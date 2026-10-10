@@ -659,6 +659,9 @@
 .bk-t + .bk-t {
   border-top: 1px solid var(--line);
 }
+.bk-s.pi .bk-t {
+  grid-template-columns: 14px 18px minmax(0, 1fr) 34px;
+}
 .bk-t .sd {
   font-size: 9.5px;
   color: var(--text-dim);

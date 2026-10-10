@@ -276,7 +276,7 @@ function OffPhase({ league }: { league: League }) {
 
       <div className="grid2">
         <Kpi k={`Expiring ${seasonLabel(s).slice(-5)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
-        <Kpi k={`${seasonLabel(s + 1)} committed`} v={fmtM(after)} sub={`${fmtM(cap.salaryCap - after)} vs projected cap`} color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'} />
+        <Kpi k={`${seasonLabel(s + 1)} committed`} v={fmtM(after)} sub={after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`} color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'} />
       </div>
 
       <SecTitle>Contracts up after {seasonLabel(s)}</SecTitle>

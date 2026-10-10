@@ -318,6 +318,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
               );
             })}
         </div>
+        <div className="col" style={{ gap: 10, position: 'sticky', bottom: 'calc(-20px - var(--safe-b))', background: 'var(--bg-2)', padding: '10px 0 calc(16px + var(--safe-b))', margin: '0 0 calc(-20px - var(--safe-b))', borderTop: '1px solid var(--line)' }}>
         {t && (
           <div className="card tight">
             <div className="row" style={{ gap: 10 }}>
@@ -343,6 +344,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
           <button className="btn primary grow" disabled={pick === null} onClick={take}>
             {t ? `Take over ${t.abbrev}` : 'Pick a team'}
           </button>
+        </div>
         </div>
       </div>
     </Sheet>

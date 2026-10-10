@@ -508,7 +508,7 @@ function MyPicks({ league }: { league: League }) {
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
-                    {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · {seasonLabel(d.season)} draft
+                    {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · drafted after {seasonLabel(d.season)}
                   </div>
                 </div>
                 {d.pick ? (
@@ -633,8 +633,11 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                 {stat('Shooting', `${c.shootingDrill}/25`)}
               </div>
               <div className="tiny dim">
-                Wingspan {c.wingspan - c.heightNoShoes >= 0 ? '+' : ''}
-                {(c.wingspan - c.heightNoShoes).toFixed(2)}" vs height.
+                Wingspan {c.wingspan - c.heightNoShoes >= 0 ? '+' : '−'}
+                {Math.abs(c.wingspan - c.heightNoShoes)
+                  .toFixed(2)
+                  .replace(/\.?0+$/, '')}
+                " vs height{c.wingspan - c.heightNoShoes >= 4 ? ': plus length' : c.wingspan - c.heightNoShoes < 1 ? ': short arms for his size' : ''}.
               </div>
             </>
           )}

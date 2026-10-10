@@ -261,7 +261,7 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
   const body = (
     <>
       <div className="lg-sb-st">
-        <span className={!done && g.day === league.day ? 'live' : ''}>{status}</span>
+        <span className={!done && mine ? 'live' : ''}>{status}</span>
         {right && <span title={done ? undefined : 'Win probability from net ratings and home court'}>{right}</span>}
       </div>
       {lines.map((t) => (

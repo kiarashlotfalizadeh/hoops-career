@@ -11,8 +11,8 @@ import { Avatar, Bar, Card, Empty } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
 
-function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off') {
-  const pg = playerSeason(p, season);
+function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
+  const pg = playerSeason(p, season, playoffs);
   if (!pg) return '';
   return kind === 'def' ? `${f1(pg.stl)} stl · ${f1(pg.blk)} blk · ${f1(pg.reb)} reb` : `${f1(pg.pts)} pts · ${f1(pg.reb)} reb · ${f1(pg.ast)} ast`;
 }
@@ -92,7 +92,7 @@ function AwardRow({ icon, children, to }: { icon: ReactNode; children: ReactNode
   );
 }
 
-function PlayerAward({ league, pid, season, icon, label, kind = 'off' }: { league: League; pid?: number; season: number; icon: ReactNode; label: string; kind?: 'off' | 'def' }) {
+function PlayerAward({ league, pid, season, icon, label, kind = 'off', playoffs = false }: { league: League; pid?: number; season: number; icon: ReactNode; label: string; kind?: 'off' | 'def'; playoffs?: boolean }) {
   const p = pid !== undefined ? league.players[pid] : undefined;
   if (!p) return null;
   const tid = seasonTeam(league, p, season);
@@ -104,7 +104,10 @@ function PlayerAward({ league, pid, season, icon, label, kind = 'off' }: { leagu
         <div className="bold ellipsis">
           {p.firstName} {p.lastName}
         </div>
-        <div className="tiny dim ellipsis">{statLine(p, season, kind)}</div>
+        <div className="tiny dim ellipsis">
+          {statLine(p, season, kind, playoffs)}
+          {playoffs ? ' in the playoffs' : ''}
+        </div>
       </div>
       {tid !== null ? <TeamLogo tid={tid} size={28} /> : <span />}
     </AwardRow>
@@ -121,7 +124,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
         <SectionLabel>Season awards</SectionLabel>
       </div>
       <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
-      <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP" />
+      <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP" playoffs />
       <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player" kind="def" />
       <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
       <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man" />

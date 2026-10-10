@@ -50,8 +50,10 @@ function Overview({ team }: { team: Team }) {
   const league = useLeague();
   const ts = curTeamSeason(league, team.tid);
   const pr = profit(league, team.tid);
+  const games = ts.won + ts.lost;
   const homeGames = ts.homeWon + ts.homeLost;
   const attAvg = homeGames ? ts.attendance / homeGames : 0;
+  const attShown = homeGames ? attAvg : attendanceFor(league, team);
   const cap = CAP_FOR(league);
   const pay = payroll(league, team.tid);
   const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(team.budget[k]), 0);
@@ -63,29 +65,30 @@ function Overview({ team }: { team: Team }) {
     ...(tax > 0 ? [{ k: 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
   ];
   const totalExp = expenses.reduce((a, e) => a + e.v, 0);
-  const games = ts.won + ts.lost;
   return (
     <>
       <div className="grid2">
         <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub="Bank balance" />
-        <Kpi k={`Profit ${seasonLabel(league.season).slice(-5)}`} v={fmtMs(pr)} color={pr >= 0 ? 'var(--good)' : 'var(--bad)'} sub={games ? `after ${games} games` : 'season not started'} />
-        <Kpi k="Revenue" v={fmtM(ts.revenue)} sub="Gate, merch, media" />
-        <Kpi k="Expenses" v={fmtM(ts.expenses)} sub="Payroll, staff, arena" />
+        <Kpi k={`Profit ${seasonLabel(league.season).slice(-5)}`} v={games || pr ? fmtMs(pr) : '—'} color={pr >= 0 ? 'var(--good)' : 'var(--bad)'} sub={games ? `after ${games} games` : 'season not started'} />
+        <Kpi k="Revenue" v={games || ts.revenue ? fmtM(ts.revenue) : '—'} sub="Gate, merch, media" />
+        <Kpi k="Expenses" v={games || ts.expenses ? fmtM(ts.expenses) : '—'} sub="Payroll, staff, arena" />
       </div>
 
       <Card title="Attendance" right={<Users size={16} className="dim" />}>
         <div className="row between" style={{ alignItems: 'flex-end' }}>
           <div>
-            <div className="fo-big">{homeGames ? Math.round(attAvg).toLocaleString() : '—'}</div>
-            <div className="tiny dim">per home game · capacity {ARENA_CAPACITY.toLocaleString()}</div>
+            <div className="fo-big">{Math.round(attShown).toLocaleString()}</div>
+            <div className="tiny dim">
+              {homeGames ? 'per home game' : 'projected per game'} · capacity {ARENA_CAPACITY.toLocaleString()}
+            </div>
           </div>
           <div className="right">
-            <div className="fo-mid">{homeGames ? `${Math.round((attAvg / ARENA_CAPACITY) * 100)}%` : '—'}</div>
+            <div className="fo-mid">{Math.round((attShown / ARENA_CAPACITY) * 100)}%</div>
             <div className="tiny dim">full</div>
           </div>
         </div>
         <div className="bar" style={{ marginTop: 10, height: 8 }}>
-          <div style={{ width: `${homeGames ? Math.min(100, (attAvg / ARENA_CAPACITY) * 100) : 0}%` }} />
+          <div style={{ width: `${Math.min(100, (attShown / ARENA_CAPACITY) * 100)}%` }} />
         </div>
         <div className="row between small" style={{ marginTop: 10 }}>
           <span className="dim">Hype</span>
@@ -200,7 +203,11 @@ function BudgetTab({ team }: { team: Team }) {
                   </p>
                 </Help>
               </div>
-              <span className="tag">{ordinal(rank(it.k))} of 30</span>
+              {(() => {
+                const a = avg(it.k);
+                const tied = league.teams.filter((t) => t.budget[it.k] === lvl).length;
+                return Math.abs(lvl - a) < 1 && tied > 1 ? <span className="tag">League average</span> : <span className={`tag ${lvl > a ? 'good' : 'warn'}`}>{tied > 1 ? 'T-' : ''}{ordinal(rank(it.k))} of 30</span>;
+              })()}
             </div>
             <Slider
               label={<span className="dim2">Level {lvl}</span>}
@@ -238,7 +245,7 @@ function BudgetTab({ team }: { team: Team }) {
         <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi k="Est. crowd" v={att >= ARENA_CAPACITY ? 'Sellout' : att.toLocaleString()} sub={`${Math.round((att / ARENA_CAPACITY) * 100)}% full`} color={att >= ARENA_CAPACITY ? 'var(--good)' : undefined} />
           <Kpi k="Gate / game" v={fmtM(gate, 2)} sub="ticket revenue" />
-          <Kpi k="Gate / season" v={fmtM(gate * 41)} sub="41 home games" />
+          <Kpi k="Season gate" v={fmtM(gate * 41)} sub="41 home games" />
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
           Higher prices earn more per fan but thin the crowd. At today's demand, gate revenue peaks around <b className="dim2">${sweet.p}</b> ({fmtM(sweet.g * 41)} a season). Playoff games sell at a 60% premium.

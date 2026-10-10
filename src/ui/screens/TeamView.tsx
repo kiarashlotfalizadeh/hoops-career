@@ -1,14 +1,13 @@
 import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
-import type { DraftPick, League, Player } from '../../core/types';
+import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, curTeamSeason, payroll, rosterSorted } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { pickLabel } from '../../core/league/trades';
 import { scoutTeam } from '../../core/ai/advisor';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
-import { ACTIONS } from '../../core/types';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
@@ -248,16 +247,15 @@ function PlayerRow({ league, p, min }: { league: League; p: Player; min?: number
       <div style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 6 }}>
           <span className="bold ellipsis">{shortName(p)}</span>
-          {p.injury && (
-            <span className="tag bad" title={p.injury.type}>
-              {p.injury.gamesRemaining}g
-            </span>
-          )}
           {p.mood.tradeRequest && <span className="tag warn">Wants out</span>}
         </div>
         <div className="tiny dim ellipsis">
-          {p.pos} · {age} yrs · {p.archetype}
-          {min ? ` · ${Math.round(min)} min` : ''}
+          {p.injury && (
+            <span className="bad" style={{ fontWeight: 700 }} title={p.injury.type}>
+              Out {p.injury.gamesRemaining}g ·{' '}
+            </span>
+          )}
+          {p.pos} · {age} yrs{min ? ` · ${Math.round(min)} min` : ''} · {p.archetype}
         </div>
       </div>
       <div className="lg-pstats">

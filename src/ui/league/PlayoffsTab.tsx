@@ -310,7 +310,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
   const META: Record<string, [string, string]> = {
     '78': ['7 vs 8', 'Winner is the 7 seed'],
     '910': ['9 vs 10', 'Loser is eliminated'],
-    '8': ['Last spot', 'Loser of 7/8 vs winner of 9/10 for the 8 seed'],
+    '8': ['For the 8 seed', 'Loser 7/8 vs winner 9/10'],
   };
   let games: { id: string; title: string; sub: string; home?: number; away?: number; pi?: PlayInGame }[];
   if (projected) {
@@ -326,6 +326,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
     };
     games = [mk('78'), mk('910'), mk('8')];
   }
+  const seedOf = new Map(confStandings(league, conf).map((r) => [r.tid, r.confRank]));
   return (
     <Card title={`${confName(conf)} play-in`} right={projected ? <span className="tag info">Projected</span> : undefined}>
       <div className="lg-pi">
@@ -334,7 +335,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
           const winner = g.pi?.winner;
           const line = (tid: number | undefined, pts: number | undefined, tbd: string) => (
             <div className={`bk-t ${winner === undefined ? '' : winner === tid ? 'win' : 'lose'}`}>
-              <span />
+              <span className="sd">{tid !== undefined ? seedOf.get(tid) ?? '' : ''}</span>
               {tid !== undefined ? <TeamLogo tid={tid} size={18} /> : <span />}
               {tid !== undefined ? (
                 <span className="ellipsis">
@@ -349,9 +350,9 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
             </div>
           );
           const card = (
-            <div className={`bk-s ${g.home === league.userTid || g.away === league.userTid ? 'me' : ''}`}>
-              {line(g.away, res?.away.pts, 'TBD')}
+            <div className={`bk-s pi ${g.home === league.userTid || g.away === league.userTid ? 'me' : ''}`}>
               {line(g.home, res?.home.pts, 'TBD')}
+              {line(g.away, res?.away.pts, 'TBD')}
             </div>
           );
           return (
