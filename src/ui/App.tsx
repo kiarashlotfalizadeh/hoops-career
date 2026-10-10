@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
-import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
 import { useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague } from '../state/persistence';
@@ -71,10 +71,11 @@ function Boot({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
   }, []);
+  const userTid = useStore((s) => s.league?.userTid);
   useEffect(() => {
-    const t = league?.teams[league.userTid];
+    const t = league && userTid !== undefined ? league.teams[userTid] : undefined;
     document.documentElement.style.setProperty('--accent', t ? teamAccent(t.colors) : '#3b82f6');
-  }, [league]);
+  }, [league, userTid]);
   if (!ready) return <div className="empty" style={{ marginTop: '40vh' }}>Loading…</div>;
   return <>{children}</>;
 }
@@ -206,6 +207,11 @@ function ScrollTop() {
   return null;
 }
 
+function LeagueTabRedirect() {
+  const { tab } = useParams();
+  return <Navigate to={`/league?tab=${tab ?? 'standings'}`} replace />;
+}
+
 function GameShell() {
   const league = useStore((s) => s.league);
   if (!league) return <Navigate to="/start" replace />;
@@ -223,6 +229,7 @@ function GameShell() {
           <Route path="/live" element={<Live />} />
           <Route path="/game/:gid" element={<GameView />} />
           <Route path="/league" element={<LeagueHub />} />
+          <Route path="/league/:tab" element={<LeagueTabRedirect />} />
           <Route path="/team/:tid" element={<TeamView />} />
           <Route path="/office" element={<Office />} />
           <Route path="/trade" element={<Trade />} />

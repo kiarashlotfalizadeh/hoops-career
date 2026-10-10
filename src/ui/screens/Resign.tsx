@@ -114,8 +114,13 @@ function ResignPhase() {
         <div className="grid3" style={{ marginTop: 12 }}>
           <Kpi k="Cap space" v={fmtM(cap.salaryCap - committed)} color={cap.salaryCap - committed > 0 ? 'var(--good)' : 'var(--warn)'} />
           <Kpi k="Under tax" v={fmtM(cap.luxuryTax - committed)} color={cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined} />
-          <Kpi k="Roster" v={`${rosterNext}`} sub={`signed for ${seasonLabel(next).slice(-5)}`} color={rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined} />
+          <Kpi k="Roster" v={`${rosterNext}/${CAP.rosterMax}`} sub={rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} over limit` : 'under contract'} color={rosterNext > CAP.rosterMax ? 'var(--bad)' : rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined} />
         </div>
+        {rosterNext > CAP.rosterMax && (
+          <div className="small bad" style={{ marginTop: 8 }}>
+            You already have {rosterNext} players under contract for {seasonLabel(next)}. Rosters max out at {CAP.rosterMax}: trade or release before opening night, and you can't add free agents until you do.
+          </div>
+        )}
         <div className="tiny dim" style={{ marginTop: 8 }}>
           Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Cap space left after re-signing is what you can use in free agency.
         </div>
@@ -165,7 +170,7 @@ function ResignPhase() {
                         </b>
                         <span className="dim">
                           {' '}
-                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · age {playerAge(p, next)} next season
+                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · {playerAge(p, next)} next season
                         </span>
                       </div>
                     </>

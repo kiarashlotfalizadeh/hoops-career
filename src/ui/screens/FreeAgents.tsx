@@ -212,7 +212,7 @@ export default function FreeAgents() {
                         <span className="fo-dot" style={{ background: ai.color }} />
                         {ai.label}
                       </span>
-                      {isMin ? <span className="tiny good">Min deal</span> : fits ? <span className="tiny good">Fits your space</span> : <span className="tiny bad">Over your space</span>}
+                      {isMin ? <span className="tiny good">Min deal</span> : fits ? <span className="tiny good">Fits your space</span> : space > 0 ? <span className="tiny warn">More than your space</span> : <span className="tiny dim">Needs cap space</span>}
                     </div>
                   </div>
                   <div className="fo-money">

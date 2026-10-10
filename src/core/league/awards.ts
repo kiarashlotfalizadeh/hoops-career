@@ -114,7 +114,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
       subject: 'Season awards',
       body: `Your team collected hardware: ${[...new Set(mine)].map((pid) => playerName(league.players[pid!])).join(', ')}${coy?.tid === league.userTid ? ' and Coach of the Year for you!' : ''}.`,
       tone: 'good',
-      link: '/league/awards',
+      link: '/league?tab=awards',
     });
   }
   return awards;
@@ -137,7 +137,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
   const mine = [...out.E, ...out.W].filter((pid) => league.players[pid].tid === league.userTid);
   addNews(league, { kind: 'award', text: `All-Stars announced. East: ${out.E.slice(0, 5).map((pid) => league.players[pid].lastName).join(', ')}... West: ${out.W.slice(0, 5).map((pid) => league.players[pid].lastName).join(', ')}...`, tids: [], pids: [...out.E, ...out.W] });
   if (mine.length) {
-    addInbox(league, { from: 'League Office', subject: 'All-Star selections', body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`, tone: 'good', link: '/league/awards' });
+    addInbox(league, { from: 'League Office', subject: 'All-Star selections', body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`, tone: 'good', link: '/league?tab=awards' });
   }
   return out;
 }

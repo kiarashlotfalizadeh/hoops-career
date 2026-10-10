@@ -16,7 +16,7 @@ import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
-import { draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
+import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
 import { askingContract, releasePlayer, valueScore } from './contracts';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
@@ -260,10 +260,14 @@ export function userDraftPick(league: League, pid: number): string | null {
   return null;
 }
 
+/** Let the staff make the user's current pick, then run AI picks until the user's next turn. */
 export function autoDraftUserPick(league: League) {
   withRng(league, (rng) => {
     const dp = nextPick(league);
-    if (dp && dp.tid === league.userTid) draftUntilUser(league, rng, true);
+    if (!dp || dp.tid !== league.userTid) return;
+    const choice = aiChoose(league, dp.tid, rng);
+    if (choice) draftPlayer(league, dp, choice.pid);
+    draftUntilUser(league, rng);
   });
 }
 

@@ -104,10 +104,7 @@ function PlayerAward({ league, pid, season, icon, label, kind = 'off', playoffs 
         <div className="bold ellipsis">
           {p.firstName} {p.lastName}
         </div>
-        <div className="tiny dim ellipsis">
-          {statLine(p, season, kind, playoffs)}
-          {playoffs ? ' in the playoffs' : ''}
-        </div>
+        <div className="tiny dim ellipsis">{statLine(p, season, kind, playoffs)}</div>
       </div>
       {tid !== null ? <TeamLogo tid={tid} size={28} /> : <span />}
     </AwardRow>
@@ -124,7 +121,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
         <SectionLabel>Season awards</SectionLabel>
       </div>
       <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
-      <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP" playoffs />
+      <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP · playoff stats" playoffs />
       <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player" kind="def" />
       <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
       <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man" />

@@ -34,6 +34,9 @@ export default function Office() {
   const roster = teamPlayers(league, tid);
   const ts = curTeamSeason(league, tid);
   const space = cap.salaryCap - pay;
+  // in the offseason, count the players actually under contract for next season
+  const signedN = isOffseason(league) ? roster.filter((p) => contractExp(p.contract) >= s0).length : roster.length;
+  const expiringN = roster.length - signedN;
   const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
   const [sel, setSel] = useState<number | null>(null);
 
@@ -122,7 +125,20 @@ export default function Office() {
         </div>
         <div className="grid2" style={{ marginTop: 12 }}>
           <Kpi k="Cap space" v={fmtM(space)} color={space >= 0 ? 'var(--good)' : 'var(--warn)'} sub={space > 0 ? 'Room to sign free agents' : `Min deals only (${fmtM(cap.vetMin, 2)})`} />
-          <Kpi k="Roster" v={`${roster.length}/${CAP.rosterMax}`} color={roster.length < CAP.rosterMin || roster.length > CAP.rosterMax ? 'var(--bad)' : undefined} sub={roster.length < CAP.rosterMin ? `Need ${CAP.rosterMin - roster.length} more` : `${CAP.rosterMax - roster.length} open spot${CAP.rosterMax - roster.length === 1 ? '' : 's'}`} />
+          <Kpi
+            k={isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster'}
+            v={`${signedN}/${CAP.rosterMax}`}
+            color={signedN > CAP.rosterMax ? 'var(--bad)' : signedN < CAP.rosterMin ? 'var(--warn)' : undefined}
+            sub={
+              expiringN > 0
+                ? `+${expiringN} expiring`
+                : signedN > CAP.rosterMax
+                  ? `${signedN - CAP.rosterMax} over the limit`
+                  : signedN < CAP.rosterMin
+                    ? `Need ${CAP.rosterMin - signedN} more`
+                    : `${CAP.rosterMax - signedN} open spot${CAP.rosterMax - signedN === 1 ? '' : 's'}`
+            }
+          />
           <Kpi k={pay > cap.luxuryTax ? 'Tax bill (est.)' : 'Room under tax'} v={pay > cap.luxuryTax ? fmtM(tax) : fmtM(cap.luxuryTax - pay)} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} sub={`Tax line ${fmtM(cap.luxuryTax)}`} />
           <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub={`${ts.won}-${ts.lost} · ${seasonLabel(league.season)}`} />
         </div>

@@ -10,7 +10,7 @@ export function ownerEvaluation(league: League) {
   const wins = clamp((winPct(ts) - 0.5) * 2.5, -1, 1);
   const round = ts.playoffRound;
   const playoffs = round >= 5 ? 1 : round === 4 ? 0.7 : round === 3 ? 0.45 : round === 2 ? 0.2 : round === 1 ? 0 : -0.25;
-  const money = clamp(profit(league, tid) / 40_000, -1, 1);
+  const money = clamp((profit(league, tid) - 15_000) / 60_000, -1, 1);
   const prev = league.ownerMood;
   const seasonsIn = league.season - league.startSeason + 1;
   const w = seasonsIn <= 1 ? 1 : 0.4;

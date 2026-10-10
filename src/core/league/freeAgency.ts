@@ -3,7 +3,7 @@ import { FREE_AGENT } from '../types';
 import { Rng } from '../random';
 import { CAP } from '../constants';
 import { contractExp, playerAge } from '../playerGen';
-import { CAP_FOR, addInbox, addNews, freeAgents, payroll, playerName, teamPlayers } from './helpers';
+import { CAP_FOR, contractSeason, addInbox, addNews, freeAgents, payroll, playerName, teamPlayers } from './helpers';
 import { askingContract, marketSalary, signPlayer, valueScore, willSign } from './contracts';
 
 export function expiringPlayers(league: League, tid: number): Player[] {
@@ -43,6 +43,7 @@ export function releaseExpiring(league: League) {
     }
   }
   for (const p of freeAgents(league)) {
+    p.asking = undefined;
     p.asking = askingContract(league, p);
     p.faDays = 30;
   }
@@ -61,7 +62,7 @@ function needScore(league: League, tid: number, p: Player): number {
 
 /** One day of free agency: AI teams make offers, players accept the best fit. */
 export function faDay(league: League, rng: Rng, intensity = 1) {
-  const season = league.phase === 'freeAgency' || league.phase === 'resign' ? league.season + 1 : league.season;
+  const season = contractSeason(league);
   const cap = CAP_FOR(league, season);
   const fas = freeAgents(league).sort((a, b) => valueScore(league, b) - valueScore(league, a));
   if (!fas.length) return;
@@ -137,7 +138,7 @@ export function trimRosters(league: League, release: (p: Player) => void) {
 export function userOffer(league: League, pid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
   if (!p || p.tid !== FREE_AGENT) return { ok: false, reason: 'Not a free agent.' };
-  const season = league.phase === 'freeAgency' || league.phase === 'resign' || league.phase === 'draft' || league.phase === 'draftLottery' ? league.season + 1 : league.season;
+  const season = contractSeason(league);
   const tid = league.userTid;
   if (teamPlayers(league, tid).length >= CAP.rosterMax) return { ok: false, reason: 'Your roster is full (15).' };
   const cap = CAP_FOR(league, season);

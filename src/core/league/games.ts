@@ -66,14 +66,16 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
   }
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p);
+  // practice intensity: intense camps build skills but add wear and injury risk
+  const injuryMult = (team.practice === 'intense' ? 1.18 : team.practice === 'light' ? 0.88 : 1) * (1.1 - 0.2 * (team.budget.health / 100));
   // opponent-specific game plan for the user's team
   const plan = league.gamePlan;
   if (tid === league.userTid && plan && opp !== undefined && plan.oppTid === opp && plan.items.length) {
     let t = team.tactics;
     for (const it of plan.items) t = applyPatch(t, it.patch);
-    return { team: { ...team, tactics: t }, players, perf, rest };
+    return { team: { ...team, tactics: t }, players, perf, rest, injuryMult };
   }
-  return { team, players, perf, rest };
+  return { team, players, perf, rest, injuryMult };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {
@@ -187,8 +189,9 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       s.teamFga += b.tFga;
       s.teamFta += b.tFta;
       s.teamTov += b.tTov;
-      // wear accumulates with minutes
-      p.wear = clamp(p.wear + (b.sec / 60) * 0.06, 0, 100);
+      // wear accumulates with minutes (more under an intense practice regime)
+      const tm = league.teams[rb.tid];
+      p.wear = clamp(p.wear + (b.sec / 60) * 0.06 * (tm?.practice === 'intense' ? 1.15 : tm?.practice === 'light' ? 0.9 : 1), 0, 100);
     }
     // rested players
     for (const t of [home, away]) {

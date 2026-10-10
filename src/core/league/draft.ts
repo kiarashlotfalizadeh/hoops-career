@@ -47,7 +47,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
   const created: Player[] = [];
   for (let i = 0; i < size; i++) {
     const t = i / size;
-    const talent = 1.35 - 2.6 * Math.pow(t, 0.75) + rng.normal(0, 0.45);
+    const talent = 1.1 - 2.5 * Math.pow(t, 0.75) + rng.normal(0, 0.45);
     const age = clamp(Math.round(rng.normal(t < 0.3 ? 19.6 : 21, 1.1)), 18, 23);
     const p = generatePlayer(rng, {
       pid: league.nextPid++,

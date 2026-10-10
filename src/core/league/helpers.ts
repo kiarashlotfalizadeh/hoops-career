@@ -63,6 +63,11 @@ export function payroll(league: League, tid: number, season = league.season): nu
   return total;
 }
 
+/** Season new contracts and offseason payroll refer to (next season during the offseason). */
+export function contractSeason(league: League): number {
+  return league.phase === 'draftLottery' || league.phase === 'draft' || league.phase === 'resign' || league.phase === 'freeAgency' ? league.season + 1 : league.season;
+}
+
 export function capSpace(league: League, tid: number, season = league.season): number {
   return CAP_FOR(league, season).salaryCap - payroll(league, tid, season);
 }

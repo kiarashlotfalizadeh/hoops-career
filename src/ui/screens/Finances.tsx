@@ -404,7 +404,7 @@ function HistoryTab({ team }: { team: Team }) {
       <SecTitle>Season by season</SecTitle>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.season} highlight={(r) => r.season === league.season} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
-        The current season is highlighted and still in progress. Payroll is recorded at the end of each regular season.
+        {league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs' ? 'The highlighted season is still in progress. ' : ''}Payroll is recorded at the end of each regular season.
       </div>
     </>
   );

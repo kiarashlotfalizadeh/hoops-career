@@ -52,8 +52,9 @@ export const K = {
   drain: 0.00068,
   recover: 0.0012,
   home: 0.007,
-  usageExp: 2.4,
-  freedomGreen: 1.35,
+  usageExp: 2.0,
+  usageDamp: 7,
+  freedomGreen: 1.25,
   freedomLimited: 0.55,
 };
 
@@ -157,12 +158,15 @@ export interface ST {
   cap: Record<ActionType, number>;
   subSig: string;
   manualSubs: boolean; // user drives subs live
+  injMult: number;
   subLock: Map<number, number>; // pid -> game second until which a manual sub sticks
 }
 
 export interface SimTeamInput {
   team: Team;
   players: Player[];
+  /** Team-specific injury risk multiplier (practice intensity, medical staff). */
+  injuryMult?: number;
   /** Per-player performance multipliers (morale, wear), ~0.95..1.03. */
   perf?: Record<number, number>;
   /** Players held out (rest / coach decision). */
@@ -345,6 +349,7 @@ export class GameSim {
       lineupKey: '',
       ls: null,
       cap: { pnr: 1, iso: 1, post: 1, handoff: 1, motion: 1 },
+      injMult: input.injuryMult ?? 1,
       subSig: '',
       manualSubs: false,
       subLock: new Map(),
@@ -811,6 +816,12 @@ export class GameSim {
     }
     let w = roleU * p.freedom * p.tu * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
+    // defenses load up on a high-usage player as the game goes on
+    const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
+    if (teamUse >= 12) {
+      const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
+      if (share > 0.3) w *= Math.exp(-K.usageDamp * (share - 0.3));
+    }
     // star plan "deny": fewer touches
     const def = this.T[1 - t.side];
     if (def.t.defense.starPlan === 'deny' && this.starTarget(def, t) === p) w *= 0.62;
@@ -2228,7 +2239,7 @@ export class GameSim {
     for (const t of this.T) {
       for (const p of t.on) {
         const fatigue = p.energy < 0.6 ? 1.6 : 1;
-        if (this.rng.chance(K.injuryRate * mult * fatigue)) {
+        if (this.rng.chance(K.injuryRate * mult * t.injMult * fatigue)) {
           p.out = 2;
           p.injured = true;
           this.injuries.push({ pid: p.pid, tid: t.tid, q: this.q });

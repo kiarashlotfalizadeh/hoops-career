@@ -89,7 +89,7 @@ export function startPlayoffs(league: League) {
     subject: inIt ? 'Playoffs: you are in!' : 'Playoffs begin',
     body: inIt ? 'Your team has qualified for the playoffs. Tactics matter more than ever: the assistant coach will scout each opponent before the series.' : 'The playoffs are underway. Your season is over. Use the time to plan the draft and free agency.',
     tone: inIt ? 'good' : 'neutral',
-    link: '/league/playoffs',
+    link: '/league?tab=playoffs',
   });
 }
 

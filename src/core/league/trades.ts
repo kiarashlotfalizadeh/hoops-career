@@ -6,7 +6,7 @@ import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
 import { salaryFor } from '../playerGen';
-import { CAP_FOR, addInbox, addNews, curTeamSeason, payroll, playerName, teamPlayers, winPct } from './helpers';
+import { CAP_FOR, contractSeason, addInbox, addNews, curTeamSeason, payroll, playerName, teamPlayers, winPct } from './helpers';
 import { tradeValue } from './contracts';
 
 export interface TradeSide {
@@ -32,7 +32,7 @@ export interface TradeEval {
 }
 
 function season(league: League) {
-  return league.phase === 'draft' || league.phase === 'resign' || league.phase === 'freeAgency' || league.phase === 'draftLottery' ? league.season + 1 : league.season;
+  return contractSeason(league);
 }
 
 export function pickValue(league: League, dp: DraftPick): number {

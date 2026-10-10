@@ -5,18 +5,24 @@ import { CAP_FOR, curTeamSeason, teamPlayers, winPct } from './helpers';
 
 export const ARENA_CAPACITY = 18_800;
 /** Arena, travel, front office and other fixed operating costs ($K per season). */
-export const OPERATIONS_PER_SEASON = 55_000;
+export const OPERATIONS_PER_SEASON = 62_000;
 
 export function budgetCostPerSeason(level: number) {
   return 5_000 + level * 200; // $K
 }
 
-export function attendanceFor(league: League, team: Team, playoffs = false): number {
+/** Ticket price fans consider fair: rises with hype, winning, market size and facilities. */
+export function referencePrice(league: League, team: Team): number {
   const ts = curTeamSeason(league, team.tid);
   const wp = ts.won + ts.lost >= 5 ? winPct(ts) : 0.5;
-  const priceEffect = (team.budget.ticketPrice - 95) / 260;
-  const demand = 0.55 + 0.32 * team.hype + 0.1 * Math.min(team.pop / 10, 1) + (wp - 0.5) * 0.3 + (team.budget.facilities - 50) / 500 - priceEffect + (playoffs ? 0.25 : 0);
-  return Math.round(clamp(ARENA_CAPACITY * demand, 7_000, ARENA_CAPACITY));
+  return 62 + 55 * team.hype + 70 * (wp - 0.5) + 22 * Math.min(team.pop / 10, 1.5) + (team.budget.facilities - 50) * 0.25;
+}
+
+export function attendanceFor(league: League, team: Team, playoffs = false): number {
+  const ref = referencePrice(league, team) * (playoffs ? 1.6 : 1);
+  const price = team.budget.ticketPrice;
+  const demand = 1.05 * Math.exp((-1.1 * (price - ref)) / ref);
+  return Math.round(clamp(ARENA_CAPACITY * demand, 1_500, ARENA_CAPACITY));
 }
 
 /** Revenue & expenses for one game (applied to both teams; home gets gate). */
@@ -32,7 +38,7 @@ export function gameFinances(league: League, team: Team, home: boolean, playoffs
     revenue += gate + merch + localTv;
     ts.attendance += att;
   }
-  if (!playoffs) revenue += 150_000 / 82; // national media & league revenue share
+  if (!playoffs) revenue += 130_000 / 82; // national media & league revenue share
   let expenses = 0;
   if (!playoffs) {
     const pay = teamPlayers(league, team.tid).reduce((a, p) => a + salaryFor(p, league.season), 0) + team.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
@@ -48,7 +54,9 @@ export function gameFinances(league: League, team: Team, home: boolean, playoffs
 
 export function updateHype(team: Team, won: boolean, playoffs: boolean) {
   const d = playoffs ? 0.012 : 0.006;
-  team.hype = clamp(team.hype + (won ? d : -d * 0.9), 0.05, 1);
+  // facilities slowly build (or erode) fan enthusiasm
+  const fac = ((team.budget.facilities - 50) / 50) * 0.0006;
+  team.hype = clamp(team.hype + (won ? d : -d * 0.9) + fac, 0.05, 1);
 }
 
 /** End of regular season: luxury tax collected and shared among non-taxpayers. */

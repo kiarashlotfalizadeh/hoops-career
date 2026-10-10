@@ -7,7 +7,7 @@ import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE } from '../constants';
 import { clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
-import { CAP_FOR, addNews, age, curTeamSeason, payroll, playerName, teamPlayers, winPct } from './helpers';
+import { CAP_FOR, addNews, age, contractSeason, curTeamSeason, payroll, playerName, teamPlayers, winPct } from './helpers';
 
 /** Blend of current and future ability used for value judgments. */
 export function valueScore(league: League, p: Player): number {
@@ -53,7 +53,7 @@ const SALARY_CURVE: [number, number][] = [
 
 /** Fair annual salary ($K) for a player on the open market. */
 export function marketSalary(league: League, p: Player): number {
-  const cap = CAP_FOR(league);
+  const cap = CAP_FOR(league, contractSeason(league));
   const s = valueScore(league, p);
   let pct = 0;
   if (s <= SALARY_CURVE[0][0]) pct = 0;
@@ -106,13 +106,16 @@ export interface Ask {
 
 export function askingContract(league: League, p: Player, tid?: number): Ask {
   let amount = marketSalary(league, p);
+  // unsigned free agents lower their price as the market dries up (see faDay)
+  if (p.tid === FREE_AGENT && p.asking && p.asking.amount < amount) amount = p.asking.amount;
   const diff = league.settings.difficulty;
   const userTeam = tid === league.userTid;
   if (userTeam) amount *= diff === 'casual' ? 0.9 : diff === 'hard' ? 1.12 : 1;
   if (tid !== undefined) amount /= teamAppeal(league, tid, p);
-  const cap = CAP_FOR(league);
+  const cap = CAP_FOR(league, contractSeason(league));
   amount = clamp(Math.round(amount / 50) * 50, p.experience >= 3 ? cap.vetMin : cap.minContract, cap.maxContract(p.experience));
-  return { amount, years: preferredYears(league, p) };
+  const years = p.tid === FREE_AGENT && p.asking && p.asking.amount < marketSalary(league, p) ? p.asking.years : preferredYears(league, p);
+  return { amount, years };
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {
@@ -191,8 +194,8 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean 
   team.rotation.order = team.rotation.order.filter((x) => x !== p.pid);
   delete team.rotation.minutes[p.pid];
   team.rotation.closers = team.rotation.closers.filter((x) => x !== p.pid);
-  const ask = askingContract(league, p);
-  p.asking = ask;
+  p.asking = undefined;
+  p.asking = askingContract(league, p);
   p.faDays = 30;
   if (opts.news !== false) addNews(league, { kind: 'release', text: `The ${team.name} released ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
 }

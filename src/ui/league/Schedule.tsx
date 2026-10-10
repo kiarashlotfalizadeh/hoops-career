@@ -17,6 +17,18 @@ function record(league: League, tid: number) {
   return `${ts.won}-${ts.lost}`;
 }
 
+const ROUND_SHORT = ['', '1st Rd', 'Semis', 'Conf Finals', 'Finals'];
+
+/** "1st Rd G4", "Finals G2", "Play-In", or '' for regular-season games. */
+function gameTag(league: League, g: ScheduledGame): string {
+  if (g.type === 'playoffs') {
+    const round = g.seriesId ? Number(g.seriesId[1]) : 0;
+    const n = seriesGameNo(league, g);
+    return `${ROUND_SHORT[round] ?? 'Playoffs'}${n ? ` G${n}` : ''}`;
+  }
+  return TYPE_LABEL[g.type] ?? '';
+}
+
 /** Game number within a playoff series (1-based), by scheduling order. */
 function seriesGameNo(league: League, g: ScheduledGame) {
   if (!g.seriesId) return 0;
@@ -92,8 +104,7 @@ export function TeamScheduleList({ league, tid, h2hTid, collapse = true }: { lea
         const monthRec = showMonth ? monthRecord(rows, league.season, month) : '';
         const today = !r.g.played && r.g.day === league.day && (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs');
         const opp = league.teams[r.opp];
-        const gameNo = seriesGameNo(league, r.g);
-        const typeLabel = TYPE_LABEL[r.g.type];
+        const typeLabel = gameTag(league, r.g);
         const to = r.res ? `/game/${r.g.gid}` : `/team/${r.opp}`;
         return (
           <Fragment key={r.g.gid}>
@@ -116,7 +127,6 @@ export function TeamScheduleList({ league, tid, h2hTid, collapse = true }: { lea
                   {typeLabel ? (
                     <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
                       {typeLabel}
-                      {gameNo ? ` G${gameNo}` : ''}
                       {' · '}
                     </span>
                   ) : null}
@@ -246,9 +256,7 @@ function favorite(league: League, g: ScheduledGame): string {
 
 function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?: GameResult }) {
   const mine = g.home === league.userTid || g.away === league.userTid;
-  const typeLabel = TYPE_LABEL[g.type];
-  const gameNo = seriesGameNo(league, g);
-  const tag = typeLabel ? `${typeLabel}${gameNo ? ` G${gameNo}` : ''}` : '';
+  const tag = gameTag(league, g);
   const done = !!res || !!g.played;
   const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : tag || 'Preview';
   const right = done ? tag : favorite(league, g);

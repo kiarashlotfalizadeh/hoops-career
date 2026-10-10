@@ -145,7 +145,7 @@ export function createLeague(opts: CreateOpts): League {
   };
   teams[opts.userTid].coach.name = opts.coachName;
 
-  if (opts.seed) {
+  if (opts.seed && opts.seed.players.length) {
     for (const sp of opts.seed.players) {
       const p = seedToPlayer(sp, league.nextPid++, season, rng);
       league.players[p.pid] = p;
@@ -165,7 +165,9 @@ export function createLeague(opts: CreateOpts): League {
       }
     }
     for (let i = 0; i < 40; i++) {
-      const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age: rng.int(22, 34), talent: rng.normal(-1, 0.5), scale: DEFAULT_SCALE });
+      const age = rng.int(22, 34);
+      const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age, talent: rng.normal(-1, 0.5), scale: DEFAULT_SCALE });
+      p.experience = Math.max(0, age - 21);
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
