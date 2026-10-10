@@ -81,4 +81,11 @@ export interface PossLog {
   lines: string[];
   /** Assistant-coach style note when something notable happened (tactic tag). */
   note?: string;
+  /** On-court pids at the start of the possession: [home five, away five]. */
+  on: [number[], number[]];
+  /** Offensive pid -> defender pid at possession start. */
+  guards: Record<number, number>;
+  /** Defensive scheme in use (for drawing zones). */
+  scheme: 'man' | 'zone23' | 'zone32';
+  help: number;
 }

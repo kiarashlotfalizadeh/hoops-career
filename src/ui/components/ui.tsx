@@ -1,0 +1,264 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, HelpCircle } from 'lucide-react';
+import type { Player } from '../../core/types';
+import { ovrColor } from '../../core/ratings';
+import { FRANCHISES } from '../../core/teams';
+
+export function Card({ title, right, children, className = '', onClick, accent }: { title?: ReactNode; right?: ReactNode; children?: ReactNode; className?: string; onClick?: () => void; accent?: boolean }) {
+  return (
+    <section className={`card ${accent ? 'accent' : ''} ${onClick ? 'clickable' : ''} ${className}`} onClick={onClick}>
+      {(title || right) && (
+        <div className="card-h">
+          {typeof title === 'string' ? <h3>{title}</h3> : title}
+          {right}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function Ovr({ v, size = '' }: { v: number; size?: '' | 'sm' | 'lg' }) {
+  return (
+    <span className={`ovr ${size}`} style={{ background: ovrColor(v) }}>
+      {Math.round(v)}
+    </span>
+  );
+}
+
+export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastName' | 'tid' | 'jersey'>; size?: '' | 'lg' }) {
+  const colors = p.tid >= 0 ? FRANCHISES[p.tid]?.colors : undefined;
+  const c1 = colors?.[0] ?? '#334155';
+  const c2 = colors?.[1] ?? '#64748b';
+  const initials = `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`;
+  return (
+    <div className={`avatar ${size}`} style={{ background: `linear-gradient(140deg, ${c1}, ${shade(c1, -0.35)})`, boxShadow: `inset 0 0 0 2px ${c2}55` }}>
+      {initials}
+      {p.jersey && <span className="jn">#{p.jersey}</span>}
+    </div>
+  );
+}
+
+export function shade(hex: string, amt: number) {
+  const h = hex.replace('#', '');
+  const n = (i: number) => Math.max(0, Math.min(255, Math.round(parseInt(h.slice(i, i + 2), 16) * (1 + amt))));
+  return `#${[n(0), n(2), n(4)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="seg" role="tablist">
+      {options.map((o) => (
+        <button key={o.id} role="tab" aria-selected={value === o.id} className={value === o.id ? 'on' : ''} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Chips<T extends string | number>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="chips">
+      {options.map((o) => (
+        <button key={String(o.id)} className={`chip ${value === o.id ? 'on' : ''}`} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode }) {
+  return (
+    <label className="row between" style={{ gap: 12, cursor: 'pointer' }}>
+      <div className="grow">
+        <div style={{ fontWeight: 650 }}>{label}</div>
+        {help && <div className="small dim">{help}</div>}
+      </div>
+      <button className={`toggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} onClick={() => onChange(!on)} />
+    </label>
+  );
+}
+
+export function Slider({ label, value, onChange, min = 0, max = 100, step = 1, left, right, help, format, disabled }: { label: ReactNode; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; left?: string; right?: string; help?: ReactNode; format?: (v: number) => string; disabled?: boolean }) {
+  const fill = ((value - min) / (max - min)) * 100;
+  return (
+    <div className="slider" style={{ opacity: disabled ? 0.5 : 1 }}>
+      <div className="slider-top">
+        <span className="slider-label">{label}</span>
+        <span className="slider-val num">{format ? format(value) : value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} style={{ ['--fill' as string]: `${fill}%` }} aria-label={typeof label === 'string' ? label : undefined} />
+      {(left || right) && (
+        <div className="slider-ends">
+          <span>{left}</span>
+          <span>{right}</span>
+        </div>
+      )}
+      {help && <div className="small dim">{help}</div>}
+    </div>
+  );
+}
+
+export function Bar({ value, max = 100, color, height = 6 }: { value: number; max?: number; color?: string; height?: number }) {
+  return (
+    <div className="bar" style={{ height }}>
+      <div style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%`, background: color }} />
+    </div>
+  );
+}
+
+export function Sheet({ open, onClose, children, title }: { open: boolean; onClose: () => void; children: ReactNode; title?: ReactNode }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return createPortal(
+    <>
+      <div className="sheet-backdrop" onClick={onClose} />
+      <div className="sheet" role="dialog" aria-modal="true">
+        <div className="sheet-grip" />
+        {title && <h2 style={{ marginBottom: 12 }}>{title}</h2>}
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+/** Tap-to-explain: the core of progressive disclosure. */
+export function Help({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="help-btn" aria-label={`Explain ${title}`} onClick={(e) => (e.stopPropagation(), setOpen(true))}>
+        <HelpCircle size={14} />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={title}>
+        <div className="col" style={{ gap: 10, color: 'var(--text-2)' }}>
+          {children}
+        </div>
+        <button className="btn block" style={{ marginTop: 16 }} onClick={() => setOpen(false)}>
+          Got it
+        </button>
+      </Sheet>
+    </>
+  );
+}
+
+export function PageHeader({ title, sub, back, right }: { title: ReactNode; sub?: ReactNode; back?: boolean; right?: ReactNode }) {
+  const nav = useNavigate();
+  return (
+    <div className="row" style={{ gap: 8, minHeight: 44 }}>
+      {back && (
+        <button className="iconbtn" onClick={() => nav(-1)} aria-label="Back">
+          <ChevronLeft size={22} />
+        </button>
+      )}
+      <div className="grow">
+        <h1 style={{ fontSize: 26, textTransform: 'uppercase' }}>{title}</h1>
+        {sub && <div className="small dim">{sub}</div>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+export function Kpi({ k, v, sub, color }: { k: ReactNode; v: ReactNode; sub?: ReactNode; color?: string }) {
+  return (
+    <div className="kpi">
+      <span className="k">{k}</span>
+      <span className="v" style={{ color }}>
+        {v}
+      </span>
+      {sub && <span className="tiny dim">{sub}</span>}
+    </div>
+  );
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <div className="empty">{children}</div>;
+}
+
+export interface Col<T> {
+  key: string;
+  label: string;
+  get: (r: T) => number | string;
+  fmt?: (v: number | string, r: T) => ReactNode;
+  left?: boolean;
+  sticky?: boolean;
+  width?: number;
+  help?: string;
+}
+
+export function StatTable<T>({ rows, cols, initialSort, rowKey, onRow, highlight, maxHeight }: { rows: T[]; cols: Col<T>[]; initialSort?: string; rowKey: (r: T) => string | number; onRow?: (r: T) => void; highlight?: (r: T) => boolean; maxHeight?: number }) {
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(initialSort ? { key: initialSort, dir: -1 } : null);
+  const sorted = useMemo(() => {
+    if (!sort) return rows;
+    const col = cols.find((c) => c.key === sort.key);
+    if (!col) return rows;
+    return [...rows].sort((a, b) => {
+      const va = col.get(a);
+      const vb = col.get(b);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sort.dir;
+      return String(va).localeCompare(String(vb)) * sort.dir;
+    });
+  }, [rows, cols, sort]);
+  return (
+    <div className="tablewrap" style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
+      <table className="stats">
+        <thead>
+          <tr>
+            {cols.map((c) => (
+              <th
+                key={c.key}
+                className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''} ${sort?.key === c.key ? 'sorted' : ''}`}
+                style={{ minWidth: c.width }}
+                title={c.help}
+                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left ? 1 : -1 }))}
+              >
+                {c.label}
+                {sort?.key === c.key ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <tr key={rowKey(r)} className={highlight?.(r) ? 'me' : ''} onClick={onRow ? () => onRow(r) : undefined} style={{ cursor: onRow ? 'pointer' : undefined }}>
+              {cols.map((c) => {
+                const v = c.get(r);
+                return (
+                  <td key={c.key} className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''}`}>
+                    {c.fmt ? c.fmt(v, r) : typeof v === 'number' ? fmtNum(v) : v}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function fmtNum(v: number, d = 1) {
+  if (!isFinite(v)) return '-';
+  return Number.isInteger(v) ? String(v) : v.toFixed(d);
+}
+
+export const pct = (v: number, d = 1) => (isFinite(v) ? `${(v * 100).toFixed(d)}` : '-');
+
+export function Spinner() {
+  return <div className="spinner" />;
+}
+
+export function Tag({ children, tone }: { children: ReactNode; tone?: 'good' | 'bad' | 'warn' | 'info' }) {
+  return <span className={`tag ${tone ?? ''}`}>{children}</span>;
+}

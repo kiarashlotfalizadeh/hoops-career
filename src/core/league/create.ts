@@ -1,4 +1,4 @@
-import type { League, Player, PlayerStats, Pos, Ratings, Settings } from '../types';
+import type { League, Player, PlayerStats, Pos, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
 import { START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
@@ -31,6 +31,7 @@ export interface SeedPlayer {
   contract: { salaries: number[]; option?: 'player' | 'team' } | null;
   draft: { year: number; round: number; pick: number; team?: string } | null;
   ratings: Ratings;
+  tend?: Tendencies;
   growth?: number;
   injuryProne?: number;
   stats: PlayerStats[];
@@ -79,6 +80,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
       : { year: 0, round: 0, pick: 0, tid: null },
     tid,
     ratings: { ...sp.ratings },
+    tend: sp.tend ? { ...sp.tend } : undefined,
     ovr: 0,
     pot: 0,
     growth: sp.growth ?? clamp(rng.normal(0, 0.4), -1, 1),

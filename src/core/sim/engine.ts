@@ -114,6 +114,11 @@ export interface SP {
   guard: boolean;
   big: boolean;
   stint: number;
+  /** Tendencies: usage, three, drive, pass multipliers. */
+  tu: number;
+  t3: number;
+  td: number;
+  tp: number;
   b: Box;
   injured?: boolean;
   /** Played at least a second. */
@@ -285,6 +290,10 @@ export class GameSim {
         guard: p.ratings.hnd >= 55 || p.pos === 'PG' || p.pos === 'SG',
         big: p.ratings.hgt >= 60 || p.pos === 'C',
         stint: 0,
+        tu: p.tend?.use ?? 1,
+        t3: p.tend?.three ?? 1,
+        td: p.tend?.drive ?? 1,
+        tp: p.tend?.pass ?? 1,
         b: newBox(),
         played: false,
       };
@@ -800,7 +809,7 @@ export class GameSim {
       default:
         skill = (p.c.create + p.c.rim + p.c.c3) / 3;
     }
-    let w = roleU * p.freedom * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
+    let w = roleU * p.freedom * p.tu * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
     // star plan "deny": fewer touches
     const def = this.T[1 - t.side];
@@ -845,17 +854,23 @@ export class GameSim {
 
   // ------------------------------------------------------------ impacts
 
+  /**
+   * Record an expected-points effect. `benefit` is the side the effect is meant to help;
+   * negative pts flip it to the other side. Keys are stored with the beneficiary's role in
+   * the possession (':o' offense, ':d' defense) so reports can phrase them correctly.
+   */
   private impact(key: string, benefit: 0 | 1, pts: number, pid?: number) {
     if (!pts) return;
-    // negative pts mean the effect hurt "benefit" side -> flip to the other side
     if (pts < 0) {
       benefit = (1 - benefit) as 0 | 1;
       pts = -pts;
     }
-    const k = `${key}|${benefit}`;
+    const role = benefit === this.poss ? 'o' : 'd';
+    const full = `${key}:${role}`;
+    const k = `${full}|${benefit}`;
     let im = this.impacts.get(k);
     if (!im) {
-      im = { key, t: benefit, count: 0, pts: 0, players: {} };
+      im = { key: full, t: benefit, count: 0, pts: 0, players: {} };
       this.impacts.set(k, im);
     }
     im.count++;
@@ -886,6 +901,10 @@ export class GameSim {
         score: [this.T[0].score, this.T[1].score],
         label: '',
         lines: [],
+        on: [this.T[0].on.map((p) => p.pid), this.T[1].on.map((p) => p.pid)],
+        guards: Object.fromEntries(off.on.map((p) => [p.pid, this.defOf(def, p).pid])),
+        scheme: def.t.defense.scheme,
+        help: def.t.defense.help,
       };
     }
     off.poss++;
@@ -1072,13 +1091,15 @@ export class GameSim {
     const trailer = off.on.filter((p) => p !== h).sort((a, b) => b.c.c3 - a.c.c3)[0];
     const threePref = 0.5 + off.t.offense.threePoint / 100;
     const opts = [
-      Math.pow(h.c.rim / 50, 1.5) * 0.6 * (1 + adv * 0.3), // attack rim
-      Math.pow(trailer.c.c3 / 50, 2) * 0.55 * threePref, // trailing three
-      Math.pow(h.c.pu3 / 50, 2) * 0.35 * threePref, // pull-up three
-      1.0 * Math.pow(Math.max(5, h.c.passing) / 50, 1.2), // drop-off to a runner
+      Math.pow(h.c.rim / 50, 1.5) * 0.6 * h.td * (1 + adv * 0.3), // attack rim
+      Math.pow(trailer.c.c3 / 50, 2) * 0.55 * threePref * trailer.t3, // trailing three
+      Math.pow(h.c.pu3 / 50, 2) * 0.35 * threePref * h.t3, // pull-up three
+      1.0 * Math.pow(Math.max(5, h.c.passing) / 50, 1.2) * h.tp, // drop-off to a runner
     ];
     const c = this.rng.weighted(opts);
     const d = this.defOf(def, h);
+    // value of the transition chance vs a half-court trip (~0.25 pts), attributed to pace/push
+    this.impact('transition', off.side, 0.25 * ((off.t.offense.transition - 50) / 100 + 0.5));
     if (c === 0) {
       this.shoot(off, def, { shooter: h, zone: 'rim', open: -0.08 + adv * 0.3, contest: def.anchor, assister: null, finish: 'transition' });
     } else if (c === 1) {
@@ -1092,8 +1113,6 @@ export class GameSim {
       this.passStep(h, runner);
       this.shoot(off, def, { shooter: runner, zone: 'rim', open: 0.06 + adv * 0.3, contest: def.anchor, assister: h, finish: 'transition' });
     }
-    // value of the transition chance vs a half-court trip (~0.25 pts), attributed to pace/push
-    this.impact('transition', off.side, 0.25 * ((off.t.offense.transition - 50) / 100 + 0.5));
   }
 
   // ------------------------------------------------------------ half court
@@ -1375,12 +1394,12 @@ export class GameSim {
     // decision
     const fr = H.freedom;
     const opts = [
-      handlerShoots * Math.pow(H.c.pu3 / 50, 2.4) * pf.three * 0.27 * fr * (1 + pullOpen), // pull-up 3
+      handlerShoots * Math.pow(H.c.pu3 / 50, 2.4) * pf.three * 0.27 * fr * H.t3 * (1 + pullOpen), // pull-up 3
       handlerShoots * Math.pow(H.c.midShot / 50, 2.2) * pf.mid * 0.22 * fr * (1 + pullOpen), // pull-up 2
-      handlerShoots * Math.pow(H.c.rim / 50, 1.6) * pf.rim * 0.32 * fr * (1 + advH * 0.4 + rimOpen * 0.5), // drive
-      Math.pow(H.c.passing / 50, 1.2) * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
-      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * Math.pow(S.c.pop / 50, 2) * 0.45 * pf.three * (1 + popOpen) : 0.01, // pop
-      Math.pow(H.c.passing / 50, 1.3) * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
+      handlerShoots * Math.pow(H.c.rim / 50, 1.6) * pf.rim * 0.32 * fr * H.td * (1 + advH * 0.4 + rimOpen * 0.5), // drive
+      Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
+      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(S.c.pop / 50, 2) * 0.45 * pf.three * S.t3 * (1 + popOpen) : 0.01, // pop
+      Math.pow(H.c.passing / 50, 1.3) * H.tp * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
     if (cov === 'blitz') opts[2] *= 0.3;
@@ -1424,7 +1443,7 @@ export class GameSim {
   }
 
   private kickTarget(off: ST, ...exclude: SP[]): SP {
-    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : Math.pow(p.c.c3 / 50, 3) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)));
+    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : Math.pow(p.c.c3 / 50, 3) * p.t3 * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)));
     return off.on[this.rng.weighted(ws)];
   }
 
@@ -1477,11 +1496,11 @@ export class GameSim {
     const rimOpen = adv * 0.35 + spacing * 0.5 - help * 0.25;
     const sizeEdge = (A.r.hgt - D.r.hgt) / 25;
     const opts = [
-      Math.pow(A.c.rim / 50, 1.7) * pf.rim * (1 + rimOpen),
+      Math.pow(A.c.rim / 50, 1.7) * pf.rim * A.td * (1 + rimOpen),
       Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.9,
-      Math.pow(A.c.pu3 / 50, 2.5) * pf.three * 0.6,
+      Math.pow(A.c.pu3 / 50, 2.5) * pf.three * 0.6 * A.t3,
       sizeEdge > 0.3 ? Math.pow(A.c.postScore / 50, 2) * sizeEdge : 0,
-      Math.pow(A.c.passing / 50, 1.2) * 0.8 * (1 + Math.max(0, help)),
+      Math.pow(A.c.passing / 50, 1.2) * 0.8 * A.tp * (1 + Math.max(0, help)),
       forced ? 0 : K.continueBase * (adv < -0.3 ? 1.4 : 0.5),
     ];
     const c = this.rng.weighted(opts);
@@ -1577,7 +1596,7 @@ export class GameSim {
       Math.pow(A.c.close / 50, 2) * 1.1, // hook / short shot
       Math.pow(A.c.rim / 50, 1.6) * 0.8 * (1 + advOpen), // drop step
       Math.pow(A.c.midShot / 50, 2) * 0.35, // fadeaway
-      Math.pow(A.c.passing / 50, 1.4) * 0.45, // pass out
+      Math.pow(A.c.passing / 50, 1.4) * 0.45 * A.tp, // pass out
       forced ? 0 : K.continueBase * 0.6,
     ];
     const c = this.rng.weighted(opts);
@@ -1641,7 +1660,7 @@ export class GameSim {
     }
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
     const opts = [
-      Math.pow(Sh.c.c3 / 50, 2.6) * pf.three * 1.25 * Sh.freedom,
+      Math.pow(Sh.c.c3 / 50, 2.6) * pf.three * 1.25 * Sh.freedom * Sh.t3,
       Math.pow(Sh.c.midShot / 50, 2) * pf.mid * 0.45,
       Math.pow(Sh.c.rim / 50, 1.6) * pf.rim * 0.45 * (1 + this.spacingBonus(off)),
       Math.pow(B.c.roll / 50, 1.5) * Math.pow(Sh.c.passing / 50, 1.2) * 0.3,
@@ -1736,7 +1755,7 @@ export class GameSim {
       }
       case 2: {
         const drivers = off.on.filter((p) => p !== passer);
-        const dr = drivers[this.rng.weighted(drivers.map((p) => Math.pow(p.c.create / 50, 2.5) * p.freedom))];
+        const dr = drivers[this.rng.weighted(drivers.map((p) => Math.pow(p.c.create / 50, 2.5) * p.freedom * p.td))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
         const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -0.3 : 0);
@@ -2000,8 +2019,8 @@ export class GameSim {
   private spotUp(off: ST, def: ST, s: ShotOpts) {
     const sh = s.shooter;
     const t3 = off.t.offense.threePoint / 100;
-    const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.5 + t3) * (1 + 0.6 * clamp(s.open, -0.5, 1));
-    const wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
+    const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.5 + t3) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
+    const wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
       return;

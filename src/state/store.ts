@@ -1,0 +1,169 @@
+import { create } from 'zustand';
+import type { League } from '../core/types';
+import { saveLeague, setLastLeagueId } from './persistence';
+import { simDay, regularGamesLeft } from '../core/league/season';
+import { userGameOnDay } from '../core/league/games';
+import { schedulePlayoffDay } from '../core/league/playoffs';
+
+export type SimTarget =
+  | { kind: 'days'; n: number }
+  | { kind: 'untilUserGame' }
+  | { kind: 'week' }
+  | { kind: 'allStar' }
+  | { kind: 'deadline' }
+  | { kind: 'endRegular' }
+  | { kind: 'endPostseason' };
+
+export interface SimProgress {
+  label: string;
+  done: number;
+  total: number;
+}
+
+export interface Toast {
+  id: number;
+  text: string;
+  tone: 'good' | 'bad' | 'neutral';
+}
+
+interface AppState {
+  league: League | null;
+  v: number;
+  sim: SimProgress | null;
+  stopRequested: boolean;
+  toasts: Toast[];
+  setLeague: (l: League | null) => void;
+  /** Mutate the league in place and re-render. */
+  mutate: (fn: (l: League) => void, save?: boolean) => void;
+  save: () => Promise<void>;
+  simulate: (target: SimTarget) => Promise<void>;
+  stopSim: () => void;
+  toast: (text: string, tone?: Toast['tone']) => void;
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let toastId = 1;
+
+const nextFrame = () => new Promise<void>((r) => setTimeout(r, 0));
+
+function targetDone(l: League, target: SimTarget, startDay: number, startPhase: string): boolean {
+  if (l.phase !== startPhase) return true;
+  if (!(l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs')) return true;
+  switch (target.kind) {
+    case 'days':
+      return l.day - startDay >= target.n;
+    case 'week':
+      return l.day - startDay >= 7;
+    case 'untilUserGame':
+      if (l.day === startDay) return false;
+      if (l.phase === 'playoffs') schedulePlayoffDay(l);
+      return !!userGameOnDay(l, l.day);
+    case 'allStar':
+      return l.phase !== 'regular' || l.day > l.allStarDay;
+    case 'deadline':
+      return l.phase !== 'regular' || l.day > l.tradeDeadlineDay;
+    case 'endRegular':
+      return l.phase !== 'regular' || regularGamesLeft(l) === 0;
+    case 'endPostseason':
+      return false;
+  }
+}
+
+function estimateTotal(l: League, target: SimTarget): number {
+  switch (target.kind) {
+    case 'days':
+      return target.n;
+    case 'week':
+      return 7;
+    case 'untilUserGame':
+      return 3;
+    case 'allStar':
+      return Math.max(1, l.allStarDay - l.day + 1);
+    case 'deadline':
+      return Math.max(1, l.tradeDeadlineDay - l.day + 1);
+    case 'endRegular':
+      return Math.max(1, l.regularSeasonDays - l.day + 1);
+    case 'endPostseason':
+      return 60;
+  }
+}
+
+export const useStore = create<AppState>((set, get) => ({
+  league: null,
+  v: 0,
+  sim: null,
+  stopRequested: false,
+  toasts: [],
+  setLeague: (l) => {
+    set({ league: l, v: get().v + 1 });
+    setLastLeagueId(l?.id ?? null);
+  },
+  mutate: (fn, save = true) => {
+    const l = get().league;
+    if (!l) return;
+    fn(l);
+    set({ v: get().v + 1 });
+    if (save) {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => void get().save(), 800);
+    }
+  },
+  save: async () => {
+    const l = get().league;
+    if (!l) return;
+    try {
+      await saveLeague(l);
+    } catch (e) {
+      console.error('save failed', e);
+      get().toast('Could not save to device storage.', 'bad');
+    }
+  },
+  simulate: async (target) => {
+    const l = get().league;
+    if (!l || get().sim) return;
+    const startDay = l.day;
+    const startPhase = l.phase;
+    const total = estimateTotal(l, target);
+    const inboxBefore = l.inbox.filter((m) => !m.read && (m.tone === 'bad' || m.tone === 'alert')).length;
+    set({ sim: { label: 'Simulating', done: 0, total }, stopRequested: false });
+    let days = 0;
+    try {
+      for (;;) {
+        if (get().stopRequested) break;
+        const report = simDay(l);
+        days++;
+        set({ sim: { label: 'Simulating', done: days, total: Math.max(total, days) }, v: get().v + 1 });
+        if (report.phaseChanged) break;
+        if (targetDone(l, target, startDay, startPhase)) break;
+        // smart stop: something important happened to your team during a long sim
+        const alerts = l.inbox.filter((m) => !m.read && (m.tone === 'bad' || m.tone === 'alert')).length;
+        if (days > 1 && alerts > inboxBefore && target.kind !== 'days') {
+          get().toast('Stopped: something needs your attention (see Inbox).', 'neutral');
+          break;
+        }
+        if (days % 20 === 0) await get().save();
+        await nextFrame();
+      }
+    } finally {
+      set({ sim: null, stopRequested: false, v: get().v + 1 });
+      await get().save();
+    }
+  },
+  stopSim: () => set({ stopRequested: true }),
+  toast: (text, tone = 'neutral') => {
+    const t = { id: toastId++, text, tone };
+    set({ toasts: [...get().toasts, t] });
+    setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== t.id) }), 3200);
+  },
+}));
+
+/** Subscribe to league changes; returns the league (asserted non-null inside the game shell). */
+export function useLeague(): League {
+  const league = useStore((s) => s.league);
+  useStore((s) => s.v);
+  return league as League;
+}
+
+export function useVersion(): number {
+  return useStore((s) => s.v);
+}

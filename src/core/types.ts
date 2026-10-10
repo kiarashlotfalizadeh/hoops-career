@@ -210,10 +210,23 @@ export interface Player {
   prospect?: ProspectInfo;
   /** Player's archetype label, recomputed when ratings change. */
   archetype: string;
+  /** Playing-style tendencies (multipliers around 1), fitted to real stats for seeded players. */
+  tend?: Tendencies;
   /** Free agent asking contract while in FA. */
   asking?: { amount: number; years: number };
   /** Days remaining in which FA will consider offers before re-evaluating. */
   faDays?: number;
+}
+
+export interface Tendencies {
+  /** How often the offense looks for him. */
+  use: number;
+  /** Preference for threes over twos. */
+  three: number;
+  /** Preference for attacking the rim. */
+  drive: number;
+  /** Preference for passing out of actions. */
+  pass: number;
 }
 
 export interface ProspectInfo {

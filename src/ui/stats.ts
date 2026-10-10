@@ -1,0 +1,115 @@
+// Derived stat helpers shared by screens.
+import type { League, Player, PlayerStats, TeamSeason } from '../core/types';
+import { seasonTotals } from '../core/league/helpers';
+import { gameScore } from '../core/league/awards';
+
+export interface PerGame {
+  gp: number;
+  gs: number;
+  min: number;
+  pts: number;
+  reb: number;
+  orb: number;
+  drb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  tov: number;
+  pf: number;
+  fgm: number;
+  fga: number;
+  tpm: number;
+  tpa: number;
+  ftm: number;
+  fta: number;
+  fgPct: number;
+  tpPct: number;
+  ftPct: number;
+  tsPct: number;
+  efgPct: number;
+  usg: number;
+  pm: number;
+  gmsc: number;
+  onOff: number; // on-court net rating
+  rimPct: number;
+  rimRate: number;
+}
+
+export function perGame(s: PlayerStats | null | undefined): PerGame | null {
+  if (!s || s.gp === 0) return null;
+  const g = s.gp;
+  const tsa = s.fga + 0.44 * s.fta;
+  const use = s.fga + 0.44 * s.fta + s.tov;
+  const teamUse = s.teamFga + 0.44 * s.teamFta + s.teamTov;
+  return {
+    gp: s.gp,
+    gs: s.gs,
+    min: s.min / g,
+    pts: s.pts / g,
+    reb: (s.orb + s.drb) / g,
+    orb: s.orb / g,
+    drb: s.drb / g,
+    ast: s.ast / g,
+    stl: s.stl / g,
+    blk: s.blk / g,
+    tov: s.tov / g,
+    pf: s.pf / g,
+    fgm: s.fgm / g,
+    fga: s.fga / g,
+    tpm: s.tpm / g,
+    tpa: s.tpa / g,
+    ftm: s.ftm / g,
+    fta: s.fta / g,
+    fgPct: s.fga ? s.fgm / s.fga : 0,
+    tpPct: s.tpa ? s.tpm / s.tpa : 0,
+    ftPct: s.fta ? s.ftm / s.fta : 0,
+    tsPct: tsa ? s.pts / (2 * tsa) : 0,
+    efgPct: s.fga ? (s.fgm + 0.5 * s.tpm) / s.fga : 0,
+    usg: s.adv ? s.adv.usg / 100 : teamUse ? use / teamUse : 0,
+    pm: s.pm / g,
+    gmsc: gameScore(s) / g,
+    onOff: s.onPoss ? ((s.onPtsFor - s.onPtsAgainst) / s.onPoss) * 100 : 0,
+    rimPct: s.rimA ? s.rimM / s.rimA : 0,
+    rimRate: s.fga ? s.rimA / s.fga : 0,
+  };
+}
+
+export function playerSeason(p: Player, season: number, playoffs = false): PerGame | null {
+  return perGame(seasonTotals(p, season, playoffs));
+}
+
+/** Most recent season with stats (current season first, then previous real seasons). */
+export function latestLine(league: League, p: Player): { season: number; pg: PerGame; real: boolean } | null {
+  for (let s = league.season; s >= league.season - 4; s--) {
+    const t = seasonTotals(p, s, false);
+    if (t && t.gp > 0) return { season: s, pg: perGame(t)!, real: !!t.real };
+  }
+  return null;
+}
+
+export function teamRatings(ts: TeamSeason) {
+  const g = Math.max(1, ts.won + ts.lost);
+  const ortg = ts.poss ? (ts.ptsFor / ts.poss) * 100 : 0;
+  const drtg = ts.oppPoss ? (ts.ptsAgainst / ts.oppPoss) * 100 : 0;
+  return {
+    ppg: ts.ptsFor / g,
+    oppg: ts.ptsAgainst / g,
+    ortg,
+    drtg,
+    net: ortg - drtg,
+    pace: ts.poss / g,
+    efg: ts.t.fga ? (ts.t.fgm + 0.5 * ts.t.tpm) / ts.t.fga : 0,
+    tpRate: ts.t.fga ? ts.t.tpa / ts.t.fga : 0,
+    tov: ts.poss ? ts.t.tov / ts.poss : 0,
+    orb: ts.t.orb + ts.o.drb ? ts.t.orb / (ts.t.orb + ts.o.drb) : 0,
+    ftr: ts.t.fga ? ts.t.fta / ts.t.fga : 0,
+    oppEfg: ts.o.fga ? (ts.o.fgm + 0.5 * ts.o.tpm) / ts.o.fga : 0,
+  };
+}
+
+export const f1 = (v: number) => (isFinite(v) ? v.toFixed(1) : '-');
+export const f0 = (v: number) => (isFinite(v) ? v.toFixed(0) : '-');
+export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '-');
+export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '-');
+export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '-');
+export const moneyM = (k: number, d = 1) => `$${(k / 1000).toFixed(d)}M`;

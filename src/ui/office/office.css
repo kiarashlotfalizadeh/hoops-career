@@ -1,0 +1,668 @@
+/* Front Office screens — scoped helpers. Everything here is prefixed fo- so it never
+   collides with the shared design system in theme.css. */
+
+/* ------------------------------------------------------------ section titles */
+.fo-sec {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 4px 2px -4px;
+}
+.fo-sec::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ------------------------------------------------------------ hero / spotlight */
+.fo-hero {
+  position: relative;
+  overflow: hidden;
+}
+.fo-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(115deg, transparent 0 22px, rgba(255, 255, 255, 0.018) 22px 44px);
+  pointer-events: none;
+}
+.fo-hero > * {
+  position: relative;
+}
+.fo-eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.fo-big {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.fo-mid {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.fo-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bad);
+}
+.fo-live::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 25%, transparent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.fo-clock {
+  border-color: color-mix(in srgb, var(--good) 55%, var(--line)) !important;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--good) 20%, var(--surface-2)), var(--surface)) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--good) 25%, transparent), 0 10px 30px color-mix(in srgb, var(--good) 12%, transparent);
+}
+
+/* ------------------------------------------------------------ nav tiles */
+.fo-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (min-width: 760px) {
+  .fo-tiles {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.fo-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 112px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tile, var(--accent)) 10%, var(--surface-2)), var(--surface));
+  overflow: hidden;
+  transition: transform 0.06s ease;
+}
+.fo-tile:active {
+  transform: scale(0.98);
+}
+.fo-tile .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+  color: var(--tile, var(--accent));
+  background: color-mix(in srgb, var(--tile, var(--accent)) 18%, transparent);
+}
+.fo-tile .t {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fo-tile .s {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+.fo-tile.hot {
+  border-color: color-mix(in srgb, var(--tile, var(--accent)) 60%, var(--line));
+}
+.fo-tile.hot::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tile, var(--accent));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tile, var(--accent)) 22%, transparent);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.fo-tile.muted .t,
+.fo-tile.muted .ic {
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------ cap bar */
+.fo-cap {
+  position: relative;
+  padding-top: 15px;
+}
+.fo-cap-track {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.fo-cap-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 6px 0 0 6px;
+  transition: width 0.25s ease;
+}
+.fo-cap-add {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, var(--accent) 0 5px, color-mix(in srgb, var(--accent) 55%, transparent) 5px 10px);
+  transition: width 0.2s ease, left 0.2s ease;
+}
+.fo-cap-mark {
+  position: absolute;
+  top: 11px;
+  width: 2px;
+  height: 20px;
+  margin-left: -1px;
+  background: var(--text);
+  border-radius: 1px;
+  opacity: 0.85;
+}
+.fo-cap-mark.tax {
+  background: var(--bad);
+}
+.fo-cap-mark span {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+}
+.fo-cap-mark.tax span {
+  color: var(--bad);
+}
+.fo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.fo-legend b {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.fo-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: 0;
+}
+
+/* ------------------------------------------------------------ centered (-1..1) bars */
+.fo-cbar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+.fo-cbar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--line-2);
+}
+.fo-cbar > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------ meter (trade AI reaction) */
+.fo-meter {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+.fo-meter > i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+.fo-meter-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ selectable asset rows */
+.fo-asset {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 9px;
+  min-height: 56px;
+  text-align: left;
+  border-left: 3px solid transparent;
+  transition: background 0.12s ease;
+}
+.fo-asset:active {
+  background: var(--surface-3);
+}
+.fo-asset.on {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border-left-color: var(--accent);
+}
+.fo-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: transparent;
+}
+.fo-asset.on .fo-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.fo-money {
+  text-align: right;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.fo-money .a {
+  font-weight: 700;
+  font-size: 14px;
+}
+.fo-money .b {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ player rows */
+.fo-prow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 60px;
+  width: 100%;
+  text-align: left;
+}
+.fo-prow:active {
+  background: var(--surface-3);
+}
+.fo-ovrstack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  width: 36px;
+}
+.fo-ovrstack .pot {
+  font-size: 10.5px;
+  line-height: 1;
+}
+.fo-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fo-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fo-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+
+/* ------------------------------------------------------------ team picker */
+.fo-teams {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -14px;
+  padding: 2px 14px 4px;
+  scroll-snap-type: x proximity;
+}
+.fo-teams::-webkit-scrollbar {
+  display: none;
+}
+.fo-team {
+  flex: none;
+  width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 0 5px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  scroll-snap-align: start;
+}
+.fo-team.on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+/* ------------------------------------------------------------ chips of selected assets */
+.fo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 3px 4px 3px 4px;
+  border-radius: 9px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.fo-pill .x {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  flex: none;
+}
+
+/* ------------------------------------------------------------ sticky dock */
+.fo-dock {
+  position: sticky;
+  bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* ------------------------------------------------------------ split layout (phone toggles, tablet side by side) */
+.fo-split {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 760px) {
+  .fo-split {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .fo-only-sm {
+    display: none !important;
+  }
+}
+@media (max-width: 759px) {
+  .fo-hide-sm {
+    display: none !important;
+  }
+}
+
+/* ------------------------------------------------------------ contracts table */
+table.stats.fo-contracts td,
+table.stats.fo-contracts th {
+  padding: 8px 7px;
+}
+table.stats.fo-contracts td.sticky {
+  max-width: 148px;
+}
+table.stats.fo-contracts tr.dead td {
+  color: var(--text-dim);
+  font-style: italic;
+}
+table.stats.fo-contracts tr.total td {
+  font-weight: 750;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line-2);
+}
+table.stats.fo-contracts tr.total td.sticky {
+  background: var(--surface-2);
+}
+table.stats.fo-contracts tr.clickable td {
+  cursor: pointer;
+}
+.fo-opt {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+  font-style: normal;
+  background: color-mix(in srgb, var(--info) 22%, transparent);
+  color: var(--info);
+}
+.fo-opt.team {
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+  color: var(--warn);
+}
+
+/* ------------------------------------------------------------ draft */
+.fo-rank {
+  width: 30px;
+  flex: none;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.fo-pickchip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 58px;
+  padding: 7px 0 6px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+.fo-pickchip.me {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+.fo-pickchip .n {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+}
+.fo-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ misc */
+.fo-callout {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.fo-callout.bad {
+  background: color-mix(in srgb, var(--bad) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--bad) 35%, transparent);
+}
+.fo-callout.good {
+  background: color-mix(in srgb, var(--good) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--good) 35%, transparent);
+}
+.fo-callout.warn {
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.fo-callout > svg {
+  flex: none;
+  margin-top: 1px;
+}
+.fo-statline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.fo-statline b {
+  color: var(--text);
+  font-weight: 700;
+}
+.fo-stepper {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  flex: none;
+}
+.fo-stepper:active {
+  transform: scale(0.94);
+}
+.fo-yr {
+  flex: 1;
+  height: 44px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-weight: 750;
+  font-size: 15px;
+  position: relative;
+}
+.fo-yr small {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.fo-yr.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+.fo-yr.on small {
+  color: var(--text-2);
+}
+.fo-gauge text {
+  font-family: var(--display);
+}
+.fo-minichart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 84px;
+  padding-top: 6px;
+}
+.fo-minichart > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
+}
+.fo-minichart .b {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 5px 5px 2px 2px;
+}
+.fo-teamgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+@media (min-width: 560px) {
+  .fo-teamgrid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}

@@ -3,17 +3,19 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Hoops Career — a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
+  "description": "Hoops Career \u2014 a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "data:fetch": "tsx scripts/data/fetch.ts",
+    "data:fetch": "NODE_USE_ENV_PROXY=1 tsx scripts/data/fetch.ts",
     "data:build": "tsx scripts/data/build-seed.ts",
-    "calibrate": "tsx scripts/calibrate.ts",
-    "cap:sync": "npm run build && cap sync"
+    "cap:sync": "npm run build && cap sync",
+    "data": "npm run data:fetch && npm run data:build",
+    "bench": "tsx scripts/engine-bench.ts",
+    "season-test": "tsx scripts/season-test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

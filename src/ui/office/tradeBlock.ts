@@ -1,0 +1,126 @@
+// "Trading block": for one of the user's players, find the best package each AI team
+// would actually accept. Same idea as aiProposeToUser in core/league/trades.ts, but
+// exhaustive across teams, including draft picks, and verified with evaluateTrade.
+import type { League } from '../../core/types';
+import { CAP } from '../../core/constants';
+import { salaryFor } from '../../core/playerGen';
+import { teamPlayers } from '../../core/league/helpers';
+import { tradeValue } from '../../core/league/contracts';
+import { evaluateTrade, pickValue, type TradeOffer } from '../../core/league/trades';
+import { capSeason } from './common';
+
+export interface BlockOffer {
+  tid: number;
+  offer: TradeOffer;
+  /** Value of the package to the user's team (its strategy). */
+  myValue: number;
+  /** Value of the user's player to the user's team. */
+  targetValue: number;
+}
+
+type Strategy = 'contend' | 'retool' | 'rebuild';
+const pickMult = (s: Strategy) => (s === 'rebuild' ? 1.35 : s === 'contend' ? 0.7 : 1);
+
+interface Asset {
+  kind: 'p' | 'd';
+  id: number;
+  ai: number; // value to the AI team
+  mine: number; // value to the user
+  sal: number;
+}
+
+function toOffer(user: number, give: number[], tid: number, pkg: Asset[]): TradeOffer {
+  return {
+    a: { tid: user, pids: give, dpids: [] },
+    b: { tid, pids: pkg.filter((x) => x.kind === 'p').map((x) => x.id), dpids: pkg.filter((x) => x.kind === 'd').map((x) => x.id) },
+  };
+}
+
+export function blockOffers(league: League, pid: number): BlockOffer[] {
+  const user = league.userTid;
+  const me = league.teams[user];
+  const target = league.players[pid];
+  if (!target || target.tid !== user) return [];
+  const s = capSeason(league);
+  const targetValue = tradeValue(league, target, me.strategy);
+  const gen = league.settings.difficulty === 'casual' ? 0.88 : league.settings.difficulty === 'hard' ? 1.12 : 1;
+  const userCount = teamPlayers(league, user).length;
+  const out: BlockOffer[] = [];
+
+  for (const t of league.teams) {
+    if (t.tid === user) continue;
+    const want = tradeValue(league, target, t.strategy);
+    const budget = want / gen;
+    const roster = teamPlayers(league, t.tid);
+    // the AI must stay at 15 or fewer after taking our player
+    const minPlayersOut = roster.length + 1 > CAP.rosterMax ? roster.length + 1 - CAP.rosterMax : 0;
+    // and we must stay at 15 or fewer
+    const maxPlayersIn = Math.min(3, CAP.rosterMax - userCount + 1);
+    if (maxPlayersIn < minPlayersOut) continue;
+    const assets: Asset[] = [
+      ...roster.map((p) => ({ kind: 'p' as const, id: p.pid, ai: tradeValue(league, p, t.strategy), mine: tradeValue(league, p, me.strategy), sal: salaryFor(p, s) })),
+      ...league.draftPicks
+        .filter((d) => d.tid === t.tid)
+        .map((d) => {
+          const pv = pickValue(league, d);
+          return { kind: 'd' as const, id: d.dpid, ai: pv * pickMult(t.strategy), mine: pv * pickMult(me.strategy), sal: 0 };
+        }),
+    ]
+      // ignore throw-ins worth almost nothing
+      .filter((a) => a.mine >= targetValue * 0.06)
+      .sort((x, y) => y.mine - x.mine);
+
+    const greedy = (skip: Set<number>, cap = budget): Asset[] => {
+      const pkg: Asset[] = [];
+      let sum = 0;
+      let np = 0;
+      let nd = 0;
+      for (let i = 0; i < assets.length; i++) {
+        if (skip.has(i)) continue;
+        const a = assets[i];
+        if (a.kind === 'p' && np >= maxPlayersIn) continue;
+        if (a.kind === 'd' && nd >= 2) continue;
+        if (sum + a.ai > cap) continue;
+        pkg.push(a);
+        sum += a.ai;
+        if (a.kind === 'p') np++;
+        else nd++;
+      }
+      return pkg;
+    };
+
+    // salary fillers: low-value contracts the AI is happy to send to make the money work
+    const fillers = roster
+      .map((p) => ({ kind: 'p' as const, id: p.pid, ai: tradeValue(league, p, t.strategy), mine: tradeValue(league, p, me.strategy), sal: salaryFor(p, s) }))
+      .filter((a) => a.sal > 0)
+      .sort((x, y) => x.ai / x.sal - y.ai / y.sal);
+
+    let best: { pkg: Asset[]; mine: number } | null = null;
+    const consider = (pkg: Asset[]) => {
+      const nPlayers = pkg.filter((a) => a.kind === 'p').length;
+      if (!pkg.length || nPlayers < minPlayersOut || nPlayers > maxPlayersIn) return;
+      const ev = evaluateTrade(league, toOffer(user, [pid], t.tid, pkg));
+      if (!ev.accept) return;
+      const mine = pkg.reduce((a, x) => a + x.mine, 0);
+      if (!best || mine > best.mine) best = { pkg, mine };
+    };
+    const variants: Set<number>[] = [new Set(), new Set([0]), new Set([1]), new Set([0, 1]), new Set([2])];
+    for (const skip of variants) {
+      const pkg = greedy(skip);
+      consider(pkg);
+      // add a salary filler or two if matching fails
+      let withFill = [...pkg];
+      for (let k = 0; k < 2; k++) {
+        const used = new Set(withFill.map((a) => a.id));
+        const used_ai = withFill.reduce((a, x) => a + x.ai, 0);
+        const f = fillers.find((x) => !used.has(x.id) && used_ai + x.ai <= budget);
+        if (!f || withFill.filter((a) => a.kind === 'p').length >= maxPlayersIn) break;
+        withFill = [...withFill, f];
+        consider(withFill);
+      }
+    }
+    const b = best as { pkg: Asset[]; mine: number } | null;
+    if (b) out.push({ tid: t.tid, offer: toOffer(user, [pid], t.tid, b.pkg), myValue: b.mine, targetValue });
+  }
+  return out.sort((x, y) => y.myValue - x.myValue);
+}
