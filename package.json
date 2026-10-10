@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Hoops Career \u2014 a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
+  "description": "Hoops Career — a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -19,8 +19,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.9",
     "@capacitor/ios": "^7.6.9",
+    "@capacitor/status-bar": "^7.0.6",
     "@fontsource/barlow-condensed": "^5.1.0",
     "@fontsource/inter": "^5.1.0",
     "comlink": "^4.4.2",

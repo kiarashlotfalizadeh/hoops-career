@@ -132,7 +132,9 @@ export const useStore = create<AppState>((set, get) => ({
         if (get().stopRequested) break;
         const report = simDay(l);
         days++;
-        set({ sim: { label: 'Simulating', done: days, total: Math.max(total, days) }, v: get().v + 1 });
+        // re-render league views weekly during long sims; the progress bar updates daily
+        const refresh = days % 7 === 0 || total <= 7;
+        set(refresh ? { sim: { label: 'Simulating', done: days, total: Math.max(total, days) }, v: get().v + 1 } : { sim: { label: 'Simulating', done: days, total: Math.max(total, days) } });
         if (report.phaseChanged) break;
         if (targetDone(l, target, startDay, startPhase)) break;
         // smart stop: something important happened to your team during a long sim

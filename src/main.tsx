@@ -8,9 +8,12 @@ import '@fontsource/barlow-condensed/700.css';
 import '@fontsource/barlow-condensed/800.css';
 import './ui/theme.css';
 import { App } from './ui/App';
+import { initNative } from './native';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 );
+
+void initNative();
