@@ -1036,8 +1036,9 @@ export class GameSim {
       }
     }
     if (!fouled) return false;
-    const dt = tag === 'hack' ? this.rng.uniform(3, 7) : this.rng.uniform(1, 3.5);
-    this.tick(dt);
+    // late-game fouls come right on the catch; never let them run out the clock
+    const dt = tag === 'hack' ? this.rng.uniform(3, 7) : Math.min(this.clock - 0.3, this.rng.uniform(0.6, 2.4));
+    this.tick(Math.max(0.2, dt));
     const fouler = def.on.reduce((a, p) => (p.fouls < a.fouls ? p : a), def.on[0]);
     this.addFoul(def, fouler, false);
     if (this.cur) {
@@ -2016,8 +2017,8 @@ export class GameSim {
     sh.hot = Math.max(0, sh.hot - 1);
     if (fouled) {
       const fouler = c ?? this.defOf(def, sh);
-      this.addFoul(def, fouler, true);
       this.addPbp(off.side, `${sh.name} fouled on ${desc} by ${fouler.name}.`, 'foul');
+      this.addFoul(def, fouler, true);
       if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
       this.freeThrows(off, def, sh, value);
       return;
