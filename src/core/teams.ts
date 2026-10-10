@@ -1,0 +1,59 @@
+// Franchise reference data. Colors are the clubs' public color schemes; logos in
+// the app are original monogram marks generated from these (no trademarked art).
+
+export interface FranchiseDef {
+  abbrev: string; // display abbreviation
+  bbref: string; // Basketball Reference abbreviation
+  region: string;
+  name: string;
+  colors: [string, string, string];
+  conf: 'E' | 'W';
+  div: string;
+  pop: number; // metro population, millions (market size)
+  /** Monogram shape for the generated mark. */
+  mark: 'circle' | 'shield' | 'hex' | 'diamond' | 'round-square';
+  arena: string;
+}
+
+export const FRANCHISES: FranchiseDef[] = [
+  { abbrev: 'ATL', bbref: 'ATL', region: 'Atlanta', name: 'Hawks', colors: ['#C8102E', '#FDB927', '#ffffff'], conf: 'E', div: 'Southeast', pop: 6.3, mark: 'circle', arena: 'State Farm Arena' },
+  { abbrev: 'BOS', bbref: 'BOS', region: 'Boston', name: 'Celtics', colors: ['#007A33', '#BA9653', '#ffffff'], conf: 'E', div: 'Atlantic', pop: 4.9, mark: 'shield', arena: 'TD Garden' },
+  { abbrev: 'BKN', bbref: 'BRK', region: 'Brooklyn', name: 'Nets', colors: ['#111111', '#FFFFFF', '#777D84'], conf: 'E', div: 'Atlantic', pop: 10.0, mark: 'round-square', arena: 'Barclays Center' },
+  { abbrev: 'CHA', bbref: 'CHO', region: 'Charlotte', name: 'Hornets', colors: ['#1D1160', '#00788C', '#A1A1A4'], conf: 'E', div: 'Southeast', pop: 2.8, mark: 'hex', arena: 'Spectrum Center' },
+  { abbrev: 'CHI', bbref: 'CHI', region: 'Chicago', name: 'Bulls', colors: ['#CE1141', '#111111', '#ffffff'], conf: 'E', div: 'Central', pop: 9.4, mark: 'diamond', arena: 'United Center' },
+  { abbrev: 'CLE', bbref: 'CLE', region: 'Cleveland', name: 'Cavaliers', colors: ['#860038', '#FDBB30', '#041E42'], conf: 'E', div: 'Central', pop: 2.1, mark: 'shield', arena: 'Rocket Arena' },
+  { abbrev: 'DAL', bbref: 'DAL', region: 'Dallas', name: 'Mavericks', colors: ['#00538C', '#B8C4CA', '#002B5E'], conf: 'W', div: 'Southwest', pop: 7.9, mark: 'hex', arena: 'American Airlines Center' },
+  { abbrev: 'DEN', bbref: 'DEN', region: 'Denver', name: 'Nuggets', colors: ['#0E2240', '#FEC524', '#8B2131'], conf: 'W', div: 'Northwest', pop: 3.0, mark: 'diamond', arena: 'Ball Arena' },
+  { abbrev: 'DET', bbref: 'DET', region: 'Detroit', name: 'Pistons', colors: ['#C8102E', '#1D42BA', '#BEC0C2'], conf: 'E', div: 'Central', pop: 4.3, mark: 'circle', arena: 'Little Caesars Arena' },
+  { abbrev: 'GSW', bbref: 'GSW', region: 'Golden State', name: 'Warriors', colors: ['#1D428A', '#FFC72C', '#ffffff'], conf: 'W', div: 'Pacific', pop: 7.5, mark: 'circle', arena: 'Chase Center' },
+  { abbrev: 'HOU', bbref: 'HOU', region: 'Houston', name: 'Rockets', colors: ['#CE1141', '#C4CED4', '#111111'], conf: 'W', div: 'Southwest', pop: 7.3, mark: 'round-square', arena: 'Toyota Center' },
+  { abbrev: 'IND', bbref: 'IND', region: 'Indiana', name: 'Pacers', colors: ['#002D62', '#FDBB30', '#BEC0C2'], conf: 'E', div: 'Central', pop: 2.1, mark: 'hex', arena: 'Gainbridge Fieldhouse' },
+  { abbrev: 'LAC', bbref: 'LAC', region: 'Los Angeles', name: 'Clippers', colors: ['#C8102E', '#1D428A', '#BEC0C2'], conf: 'W', div: 'Pacific', pop: 12.8, mark: 'shield', arena: 'Intuit Dome' },
+  { abbrev: 'LAL', bbref: 'LAL', region: 'Los Angeles', name: 'Lakers', colors: ['#552583', '#FDB927', '#ffffff'], conf: 'W', div: 'Pacific', pop: 12.8, mark: 'diamond', arena: 'Crypto.com Arena' },
+  { abbrev: 'MEM', bbref: 'MEM', region: 'Memphis', name: 'Grizzlies', colors: ['#5D76A9', '#12173F', '#F5B112'], conf: 'W', div: 'Southwest', pop: 1.3, mark: 'shield', arena: 'FedExForum' },
+  { abbrev: 'MIA', bbref: 'MIA', region: 'Miami', name: 'Heat', colors: ['#98002E', '#F9A01B', '#111111'], conf: 'E', div: 'Southeast', pop: 6.2, mark: 'diamond', arena: 'Kaseya Center' },
+  { abbrev: 'MIL', bbref: 'MIL', region: 'Milwaukee', name: 'Bucks', colors: ['#00471B', '#EEE1C6', '#0077C0'], conf: 'E', div: 'Central', pop: 1.6, mark: 'circle', arena: 'Fiserv Forum' },
+  { abbrev: 'MIN', bbref: 'MIN', region: 'Minnesota', name: 'Timberwolves', colors: ['#0C2340', '#236192', '#78BE20'], conf: 'W', div: 'Northwest', pop: 3.7, mark: 'hex', arena: 'Target Center' },
+  { abbrev: 'NOP', bbref: 'NOP', region: 'New Orleans', name: 'Pelicans', colors: ['#0C2340', '#C8102E', '#85714D'], conf: 'W', div: 'Southwest', pop: 1.3, mark: 'round-square', arena: 'Smoothie King Center' },
+  { abbrev: 'NYK', bbref: 'NYK', region: 'New York', name: 'Knicks', colors: ['#006BB6', '#F58426', '#BEC0C2'], conf: 'E', div: 'Atlantic', pop: 19.5, mark: 'circle', arena: 'Madison Square Garden' },
+  { abbrev: 'OKC', bbref: 'OKC', region: 'Oklahoma City', name: 'Thunder', colors: ['#007AC1', '#EF3B24', '#FDBB30'], conf: 'W', div: 'Northwest', pop: 1.4, mark: 'shield', arena: 'Paycom Center' },
+  { abbrev: 'ORL', bbref: 'ORL', region: 'Orlando', name: 'Magic', colors: ['#0077C0', '#C4CED4', '#111111'], conf: 'E', div: 'Southeast', pop: 2.7, mark: 'diamond', arena: 'Kia Center' },
+  { abbrev: 'PHI', bbref: 'PHI', region: 'Philadelphia', name: '76ers', colors: ['#006BB6', '#ED174C', '#002B5C'], conf: 'E', div: 'Atlantic', pop: 6.2, mark: 'shield', arena: 'Xfinity Mobile Arena' },
+  { abbrev: 'PHX', bbref: 'PHO', region: 'Phoenix', name: 'Suns', colors: ['#1D1160', '#E56020', '#F9AD1B'], conf: 'W', div: 'Pacific', pop: 5.1, mark: 'circle', arena: 'Mortgage Matchup Center' },
+  { abbrev: 'POR', bbref: 'POR', region: 'Portland', name: 'Trail Blazers', colors: ['#E03A3E', '#111111', '#ffffff'], conf: 'W', div: 'Northwest', pop: 2.5, mark: 'hex', arena: 'Moda Center' },
+  { abbrev: 'SAC', bbref: 'SAC', region: 'Sacramento', name: 'Kings', colors: ['#5A2D81', '#63727A', '#ffffff'], conf: 'W', div: 'Pacific', pop: 2.4, mark: 'shield', arena: 'Golden 1 Center' },
+  { abbrev: 'SAS', bbref: 'SAS', region: 'San Antonio', name: 'Spurs', colors: ['#C4CED4', '#111111', '#8A8D8F'], conf: 'W', div: 'Southwest', pop: 2.7, mark: 'round-square', arena: 'Frost Bank Center' },
+  { abbrev: 'TOR', bbref: 'TOR', region: 'Toronto', name: 'Raptors', colors: ['#CE1141', '#111111', '#A1A1A4'], conf: 'E', div: 'Atlantic', pop: 6.7, mark: 'diamond', arena: 'Scotiabank Arena' },
+  { abbrev: 'UTA', bbref: 'UTA', region: 'Utah', name: 'Jazz', colors: ['#4E008E', '#79A3DC', '#111111'], conf: 'W', div: 'Northwest', pop: 2.7, mark: 'circle', arena: 'Delta Center' },
+  { abbrev: 'WAS', bbref: 'WAS', region: 'Washington', name: 'Wizards', colors: ['#002B5C', '#E31837', '#C4CED4'], conf: 'E', div: 'Southeast', pop: 6.4, mark: 'hex', arena: 'Capital One Arena' },
+];
+
+export const BBREF_TO_TID: Record<string, number> = Object.fromEntries(
+  FRANCHISES.map((f, i) => [f.bbref, i]),
+);
+// Historic/alternate abbreviations that can appear in older stat rows.
+BBREF_TO_TID['BKN'] = BBREF_TO_TID['BRK'];
+BBREF_TO_TID['CHA'] = BBREF_TO_TID['CHO'];
+BBREF_TO_TID['PHX'] = BBREF_TO_TID['PHO'];
+
+export const DIVISIONS = ['Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest'];

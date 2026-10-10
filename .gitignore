@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+coverage
+test-results
+playwright-report
+data/raw
+android/app/build
+android/build
+android/.gradle
+ios/App/Pods
+ios/App/build
+*.log
