@@ -52,6 +52,9 @@ export const K = {
   drain: 0.00068,
   recover: 0.0012,
   home: 0.007,
+  usageExp: 2.4,
+  freedomGreen: 1.35,
+  freedomLimited: 0.55,
 };
 
 // ---------------------------------------------------------------- internal state
@@ -270,7 +273,7 @@ export class GameSim {
         r: p.ratings,
         c: composites(p.ratings),
         role,
-        freedom: fr === 1 ? 1.55 : fr === -1 ? 0.45 : 1,
+        freedom: fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1,
         energy: 1,
         fouls: 0,
         on: false,
@@ -492,7 +495,7 @@ export class GameSim {
     for (const p of t.players) {
       p.role = t.t.offense.roles[p.pid] ?? p.role;
       const fr = t.t.offense.freedom[p.pid] ?? 0;
-      p.freedom = fr === 1 ? 1.55 : fr === -1 ? 0.45 : 1;
+      p.freedom = fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1;
     }
     this.refreshMatchups();
   }
@@ -797,7 +800,7 @@ export class GameSim {
       default:
         skill = (p.c.create + p.c.rim + p.c.c3) / 3;
     }
-    let w = roleU * p.freedom * Math.pow(Math.max(5, skill) / 50, 3.2) * (0.75 + 0.25 * p.energy) * p.perf;
+    let w = roleU * p.freedom * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
     // star plan "deny": fewer touches
     const def = this.T[1 - t.side];

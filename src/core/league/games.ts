@@ -1,0 +1,253 @@
+// Running scheduled games and folding results into the league.
+
+import type { GameResult, League, Player, ScheduledGame, TeamSeason, TeamTotals } from '../types';
+import { GameSim, type SimTeamInput } from '../sim/engine';
+import { Rng, clamp } from '../random';
+import { autoRotation, autoTactics } from '../ai/coachAI';
+import { addInbox, addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
+import { applyInjury, healOneGame } from './injuries';
+import { gameFinances, updateHype } from './finances';
+import { moodPerf } from './morale';
+import { playerAge } from '../playerGen';
+
+export function wearPerf(p: Player) {
+  return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
+}
+
+function playedYesterday(league: League, tid: number, day: number): boolean {
+  return league.schedule.some((g) => g.day === day - 1 && (g.home === tid || g.away === tid));
+}
+
+/** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
+export function ensureRotation(league: League, tid: number) {
+  const team = league.teams[tid];
+  const players = teamPlayers(league, tid);
+  const pids = new Set(players.map((p) => p.pid));
+  const rot = team.rotation;
+  const stale = rot.order.some((pid) => !pids.has(pid)) || players.some((p) => !rot.order.includes(p.pid));
+  const isUser = tid === league.userTid;
+  if (!isUser || !rot.manual) {
+    team.rotation = autoRotation(players, rot);
+  } else if (stale) {
+    // keep the user's order, drop departed players, append new ones at the end
+    rot.order = rot.order.filter((pid) => pids.has(pid));
+    for (const p of players.sort((a, b) => b.ovr - a.ovr)) if (!rot.order.includes(p.pid)) rot.order.push(p.pid);
+    for (const k of Object.keys(rot.minutes)) if (!pids.has(+k)) delete rot.minutes[+k];
+    rot.closers = rot.closers.filter((pid) => pids.has(pid));
+  }
+  const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
+  if ((!isUser || !team.tactics.manual) && (stale || missingRoles)) {
+    team.tactics = autoTactics(team, players, isUser);
+  } else if (missingRoles) {
+    // manual tactics: fill roles/freedom for newly acquired players only
+    const auto = autoTactics({ ...team, tactics: { ...team.tactics, manual: false } }, players, false);
+    for (const p of players) {
+      if (team.tactics.offense.roles[p.pid] === undefined) {
+        team.tactics.offense.roles[p.pid] = auto.offense.roles[p.pid];
+        team.tactics.offense.freedom[p.pid] = auto.offense.freedom[p.pid] ?? 0;
+      }
+    }
+  }
+}
+
+export function buildSimInput(league: League, tid: number, day: number, type: ScheduledGame['type']): SimTeamInput {
+  const team = league.teams[tid];
+  const players = teamPlayers(league, tid);
+  const rest: number[] = [];
+  if (type === 'regular' && playedYesterday(league, tid, day)) {
+    for (const pid of team.rotation.restB2B) rest.push(pid);
+    // AI load management for older stars
+    if (tid !== league.userTid) {
+      for (const p of players) {
+        if (p.ovr >= 82 && playerAge(p, league.season) >= 33 && !rest.includes(p.pid) && p.wear > 45) rest.push(p.pid);
+      }
+    }
+  }
+  const perf: Record<number, number> = {};
+  for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p);
+  return { team, players, perf, rest };
+}
+
+function addTotals(a: TeamTotals, b: TeamTotals) {
+  for (const k of Object.keys(a) as (keyof TeamTotals)[]) a[k] += b[k];
+}
+
+function recordTeamGame(ts: TeamSeason, won: boolean, home: boolean, sameConf: boolean, sameDiv: boolean, pf: number, pa: number, poss: number, oppPoss: number, t: TeamTotals, o: TeamTotals) {
+  if (won) ts.won++;
+  else ts.lost++;
+  if (home) {
+    if (won) ts.homeWon++;
+    else ts.homeLost++;
+  }
+  if (sameConf) {
+    if (won) ts.confWon++;
+    else ts.confLost++;
+  }
+  if (sameDiv) {
+    if (won) ts.divWon++;
+    else ts.divLost++;
+  }
+  ts.streak = won ? (ts.streak > 0 ? ts.streak + 1 : 1) : ts.streak < 0 ? ts.streak - 1 : -1;
+  ts.lastTen.push(won ? 1 : 0);
+  if (ts.lastTen.length > 10) ts.lastTen.shift();
+  ts.ptsFor += pf;
+  ts.ptsAgainst += pa;
+  ts.poss += poss;
+  ts.oppPoss += oppPoss;
+  addTotals(ts.t, t);
+  addTotals(ts.o, o);
+}
+
+export interface PlayOpts {
+  record?: boolean;
+  /** Use an already-finished live sim instead of simulating. */
+  sim?: GameSim;
+}
+
+export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}): GameResult {
+  const rng = new Rng(league.rng);
+  const userGame = g.home === league.userTid || g.away === league.userTid;
+  let sim = opts.sim;
+  if (!sim) {
+    ensureRotation(league, g.home);
+    ensureRotation(league, g.away);
+    sim = new GameSim(buildSimInput(league, g.home, g.day, g.type), buildSimInput(league, g.away, g.day, g.type), {
+      rng,
+      type: g.type,
+      record: opts.record ?? false,
+      keepShots: userGame,
+      injuries: league.settings.injuries,
+      neutral: g.type === 'allstar',
+    });
+    sim.simToEnd();
+  }
+  league.rng = rng.state;
+  const res = sim.result(g.gid, league.season, g.day);
+  res.seriesId = g.seriesId;
+  applyResult(league, g, sim, res, rng);
+  league.rng = rng.state;
+  return res;
+}
+
+function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameResult, rng: Rng) {
+  g.played = true;
+  const playoffs = g.type === 'playoffs';
+  const home = league.teams[g.home];
+  const away = league.teams[g.away];
+  const homeWon = res.home.pts > res.away.pts;
+  if (g.type !== 'allstar') {
+    if (g.type === 'regular') {
+      const sameConf = home.conf === away.conf;
+      const sameDiv = home.div === away.div;
+      recordTeamGame(teamSeason(home, league.season), homeWon, true, sameConf, sameDiv, res.home.pts, res.away.pts, res.home.poss, res.away.poss, res.home.t, res.away.t);
+      recordTeamGame(teamSeason(away, league.season), !homeWon, false, sameConf, sameDiv, res.away.pts, res.home.pts, res.away.poss, res.home.poss, res.away.t, res.home.t);
+    }
+    // player stats
+    for (const rb of sim.rawBoxes()) {
+      const p = league.players[rb.pid];
+      if (!p) continue;
+      if (!rb.played || rb.b.sec <= 0) continue;
+      const s = statsLine(p, league.season, rb.tid, playoffs || g.type === 'playin');
+      const b = rb.b;
+      s.gp++;
+      if (rb.starter) s.gs++;
+      s.min += b.sec / 60;
+      s.fgm += b.fgm;
+      s.fga += b.fga;
+      s.tpm += b.tpm;
+      s.tpa += b.tpa;
+      s.ftm += b.ftm;
+      s.fta += b.fta;
+      s.orb += b.orb;
+      s.drb += b.drb;
+      s.ast += b.ast;
+      s.stl += b.stl;
+      s.blk += b.blk;
+      s.tov += b.tov;
+      s.pf += b.pf;
+      s.pts += b.pts;
+      s.pm += b.pm;
+      s.rimM += b.rimM;
+      s.rimA += b.rimA;
+      s.midM += b.midM;
+      s.midA += b.midA;
+      s.onPoss += b.onPoss;
+      s.onPtsFor += b.onPF;
+      s.onPtsAgainst += b.onPA;
+      s.teamFga += b.tFga;
+      s.teamFta += b.tFta;
+      s.teamTov += b.tTov;
+      // wear accumulates with minutes
+      p.wear = clamp(p.wear + (b.sec / 60) * 0.06, 0, 100);
+    }
+    // rested players
+    for (const t of [home, away]) {
+      const side = t === home ? res.home : res.away;
+      for (const bl of side.players) if (bl.dnp === 'Rest') league.players[bl.pid].restedGames++;
+    }
+    // injuries & healing
+    for (const tid of [g.home, g.away]) {
+      for (const p of teamPlayers(league, tid)) {
+        if (p.injury && !sim.injuries.some((i) => i.pid === p.pid)) healOneGame(league, p, rng);
+      }
+    }
+    for (const inj of sim.injuries) {
+      const p = league.players[inj.pid];
+      if (p) applyInjury(league, p, rng);
+    }
+    // finances & hype
+    res.att = gameFinances(league, home, true, playoffs);
+    gameFinances(league, away, false, playoffs);
+    updateHype(home, homeWon, playoffs);
+    updateHype(away, !homeWon, playoffs);
+  }
+  // storage policy: keep detail only for the user's games
+  const userGame = g.home === league.userTid || g.away === league.userTid;
+  if (!userGame) {
+    delete res.shots;
+    delete res.impacts;
+    delete res.lineups;
+    delete res.flow;
+    delete res.pbp;
+  }
+  league.games.push(res);
+  // trim play-by-play from older user games
+  if (userGame) {
+    const userGames = league.games.filter((x) => x.pbp);
+    if (userGames.length > 6) delete userGames[0].pbp;
+  }
+  notableNews(league, res);
+  if (userGame && g.type !== 'allstar') userGameInbox(league, res);
+}
+
+function notableNews(league: League, res: GameResult) {
+  for (const side of [res.home, res.away]) {
+    for (const bl of side.players) {
+      const p = league.players[bl.pid];
+      if (!p) continue;
+      const tdbl = [bl.pts, bl.orb + bl.drb, bl.ast, bl.stl, bl.blk].filter((x) => x >= 10).length >= 3;
+      if (bl.pts >= 50 || tdbl && bl.pts >= 20 && (bl.orb + bl.drb >= 12 || bl.ast >= 12) || bl.pts >= 45) {
+        const team = league.teams[side.tid];
+        const opp = league.teams[side === res.home ? res.away.tid : res.home.tid];
+        const line = `${bl.pts} pts, ${bl.orb + bl.drb} reb, ${bl.ast} ast`;
+        addNews(league, { kind: 'milestone', text: `${playerName(p)} (${team.abbrev}) put up ${line} vs ${opp.abbrev}.`, tids: [team.tid], pids: [p.pid] });
+      }
+    }
+  }
+}
+
+function userGameInbox(league: League, res: GameResult) {
+  void res;
+  void league;
+  // Post-game reports are generated on demand in the UI (analysis/gameReport), so no inbox spam here.
+}
+
+export function gamesOnDay(league: League, day: number): ScheduledGame[] {
+  return league.schedule.filter((g) => g.day === day && !g.played);
+}
+
+export function userGameOnDay(league: League, day: number): ScheduledGame | undefined {
+  return league.schedule.find((g) => g.day === day && !g.played && (g.home === league.userTid || g.away === league.userTid));
+}
+
+export { addInbox };

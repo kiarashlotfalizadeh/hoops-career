@@ -278,8 +278,8 @@ export const ROLE_META: Record<OffRole, { label: string; help: string }> = {
 
 /** Base usage weight multiplier per role (how often the offense looks for him). */
 export const ROLE_USAGE: Record<OffRole, number> = {
-  creator: 1.6,
-  scorer: 1.25,
+  creator: 1.45,
+  scorer: 1.2,
   playmaker: 1.0,
   shooter: 0.85,
   slasher: 0.85,
