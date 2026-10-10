@@ -86,24 +86,25 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
     } else {
       for (let i = 0; i < n; i++) need[i] = mins[i] - firstHalfNeed[i];
     }
-    // closers reserve up to 5 minutes for the end of the game
-    const reserve = players.map((p, i) => (half === 1 && p.closer ? Math.min(5, need[i]) : 0));
-    for (let s = 0; s < 24; s++) {
-      const remaining = 24 - s;
+    // The second half is planned backwards from the final buzzer so the closing lineup
+    // finishes the game; its "first" slot in planning order is minute 48.
+    for (let step = 0; step < 24; step++) {
+      const s = half === 0 ? step : 23 - step;
+      const remaining = 24 - step;
       const slot = half * 24 + s;
       const scores: { i: number; sc: number }[] = [];
       for (let i = 0; i < n; i++) {
         const p = players[i];
-        const lateWindow = half === 1 && s >= 19;
-        const avail = need[i] - (lateWindow ? 0 : reserve[i]);
+        const avail = need[i];
         if (avail <= 0) continue;
         const maxStint = 6 + (p.endurance / 100) * 6;
         let sc = need[i] / remaining;
         if (onPrev[i]) sc += stint[i] < maxStint ? 0.45 : -0.6;
         else if (rest[i] < 3) sc -= 0.35;
-        if (s === 0 && p.starter) sc += 6;
-        if (lateWindow && p.closer) sc += 4;
-        if (avail >= remaining - (lateWindow ? 0 : reserve[i])) sc += 100;
+        if (half === 0 && step === 0 && p.starter) sc += 6;
+        if (half === 1 && step < 4 && p.closer) sc += 6;
+        if (half === 1 && step === 23 && p.starter) sc += 0.6;
+        if (avail >= remaining) sc += 100;
         scores.push({ i, sc });
       }
       scores.sort((a, b) => b.sc - a.sc);
@@ -113,7 +114,7 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
       if (!hasGuard) {
         const alt = scores.slice(5).find((x) => players[x.i].guard);
         if (alt) {
-          const worst = chosen.filter((i) => !players[i].closer || !(half === 1 && s >= 19)).pop();
+          const worst = chosen.filter((i) => !players[i].closer || !(half === 1 && step < 4)).pop();
           if (worst !== undefined) chosen = chosen.map((i) => (i === worst ? alt.i : i));
         }
       }

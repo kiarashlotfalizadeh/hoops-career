@@ -5,6 +5,7 @@ import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
 import { useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
+import { teamRatings } from '../stats';
 import { Card, Empty } from '../components/ui';
 import { ordinal, useGamesByGid, useQueryParam } from './shared';
 import { standings, type StandingRow } from '../../core/league/standings';
@@ -231,11 +232,26 @@ export function DayScoreboard({ league }: { league: League }) {
   );
 }
 
+/** "MIL 72%": the favorite by season net rating plus home court (logistic on the expected margin). */
+function favorite(league: League, g: ScheduledGame): string {
+  const h = curTeamSeason(league, g.home);
+  const a = curTeamSeason(league, g.away);
+  if (h.won + h.lost < 3 || a.won + a.lost < 3) return '';
+  const margin = teamRatings(h).net - teamRatings(a).net + 2.5;
+  const pHome = 1 / (1 + Math.exp(-margin / 7));
+  const fav = pHome >= 0.5 ? g.home : g.away;
+  const p = Math.round(Math.max(pHome, 1 - pHome) * 100);
+  return `${league.teams[fav].abbrev} ${p}%`;
+}
+
 function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?: GameResult }) {
   const mine = g.home === league.userTid || g.away === league.userTid;
-  const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : g.day === league.day ? 'Today' : 'Upcoming';
   const typeLabel = TYPE_LABEL[g.type];
   const gameNo = seriesGameNo(league, g);
+  const tag = typeLabel ? `${typeLabel}${gameNo ? ` G${gameNo}` : ''}` : '';
+  const done = !!res || !!g.played;
+  const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : tag || 'Preview';
+  const right = done ? tag : favorite(league, g);
   const series = g.seriesId && g.type === 'playoffs' ? league.playoffs.find((s) => s.id === g.seriesId) : undefined;
   const lines = [
     { tid: g.away, pts: res?.away.pts },
@@ -245,8 +261,8 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
   const body = (
     <>
       <div className="lg-sb-st">
-        <span className={!res && g.day === league.day ? 'live' : ''}>{status}</span>
-        {typeLabel && <span>{typeLabel}{gameNo ? ` G${gameNo}` : ''}</span>}
+        <span className={!done && g.day === league.day ? 'live' : ''}>{status}</span>
+        {right && <span title={done ? undefined : 'Win probability from net ratings and home court'}>{right}</span>}
       </div>
       {lines.map((t) => (
         <div key={t.tid} className={`lg-sb-t ${winner !== undefined && winner !== t.tid ? 'lose' : ''}`}>

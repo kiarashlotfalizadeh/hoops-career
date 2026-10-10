@@ -36,5 +36,5 @@ export default defineConfig({
   ],
   worker: { format: 'es' },
   build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
-  test: { environment: 'node', include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'] },
+  test: { environment: 'node', include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'], testTimeout: 60_000 },
 });

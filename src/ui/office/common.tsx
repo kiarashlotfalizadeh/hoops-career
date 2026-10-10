@@ -154,14 +154,14 @@ export function Gauge({ value, size = 150, label }: { value: number; size?: numb
   };
   const verdict = ownerVerdict(v);
   return (
-    <svg className="fo-gauge" width={size} height={size * 0.62} viewBox="0 0 100 62" role="img" aria-label={`Owner mood ${Math.round(v * 100)}`}>
+    <svg className="fo-gauge" width={size} height={size * 0.68} viewBox="0 0 100 68" role="img" aria-label={`Owner mood ${Math.round(v * 100)}`}>
       <path d={arc(0, 0.25)} stroke="var(--bad)" strokeWidth="8" fill="none" opacity="0.9" />
       <path d={arc(0.25, 0.4)} stroke="var(--warn)" strokeWidth="8" fill="none" opacity="0.9" />
       <path d={arc(0.4, 0.55)} stroke="var(--info)" strokeWidth="8" fill="none" opacity="0.9" />
       <path d={arc(0.55, 1)} stroke="var(--good)" strokeWidth="8" fill="none" opacity="0.9" />
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
       <circle cx={cx} cy={cy} r="4.5" fill="var(--text)" />
-      <text x={cx} y={61} textAnchor="middle" fontSize="11" fontWeight="700" fill={verdict.color}>
+      <text x={cx} y={66} textAnchor="middle" fontSize="11" fontWeight="700" fill={verdict.color}>
         {label ?? verdict.label.toUpperCase()}
       </text>
     </svg>

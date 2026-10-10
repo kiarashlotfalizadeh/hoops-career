@@ -155,9 +155,6 @@ export default function Trade() {
         </Callout>
       )}
 
-      <TeamPicker league={league} partner={partner} onPick={pickPartner} />
-      <PartnerCard league={league} tid={partner} season={s} />
-
       <Segmented
         value={tab}
         onChange={setTab}
@@ -169,6 +166,8 @@ export default function Trade() {
 
       {tab === 'build' ? (
         <>
+          <TeamPicker league={league} partner={partner} onPick={pickPartner} />
+          <PartnerCard league={league} tid={partner} season={s} />
           <DealCard league={league} partner={partner} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
           <div className="fo-only-sm">
             <Segmented
@@ -417,7 +416,7 @@ function reaction(ev: TradeEval): { pct: number; label: string; color: string } 
   const gap = -ev.delta;
   const rel = ev.valueOut > 0 ? gap / ev.valueOut : gap > 0 ? 1 : 0;
   const pct = Math.max(4, Math.min(94, (1 - rel) * 100));
-  if (!ev.ok && ev.delta >= -0.01) return { pct: 96, label: 'They like it, but it breaks the rules', color: 'var(--warn)' };
+  if (ev.delta >= -0.01) return { pct: 100, label: 'They would take it', color: 'var(--good)' };
   if (rel > 0.6) return { pct, label: 'Not even close', color: 'var(--bad)' };
   if (rel > 0.25) return { pct, label: 'You need to add significant value', color: 'var(--warn)' };
   return { pct, label: 'Close — add a little more', color: 'var(--tier-elite)' };
@@ -447,7 +446,7 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
     <div className="fo-dock">
       <div className="row between" style={{ gap: 8, marginBottom: 6 }}>
         <span className="small bold" style={{ color: r.color }}>
-          {league.teams[offer.b.tid].abbrev}: {ev.ok ? r.label : 'Not allowed'}
+          {league.teams[offer.b.tid].abbrev}: {r.label}
         </span>
         <span className="tiny dim num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
       </div>
@@ -460,11 +459,14 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
         <span>Close</span>
         <span>Deal!</span>
       </div>
-      <div className="grid3" style={{ marginTop: 8, gap: 6 }}>
+      <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
         <div>
           <div className="tiny dim upper bold">Salary</div>
-          <div className="small num bold">
-            {fmtM(out)} → {fmtM(inc)}
+          <div className="small num">
+            Out <b>{fmtM(out)}</b>
+          </div>
+          <div className="small num">
+            In <b>{fmtM(inc)}</b>
           </div>
         </div>
         <div>
@@ -483,9 +485,14 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
         </div>
       </div>
       {ruleErrors.length > 0 && (
-        <div className="small bad" style={{ marginTop: 8 }}>
-          {ruleErrors[0]}
-          {ruleErrors.length > 1 ? ` (+${ruleErrors.length - 1} more)` : ''}
+        <div className="row top small" style={{ marginTop: 8, gap: 6 }}>
+          <span className="tag bad" style={{ flex: 'none' }}>
+            Not allowed
+          </span>
+          <span className="bad">
+            {ruleErrors[0]}
+            {ruleErrors.length > 1 ? ` (+${ruleErrors.length - 1} more)` : ''}
+          </span>
         </div>
       )}
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
@@ -504,6 +511,7 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
 
 function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: League; shop: number | null; setShop: (pid: number) => void; closed: boolean; onLoad: (o: TradeOffer) => void }) {
   const v = useVersion();
+  const [showAll, setShowAll] = useState(false);
   const mine = teamPlayers(league, league.userTid).sort((a, b) => b.ovr - a.ovr);
   const pid = shop !== null && league.players[shop]?.tid === league.userTid ? shop : null;
   const offers = useMemo(() => (pid !== null && !closed ? blockOffers(league, pid) : []), [pid, v, closed]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -532,9 +540,9 @@ function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: Leagu
       ) : (
         <>
           <div className="fo-sec">
-            {offers.length} team{offers.length > 1 ? 's' : ''} interested in {target.lastName}
+            {offers.length} team{offers.length > 1 ? 's' : ''} would deal for {target.lastName}
           </div>
-          {offers.map((o) => {
+          {(showAll ? offers : offers.slice(0, 8)).map((o) => {
             const t = league.teams[o.tid];
             const ratio = o.myValue / Math.max(0.01, o.targetValue);
             const tone = ratio >= 1.1 ? { l: 'Overpay', c: 'var(--good)' } : ratio >= 0.9 ? { l: 'Fair value', c: 'var(--info)' } : ratio >= 0.7 ? { l: 'Below value', c: 'var(--warn)' } : { l: 'Lowball', c: 'var(--bad)' };
@@ -549,7 +557,7 @@ function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: Leagu
                     </div>
                     <div className="row" style={{ gap: 6 }}>
                       <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
-                      <span className="tiny dim">{inSal > 0 ? `${fmtM(inSal)} salary back` : 'No salary back'}</span>
+                      <span className="tiny dim">{inSal > 0 ? `${fmtM(inSal)} back` : 'No salary back'}</span>
                     </div>
                   </div>
                   <div className="right">
@@ -591,6 +599,11 @@ function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: Leagu
               </Card>
             );
           })}
+          {offers.length > 8 && !showAll && (
+            <button className="btn ghost block" onClick={() => setShowAll(true)}>
+              Show all {offers.length} offers
+            </button>
+          )}
         </>
       )}
     </>

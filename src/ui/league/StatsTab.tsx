@@ -278,7 +278,7 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
         </Card>
       ) : (
         <>
-          <StatTable rows={filtered} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} highlight={(r) => r.tid === league.userTid} maxHeight={620} />
+          <StatTable rows={filtered} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} highlight={(r) => r.tid === league.userTid} maxHeight={560} />
           <div className="lg-note">
             {filtered.length} players · per-game averages · tap a column to sort{real ? ' · imported real-life season' : ''}
           </div>

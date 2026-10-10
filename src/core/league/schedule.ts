@@ -9,8 +9,53 @@ interface Matchup {
   away: number;
 }
 
+/**
+ * Orient the edges of an even-degree graph so every vertex has equal in/out degree
+ * (Euler circuits). Used to give each team exactly two "extra" home games in its four
+ * three-game conference series, keeping everyone at 41 home games.
+ */
+function balancedOrientation(edges: [number, number][], season: number): Map<string, number> {
+  const adj = new Map<number, { to: number; id: number }[]>();
+  edges.forEach(([a, b], id) => {
+    if (!adj.has(a)) adj.set(a, []);
+    if (!adj.has(b)) adj.set(b, []);
+    adj.get(a)!.push({ to: b, id });
+    adj.get(b)!.push({ to: a, id });
+  });
+  const used = new Array(edges.length).fill(false);
+  const homeOf = new Map<string, number>();
+  const ptr = new Map<number, number>();
+  const verts = [...adj.keys()].sort((x, y) => x - y);
+  // vary which way circuits run by season
+  if (season % 2) verts.reverse();
+  for (const start of verts) {
+    const stack = [start];
+    while (stack.length) {
+      const v = stack[stack.length - 1];
+      const list = adj.get(v)!;
+      let i = ptr.get(v) ?? 0;
+      while (i < list.length && used[list[i].id]) i++;
+      ptr.set(v, i);
+      if (i === list.length) {
+        stack.pop();
+        continue;
+      }
+      const e = list[i];
+      used[e.id] = true;
+      // traversing v -> e.to: v hosts the extra game
+      homeOf.set(key(v, e.to), v);
+      stack.push(e.to);
+    }
+  }
+  return homeOf;
+}
+
+const key = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
 export function buildMatchups(teams: Team[], season: number): Matchup[] {
   const out: Matchup[] = [];
+  const threeGame: [number, number][] = [];
+  const pairGames = new Map<string, number>();
   const confDivs: Record<string, string[]> = {};
   for (const t of teams) {
     confDivs[t.conf] ??= [];
@@ -31,11 +76,19 @@ export function buildMatchups(teams: Team[], season: number): Matchup[] {
         const shift = (divs.indexOf(a.div) + divs.indexOf(b.div) + season) % 5;
         games = (ia + ib + shift) % 5 <= 1 ? 3 : 4;
       } else games = 2;
-      const homeFirst = (i + j + season) % 2 === 0;
-      for (let g = 0; g < games; g++) {
-        const aHome = g % 2 === 0 ? homeFirst : !homeFirst;
-        out.push(aHome ? { home: a.tid, away: b.tid } : { home: b.tid, away: a.tid });
-      }
+      pairGames.set(key(a.tid, b.tid), games);
+      if (games === 3) threeGame.push([a.tid, b.tid]);
+    }
+  }
+  const extraHome = balancedOrientation(threeGame, season);
+  for (const [k, games] of pairGames) {
+    const [x, y] = k.split('-').map(Number);
+    if (games === 3) {
+      const host = extraHome.get(k) ?? x;
+      const other = host === x ? y : x;
+      out.push({ home: host, away: other }, { home: host, away: other }, { home: other, away: host });
+    } else {
+      for (let g = 0; g < games; g++) out.push(g % 2 === 0 ? { home: x, away: y } : { home: y, away: x });
     }
   }
   return out;

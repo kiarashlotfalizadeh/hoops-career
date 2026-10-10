@@ -102,14 +102,6 @@ export function teamAbbrev(league: League, tid: number | null | undefined) {
   return league.teams[tid]?.abbrev ?? '—';
 }
 
-/** Is this season made of real imported stat lines? */
-export function isRealSeason(league: League, season: number) {
-  for (const p of Object.values(league.players)) {
-    for (const s of p.stats) if (s.season === season && s.real) return true;
-  }
-  return false;
-}
-
 /** All seasons with any player stats, newest first, plus the current season. */
 export function statSeasons(league: League): { season: number; real: boolean }[] {
   const real = new Map<number, boolean>();

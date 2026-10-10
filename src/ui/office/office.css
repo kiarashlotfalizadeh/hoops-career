@@ -468,10 +468,12 @@
 /* ------------------------------------------------------------ contracts table */
 table.stats.fo-contracts td,
 table.stats.fo-contracts th {
-  padding: 8px 7px;
+  padding: 8px 6px;
 }
-table.stats.fo-contracts td.sticky {
-  max-width: 148px;
+table.stats.fo-contracts td.sticky,
+table.stats.fo-contracts th.sticky {
+  padding-left: 10px;
+  max-width: 132px;
 }
 table.stats.fo-contracts tr.dead td {
   color: var(--text-dim);

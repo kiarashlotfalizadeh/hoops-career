@@ -98,7 +98,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
         <div className="kpi">
           <span className="k">He's asking</span>
           <span className="v" style={{ fontSize: 21 }}>
-            {fmtM(ask.amount)}
+            {fmtM(ask.amount, 2)}
           </span>
           <span className="tiny dim">
             {ask.years} yr{ask.years > 1 ? 's' : ''} · market {fmtM(market)}
@@ -186,19 +186,56 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             </button>
           ))}
         </div>
-        <div className="tiny dim">Salaries rise 5% per season. Contracts run through {seasonLabel(season + years - 1)}. Offering a different length than he wants raises his price ~3% per year of difference.</div>
+        <div className="tiny dim">Runs through {seasonLabel(season + years - 1)} with 5% annual raises. Each year away from what he wants adds ~3% to his price.</div>
       </div>
 
-      {verdict.ok ? (
-        <Callout tone="good" icon={<CircleCheck size={18} className="good" />}>
-          <b>He'll sign at this number.</b>
-          {needed !== null && amount > needed + 2 * STEP && <span className="dim2"> You could go as low as {fmtM(needed, 2)}.</span>}
-        </Callout>
-      ) : (
-        <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
-          {needed === null ? <b>{verdict.reason}</b> : <><b>Not enough.</b> For {years} year{years > 1 ? 's' : ''} he wants at least <b>{fmtM(needed, 2)}</b> per season.</>}
+      {rosterBlocked && (
+        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
+          <b>Your roster is full ({CAP.rosterMax}).</b> Release or trade someone from the Office first.
         </Callout>
       )}
+      {capBlocked && !rosterBlocked && (
+        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
+          <div className="row between" style={{ gap: 8 }}>
+            <b>Not enough cap space.</b>
+            <Help title="Why can't I sign him?">
+              <p style={{ margin: 0 }}>
+                The league uses a <b>soft cap</b> of {fmtM(cap.salaryCap)}. You can sign a free agent to any contract that fits under the cap: you have <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(season)}.
+              </p>
+              <p style={{ margin: 0 }}>
+                Once you're over the cap you can still add players on <b>minimum contracts</b> (up to {fmtM(cap.vetMin, 2)} per season), as long as you have a roster spot.
+              </p>
+              <p style={{ margin: 0 }}>To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).</p>
+            </Help>
+          </div>
+          <div className="small dim2" style={{ marginTop: 2 }}>
+            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can only offer the minimum ({fmtM(cap.vetMin, 2)}).
+          </div>
+          <button className="btn xs" style={{ marginTop: 8 }} onClick={() => set(Math.min(cap.vetMin, maxAmt))}>
+            Offer the minimum instead
+          </button>
+          {ask.amount > cap.vetMin && <div className="tiny dim" style={{ marginTop: 6 }}>He's asking {fmtM(ask.amount, 2)}, so he's unlikely to take a minimum deal.</div>}
+        </Callout>
+      )}
+
+      {!capBlocked &&
+        !rosterBlocked &&
+        (verdict.ok ? (
+          <Callout tone="good" icon={<CircleCheck size={18} className="good" />}>
+            <b>He'll sign at this number.</b>
+            {needed !== null && amount > needed + 2 * STEP && <span className="dim2"> You could go as low as {fmtM(needed, 2)}.</span>}
+          </Callout>
+        ) : (
+          <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
+            {needed === null ? (
+              <b>{verdict.reason}</b>
+            ) : (
+              <>
+                <b>Not enough.</b> For {years} year{years > 1 ? 's' : ''} he wants at least <b>{fmtM(needed, 2)}</b> per season.
+              </>
+            )}
+          </Callout>
+        ))}
 
       {mode === 'fa' ? (
         <div className="card tight col" style={{ gap: 8 }}>
@@ -241,34 +278,6 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             )}
           </div>
         </div>
-      )}
-
-      {rosterBlocked && (
-        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>Your roster is full ({CAP.rosterMax}).</b> Release or trade someone from the Office first.
-        </Callout>
-      )}
-      {capBlocked && !rosterBlocked && (
-        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <div className="row between" style={{ gap: 8 }}>
-            <b>Not enough cap space.</b>
-            <Help title="Why can't I sign him?">
-              <p style={{ margin: 0 }}>
-                The league uses a <b>soft cap</b> of {fmtM(cap.salaryCap)}. You can sign a free agent to any contract that fits under the cap: you have <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(season)}.
-              </p>
-              <p style={{ margin: 0 }}>
-                Once you're over the cap you can still add players on <b>minimum contracts</b> (up to {fmtM(cap.vetMin, 2)} per season), as long as you have a roster spot.
-              </p>
-              <p style={{ margin: 0 }}>To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).</p>
-            </Help>
-          </div>
-          <div className="small dim2" style={{ marginTop: 2 }}>
-            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can only offer the minimum ({fmtM(cap.vetMin, 2)}).
-          </div>
-          <button className="btn xs" style={{ marginTop: 8 }} onClick={() => set(Math.min(cap.vetMin, maxAmt))}>
-            Offer the minimum instead
-          </button>
-        </Callout>
       )}
 
       <div className="row" style={{ gap: 8 }}>

@@ -74,9 +74,8 @@ function Franchise({ league }: { league: League }) {
           <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase', lineHeight: 1.05 }}>
             {team.region} {team.name}
           </div>
-          <div className="small dim">
-            {tid === league.userTid ? 'Your franchise' : 'Franchise history'}
-            {best ? ` · best ${best.won}-${best.lost} (${seasonLabel(best.season)})` : ''}
+          <div className="small dim ellipsis">
+            {tid === league.userTid ? `Your franchise · Coach ${league.coachName}` : `Coach ${team.coach.name}`}
           </div>
         </div>
         <select className="lg-select" value={tid} onChange={(e) => setTidStr(e.target.value)} aria-label="Team" style={{ maxWidth: 96 }}>
@@ -90,7 +89,7 @@ function Franchise({ league }: { league: League }) {
         </select>
       </div>
       <div className="grid4">
-        <Kpi k="Seasons" v={seasons.length} />
+        <Kpi k="Seasons" v={seasons.length} sub={best && best.won + best.lost >= 20 ? `Best ${best.won}-${best.lost}` : undefined} />
         <Kpi k="Record" v={<span style={{ fontSize: 20 }}>{`${w}-${l}`}</span>} sub={w + l ? `${((w / (w + l)) * 100).toFixed(1)}%` : ''} />
         <Kpi k="Playoffs" v={apps} />
         <Kpi k="Titles" v={titles.length} color={titles.length ? 'var(--tier-elite)' : undefined} />

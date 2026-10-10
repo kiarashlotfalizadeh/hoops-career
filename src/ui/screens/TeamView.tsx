@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
-import type { League, Player } from '../../core/types';
+import type { DraftPick, League, Player } from '../../core/types';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, curTeamSeason, payroll, rosterSorted } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
@@ -11,6 +11,7 @@ import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEM
 import { ACTIONS } from '../../core/types';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
+import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
 import { f1, latestLine, moneyM, playerSeason, signed, teamRatings, type PerGame } from '../stats';
@@ -39,7 +40,7 @@ export default function TeamView() {
   }
   return (
     <main className="page" key={tid}>
-      <PageHeader title={team.abbrev} sub={`${team.region} ${team.name}`} back />
+      <PageHeader title={team.abbrev} sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`} back />
       <Hero league={league} tid={tid} />
       <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} />
       {tab === 'roster' && <RosterTab league={league} tid={tid} />}
@@ -65,14 +66,11 @@ function Hero({ league, tid }: { league: League; tid: number }) {
     [league, tid, v],
   );
   const pay = payroll(league, tid);
-  const cap = CAP_FOR(league);
   const tr = teamRatings(ts);
   const gp = ts.won + ts.lost;
   const off = OFF_PRESETS.find((p) => p.id === team.coach.offPhilosophy);
   const def = DEF_PRESETS.find((p) => p.id === team.coach.defPhilosophy);
   const [c1] = team.colors;
-  const capPct = (pay / cap.luxuryTax) * 100;
-  const payColor = pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)';
   const outcome = seasonOutcome(league, tid, ts);
   return (
     <>
@@ -98,60 +96,88 @@ function Hero({ league, tid }: { league: League; tid: number }) {
               {ts.won}-{ts.lost}
             </div>
             <div className="tiny dim2 upper bold" style={{ marginTop: 3 }}>
-              {gp ? `${ordinal(confRank)} in the ${team.conf === 'E' ? 'East' : 'West'}` : `${team.conf === 'E' ? 'Eastern' : 'Western'} Conf. · ${team.div}`}
+              {gp ? `${ordinal(confRank)} in the ${team.conf === 'E' ? 'East' : 'West'}` : `${team.conf === 'E' ? 'Eastern' : 'Western'} Conference`}
             </div>
           </div>
           <div className="grow" />
-          <div style={{ textAlign: 'right' }}>
-            <div className="small bold">
-              {isUser ? league.coachName : team.coach.name}
-            </div>
-            <div className="tiny dim2">
+          <div style={{ textAlign: 'right', minWidth: 0 }}>
+            <div className="small bold ellipsis">{isUser ? league.coachName : team.coach.name}</div>
+            <div className="tiny dim2 ellipsis">
               {off?.name ?? 'Balanced'} · {def?.name ?? 'Man'}
             </div>
           </div>
         </div>
-      </div>
-      <div className="grid4">
-        <Kpi k="Off Rtg" v={gp ? f1(tr.ortg) : '–'} />
-        <Kpi k="Def Rtg" v={gp ? f1(tr.drtg) : '–'} />
-        <Kpi k="Net" v={gp ? signed(tr.net) : '–'} color={gp ? (tr.net >= 0 ? 'var(--good)' : 'var(--bad)') : undefined} />
-        <Kpi k="Pace" v={gp ? f1(tr.pace) : '–'} />
-      </div>
-      <Card>
-        <div className="row between" style={{ marginBottom: 8 }}>
-          <span className="small dim">Payroll {seasonLabel(league.season)}</span>
-          <span className="bold num" style={{ color: payColor }}>
-            {moneyM(pay)}
-          </span>
-        </div>
-        <Bar value={capPct} color={payColor} />
-        <div className="row between tiny dim" style={{ marginTop: 6 }}>
-          <span>Cap {moneyM(cap.salaryCap)}</span>
-          <span>{pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}</span>
-          <span>Tax {moneyM(cap.luxuryTax)}</span>
-        </div>
-        {!isUser ? (
-          <div className="row" style={{ marginTop: 12, gap: 8 }}>
-            <Link to={`/trade?with=${tid}`} className="btn primary grow">
-              <ArrowLeftRight size={17} /> Propose trade
-            </Link>
-            <Link to={`/lab?opp=${tid}`} className="btn grow">
-              <FlaskConical size={17} /> Game plan
-            </Link>
+        <div className="lg-strip">
+          <div>
+            <span className="k">Off Rtg</span>
+            <span className="v">{gp ? f1(tr.ortg) : '–'}</span>
           </div>
-        ) : (
-          <div className="row" style={{ marginTop: 12, gap: 8 }}>
-            <Link to="/roster" className="btn grow">
-              Manage roster
-            </Link>
-            <Link to="/tactics" className="btn grow">
-              Tactics
-            </Link>
+          <div>
+            <span className="k">Def Rtg</span>
+            <span className="v">{gp ? f1(tr.drtg) : '–'}</span>
           </div>
-        )}
-      </Card>
+          <div>
+            <span className="k">Net</span>
+            <span className="v" style={{ color: gp ? (tr.net >= 0 ? 'var(--good)' : 'var(--bad)') : undefined }}>
+              {gp ? signed(tr.net) : '–'}
+            </span>
+          </div>
+          <div>
+            <span className="k">Payroll</span>
+            <span className="v" style={{ color: payColor(league, pay) }}>
+              {moneyM(pay)}
+            </span>
+          </div>
+        </div>
+      </div>
+      {!isUser ? (
+        <div className="row" style={{ gap: 8 }}>
+          <Link to={`/trade?with=${tid}`} className="btn primary grow">
+            <ArrowLeftRight size={17} /> Propose trade
+          </Link>
+          <Link to={`/lab?opp=${tid}`} className="btn grow">
+            <FlaskConical size={17} /> Game plan
+          </Link>
+        </div>
+      ) : (
+        <div className="row" style={{ gap: 8 }}>
+          <Link to="/roster" className="btn grow">
+            Manage roster
+          </Link>
+          <Link to="/tactics" className="btn grow">
+            Tactics
+          </Link>
+        </div>
+      )}
     </>
+  );
+}
+
+function payColor(league: League, pay: number) {
+  const cap = CAP_FOR(league);
+  return pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)';
+}
+
+/** Payroll vs cap and tax lines. */
+function PayrollBar({ league, tid }: { league: League; tid: number }) {
+  const pay = payroll(league, tid);
+  const cap = CAP_FOR(league);
+  const color = payColor(league, pay);
+  return (
+    <Card>
+      <div className="row between" style={{ marginBottom: 8 }}>
+        <span className="small dim">Payroll {seasonLabel(league.season)}</span>
+        <span className="bold num" style={{ color }}>
+          {moneyM(pay)}
+        </span>
+      </div>
+      <Bar value={(pay / (cap.luxuryTax * 1.1)) * 100} color={color} />
+      <div className="row between tiny dim" style={{ marginTop: 6 }}>
+        <span>Cap {moneyM(cap.salaryCap)}</span>
+        <span>{pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}</span>
+        <span>Tax {moneyM(cap.luxuryTax)}</span>
+      </div>
+    </Card>
   );
 }
 
@@ -322,6 +348,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
   );
   return (
     <>
+      <PayrollBar league={league} tid={tid} />
       <div className="grid4">
         {seasons.map((s) => {
           const pay = payroll(league, tid, s);
@@ -573,7 +600,31 @@ function ScheduleTab({ league, tid }: { league: League; tid: number }) {
 
 // ---------------------------------------------------------------- picks
 
+/** Projected draft slot by current record (worst record picks first) before the lottery sets the order. */
+function projectedSlots(league: League): Map<number, number> {
+  const order = league.teams
+    .map((t) => ({ tid: t.tid, ts: curTeamSeason(league, t.tid) }))
+    .sort((a, b) => a.ts.won / Math.max(1, a.ts.won + a.ts.lost) - b.ts.won / Math.max(1, b.ts.won + b.ts.lost) || a.ts.ptsFor - a.ts.ptsAgainst - (b.ts.ptsFor - b.ts.ptsAgainst));
+  return new Map(order.map((x, i) => [x.tid, i + 1]));
+}
+
 function PicksTab({ league, tid }: { league: League; tid: number }) {
+  const v = useStore((s) => s.v);
+  const proj = useMemo(
+    () => projectedSlots(league),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [league, v],
+  );
+  const started = league.phase !== 'preseason';
+  const slotTag = (d: DraftPick) => {
+    if (d.pick) return { text: `Pick #${d.pick}`, tone: 'good' };
+    if (d.season === league.season && started) {
+      const n = (proj.get(d.originalTid) ?? 15) + (d.round === 2 ? 30 : 0);
+      return { text: `Proj. #${n}`, tone: d.round === 1 && n <= 14 ? 'warn' : 'info' };
+    }
+    const yrs = d.season - league.season;
+    return { text: yrs <= 0 ? 'This draft' : `In ${yrs} yr${yrs === 1 ? '' : 's'}`, tone: '' };
+  };
   const owned = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || a.originalTid - b.originalTid);
   const away = league.draftPicks.filter((d) => d.originalTid === tid && d.tid !== tid).sort((a, b) => a.season - b.season || a.round - b.round);
   const firsts = owned.filter((d) => d.round === 1).length;
@@ -584,6 +635,7 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
         <Kpi k="1st rounders" v={firsts} />
         <Kpi k="Traded away" v={away.length} color={away.length ? 'var(--warn)' : undefined} />
       </div>
+      {started && owned.some((d) => d.season === league.season && !d.pick) && <div className="lg-note">Projected slots follow the current standings (worst record picks first). The lottery reshuffles the top 14.</div>}
       <Card className="flush lg-flat">
         {owned.length === 0 ? (
           <Empty>No draft picks owned.</Empty>
@@ -597,7 +649,10 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
                   <div className="bold">{pickLabel(league, d)}</div>
                   <div className="tiny dim">{acquired ? `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}` : 'Own pick'}</div>
                 </div>
-                <span className={`tag ${d.round === 1 ? 'info' : ''}`}>{d.round === 1 ? '1st round' : '2nd round'}</span>
+                {(() => {
+                  const t = slotTag(d);
+                  return <span className={`tag ${t.tone}`}>{t.text}</span>;
+                })()}
               </div>
             );
           })

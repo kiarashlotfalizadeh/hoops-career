@@ -307,21 +307,24 @@ function piGameFor(league: League, id: string): GameResult | undefined {
 }
 
 function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; projected: boolean }) {
-  let games: { id: string; label: string; home?: number; away?: number; pi?: PlayInGame }[];
+  const META: Record<string, [string, string]> = {
+    '78': ['7 vs 8', 'Winner is the 7 seed'],
+    '910': ['9 vs 10', 'Loser is eliminated'],
+    '8': ['Last spot', 'Loser of 7/8 vs winner of 9/10 for the 8 seed'],
+  };
+  let games: { id: string; title: string; sub: string; home?: number; away?: number; pi?: PlayInGame }[];
   if (projected) {
     const st = confStandings(league, conf);
-    games = [
-      { id: `${conf}-78`, label: '7 vs 8 · Winner is the 7 seed', home: st[6]?.tid, away: st[7]?.tid },
-      { id: `${conf}-910`, label: '9 vs 10 · Loser is out', home: st[8]?.tid, away: st[9]?.tid },
-      { id: `${conf}-8`, label: 'For the 8 seed', home: undefined, away: undefined },
-    ];
+    const mk = (k: string, home?: number, away?: number) => ({ id: `${conf}-${k}`, title: META[k][0], sub: META[k][1], home, away });
+    games = [mk('78', st[6]?.tid, st[7]?.tid), mk('910', st[8]?.tid, st[9]?.tid), mk('8')];
   } else {
     const byId = new Map(league.playIn.filter((p) => p.conf === conf).map((p) => [p.id, p]));
-    const mk = (id: string, label: string) => {
+    const mk = (k: string) => {
+      const id = `${conf}-${k}`;
       const pi = byId.get(id);
-      return { id, label, home: pi?.home, away: pi?.away, pi };
+      return { id, title: META[k][0], sub: META[k][1], home: pi?.home, away: pi?.away, pi };
     };
-    games = [mk(`${conf}-78`, '7 vs 8 · Winner is the 7 seed'), mk(`${conf}-910`, '9 vs 10 · Loser is out'), mk(`${conf}-8`, 'Loser 7/8 vs winner 9/10 · for the 8 seed')];
+    games = [mk('78'), mk('910'), mk('8')];
   }
   return (
     <Card title={`${confName(conf)} play-in`} right={projected ? <span className="tag info">Projected</span> : undefined}>
@@ -353,7 +356,10 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
           );
           return (
             <div key={g.id} className="lg-pi-game">
-              <span className="lbl">{g.label}</span>
+              <span className="lbl">
+                <b>{g.title}</b>
+                <span>{g.sub}</span>
+              </span>
               {res ? (
                 <Link to={`/game/${res.gid}`} style={{ display: 'block' }}>
                   {card}

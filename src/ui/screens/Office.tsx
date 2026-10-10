@@ -186,7 +186,7 @@ function Spotlight({ league }: { league: League }) {
   const tid = league.userTid;
   const v = useVersion();
   const topFAs = useMemo(
-    () => (league.phase === 'freeAgency' || league.phase === 'preseason' ? freeAgents(league).sort((a, b) => valueScore(league, b) - valueScore(league, a)).slice(0, 5) : []),
+    () => (league.phase === 'freeAgency' || league.phase === 'preseason' ? freeAgents(league).sort((a, b) => valueScore(league, b) - valueScore(league, a)).slice(0, league.phase === 'preseason' ? 3 : 5) : []),
     [league, v],
   );
   const s0 = capSeason(league);
@@ -349,6 +349,8 @@ function MiniRow({ league, p, right, to }: { league: League; p: Player; right: R
 
 // ------------------------------------------------------------------ contracts
 
+const m1 = (k: number) => (k / 1000).toFixed(1);
+
 function ContractsTable({ league, onPick }: { league: League; onPick: (pid: number) => void }) {
   const tid = league.userTid;
   const team = league.teams[tid];
@@ -377,7 +379,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
           </Help>
         }
       >
-        Contracts
+        Contracts · $M
       </SecTitle>
       <div className="tablewrap">
         <table className="stats fo-contracts">
@@ -398,7 +400,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                 <tr key={p.pid} className="clickable" onClick={() => onPick(p.pid)}>
                   <td className="l sticky">
                     <div className="row" style={{ gap: 5 }}>
-                      <span className="fo-name small" style={{ maxWidth: 104 }}>
+                      <span className="fo-name small" style={{ maxWidth: 96 }}>
                         {p.firstName[0]}. {p.lastName}
                       </span>
                       {p.contract.rookie && <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 9 }}>R</span>}
@@ -420,7 +422,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                       const amt = salaryFor(p, s);
                       return (
                         <td key={s} className={amt ? '' : 'dim'}>
-                          {amt ? fmtM(amt) : '—'}
+                          {amt ? m1(amt) : '—'}
                           {amt > 0 && s === exp && p.contract.option && <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span>}
                         </td>
                       );
@@ -439,7 +441,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                 </td>
                 <td />
                 {seasons.map((s) => (
-                  <td key={s}>{d.by[s] ? fmtM(d.by[s]) : '—'}</td>
+                  <td key={s}>{d.by[s] ? m1(d.by[s]) : '—'}</td>
                 ))}
               </tr>
             ))}
@@ -448,19 +450,17 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
               <td />
               {totals.map((t, i) => (
                 <td key={i} style={{ color: t > CAP_FOR(league, seasons[i]).luxuryTax ? 'var(--bad)' : t > caps[i] ? 'var(--warn)' : undefined }}>
-                  {fmtM(t)}
+                  {m1(t)}
                 </td>
               ))}
             </tr>
             <tr className="total">
-              <td className="l sticky">
-                Cap space <span className="tiny dim">(cap)</span>
-              </td>
+              <td className="l sticky">Cap space</td>
               <td />
               {totals.map((t, i) => (
                 <td key={i}>
-                  <div style={{ color: caps[i] - t >= 0 ? 'var(--good)' : 'var(--text-dim)' }}>{fmtM(caps[i] - t)}</div>
-                  <div className="tiny dim">{fmtM(caps[i], 0)}</div>
+                  <div style={{ color: caps[i] - t >= 0 ? 'var(--good)' : 'var(--text-dim)' }}>{m1(caps[i] - t)}</div>
+                  <div className="tiny dim">cap {m1(caps[i])}</div>
                 </td>
               ))}
             </tr>
