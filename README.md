@@ -34,6 +34,8 @@ npm run data:fetch   # polite crawler, ~90 pages at 1 request / 3.7 s, cached in
 npm run data:build   # parse → derive ratings → calibrate in the engine → src/data/seed.json
 ```
 
+Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches the pages on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, and commits `src/data/seed.json` to `main`. It also keeps the raw pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing.
+
 How ratings are made (`scripts/data/derive.ts`, `scripts/data/calibrate.ts`):
 1. Seasons are weighted by recency and minutes (2025-26 ×1.0, 24-25 ×0.6, 23-24 ×0.3). Shooting uses Bayesian priors, and everything is regressed toward the mean by sample size.
 2. Stats are mapped to 21 attributes, and per-player tendencies (usage, three-point rate, driving, passing) are set.
