@@ -304,7 +304,7 @@ export function parseDraft(html: string, year: number): DraftRow[] {
     const name = playerName(r);
     const pick = num(r.pick_overall);
     if (!id || !name || !pick) continue;
-    out.push({ id, name, year, pick, round: pick <= 30 ? 1 : 2, team: r.team_id ?? '', college: r.college_name ?? '' });
+    out.push({ id, name, year, pick, round: pick <= 30 ? 1 : 2, team: r.team_id ?? r.team_name_abbr ?? '', college: r.college_name ?? '' });
   }
   return out;
 }
