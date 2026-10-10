@@ -1,0 +1,63 @@
+# Builds src/data/seed.json from Basketball Reference on GitHub's runners (open network).
+# Fetches ~90 pages politely (1 request / 3.7 s), calibrates ratings in the engine, commits
+# the seed to main, and stores the raw pages as a tarball on the `data-raw` branch.
+name: Build seed data
+on:
+  workflow_dispatch:
+    inputs:
+      commit_seed:
+        description: Commit the generated seed.json to main
+        type: boolean
+        default: true
+permissions:
+  contents: write
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Reuse previously fetched pages
+        run: |
+          if git ls-remote --exit-code origin data-raw >/dev/null 2>&1; then
+            git fetch origin data-raw
+            git show origin/data-raw:data-raw.tgz > /tmp/prev.tgz && tar xzf /tmp/prev.tgz || true
+          fi
+      - name: Fetch Basketball Reference pages
+        run: npm run data:fetch
+      - name: Archive raw pages
+        run: tar czf /tmp/data-raw.tgz data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
+      - name: Build seed (parse, derive, calibrate)
+        id: build
+        continue-on-error: true
+        run: npm run data:build 2>&1 | tee /tmp/build.log
+      - name: Verify app still builds and tests pass with the seed
+        if: steps.build.outcome == 'success'
+        run: npm run typecheck && npm test && npm run build
+      - name: Commit seed to main
+        if: steps.build.outcome == 'success' && inputs.commit_seed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/seed.json
+          git commit -m "Update Basketball Reference seed data" || echo "seed unchanged"
+          git push origin HEAD:main
+      - name: Push raw pages to data-raw branch
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp /tmp/data-raw.tgz /tmp/upload.tgz
+          git checkout --orphan data-raw-tmp
+          git rm -rf --cached . > /dev/null
+          cp /tmp/upload.tgz data-raw.tgz
+          git add -f data-raw.tgz
+          git commit -m "Basketball Reference raw pages $(date -u +%F)"
+          git push -f origin HEAD:data-raw
