@@ -988,3 +988,22 @@ table.stats th.sorted {
     opacity: 0.55;
   }
 }
+
+/* ------------------------------------------------------------------ live game layout */
+.live-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (min-width: 900px) {
+  .live-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr);
+    align-items: start;
+    gap: 14px;
+  }
+  .live-left {
+    position: sticky;
+    top: calc(var(--top-h) + var(--safe-t) + 10px);
+  }
+}

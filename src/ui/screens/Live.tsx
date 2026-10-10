@@ -225,7 +225,7 @@ export default function Live() {
   if (colorDistance(colors[0][0], colors[1][0]) < 90) colors[1] = ['#f1f1f1', away.colors[0]];
 
   return (
-    <main className="page" style={{ gap: 10 }}>
+    <main className="page full" style={{ gap: 10 }}>
       {/* scorebug */}
       <div className="card tight" style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}>
         <div className="scorebug">
@@ -252,6 +252,8 @@ export default function Live() {
         </div>
       </div>
 
+      <div className="live-grid">
+      <div className="col live-left" style={{ gap: 10 }}>
       {/* court */}
       <div style={{ position: 'relative' }}>
         <Court
@@ -309,6 +311,8 @@ export default function Live() {
         </Card>
       )}
 
+      </div>
+      <div className="col live-right" style={{ gap: 10 }}>
       {suggestions.map((s) => (
         <div key={s.id} className="card tight fade-in" style={{ borderColor: 'color-mix(in srgb, var(--warn) 40%, transparent)' }}>
           <div className="row top">
@@ -376,6 +380,9 @@ export default function Live() {
           )}
         </div>
       </Card>
+
+      </div>
+      </div>
 
       <Sheet open={panel === 'subs'} onClose={() => setPanel('none')} title="Substitutions">
         <SubsPanel live={live} side={userSide} onChange={() => setTick((x) => x + 1)} />
