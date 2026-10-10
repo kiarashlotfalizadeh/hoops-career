@@ -506,6 +506,40 @@ function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; appl
           </div>
         )}
       </div>
+      <div>
+        <div className="small bold" style={{ marginBottom: 6 }}>Matchups</div>
+        <div className="col" style={{ gap: 8 }}>
+          {opp.on.map((o) => {
+            const cur = live.sim.T[side].guardOf.get(o.pid);
+            return (
+              <div key={o.pid} className="col" style={{ gap: 4 }}>
+                <div className="small"><b>{o.name}</b> <span className="dim">guarded by {cur?.name ?? '—'}{t.defense.matchups[o.pid] !== undefined ? ' (assigned)' : ''}</span></div>
+                <div className="chips">
+                  {live.sim.T[side].on.map((d) => (
+                    <button
+                      key={d.pid}
+                      className={`chip ${t.defense.matchups[o.pid] === d.pid ? 'on' : ''}`}
+                      style={{ height: 28, fontSize: 12 }}
+                      onClick={() =>
+                        set((tt) => {
+                          if (tt.defense.matchups[o.pid] === d.pid) delete tt.defense.matchups[o.pid];
+                          else {
+                            for (const k of Object.keys(tt.defense.matchups)) if (tt.defense.matchups[+k] === d.pid) delete tt.defense.matchups[+k];
+                            tt.defense.matchups[o.pid] = d.pid;
+                          }
+                        })
+                      }
+                    >
+                      {d.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div className="tiny dim">Assignments stick whenever both players are on the floor; otherwise the staff matches by size and threat.</div>
+        </div>
+      </div>
       <Slider label="Pace" value={t.offense.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} left="Grind" right="Run" />
       <Slider label="Three-point emphasis" value={t.offense.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} left="Mid ok" right="Threes" />
       <Slider label="Attack the rim" value={t.offense.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} left="Settle" right="Downhill" />

@@ -10,8 +10,11 @@ import { ROLE_META, archetype, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
+import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
+import { IMPACT_TEXT } from '../../core/analysis/gameReport';
+import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 
-type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage';
+type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
 
 function fitScale(fits: Record<string, number>) {
   const vals = Object.values(fits);
@@ -45,6 +48,7 @@ export default function Tactics() {
           { id: 'manage' as Tab, label: 'Game Mgmt' },
         ]
       : []),
+    { id: 'insights', label: 'Insights' },
   ];
   const tab = (tabs.find((t) => t.id === params.get('tab'))?.id ?? 'playbook') as Tab;
   const team = league.teams[league.userTid];
@@ -237,6 +241,7 @@ export default function Tactics() {
       )}
 
       {tab === 'roles' && <RolesTab />}
+      {tab === 'insights' && <InsightsTab />}
       {tab === 'manage' && <ManageTab edit={edit} t={t} />}
 
       {changed && (
@@ -268,6 +273,61 @@ export default function Tactics() {
         </div>
       )}
     </main>
+  );
+}
+
+function InsightsTab() {
+  const league = useLeague();
+  const v = useStore((s) => s.v);
+  const pts = useMemo(() => seasonPlayTypes(league), [league, v]);
+  const imps = useMemo(() => seasonImpacts(league).filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3), [league, v]);
+  const helping = imps.filter((x) => x.forUser).slice(0, 5);
+  const hurting = imps.filter((x) => !x.forUser).slice(0, 5);
+  const games = imps[0]?.games ?? 0;
+  if (!pts.length) return <Card><div className="small dim">Insights appear once your team has played a few games: what your tactics are winning, what they are giving up, and which play types work.</div></Card>;
+  const row = (x: { key: string; perGame: number; forUser: boolean }) => {
+    const tpl = IMPACT_TEXT[x.key];
+    const X = x.forUser ? 'Your team' : 'The opposition';
+    const Y = x.forUser ? 'the opposition' : 'your team';
+    return (
+      <div key={`${x.key}${x.forUser}`} className="row top small" style={{ gap: 10 }}>
+        <span className={`num bold ${x.forUser ? 'good' : 'bad'}`} style={{ width: 44, flex: 'none' }}>{x.forUser ? '+' : '-'}{x.perGame.toFixed(1)}</span>
+        <div className="grow">
+          <div>{tpl.text(X, Y, '')}</div>
+          {!x.forUser && tpl.advice && <div className="tiny" style={{ color: 'var(--warn)' }}>{tpl.advice}</div>}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <>
+      <Card title="What's working" right={<span className="tiny dim">pts per game · {games} games</span>}>
+        <div className="col" style={{ gap: 8 }}>{helping.length ? helping.map(row) : <div className="small dim">Nothing stands out yet.</div>}</div>
+      </Card>
+      <Card title="What's hurting you">
+        <div className="col" style={{ gap: 8 }}>{hurting.length ? hurting.map(row) : <div className="small dim">Nothing stands out yet.</div>}</div>
+      </Card>
+      <Card title="Play types this season" right={<Help title="Points per possession">PPP = points scored per possession that ended in that play type (including turnovers and free throws). League average is about 1.13; above 1.2 is excellent, below 0.95 is poor. Defense shows what opponents score against you.</Help>}>
+        <div className="col" style={{ gap: 6 }}>
+          <div className="row tiny dim upper bold">
+            <span className="grow">Type</span>
+            <span style={{ width: 92, textAlign: 'right' }}>Offense</span>
+            <span style={{ width: 92, textAlign: 'right' }}>Defense</span>
+          </div>
+          {pts.map((p) => {
+            const o = p.off.poss ? p.off.pts / p.off.poss : 0;
+            const d = p.def.poss ? p.def.pts / p.def.poss : 0;
+            return (
+              <div key={p.key} className="row small">
+                <span className="grow">{FINISH_LABEL[p.key as FinishType] ?? p.key}</span>
+                <span className="num" style={{ width: 92, textAlign: 'right' }}><span className="dim">{p.off.poss}</span> <b style={{ color: o >= 1.2 ? 'var(--good)' : o < 0.95 ? 'var(--bad)' : undefined }}>{p.off.poss ? o.toFixed(2) : '-'}</b></span>
+                <span className="num" style={{ width: 92, textAlign: 'right' }}><span className="dim">{p.def.poss}</span> <b style={{ color: d <= 0.95 ? 'var(--good)' : d > 1.2 ? 'var(--bad)' : undefined }}>{p.def.poss ? d.toFixed(2) : '-'}</b></span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </>
   );
 }
 

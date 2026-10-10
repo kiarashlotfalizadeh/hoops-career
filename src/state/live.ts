@@ -22,7 +22,7 @@ export class LiveGame {
     ensureRotation(league, game.home);
     ensureRotation(league, game.away);
     const rng = new Rng((league.rng ^ (game.gid * 2654435761)) >>> 0);
-    this.sim = new GameSim(buildSimInput(league, game.home, game.day, game.type), buildSimInput(league, game.away, game.day, game.type), {
+    this.sim = new GameSim(buildSimInput(league, game.home, game.day, game.type, game.away), buildSimInput(league, game.away, game.day, game.type, game.home), {
       rng,
       type: game.type,
       record: true,

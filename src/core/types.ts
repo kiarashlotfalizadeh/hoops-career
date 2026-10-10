@@ -707,6 +707,13 @@ export interface League {
   startSeason: number;
   /** Real-life league averages from seed data, for context in UI. */
   realAvgs?: Record<string, number>;
+  /** Opponent-specific adjustments for the user's next game against that opponent. */
+  gamePlan?: GamePlan | null;
+}
+
+export interface GamePlan {
+  oppTid: number;
+  items: { id: string; label: string; patch: { offense?: Partial<OffenseTactics>; defense?: Partial<DefenseTactics>; manage?: Partial<GameManagement> } }[];
 }
 
 export const FREE_AGENT = -1;

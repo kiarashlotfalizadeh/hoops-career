@@ -205,6 +205,17 @@ interface ShotOpts {
 
 const ACTION_LIST: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
 
+/** All 120 orderings of five defenders. */
+const PERMS5: number[][] = (() => {
+  const out: number[][] = [];
+  const rec = (cur: number[], rest: number[]) => {
+    if (!rest.length) return void out.push(cur);
+    for (let i = 0; i < rest.length; i++) rec([...cur, rest[i]], [...rest.slice(0, i), ...rest.slice(i + 1)]);
+  };
+  rec([], [0, 1, 2, 3, 4]);
+  return out;
+})();
+
 function shortName(p: Player) {
   return p.lastName || p.firstName;
 }
@@ -228,6 +239,7 @@ export class GameSim {
   shots: ShotRecord[] = [];
   flow: number[] = [];
   impacts = new Map<string, TacticImpact>();
+  private impactSlots = new Map<string, (TacticImpact | null)[]>();
   lineups = new Map<string, LineupStat>();
   injuries: InGameInjury[] = [];
   private cur: PossLog | null = null;
@@ -452,42 +464,30 @@ export class GameSim {
     const manual = def.t.defense.matchups;
     // threat: how much the offense runs through him
     const threat = O.map((o) => this.usageWeight(o, off, 'iso') + this.usageWeight(o, off, 'pnr'));
-    const maxThreat = Math.max(...threat);
-    let best: number[] = [0, 1, 2, 3, 4];
-    let bestCost = Infinity;
-    const perm = [0, 1, 2, 3, 4];
-    const cost = (p: number[]) => {
-      let c = 0;
-      for (let i = 0; i < 5; i++) {
-        const o = O[i];
-        const d = D[p[i]];
-        c += Math.abs(o.r.hgt - d.r.hgt) * 0.09;
+    const maxThreat = Math.max(...threat) || 1;
+    // cost[i][j]: defender j guarding offensive player i
+    const cost: number[] = new Array(25);
+    for (let i = 0; i < 5; i++) {
+      const o = O[i];
+      const m = manual[o.pid];
+      for (let j = 0; j < 5; j++) {
+        const d = D[j];
+        let c = Math.abs(o.r.hgt - d.r.hgt) * 0.09;
         const quality = o.big ? d.c.intDef : d.c.perDef;
         c -= (threat[i] / maxThreat) * (quality - 50) * 0.06;
-        if (manual[o.pid] !== undefined) c += manual[o.pid] === d.pid ? -50 : 4;
+        if (m !== undefined) c += m === d.pid ? -50 : 4;
+        cost[i * 5 + j] = c;
       }
-      return c;
-    };
-    // Heap's algorithm over the 120 permutations
-    const permute = (k: number) => {
-      if (k === 1) {
-        const c = cost(perm);
-        if (c < bestCost) {
-          bestCost = c;
-          best = perm.slice();
-        }
-        return;
+    }
+    let best = PERMS5[0];
+    let bestCost = Infinity;
+    for (const p of PERMS5) {
+      const c = cost[p[0]] + cost[5 + p[1]] + cost[10 + p[2]] + cost[15 + p[3]] + cost[20 + p[4]];
+      if (c < bestCost) {
+        bestCost = c;
+        best = p;
       }
-      permute(k - 1);
-      for (let i = 0; i < k - 1; i++) {
-        const j = k % 2 === 0 ? i : 0;
-        const tmp = perm[j];
-        perm[j] = perm[k - 1];
-        perm[k - 1] = tmp;
-        permute(k - 1);
-      }
-    };
-    permute(5);
+    }
     O.forEach((o, i) => def.guardOf.set(o.pid, D[best[i]]));
   }
 
@@ -865,13 +865,19 @@ export class GameSim {
       benefit = (1 - benefit) as 0 | 1;
       pts = -pts;
     }
-    const role = benefit === this.poss ? 'o' : 'd';
-    const full = `${key}:${role}`;
-    const k = `${full}|${benefit}`;
-    let im = this.impacts.get(k);
+    const roleO = benefit === this.poss;
+    let slots = this.impactSlots.get(key);
+    if (!slots) {
+      slots = [null, null, null, null];
+      this.impactSlots.set(key, slots);
+    }
+    const si = benefit * 2 + (roleO ? 0 : 1);
+    let im = slots[si];
     if (!im) {
+      const full = `${key}:${roleO ? 'o' : 'd'}`;
       im = { key: full, t: benefit, count: 0, pts: 0, players: {} };
-      this.impacts.set(k, im);
+      slots[si] = im;
+      this.impacts.set(`${full}|${benefit}`, im);
     }
     im.count++;
     im.pts += pts;

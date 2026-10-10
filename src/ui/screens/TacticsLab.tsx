@@ -79,13 +79,19 @@ export default function TacticsLab() {
     }
   };
 
-  const applyCand = (c: CandidateResult) => {
+  const applyCand = (c: CandidateResult, scope: 'game' | 'always') => {
     useStore.getState().mutate((l) => {
-      const tm = l.teams[l.userTid];
-      tm.tactics = { ...applyPatch(tm.tactics, c.patch), manual: true };
+      if (scope === 'always') {
+        const tm = l.teams[l.userTid];
+        tm.tactics = { ...applyPatch(tm.tactics, c.patch), manual: true };
+      } else {
+        const plan = l.gamePlan && l.gamePlan.oppTid === opp ? l.gamePlan : { oppTid: opp, items: [] };
+        plan.items = [...plan.items.filter((x) => x.id !== c.id), { id: c.id, label: c.label, patch: c.patch }];
+        l.gamePlan = plan;
+      }
     });
     setApplied((a) => [...a, c.id]);
-    useStore.getState().toast(`Applied: ${c.label}`, 'good');
+    useStore.getState().toast(scope === 'game' ? `Game plan vs ${league.teams[opp].abbrev}: ${c.label}` : `Applied to your tactics: ${c.label}`, 'good');
   };
 
   const oppTeam = league.teams[opp];
@@ -179,9 +185,14 @@ export default function TacticsLab() {
                       {applied.includes(c.id) ? (
                         <Tag tone="good"><Check size={12} /> Applied</Tag>
                       ) : (
-                        <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c)}>
-                          Apply
-                        </button>
+                        <div className="row" style={{ gap: 6 }}>
+                          <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c, 'game')}>
+                            This game
+                          </button>
+                          <button className="btn xs ghost" onClick={() => applyCand(c, 'always')}>
+                            Always
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

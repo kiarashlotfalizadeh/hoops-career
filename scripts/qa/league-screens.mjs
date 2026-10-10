@@ -1,8 +1,10 @@
 // Phone-size screenshots of the League hub, Team, History and Inbox screens.
 // Usage: node scripts/qa/league-screens.mjs [baseUrl] [outDir] [stage]
-//   stage: "mid"  = start season and sim to the trade deadline (default)
-//          "post" = also finish the regular season, play-in and playoffs
-// Set CHROMIUM=/path/to/chrome or PLAYWRIGHT_BROWSERS_PATH if browsers are not in the default cache.
+//   stage: "mid"   = new league, start season and sim to the trade deadline (default)
+//          "post"  = also finish the regular season, play-in and playoffs
+//          "visit" = only screenshot the league already saved in PROFILE (no new league, no sims)
+// Env: WIDE=1 for a 820px tablet viewport; PROFILE=/dir keeps the browser profile (IndexedDB saves)
+// between runs; CHROMIUM=/path/to/chrome or PLAYWRIGHT_BROWSERS_PATH if browsers are elsewhere.
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 
@@ -12,11 +14,25 @@ const stage = process.argv[4] ?? 'mid';
 const wide = process.env.WIDE === '1';
 mkdirSync(out, { recursive: true });
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
-const ctx = await browser.newContext(
-  wide ? { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 1 } : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
-);
-const page = await ctx.newPage();
+const ctxOpts = wide ? { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 1 } : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+const executablePath = process.env.CHROMIUM || undefined;
+let ctx;
+if (process.env.PROFILE) {
+  ctx = await chromium.launchPersistentContext(process.env.PROFILE, { ...ctxOpts, executablePath });
+} else {
+  const browser = await chromium.launch({ executablePath });
+  ctx = await browser.newContext(ctxOpts);
+}
+const page = ctx.pages()[0] ?? (await ctx.newPage());
+const onFail = async (e) => {
+  console.error('FAILED:', e?.message ?? e);
+  console.error('url:', page.url());
+  await page.screenshot({ path: `${out}/zz-failure.png` }).catch(() => {});
+  console.error(errors.length ? `errors (${errors.length}):\n${errors.join('\n')}` : 'errors: none');
+  process.exit(1);
+};
+process.on('unhandledRejection', onFail);
+process.on('uncaughtException', onFail);
 const errors = [];
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}\n${e.stack ?? ''}`));
 page.on('console', (m) => {
@@ -68,33 +84,6 @@ const go = async (hash) => {
   await page.goto(`${base}/${hash}`);
   await page.waitForTimeout(500);
 };
-
-// ---------------------------------------------------------------- new league
-await go('#/start');
-await page.getByText('New League').click();
-await page.waitForTimeout(500);
-await page.getByRole('heading', { name: 'Fictional League' }).click();
-await page.getByText('Choose your team').click();
-await page.waitForTimeout(300);
-await page.getByText(/Take over the/).click();
-await page.waitForTimeout(300);
-await page.fill('input[placeholder="Your name"]', 'QA Coach');
-await page.getByText('Start career').click();
-await page.waitForSelector('.topbar', { timeout: 60_000 });
-await page.waitForTimeout(1200);
-
-// preseason views (empty states)
-await go('#/league?tab=playoffs');
-await shot('00-pre-playoffs');
-await go('#/league?tab=awards');
-await shot('00-pre-awards');
-await go('#/inbox');
-await shot('00-pre-inbox');
-
-// ---------------------------------------------------------------- season
-await play('Start regular season');
-await page.waitForTimeout(800);
-await simUntilGone('Sim to trade deadline');
 
 const visit = async (prefix) => {
   const pages = [
@@ -150,6 +139,42 @@ const visit = async (prefix) => {
   }
 };
 
+if (stage === 'visit') {
+  await go('#/');
+  await page.waitForSelector('.topbar', { timeout: 15_000 });
+  await visit(wide ? 'wide' : 'visit');
+  console.log(errors.length ? `errors (${errors.length}):\n${errors.join('\n')}` : 'errors: none');
+  await ctx.close();
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------- new league
+await go('#/start');
+await page.getByText('New League').click();
+await page.waitForTimeout(500);
+await page.getByRole('heading', { name: 'Fictional League' }).click();
+await page.getByText('Choose your team').click();
+await page.waitForTimeout(300);
+await page.getByText(/Take over the/).click();
+await page.waitForTimeout(300);
+await page.fill('input[placeholder="Your name"]', 'QA Coach');
+await page.getByText('Start career').click();
+await page.waitForSelector('.topbar', { timeout: 60_000 });
+await page.waitForTimeout(1200);
+
+// preseason views (empty states)
+await go('#/league?tab=playoffs');
+await shot('00-pre-playoffs');
+await go('#/league?tab=awards');
+await shot('00-pre-awards');
+await go('#/inbox');
+await shot('00-pre-inbox');
+
+// ---------------------------------------------------------------- season
+await play('Start regular season');
+await page.waitForTimeout(800);
+await simUntilGone('Sim to trade deadline');
+
 await visit('mid');
 
 if (stage === 'post') {
@@ -166,4 +191,4 @@ if (stage === 'post') {
 }
 
 console.log(errors.length ? `errors (${errors.length}):\n${errors.join('\n')}` : 'errors: none');
-await browser.close();
+await ctx.close();

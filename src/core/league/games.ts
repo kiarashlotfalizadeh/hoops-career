@@ -9,6 +9,7 @@ import { applyInjury, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { moodPerf } from './morale';
 import { playerAge } from '../playerGen';
+import { applyPatch } from '../ai/lab';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -50,7 +51,7 @@ export function ensureRotation(league: League, tid: number) {
   }
 }
 
-export function buildSimInput(league: League, tid: number, day: number, type: ScheduledGame['type']): SimTeamInput {
+export function buildSimInput(league: League, tid: number, day: number, type: ScheduledGame['type'], opp?: number): SimTeamInput {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
   const rest: number[] = [];
@@ -65,6 +66,13 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
   }
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p);
+  // opponent-specific game plan for the user's team
+  const plan = league.gamePlan;
+  if (tid === league.userTid && plan && opp !== undefined && plan.oppTid === opp && plan.items.length) {
+    let t = team.tactics;
+    for (const it of plan.items) t = applyPatch(t, it.patch);
+    return { team: { ...team, tactics: t }, players, perf, rest };
+  }
   return { team, players, perf, rest };
 }
 
@@ -111,7 +119,7 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
   if (!sim) {
     ensureRotation(league, g.home);
     ensureRotation(league, g.away);
-    sim = new GameSim(buildSimInput(league, g.home, g.day, g.type), buildSimInput(league, g.away, g.day, g.type), {
+    sim = new GameSim(buildSimInput(league, g.home, g.day, g.type, g.away), buildSimInput(league, g.away, g.day, g.type, g.home), {
       rng,
       type: g.type,
       record: opts.record ?? false,
@@ -131,6 +139,8 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
 
 function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameResult, rng: Rng) {
   g.played = true;
+  // a game plan is used up once the user plays that opponent
+  if (league.gamePlan && (g.home === league.userTid || g.away === league.userTid) && (g.home === league.gamePlan.oppTid || g.away === league.gamePlan.oppTid)) league.gamePlan = null;
   const playoffs = g.type === 'playoffs';
   const home = league.teams[g.home];
   const away = league.teams[g.away];

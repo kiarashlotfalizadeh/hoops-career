@@ -139,16 +139,20 @@ export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outc
     }
   }
   if (r === 5) return { label: 'Won the championship', short: 'Champion', tone: 'good', gold: true };
-  if (r === 4) return { label: 'Lost in the Finals', short: 'Finals', tone: 'good' };
-  if (r === 3) return { label: 'Lost in the Conference Finals', short: 'Conf. Finals', tone: 'info' };
-  if (r === 2) return { label: 'Lost in the 2nd round', short: '2nd Round', tone: 'info' };
-  if (r === 1) return { label: 'Lost in the 1st round', short: '1st Round', tone: 'info' };
-  if (r === 0) return { label: 'Lost in the play-in', short: 'Play-In', tone: 'warn' };
+  if (r === 4) return { label: 'Lost in the Finals', short: 'Lost Finals', tone: 'good' };
+  if (r === 3) return { label: 'Lost in the Conference Finals', short: 'Lost Conf. Finals', tone: 'info' };
+  if (r === 2) return { label: 'Lost in the 2nd round', short: 'Lost 2nd Rd', tone: 'info' };
+  if (r === 1) return { label: 'Lost in the 1st round', short: 'Lost 1st Rd', tone: 'info' };
+  if (r === 0) return { label: 'Lost in the play-in', short: 'Lost Play-In', tone: 'warn' };
   return { label: 'Missed the playoffs', short: 'Missed' };
 }
 
 export function OutcomeTag({ o }: { o: Outcome }) {
-  return <span className={`tag ${o.tone ?? ''} ${o.gold ? 'lg-gold' : ''}`}>{o.short}</span>;
+  return (
+    <span className={`tag ${o.tone ?? ''} ${o.gold ? 'lg-gold' : ''}`} title={o.label}>
+      {o.short}
+    </span>
+  );
 }
 
 export function StrategyTag({ team }: { team: Team }) {

@@ -112,8 +112,23 @@ export default function Home() {
                   <span className="good">Attack:</span> {scout.weaknesses[0]}
                 </div>
               )}
+              {league.gamePlan && league.gamePlan.oppTid === oppTid && league.gamePlan.items.length > 0 ? (
+                <div className="card tight" style={{ marginTop: 4 }}>
+                  <div className="row between">
+                    <span className="small bold">Game plan for this opponent</span>
+                    <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.gamePlan = null))}>
+                      Clear
+                    </button>
+                  </div>
+                  <div className="chips" style={{ marginTop: 6 }}>
+                    {league.gamePlan.items.map((it) => (
+                      <span key={it.id} className="tag info">{it.label}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <Link to={`/lab?opp=${oppTid}`} className="small" style={{ color: 'var(--accent)', fontWeight: 650 }}>
-                Test a game plan in the Tactics Lab →
+                Build a game plan in the Tactics Lab →
               </Link>
             </div>
           )}

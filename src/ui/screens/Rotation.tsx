@@ -7,6 +7,7 @@ import { buildMinutePlan, normalizeMinutes, type PlanPlayer } from '../../core/s
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, playerSeason } from '../stats';
+import { seasonLineups } from '../seasonAnalysis';
 
 export default function Rotation() {
   const league = useLeague();
@@ -162,10 +163,32 @@ export default function Rotation() {
         </div>
       </Card>
 
+      <LineupsCard />
+
       <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
         {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} />}
       </Sheet>
     </main>
+  );
+}
+
+function LineupsCard() {
+  const league = useLeague();
+  const v = useStore((s) => s.v);
+  const lineups = useMemo(() => seasonLineups(league).filter((l) => l.min >= 8).slice(0, 10), [league, v]);
+  if (!lineups.length) return null;
+  return (
+    <Card title="Lineups this season" right={<Help title="Lineup net rating">Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes.</Help>}>
+      <div className="col" style={{ gap: 8 }}>
+        {lineups.map((l) => (
+          <div key={l.key} className="row small top">
+            <span className={`num bold ${l.net >= 0 ? 'good' : 'bad'}`} style={{ width: 46 }}>{l.net >= 0 ? '+' : ''}{l.net.toFixed(1)}</span>
+            <span className="grow dim2">{l.pids.map((pid) => league.players[pid]?.lastName ?? '?').join(', ')}</span>
+            <span className="tiny dim num">{Math.round(l.min)}m</span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

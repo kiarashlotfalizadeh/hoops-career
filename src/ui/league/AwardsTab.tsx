@@ -192,7 +192,7 @@ function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
       {(['E', 'W'] as const).map((c) => (
         <Card key={c} title={`${c === 'E' ? 'East' : 'West'} All-Stars`} right={<Medal size={16} className="dim" />}>
           <div className="lg-team5">
-            {aw.allStars[c].map((pid, i) => {
+            {aw.allStars[c].map((pid) => {
               const p = league.players[pid];
               if (!p) return null;
               const tid = seasonTeam(league, p, aw.season);
@@ -203,7 +203,7 @@ function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
                     <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
                     {pid === aw.allStarMvp && <span className="tag lg-gold" style={{ marginLeft: 6 }}>MVP</span>}
                   </span>
-                  <span className="tiny dim">{i < 5 ? 'Starter' : 'Reserve'}</span>
+                  <span className="tiny dim num">{statLine(p, aw.season)}</span>
                 </Link>
               );
             })}
