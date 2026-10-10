@@ -660,6 +660,8 @@ export interface Settings {
   complexity: 'simple' | 'advanced' | 'expert';
   /** Auto-play speed for live game. */
   liveSpeed: number;
+  /** First-run guide dismissed. */
+  onboarded?: boolean;
 }
 
 export interface League {

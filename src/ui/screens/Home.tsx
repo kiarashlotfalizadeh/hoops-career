@@ -70,6 +70,8 @@ export default function Home() {
         </Card>
       )}
 
+      {!league.settings.onboarded && <Onboarding />}
+
       {/* Next game / phase card */}
       {next && oppTid !== undefined ? (
         <Card accent>
@@ -290,5 +292,30 @@ export default function Home() {
         </div>
       </Card>
     </main>
+  );
+}
+
+function Onboarding() {
+  const steps = [
+    { to: '/tactics', title: 'Pick a game plan', body: 'Choose an offensive playbook and defensive identity. Fit scores show what suits your roster; every control explains itself.' },
+    { to: '/rotation', title: 'Set the rotation', body: 'Order your depth chart and minute targets. The stint plan shows exactly when each player will be on the floor.' },
+    { to: '/lab', title: 'Test it in the Lab', body: 'Simulate dozens of games against any opponent before you commit, and let the assistant find counters.' },
+    { to: '/', title: 'Coach games live', body: 'Watch on the court, call timeouts, sub and adjust coverages. After each game, "Why" breaks down what decided it.' },
+  ];
+  return (
+    <Card accent title={<h3>Welcome, coach</h3>} right={<button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.settings.onboarded = true))}>Got it</button>}>
+      <div className="col" style={{ gap: 10 }}>
+        {steps.map((s, i) => (
+          <Link key={s.title} to={s.to} className="row top" style={{ gap: 10 }}>
+            <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent)' }}>{i + 1}</span>
+            <div className="grow">
+              <div className="bold small">{s.title}</div>
+              <div className="small dim">{s.body}</div>
+            </div>
+          </Link>
+        ))}
+        <div className="tiny dim">Change how deep the coaching controls go (Simple / Advanced / Expert) any time in Settings.</div>
+      </div>
+    </Card>
   );
 }
