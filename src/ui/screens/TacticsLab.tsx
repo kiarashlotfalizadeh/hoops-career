@@ -310,7 +310,7 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
         </div>
         <div className="small dim">Net rating change per 100 possessions (± {f1(se)}).</div>
         <div className="grid3" style={{ marginTop: 10 }}>
-          <Kpi k="Win %" v={`${p0(before.winPct)} → ${p0(after.winPct)}`} />
+          <Kpi k="Win %" v={p0(after.winPct)} sub={`was ${p0(before.winPct)}`} />
           <Kpi k="Off rtg" v={`${f1(after.ortg)}`} sub={signed(after.ortg - before.ortg)} />
           <Kpi k="Def rtg" v={`${f1(after.drtg)}`} sub={signed(after.drtg - before.drtg)} />
         </div>
@@ -344,7 +344,7 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
           {players.map(({ p, a, b }) => (
             <div key={p.pid} className="row small">
               <span className="grow ellipsis">{p.lastName}</span>
-              <span className="num dim" style={{ width: 96, textAlign: 'right' }}>{b ? p1(b.usg) : '-'} → {p1(a.usg)}</span>
+              <span className="num dim nowrap" style={{ width: 120, textAlign: 'right' }}>{b ? p1(b.usg) : '-'} → {p1(a.usg)}</span>
               <span className="num" style={{ width: 70, textAlign: 'right' }}>{f1(a.pts)} pts</span>
             </div>
           ))}

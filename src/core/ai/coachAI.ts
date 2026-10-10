@@ -240,7 +240,8 @@ export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; 
 
 export function autoTactics(team: Team, players: Player[], keepManual = true): Tactics {
   if (keepManual && team.tactics.manual) return team.tactics;
-  const pr = rosterProfile(players);
+  const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
+  const pr = rosterProfile(healthy.length >= 8 ? healthy : players);
   const offBias = PHILOSOPHY_BIAS[team.coach.offPhilosophy] ?? {};
   const defBias: Record<string, number> = { [team.coach.defPhilosophy]: 7 };
   const off = bestPreset(offPresetFit(pr), offBias);

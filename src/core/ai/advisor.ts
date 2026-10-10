@@ -133,11 +133,11 @@ export function teamAlerts(league: League, tid: number): Alert[] {
   const curDef = team.tactics.defPreset;
   const bestOff = Object.entries(offFit).sort((a, b) => b[1] - a[1])[0];
   const bestDef = Object.entries(defFit).sort((a, b) => b[1] - a[1])[0];
-  if (offFit[curOff] !== undefined && bestOff[1] - offFit[curOff] > 12) {
+  if (team.tactics.manual && offFit[curOff] !== undefined && bestOff[1] - offFit[curOff] > 12) {
     const nm = OFF_PRESETS.find((x) => x.id === bestOff[0])?.name;
     alerts.push({ id: 'off-fit', tone: 'alert', title: `Offense may not fit: try ${nm}`, body: `Your roster profile fits ${nm} better (fit ${Math.round(bestOff[1])} vs ${Math.round(offFit[curOff])}).`, link: '/tactics' });
   }
-  if (defFit[curDef] !== undefined && bestDef[1] - defFit[curDef] > 12) {
+  if (team.tactics.manual && defFit[curDef] !== undefined && bestDef[1] - defFit[curDef] > 12) {
     const nm = DEF_PRESETS.find((x) => x.id === bestDef[0])?.name;
     alerts.push({ id: 'def-fit', tone: 'alert', title: `Defense may not fit: try ${nm}`, body: `Your personnel fits ${nm} better (fit ${Math.round(bestDef[1])} vs ${Math.round(defFit[curDef])}).`, link: '/tactics' });
   }

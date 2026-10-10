@@ -287,13 +287,14 @@ function InsightsTab() {
   if (!pts.length) return <Card><div className="small dim">Insights appear once your team has played a few games: what your tactics are winning, what they are giving up, and which play types work.</div></Card>;
   const row = (x: { key: string; perGame: number; forUser: boolean }) => {
     const tpl = IMPACT_TEXT[x.key];
-    const X = x.forUser ? 'Your team' : 'The opposition';
+    const X = x.forUser ? 'your team' : 'the opposition';
     const Y = x.forUser ? 'the opposition' : 'your team';
+    const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
     return (
       <div key={`${x.key}${x.forUser}`} className="row top small" style={{ gap: 10 }}>
         <span className={`num bold ${x.forUser ? 'good' : 'bad'}`} style={{ width: 44, flex: 'none' }}>{x.forUser ? '+' : '-'}{x.perGame.toFixed(1)}</span>
         <div className="grow">
-          <div>{tpl.text(X, Y, '')}</div>
+          <div>{cap(tpl.text(X, Y, ''))}</div>
           {!x.forUser && tpl.advice && <div className="tiny" style={{ color: 'var(--warn)' }}>{tpl.advice}</div>}
         </div>
       </div>

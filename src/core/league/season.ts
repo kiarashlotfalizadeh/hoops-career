@@ -67,7 +67,13 @@ function periodic(league: League, rng: Rng) {
   const d = league.day;
   // wear recovery
   for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
-  if (d % 7 === 0) for (const t of league.teams) updateMorale(league, t.tid, true);
+  if (d % 7 === 0) {
+    for (const t of league.teams) {
+      updateMorale(league, t.tid, true);
+      // assistant-managed teams re-fit their playbook to the healthy roster weekly
+      if (!t.tactics.manual) t.tactics = autoTactics(t, teamPlayers(league, t.tid), true);
+    }
+  }
   if (d === 45 || d === 90 || d === 135) {
     const changes = inSeasonProgression(league, rng).filter((c) => league.players[c.pid].tid === league.userTid && c.delta !== 0);
     if (changes.length) {
