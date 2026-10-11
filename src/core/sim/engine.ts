@@ -224,6 +224,8 @@ export interface SP {
   fouls: number;
   on: boolean;
   out: 0 | 1 | 2; // 0 ok, 1 fouled out, 2 injured
+  /** Game second he fouled out. */
+  outAt?: number;
   starter: boolean;
   ftPct: number;
   hot: number;
@@ -435,6 +437,8 @@ export class GameSim {
     for (const t of this.T) {
       t.plan = this.makePlan(t);
       this.setLineup(t, this.initialLineup(t));
+      // the starters are the five on the floor for the tip (the plan may have swapped one in for balance)
+      for (const p of t.players) p.starter = p.on;
     }
     this.refreshMatchups();
     // opening tip: size + explosiveness of the centers
@@ -566,11 +570,7 @@ export class GameSim {
     const src = t.players.map((p) => ({ pid: p.pid, available: p.out === 0, guard: p.guard, big: p.big, endurance: p.r.end }));
     const planPlayers = planInputs(src, rot, { playoffs: this.opts.type === 'playoffs' });
     if (!planPlayers.length) return [];
-    const starters = new Set(planPlayers.slice(0, 5).map((p) => p.pid));
-    for (const p of t.players) {
-      if (p.out === 0) p.starter = starters.has(p.pid);
-      p.cap = rot.caps[p.pid] || undefined;
-    }
+    for (const p of t.players) p.cap = rot.caps[p.pid] || undefined;
     const plan = buildMinutePlan(planPlayers);
     for (const slot of plan) for (const pid of slot) t.byId.get(pid)!.planMin++;
     return plan;
@@ -695,6 +695,7 @@ export class GameSim {
 
   callTimeout(side: 0 | 1, reason = '') {
     const t = this.T[side];
+    this.lateTimeouts();
     if (t.timeouts <= 0) return false;
     t.timeouts--;
     for (const tm of this.T) for (const p of tm.players) p.energy = Math.min(1, p.energy + (p.on ? 0.05 : 0.02));
@@ -799,13 +800,15 @@ export class GameSim {
   }
 
   private endPeriod(): boolean {
+    // the last fraction of a second still counts: exactly 48 minutes (plus overtime) are played
+    this.tick(this.clock);
     const [h, a] = this.T;
     if (this.q >= 4 && h.score !== a.score) {
       this.over = true;
       this.addPbp(-1, `End of game. ${h.team.abbrev} ${h.score}, ${a.team.abbrev} ${a.score}.`, 'period');
       return false;
     }
-    const label = this.q <= 4 ? `${ordinal(this.q)} quarter` : `OT${this.q - 4 > 1 ? this.q - 4 : ''}`;
+    const label = periodName(this.q);
     this.addPbp(-1, `End of ${label}. ${h.team.abbrev} ${h.score}, ${a.team.abbrev} ${a.score}.`, 'period');
     this.q++;
     this.flowPeriods.push(this.flow.length);
@@ -831,8 +834,7 @@ export class GameSim {
     this.T[1].run = 0;
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
-    const label2 = this.q <= 4 ? `${ordinal(this.q)} quarter` : `overtime`;
-    this.addPbp(-1, `Start of ${label2}.`, 'period');
+    this.addPbp(-1, `Start of ${periodName(this.q)}.`, 'period');
     return true;
   }
 
@@ -860,7 +862,8 @@ export class GameSim {
     let desired: SP[];
     const margin = Math.abs(this.T[0].score - this.T[1].score);
     // once the bench is in it stays: a lead dipping to 14 with seconds left doesn't bring the starters back
-    if (this.q >= 4 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) t.garbage = true;
+    // (and nobody empties the bench for the last half minute)
+    if (this.q >= 4 && this.clock >= 30 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) t.garbage = true;
     else if (margin <= 6 + this.clock / 30) t.garbage = false;
     const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
     const ordered = t.players.filter(avail);
@@ -922,6 +925,8 @@ export class GameSim {
     for (const p of t.players) sig += p.out + (p.on ? (p.energy < fl ? 'f' : 'o') : p.energy > 0.82 ? 'r' : 'b') + p.fouls + (this.capped(p) ? 'k' : '');
     const margin = Math.abs(this.T[0].score - this.T[1].score);
     if (this.q >= 4 && this.clock < 360) sig += `c${margin >= 16 ? (this.clock < 300 ? 'g' : 'x') : ''}`;
+    // a blowout getting back within reach brings the starters back now, not at the next minute mark
+    if (t.garbage && margin <= 6 + this.clock / 30) sig += 'n';
     return sig;
   }
 
@@ -970,7 +975,13 @@ export class GameSim {
     }
   }
 
+  /** NBA: no more than two timeouts each after the 3:00 mark of the fourth quarter. */
+  private lateTimeouts() {
+    if (this.q === 4 && this.clock <= 180) for (const t of this.T) t.timeouts = Math.min(t.timeouts, 2);
+  }
+
   private autoTimeouts() {
+    this.lateTimeouts();
     for (const t of this.T) {
       const opp = this.T[1 - t.side];
       if (!t.t.manage.autoTimeouts || t.manualSubs) continue;
@@ -1267,6 +1278,9 @@ export class GameSim {
       setup = Math.max(setup, this.clock - 6.5);
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
+    // the period is about to run out: push it up the floor and get a shot off before the buzzer
+    // (unless it's a lead to run out: then the clock dies with the ball)
+    if (!late.milk && this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
     let shotClock = GAME.shotClock - (ctx === 'orb' ? 10 : 0);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
@@ -1308,7 +1322,9 @@ export class GameSim {
     let tag = '';
     if (final && def.t.manage.foulWhenTrailing && defDiff < 0) {
       const down = -defDiff;
-      if ((down >= 4 && down <= 9 && clock <= 50 && clock > 1) || (down <= 3 && clock <= 24 && clock > 1.2)) {
+      // only while there is time to score twice more after the free throws: down one or two, a foul
+      // still buys a last shot; down three or more with seconds left it only pads the margin
+      if ((down >= 4 && down <= 9 && clock <= 50 && clock > 6) || (down <= 3 && clock <= 24 && clock > (down === 3 ? 6 : 1.2))) {
         // offense gets the ball to its best free throw shooters
         const ws = off.on.map((p) => Math.pow(p.ftPct, 6) * (0.5 + p.c.ballSec / 100));
         fouled = off.on[this.rng.weighted(ws)];
@@ -2374,23 +2390,62 @@ export class GameSim {
     p.fouls++;
     p.b.pf++;
     t.tot.pf++;
-    if (p.fouls >= GAME.foulOut) {
+    if (p.fouls < GAME.foulOut) return;
+    if (p.out === 0) {
       p.out = 1;
+      p.outAt = this.elapsed;
       this.addPbp(t.side, `${p.name} has fouled out.`, 'foul');
-      this.replace(t, p);
     }
+    // NBA rules: with nobody left to come in he stays on, and every foul from his sixth on adds a technical
+    if (!this.replace(t, p)) this.technical(t);
   }
 
-  /** Immediate replacement for a player who can't continue: same size if possible, never one at his minute cap if anyone else can go. */
-  private replace(t: ST, p: SP) {
-    const bench = t.players.filter((x) => !x.on && x.out === 0);
-    if (!bench.length) return;
-    const score = (x: SP) => (this.capped(x) ? 0 : 2) + (x.big === p.big ? 1 : 0);
+  /**
+   * Immediate replacement for a player who can't continue: same size if possible, never one at his
+   * minute cap if anyone else can go. With nobody left, an injured player is replaced by the most
+   * recently disqualified one (NBA rules); a team never plays four.
+   */
+  private replace(t: ST, p: SP): boolean {
+    let bench = t.players.filter((x) => !x.on && x.out === 0);
+    if (!bench.length && p.out === 2)
+      bench = t.players
+        .filter((x) => !x.on && x.out === 1)
+        .sort((a, b) => (b.outAt ?? 0) - (a.outAt ?? 0))
+        .slice(0, 1);
+    if (!bench.length) return false;
+    // in garbage time the deep bench fills in for its own: a starter doesn't come back to replace one
+    const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
+    const score = (x: SP) => (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
     this.applySub(
       t,
       t.on.map((x) => (x === p ? rep : x)),
     );
+    return true;
+  }
+
+  /** Technical foul on `t`: one free throw for the other side's best shooter on the floor; the possession carries on. */
+  private technical(t: ST) {
+    const opp = this.T[1 - t.side];
+    const sh = opp.on.reduce((a, x) => (x.ftPct > a.ftPct ? x : a), opp.on[0]);
+    sh.b.fta++;
+    opp.tot.fta++;
+    for (const x of opp.on) x.b.tFta++;
+    const made = this.rng.chance(sh.ftPct);
+    if (made) {
+      sh.b.ftm++;
+      opp.tot.ftm++;
+      // a point for the game, not for this possession's play type or its fast-break / second-chance tallies
+      const keep = { pts: this.possPts, second: this.secondChance, trans: this.inTransition, ctx: this.possCtxForTOPts };
+      this.secondChance = this.inTransition = false;
+      this.possCtxForTOPts = 'start';
+      this.score(opp, t, sh, 1);
+      this.possPts = keep.pts;
+      this.secondChance = keep.second;
+      this.inTransition = keep.trans;
+      this.possCtxForTOPts = keep.ctx;
+    }
+    this.addPbp(opp.side, `Technical foul on ${t.team.abbrev} (a disqualified player stays in). ${sh.name} ${made ? 'makes' : 'misses'} the free throw.`, 'ft');
   }
 
   private turnover(off: ST, def: ST, handler: SP, stealer: SP | null, finish: FinishType | 'press' | 'transition' | 'shotclock') {
@@ -2773,7 +2828,7 @@ export class GameSim {
     // reset with a 14-second shot clock
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
-    const setup = this.rng.uniform(1.5, 4);
+    const setup = Math.min(this.rng.uniform(1.5, 4), Math.max(0.3, this.clock * 0.4));
     this.tick(setup);
     if (this.clock <= 0.05) {
       this.finishPoss(off, def, 'putback');
@@ -2849,6 +2904,8 @@ export class GameSim {
 
   private addPbp(side: 0 | 1 | -1, text: string, kind: PbpEntry['kind']) {
     if (!this.record) return;
+    // a name that ends in a period ("Reed Jr.") closes the sentence itself
+    text = text.replace(/\.\.+/g, '.');
     this.pbp.push({ q: this.q, clock: Math.max(0, Math.round(this.clock * 10) / 10), t: side, text, hs: this.T?.[0]?.score ?? 0, as: this.T?.[1]?.score ?? 0, kind });
     if (this.cur) this.cur.lines.push(text);
   }
@@ -2953,6 +3010,11 @@ export class GameSim {
 
 function ordinal(n: number) {
   return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
+}
+
+/** "1st quarter" ... "4th quarter", then "OT", "2OT", "3OT" as the box score writes them. */
+function periodName(q: number) {
+  return q <= 4 ? `${ordinal(q)} quarter` : q === 5 ? 'OT' : `${q - 4}OT`;
 }
 
 export type { Box as SimBox, PossStep };

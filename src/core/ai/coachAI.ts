@@ -1,7 +1,7 @@
 // Automatic coaching: builds rotations and fits tactics to a roster. Used for AI teams,
 // for the user's "Auto" buttons, and by the assistant coach to propose changes.
 
-import type { OffRole, Player, Rotation, ShotFreedom, Tactics, Team } from '../types';
+import type { OffRole, Player, Pos, Rotation, ShotFreedom, Tactics, Team } from '../types';
 import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
@@ -19,8 +19,7 @@ export interface LineupEval {
 /** Spacing below which a starting five is called cramped: about the bottom fifth of real NBA starting fives. */
 export const CRAMPED_SPACING = 32;
 
-export function evaluateLineup(ps: Player[]): LineupEval {
-  const cs = ps.map((p) => composites(p.ratings));
+export function evaluateLineup(ps: Player[], cs = ps.map((p) => composites(p.ratings))): LineupEval {
   const ovr = ps.reduce((a, p) => a + p.ovr, 0);
   const spacing = cs.reduce((a, c) => a + c.spacing, 0) / ps.length;
   const creation = Math.max(...cs.map((c) => (c.pnrHandle + c.create) / 2));
@@ -79,8 +78,13 @@ export function bestLineup(players: Player[], pool = 9, roles?: Map<number, Role
   if (cands.length <= 5) return cands;
   let best = cands.slice(0, 5);
   let bs = -Infinity;
+  // composites once per candidate, not once per combination (AI teams re-plan before every game)
+  const comp = new Map(cands.map((p) => [p, composites(p.ratings)]));
   for (const c of combos(cands, 5)) {
-    let s = evaluateLineup(c).score;
+    let s = evaluateLineup(
+      c,
+      c.map((p) => comp.get(p)!),
+    ).score;
     // incumbents: a player who started last season keeps an edge for the job
     if (roles) for (const p of c) s += startBonus(roles.get(p.pid) ?? null);
     if (s > bs) {
@@ -91,9 +95,11 @@ export function bestLineup(players: Player[], pool = 9, roles?: Map<number, Role
   return best;
 }
 
-/** Sort a lineup into a conventional 1-5 order for display. */
+const POS_ORDER: Record<Pos, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+
+/** Sort a lineup into a conventional 1-5 order for display: by position, then size and handling. */
 export function sortByPosition(ps: Player[]): Player[] {
-  return [...ps].sort((a, b) => a.ratings.hgt - b.ratings.hgt + (b.ratings.hnd - a.ratings.hnd) * 0.15);
+  return [...ps].sort((a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos] || a.ratings.hgt - b.ratings.hgt + (b.ratings.hnd - a.ratings.hnd) * 0.15);
 }
 
 /**
