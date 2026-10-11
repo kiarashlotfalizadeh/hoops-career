@@ -11,6 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, moneyM, ordinalSuffix, p1, perGame, signed } from '../stats';
+import { openOption } from '../office/common';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
@@ -331,7 +332,7 @@ export default function PlayerView() {
                     <span className="dim2 small">Expires</span>
                     <span className="num">
                       {seasonLabel(contractExp(p.contract))}
-                      {p.contract.option ? ` (${p.contract.option} option)` : ''}
+                      {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
                       {p.contract.rookie ? ' · rookie scale' : ''}
                     </span>
                   </div>

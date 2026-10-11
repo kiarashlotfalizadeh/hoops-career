@@ -1,4 +1,4 @@
-import { capSeason, isOffseason } from '../office/common';
+import { capSeason, isOffseason, openOption } from '../office/common';
 import { useQueryParam } from '../league/shared';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -98,7 +98,11 @@ export default function Roster() {
       label: `${String(s - 1).slice(2)}-${String(s).slice(2)}`,
       get: (p: Player) => salaryFor(p, s),
       fmt: (v: number | string, p: Player) =>
-        v ? <span style={{ color: p.contract.option && contractExp(p.contract) === s ? 'var(--warn)' : undefined }}>{moneyM(v as number)}</span> : <span className="dim">—</span>,
+        v ? (
+          <span style={{ color: openOption(league, p) && contractExp(p.contract) === s ? 'var(--warn)' : undefined }}>{moneyM(v as number)}</span>
+        ) : (
+          <span className="dim">—</span>
+        ),
     })),
     { key: 'exp', label: 'EXP', get: (p) => contractExp(p.contract) },
   ];

@@ -13,6 +13,7 @@ import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
 import { f1, latestLine, moneyM, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
+import { openOption } from '../office/common';
 import { OutcomeTag, SectionLabel, StrategyTag, TabBar, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
@@ -41,7 +42,7 @@ export default function TeamView() {
     <main className="page lg-page" key={tid}>
       <PageHeader title={team.name} sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`} back />
       <Hero league={league} tid={tid} />
-      <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} />
+      <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} label="Team sections" />
       {tab === 'roster' && <RosterTab league={league} tid={tid} />}
       {tab === 'tactics' && <TacticsTab league={league} tid={tid} />}
       {tab === 'scouting' && <ScoutingTab league={league} tid={tid} />}
@@ -363,7 +364,9 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
         fmt: (x, p) => {
           const amt = x as number;
           if (!amt) return <span className="dim">–</span>;
-          const opt = p.contract.option && contractExp(p.contract) === s ? (p.contract.option === 'player' ? ' PO' : ' TO') : '';
+          // (an option year already under way was settled)
+          const o = openOption(league, p);
+          const opt = o && contractExp(p.contract) === s ? (o === 'player' ? ' PO' : ' TO') : '';
           return (
             <span className={p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
               {moneyM(amt)}
