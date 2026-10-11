@@ -852,9 +852,10 @@ export class GameSim {
     return mode === 'strict' ? base - (q === 1 ? 0 : 1) : mode === 'loose' ? base + 1 : base;
   }
 
-  /** At his hard minute cap: he sits unless nobody else can play. */
+  /** At his hard minute cap: he sits unless nobody else can play. Subs wait for a dead ball and a
+   * live-ball run can last a minute or two, so he comes out up to 40 seconds early rather than late. */
   private capped(p: SP) {
-    return p.cap !== undefined && p.b.sec >= p.cap * 60 - 10;
+    return p.cap !== undefined && p.b.sec >= p.cap * 60 - 40;
   }
 
   private desiredLineup(t: ST): SP[] {
