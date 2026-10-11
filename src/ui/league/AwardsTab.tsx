@@ -61,7 +61,7 @@ export function AwardsTab({ league }: { league: League }) {
         </div>
       )}
 
-      {aw?.cupWinner !== undefined && <CupBanner league={league} season={season} tid={aw.cupWinner} runnerUp={aw.cupRunnerUp} mvp={aw.cupMvp} />}
+      {aw?.cupWinner !== undefined && <CupBanner league={league} season={season} tid={aw.cupWinner} runnerUp={aw.cupRunnerUp} mvp={aw.cupMvp} final={league.cup?.season === season ? league.cup.bracket.find((t) => t.round === 'final') : undefined} />}
 
       {!decided && isCurrent && <AwardRace league={league} />}
       {!decided && !isCurrent && !aw?.allStars.E.length && (
@@ -181,7 +181,14 @@ function Teams({ league, aw }: { league: League; aw: SeasonAwards }) {
       {aw.allDefense.map((t, i) => (
         <TeamList key={`d${i}`} league={league} title={`All-Defensive ${['1st', '2nd'][i]} Team`} pids={t} season={aw.season} kind="def" />
       ))}
-      <TeamList league={league} title="All-Rookie Team" pids={aw.allRookie} season={aw.season} />
+      {aw.allRookie.length > 5 ? (
+        <>
+          <TeamList league={league} title="All-Rookie 1st Team" pids={aw.allRookie.slice(0, 5)} season={aw.season} />
+          <TeamList league={league} title="All-Rookie 2nd Team" pids={aw.allRookie.slice(5)} season={aw.season} />
+        </>
+      ) : (
+        <TeamList league={league} title="All-Rookie Team" pids={aw.allRookie} season={aw.season} />
+      )}
     </div>
   );
 }

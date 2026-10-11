@@ -1,7 +1,7 @@
 // Shared helpers for the league hub, team pages, history and inbox screens.
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
+import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useStore } from '../../state/store';
 import { seasonTotals } from '../../core/league/helpers';
 import { Segmented } from '../components/ui';
@@ -155,9 +155,27 @@ export function OutcomeTag({ o }: { o: Outcome }) {
   );
 }
 
+/** AI front-office strategies: one label and colour everywhere they appear (team pages, trades, settings). */
+export const STRATEGY_META: Record<Team['strategy'], { label: string; tone: 'good' | 'warn' | 'info'; help: string }> = {
+  contend: { label: 'Contending', tone: 'good', help: 'Wants proven players who help now. Discounts draft picks.' },
+  retool: { label: 'Retooling', tone: 'warn', help: 'Balanced: values players and picks at face value.' },
+  rebuild: { label: 'Rebuilding', tone: 'info', help: 'Pays extra for young players and draft picks, marks down veterans 29+.' },
+};
+
 export function StrategyTag({ team }: { team: Team }) {
-  const m = { contend: { t: 'good', l: 'Contending' }, retool: { t: 'warn', l: 'Retooling' }, rebuild: { t: 'info', l: 'Rebuilding' } }[team.strategy];
-  return <span className={`tag ${m.t}`}>{m.l}</span>;
+  const m = STRATEGY_META[team.strategy];
+  return <span className={`tag ${m.tone}`}>{m.label}</span>;
+}
+
+/** Overall slot of a pick once the draft order is set (the second round continues from 31). */
+export function overallPick(league: League, d: DraftPick): number | undefined {
+  return d.pick ? (d.round - 1) * league.teams.length + d.pick : undefined;
+}
+
+/** "2027 2nd round", plus "Top-4 protected" while another team holds a protected pick. */
+export function pickName(d: DraftPick): string {
+  const name = `${d.season} ${d.round === 1 ? '1st' : '2nd'} round`;
+  return d.protection && d.tid !== d.originalTid ? `${name} · Top-${d.protection} protected` : name;
 }
 
 /** Map legacy deep links (e.g. /league/awards) to routes that exist. */

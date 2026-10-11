@@ -51,9 +51,10 @@ interface Row {
 
 /**
  * One team's schedule & results, grouped by month. Long lists start collapsed around the next game.
- * `h2hTid` highlights games against that team (e.g. the user's team on another club's page).
+ * `h2hTid` highlights games against that team (e.g. the user's team on another club's page);
+ * `cupOnly` keeps just its NBA Cup games.
  */
-export function TeamScheduleList({ league, tid, h2hTid, collapse = true }: { league: League; tid: number; h2hTid?: number; collapse?: boolean }) {
+export function TeamScheduleList({ league, tid, h2hTid, collapse = true, cupOnly = false }: { league: League; tid: number; h2hTid?: number; collapse?: boolean; cupOnly?: boolean }) {
   const v = useStore((s) => s.v);
   const byGid = useGamesByGid(league);
   const [expanded, setExpanded] = useState(!collapse);
@@ -83,12 +84,13 @@ export function TeamScheduleList({ league, tid, h2hTid, collapse = true }: { lea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [league, tid, byGid, v]);
 
-  if (!rows.length) return <Empty>No games on the schedule yet.</Empty>;
+  const list = cupOnly ? rows.filter((r) => r.g.cup) : rows;
+  if (!list.length) return <Empty>{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</Empty>;
 
-  const nextIdx = rows.findIndex((r) => !r.g.played);
-  const anchor = nextIdx === -1 ? rows.length : nextIdx;
+  const nextIdx = list.findIndex((r) => !r.g.played);
+  const anchor = nextIdx === -1 ? list.length : nextIdx;
   const hiddenCount = !expanded && anchor > 5 ? anchor - 3 : 0;
-  const visible = rows.slice(hiddenCount);
+  const visible = list.slice(hiddenCount);
 
   let lastMonth = '';
   return (
@@ -103,7 +105,7 @@ export function TeamScheduleList({ league, tid, h2hTid, collapse = true }: { lea
         const month = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
         const showMonth = month !== lastMonth;
         lastMonth = month;
-        const monthRec = showMonth ? monthRecord(rows, league.season, month) : '';
+        const monthRec = showMonth && !cupOnly ? monthRecord(rows, league.season, month) : '';
         const today = !r.g.played && r.g.day === league.day && (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs');
         const opp = league.teams[r.opp];
         const typeLabel = gameTag(league, r.g);
@@ -169,14 +171,18 @@ function rowSub(league: League, r: Row, tid: number, ranks: Map<number, Standing
   }
   const st = ranks.get(r.opp);
   if (!st) return record(league, r.opp);
-  return `${st.won}-${st.lost} · ${ordinal(st.confRank)} in ${st.conf === 'E' ? 'East' : 'West'}`;
+  if (st.won + st.lost) return `${st.won}-${st.lost} · ${ordinal(st.confRank)} in ${st.conf === 'E' ? 'East' : 'West'}`;
+  // a rank means nothing before the opponent has played: show last season instead, if there was one
+  const prev = league.teams[r.opp].seasons.find((s) => s.season === league.season - 1);
+  return prev && prev.won + prev.lost ? `Last season ${prev.won}-${prev.lost}` : '0-0';
 }
 
 function monthRecord(rows: Row[], season: number, month: string) {
   let w = 0;
   let l = 0;
   for (const r of rows) {
-    if (!r.res) continue;
+    // the Cup championship doesn't count
+    if (!r.res || r.g.type === 'cup') continue;
     const m = dayToDate(season, r.g.day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
     if (m !== month) continue;
     if (r.won) w++;
@@ -230,9 +236,9 @@ export function DayScoreboard({ league }: { league: League }) {
           <ChevronRight size={20} />
         </button>
       </div>
-      {!isToday && (
+      {day !== fallback && (
         <button className="btn xs ghost" style={{ alignSelf: 'center' }} onClick={() => setDayStr('')}>
-          Jump to {days.includes(league.day) ? 'today' : 'next game day'}
+          Jump to {fallback === league.day ? 'today' : fallback > league.day ? 'next game day' : 'latest games'}
         </button>
       )}
       <div className="lg-sb-grid">

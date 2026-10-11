@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useLeague } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { fmtDate } from '../../core/league/helpers';
-import { PageHeader, Segmented } from '../components/ui';
+import { Chips, PageHeader, Segmented } from '../components/ui';
 import { TabBar, useQueryParam } from '../league/shared';
 import { StandingsTab } from '../league/StandingsTab';
 import { StatsTab } from '../league/StatsTab';
@@ -33,7 +33,7 @@ export default function LeagueHub() {
   const inSeason = league.phase === 'regular' || inPost;
 
   return (
-    <main className="page">
+    <main className="page lg-page">
       <PageHeader
         title="League"
         sub={`${seasonLabel(league.season)} · ${PHASE_LABEL[league.phase]}${inSeason ? ` · ${fmtDate(league.season, league.day)}` : ''}`}
@@ -58,7 +58,9 @@ export default function LeagueHub() {
 function ScheduleTab() {
   const league = useLeague();
   const [mode, setMode] = useQueryParam<'mine' | 'day'>('sched', 'mine', ['mine', 'day']);
+  const [games, setGames] = useQueryParam<'all' | 'cup'>('games', 'all', ['all', 'cup']);
   const t = league.teams[league.userTid];
+  const cup = league.schedule.some((g) => g.cup && (g.home === t.tid || g.away === t.tid));
   return (
     <>
       <Segmented
@@ -69,7 +71,17 @@ function ScheduleTab() {
           { id: 'day', label: 'All games by day' },
         ]}
       />
-      {mode === 'mine' ? <TeamScheduleList league={league} tid={league.userTid} /> : <DayScoreboard league={league} />}
+      {mode === 'mine' && cup && (
+        <Chips
+          value={games}
+          onChange={setGames}
+          options={[
+            { id: 'all', label: 'All games' },
+            { id: 'cup', label: 'NBA Cup' },
+          ]}
+        />
+      )}
+      {mode === 'mine' ? <TeamScheduleList league={league} tid={league.userTid} cupOnly={cup && games === 'cup'} /> : <DayScoreboard league={league} />}
     </>
   );
 }

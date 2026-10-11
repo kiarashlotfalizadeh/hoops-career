@@ -3,9 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useStore } from '../../state/store';
-import { CAP_FOR, curTeamSeason, payroll, rosterSorted } from '../../core/league/helpers';
+import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
-import { pickLabel } from '../../core/league/trades';
 import { scoutTeam } from '../../core/ai/advisor';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
 import { contractExp, salaryFor } from '../../core/playerGen';
@@ -14,7 +13,7 @@ import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
 import { f1, latestLine, moneyM, playerSeason, signed, teamRatings, type PerGame } from '../stats';
-import { OutcomeTag, SectionLabel, StrategyTag, TabBar, ordinal, seasonOutcome, shortName, useQueryParam } from '../league/shared';
+import { OutcomeTag, SectionLabel, StrategyTag, TabBar, ordinal, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 
 const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'history'] as const;
@@ -38,7 +37,7 @@ export default function TeamView() {
     );
   }
   return (
-    <main className="page" key={tid}>
+    <main className="page lg-page" key={tid}>
       <PageHeader title={team.name} sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`} back />
       <Hero league={league} tid={tid} />
       <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} />
@@ -64,7 +63,8 @@ function Hero({ league, tid }: { league: League; tid: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, tid, v],
   );
-  const pay = payroll(league, tid);
+  const cs = contractSeason(league);
+  const pay = payroll(league, tid, cs);
   const tr = teamRatings(ts);
   const gp = ts.won + ts.lost;
   const off = OFF_PRESETS.find((p) => p.id === team.coach.offPhilosophy);
@@ -122,8 +122,8 @@ function Hero({ league, tid }: { league: League; tid: number }) {
             </span>
           </div>
           <div>
-            <span className="k">Payroll</span>
-            <span className="v" style={{ color: payColor(league, pay) }}>
+            <span className="k">Payroll{cs !== league.season ? ` ${seasonLabel(cs).slice(2)}` : ''}</span>
+            <span className="v" style={{ color: payColor(league, pay, cs) }}>
               {moneyM(pay)}
             </span>
           </div>
@@ -152,20 +152,21 @@ function Hero({ league, tid }: { league: League; tid: number }) {
   );
 }
 
-function payColor(league: League, pay: number) {
-  const cap = CAP_FOR(league);
+function payColor(league: League, pay: number, season: number) {
+  const cap = CAP_FOR(league, season);
   return pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)';
 }
 
-/** Payroll vs cap and tax lines. */
+/** Payroll vs cap and tax lines, for the season contracts count against (next season in the offseason). */
 function PayrollBar({ league, tid }: { league: League; tid: number }) {
-  const pay = payroll(league, tid);
-  const cap = CAP_FOR(league);
-  const color = payColor(league, pay);
+  const cs = contractSeason(league);
+  const pay = payroll(league, tid, cs);
+  const cap = CAP_FOR(league, cs);
+  const color = payColor(league, pay, cs);
   return (
     <Card>
       <div className="row between" style={{ marginBottom: 8 }}>
-        <span className="small dim">Payroll {seasonLabel(league.season)}</span>
+        <span className="small dim">Payroll {seasonLabel(cs)}</span>
         <span className="bold num" style={{ color }}>
           {moneyM(pay)}
         </span>
@@ -310,16 +311,29 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
 function Contracts({ league, tid }: { league: League; tid: number }) {
   const nav = useNavigate();
   const v = useStore((s) => s.v);
-  const seasons = [0, 1, 2, 3].map((i) => league.season + i);
+  const cs = contractSeason(league);
+  const seasons = [0, 1, 2, 3].map((i) => cs + i);
   const rows = useMemo(
-    () => rosterSorted(league, tid).sort((a, b) => salaryFor(b, league.season) - salaryFor(a, league.season)),
+    () => rosterSorted(league, tid).sort((a, b) => salaryFor(b, cs) - salaryFor(a, cs)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, v],
+    [league, tid, cs, v],
   );
-  const cap = CAP_FOR(league);
+  const cap = CAP_FOR(league, cs);
   const cols = useMemo<Col<Player>[]>(
     () => [
-      { key: 'n', label: 'Player', left: true, sticky: true, get: (p) => p.lastName, fmt: (_x, p) => <span className="lg-pcell"><span className="n">{shortName(p)}</span></span> },
+      {
+        key: 'n',
+        label: 'Player',
+        left: true,
+        sticky: true,
+        get: (p) => p.lastName,
+        fmt: (_x, p) => (
+          <span className="lg-pcell">
+            <span className="n">{shortName(p)}</span>
+            {p.contract.twoWay && <span className="tag">2W</span>}
+          </span>
+        ),
+      },
       { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (x) => <Ovr v={x as number} size="sm" /> },
       { key: 'age', label: 'Age', get: (p) => league.season - p.bornYear },
       ...seasons.map(
@@ -332,7 +346,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
             if (!amt) return <span className="dim">–</span>;
             const opt = p.contract.option && contractExp(p.contract) === s ? (p.contract.option === 'player' ? ' PO' : ' TO') : '';
             return (
-              <span className={i === 0 ? 'bold' : 'dim2'}>
+              <span className={p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
                 {moneyM(amt)}
                 {opt && <span className="tiny warn">{opt}</span>}
               </span>
@@ -343,19 +357,22 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
       { key: 'exp', label: 'Exp', get: (p) => contractExp(p.contract) },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, league.season],
+    [league, cs],
   );
+  const twoWay = rows.some((p) => p.contract.twoWay);
   return (
     <>
       <PayrollBar league={league} tid={tid} />
       <div className="grid4">
         {seasons.map((s) => {
           const pay = payroll(league, tid, s);
-          return <Kpi key={s} k={seasonLabel(s)} v={<span style={{ fontSize: 18 }}>{moneyM(pay, 0)}</span>} sub={s === league.season ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'} />;
+          return <Kpi key={s} k={seasonLabel(s)} v={<span style={{ fontSize: 18 }}>{moneyM(pay, 0)}</span>} sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'} />;
         })}
       </div>
       <StatTable rows={rows} cols={cols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
-      <div className="lg-note">PO = player option, TO = team option on the final year. Dead money from released players counts toward payroll.</div>
+      <div className="lg-note">
+        PO = player option, TO = team option on the final year.{twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from released players counts toward payroll.
+      </div>
     </>
   );
 }
@@ -616,10 +633,11 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
   );
   const started = league.phase !== 'preseason';
   const slotTag = (d: DraftPick) => {
-    if (d.pick) return { text: `Pick #${d.pick}`, tone: 'good' };
+    const n = overallPick(league, d);
+    if (n) return { text: `#${n} overall`, tone: 'good' };
     if (d.season === league.season && started) {
-      const n = (proj.get(d.originalTid) ?? 15) + (d.round === 2 ? 30 : 0);
-      return { text: `Proj. #${n}`, tone: d.round === 1 && n <= 14 ? 'warn' : 'info' };
+      const p = (proj.get(d.originalTid) ?? 15) + (d.round === 2 ? league.teams.length : 0);
+      return { text: `Proj. #${p}`, tone: d.round === 1 && p <= 14 ? 'warn' : 'info' };
     }
     const yrs = d.season - league.season;
     return { text: yrs <= 0 ? 'This draft' : `In ${yrs} yr${yrs === 1 ? '' : 's'}`, tone: '' };
@@ -645,8 +663,8 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
               <div key={d.dpid} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
                 <TeamLogo tid={d.originalTid} size={28} />
                 <div style={{ minWidth: 0 }}>
-                  <div className="bold">{pickLabel(league, d)}</div>
-                  <div className="tiny dim">{acquired ? `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}` : 'Own pick'}</div>
+                  <div className="bold">{pickName(d)}</div>
+                  <div className="tiny dim">{acquired ? `Acquired from the ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}` : 'Own pick'}</div>
                 </div>
                 {(() => {
                   const t = slotTag(d);
@@ -666,10 +684,10 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
                 <TeamLogo tid={d.tid} size={28} />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">
-                    {d.season} {d.round === 1 ? '1st' : '2nd'}
-                    {d.pick ? ` (#${d.pick})` : ''}
+                    {pickName(d)}
+                    {d.pick ? ` · #${overallPick(league, d)} overall` : ''}
                   </div>
-                  <div className="tiny dim">Owned by {league.teams[d.tid].region} {league.teams[d.tid].name}</div>
+                  <div className="tiny dim">Owned by the {league.teams[d.tid].region} {league.teams[d.tid].name}</div>
                 </div>
                 <ChevronRight size={16} className="dim" />
               </Link>

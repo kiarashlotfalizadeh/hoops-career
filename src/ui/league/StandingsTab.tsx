@@ -22,7 +22,7 @@ export function StandingsTab({ league }: { league: League }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, v],
   );
-  const preseason = league.phase === 'preseason';
+  const started = rows.some((r) => r.won + r.lost > 0);
 
   return (
     <>
@@ -40,26 +40,25 @@ export function StandingsTab({ league }: { league: League }) {
         <PowerRankings league={league} />
       ) : (
         <>
-          <div className="row between lg-only-narrow">
-            <span className="small dim">{preseason ? 'Season has not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}</span>
-            <div className="chips">
-              <button className={`chip ${cols === 'basic' ? 'on' : ''}`} style={{ height: 28 }} onClick={() => setCols('basic')}>
+          <div className="row between">
+            <span className="small dim">{!started ? 'Season has not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}</span>
+            <div className="chips lg-only-narrow">
+              <button className={`chip lg-chip-xs ${cols === 'basic' ? 'on' : ''}`} aria-pressed={cols === 'basic'} onClick={() => setCols('basic')}>
                 Standings
               </button>
-              <button className={`chip ${cols === 'splits' ? 'on' : ''}`} style={{ height: 28 }} onClick={() => setCols('splits')}>
+              <button className={`chip lg-chip-xs ${cols === 'splits' ? 'on' : ''}`} aria-pressed={cols === 'splits'} onClick={() => setCols('splits')}>
                 Splits
               </button>
             </div>
           </div>
           <StandingsTable league={league} rows={view === 'league' ? leagueRows(rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} cols={cols} />
-          <div className="lg-note">
-            {view !== 'league' && (
-              <>
-                Seeds 1-6 make the playoffs; 7-10 go to the play-in. <span className="lg-clinch x">x</span> clinched playoffs · <span className="lg-clinch p">p</span> clinched play-in · <span className="lg-clinch e">e</span> eliminated.{' '}
-              </>
-            )}
-            Ties break on head-to-head, then conference record, then point differential.
-          </div>
+          {view === 'league' ? (
+            <div className="lg-note">Teams are ranked by win %, then point differential. Playoff seeding uses the conference standings and their tiebreakers.</div>
+          ) : (
+            <div className="lg-note">
+              Seeds 1-6 make the playoffs; 7-10 go to the play-in. <span className="lg-clinch x">x</span> clinched playoffs · <span className="lg-clinch p">p</span> clinched play-in · <span className="lg-clinch e">e</span> eliminated. Two-team ties break on head-to-head, division leader, division record (same division only), conference record, record against playoff teams in the conference, then in the other conference, then point differential. In ties of three or more, division leaders go first.
+            </div>
+          )}
         </>
       )}
     </>
@@ -74,6 +73,8 @@ function leagueRows(rows: StandingRow[]): StandingRow[] {
 }
 
 function StandingsTable({ league, rows, conf, cols }: { league: League; rows: StandingRow[]; conf: boolean; cols: Cols }) {
+  // the play-in and lottery lines mean nothing before a game is played
+  const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
     <Card className={`flush lg-flat lg-st mode-${cols}`}>
       <div className="lg-st-row lg-st-head">
@@ -95,7 +96,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
         return (
           <Fragment key={r.tid}>
             <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
-              <span className="rk">{conf ? r.confRank : r.leagueRank}</span>
+              <span className="rk">{r.won + r.lost === 0 ? '–' : conf ? r.confRank : r.leagueRank}</span>
               <TeamLogo tid={r.tid} size={24} />
               <span className="nm">
                 <span>
@@ -118,12 +119,12 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
               <span className="c-split dim2">{r.confRec}</span>
               <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : 'dim'}`}>{r.won + r.lost ? signed(r.diff) : '–'}</span>
             </Link>
-            {conf && i === 5 && rows.length > 6 && (
+            {cuts && i === 5 && rows.length > 6 && (
               <div className="lg-cut">
                 <span>Play-in</span>
               </div>
             )}
-            {conf && i === 9 && rows.length > 10 && (
+            {cuts && i === 9 && rows.length > 10 && (
               <div className="lg-cut">
                 <span>Lottery</span>
               </div>
@@ -163,7 +164,9 @@ function PowerRankings({ league }: { league: League }) {
   return (
     <>
       <div className="row between">
-        <span className="small dim">Ranked by net rating (points per 100 possessions)</span>
+        <span className="small dim">
+          {list.every((x) => x.gp === 0) ? 'Ranked by roster strength (TAL) until games are played' : list.some((x) => x.gp < 10) ? 'Net rating, blended with roster strength early on' : 'Ranked by net rating (points per 100 possessions)'}
+        </span>
         <Help title="Power rankings">
           <p style={{ margin: 0 }}>Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
           <p style={{ margin: 0 }}>Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until about ten games are played.</p>

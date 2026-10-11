@@ -90,6 +90,24 @@
 .lg-select:focus {
   border-color: var(--accent);
 }
+.lg-sub .chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* compact chips that still give fingers a 40px target */
+.chip.lg-chip-xs {
+  position: relative;
+  height: 28px;
+}
+.chip.lg-chip-xs::after {
+  content: '';
+  position: absolute;
+  inset: -6px -3px;
+}
+/* sortable table headers: a 40px row, and the whole cell sorts */
+.lg-page .tablewrap table.stats th {
+  height: 40px;
+}
 .lg-search {
   position: relative;
   flex: 1;
@@ -749,15 +767,14 @@ a.bk-s:hover {
   color: inherit;
   text-decoration: none;
 }
-table.cup-group th:last-child,
-table.cup-group td:last-child {
-  width: 44px;
-  padding-left: 0;
+.lg-st.mode-cup .lg-st-row {
+  grid-template-columns: 18px 22px minmax(0, 1fr) 38px 38px 36px 32px;
 }
-table.cup-group tr.cup-out td {
+.lg-st-row.cup-out > span {
   color: var(--text-dim);
 }
-table.cup-group tr.cup-out td .lg-tcell {
+.lg-st-row.cup-out .nm,
+.lg-st-row.cup-out .wl {
   font-weight: 600;
 }
 .lg-champ {
@@ -1067,7 +1084,8 @@ table.cup-group tr.cup-out td .lg-tcell {
 .lg-strip {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* payroll gets a little more room: its label carries the season in the offseason */
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr);
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--line-2);
@@ -1104,39 +1122,7 @@ table.cup-group tr.cup-out td .lg-tcell {
   padding: 8px 12px;
   min-height: 58px;
 }
-.lg-prow + .lg-strip {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line-2);
-}
-.lg-strip > div {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.lg-strip > div + div {
-  padding-left: 10px;
-  border-left: 1px solid var(--line);
-}
-.lg-strip .k {
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.lg-strip .v {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.lg-prow {
+.lg-prow + .lg-prow {
   border-top: 1px solid var(--line);
 }
 .lg-prow:active {
@@ -1218,7 +1204,7 @@ table.cup-group tr.cup-out td .lg-tcell {
 /* ------------------------------------------------------------------ history */
 .lg-season {
   display: grid;
-  grid-template-columns: 64px 54px minmax(0, 1fr) auto;
+  grid-template-columns: 74px 54px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
@@ -1232,6 +1218,7 @@ table.cup-group tr.cup-out td .lg-tcell {
   font-weight: 700;
   font-size: 16px;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 .lg-season .rec {
   font-weight: 750;

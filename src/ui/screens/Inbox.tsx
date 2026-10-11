@@ -5,7 +5,7 @@ import type { InboxMessage } from '../../core/types';
 import { useLeague, useStore } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { Card, Empty, PageHeader } from '../components/ui';
+import { Card, Empty, PageHeader, activateOnKey } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
@@ -114,12 +114,7 @@ export default function Inbox() {
                   tabIndex={0}
                   aria-expanded={open}
                   onClick={() => toggle(m)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      toggle(m);
-                    }
-                  }}
+                  onKeyDown={activateOnKey(() => toggle(m))}
                 >
                   <div className="lg-msg-top">
                     <span className="ic">

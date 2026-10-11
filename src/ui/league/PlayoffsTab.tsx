@@ -85,7 +85,9 @@ export function PlayoffsTab({ league }: { league: League }) {
   const [open, setOpen] = useState<PlayoffSeries | null>(null);
   const finals = league.playoffs.find((s) => s.round === 4);
   const champ = finals?.winner;
-  const phase: Phase = champ !== undefined ? 'done' : league.playoffs.length ? 'live' : league.playIn.length ? 'playin' : league.phase === 'regular' ? 'projected' : 'none';
+  // a projection needs results: on opening day every seed would be arbitrary
+  const played = league.games.some((g) => g.season === league.season && g.type === 'regular');
+  const phase: Phase = champ !== undefined ? 'done' : league.playoffs.length ? 'live' : league.playIn.length ? 'playin' : league.phase === 'regular' && played ? 'projected' : 'none';
   const slots = useMemo(
     () => ({ E: confSlots(league, 'E'), W: confSlots(league, 'W') }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
