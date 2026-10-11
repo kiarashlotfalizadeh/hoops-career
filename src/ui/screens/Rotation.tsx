@@ -183,7 +183,13 @@ export default function Rotation() {
             .filter((pid) => (plan.norm[pid] ?? 0) > 0)
             .map((pid) => {
               return (
-                <div key={pid} className="row" style={{ gap: 6 }}>
+                <div
+                  key={pid}
+                  className="row"
+                  style={{ gap: 6 }}
+                  role="img"
+                  aria-label={`${nameOf(pid)}: ${plan.norm[pid]} minutes, on the floor in minutes ${stints(plan.slots, pid)}`}
+                >
                   <span className="tiny ellipsis" style={{ width: 110, flex: 'none' }}>
                     {nameOf(pid)}
                   </span>
@@ -235,6 +241,22 @@ export default function Rotation() {
       )}
     </main>
   );
+}
+
+/** "1-8, 20-26, 41-48": the minutes of the game a player is planned on the floor (the stint plan for screen readers). */
+function stints(slots: number[][], pid: number) {
+  const out: string[] = [];
+  let from = -1;
+  slots.forEach((slot, s) => {
+    const on = slot.includes(pid);
+    if (on && from < 0) from = s;
+    if (from >= 0 && (!on || s === slots.length - 1)) {
+      const to = on ? s : s - 1;
+      out.push(from === to ? `${from + 1}` : `${from + 1}-${to + 1}`);
+      from = -1;
+    }
+  });
+  return out.join(', ');
 }
 
 function LineupsCard() {
