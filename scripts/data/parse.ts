@@ -277,7 +277,8 @@ export function parseRoster(html: string, team: string, season: number): RosterR
       heightIn: ft ? ft * 12 + (inch || 0) : 0,
       weightLb: num(r.weight),
       birthDate: r.birth_date__csk ?? '',
-      country: (r.flag ?? r.birth_country ?? '').toUpperCase(),
+      // the cell holds a flag icon plus the code ("us us"): keep one code
+      country: (r.flag ?? r.birth_country ?? '').trim().split(/\s+/)[0].toUpperCase(),
       exp: r.years_experience === 'R' ? 0 : num(r.years_experience),
       college: (r.college ?? '').trim(),
     });

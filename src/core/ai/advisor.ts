@@ -4,7 +4,7 @@
 import type { League, Player, PnrCoverage } from '../types';
 import { composites, ROLE_META } from '../ratings';
 import { DEF_PRESETS, OFF_PRESETS, COVERAGE_META } from '../sim/tactics';
-import { defPresetFit, evaluateLineup, offPresetFit, rosterProfile } from './coachAI';
+import { defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import type { Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 
@@ -154,7 +154,19 @@ export function teamAlerts(league: League, tid: number): Alert[] {
   const total = Object.entries(rot.minutes).filter(([pid]) => players.some((p) => p.pid === +pid && !p.injury)).reduce((a, [, m]) => a + m, 0);
   if (rot.manual && Math.abs(total - 240) > 6) alerts.push({ id: 'min-total', tone: 'alert', title: `Minutes add up to ${Math.round(total)}`, body: 'Minute targets are scaled to 240 automatically, so the actual split may differ from what you set.', link: '/rotation' });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
-  if (best && (rot.minutes[best.pid] ?? 0) < 28) alerts.push({ id: 'star-min', tone: 'alert', title: `${best.lastName} is only playing ${rot.minutes[best.pid] ?? 0} minutes`, body: 'Your best player should usually play 32-36 minutes.', link: '/rotation' });
+  if (best) {
+    // stamina sets a ceiling; only flag minutes well below what he can carry
+    const sustain = Math.round(sustainableMinutes(best));
+    const m = rot.minutes[best.pid] ?? 0;
+    if (m < Math.min(28, sustain - 3))
+      alerts.push({
+        id: 'star-min',
+        tone: 'alert',
+        title: `${best.lastName} is only playing ${m} minutes`,
+        body: sustain < 32 ? `His stamina supports about ${sustain} minutes. Give him most of them.` : 'Your best player should usually play 32-36 minutes.',
+        link: '/rotation',
+      });
+  }
   for (const p of players) {
     if (p.wear >= 55) alerts.push({ id: `wear-${p.pid}`, tone: 'alert', title: `${p.lastName} is worn down`, body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. Rest him on back-to-backs (Rotation).`, link: '/rotation' });
     if (p.mood.tradeRequest) alerts.push({ id: `tr-${p.pid}`, tone: 'bad', title: `${p.lastName} wants a trade`, body: p.mood.notes.join('. '), link: `/player/${p.pid}` });

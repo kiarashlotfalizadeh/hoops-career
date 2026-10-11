@@ -117,7 +117,11 @@ export default function PlayerView() {
   const arch = archetype(p.ratings);
   const role = team ? team.tactics.offense.roles[p.pid] ?? arch.role : arch.role;
   const mood = MOOD_META[moodLevel(p.mood.score)];
-  const cur = perGame(p.stats.filter((s) => s.season === league.season && !s.playoffs).reduce<PlayerStats | null>((a, s) => (a ? { ...a, ...sumStats(a, s) } : s), null));
+  const seasonLine = (season: number) => perGame(p.stats.filter((s) => s.season === season && !s.playoffs).reduce<PlayerStats | null>((a, s) => (a ? { ...a, ...sumStats(a, s) } : s), null));
+  const cur = seasonLine(league.season);
+  // before his first game this season, show his most recent season instead
+  const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
+  const line = cur ?? (lastSeason ? seasonLine(lastSeason) : null);
   const sal = salaryFor(p, league.season) || salaryFor(p, league.season + 1);
   const status = p.tid === FREE_AGENT ? 'Free agent' : p.tid === DRAFT_PROSPECT ? `${p.draft.year} draft prospect` : p.tid === RETIRED ? `Retired ${p.retiredSeason ?? ''}` : team ? `${team.region} ${team.name}` : '';
   const contribs = ovrContributions(league, p);
@@ -154,11 +158,12 @@ export default function PlayerView() {
           </div>
         </div>
         <div className="grid4" style={{ marginTop: 12 }}>
-          <Kpi k="PTS" v={cur ? f1(cur.pts) : '-'} />
-          <Kpi k="REB" v={cur ? f1(cur.reb) : '-'} />
-          <Kpi k="AST" v={cur ? f1(cur.ast) : '-'} />
-          <Kpi k="TS%" v={cur ? p1(cur.tsPct).replace('%', '') : '-'} />
+          <Kpi k="PTS" v={line ? f1(line.pts) : '-'} />
+          <Kpi k="REB" v={line ? f1(line.reb) : '-'} />
+          <Kpi k="AST" v={line ? f1(line.ast) : '-'} />
+          <Kpi k="TS%" v={line ? p1(line.tsPct).replace('%', '') : '-'} />
         </div>
+        {!cur && line && lastSeason ? <div className="tiny dim" style={{ marginTop: 6 }}>{seasonLabel(lastSeason)} per game{p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}</div> : null}
       </Card>
 
       <Segmented

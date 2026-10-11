@@ -58,7 +58,10 @@ export function StatsTab({ league }: { league: League }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, v],
   );
-  const [seasonStr, setSeasonStr] = useQueryParam<string>('season', String(league.season));
+  // before the first game of a season, open on the last completed one
+  const started = league.games.some((g) => g.season === league.season);
+  const fallback = started ? league.season : ([...seasons].filter((s) => s.season < league.season).sort((a, b) => b.season - a.season)[0]?.season ?? league.season);
+  const [seasonStr, setSeasonStr] = useQueryParam<string>('season', String(fallback));
   const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : league.season;
   const [po, setPo] = useQueryParam<'reg' | 'po'>('po', 'reg', ['reg', 'po']);
   const playoffs = po === 'po';

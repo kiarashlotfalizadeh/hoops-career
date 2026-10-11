@@ -1,8 +1,8 @@
 import type { CombineResults, DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
-import { generatePlayer } from '../playerGen';
-import { composites, ratingToHeight } from '../ratings';
+import { generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { composites, ratingToHeight, shiftToOvr } from '../ratings';
 import { addInbox, addNews, curTeamSeason, playerName, prospects, teamPlayers, winPct } from './helpers';
 import { rookieContract } from './contracts';
 import { valueScore } from './contracts';
@@ -42,6 +42,11 @@ function blurb(p: Player): string {
   return `${p.archetype}. Best tools: ${strengths[0][0]} and ${strengths[1][0]}. Needs work: ${weak}.`;
 }
 
+/** Display OVR a year before the draft for the prospect at talent rank `i` (0 = best). */
+function prospectLevel(i: number): number {
+  return i < 30 ? 77 - 9.5 * Math.pow(i / 29, 0.8) : 64 - (5 * (i - 30)) / 42;
+}
+
 /** Generate a class of prospects for the draft held at the end of `year`'s season. */
 export function generateDraftClass(league: League, year: number, rng: Rng, size = 72) {
   const created: Player[] = [];
@@ -61,6 +66,9 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     });
     p.bornYear = year - age;
     p.growth = clamp(rng.normal(0.15, 0.45), -1, 1);
+    // level to how real classes arrive: ~77 at the top a year out, ~68 by the end of round one
+    p.ratings = shiftToOvr(p.ratings, Math.round(prospectLevel(i) + rng.normal(0, 2.2)), league.ovrScale);
+    refreshPlayerDerived(p, league.season, league.ovrScale);
     p.contract = { start: year + 1, salaries: [0] };
     league.players[p.pid] = p;
     created.push(p);

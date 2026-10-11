@@ -10,11 +10,11 @@ import { COUNTRY_NAMES, parseAdvanced, parseContracts, parseDraft, parsePerGame,
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
 import { calibrate } from './calibrate';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
-import type { PlayerStats, Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
+import type { PlayerStats, Pos, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { BBREF_TO_TID } from '../../src/core/teams';
-import { RATING_KEYS, buildOvrScale, ovrRaw, toDisplay, type OvrScale } from '../../src/core/ratings';
+import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
 import { clamp } from '../../src/core/random';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
@@ -302,8 +302,6 @@ function main() {
   console.log(`wrote ${OUT} (${(JSON.stringify(seed).length / 1e6).toFixed(2)} MB)`);
 }
 
-const SKILLS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
-
 /** Display OVR expected from draft slot and reputation alone (no NBA sample). */
 function priorOvr(sp: SeedPlayer): number {
   const age = 2027 - sp.bornYear;
@@ -316,25 +314,6 @@ function priorOvr(sp: SeedPlayer): number {
   }
   // veterans without recent NBA minutes: overseas returns, long injuries, camp invites
   return 64 + (pick !== null && pick <= 14 ? 4 : pick !== null && pick <= 30 ? 2 : 0) - Math.max(0, age - 31) * 1.5;
-}
-
-/** Shift skill ratings uniformly until the player's display OVR reaches `target`. */
-function shiftTo(r: Ratings, target: number, scale: OvrScale): Ratings {
-  const at = (d: number) => {
-    const t = { ...r };
-    for (const k of SKILLS) t[k] = clamp(r[k] + d, 1, 100);
-    return t;
-  };
-  let lo = -45;
-  let hi = 45;
-  for (let i = 0; i < 32; i++) {
-    const mid = (lo + hi) / 2;
-    if (toDisplay(ovrRaw(at(mid)), scale) < target) lo = mid;
-    else hi = mid;
-  }
-  const out = at(hi);
-  for (const k of SKILLS) out[k] = Math.round(out[k] * 10) / 10;
-  return out;
 }
 
 /**
@@ -378,7 +357,7 @@ function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Ma
     for (const p of players) {
       const t = targets.get(p.id);
       if (t === undefined || disp(p) === t) continue;
-      p.ratings = shiftTo(p.ratings, t, scale);
+      p.ratings = shiftToOvr(p.ratings, t, scale);
       moved++;
     }
     scale = scaleNow();

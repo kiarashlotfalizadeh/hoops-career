@@ -8,6 +8,7 @@ import { archetype } from '../ratings';
 import { addInbox, curTeamSeason, playerName, seasonTotals, teamPlayers, winPct } from './helpers';
 import { marketSalary } from './contracts';
 import { salaryFor } from '../playerGen';
+import { sustainableMinutes } from '../ai/coachAI';
 
 export function moodLevel(score: number): MoodLevel {
   if (score >= 5) return 'ecstatic';
@@ -25,12 +26,12 @@ export const MOOD_META: Record<MoodLevel, { label: string; emoji: string; color:
   furious: { label: 'Furious', emoji: '✖', color: 'var(--bad)' },
 };
 
-/** Expected minutes per game given rank on the team. */
-export function expectedMinutes(rank: number, ovr: number): number {
+/** Expected minutes per game given rank on the team, capped by what his stamina can carry. */
+export function expectedMinutes(rank: number, ovr: number, sustainable = 40): number {
   const byRank = [34, 33, 31, 30, 28, 24, 21, 18, 15, 11, 8, 5, 3, 2, 1];
   const base = byRank[Math.min(rank, byRank.length - 1)];
   // players far better than the league median expect more regardless of team
-  return clamp(base + (ovr - 76) * 0.4, 2, 37);
+  return Math.min(clamp(base + (ovr - 76) * 0.4, 2, 37), sustainable);
 }
 
 export function updateMorale(league: League, tid: number, notify = false) {
@@ -40,7 +41,7 @@ export function updateMorale(league: League, tid: number, notify = false) {
   const wp = games ? winPct(ts) : 0.5;
   roster.forEach((p, rank) => {
     const prev = p.mood.score;
-    const exp = expectedMinutes(rank, p.ovr);
+    const exp = expectedMinutes(rank, p.ovr, sustainableMinutes(p));
     const st = seasonTotals(p, league.season);
     const mpg = st && st.gp ? st.min / st.gp : 0;
     const healthy = !p.injury;

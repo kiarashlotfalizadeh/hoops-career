@@ -91,9 +91,12 @@ export function sortByPosition(ps: Player[]): Player[] {
   return [...ps].sort((a, b) => a.ratings.hgt - b.ratings.hgt + (b.ratings.hnd - a.ratings.hnd) * 0.15);
 }
 
-/** Minutes per game a player can sustain, from stamina (calibrated so real players match their real MPG). */
+/**
+ * Minutes per game a player can sustain, from stamina. Real players' stamina comes from the
+ * minutes they actually played, so this sits a little above that to leave room for a bigger role.
+ */
 export function sustainableMinutes(p: Player): number {
-  return clamp(19.5 + (p.ratings.end - 38) / 1.5, 12, 40);
+  return clamp(22 + (p.ratings.end - 38) / 1.5, 14, 40);
 }
 
 export function autoRotation(players: Player[], prev?: Rotation): Rotation {

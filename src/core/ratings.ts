@@ -204,6 +204,27 @@ export function fromDisplay(disp: number, scale: OvrScale): number {
   return xs[n - 1];
 }
 
+const SKILL_KEYS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
+
+/** Shift skill ratings uniformly (physical tools untouched) until display OVR reaches `target`. */
+export function shiftToOvr(r: Ratings, target: number, scale: OvrScale): Ratings {
+  const at = (d: number) => {
+    const t = { ...r };
+    for (const k of SKILL_KEYS) t[k] = clamp(r[k] + d, 1, 100);
+    return t;
+  };
+  let lo = -45;
+  let hi = 45;
+  for (let i = 0; i < 32; i++) {
+    const mid = (lo + hi) / 2;
+    if (toDisplay(ovrRaw(at(mid)), scale) < target) lo = mid;
+    else hi = mid;
+  }
+  const out = at(hi);
+  for (const k of SKILL_KEYS) out[k] = Math.round(out[k] * 10) / 10;
+  return out;
+}
+
 /** Expected display-point growth remaining by age (mean path). */
 export function expectedGrowth(age: number): number {
   if (age <= 19) return 10;
@@ -217,14 +238,15 @@ export function potential(ovr: number, age: number, growth: number): number {
   return clamp(Math.round(Math.max(ovr, ovr + g)), 40, 99);
 }
 
+/** Tiers sized to the real league: ~6 MVP candidates, ~18 All-NBA, ~30 All-Stars, ~2 quality starters a team. */
 export function tierLabel(ovr: number): string {
-  if (ovr >= 92) return 'MVP Candidate';
-  if (ovr >= 86) return 'All-NBA';
-  if (ovr >= 81) return 'All-Star';
-  if (ovr >= 77) return 'Quality Starter';
-  if (ovr >= 73) return 'Starter';
-  if (ovr >= 69) return 'Rotation';
-  if (ovr >= 64) return 'Bench';
+  if (ovr >= 93) return 'MVP Candidate';
+  if (ovr >= 89) return 'All-NBA';
+  if (ovr >= 87) return 'All-Star';
+  if (ovr >= 82) return 'Quality Starter';
+  if (ovr >= 78) return 'Starter';
+  if (ovr >= 72) return 'Rotation';
+  if (ovr >= 67) return 'Bench';
   return 'Fringe';
 }
 
