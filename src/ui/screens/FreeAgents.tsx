@@ -5,7 +5,7 @@ import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, twoWaySalary, twoWayYears, valueScore, wantsTwoWay } from '../../core/league/contracts';
-import { signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
+import { capPayroll, signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { faAdvance } from '../../core/league/season';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
@@ -22,7 +22,9 @@ export default function FreeAgents() {
   const s = capSeason(league);
   const cap = CAP_FOR(league, s);
   const pay = payroll(league, tid, s);
-  const space = cap.salaryCap - pay;
+  // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet)
+  const holds = capPayroll(league, tid, s) - pay;
+  const space = cap.salaryCap - pay - holds;
   const mle = mleRoom(league, tid, s);
   // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;
@@ -151,7 +153,12 @@ export default function FreeAgents() {
       )}
 
       <div className="grid3">
-        <Kpi k="Cap space" v={fmtM(space)} color={space > 0 ? 'var(--good)' : 'var(--warn)'} sub={space > 0 ? 'to spend' : 'min deals only'} />
+        <Kpi
+          k="Cap space"
+          v={fmtM(space)}
+          color={space > 0 ? 'var(--good)' : 'var(--warn)'}
+          sub={holds > 0 ? 'after cap holds' : space > 0 ? 'to spend' : mle > 0 ? 'min or mid-level' : 'min deals only'}
+        />
         <Kpi
           k="Roster"
           v={`${n}/${max}`}
@@ -197,7 +204,7 @@ export default function FreeAgents() {
                 <Newspaper size={13} /> Latest signings
               </div>
               {recent.map((x) => (
-                <div key={x.id} className="small dim2 ellipsis">
+                <div key={x.id} className="small dim2">
                   {x.text}
                 </div>
               ))}
