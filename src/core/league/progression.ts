@@ -4,7 +4,7 @@
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
-import { RATING_KEYS, ovrRaw, potential, toDisplay, archetype } from '../ratings';
+import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, potential, toDisplay, archetype } from '../ratings';
 import { playerAge } from '../playerGen';
 import { seasonTotals } from './helpers';
 
@@ -34,19 +34,40 @@ const GROUP_OF: Record<RatingKey, Group> = {
   dreb: 'reb',
 };
 
-// mean change per year for ages 19..35+
+// Mean change per year for ages 19..35+, relative to the league: anchorRatings holds each
+// attribute's league mean, so a typical roster's changes (with training, coaching and playing time
+// added) average out to about zero and the anchor only corrects drift. A uniform cut there used to
+// shift the whole age curve down, so players peaked at 24-25 and fell 3-4 OVR a year after 30.
+// Young players climb about 2 OVR a year, skills and IQ hold into the late 20s and athleticism
+// fades first: players peak around 26-27, slip slowly to 30, then lose 1-2 OVR a year.
 const CURVES: Record<Group, number[]> = {
-  athletic: [2, 1.5, 1, 0.5, 0, 0, -0.3, -0.6, -1, -1.4, -1.8, -2.3, -2.8, -3.3, -3.8, -4.4, -5],
-  end: [2, 2, 1.5, 1, 0.5, 0, 0, 0, -0.5, -0.8, -1, -1.5, -2, -2.5, -3, -3.5, -4],
-  str: [3, 2.5, 2, 1.5, 1, 0.5, 0.3, 0, 0, 0, 0, -0.5, -1, -1.5, -2, -2.5, -3],
-  shooting: [3.4, 3, 2.6, 2.1, 1.7, 1.3, 0.9, 0.6, 0.3, 0, 0, -0.3, -0.5, -0.8, -1, -1.3, -1.6],
-  skill: [3, 2.6, 2.2, 1.8, 1.3, 0.9, 0.5, 0.2, 0, -0.2, -0.4, -0.8, -1.2, -1.6, -2, -2.5, -3],
-  iq: [4, 3.5, 3, 2.5, 2, 1.5, 1.2, 0.9, 0.6, 0.4, 0.2, 0, -0.3, -0.6, -1, -1.5, -2],
-  perim: [2.5, 2, 1.8, 1.5, 1, 0.6, 0.3, 0, -0.4, -0.8, -1.2, -1.6, -2, -2.5, -3, -3.5, -4],
-  interior: [2.5, 2, 1.8, 1.5, 1, 0.6, 0.3, 0, -0.2, -0.5, -0.9, -1.3, -1.8, -2.3, -2.8, -3.3, -3.8],
-  reb: [2, 1.8, 1.5, 1.2, 0.8, 0.5, 0.3, 0, 0, -0.3, -0.6, -1, -1.4, -1.8, -2.2, -2.6, -3],
+  athletic: [1.3, 0.9, 0.5, 0.4, 0.2, 0.1, 0.1, -0.1, -0.2, -0.4, -0.7, -1, -1.3, -1.7, -2.1, -2.6, -3],
+  end: [0.7, 0.7, 0.5, 0.4, 0.2, -0.1, -0.3, -0.3, -0.2, -0.3, -0.4, -0.6, -0.9, -1.3, -1.7, -2, -2.4],
+  str: [1.2, 0.8, 0.5, 0.4, 0.2, -0.1, -0.4, -0.5, -0.6, -0.5, -0.3, -0.4, -0.6, -0.9, -1.3, -1.6, -2],
+  shooting: [0.9, 0.6, 0.4, 0.3, 0.1, 0, -0.2, -0.1, -0.4, -0.7, -0.9, -0.9, -1, -1.1, -1.3, -1.4, -1.5],
+  skill: [0.8, 0.6, 0.4, 0.3, 0.1, 0, -0.2, -0.1, -0.4, -0.6, -0.7, -0.8, -1, -1.3, -1.6, -1.9, -2.2],
+  iq: [1.2, 0.8, 0.4, 0.3, 0.1, 0.1, -0.1, -0.2, -0.4, -0.7, -1, -1.1, -1.1, -1.3, -1.5, -1.8, -2.1],
+  perim: [0.8, 0.5, 0.3, 0.3, 0.2, 0.1, 0, -0.2, -0.3, -0.5, -0.8, -1.1, -1.3, -1.7, -2.1, -2.6, -3],
+  interior: [0.7, 0.4, 0.2, 0.2, 0.1, 0, -0.1, -0.2, -0.3, -0.4, -0.7, -0.9, -1.1, -1.5, -1.9, -2.4, -2.8],
+  reb: [0.3, 0.1, 0, 0, -0.1, -0.2, -0.3, -0.2, -0.3, -0.3, -0.4, -0.6, -0.8, -1.1, -1.4, -1.7, -2],
   hgt: [0.6, 0.3, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 };
+/**
+ * Share of a good or bad summer that reaches the skills and the body. A shared summer moves skills
+ * together, and correlated skills widen the OVR spread over the years, so most of each
+ * attribute's year is its own noise.
+ */
+const SUMMER_SKILLS = 0.6;
+const SUMMER_BODY = 0.25;
+const OWN_NOISE = 1.6;
+
+/**
+ * Training: balanced adds a little to every attribute. A focus is OVR-neutral against it: the
+ * other attributes add less, and the focused ones get what they give up, sized by how much they
+ * count in this player's OVR (a guard's rebounding focus gains more rebounding than a center's).
+ */
+const BALANCED_GAIN = 0.25;
+const OFF_FOCUS_GAIN = 0.05;
 
 const FOCUS_KEYS: Record<TrainingFocus, RatingKey[]> = {
   balanced: [],
@@ -93,16 +114,21 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   const practice = ctx.practice === 'intense' ? 0.45 : ctx.practice === 'light' ? -0.35 : 0;
   const minutes = young ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
   const focus = FOCUS_KEYS[p.training];
+  let focusGain = BALANCED_GAIN;
+  if (focus.length) {
+    const w = ovrWeights(p.ratings);
+    const all = RATING_KEYS.reduce((t, k) => t + (k === 'hgt' ? 0 : w[k]), 0);
+    const focused = focus.reduce((t, k) => t + w[k], 0);
+    focusGain = (BALANCED_GAIN * all - OFF_FOCUS_GAIN * (all - focused)) / focused;
+  }
   for (const k of RATING_KEYS) {
     const g = GROUP_OF[k];
     let d = curve(g, a);
     if (g !== 'hgt') {
       const isSkill = g !== 'athletic' && g !== 'end' && g !== 'str';
-      d += (isSkill ? summer : summer * 0.4) + rng.normal(0, 1.4);
+      d += summer * (isSkill ? SUMMER_SKILLS : SUMMER_BODY) + rng.normal(0, OWN_NOISE);
       if (isSkill) d += coaching + practice + minutes;
-      if (p.training === 'balanced') d += 0.25;
-      else if (focus.includes(k)) d += 1.6;
-      else d -= 0.35;
+      d += !focus.length || focus.includes(k) ? focusGain : OFF_FOCUS_GAIN;
       if (p.training === 'conditioning' && g === 'athletic' && d < 0) d *= 0.75;
     }
     p.ratings[k] = clamp(Math.round((p.ratings[k] + d * frac) * 10) / 10, 1, 100);
@@ -174,6 +200,37 @@ export function anchorRatings(league: League) {
       if (p.tid === RETIRED) continue;
       p.ratings[k] = clamp(Math.round((target + (p.ratings[k] - now[k]!) * scale) * 10) / 10, 1, 100);
     }
+  }
+  anchorOverallSpread(league);
+}
+
+/**
+ * Good and bad summers move a player's skills together, so over the years good players become
+ * good at everything and the OVR spread widens even with every attribute's own spread held (more
+ * stars and more sub-60 players), while the top can thin out as stars age. Pull each half of the
+ * raw-OVR distribution halfway back to the shape the display scale was built on at league creation
+ * (median to 97.5th percentile above, 5th percentile to median below): each player moves along all
+ * his attributes at once, toward or away from the median.
+ */
+function anchorOverallSpread(league: League) {
+  const raws = Object.values(league.players)
+    .filter((p) => p.tid >= 0)
+    .map((p) => ovrRaw(p.ratings))
+    .sort((a, b) => a - b);
+  if (raws.length < 40) return;
+  const now = (f: number) => raws[Math.round(f * (raws.length - 1))];
+  const then = (f: number) => league.ovrScale.raw[OVR_ANCHORS.findIndex(([q]) => q === f)];
+  const pull = (lo: number, hi: number) => 0.5 * (1 - (then(hi) - then(lo)) / (now(hi) - now(lo)));
+  const [up, down] = [pull(0.5, 0.975), pull(0.05, 0.5)];
+  const median = now(0.5);
+  for (const p of Object.values(league.players)) {
+    if (p.tid === RETIRED) continue;
+    const w = ovrWeights(p.ratings);
+    const weight = RATING_KEYS.reduce((t, k) => t + (k === 'hgt' ? 0 : w[k]), 0);
+    const dev = ovrRaw(p.ratings) - median;
+    const shift = (-(dev > 0 ? up : down) * dev) / weight;
+    if (Math.abs(shift) < 0.05) continue;
+    for (const k of RATING_KEYS) if (k !== 'hgt') p.ratings[k] = clamp(Math.round((p.ratings[k] + shift) * 10) / 10, 1, 100);
   }
 }
 
