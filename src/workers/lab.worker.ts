@@ -11,12 +11,23 @@ const throttled = (onProgress?: (games: number) => void) => {
   };
 };
 
+/** Each proxy keeps a message port open on both threads until it's released. */
+const release = (onProgress?: (games: number) => void) => (onProgress as Comlink.Remote<(games: number) => void> | undefined)?.[Comlink.releaseProxy]();
+
 const api = {
   runLab(req: LabRequest, onProgress?: (games: number) => void) {
-    return runLab(req, throttled(onProgress));
+    try {
+      return runLab(req, throttled(onProgress));
+    } finally {
+      release(onProgress);
+    }
   },
   evaluate(a: LabSide, b: LabSide, candidates: Candidate[], games: number, seed: number, onProgress?: (games: number) => void) {
-    return evaluateCandidates(a, b, candidates, games, seed, throttled(onProgress));
+    try {
+      return evaluateCandidates(a, b, candidates, games, seed, throttled(onProgress));
+    } finally {
+      release(onProgress);
+    }
   },
 };
 
