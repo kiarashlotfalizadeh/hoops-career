@@ -261,16 +261,18 @@ export default function Settings() {
             <span className="fo-mid" style={{ color: 'var(--text)' }}>
               Hoops Career
             </span>
-            <span className="tag">
+            {/* tags are uppercase; a build hash keeps its own case */}
+            <span className="tag" style={{ textTransform: 'none' }}>
               v{__APP_VERSION__} · {__APP_BUILD__}
             </span>
           </div>
           <div className="row top" style={{ gap: 10 }}>
             <Database size={18} className="dim" style={{ flex: 'none', marginTop: 1 }} />
             <div>
-              <b className="dim2">Data sources.</b> Rosters and salaries come from Basketball Reference's contracts page. Ratings are built from 2023-24 to 2025-26 per-game and
-              advanced stats (Basketball Reference), NBA.com play-by-play, lineup and matchup data (shot zones, shot creation, adjusted plus-minus), and college box scores for
-              rookies, then calibrated in the engine. Fictional leagues use generated players.
+              <b className="dim2">Data sources.</b> Rosters and salaries come from Basketball Reference's contracts page; the 2026-27 schedule and NBA Cup groups from NBA.com,
+              future pick ownership from RealGM and opening-night injuries from ESPN's injury report. Ratings are built from 2023-24 to 2025-26 per-game and advanced stats
+              (Basketball Reference), NBA.com play-by-play, lineup and matchup data (shot zones, shot creation, adjusted plus-minus), and college box scores for rookies, then
+              calibrated in the engine. Fictional leagues use generated players.
             </div>
           </div>
           <div className="row top" style={{ gap: 10 }}>
@@ -362,6 +364,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
                 <button
                   key={x.tid}
                   className="card tight"
+                  aria-pressed={pick === x.tid}
                   disabled={me}
                   style={{
                     display: 'flex',
