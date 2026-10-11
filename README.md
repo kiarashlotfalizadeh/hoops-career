@@ -79,20 +79,24 @@ The pipeline is covered by parser and pipeline unit tests (CSV, RAPM, name match
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # vitest: engine, schedule, rotations, season loop, trades, lab, parsers
+npm test             # vitest: engine, schedule, Cup, rotations, season loop, finances, transactions, lab, saves, parsers
 npm run typecheck
-npm run bench        # engine calibration bench vs 2025-26 averages
+npm run lint         # ESLint (TypeScript + React hooks rules)
+npm run format       # Prettier (format:check in CI)
+npm run bench        # engine calibration bench vs 2025-26 averages and game-shape targets
 npm run season-test  # multi-season end-to-end run
+npm run invariants   # five seasons through every phase, asserting league invariants (also runs in CI)
 npm run real-check   # one real-league season vs real 2025-26 stats
 npm run build        # production PWA in dist/
 npm run smoke        # browser smoke test on the production build (also runs in CI)
+npx tsx scripts/tactic-sweep.ts  # what every tactic extreme is worth, in net rating, over real matchups
 ```
 
 Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir>` screenshots every screen and tab on a phone and a tablet at six points of a season (preseason, trade deadline, after the playoffs, draft, re-sign period, free agency). `scripts/qa/full-career.mjs` plays a whole career loop through the Play menu.
 
 ## Ship to phones
 
-- **PWA**: deploy `dist/` to any static host and use "Add to Home Screen". It works offline after the first load, and saves stay on the device (IndexedDB, with persistent storage requested). A new version downloads in the background and applies on the next launch, never mid-game.
+- **PWA**: deploy `dist/` to any static host and use "Add to Home Screen". It works offline after the first load, and saves stay on the device (IndexedDB, with persistent storage requested). Saves are incremental (game results live in their own store and only new ones are written), a failed save says so and offers a backup, and a league open in two windows can't overwrite itself. A new version downloads in the background and applies on the next launch, never mid-game.
 - **Backups**: Settings → Export backup saves the league as a JSON file (the share sheet in the app, a download on the web). Import it from Settings or the start screen on any device.
 - **Android**: the *Android APK* workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`. The native shell adds the hardware Back button (closes sheets first, saves before leaving), haptics, edge-to-edge insets and no service worker (the files ship in the APK).
 - **Android signing**: Android only installs an update signed with the same key as the installed app. Without signing secrets, each workflow run signs with a throwaway debug key, so a new build only installs after uninstalling the old one, which deletes its saves (export a backup first). To sign every build with one key, create a keystore once and keep it safe (a lost key means users must reinstall):
