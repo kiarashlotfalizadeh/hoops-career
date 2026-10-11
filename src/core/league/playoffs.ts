@@ -95,16 +95,24 @@ export function startPlayoffs(league: League) {
 
 const HOME_PATTERN = [true, true, false, false, true, false, true]; // 2-2-1-1-1 from the higher seed's view
 
+/**
+ * Schedule each live series' next game: every other day within a series, two days off between
+ * rounds (a round starts once the whole previous round is over). Games can land on a later day,
+ * so the user's next game shows ahead of time.
+ */
 export function schedulePlayoffDay(league: League) {
+  const lastDay = (pred: (g: ScheduledGame) => boolean) => league.schedule.reduce((d, g) => (g.type === 'playoffs' && pred(g) ? Math.max(d, g.day) : d), -Infinity);
   for (const s of league.playoffs) {
     if (s.winner !== undefined) continue;
     const pending = league.schedule.some((g) => g.seriesId === s.id && !g.played);
     if (pending) continue;
     const n = s.highWins + s.lowWins;
+    const prevRound = new Set(league.playoffs.filter((x) => x.round === s.round - 1).map((x) => x.id));
+    const earliest = n > 0 ? lastDay((g) => g.seriesId === s.id) + 2 : lastDay((g) => prevRound.has(g.seriesId!)) + 3;
     const highHome = HOME_PATTERN[n];
     league.schedule.push({
       gid: league.nextGid++,
-      day: league.day,
+      day: Math.max(league.day, earliest),
       home: highHome ? s.high : s.low,
       away: highHome ? s.low : s.high,
       type: 'playoffs',

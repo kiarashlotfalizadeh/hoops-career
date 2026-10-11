@@ -71,8 +71,6 @@ export function startRegularSeason(league: League): string[] {
 
 function periodic(league: League, rng: Rng) {
   const d = league.day;
-  // wear recovery
-  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   if (d % 7 === 0) {
     for (const t of league.teams) {
       updateMorale(league, t.tid, true);
@@ -163,12 +161,13 @@ export function simDay(league: League, opts: { skipGid?: number; record?: boolea
 
 /**
  * Injuries heal one game per team game; players with no games to miss (free agents, and teams
- * idle in the postseason) recover by the calendar instead, about a game every other day.
+ * idle in the postseason) recover by the calendar instead, about a game every other day. A team
+ * mid-series (a game today or yesterday) heals through its games.
  */
 function healIdle(league: League, rng: Rng) {
   if (league.day % 2 !== 0) return;
   const playing = new Set<number>();
-  for (const g of league.schedule) if (g.day === league.day) playing.add(g.home).add(g.away);
+  for (const g of league.schedule) if (g.day === league.day || g.day === league.day - 1) playing.add(g.home).add(g.away);
   for (const p of Object.values(league.players)) {
     if (!p.injury) continue;
     if (p.tid === FREE_AGENT || (p.tid >= 0 && league.phase !== 'regular' && !playing.has(p.tid))) healOneGame(league, p, rng);
@@ -193,6 +192,8 @@ export function advanceDay(league: League, report?: DayReport) {
     }
     healIdle(league, rng);
   });
+  // wear recovery, every day of the season and postseason
+  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   league.day++;
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) {
     endRegularSeason(league);

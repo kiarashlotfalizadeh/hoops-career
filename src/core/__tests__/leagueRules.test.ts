@@ -1,19 +1,20 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
-// windows, draft order, two-way contracts, phase guards and tiebreaks. Fast: no full-season sims.
+// windows, draft order, two-way contracts, phase guards, tiebreaks and the playoff calendar. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
+import { advanceDay, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
 import { finalsHomeCourt, standings } from '../league/standings';
+import { schedulePlayoffDay } from '../league/playoffs';
 import { runLottery } from '../league/draft';
 import { contractExp, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
 import { Rng } from '../random';
-import type { League, Player } from '../types';
+import type { League, Player, PlayoffSeries } from '../types';
 import { FREE_AGENT } from '../types';
 
 const seed = seedJson as unknown as SeedData;
@@ -356,5 +357,43 @@ describe('standings tiebreaks: NBA procedure (L5, L18)', () => {
     curTeamSeason(l, e).confWon = 30;
     curTeamSeason(l, w).confWon = 40;
     expect(finalsHomeCourt(l, e, w)).toBe(e);
+  });
+});
+
+describe('playoff calendar (L10)', () => {
+  it('series play every other day with two days off between rounds', () => {
+    const l = league();
+    const [a, b, c, d] = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    l.phase = 'playoffs';
+    l.schedule = [];
+    l.day = 100;
+    const series = (id: string, round: number, high: number, low: number): PlayoffSeries => ({ id, round, conf: 'E', high, low, highSeed: 1, lowSeed: 8, highWins: 0, lowWins: 0 });
+    l.playoffs = [series('E1-0', 1, a, b), series('E1-1', 1, c, d)];
+    schedulePlayoffDay(l);
+    expect(l.schedule.map((g) => g.day)).toEqual([100, 100]);
+    for (const g of l.schedule) g.played = true;
+    l.playoffs.forEach((s) => (s.highWins = 1));
+    l.day = 101;
+    schedulePlayoffDay(l);
+    expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([102, 102]);
+    // round 1 over on day 110: round 2 tips off on day 113
+    for (const g of l.schedule) g.played = true;
+    l.schedule.push({ gid: 999, day: 110, home: a, away: b, type: 'playoffs', seriesId: 'E1-0', played: true });
+    l.playoffs.forEach((s) => ((s.highWins = 4), (s.winner = s.high)));
+    l.playoffs.push(series('E2-0', 2, a, c));
+    l.day = 111;
+    schedulePlayoffDay(l);
+    expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([113]);
+  });
+
+  it('wear recovers on postseason days too', () => {
+    const l = league();
+    l.phase = 'playoffs';
+    l.playoffs = [];
+    l.schedule = [];
+    const p = standardRoster(l, U)[0];
+    p.wear = 40;
+    advanceDay(l);
+    expect(p.wear).toBeCloseTo(39.25);
   });
 });
