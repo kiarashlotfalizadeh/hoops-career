@@ -48,7 +48,15 @@ export function pickValue(league: League, dp: DraftPick): number {
   if (dp.round === 2) slot += 30;
   // expected prospect value score: #1 ~ 79, #15 ~ 70, #30 ~ 66, #45 ~ 62
   const score = slot <= 30 ? 80 - Math.log(slot) * 4.2 : 66 - (slot - 30) * 0.28;
-  return Math.exp((score - 60) / 6) * Math.pow(0.93, Math.max(0, yearsOut));
+  let value = Math.exp((score - 60) / 6) * Math.pow(0.93, Math.max(0, yearsOut));
+  // top-N protection: the pick only conveys outside the top N, which removes its best outcomes
+  if (dp.protection && dp.tid !== dp.originalTid) {
+    const inRound = dp.round === 2 ? slot - 30 : slot;
+    const spread = 4 + yearsOut * 3;
+    const pConvey = clamp((inRound - dp.protection + spread) / (2 * spread), 0.05, 1);
+    value *= pConvey * (inRound <= dp.protection + spread ? 0.85 : 1);
+  }
+  return value;
 }
 
 function sideValue(league: League, side: TradeSide, receiverStrategy: 'contend' | 'retool' | 'rebuild'): number {
@@ -186,7 +194,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
 
 export function pickLabel(league: League, dp: DraftPick) {
   const orig = league.teams[dp.originalTid];
-  return `${dp.season} ${dp.round === 1 ? '1st' : '2nd'}${dp.pick ? ` (#${dp.pick})` : ''}${dp.originalTid !== dp.tid ? ` (${orig.abbrev})` : ''}`;
+  return `${dp.season} ${dp.round === 1 ? '1st' : '2nd'}${dp.pick ? ` (#${dp.pick})` : ''}${dp.originalTid !== dp.tid ? ` (${orig.abbrev})` : ''}${dp.protection && dp.originalTid !== dp.tid ? ` top-${dp.protection} prot.` : ''}`;
 }
 
 /** Ask the AI what it would need from side A to accept. Returns an adjusted offer or null. */

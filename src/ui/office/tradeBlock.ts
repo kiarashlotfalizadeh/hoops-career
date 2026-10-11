@@ -2,11 +2,10 @@
 // would actually accept. Same idea as aiProposeToUser in core/league/trades.ts, but
 // exhaustive across teams, including draft picks, and verified with evaluateTrade.
 import type { League } from '../../core/types';
-import { CAP } from '../../core/constants';
 import { salaryFor } from '../../core/playerGen';
-import { teamPlayers } from '../../core/league/helpers';
+import { rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { tradeValue } from '../../core/league/contracts';
-import { evaluateTrade, pickValue, type TradeOffer } from '../../core/league/trades';
+import { evaluateTrade, pickValue, untradeableReason, type TradeOffer } from '../../core/league/trades';
 import { capSeason } from './common';
 
 export interface BlockOffer {
@@ -44,18 +43,20 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
   const s = capSeason(league);
   const targetValue = tradeValue(league, target, me.strategy);
   const gen = league.settings.difficulty === 'casual' ? 0.88 : league.settings.difficulty === 'hard' ? 1.12 : 1;
-  const userCount = teamPlayers(league, user).length;
+  const userCount = standardRoster(league, user).length;
+  const max = rosterMaxNow(league);
   const out: BlockOffer[] = [];
 
   for (const t of league.teams) {
     if (t.tid === user) continue;
     const want = tradeValue(league, target, t.strategy);
     const budget = want / gen;
-    const roster = teamPlayers(league, t.tid);
-    // the AI must stay at 15 or fewer after taking our player
-    const minPlayersOut = roster.length + 1 > CAP.rosterMax ? roster.length + 1 - CAP.rosterMax : 0;
-    // and we must stay at 15 or fewer
-    const maxPlayersIn = Math.min(3, CAP.rosterMax - userCount + 1);
+    // players they can actually move (no expiring deals after the season, two-ways stay put)
+    const roster = standardRoster(league, t.tid).filter((p) => !untradeableReason(league, p));
+    // the AI must stay within the roster limit after taking our player
+    const minPlayersOut = standardRoster(league, t.tid).length + 1 > max ? standardRoster(league, t.tid).length + 1 - max : 0;
+    // and so must we
+    const maxPlayersIn = Math.min(3, max - userCount + 1);
     if (maxPlayersIn < minPlayersOut) continue;
     const assets: Asset[] = [
       ...roster.map((p) => ({ kind: 'p' as const, id: p.pid, ai: tradeValue(league, p, t.strategy), mine: tradeValue(league, p, me.strategy), sal: salaryFor(p, s) })),

@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, History as HistoryIcon, ListOrdered, PenLine, PiggyBank, Timer, TriangleAlert, UserMinus, UserPlus } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, PHASE_LABEL, seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, teamPlayers } from '../../core/league/helpers';
-import { askingContract, releasePlayer, valueScore } from '../../core/league/contracts';
+import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, teamPlayers, standardRoster, twoWayRoster } from '../../core/league/helpers';
+import { askingContract, releaseBlockedReason, releasePlayer, valueScore } from '../../core/league/contracts';
 import { expiringPlayers } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { contractExp, salaryFor } from '../../core/playerGen';
@@ -31,7 +31,8 @@ export default function Office() {
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
   const pay = payroll(league, tid, s0);
-  const roster = teamPlayers(league, tid);
+  const roster = standardRoster(league, tid);
+  const twoWays = twoWayRoster(league, tid).length;
   const ts = curTeamSeason(league, tid);
   const space = cap.salaryCap - pay;
   // in the offseason, count the players actually under contract for next season
@@ -130,13 +131,13 @@ export default function Office() {
             v={`${signedN}/${CAP.rosterMax}`}
             color={signedN > CAP.rosterMax ? 'var(--bad)' : signedN < CAP.rosterMin ? 'var(--warn)' : undefined}
             sub={
-              expiringN > 0
+              (expiringN > 0
                 ? `+${expiringN} expiring`
                 : signedN > CAP.rosterMax
                   ? `${signedN - CAP.rosterMax} over the limit`
                   : signedN < CAP.rosterMin
                     ? `Need ${CAP.rosterMin - signedN} more`
-                    : `${CAP.rosterMax - signedN} open spot${CAP.rosterMax - signedN === 1 ? '' : 's'}`
+                    : `${CAP.rosterMax - signedN} open spot${CAP.rosterMax - signedN === 1 ? '' : 's'}`) + (twoWays ? ` · ${twoWays} two-way` : '')
             }
           />
           <Kpi k={pay > cap.luxuryTax ? 'Tax bill (est.)' : 'Room under tax'} v={pay > cap.luxuryTax ? fmtM(tax) : fmtM(cap.luxuryTax - pay)} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} sub={`Tax line ${fmtM(cap.luxuryTax)}`} />
@@ -207,7 +208,7 @@ function Spotlight({ league }: { league: League }) {
   );
   const s0 = capSeason(league);
   const space = CAP_FOR(league, s0).salaryCap - payroll(league, tid, s0);
-  const roster = teamPlayers(league, tid).length;
+  const roster = standardRoster(league, tid).length;
 
   switch (league.phase) {
     case 'draftLottery':
@@ -509,14 +510,15 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const [confirm, setConfirm] = useState(false);
   const exp = contractExp(p.contract);
   const remaining: { season: number; amount: number }[] = [];
-  for (let s = league.season; s <= exp; s++) {
+  // two-way pay sits outside the cap: releasing one leaves no dead money
+  for (let s = league.season; s <= exp && !p.contract.twoWay; s++) {
     const a = salaryFor(p, s);
     if (a > 0) remaining.push({ season: s, amount: a });
   }
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
-  const n = teamPlayers(league, league.userTid).length;
-  const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
-  const tooFew = inSeason && n - 1 < CAP.rosterMin;
+  const n = standardRoster(league, league.userTid).length;
+  const blocked = releaseBlockedReason(league, p);
+  const tooFew = !!blocked;
   const expiringNow = isOffseason(league) && exp <= league.season;
   const s0 = capSeason(league);
 
@@ -535,7 +537,8 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
           <h2 className="grow">Release {p.lastName}?</h2>
         </div>
         <p className="dim2" style={{ margin: 0 }}>
-          {playerName(p)} becomes a free agent immediately and can sign with any team. <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out.
+          {playerName(p)} becomes a free agent immediately and can sign with any team.{' '}
+          {p.contract.twoWay ? 'Two-way pay sits outside the cap, so there is no dead money.' : <><b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out.</>}
         </p>
         {remaining.length > 0 && (
           <div className="card tight">
@@ -552,7 +555,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
             </div>
           </div>
         )}
-        {n - 1 < CAP.rosterMin && !tooFew && (
+        {!p.contract.twoWay && n - 1 < CAP.rosterMin && !tooFew && (
           <div className="fo-callout warn">
             <TriangleAlert size={18} className="warn" />
             <div>
@@ -627,7 +630,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
           </button>
         )}
       </div>
-      {tooFew && <div className="tiny dim">You need at least {CAP.rosterMin} players during the season. Sign a replacement before releasing anyone.</div>}
+      {blocked && <div className="tiny dim">{blocked}</div>}
     </div>
   );
 }

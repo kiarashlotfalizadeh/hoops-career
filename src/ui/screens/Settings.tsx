@@ -180,7 +180,7 @@ export default function Settings() {
             on={st.stopOnNews !== false}
             onChange={(v) => mutate((l) => (l.settings.stopOnNews = v))}
             label="Pause sims for big news"
-            help="Long sims stop for a trade request, a long injury to a top-eight player, or an owner verdict. Routine news just lands in the inbox."
+            help="Long sims stop for a trade request, a month-long injury to one of your top six players, or an owner verdict. Routine news just lands in the inbox."
           />
         </div>
       </Card>

@@ -78,7 +78,7 @@ export default function Roster() {
     <main className="page">
       <PageHeader
         title="Roster"
-        sub={`${roster.length}/${CAP.rosterMax} players · Payroll ${moneyM(pay)} · ${pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}`}
+        sub={`${roster.filter((p) => !p.contract.twoWay).length}/${CAP.rosterMax} players${roster.some((p) => p.contract.twoWay) ? ` + ${roster.filter((p) => p.contract.twoWay).length} two-way` : ''} · Payroll ${moneyM(pay)} · ${pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}`}
       />
       <div className="grid3">
         <Link to="/rotation" className="btn sm">
@@ -121,6 +121,7 @@ export default function Roster() {
                       {p.pos} · {age(p)} · {fmtHeight(p.heightIn)} · {ROLE_META[role].label}
                     </div>
                     <div className="row" style={{ gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
+                      {p.contract.twoWay && <Tag>Two-way</Tag>}
                       {p.injury && <Tag tone="bad">{p.injury.type} · {p.injury.gamesRemaining}g</Tag>}
                       {p.mood.tradeRequest && <Tag tone="bad">Trade request</Tag>}
                       {pg ? (

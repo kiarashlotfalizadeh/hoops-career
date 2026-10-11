@@ -214,7 +214,7 @@ export default function FreeAgents() {
         <Empty>{all.length === 0 ? 'No free agents on the market right now.' : 'No free agents match these filters.'}</Empty>
       ) : (
         <Card className="flush">
-          <div className="list">
+          <div className="list wide2">
             {rows.slice(0, limit).map(({ p, ask, appeal }) => {
               const ai = appealInfo(appeal);
               const isMin = ask.amount <= cap.vetMin + 1;

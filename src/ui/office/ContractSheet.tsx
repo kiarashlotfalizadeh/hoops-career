@@ -6,7 +6,7 @@ import type { Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
-import { CAP_FOR, payroll, playerName, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, standardRoster } from '../../core/league/helpers';
 import { askingContract, makeContract, marketSalary, teamAppeal, willSign } from '../../core/league/contracts';
 import { userOffer, userResign } from '../../core/league/freeAgency';
 import { useLeague, useStore } from '../../state/store';
@@ -64,7 +64,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const space = cap.salaryCap - pay;
   const isMin = amount <= cap.vetMin + 1;
   const after = pay + amount;
-  const rosterN = teamPlayers(league, tid).length;
+  const rosterN = standardRoster(league, tid).length;
   const rosterBlocked = mode === 'fa' && rosterN >= CAP.rosterMax;
   const capBlocked = mode === 'fa' && !isMin && after > cap.salaryCap;
   const contract = makeContract(league, amount, years, season);

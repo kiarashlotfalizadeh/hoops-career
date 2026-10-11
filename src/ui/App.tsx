@@ -200,20 +200,24 @@ function SimBar() {
   const stop = useStore((s) => s.stopSim);
   if (!sim) return null;
   const pct = Math.min(100, (sim.done / Math.max(1, sim.total)) * 100);
+  const steps = sim.total > 1;
   return (
     <div className="simbar fade-in" role="status" aria-live="polite">
       <Spinner />
       <div className="grow">
         <div className="small bold">
-          {sim.label}… day {sim.done}
+          {sim.label}…{sim.total > 1 ? ` day ${sim.done}` : ''}
         </div>
         <div className="bar" style={{ marginTop: 6 }}>
-          <div style={{ width: `${pct}%` }} />
+          {/* one-shot jobs (new season, free agency) can't be stopped midway: show them as busy */}
+          <div className={steps ? '' : 'pulse'} style={{ width: steps ? `${pct}%` : '100%' }} />
         </div>
       </div>
-      <button className="btn sm" onClick={stop}>
-        <X size={16} /> Stop
-      </button>
+      {steps && (
+        <button className="btn sm" onClick={stop}>
+          <X size={16} /> Stop
+        </button>
+      )}
     </div>
   );
 }

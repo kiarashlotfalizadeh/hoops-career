@@ -216,7 +216,8 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
   const starters = new Set(team.rotation.order.slice(0, 5));
   const groups = [
     { label: 'Starters', list: roster.filter((p) => starters.has(p.pid)) },
-    { label: 'Bench', list: roster.filter((p) => !starters.has(p.pid)) },
+    { label: 'Bench', list: roster.filter((p) => !starters.has(p.pid) && !p.contract.twoWay) },
+    { label: 'Two-way', list: roster.filter((p) => !starters.has(p.pid) && p.contract.twoWay) },
   ];
   const anyCur = roster.some((p) => (playerSeason(p, league.season)?.gp ?? 0) > 0);
   return (

@@ -130,7 +130,16 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   const assign = (round: 1 | 2, order: number[]) => {
     order.forEach((origTid, i) => {
       const dp = league.draftPicks.find((d) => d.season === season && d.round === round && d.originalTid === origTid);
-      if (dp) dp.pick = i + 1;
+      if (!dp) return;
+      dp.pick = i + 1;
+      // a protected pick that lands inside its protection stays home and the obligation ends
+      if (dp.protection && dp.pick <= dp.protection && dp.tid !== dp.originalTid) {
+        const holder = league.teams[dp.tid];
+        const orig = league.teams[dp.originalTid];
+        addNews(league, { kind: 'draft', text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${dp.pick}, top-${dp.protection} protected); the ${holder.name} come away empty.`, tids: [dp.tid, dp.originalTid], pids: [] });
+        dp.tid = dp.originalTid;
+      }
+      delete dp.protection;
     });
   };
   assign(1, firstRound);
