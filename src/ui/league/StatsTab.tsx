@@ -64,7 +64,8 @@ export function StatsTab({ league }: { league: League }) {
   const [seasonStr, setSeasonStr] = useQueryParam<string>('season', String(fallback));
   const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : league.season;
   const [po, setPo] = useQueryParam<'reg' | 'po'>('po', 'reg', ['reg', 'po']);
-  const playoffs = po === 'po';
+  // team stats are kept for the regular season only
+  const playoffs = po === 'po' && view !== 'teams';
   const rows = useSeasonRows(league, season, playoffs);
   const real = seasons.find((s) => s.season === season)?.real ?? false;
 
@@ -92,7 +93,13 @@ export function StatsTab({ league }: { league: League }) {
           <button className={`chip ${!playoffs ? 'on' : ''}`} style={{ height: 34 }} aria-pressed={!playoffs} onClick={() => setPo('reg')}>
             Regular season
           </button>
-          <button className={`chip ${playoffs ? 'on' : ''}`} style={{ height: 34 }} aria-pressed={playoffs} disabled={real && !playoffs} onClick={() => setPo('po')}>
+          <button
+            className={`chip ${playoffs ? 'on' : ''}`}
+            style={{ height: 34 }}
+            aria-pressed={playoffs}
+            disabled={(real || view === 'teams') && !playoffs}
+            onClick={() => setPo('po')}
+          >
             Playoffs
           </button>
         </div>
@@ -105,7 +112,7 @@ export function StatsTab({ league }: { league: League }) {
         <>
           {view === 'leaders' && <Leaders league={league} rows={rows} season={season} playoffs={playoffs} />}
           {view === 'players' && <PlayerStatsTable league={league} rows={rows} season={season} playoffs={playoffs} real={real} />}
-          {view === 'teams' && <TeamStatsTable league={league} season={season} playoffs={playoffs} />}
+          {view === 'teams' && <TeamStatsTable league={league} season={season} />}
         </>
       )}
     </>
@@ -389,7 +396,7 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
       </div>
       {filtered.length === 0 ? (
         <Card>
-          <Empty>{rows.length ? 'No players match these filters.' : 'No games played yet.'}</Empty>
+          <Empty>{rows.length ? 'No players match these filters.' : playoffs ? 'No playoff games played yet.' : 'No games played yet.'}</Empty>
         </Card>
       ) : (
         <>
@@ -417,7 +424,7 @@ interface TeamRow {
   tr: ReturnType<typeof teamRatings>;
 }
 
-function TeamStatsTable({ league, season, playoffs }: { league: League; season: number; playoffs: boolean }) {
+function TeamStatsTable({ league, season }: { league: League; season: number }) {
   const nav = useNavigate();
   const v = useStore((s) => s.v);
   const rows = useMemo(() => {
@@ -446,11 +453,12 @@ function TeamStatsTable({ league, season, playoffs }: { league: League; season: 
         ),
       },
       { key: 'wl', label: 'W-L', get: (r) => r.ts.won / Math.max(1, r.ts.won + r.ts.lost), fmt: (_v, r) => `${r.ts.won}-${r.ts.lost}` },
-      { key: 'ppg', label: 'PPG', get: (r) => r.tr.ppg, fmt: (x) => f1(x as number) },
-      { key: 'opp', label: 'OPP', get: (r) => r.tr.oppg, fmt: (x) => f1(x as number) },
+      // the table opens sorted by Net, so it sits where a phone shows it
+      { key: 'net', label: 'Net', get: (r) => r.tr.net, fmt: (x) => <b className={(x as number) >= 0 ? 'good' : 'bad'}>{signed(x as number)}</b> },
       { key: 'ortg', label: 'ORtg', get: (r) => r.tr.ortg, fmt: (x) => f1(x as number), help: 'Points scored per 100 possessions' },
       { key: 'drtg', label: 'DRtg', get: (r) => -r.tr.drtg, fmt: (_x, r) => f1(r.tr.drtg), help: 'Points allowed per 100 possessions (lower is better)' },
-      { key: 'net', label: 'Net', get: (r) => r.tr.net, fmt: (x) => <b className={(x as number) >= 0 ? 'good' : 'bad'}>{signed(x as number)}</b> },
+      { key: 'ppg', label: 'PPG', get: (r) => r.tr.ppg, fmt: (x) => f1(x as number) },
+      { key: 'opp', label: 'OPP', get: (r) => r.tr.oppg, fmt: (x) => f1(x as number) },
       { key: 'pace', label: 'Pace', get: (r) => r.tr.pace, fmt: (x) => f1(x as number), help: 'Possessions per game' },
       { key: 'efg', label: 'eFG%', get: (r) => r.tr.efg, fmt: pctCell },
       { key: 'tov', label: 'TOV%', get: (r) => -r.tr.tov, fmt: (_x, r) => pctCell(r.tr.tov), help: 'Turnovers per possession (lower is better)' },
@@ -471,9 +479,7 @@ function TeamStatsTable({ league, season, playoffs }: { league: League; season: 
   return (
     <>
       <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(`/team/${r.tid}`)} highlight={(r) => r.tid === league.userTid} />
-      <div className="lg-note">
-        {playoffs ? 'Team stats cover the regular season. ' : ''}Rates are per 100 possessions. Sorting DRtg, TOV% and Opp eFG% puts the best (lowest) first.
-      </div>
+      <div className="lg-note">Team stats cover the regular season. Rates are per 100 possessions. Sorting DRtg, TOV% and Opp eFG% puts the best (lowest) first.</div>
     </>
   );
 }
