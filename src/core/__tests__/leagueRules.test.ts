@@ -573,6 +573,10 @@ describe('awards (L13, L18)', () => {
     const aw = computeRegularSeasonAwards(l);
     expect(aw.smoy).toBe(sixth.pid);
     expect(aw.mvp).toBe(race.mvp[0].c.p.pid);
+    // the Coach of the Year is remembered by name, whoever coaches that team later
+    const coach = aw.coy === U ? l.coachName : l.teams[aw.coy!].coach.name;
+    l.teams[aw.coy!].coach.name = 'Someone Else';
+    expect(l.awards.find((a) => a.season === l.season)!.coyCoach).toBe(coach);
   });
 
   it('All-Rookie has a 1st and a 2nd team', () => {

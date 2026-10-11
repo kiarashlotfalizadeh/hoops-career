@@ -664,6 +664,8 @@ export interface SeasonAwards {
   smoy?: number;
   mip?: number;
   coy?: number; // tid
+  /** The Coach of the Year by name, as he was when he won it (coaches change teams). */
+  coyCoach?: string;
   allNba: number[][]; // 3 teams of 5
   allDefense: number[][];
   allRookie: number[];

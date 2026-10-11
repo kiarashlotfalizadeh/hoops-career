@@ -162,6 +162,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
     smoy: smoy[0]?.p.pid,
     mip: mip[0]?.p.pid,
     coy: coy?.tid,
+    coyCoach: coy ? (coy.tid === league.userTid ? league.coachName : coy.coach.name) : undefined,
     allNba,
     allDefense: allDef,
     allRookie,

@@ -163,7 +163,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
           <TeamLogo tid={coyTeam.tid} size={40} />
           <div style={{ minWidth: 0 }}>
             <div className="lb">Coach of the Year</div>
-            <div className="bold ellipsis">{coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name}</div>
+            <div className="bold ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</div>
             <div className="tiny dim ellipsis">
               {coyTeam.region} {coyTeam.name}
               {coyTs ? ` · ${coyTs.won}-${coyTs.lost}` : ''}
