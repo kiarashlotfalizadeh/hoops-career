@@ -925,6 +925,8 @@ export class GameSim {
     for (const p of t.players) sig += p.out + (p.on ? (p.energy < fl ? 'f' : 'o') : p.energy > 0.82 ? 'r' : 'b') + p.fouls + (this.capped(p) ? 'k' : '');
     const margin = Math.abs(this.T[0].score - this.T[1].score);
     if (this.q >= 4 && this.clock < 360) sig += `c${margin >= 16 ? (this.clock < 300 ? 'g' : 'x') : ''}`;
+    // a blowout getting back within reach brings the starters back now, not at the next minute mark
+    if (t.garbage && margin <= 6 + this.clock / 30) sig += 'n';
     return sig;
   }
 

@@ -136,6 +136,32 @@ describe('engine rules', () => {
     expect(shots).toBeGreaterThanOrEqual(18);
   });
 
+  it('brings the starters back as soon as a blowout gets back within reach', () => {
+    type G = {
+      q: number;
+      clock: number;
+      T: { score: number; garbage: boolean; subSig: string; on: { pid: number }[]; t: Team['tactics']; team: Team }[];
+      subSignature(t: unknown): string;
+      checkSubs(t: unknown): void;
+    };
+    const sim = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false }) as unknown as G;
+    const t = sim.T[0];
+    sim.q = 4;
+    sim.clock = 100;
+    t.score = 100;
+    sim.T[1].score = 85;
+    t.garbage = true;
+    sim.checkSubs(t);
+    const starters = t.team.rotation.order.slice(0, 5);
+    expect(t.on.some((p) => starters.includes(p.pid))).toBe(false);
+    // the lead falls to 8 with 1:40 left: no minute mark or fatigue change needed to react
+    t.subSig = sim.subSignature(t);
+    sim.T[1].score = 92;
+    sim.checkSubs(t);
+    expect(t.garbage).toBe(false);
+    expect(t.on.filter((p) => starters.includes(p.pid)).length).toBeGreaterThanOrEqual(3);
+  });
+
   it('allows only two timeouts after the 3:00 mark of the fourth quarter', () => {
     const game = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false });
     const sim = game as unknown as Internals & { T: { timeouts: number }[] };
