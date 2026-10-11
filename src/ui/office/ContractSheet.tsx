@@ -8,7 +8,7 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { MLE_YEARS, askingContract, makeContract, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
-import { signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
+import { capHolds, signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
 import { useLeague, useStore } from '../../state/store';
 import { Avatar, Help, Sheet } from '../components/ui';
 import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta } from './common';
@@ -65,6 +65,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const space = cap.salaryCap - pay;
   const isMin = amount <= cap.vetMin + 1;
   const after = pay + amount;
+  // re-signing him clears his own cap hold; the other expiring players still hold their room
+  const otherHolds = mode === 'resign' ? capHolds(league, tid).reduce((a, h) => a + (h.p.pid === p.pid ? 0 : h.amount), 0) : 0;
   const rosterN = standardRoster(league, tid).length;
   const rosterMax = rosterMaxNow(league);
   // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
@@ -228,7 +230,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
               </p>
               <p style={{ margin: 0 }}>
                 Once a season you can also use the <b>mid-level exception</b>: one signing over the cap, up to {MLE_YEARS} years, as long as it keeps you under the tax line (
-                {fmtM(cap.luxuryTax)}). {mle > 0 ? `You can offer up to ${fmtM(mle, 2)} with it now.` : "It isn't available to you right now."}
+                {fmtM(cap.luxuryTax)}), and for the rest of that season trades can't take you past it.{' '}
+                {mle > 0 ? `You can offer up to ${fmtM(mle, 2)} with it now.` : "It isn't available to you right now."}
               </p>
               <p style={{ margin: 0 }}>
                 To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).
@@ -321,10 +324,17 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
                 {' '}
                 This puts you {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in luxury tax.
               </span>
-            ) : after > cap.salaryCap ? (
-              <> You'd be over the cap, so you'd only be able to add free agents on minimum deals.</>
+            ) : after + otherHolds > cap.salaryCap ? (
+              <>
+                {' '}
+                You'd be over the cap{otherHolds > 0 ? ' counting your other cap holds' : ''}, so in free agency you could only add players on minimum deals or with the mid-level
+                exception.
+              </>
             ) : (
-              <> You'd still have {fmtM(cap.salaryCap - after)} of cap space.</>
+              <>
+                {' '}
+                You'd still have {fmtM(cap.salaryCap - after - otherHolds)} of cap space{otherHolds > 0 ? ` after ${fmtM(otherHolds)} in other cap holds` : ''}.
+              </>
             )}
           </div>
         </div>

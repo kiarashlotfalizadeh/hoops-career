@@ -120,7 +120,7 @@ export default function FreeAgents() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Mid-level exception.</b> Once a season, if the signing keeps you under the tax line ({fmtM(cap.luxuryTax)}), you can sign one player over the cap for up to{' '}
-              {fmtM(cap.salaryCap * MLE_PCT)}, for up to {MLE_YEARS} years.{' '}
+              {fmtM(cap.salaryCap * MLE_PCT)}, for up to {MLE_YEARS} years; for the rest of that season, trades can't take you past the tax line.{' '}
               {mle > 0 ? `You can use up to ${fmtM(mle)} now.` : "You can't use it right now (used this season, or it would take you over the tax)."}
             </p>
             <p style={{ margin: 0 }}>

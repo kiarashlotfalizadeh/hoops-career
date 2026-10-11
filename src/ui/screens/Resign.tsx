@@ -105,8 +105,8 @@ function ResignPhase() {
         right={
           <Help title="Re-signing your players">
             <p style={{ margin: 0 }}>
-              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. This is the only time you can exceed the cap for anything
-              other than minimum deals.
+              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. In free agency, a team over the cap can only add players on
+              minimum deals or with its mid-level exception.
             </p>
             <p style={{ margin: 0 }}>
               <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs

@@ -4,7 +4,18 @@
 import type { League } from '../../core/types';
 import { rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { tradeValue } from '../../core/league/contracts';
-import { MAX_FIRSTS_OUT, PICK_LENS, capSalary, evaluateTrade, pickValue, pickValueFor, playerValueFor, untradeableReason, type TradeOffer } from '../../core/league/trades';
+import {
+  MAX_FIRSTS_OUT,
+  PICK_LENS,
+  capSalary,
+  evaluateTrade,
+  pickValue,
+  pickValueFor,
+  playerValueFor,
+  tradeRoster,
+  untradeableReason,
+  type TradeOffer,
+} from '../../core/league/trades';
 
 export interface BlockOffer {
   tid: number;
@@ -37,7 +48,8 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
   if (!target || target.tid !== user) return [];
   const targetValue = tradeValue(league, target, me.strategy);
   const gen = league.settings.difficulty === 'casual' ? 0.88 : league.settings.difficulty === 'hard' ? 1.12 : 1;
-  const userCount = standardRoster(league, user).length;
+  // after the season, only next season's contracts take a spot
+  const userCount = tradeRoster(league, user).length;
   const max = rosterMaxNow(league);
   const out: BlockOffer[] = [];
 
@@ -48,7 +60,7 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
     // players they can actually move (no expiring deals after the season, two-ways stay put)
     const roster = standardRoster(league, t.tid).filter((p) => !untradeableReason(league, p));
     // the AI must stay within the roster limit after taking our player
-    const minPlayersOut = standardRoster(league, t.tid).length + 1 > max ? standardRoster(league, t.tid).length + 1 - max : 0;
+    const minPlayersOut = Math.max(0, tradeRoster(league, t.tid).length + 1 - max);
     // and so must we
     const maxPlayersIn = Math.min(3, max - userCount + 1);
     if (maxPlayersIn < minPlayersOut) continue;

@@ -7,6 +7,7 @@ import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, roste
 import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer, signingRoute, valueScore } from '../../core/league/contracts';
 import { capHolds, expiringPlayers } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
+import { untradeableReason } from '../../core/league/trades';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -118,7 +119,7 @@ export default function Office() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Mid-level exception.</b> Once a season, a team that stays under the tax line can sign one free agent for up to {fmtM(cap.salaryCap * MLE_PCT)} (
-              {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap.
+              {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap. For the rest of that season, trades can't take its payroll past the tax line.
             </p>
             <p style={{ margin: 0 }}>
               <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign phase, even over the cap. Until free agency opens (or you renounce
@@ -623,6 +624,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const blocked = releaseBlockedReason(league, p);
   const tooFew = !!blocked;
   const expiringNow = isOffseason(league) && exp <= league.season;
+  const noTrade = expiringNow ? null : untradeableReason(league, p);
   const s0 = capSeason(league);
 
   const release = () => {
@@ -727,14 +729,19 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
       {expiringNow ? (
         <div className="fo-callout warn">
           <TriangleAlert size={18} className="warn" />
-          <div>His contract is up. {league.phase === 'resign' ? 'Re-sign him now or he becomes a free agent.' : 'He is an unrestricted free agent.'}</div>
+          <div>
+            His contract is up.{' '}
+            {league.phase === 'resign'
+              ? 'Re-sign him now or he becomes a free agent.'
+              : 'You hold his rights until free agency opens: re-sign him in the re-signing period after the draft.'}
+          </div>
         </div>
       ) : null}
       <div className="grid3">
         <button className="btn" onClick={() => (onClose(), nav(`/player/${p.pid}`))}>
           Profile
         </button>
-        <button className="btn" onClick={() => (onClose(), nav(`/trade?give=${p.pid}`))}>
+        <button className="btn" disabled={expiringNow || !!noTrade} onClick={() => (onClose(), nav(`/trade?give=${p.pid}`))}>
           Trade
         </button>
         {league.phase === 'resign' && expiringNow ? (
@@ -748,6 +755,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
         )}
       </div>
       {blocked && <div className="tiny dim">{blocked}</div>}
+      {noTrade && <div className="tiny dim">{noTrade}</div>}
     </div>
   );
 }

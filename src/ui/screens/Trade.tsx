@@ -3,7 +3,20 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Ban, Check, Handshake, Info, RotateCcw, Ticket, X } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
+import {
+  CAP_FOR,
+  OFFSEASON_ROSTER_MAX,
+  TWO_WAY_MAX,
+  curTeamSeason,
+  payroll,
+  playerName,
+  rosterMaxNow,
+  standardRoster,
+  teamPlayers,
+  twoWayRoster,
+  winPct,
+} from '../../core/league/helpers';
+import { pendingOption } from '../../core/league/contracts';
 import { capPayroll } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
@@ -13,6 +26,7 @@ import {
   makeItWork,
   pickLabel,
   salaryMatchGap,
+  tradeRoster,
   untradeableReason,
   validateTrade,
   type TradeEval,
@@ -172,15 +186,20 @@ export default function Trade() {
           <Help title="Trade rules">
             <p style={{ margin: 0 }}>
               <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out,
-              plus $0.1M. Teams under the cap can absorb salary freely.
+              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level exception this season can't take on salary past the tax line (
+              {fmtM(CAP_FOR(league, s).luxuryTax)}).
             </p>
             <p style={{ margin: 0 }}>
               <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season
               no team can drop below {CAP.rosterMin}. Two-way players don't count, but each team has only {TWO_WAY_MAX} two-way slots.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded. Until free agency opens, each team's own
-              expiring players it plans to keep count against its cap at about their asking price (cap holds).
+              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded, and a player with a player option on next
+              season can't be traded until he decides after the draft. Until free agency opens, each team's own expiring players it plans to keep count against its cap at about
+              their asking price (cap holds).
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>No trade-backs.</b> A team can't reacquire a player or pick it traded away until the next season.
             </p>
             <p style={{ margin: 0 }}>
               <b>Draft picks.</b> No team can be left without a first-round pick in two drafts in a row, and no AI team gives up more than {MAX_FIRSTS_OUT} firsts in one deal.
@@ -288,7 +307,8 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   const holds = pay - payroll(league, tid, season);
   const cap = CAP_FOR(league, season);
   const st = STRATEGY_META[t.strategy];
-  const n = teamPlayers(league, tid).length;
+  const n = standardRoster(league, tid).length;
+  const tw = twoWayRoster(league, tid).length;
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
@@ -300,7 +320,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
           <div className="row" style={{ gap: 6, marginTop: 2 }}>
             <span className={`tag ${st.tone}`}>{st.label}</span>
             <span className="tiny dim num">
-              {rec} · {n} players
+              {rec} · {n} players{tw ? ` + ${tw} two-way` : ''}
             </span>
           </div>
         </div>
@@ -468,7 +488,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
           )}
           {untradeableReason(league, p) && (
             <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              EXPIRING
+              {pendingOption(league, p) === 'player' ? 'OPTION' : 'EXPIRING'}
             </span>
           )}
         </div>
@@ -543,8 +563,9 @@ function Dock({
   const after = capPayroll(league, user, season) - out + inc;
   // standard roster spots (two-way players don't count)
   const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
-  const rosterAfter = standardRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
-  const theirAfter = standardRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
+  // after the season, only next season's contracts count (expiring deals are leaving)
+  const rosterAfter = tradeRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
+  const theirAfter = tradeRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
   const maxSize = rosterMaxNow(league);
   if (empty || !ev) {
     return (
