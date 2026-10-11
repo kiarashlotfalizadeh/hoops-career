@@ -33,7 +33,7 @@ export default function LeagueHub() {
   const inSeason = league.phase === 'regular' || inPost;
 
   return (
-    <main className="page">
+    <main className="page lg-page">
       <PageHeader
         title="League"
         sub={`${seasonLabel(league.season)} · ${PHASE_LABEL[league.phase]}${inSeason ? ` · ${fmtDate(league.season, league.day)}` : ''}`}
