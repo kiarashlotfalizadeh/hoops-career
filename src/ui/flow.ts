@@ -69,7 +69,7 @@ export function flowActions(league: League, { onLive = false } = {}): FlowAction
       } else {
         // playoff games are only scheduled a game at a time, so the next one may not be on the calendar yet
         const next = league.schedule.reduce<ScheduledGame | undefined>(
-          (a, x) => (!x.played && x.day > league.day && (x.home === league.userTid || x.away === league.userTid) && (!a || x.day < a.day) ? x : a),
+          (best, x) => (!x.played && x.day > league.day && (x.home === league.userTid || x.away === league.userTid) && (!best || x.day < best.day) ? x : best),
           undefined,
         );
         const sub = next

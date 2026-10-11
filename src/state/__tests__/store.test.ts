@@ -78,7 +78,7 @@ describe('saving', () => {
     expect(await st().flush()).toBe(true);
     expect(st().dirty).toBe(false);
     expect((await loadLeague(l.id))!.day).toBe(l.day);
-    st().setLeague(await loadLeague(l.id));
+    st().setLeague((await loadLeague(l.id))!);
     expect(st().dirty).toBe(false);
   });
 
