@@ -192,7 +192,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
         <div className="tiny dim upper bold">Years</div>
         <div className="row" style={{ gap: 6 }}>
           {[1, 2, 3, 4, 5].map((y) => (
-            <button key={y} className={`fo-yr ${years === y ? 'on' : ''}`} onClick={() => setYears(y)}>
+            <button key={y} className={`fo-yr ${years === y ? 'on' : ''}`} aria-pressed={years === y} onClick={() => setYears(y)}>
               {y}
               <small>{y === ask.years ? 'wants' : seasonLabel(season + y - 1).slice(-5)}</small>
             </button>

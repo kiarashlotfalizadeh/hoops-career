@@ -227,10 +227,10 @@ export default function FreeAgents() {
               { id: 75, label: '75+' },
             ]}
           />
-          <button className={`chip ${onlySignable ? 'on' : ''}`} onClick={() => setOnlySignable(!onlySignable)}>
+          <button className={`chip ${onlySignable ? 'on' : ''}`} aria-pressed={onlySignable} onClick={() => setOnlySignable(!onlySignable)}>
             Can sign now
           </button>
-          <button className={`chip ${twoWayMode ? 'on' : ''}`} onClick={() => (setTwoWayMode(!twoWayMode), setLimit(40))}>
+          <button className={`chip ${twoWayMode ? 'on' : ''}`} aria-pressed={twoWayMode} onClick={() => (setTwoWayMode(!twoWayMode), setLimit(40))}>
             Two-way offers ({tw}/{TWO_WAY_MAX})
           </button>
         </div>
