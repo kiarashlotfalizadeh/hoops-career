@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { hallOfFameScore, newSeason, simDay, startRegularSeason } from '../league/season';
-import { curTeamSeason, standardRoster, statsLine, teamPlayers } from '../league/helpers';
+import { curTeamSeason, standardRoster, statsLine, teamPlayers, withRng } from '../league/helpers';
+import { annualProgression } from '../league/progression';
 import { releasePlayer, valueScore } from '../league/contracts';
 import { gameFinances } from '../league/finances';
 import { CAP } from '../constants';
@@ -32,6 +33,17 @@ describe('box scores (L3)', () => {
     for (const g of ai) for (const b of [...g.home.players, ...g.away.players]) expect(b.min).toBeGreaterThan(0);
     // season minutes are stored to a tenth
     for (const p of Object.values(l.players)) for (const s of p.stats) if (!s.real) expect(Math.round(s.min * 10) / 10).toBe(s.min);
+  });
+});
+
+describe('ratings history', () => {
+  it('keeps full ratings on the last two snapshots only; the OVR line stays whole', () => {
+    const l = league();
+    const p = standardRoster(l, 1)[0];
+    p.ratingsHistory = [0, 1, 2].map((i) => ({ season: l.season - 3 + i, ovr: 70 + i, pot: 75, r: { ...p.ratings } }));
+    withRng(l, (rng) => annualProgression(l, rng));
+    expect(p.ratingsHistory.slice(0, 3).map((h) => h.ovr)).toEqual([70, 71, 72]);
+    expect(p.ratingsHistory.map((h) => !!h.r)).toEqual([false, false, true, true]);
   });
 });
 

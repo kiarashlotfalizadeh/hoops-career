@@ -250,6 +250,8 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
     refreshDerived(league, p);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
+    // older snapshots keep the OVR line only: full ratings for every season were a sixth of a long save
+    for (const h of p.ratingsHistory.slice(0, -2)) delete h.r;
     out.push({ pid: p.pid, delta: p.ovr - (before.get(p.pid) ?? p.ovr) });
   }
   return out;

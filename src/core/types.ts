@@ -148,7 +148,8 @@ export interface RatingsSnapshot {
   season: number;
   ovr: number;
   pot: number;
-  r: Ratings;
+  /** Full ratings, on the last two snapshots only (the player page compares them with last season's). */
+  r?: Ratings;
 }
 
 export interface DraftInfo {
