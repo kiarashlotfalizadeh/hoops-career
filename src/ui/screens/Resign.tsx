@@ -8,7 +8,7 @@ import { askingContract, decideTeamOption, pendingTeamOptions, teamOptionWorth }
 import { capHolds, expiringPlayers, renouncePlayer } from '../../core/league/freeAgency';
 import { startFreeAgency } from '../../core/league/season';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
-import { useLeague, useStore, useVersion } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
 import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta } from '../office/common';
@@ -51,7 +51,6 @@ function StatLine({ league, p }: { league: League; p: Player }) {
 
 function ResignPhase() {
   const league = useLeague();
-  const v = useVersion();
   const nav = useNavigate();
   const tid = league.userTid;
   const next = league.season + 1;
@@ -59,7 +58,7 @@ function ResignPhase() {
   const [sel, setSel] = useState<number | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [renounce, setRenounce] = useState<Player | null>(null);
-  const expiring = useMemo(() => expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr), [league, v, tid]);
+  const expiring = useLeagueMemo(() => expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   const asks = useMemo(() => new Map(expiring.map((p) => [p.pid, askingContract(league, p, tid)])), [expiring, league, tid]);
   const committed = payroll(league, tid, next);
   const holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
@@ -67,7 +66,7 @@ function ResignPhase() {
   const resigned = teamPlayers(league, tid)
     .filter((p) => p.contract.start === next && !p.contract.rookie)
     .sort((a, b) => b.ovr - a.ovr);
-  const options = useMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, v, tid]);
+  const options = useLeagueMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   // standard roster spots only: two-way deals sit outside the 15
   const rosterNext = standardRoster(league, tid).length - expiring.filter((p) => !p.contract.twoWay).length;
 
@@ -370,15 +369,14 @@ function ResignPhase() {
 }
 
 function OffPhase({ league }: { league: League }) {
-  const v = useVersion();
   const tid = league.userTid;
   const s = capSeason(league);
-  const list = useMemo(
+  const list = useLeagueMemo(
     () =>
       teamPlayers(league, tid)
         .filter((p) => contractExp(p.contract) === s)
         .sort((a, b) => b.ovr - a.ovr),
-    [league, v, tid, s],
+    [league, tid, s],
   );
   const freed = list.reduce((a, p) => a + salaryFor(p, s), 0);
   const cap = CAP_FOR(league, s + 1);

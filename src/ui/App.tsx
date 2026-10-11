@@ -1,7 +1,7 @@
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
-import { problemOf, useLeague, useStore } from '../state/store';
+import { problemOf, useLeague, useLeagueMemo, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
@@ -182,13 +182,11 @@ function TopBar() {
   const run = useFlowRunner();
   const { pathname } = useLocation();
   const sim = useStore((s) => s.sim);
-  const v = useStore((s) => s.v);
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
   // standings scans every game: recompute per league change, not per render
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const status = useMemo(() => statusLine(league), [league, v]);
+  const status = useLeagueMemo(() => statusLine(league), [league]);
   const actions = open ? flowActions(league, { onLive: pathname === '/live' }) : [];
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>

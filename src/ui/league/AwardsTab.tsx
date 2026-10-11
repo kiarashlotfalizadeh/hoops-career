@@ -1,11 +1,11 @@
-import { useMemo, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Award, Crown, Medal, Shield, Sparkles, Star, TrendingUp, Trophy, Users } from 'lucide-react';
 import type { League, Player, SeasonAwards } from '../../core/types';
 import { curTeamSeason, seasonTotals, winPct } from '../../core/league/helpers';
 import { defContext, dpoyScore, gameScore, gamesThreshold, mvpScore } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty } from '../components/ui';
 import { f1, playerSeason } from '../stats';
@@ -19,12 +19,7 @@ function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playof
 }
 
 export function AwardsTab({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
-  const seasons = useMemo(
-    () => [...new Set([league.season, ...league.awards.map((a) => a.season)])].sort((a, b) => b - a),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const seasons = useLeagueMemo(() => [...new Set([league.season, ...league.awards.map((a) => a.season)])].sort((a, b) => b - a), [league]);
   // before opening night there is no race yet: open on the last season's winners
   const started = league.games.some((g) => g.season === league.season && g.type === 'regular');
   const last = league.awards.filter((a) => a.season < league.season && a.mvp !== undefined).sort((a, b) => b.season - a.season)[0];
@@ -274,8 +269,7 @@ interface Cand {
 }
 
 function AwardRace({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
-  const race = useMemo(() => {
+  const race = useLeagueMemo(() => {
     const season = league.season;
     const played = Math.max(0, ...league.teams.map((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost));
     const all: Cand[] = [];
@@ -308,8 +302,7 @@ function AwardRace({ league }: { league: League }) {
         (c) => c.gmsc + c.pmPerGame * 0.2,
       ),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, v]);
+  }, [league]);
 
   if (race.played === 0) {
     return (

@@ -1,9 +1,9 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { teamRatings } from '../stats';
 import { Card, Empty } from '../components/ui';
@@ -67,15 +67,10 @@ export function TeamScheduleList({
   collapse?: boolean;
   cupOnly?: boolean;
 }) {
-  const v = useStore((s) => s.v);
   const byGid = useGamesByGid(league);
   const [expanded, setExpanded] = useState(!collapse);
-  const ranks = useMemo(
-    () => new Map(standings(league).map((r) => [r.tid, r])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
-  const rows = useMemo(() => {
+  const ranks = useLeagueMemo(() => new Map(standings(league).map((r) => [r.tid, r])), [league]);
+  const rows = useLeagueMemo(() => {
     const list = league.schedule.filter((g) => g.home === tid || g.away === tid).sort((a, b) => a.day - b.day || a.gid - b.gid);
     let w = 0;
     let l = 0;
@@ -93,8 +88,7 @@ export function TeamScheduleList({
       }
       return { g, res, opp, home, won, us, them, rec: `${w}-${l}` };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, tid, byGid, v]);
+  }, [league, tid, byGid]);
 
   const list = cupOnly ? rows.filter((r) => r.g.cup) : rows;
   if (!list.length) return <Empty>{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</Empty>;
@@ -210,13 +204,8 @@ function monthRecord(rows: Row[], season: number, month: string) {
 
 /** Scoreboard for every game on one calendar day, with a day stepper. */
 export function DayScoreboard({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const byGid = useGamesByGid(league);
-  const days = useMemo(
-    () => [...new Set(league.schedule.map((g) => g.day))].sort((a, b) => a - b),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const days = useLeagueMemo(() => [...new Set(league.schedule.map((g) => g.day))].sort((a, b) => a - b), [league]);
   const [dayStr, setDayStr] = useQueryParam<string>('day', '');
   if (!days.length) return <Empty>No games scheduled.</Empty>;
   const fallback = days.includes(league.day) ? league.day : (days.find((d) => d >= league.day) ?? days[days.length - 1]);

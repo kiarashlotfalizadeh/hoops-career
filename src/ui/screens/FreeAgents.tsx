@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { CalendarDays, FastForward, Lock, Newspaper, SkipForward } from 'lucide-react';
 import type { Player, Pos } from '../../core/types';
 import { FREE_AGENT, POSITIONS } from '../../core/types';
@@ -8,7 +8,7 @@ import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, 
 import { capPayroll, signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { faAdvance } from '../../core/league/season';
 import { playerAge } from '../../core/playerGen';
-import { useLeague, useStore, useVersion } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet } from '../components/ui';
 import { Callout, OvrPot, appealInfo, capSeason, fmtM, playerMeta } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
@@ -17,7 +17,6 @@ type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
 
 export default function FreeAgents() {
   const league = useLeague();
-  const v = useVersion();
   const tid = league.userTid;
   const s = capSeason(league);
   const cap = CAP_FOR(league, s);
@@ -41,7 +40,7 @@ export default function FreeAgents() {
   const [twoWaySel, setTwoWaySel] = useState<number | null>(null);
   const fa = league.phase === 'freeAgency';
 
-  const all = useMemo(
+  const all = useLeagueMemo(
     () =>
       freeAgents(league).map((p) => {
         const ask = askingContract(league, p, tid);
@@ -55,7 +54,7 @@ export default function FreeAgents() {
           twoWay: wantsTwoWay(league, p, tid),
         };
       }),
-    [league, v, tid, s],
+    [league, tid, s],
   );
 
   // what the user could actually do today: the window is open and there's a spot to fill

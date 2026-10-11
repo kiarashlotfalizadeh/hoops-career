@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, Crown, Landmark, Trophy } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { RETIRED } from '../../core/types';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Chips, Empty, Kpi, Ovr, PageHeader, Segmented } from '../components/ui';
@@ -38,7 +38,6 @@ export default function History() {
 type LeaderKey = 'pts' | 'reb' | 'ast' | 'gp';
 
 function Franchise({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const [tidStr, setTidStr] = useQueryParam<string>('tid', String(league.userTid));
   const tid = league.teams[Number(tidStr)] ? Number(tidStr) : league.userTid;
   const [cat, setCat] = useState<LeaderKey>('pts');
@@ -52,19 +51,15 @@ function Franchise({ league }: { league: League }) {
   const apps = finished.filter((s) => s.playoffRound >= 1).length;
   const best = [...seasons].filter((s) => s.won + s.lost > 0).sort((a, b) => b.won / Math.max(1, b.won + b.lost) - a.won / Math.max(1, a.won + a.lost))[0];
 
-  const leaders = useMemo(
-    () => {
-      const rows: { p: Player; pts: number; reb: number; ast: number; gp: number; seasons: number }[] = [];
-      for (const p of Object.values(league.players)) {
-        const t = careerTotals(p, tid);
-        if (t.gp === 0) continue;
-        rows.push({ p, pts: t.pts, reb: t.reb, ast: t.ast, gp: t.gp, seasons: t.seasons.size });
-      }
-      return rows;
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, v],
-  );
+  const leaders = useLeagueMemo(() => {
+    const rows: { p: Player; pts: number; reb: number; ast: number; gp: number; seasons: number }[] = [];
+    for (const p of Object.values(league.players)) {
+      const t = careerTotals(p, tid);
+      if (t.gp === 0) continue;
+      rows.push({ p, pts: t.pts, reb: t.reb, ast: t.ast, gp: t.gp, seasons: t.seasons.size });
+    }
+    return rows;
+  }, [league, tid]);
   const top = [...leaders].sort((a, b) => b[cat] - a[cat]).slice(0, 8);
 
   return (
@@ -277,22 +272,17 @@ function careerValue(p: Player) {
 }
 
 function HallOfFame({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const [limit, setLimit] = useState(25);
-  const { hof, retired } = useMemo(
-    () => {
-      const all = Object.values(league.players);
-      const hof = all.filter((p) => p.hof).sort((a, b) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || accoladeScore(b) - accoladeScore(a));
-      const value = new Map(all.filter((p) => p.tid === RETIRED && !p.hof).map((p) => [p, careerValue(p)] as const));
-      const retired = [...value.entries()]
-        .filter(([, v]) => v.notable)
-        .sort(([a, va], [b, vb]) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || vb.score - va.score)
-        .map(([p]) => p);
-      return { hof, retired };
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const { hof, retired } = useLeagueMemo(() => {
+    const all = Object.values(league.players);
+    const hof = all.filter((p) => p.hof).sort((a, b) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || accoladeScore(b) - accoladeScore(a));
+    const value = new Map(all.filter((p) => p.tid === RETIRED && !p.hof).map((p) => [p, careerValue(p)] as const));
+    const retired = [...value.entries()]
+      .filter(([, v]) => v.notable)
+      .sort(([a, va], [b, vb]) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || vb.score - va.score)
+      .map(([p]) => p);
+    return { hof, retired };
+  }, [league]);
   return (
     <>
       <SectionLabel right={<span className="tiny dim">{hof.length} inducted</span>}>

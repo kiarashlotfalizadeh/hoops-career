@@ -6,7 +6,7 @@ import { confStandings } from '../../core/league/standings';
 import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
 import { seriesLabel } from '../../core/league/playoffs';
 import { seasonLabel } from '../../core/constants';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Segmented, Sheet } from '../components/ui';
 import { confName, useQueryParam } from './shared';
@@ -75,7 +75,6 @@ function confSlots(league: League, conf: 'E' | 'W'): Slot[][] {
 type Phase = 'none' | 'projected' | 'playin' | 'live' | 'done';
 
 export function PlayoffsTab({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const userConf = league.teams[league.userTid].conf;
   const [conf, setConf] = useQueryParam<'E' | 'W'>('conf', userConf, ['E', 'W']);
   const [open, setOpen] = useState<PlayoffSeries | null>(null);
@@ -85,11 +84,7 @@ export function PlayoffsTab({ league }: { league: League }) {
   const played = league.games.some((g) => g.season === league.season && g.type === 'regular');
   const phase: Phase =
     champ !== undefined ? 'done' : league.playoffs.length ? 'live' : league.playIn.length ? 'playin' : league.phase === 'regular' && played ? 'projected' : 'none';
-  const slots = useMemo(
-    () => ({ E: confSlots(league, 'E'), W: confSlots(league, 'W') }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const slots = useLeagueMemo(() => ({ E: confSlots(league, 'E'), W: confSlots(league, 'W') }), [league]);
   const lastAw = [...league.awards].filter((a) => a.champion !== undefined).sort((a, b) => b.season - a.season)[0];
 
   if (phase === 'none') {

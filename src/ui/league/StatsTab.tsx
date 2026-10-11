@@ -5,7 +5,7 @@ import type { League, Player, PlayerStats, Pos, TeamSeason } from '../../core/ty
 import { POSITIONS } from '../../core/types';
 import { seasonTotals } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Empty, Segmented, StatTable, type Col } from '../components/ui';
 import { f1, perGame, signed, teamRatings, type PerGame } from '../stats';
@@ -22,8 +22,7 @@ export interface StatRow {
 
 /** Per-game rows for every player with stats in a season (regular season or playoffs). */
 export function useSeasonRows(league: League, season: number, playoffs: boolean): StatRow[] {
-  const v = useStore((s) => s.v);
-  return useMemo(() => {
+  return useLeagueMemo(() => {
     const out: StatRow[] = [];
     for (const p of Object.values(league.players)) {
       const s = seasonTotals(p, season, playoffs);
@@ -33,8 +32,7 @@ export function useSeasonRows(league: League, season: number, playoffs: boolean)
       out.push({ p, s, pg, tid: statTid(league, s) });
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, season, playoffs, v]);
+  }, [league, season, playoffs]);
 }
 
 /** Games played by the busiest team that season (82 for imported seasons). */
@@ -52,12 +50,7 @@ const pctCell = (v: number | string) => (typeof v === 'number' && v >= 0 ? (v * 
 
 export function StatsTab({ league }: { league: League }) {
   const [view, setView] = useQueryParam<View>('sv', 'leaders', ['leaders', 'players', 'teams']);
-  const v = useStore((s) => s.v);
-  const seasons = useMemo(
-    () => statSeasons(league),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const seasons = useLeagueMemo(() => statSeasons(league), [league]);
   // before the first game of a season, open on the last completed one
   const started = league.games.some((g) => g.season === league.season);
   const fallback = started ? league.season : ([...seasons].filter((s) => s.season < league.season).sort((a, b) => b.season - a.season)[0]?.season ?? league.season);
@@ -427,8 +420,7 @@ interface TeamRow {
 
 function TeamStatsTable({ league, season }: { league: League; season: number }) {
   const nav = useNavigate();
-  const v = useStore((s) => s.v);
-  const rows = useMemo(() => {
+  const rows = useLeagueMemo(() => {
     const out: TeamRow[] = [];
     for (const t of league.teams) {
       const ts = t.seasons.find((x) => x.season === season);
@@ -436,8 +428,7 @@ function TeamStatsTable({ league, season }: { league: League; season: number }) 
       out.push({ tid: t.tid, ts, tr: teamRatings(ts) });
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, season, v]);
+  }, [league, season]);
   const cols = useMemo<Col<TeamRow>[]>(
     () => [
       {

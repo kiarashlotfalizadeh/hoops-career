@@ -14,8 +14,8 @@ export default defineConfig([
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
-      // screens list the league version `v` as a dependency on purpose: the league mutates in place
-      'react-hooks/exhaustive-deps': 'warn',
+      // values read from the league (which mutates in place) memoize with useLeagueMemo: check its deps too
+      'react-hooks/exhaustive-deps': ['warn', { additionalHooks: '^useLeagueMemo$' }],
       // flags `let x = fallback` ahead of branches that may overwrite it, a deliberate pattern here
       'no-useless-assignment': 'off',
     },

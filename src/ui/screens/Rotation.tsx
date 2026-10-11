@@ -1,7 +1,7 @@
 import { attrDisplay } from '../../core/ratings';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
@@ -12,10 +12,9 @@ import { seasonLineups } from '../seasonAnalysis';
 
 export default function Rotation() {
   const league = useLeague();
-  const v = useStore((s) => s.v);
   const team = league.teams[league.userTid];
   const rot = team.rotation;
-  const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
+  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
   const byId = new Map(players.map((p) => [p.pid, p]));
   const nameOf = rosterNames(players);
   const fullNameOf = rosterNames(players, { initial: true });
@@ -45,7 +44,7 @@ export default function Rotation() {
   const benchFrom = healthyOrder.length >= 5 ? order.indexOf(healthyOrder[4]) + 1 : order.length;
 
   // planned stints visual: the engine's own plan inputs (injured players' minutes handed out, caps)
-  const plan = useMemo(() => {
+  const plan = useLeagueMemo(() => {
     const pp = planInputs(
       order.map((pid) => {
         const p = byId.get(pid)!;
@@ -55,8 +54,9 @@ export default function Rotation() {
     );
     const norm = normalizeMinutes(pp);
     return { slots: buildMinutePlan(pp), norm: Object.fromEntries(pp.map((x, i) => [x.pid, norm[i]])) as Record<number, number> };
+    // the rotation's content stands for order, byId and rot, which are new objects every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(rot), v]);
+  }, [JSON.stringify(rot)]);
 
   const move = (pid: number, dir: -1 | 1) =>
     update((r) => {
@@ -261,13 +261,12 @@ function stints(slots: number[][], pid: number) {
 
 function LineupsCard() {
   const league = useLeague();
-  const v = useStore((s) => s.v);
-  const lineups = useMemo(
+  const lineups = useLeagueMemo(
     () =>
       seasonLineups(league)
         .filter((l) => l.min >= 8)
         .slice(0, 10),
-    [league, v],
+    [league],
   );
   const names = rosterNames(Object.values(league.players).filter((p) => p.tid === league.userTid));
   if (!lineups.length) return null;

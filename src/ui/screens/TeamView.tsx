@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
@@ -55,15 +55,10 @@ export default function TeamView() {
 // ---------------------------------------------------------------- header
 
 function Hero({ league, tid }: { league: League; tid: number }) {
-  const v = useStore((s) => s.v);
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
   const isUser = tid === league.userTid;
-  const confRank = useMemo(
-    () => confStandings(league, team.conf).findIndex((r) => r.tid === tid) + 1,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, v],
-  );
+  const confRank = useLeagueMemo(() => confStandings(league, team.conf).findIndex((r) => r.tid === tid) + 1, [league, tid, team.conf]);
   const cs = contractSeason(league);
   const pay = payroll(league, tid, cs);
   const tr = teamRatings(ts);
@@ -215,13 +210,8 @@ function RosterTab({ league, tid }: { league: League; tid: number }) {
 }
 
 function RotationList({ league, tid }: { league: League; tid: number }) {
-  const v = useStore((s) => s.v);
   const team = league.teams[tid];
-  const roster = useMemo(
-    () => rosterSorted(league, tid),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, v],
-  );
+  const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   if (!roster.length) return <Empty>No players on the roster.</Empty>;
   // the avatar already shows the initials: last names alone fit a phone ("Murray-Boyles", not "C. Murray-Boyl…")
   const nameOf = rosterNames(roster);
@@ -290,14 +280,12 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
 
 function RosterStats({ league, tid }: { league: League; tid: number }) {
   const nav = useNavigate();
-  const v = useStore((s) => s.v);
-  const rows = useMemo(
+  const rows = useLeagueMemo(
     () =>
       rosterSorted(league, tid)
         .map((p) => ({ p, pg: playerSeason(p, league.season) }))
         .filter((r): r is { p: Player; pg: PerGame } => !!r.pg),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, v],
+    [league, tid],
   );
   const cols = useMemo<Col<{ p: Player; pg: PerGame }>[]>(() => {
     const nameOf = rosterNames(
@@ -346,14 +334,9 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
 
 function Contracts({ league, tid }: { league: League; tid: number }) {
   const nav = useNavigate();
-  const v = useStore((s) => s.v);
   const cs = contractSeason(league);
   const seasons = [0, 1, 2, 3].map((i) => cs + i);
-  const rows = useMemo(
-    () => rosterSorted(league, tid).sort((a, b) => salaryFor(b, cs) - salaryFor(a, cs)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, cs, v],
-  );
+  const rows = useLeagueMemo(() => rosterSorted(league, tid).sort((a, b) => salaryFor(b, cs) - salaryFor(a, cs)), [league, tid, cs]);
   const cap = CAP_FOR(league, cs);
   const nameOf = rosterNames(rows, { initial: true });
   const cols = useMemo<Col<Player>[]>(
@@ -587,12 +570,7 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
 // ---------------------------------------------------------------- scouting
 
 function ScoutingTab({ league, tid }: { league: League; tid: number }) {
-  const v = useStore((s) => s.v);
-  const rep = useMemo(
-    () => scoutTeam(league, tid),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, tid, v],
-  );
+  const rep = useLeagueMemo(() => scoutTeam(league, tid), [league, tid]);
   const isUser = tid === league.userTid;
   return (
     <>
@@ -683,9 +661,8 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
 // ---------------------------------------------------------------- schedule
 
 function ScheduleTab({ league, tid }: { league: League; tid: number }) {
-  const v = useStore((s) => s.v);
   const isUser = tid === league.userTid;
-  const h2h = useMemo(() => {
+  const h2h = useLeagueMemo(() => {
     if (isUser) return null;
     let w = 0;
     let l = 0;
@@ -701,8 +678,7 @@ function ScheduleTab({ league, tid }: { league: League; tid: number }) {
       .filter((g) => !g.played && ((g.home === tid && g.away === league.userTid) || (g.away === tid && g.home === league.userTid)))
       .sort((a, b) => a.day - b.day);
     return { w, l, next };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, tid, v, isUser]);
+  }, [league, tid, isUser]);
   const me = league.teams[league.userTid];
   return (
     <>
@@ -746,12 +722,7 @@ function projectedSlots(league: League): Map<number, number> {
 }
 
 function PicksTab({ league, tid }: { league: League; tid: number }) {
-  const v = useStore((s) => s.v);
-  const proj = useMemo(
-    () => projectedSlots(league),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const proj = useLeagueMemo(() => projectedSlots(league), [league]);
   const started = league.phase !== 'preseason';
   const slotTag = (d: DraftPick) => {
     const n = overallPick(league, d);

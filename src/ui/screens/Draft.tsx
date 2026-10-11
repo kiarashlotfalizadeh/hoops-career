@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucide-react';
 import type { CombineResults, League, Player } from '../../core/types';
@@ -9,7 +9,7 @@ import { pickLabel } from '../../core/league/trades';
 import { finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
-import { useLeague, useStore, useVersion } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, activateOnKey, type Col } from '../components/ui';
 import { OvrPot, SecTitle, ordinal } from '../office/common';
@@ -44,7 +44,6 @@ function defaultView(league: League): View {
 
 export default function Draft() {
   const league = useLeague();
-  const v = useVersion();
   const nav = useNavigate();
   const [view, setView] = useState<View>(() => defaultView(league));
   const [detail, setDetail] = useState<number | null>(null);
@@ -53,7 +52,7 @@ export default function Draft() {
   useEffect(() => setView(defaultView(league)), [league.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const user = league.userTid;
-  const cls = useMemo(() => prospects(league, league.season).sort((a, b) => (a.prospect?.rank ?? 99) - (b.prospect?.rank ?? 99)), [league, v]);
+  const cls = useLeagueMemo(() => prospects(league, league.season).sort((a, b) => (a.prospect?.rank ?? 99) - (b.prospect?.rank ?? 99)), [league]);
   const np = league.phase === 'draft' ? nextPick(league) : undefined;
   const onClock = !!np && np.tid === user;
   const after = league.phase === 'resign' || league.phase === 'freeAgency';
@@ -287,10 +286,9 @@ function draftedThisYear(league: League): Player[] {
 }
 
 function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; cls: Player[]; onClock: boolean; onOpen: (pid: number) => void; onDraft: (pid: number) => void }) {
-  const v = useVersion();
   const [all, setAll] = useState(false);
   const order = draftOrder(league);
-  const picks = useMemo(() => draftedThisYear(league).reverse(), [league, v]);
+  const picks = useLeagueMemo(() => draftedThisYear(league).reverse(), [league]);
   return (
     <>
       {order.length > 1 && (
@@ -563,8 +561,7 @@ function MyPicks({ league }: { league: League }) {
 // ------------------------------------------------------------------ results (after the draft)
 
 function Results({ league }: { league: League }) {
-  const v = useVersion();
-  const list = useMemo(() => draftedThisYear(league), [league, v]);
+  const list = useLeagueMemo(() => draftedThisYear(league), [league]);
   const [round, setRound] = useState<1 | 2>(1);
   if (!list.length) return <Empty>No draft results yet.</Empty>;
   return (

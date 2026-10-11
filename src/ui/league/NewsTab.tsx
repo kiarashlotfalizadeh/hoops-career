@@ -4,7 +4,7 @@ import { ArrowLeftRight, ChevronDown, Flame, HeartPulse, Hourglass, ListOrdered,
 import type { League, NewsItem } from '../../core/types';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty } from '../components/ui';
 import { shortName, useQueryParam } from './shared';
@@ -27,15 +27,10 @@ const ORDER: Kind[] = ['trade', 'signing', 'injury', 'award', 'draft', 'mileston
 const PAGE = 50;
 
 export function NewsTab({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const [kind, setKind] = useQueryParam<'all' | Kind>('kind', 'all', ['all', ...ORDER]);
   const [mine, setMine] = useQueryParam<'0' | '1'>('mynews', '0', ['0', '1']);
   const [limit, setLimit] = useState(PAGE);
-  const sorted = useMemo(
-    () => [...league.news].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const sorted = useLeagueMemo(() => [...league.news].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
   const counts = useMemo(() => {
     const c: Partial<Record<Kind, number>> = {};
     for (const n of sorted) c[n.kind] = (c[n.kind] ?? 0) + 1;

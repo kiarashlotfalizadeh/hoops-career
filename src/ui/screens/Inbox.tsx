@@ -1,8 +1,8 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Briefcase, CheckCheck, ClipboardList, Crown, Landmark, Mail, MailOpen, Stethoscope, Telescope, TrendingUp, type LucideIcon } from 'lucide-react';
 import type { InboxMessage } from '../../core/types';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { Card, Empty, PageHeader } from '../components/ui';
@@ -34,15 +34,10 @@ function setRead(id: number, read: boolean) {
 
 export default function Inbox() {
   const league = useLeague();
-  const v = useStore((s) => s.v);
   const nav = useNavigate();
   const [filter, setFilter] = useQueryParam<'all' | 'unread'>('f', 'all', ['all', 'unread']);
   const [openId, setOpenId] = useState<number | null>(null);
-  const sorted = useMemo(
-    () => [...league.inbox].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const sorted = useLeagueMemo(() => [...league.inbox].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
   const unread = sorted.filter((m) => !m.read).length;
   // Keep a just-read message visible in the Unread view until another one is opened.
   const list = filter === 'unread' ? sorted.filter((m) => !m.read || m.id === openId) : sorted;

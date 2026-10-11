@@ -1,9 +1,9 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import type { League } from '../../core/types';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { curTeamSeason, teamPlayers } from '../../core/league/helpers';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Help, Segmented } from '../components/ui';
 import { f0, f1, signed, teamRatings } from '../stats';
@@ -13,15 +13,10 @@ type View = 'E' | 'W' | 'league' | 'power';
 type Cols = 'basic' | 'splits';
 
 export function StandingsTab({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const userConf = league.teams[league.userTid].conf;
   const [view, setView] = useQueryParam<View>('view', userConf, ['E', 'W', 'league', 'power']);
   const [cols, setCols] = useQueryParam<Cols>('cols', 'basic', ['basic', 'splits']);
-  const rows = useMemo(
-    () => standings(league),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, v],
-  );
+  const rows = useLeagueMemo(() => standings(league), [league]);
   const started = rows.some((r) => r.won + r.lost > 0);
 
   return (
@@ -167,8 +162,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
 }
 
 function PowerRankings({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
-  const list = useMemo(() => {
+  const list = useLeagueMemo(() => {
     const base = league.teams.map((t) => {
       const ts = curTeamSeason(league, t.tid);
       const tr = teamRatings(ts);
@@ -188,8 +182,7 @@ function PowerRankings({ league }: { league: League }) {
         return { ...x, score };
       })
       .sort((a, b) => b.score - a.score);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, v]);
+  }, [league]);
 
   return (
     <>

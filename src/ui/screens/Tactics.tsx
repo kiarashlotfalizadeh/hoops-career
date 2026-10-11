@@ -2,7 +2,7 @@ import { TabBar } from '../league/shared';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
 import {
   ACTION_META,
@@ -45,7 +45,6 @@ function FitTag({ v }: { v: number }) {
 export default function Tactics() {
   const league = useLeague();
   const nav = useNavigate();
-  const v = useStore((s) => s.v);
   const [params, setParams] = useSearchParams();
   const complexity = league.settings.complexity;
   const tabs: { id: Tab; label: string }[] = [
@@ -69,7 +68,7 @@ export default function Tactics() {
   const t = team.tactics;
   const snapshot = useRef<TacticsT>(cloneTactics(t));
   const changed = JSON.stringify(snapshot.current) !== JSON.stringify(t);
-  const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
+  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
   // the roster as the assistant judges it (rankedPresets): a knock of five games or fewer doesn't swing the fits
   const healthy = useMemo(() => {
     const fit = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
@@ -78,7 +77,7 @@ export default function Tactics() {
   const prof = useMemo(() => rosterProfile(healthy), [healthy]);
   const offFit = useMemo(() => fitScale(offPresetFit(prof)), [prof]);
   const defFit = useMemo(() => fitScale(defPresetFit(prof)), [prof]);
-  const alerts = useMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/tactics'), [league, v]);
+  const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/tactics'), [league]);
 
   const edit = (fn: (t: TacticsT) => void) =>
     useStore.getState().mutate((l) => {
@@ -471,9 +470,8 @@ export default function Tactics() {
 
 function InsightsTab() {
   const league = useLeague();
-  const v = useStore((s) => s.v);
-  const pts = useMemo(() => seasonPlayTypes(league), [league, v]);
-  const imps = useMemo(() => seasonImpacts(league).filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3), [league, v]);
+  const pts = useLeagueMemo(() => seasonPlayTypes(league), [league]);
+  const imps = useLeagueMemo(() => seasonImpacts(league).filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3), [league]);
   const helping = imps.filter((x) => x.forUser).slice(0, 5);
   const hurting = imps.filter((x) => !x.forUser).slice(0, 5);
   const games = imps[0]?.games ?? 0;
@@ -557,10 +555,9 @@ function InsightsTab() {
 
 function RolesTab() {
   const league = useLeague();
-  const v = useStore((s) => s.v);
   const team = league.teams[league.userTid];
   const t = team.tactics;
-  const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
+  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
   const nameOf = useMemo(() => rosterNames(players, { initial: true }), [players]);
   const [pick, setPick] = useState<number | null>(null);
   const edit = (fn: (tt: TacticsT) => void) =>

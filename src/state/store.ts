@@ -1,3 +1,4 @@
+import { useMemo, type DependencyList } from 'react';
 import { create } from 'zustand';
 import type { League } from '../core/types';
 import { isQuotaError, loadLeague, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
@@ -290,4 +291,14 @@ export function useLeague(): League {
 
 export function useVersion(): number {
   return useStore((s) => s.v);
+}
+
+/**
+ * useMemo for values read from the league. The league mutates in place, so the value is also
+ * recomputed on every league change; list the other inputs as usual (the lint rule checks them).
+ */
+export function useLeagueMemo<T>(compute: () => T, deps: DependencyList): T {
+  const v = useVersion();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller's deps, checked at each call site (additionalHooks), plus the version
+  return useMemo(compute, [v, ...deps]);
 }

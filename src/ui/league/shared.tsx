@@ -1,8 +1,8 @@
 // Shared helpers for the league hub, team pages, history and inbox screens.
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { seasonTotals } from '../../core/league/helpers';
 import { Segmented } from '../components/ui';
 import './league.css';
@@ -64,13 +64,11 @@ export function TabBar<T extends string>({ value, options, onChange }: { value: 
 }
 
 export function useGamesByGid(league: League): Map<number, GameResult> {
-  const v = useStore((s) => s.v);
-  return useMemo(() => {
+  return useLeagueMemo(() => {
     const m = new Map<number, GameResult>();
     for (const g of league.games) m.set(g.gid, g);
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, v]);
+  }, [league]);
 }
 
 export const ordinal = (n: number) => {

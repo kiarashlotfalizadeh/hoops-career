@@ -3,7 +3,7 @@ import { useQueryParam } from '../league/shared';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity, ListOrdered, Workflow } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
 import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col, activateOnKey } from '../components/ui';
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
@@ -27,11 +27,10 @@ export function MoodIcon({ p }: { p: Player }) {
 export default function Roster() {
   const league = useLeague();
   const nav = useNavigate();
-  const v = useStore((s) => s.v);
   const [view, setView] = useQueryParam<View>('view', 'players', ['players', 'ratings', 'stats', 'contracts']);
   const tid = league.userTid;
   const team = league.teams[tid];
-  const roster = useMemo(() => rosterSorted(league, tid), [league, tid, v]);
+  const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   const nameOf = useMemo(() => rosterNames(roster, { initial: true }), [roster]);
   // between seasons, count and pay next season's contracts (the same view as Office and Re-sign)
   const s0 = capSeason(league);

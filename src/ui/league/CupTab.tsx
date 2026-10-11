@@ -1,11 +1,10 @@
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy } from 'lucide-react';
 import type { CupTie, League } from '../../core/types';
 import { cupSeeds, cupTables, type CupGroupTable } from '../../core/league/cup';
 import { dayToDate, fmtDate, playerName } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { useStore } from '../../state/store';
+import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Segmented } from '../components/ui';
 import { confName, useQueryParam } from './shared';
@@ -25,20 +24,15 @@ type Seeds = { E: number[]; W: number[] };
 type Tie = Pick<CupTie, 'round' | 'high' | 'low' | 'highSeed' | 'lowSeed'> & Partial<CupTie>;
 
 export function CupTab({ league }: { league: League }) {
-  const v = useStore((s) => s.v);
   const cup = league.cup && league.cup.season === league.season ? league.cup : null;
   const userConf = league.teams[league.userTid].conf;
   const [conf, setConf] = useQueryParam<'E' | 'W'>('cconf', userConf, ['E', 'W']);
-  const { tables, projected } = useMemo(
-    () => {
-      const tables = cup ? cupTables(league) : [];
-      // during the group stage: who goes through if it ended today (leaders plus the best runner-up)
-      const started = tables.some((t) => t.rows.some((r) => r.won + r.lost > 0));
-      return { tables, projected: cup && !cup.seeds && started ? cupSeeds(league) : undefined };
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [league, cup, v],
-  );
+  const { tables, projected } = useLeagueMemo(() => {
+    const tables = cup ? cupTables(league) : [];
+    // during the group stage: who goes through if it ended today (leaders plus the best runner-up)
+    const started = tables.some((t) => t.rows.some((r) => r.won + r.lost > 0));
+    return { tables, projected: cup && !cup.seeds && started ? cupSeeds(league) : undefined };
+  }, [league, cup]);
   const lastWinner = [...league.awards].filter((a) => a.cupWinner !== undefined).sort((a, b) => b.season - a.season)[0];
 
   if (!cup) {

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, History as HistoryIcon, ListOrdered, PenLine, PiggyBank, Timer, TriangleAlert, UserMinus, UserPlus } from 'lucide-react';
 import type { League, Player } from '../../core/types';
@@ -9,7 +9,7 @@ import { capHolds, expiringPlayers, signingClosedReason } from '../../core/leagu
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { untradeableReason } from '../../core/league/trades';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { useLeague, useStore, useVersion } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet, activateOnKey } from '../components/ui';
 import { CapBar, CenterBar, Gauge, SecTitle, capSeason, contractYearsLabel, fmtM, isOffseason, openOption, ownerVerdict, playerMeta, shortSeason } from '../office/common';
@@ -27,7 +27,6 @@ interface Tile {
 
 export default function Office() {
   const league = useLeague();
-  const v = useVersion();
   const tid = league.userTid;
   const team = league.teams[tid];
   const s0 = capSeason(league);
@@ -47,7 +46,7 @@ export default function Office() {
   const inSeasonNow = rosterMaxNow(league) === CAP.rosterMax;
   const [sel, setSel] = useState<number | null>(null);
 
-  const faCount = useMemo(() => freeAgents(league).length, [league, v]);
+  const faCount = useLeagueMemo(() => freeAgents(league).length, [league]);
   const signingClosed = !!signingClosedReason(league);
   const myPicks = league.draftPicks.filter((d) => d.tid === tid);
   const expiring = league.phase === 'resign' ? expiringPlayers(league, tid) : [];
@@ -258,14 +257,13 @@ export default function Office() {
 function Spotlight({ league }: { league: League }) {
   const nav = useNavigate();
   const tid = league.userTid;
-  const v = useVersion();
   const s0 = capSeason(league);
   const space = CAP_FOR(league, s0).salaryCap - payroll(league, tid, s0);
   const mle = mleRoom(league, tid, s0);
   const roster = standardRoster(league, tid).length;
   const full = roster >= rosterMaxNow(league);
   // only players the team can actually pay: cap space, the mid-level or the minimum
-  const topFAs = useMemo(
+  const topFAs = useLeagueMemo(
     () =>
       league.phase === 'freeAgency' || league.phase === 'preseason'
         ? freeAgents(league)
@@ -273,7 +271,7 @@ function Spotlight({ league }: { league: League }) {
             .sort((a, b) => valueScore(league, b) - valueScore(league, a))
             .slice(0, league.phase === 'preseason' ? 3 : 5)
         : [],
-    [league, v, tid, s0],
+    [league, tid, s0],
   );
 
   switch (league.phase) {

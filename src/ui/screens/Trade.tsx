@@ -22,7 +22,7 @@ import {
   type TradeOffer,
 } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
-import { useLeague, useStore, useVersion } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented } from '../components/ui';
 import { STRATEGY_META, Callout, capSeason, contractYearsLabel, fmtM, fmtMs } from '../office/common';
@@ -58,7 +58,6 @@ function readParams(league: League, params: URLSearchParams) {
 
 export default function Trade() {
   const league = useLeague();
-  const v = useVersion();
   const [params] = useSearchParams();
   const user = league.userTid;
   const init = useMemo(() => readParams(league, params), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -100,10 +99,12 @@ export default function Trade() {
   const offer: TradeOffer = { a: { tid: user, ...cleanGive }, b: { tid: partner, ...cleanGet } };
   const offerKey = JSON.stringify(offer);
   const empty = !cleanGive.pids.length && !cleanGive.dpids.length && !cleanGet.pids.length && !cleanGet.dpids.length;
-  const ev = useMemo(() => (empty ? null : evaluateTrade(league, offer)), [offerKey, v]); // eslint-disable-line react-hooks/exhaustive-deps
-  const phaseErrs = useMemo(
+  // offerKey stands for the offer (a new object every render) and whether it is empty
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ev = useLeagueMemo(() => (empty ? null : evaluateTrade(league, offer)), [league, offerKey]);
+  const phaseErrs = useLeagueMemo(
     () => validateTrade(league, { a: { tid: user, pids: [], dpids: [] }, b: { tid: partner, pids: [], dpids: [] } }).filter((e) => !/empty/i.test(e)),
-    [league, v, partner, user],
+    [league, partner, user],
   );
   const closed = phaseErrs.length > 0;
 
@@ -655,11 +656,10 @@ function TradingBlock({
   closed: boolean;
   onLoad: (o: TradeOffer) => void;
 }) {
-  const v = useVersion();
   const [showAll, setShowAll] = useState(false);
   const mine = teamPlayers(league, league.userTid).sort((a, b) => b.ovr - a.ovr);
   const pid = shop !== null && league.players[shop]?.tid === league.userTid ? shop : null;
-  const offers = useMemo(() => (pid !== null && !closed ? blockOffers(league, pid) : []), [pid, v, closed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offers = useLeagueMemo(() => (pid !== null && !closed ? blockOffers(league, pid) : []), [league, pid, closed]);
   const target = pid !== null ? league.players[pid] : null;
   return (
     <>

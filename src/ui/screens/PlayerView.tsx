@@ -1,8 +1,8 @@
 import { useQueryParam } from '../league/shared';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel, type Composites } from '../../core/ratings';
@@ -42,8 +42,7 @@ const SKILLS: SkillDef[] = [
 ];
 
 function useSkillPercentiles(league: League) {
-  const v = useStore((s) => s.v);
-  return useMemo(() => {
+  return useLeagueMemo(() => {
     const pool = Object.values(league.players).filter((p) => p.tid >= 0);
     const sorted: Record<string, number[]> = {};
     for (const s of SKILLS) sorted[s.key] = pool.map((p) => s.get(composites(p.ratings), p)).sort((a, b) => a - b);
@@ -58,8 +57,7 @@ function useSkillPercentiles(league: League) {
       }
       return arr.length ? Math.min(99, Math.max(1, Math.round((lo / arr.length) * 100))) : 50;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [league, v]);
+  }, [league]);
 }
 
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
