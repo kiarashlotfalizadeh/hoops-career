@@ -244,8 +244,10 @@ export function createLeague(opts: CreateOpts): League {
     const taken = new Set<string>();
     for (let tid = 0; tid < 30; tid++) {
       const roster: Player[] = [];
-      // contenders and rebuilding teams: the whole roster is a little better or worse
-      const quality = rng.normal(0, 0.4);
+      // contenders and rebuilding teams: the whole roster is a little better or worse. Teams' top-8
+      // OVR then spreads about 2 points, near real rosters' 1.75; a wider start (2.7) only drained
+      // away over the first few offseasons
+      const quality = rng.normal(0, 0.2);
       for (let i = 0; i < 14; i++) {
         const talent = quality + rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
         // the last three spots go to young players (some of them on rookie deals)
