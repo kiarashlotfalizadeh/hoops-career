@@ -34,8 +34,9 @@ function gamesThreshold(league: League) {
   return Math.round(played * (65 / 82));
 }
 
+/** MVP: production first; winning and on-court impact break ties (teammates share those, so they can't carry a sidekick). */
 export function mvpScore(c: Cand) {
-  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 14 + c.pmPerGame * 0.3;
+  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 8 + c.pmPerGame * 0.15;
 }
 
 /**
