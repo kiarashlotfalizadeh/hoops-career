@@ -13,7 +13,7 @@ import { f1, moneyM, p1, perGame, signed } from '../stats';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, marketSalary, releasePlayer } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason, releasePlayer } from '../../core/league/contracts';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 
@@ -163,6 +163,7 @@ export default function PlayerView() {
             <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
               <Tag tone="info">{p.archetype}</Tag>
               <Tag>{tierLabel(p.ovr)}</Tag>
+              {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
               {p.injury && <Tag tone="bad">{p.injury.type} · {p.injury.gamesRemaining}g</Tag>}
               {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
             </div>
@@ -293,6 +294,7 @@ export default function PlayerView() {
                     <span className="dim2 small">Expires</span>
                     <span className="num">{seasonLabel(contractExp(p.contract))}{p.contract.option ? ` (${p.contract.option} option)` : ''}{p.contract.rookie ? ' · rookie scale' : ''}</span>
                   </div>
+                  {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
                   <div className="row between">
                     <span className="dim2 small">Market value</span>
                     <span className="num">{moneyM(marketSalary(league, p))}</span>
@@ -315,7 +317,26 @@ export default function PlayerView() {
                       <Link className="btn xs" to={`/trade?give=${p.pid}`}>
                         <ArrowLeftRight size={14} /> Trade
                       </Link>
-                      <button className="btn xs danger" onClick={() => setConfirmRelease(true)}>
+                      {p.contract.twoWay && (
+                        <button
+                          className="btn xs"
+                          onClick={() => {
+                            let res = { ok: false, reason: '' };
+                            useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
+                            useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
+                          }}
+                        >
+                          Convert to standard
+                        </button>
+                      )}
+                      <button
+                        className="btn xs danger"
+                        onClick={() => {
+                          const why = releaseBlockedReason(league, p);
+                          if (why) useStore.getState().toast(why, 'bad');
+                          else setConfirmRelease(true);
+                        }}
+                      >
                         Release
                       </button>
                     </>
@@ -376,7 +397,9 @@ export default function PlayerView() {
 
       <Sheet open={confirmRelease} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
         <p className="dim2">
-          His remaining salary ({moneyM(Array.from({ length: Math.max(0, contractExp(p.contract) - league.season + 1) }, (_, i) => salaryFor(p, league.season + i)).reduce((a, b) => a + b, 0))}) stays on your books as dead money. He becomes a free agent.
+          {p.contract.twoWay
+            ? 'Two-way pay sits outside the cap, so releasing him leaves no dead money. He becomes a free agent.'
+            : `His remaining salary (${moneyM(Array.from({ length: Math.max(0, contractExp(p.contract) - league.season + 1) }, (_, i) => salaryFor(p, league.season + i)).reduce((a, b) => a + b, 0))}) stays on your books as dead money. He becomes a free agent.`}
         </p>
         <div className="row" style={{ marginTop: 12 }}>
           <button className="btn grow" onClick={() => setConfirmRelease(false)}>

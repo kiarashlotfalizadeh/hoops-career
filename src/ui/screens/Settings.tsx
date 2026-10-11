@@ -7,6 +7,7 @@ import type { League, Settings as LeagueSettings } from '../../core/types';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, teamPlayers } from '../../core/league/helpers';
 import { deleteLeague } from '../../state/persistence';
+import { seasonsInCharge, takeOverTeam } from '../../core/league/owner';
 import { useLeague, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
@@ -75,7 +76,7 @@ export default function Settings() {
     useStore.getState().toast(`"${nm}" deleted.`, 'neutral');
   };
 
-  const seasonsIn = league.season - league.startSeason + 1;
+  const seasonsIn = seasonsInCharge(league);
 
   return (
     <main className="page">
@@ -277,19 +278,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
   const take = () => {
     if (pick === null) return;
     const target = league.teams[pick];
-    useStore.getState().mutate((l) => {
-      const old = l.teams[l.userTid];
-      const nu = l.teams[pick];
-      // the coaches swap jobs; the old team goes back to the AI staff
-      const theirCoach = nu.coach.name;
-      nu.coach.name = l.coachName;
-      old.coach.name = theirCoach;
-      old.rotation.manual = false;
-      old.tactics.manual = false;
-      l.userTid = pick;
-      l.fired = false;
-      l.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
-    });
+    useStore.getState().mutate((l) => takeOverTeam(l, pick));
     useStore.getState().toast(`Welcome to the ${target.region} ${target.name}, Coach.`, 'good');
     onClose();
     setPick(null);

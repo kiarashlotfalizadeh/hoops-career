@@ -1,3 +1,4 @@
+import { seasonsInCharge } from '../../core/league/owner';
 import { useQueryParam } from '../league/shared';
 import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
@@ -287,7 +288,7 @@ function OwnerTab() {
   const league = useLeague();
   const om = league.ownerMood;
   const verdict = ownerVerdict(om.total);
-  const seasonsIn = league.season - league.startSeason + 1;
+  const seasonsIn = seasonsInCharge(league);
   const ts = curTeamSeason(league, league.userTid);
   const games = ts.won + ts.lost;
   const rows: { k: string; w: string; v: number; how: string }[] = [
