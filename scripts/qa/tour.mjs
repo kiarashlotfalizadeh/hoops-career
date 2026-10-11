@@ -1,6 +1,9 @@
 // Visual tour: every screen and tab of the real league on a phone and a tablet, at several
 // points of a season. For design review, not assertions; page errors are collected and printed.
-// Usage: node scripts/qa/tour.mjs <devServerUrl> <outDir> [stages=pre,mid,post,draft,fa]
+// Usage: node scripts/qa/tour.mjs <devServerUrl> <outDir> [stages=pre,mid,post,draft,resign,fa]
+// It reads the league through window.__hc (player and game ids, saves), which only dev servers
+// (npm run dev) and builds made with VITE_QA=1 expose: for a production-like run,
+// `VITE_QA=1 npm run build && npm run preview`.
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
@@ -130,6 +133,11 @@ async function tour(stage) {
 
 await phone.goto(`${base}/#/start`);
 await phone.waitForTimeout(800);
+if (!(await phone.evaluate(() => !!window.__hc))) {
+  console.error(`${base} doesn't expose window.__hc: point the tour at a dev server (npm run dev) or a build made with VITE_QA=1.`);
+  await browser.close();
+  process.exit(1);
+}
 mkdirSync(`${out}/start`, { recursive: true });
 await phone.screenshot({ path: `${out}/start/phone-start.png`, fullPage: true });
 await phone.getByText('New League').click();
@@ -149,8 +157,11 @@ await phone.getByText('Start career').click();
 await phone.waitForTimeout(2500);
 log(`created → ${await phase()}`);
 
+// stages come in season order: stop simming once the last one asked for is captured
+const ORDER = ['pre', 'mid', 'post', 'draft', 'resign', 'fa'];
+const want = (stage) => stages.some((s) => ORDER.indexOf(s) >= ORDER.indexOf(stage));
 if (stages.includes('pre')) await tour('pre');
-await play('Start regular season');
+if (want('mid')) await play('Start regular season');
 if (stages.includes('mid')) {
   await play('Sim to next game');
   // a live game for the game view and live screens
@@ -192,14 +203,16 @@ if (stages.includes('mid')) {
   await play('Sim to trade deadline');
   await tour('mid');
 }
-for (let i = 0; i < 25 && /Regular Season/.test((await phase()) ?? ''); i++) await play('Sim to end of regular season');
-for (let i = 0; i < 4 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
+if (want('post')) {
+  for (let i = 0; i < 25 && /Regular Season/.test((await phase()) ?? ''); i++) await play('Sim to end of regular season');
+  for (let i = 0; i < 4 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
+}
 if (stages.includes('post')) await tour('post');
-for (let i = 0; i < 4 && !/NBA Draft/.test((await phase()) ?? ''); i++) if (!(await play('(Go to the draft)'))) break;
+if (want('draft')) for (let i = 0; i < 4 && !/NBA Draft/.test((await phase()) ?? ''); i++) if (!(await play('(Go to the draft)'))) break;
 if (stages.includes('draft')) await tour('draft');
-for (let i = 0; i < 3 && /NBA Draft/.test((await phase()) ?? ''); i++) if (!(await play('Auto-draft the rest'))) break;
+if (want('resign')) for (let i = 0; i < 3 && /NBA Draft/.test((await phase()) ?? ''); i++) if (!(await play('Auto-draft the rest'))) break;
 if (stages.includes('resign')) await tour('resign');
-for (let i = 0; i < 3 && !/Free Agency/i.test((await phase()) ?? ''); i++) if (!(await play('Open free agency'))) break;
+if (want('fa')) for (let i = 0; i < 3 && !/Free Agency/i.test((await phase()) ?? ''); i++) if (!(await play('Open free agency'))) break;
 if (stages.includes('fa')) await tour('fa');
 console.log(`errors: ${errors.length}`);
 for (const e of [...new Set(errors)].slice(0, 30)) console.log('  ' + e.slice(0, 300));
