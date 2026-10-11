@@ -1,10 +1,11 @@
 // Phase-aware "what can I do next" actions shared by the top-bar play button and Home.
-import type { League } from '../core/types';
+import type { League, ScheduledGame } from '../core/types';
 import { allStarStop, type SimTarget } from '../state/store';
 import { pendingLive } from '../state/live';
 import { canStartRegularSeason, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
+import { periodLabel } from './stats';
 
 export interface FlowAction {
   id: string;
@@ -53,20 +54,32 @@ export function flowActions(league: League, { onLive = false } = {}): FlowAction
         break;
       }
       const g = userGameOnDay(league, league.day);
-      const date = fmtDate(league.season, league.day, { weekday: 'short', month: 'short', day: 'numeric' });
+      const when = (day: number) => fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' });
       const out = league.phase !== 'regular' && !stillAlive(league);
       if (live) {
-        const q = live.sim.q <= 4 ? `Q${live.sim.q}` : 'OT';
+        const q = live.sim.clock <= 0.05 ? `End of ${periodLabel(live.sim.q)}` : periodLabel(live.sim.q);
         a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${live.sim.T[live.userSide].score}-${live.sim.T[1 - live.userSide].score}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
-        a.push({ id: 'live', label: 'Watch & coach live', sub: `${date}: your game is today`, primary: true, cmd: 'watchLive' });
+        a.push({ id: 'live', label: 'Watch & coach live', sub: `${when(league.day)}: your game is today`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Quick sim this game', cmd: 'quickGame' });
       } else if (out) {
         // "next game" would never come: it would sim the whole postseason anyway
         a.push({ id: 'endpost', label: 'Sim to end of playoffs', sub: 'Your season is over.', primary: true, sim: { kind: 'endPlayoffs' } });
       } else {
-        a.push({ id: 'next', label: 'Sim to next game', sub: date, primary: true, sim: { kind: 'untilUserGame' } });
+        // playoff games are only scheduled a game at a time, so the next one may not be on the calendar yet
+        const next = league.schedule.reduce<ScheduledGame | undefined>(
+          (best, x) => (!x.played && x.day > league.day && (x.home === league.userTid || x.away === league.userTid) && (!best || x.day < best.day) ? x : best),
+          undefined,
+        );
+        const sub = next
+          ? when(next.day)
+          : league.phase === 'regular'
+            ? 'Your regular season is over.'
+            : league.phase === 'playin'
+              ? 'Your series starts after the play-in.'
+              : undefined;
+        a.push({ id: 'next', label: 'Sim to next game', sub, primary: true, sim: { kind: 'untilUserGame' } });
       }
       a.push({ id: 'day', label: 'Sim 1 day', sim: { kind: 'days', n: 1 } });
       if (league.phase === 'regular') {
@@ -91,17 +104,23 @@ export function flowActions(league: League, { onLive = false } = {}): FlowAction
       a.push({ id: 'resign', label: 'Re-sign players', primary: true, to: '/resign' });
       a.push({ id: 'fa', label: 'Open free agency', sub: 'Unsigned players will hit the market.', cmd: 'startFA' });
       break;
-    case 'freeAgency':
-      a.push({ id: 'fas', label: 'Free agents', sub: `Day ${league.faDay + 1} of 30`, primary: true, to: '/free-agents' });
-      a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });
-      a.push({ id: 'faweek', label: 'Advance 1 week', cmd: 'faWeek' });
+    case 'freeAgency': {
+      // after day 30 the calendar can't advance: the new season is all that's left
+      const over = league.faDay >= 30;
+      a.push({ id: 'fas', label: 'Free agents', sub: over ? 'Day 30 of 30: the market is winding down.' : `Day ${league.faDay + 1} of 30`, primary: !over, to: '/free-agents' });
+      if (!over) {
+        a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });
+        a.push({ id: 'faweek', label: 'Advance 1 week', cmd: 'faWeek' });
+      }
       a.push({
         id: 'new',
         label: `Start ${league.season}-${String((league.season + 1) % 100).padStart(2, '0')} season`,
         sub: 'Training camp: players develop and age.',
+        primary: over,
         cmd: 'newSeason',
       });
       break;
+    }
   }
   return a;
 }

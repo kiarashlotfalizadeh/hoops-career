@@ -4,9 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { importLeague } from '../backup';
 import { loadLeague, SAVE_VERSION } from '../persistence';
 import { useStore } from '../store';
-import { simDay } from '../../core/league/season';
+import { faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency } from '../../core/league/season';
+import { nextPick } from '../../core/league/draft';
+import { userGameOnDay } from '../../core/league/games';
+import { prepareLive } from '../live';
 import type { League } from '../../core/types';
-import { testLeague } from './fixtures';
+import { testLeague, toGameDay } from './fixtures';
 
 const backup = (l: unknown, name = 'backup.json') => new File([JSON.stringify(l)], name, { type: 'application/json' });
 
@@ -49,6 +52,62 @@ describe('import', () => {
     const back = await importLeague(backup(l));
     expect(back.inbox[0].link).toBeUndefined();
     expect((await loadLeague(back.id))!.inbox[0].link).toBeUndefined();
+  });
+
+  it('a league exported mid-game, mid-draft or in free agency plays on after import', { timeout: 180_000 }, async () => {
+    const l = testLeague('states');
+    /** What Export writes, read back the way Import reads it. */
+    const roundTrip = async () => {
+      const back = await importLeague(backup(l));
+      expect(back).toEqual(JSON.parse(JSON.stringify({ ...l, id: back.id, name: back.name })));
+      return back;
+    };
+    toGameDay(l);
+    useStore.getState().setLeague(l);
+    useStore.getState().mutate((x) => void prepareLive(x)!.simTo('quarter'));
+    const live = await roundTrip();
+    useStore.getState().setLeague(live);
+    const lg = prepareLive(live)!;
+    expect(lg.game.gid).toBe(userGameOnDay(l, l.day)!.gid);
+    lg.commit(live);
+    expect(live.games.filter((g) => g.gid === lg.game.gid)).toHaveLength(1);
+    expect(live.schedule.filter((g) => g.day < live.day && !g.played)).toEqual([]);
+    useStore.getState().setLeague(null);
+
+    for (let i = 0; i < 400 && l.phase !== 'draftLottery'; i++) simDay(l);
+    startDraft(l);
+    const draft = await roundTrip();
+    expect(finishDraftPhase(draft)).toBe(true);
+    expect(draft.phase).toBe('resign');
+    expect(nextPick(draft)).toBeUndefined();
+
+    finishDraftPhase(l);
+    startFreeAgency(l);
+    faAdvance(l, 3);
+    const fa = await roundTrip();
+    faAdvance(fa, 7);
+    expect(fa.faDay).toBe(10);
+    expect(newSeason(fa)).toBe(true);
+    expect(fa.phase).toBe('preseason');
+  });
+
+  it('a crafted backup cannot reach the prototypes of the objects it is read into', async () => {
+    const l = played('proto');
+    const plant = (o: object) => {
+      Object.defineProperty(o, '__proto__', { value: { polluted: true }, enumerable: true });
+      Object.defineProperty(o, 'constructor', { value: { prototype: { polluted: true } }, enumerable: true });
+    };
+    const p = Object.values(l.players).find((x) => x.tid === l.userTid)!;
+    [l, l.settings, l.teams[l.userTid], l.teams[l.userTid].tactics, l.teams[l.userTid].rotation, p, p.ratings, l.games[0]].forEach(plant);
+    const back = await importLeague(backup(l));
+    useStore.getState().setLeague(back);
+    await useStore.getState().simulate({ kind: 'days', n: 3 });
+    useStore.getState().mutate((x) => (x.name = 'saved again'));
+    await useStore.getState().save();
+    await loadLeague(back.id);
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    expect((Object.prototype as { polluted?: boolean }).polluted).toBeUndefined();
+    expect(back.day).toBe(l.day + 3);
   });
 
   it('refuses files that are not backups, too big, or from a newer version', async () => {

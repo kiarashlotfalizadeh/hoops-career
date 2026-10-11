@@ -108,10 +108,13 @@ describe('live game', () => {
   it('the Play menu finishes a game in progress first', () => {
     const l = testLeague('flow');
     toGameDay(l);
-    goLive(l);
+    const lg = goLive(l);
     expect(flowActions(l, { onLive: true }).map((a) => a.label)).toEqual(['Finish this game']);
+    lg.simTo('quarter');
     const off = flowActions(l);
     expect(off[0].label).toBe('Resume live game');
+    const me = lg.sim.T[lg.userSide].score;
+    expect(off[0].sub).toBe(`End of Q1 · ${me}-${lg.sim.T[1 - lg.userSide].score}`);
     expect(off.find((a) => a.id === 'quick')?.label).toBe('Finish this game');
   });
 });

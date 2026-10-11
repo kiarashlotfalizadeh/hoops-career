@@ -1,6 +1,7 @@
 // Native integrations when running inside the Capacitor shell (no-ops on the web).
 import { Capacitor } from '@capacitor/core';
 import { useStore } from './state/store';
+import { canGoBack } from './ui/nav';
 
 /** Resolves once no sim or phase change is running (a sim is asked to stop first). */
 function idle(): Promise<void> {
@@ -39,14 +40,18 @@ export async function initNative() {
   };
   // Android hardware back: close sheets/navigate back; exit from the root screen once the league is saved.
   await App.addListener('backButton', () => {
-    const backdrop = document.querySelector('.sheet-backdrop') as HTMLElement | null;
+    // sheets open on top of each other in DOM order: close the topmost one
+    const backdrops = document.querySelectorAll<HTMLElement>('.sheet-backdrop');
+    const backdrop = backdrops[backdrops.length - 1];
     if (backdrop) {
       backdrop.click();
       return;
     }
     const hash = window.location.hash.replace('#', '') || '/';
     if (hash === '/' || hash === '/start') void exit();
-    else window.history.back();
+    // after a reload there's no earlier screen, and history.back() would do nothing
+    else if (canGoBack()) window.history.back();
+    else window.location.replace('#/');
   });
   // the OS may end a backgrounded app without warning
   await App.addListener('pause', () => void useStore.getState().flush());

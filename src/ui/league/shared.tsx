@@ -144,7 +144,8 @@ export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outc
   if (r === 3) return { label: 'Lost in the Conference Finals', short: 'Lost Conf. Finals', tone: 'info' };
   if (r === 2) return { label: 'Lost in the 2nd round', short: 'Lost 2nd Rd', tone: 'info' };
   if (r === 1) return { label: 'Lost in the 1st round', short: 'Lost 1st Rd', tone: 'info' };
-  if (r === 0) return { label: 'Lost in the play-in', short: 'Lost Play-In', tone: 'warn' };
+  // a play-in loser's round drops to -1: the play-in flag tells it apart from a lottery team
+  if (r === 0 || ts.playIn) return { label: 'Lost in the play-in', short: 'Lost Play-In', tone: 'warn' };
   return { label: 'Missed the playoffs', short: 'Missed' };
 }
 

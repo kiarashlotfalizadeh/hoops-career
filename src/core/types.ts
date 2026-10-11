@@ -148,7 +148,7 @@ export interface RatingsSnapshot {
   season: number;
   ovr: number;
   pot: number;
-  /** Full ratings, on the last two snapshots only (the player page compares them with last season's). */
+  /** Full ratings: only the latest two snapshots keep them (the Ratings tab compares them). */
   r?: Ratings;
 }
 

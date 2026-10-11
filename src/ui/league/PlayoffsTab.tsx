@@ -250,8 +250,17 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
     return (
       <div className={`bk-t ${cls}`}>
         <span className="sd">{seed ?? ''}</span>
-        {tid !== undefined ? <TeamLogo tid={tid} size={18} /> : <span />}
-        {tid !== undefined ? <span className="ellipsis">{league.teams[tid].abbrev}</span> : <span className="tb ellipsis">{tbd ?? 'TBD'}</span>}
+        {tid !== undefined ? (
+          <>
+            <TeamLogo tid={tid} size={18} />
+            <span className="ellipsis">{league.teams[tid].abbrev}</span>
+          </>
+        ) : (
+          // no logo yet: "Play-in" gets the logo's room too, so it fits a phone-width bracket
+          <span className="tb ellipsis" style={{ gridColumn: 'span 2' }}>
+            {tbd ?? 'TBD'}
+          </span>
+        )}
         <span className="w">{s.series ? wins : ''}</span>
       </div>
     );
@@ -266,7 +275,11 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
   if (s.series) {
     const ser = s.series;
     return (
-      <button className={cls} onClick={() => onOpen(ser)} aria-label={`${seriesLabel(ser)} details`}>
+      <button
+        className={cls}
+        onClick={() => onOpen(ser)}
+        aria-label={`${seriesLabel(ser)}: ${league.teams[ser.high].abbrev} ${ser.highWins}, ${league.teams[ser.low].abbrev} ${ser.lowWins}. Series details`}
+      >
         {body}
       </button>
     );

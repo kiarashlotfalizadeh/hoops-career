@@ -47,6 +47,7 @@ function Franchise({ league }: { league: League }) {
   const finished = seasons.filter((s) => s.season < league.season || !['preseason', 'regular'].includes(league.phase));
   const w = seasons.reduce((a, s) => a + s.won, 0);
   const l = seasons.reduce((a, s) => a + s.lost, 0);
+  const rec = `${w}-${l}`;
   const titles = seasons.filter((s) => s.playoffRound === 5);
   const apps = finished.filter((s) => s.playoffRound >= 1).length;
   const best = [...seasons].filter((s) => s.won + s.lost > 0).sort((a, b) => b.won / Math.max(1, b.won + b.lost) - a.won / Math.max(1, a.won + a.lost))[0];
@@ -88,7 +89,12 @@ function Franchise({ league }: { league: League }) {
       </div>
       <div className="grid4">
         <Kpi k="Seasons" v={seasons.length} sub={best && best.won + best.lost >= 20 ? `Best ${best.won}-${best.lost}` : undefined} />
-        <Kpi k="Record" v={<span style={{ fontSize: 20 }}>{`${w}-${l}`}</span>} sub={w + l ? `${((w / (w + l)) * 100).toFixed(1)}%` : ''} />
+        <Kpi
+          k="Record"
+          // a multi-season record stays on one line in a phone-width tile
+          v={<span style={{ fontSize: rec.length > 7 ? 15 : rec.length > 5 ? 17 : 20, whiteSpace: 'nowrap' }}>{rec}</span>}
+          sub={w + l ? `${((w / (w + l)) * 100).toFixed(1)}%` : ''}
+        />
         <Kpi k="Playoffs" v={apps} />
         <Kpi k="Titles" v={titles.length} color={titles.length ? 'var(--tier-elite)' : undefined} />
       </div>
@@ -183,6 +189,8 @@ function LeagueHistory({ league }: { league: League }) {
     );
   }
   const name = (pid?: number) => (pid !== undefined && league.players[pid] ? league.players[pid] : undefined);
+  // a team taken over later won its earlier titles under another coach
+  const tenure = league.tenureStart ?? league.startSeason;
   return (
     <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
       {list.map((a) => {
@@ -193,7 +201,11 @@ function LeagueHistory({ league }: { league: League }) {
           { k: 'ROY', p: name(a.roy) },
         ];
         return (
-          <Card key={a.season} title={seasonLabel(a.season)} right={a.champion === league.userTid ? <span className="tag lg-gold">Your title</span> : undefined}>
+          <Card
+            key={a.season}
+            title={seasonLabel(a.season)}
+            right={a.champion === league.userTid && a.season >= tenure ? <span className="tag lg-gold">Your title</span> : undefined}
+          >
             {a.champion !== undefined ? (
               <Link to={`/team/${a.champion}`} className="row" style={{ gap: 12, marginBottom: 8 }}>
                 <TeamLogo tid={a.champion} size={42} />
@@ -297,7 +309,15 @@ function HallOfFame({ league }: { league: League }) {
           ))}
         </div>
       )}
-      <SectionLabel right={<span className="tiny dim">{retired.length} players</span>}>Notable retirements</SectionLabel>
+      <SectionLabel
+        right={
+          <span className="tiny dim">
+            {retired.length} player{retired.length === 1 ? '' : 's'}
+          </span>
+        }
+      >
+        Notable retirements
+      </SectionLabel>
       {retired.length === 0 ? (
         <Card>
           <Empty>Decorated and long-serving players who retire will be listed here.</Empty>
@@ -311,7 +331,7 @@ function HallOfFame({ league }: { league: League }) {
           </div>
           {retired.length > limit && (
             <button className="btn sm ghost" style={{ alignSelf: 'center' }} onClick={() => setLimit(limit + 25)}>
-              <ChevronDown size={15} /> Show more
+              <ChevronDown size={15} /> Show more ({retired.length - limit})
             </button>
           )}
         </>
