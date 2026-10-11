@@ -12,7 +12,7 @@ import { composites } from '../../core/ratings';
 import type { League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
 import { COVERAGE_META, PRESS_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
-import { IMPACT_TEXT } from '../../core/analysis/gameReport';
+import { IMPACT_TEXT, impactAdvice } from '../../core/analysis/gameReport';
 import { buildSimInput } from '../../core/league/games';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
@@ -428,11 +428,12 @@ export default function Live() {
         });
     }
     // biggest tactical edge against us so far
-    const worst = [...lg.sim.impacts.values()].filter((im) => im.t !== userSide && im.pts >= 2.5 && IMPACT_TEXT[im.key]?.advice).sort((a, b) => b.pts - a.pts)[0];
+    // only advice that still applies: a switch away from the coverage that was burned silences it
+    const worst = [...lg.sim.impacts.values()].filter((im) => im.t !== userSide && im.pts >= 2.5 && impactAdvice(im.key, me.t)).sort((a, b) => b.pts - a.pts)[0];
     if (worst) {
       out.push({
         id: `imp-${worst.key}`,
-        text: `${IMPACT_TEXT[worst.key].text(them.team.name, me.team.name, '')} ${adviceFor(IMPACT_TEXT[worst.key].advice!, league.settings.complexity)}`,
+        text: `${IMPACT_TEXT[worst.key].text(them.team.name, me.team.name, '')} ${adviceFor(impactAdvice(worst.key, me.t)!, league.settings.complexity)}`,
       });
     }
     return out.filter((s) => !dismissed.includes(s.id)).slice(0, 2);

@@ -24,7 +24,7 @@ import { RoleEditor } from '../components/RoleEditor';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
 import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
-import { IMPACT_TEXT } from '../../core/analysis/gameReport';
+import { IMPACT_TEXT, impactAdvice } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
 
@@ -481,6 +481,8 @@ function InsightsTab() {
     );
   const row = (x: { key: string; perGame: number; forUser: boolean }) => {
     const tpl = IMPACT_TEXT[x.key];
+    // no "go to Hedge" once you already play Hedge
+    const advice = x.forUser ? undefined : impactAdvice(x.key, league.teams[league.userTid].tactics);
     const X = x.forUser ? 'your team' : 'the opposition';
     const Y = x.forUser ? 'the opposition' : 'your team';
     const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -492,9 +494,9 @@ function InsightsTab() {
         </span>
         <div className="grow">
           <div>{cap(tpl.text(X, Y, ''))}</div>
-          {!x.forUser && tpl.advice && (
+          {advice && (
             <div className="tiny" style={{ color: 'var(--warn)' }}>
-              {adviceFor(tpl.advice, league.settings.complexity)}
+              {adviceFor(advice, league.settings.complexity)}
             </div>
           )}
         </div>
