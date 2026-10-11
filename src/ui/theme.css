@@ -253,6 +253,12 @@ h3 {
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
+/* phones: one column with the page's own 14px between cards (not stacked edge to edge) */
+.md-grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
 @media (min-width: 760px) {
   .md-grid2 {
     display: grid;
