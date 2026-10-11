@@ -169,7 +169,8 @@
 /* ------------------------------------------------------------------ standings table */
 .lg-st-row {
   display: grid;
-  grid-template-columns: 20px 24px minmax(0, 1fr) 46px 34px 36px 36px;
+  /* narrow number columns leave a phone room for "Timberwolves" and its clinch mark */
+  grid-template-columns: 20px 24px minmax(0, 1fr) 42px 34px 36px 32px;
   align-items: center;
   gap: 0 6px;
   padding: 0 12px;
@@ -268,13 +269,16 @@
 }
 .lg-st.mode-splits .lg-st-row {
   grid-template-columns: 18px 22px minmax(0, 1fr) 42px 42px 42px 42px 38px;
-  gap: 0 4px;
+  gap: 0 5px;
   font-size: 12.5px;
 }
 .lg-st-row > span {
   white-space: nowrap;
 }
 .lg-st.mode-splits .nm-full {
+.lg-st.mode-splits .lg-st-head {
+  letter-spacing: 0.02em;
+}
   display: none;
 }
 .lg-st.mode-splits .nm-ab {
