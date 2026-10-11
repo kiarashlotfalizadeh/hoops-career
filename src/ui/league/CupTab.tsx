@@ -63,11 +63,13 @@ export function CupTab({ league }: { league: League }) {
   const groupGamesLeft = league.schedule.filter((g) => g.cup === 'group' && !g.played).length;
   const final = cup.bracket.find((t) => t.round === 'final');
   const seeds = cup.seeds ?? projected;
+  // each knockout round is drawn once the one before it is over
+  const koRound = final ? 'Championship' : cup.bracket.some((t) => t.round === 'sf') ? 'Semifinals' : 'Quarterfinals';
   const status =
     cup.champion !== undefined
       ? `${seasonLabel(cup.season)} NBA Cup complete`
       : cup.seeds
-        ? 'Knockout round'
+        ? `Knockouts · ${koRound}`
         : projected
           ? `Group stage · ${groupGamesLeft} group game${groupGamesLeft === 1 ? '' : 's'} left`
           : `Group stage starts ${fmtDate(league.season, cup.nights[0])}`;
