@@ -24,6 +24,18 @@ type Mode = 'project' | 'compare' | 'counters';
 const SIGMAS = 2;
 
 /**
+ * Standard errors each counter must clear when `n` are tested at once: wide enough that the whole
+ * list has a 95% chance of marking none of the ones that change nothing (Bonferroni: 2 for one,
+ * about 2.8 for nine). At two each, about one run in five flagged a counter that does nothing.
+ */
+function familySigmas(n: number): number {
+  if (n <= 1) return SIGMAS;
+  // upper-tail normal quantile of 2.5% / n (Abramowitz & Stegun 26.2.23, error under 0.0005)
+  const t = Math.sqrt(-2 * Math.log(0.025 / n));
+  return t - (2.515517 + 0.802853 * t + 0.010328 * t * t) / (1 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t);
+}
+
+/**
  * A lab side is built like a real game's: the game plan for this opponent on top of the tactics,
  * and injured players kept on the roster so the engine hands their minutes down the bench.
  */
@@ -291,15 +303,17 @@ export default function TacticsLab() {
             title="Counters, ranked"
             right={
               <Help title="Reading these numbers">
-                Each candidate is simulated against the same opponent. The change is in net rating (points per 100 possessions) versus your current plan. The ± range is a 95%
-                interval (two standard errors): a counter is only marked as better or worse when its change clears it. More games mean tighter estimates.
+                Each candidate is simulated against the same opponent. The change is in net rating (points per 100 possessions) versus your current plan. A counter is only marked
+                as better or worse when its change clears the ± range. With several counters tested at once the range is wider than for one (two standard errors), so a counter that
+                changes nothing rarely looks like a win. More games mean tighter estimates.
               </Help>
             }
           >
             <div className="col" style={{ gap: 8 }}>
-              {shown.cands.map((c) => {
-                const good = c.delta > SIGMAS * c.se;
-                const bad = c.delta < -SIGMAS * c.se;
+              {shown.cands.map((c, _, all) => {
+                const sig = familySigmas(all.length);
+                const good = c.delta > sig * c.se;
+                const bad = c.delta < -sig * c.se;
                 return (
                   <div key={c.id} className="card tight" style={{ borderColor: good ? 'color-mix(in srgb, var(--good) 45%, transparent)' : undefined }}>
                     <div className="row between">
@@ -311,7 +325,7 @@ export default function TacticsLab() {
                     <div className="small dim2">{c.why}</div>
                     <div className="row between" style={{ marginTop: 6 }}>
                       <span className="tiny dim">
-                        95% range ± {f1(SIGMAS * c.se)} · win {p0(c.winPct)}
+                        range ± {f1(sig * c.se)} · win {p0(c.winPct)}
                       </span>
                       {applied.includes(c.id) ? (
                         <Tag tone="good">
