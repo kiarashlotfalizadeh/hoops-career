@@ -422,6 +422,13 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
       </Card>
       <Card title="Who gets the ball">
         <div className="col" style={{ gap: 6 }}>
+          <div className="row tiny dim upper bold">
+            <span className="grow">Player</span>
+            <span style={{ width: 44, textAlign: 'right' }}>Min</span>
+            <span style={{ width: 44, textAlign: 'right' }}>Pts</span>
+            <span style={{ width: 52, textAlign: 'right' }}>Usg</span>
+            <span style={{ width: 52, textAlign: 'right' }}>TS%</span>
+          </div>
           {users.slice(0, 10).map((u) => (
             <div key={u.p.pid} className="row small">
               <span className="grow ellipsis">{names(u.p.pid)}</span>
