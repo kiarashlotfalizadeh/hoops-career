@@ -30,6 +30,8 @@ function rotationPlayers(league: League, tid: number, n = 8): Player[] {
 }
 
 const pct = (x: number) => Math.round(x);
+/** Team nicknames are plural ("the Nuggets are"); their possessive drops the extra s ("the Nuggets' bench"). */
+const possessive = (name: string) => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 
 export function scoutTeam(league: League, tid: number): ScoutReport {
   const team = league.teams[tid];
@@ -69,12 +71,14 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   }
   if (t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
   const threats: Threat[] = [];
-  if (creators[0])
+  if (creators[0]) {
+    const role = t.offense.roles[creators[0].p.pid] ?? 'creator';
     threats.push({
       pid: creators[0].p.pid,
       name: playerName(creators[0].p),
-      why: `Primary creator (${ROLE_META[t.offense.roles[creators[0].p.pid] ?? 'creator'].label}), OVR ${creators[0].p.ovr}.`,
+      why: role === 'creator' ? `Primary creator, OVR ${creators[0].p.ovr}.` : `Best shot creator, used as their ${ROLE_META[role].label.toLowerCase()}, OVR ${creators[0].p.ovr}.`,
     });
+  }
   if (shooters[0] && shooters[0].p !== creators[0]?.p)
     threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter (3PT ${pct(shooters[0].p.ratings.tp)}). Don't leave him open.` });
   if (protector && !threats.some((x) => x.pid === protector.p.pid))
@@ -109,7 +113,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       out.push({
         id: 'star-double',
         label: `Double-team ${top.p.lastName}`,
-        why: `Force ${opp.name}'s supporting cast to beat you.`,
+        why: `Force the ${possessive(opp.name)} supporting cast to beat you.`,
         patch: { defense: { starPlan: 'double', starTarget: top.p.pid } },
       });
     if (cur.defense.starPlan !== 'deny')
@@ -124,11 +128,11 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     out.push({
       id: 'help-high',
       label: 'Pack the paint',
-      why: `${opp.name} can't shoot (spacing ${Math.round(spacing)}). Sag off and protect the rim.`,
+      why: `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}). Sag off and protect the rim.`,
       patch: { defense: { help: 78 } },
     });
   if (spacing >= 50 && cur.defense.help > 40)
-    out.push({ id: 'help-low', label: 'Stay home on shooters', why: `${opp.name} spaces the floor well; don't over-help.`, patch: { defense: { help: 32 } } });
+    out.push({ id: 'help-low', label: 'Stay home on shooters', why: `The ${opp.name} space the floor well; don't over-help.`, patch: { defense: { help: 32 } } });
   if (spacing < 42 && cur.defense.scheme === 'man')
     out.push({ id: 'zone', label: '2-3 zone', why: 'Dare a poor shooting team to beat you from outside.', patch: { defense: { scheme: 'zone23' } } });
   if (security < 55 && cur.defense.pressure < 70)
@@ -169,7 +173,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   if (oppProfile.rimProtection < 58)
     out.push({ id: 'attack-rim', label: 'Attack the rim', why: 'No rim protector to worry about.', patch: { offense: { rimAttack: Math.min(100, cur.offense.rimAttack + 25) } } });
   if (oppProfile.athleticism < 50 && cur.offense.pace < 70)
-    out.push({ id: 'pace-up', label: 'Push the pace', why: `${opp.name} is slow; run on them.`, patch: { offense: { pace: 78, transition: 85 } } });
+    out.push({ id: 'pace-up', label: 'Push the pace', why: `The ${opp.name} are slow; run on them.`, patch: { offense: { pace: 78, transition: 85 } } });
   if (oppProfile.size < 48 && cur.offense.crashBoards < 70)
     out.push({ id: 'crash', label: 'Crash the glass', why: 'They are small; attack the offensive boards.', patch: { offense: { crashBoards: 78 } } });
   // a counter that changes nothing (sliders already at the limit) isn't worth simulating

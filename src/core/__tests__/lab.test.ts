@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab } from '../ai/lab';
-import { counterCandidates } from '../ai/advisor';
+import { counterCandidates, scoutTeam } from '../ai/advisor';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
 
@@ -57,5 +57,11 @@ describe('tactics lab & reports', () => {
     mine.tactics = applyPatch(mine.tactics, { offense: { actions: { ...mine.tactics.offense.actions, pnr: 100, handoff: 100 } } });
     expect(counterCandidates(league, 0, 1).map((c) => c.id)).not.toContain('vs-drop');
     [mine.tactics, opp.tactics] = saved;
+  });
+  it('scouts in plain English: plural team names, the creator role named once', () => {
+    for (let tid = 1; tid < 30; tid++) {
+      for (const t of scoutTeam(league, tid).threats) expect(t.why).not.toMatch(/Primary creator \(Primary Creator\)/);
+      for (const c of counterCandidates(league, 0, tid)) expect(c.why).not.toMatch(new RegExp(`^${league.teams[tid].name} (is|spaces)\\b`));
+    }
   });
 });
