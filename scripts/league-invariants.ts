@@ -11,6 +11,7 @@ import { nextPick } from '../src/core/league/draft';
 import { standings } from '../src/core/league/standings';
 import { contractExp, salaryFor } from '../src/core/playerGen';
 import { CAP } from '../src/core/constants';
+import { ARENA_CAPACITY } from '../src/core/league/finances';
 
 const [seasons, rngSeed, userTid] = [5, 42, 19].map((d, i) => Number(process.argv[i + 2] ?? d));
 const L = createLeague({ name: 'Inv', userTid, coachName: 'C', settings: defaultSettings(), seed: JSON.parse(readFileSync('src/data/seed.json', 'utf8')), rngSeed });
@@ -44,8 +45,8 @@ function check() {
     const who = `${t.abbrev}${t.tid === L.userTid ? '*' : ''}`;
     // standard roster: 13-15 in season; two-way deals sit outside it (max 3)
     if (H.inSeason(L) && (n < CAP.rosterMin || n > CAP.rosterMax)) bad('roster size in season', `${who} ${n}`);
-    // during the re-sign window expiring deals still sit on the roster; count next season's contracts
-    const signed = ph === 'resign' ? H.standardRoster(L, t.tid).filter((p) => contractExp(p.contract) > L.season).length : n;
+    // through the draft and the re-sign window expiring deals still sit on the roster; count next season's contracts
+    const signed = ph === 'draft' || ph === 'resign' ? H.standardRoster(L, t.tid).filter((p) => contractExp(p.contract) > L.season).length : n;
     if (signed > H.OFFSEASON_ROSTER_MAX) bad('roster above offseason limit', `${who} ${signed}`);
     if (tw > H.TWO_WAY_MAX) bad('too many two-way players', `${who} ${tw}`);
     if (ph === 'preseason' && t.tid !== L.userTid && n < CAP.rosterMin) bad('AI roster <13 in preseason', `${who} ${n}`);
@@ -123,6 +124,19 @@ function checkSeasonEnd() {
     )
       bad('seeds', conf);
   for (const t of L.teams) if (H.curTeamSeason(L, t.tid).won + H.curTeamSeason(L, t.tid).lost !== 82) bad('team != 82 games', t.abbrev);
+  if (aw.smoy !== undefined) {
+    const s = H.seasonTotals(L.players[aw.smoy], L.season)!;
+    if (s.gs >= s.gp - s.gs) bad('6MOY started as often as he came off the bench', `${nm(aw.smoy)} ${s.gs}/${s.gp}`);
+  }
+  for (const t of L.teams) {
+    const ts = H.curTeamSeason(L, t.tid);
+    if (ts.attendance / Math.max(1, ts.homeWon + ts.homeLost) > ARENA_CAPACITY) bad('attendance over capacity', t.abbrev);
+  }
+  // playoff series: every other day at most
+  for (const s of L.playoffs) {
+    const days = L.schedule.filter((g) => g.seriesId === s.id).map((g) => g.day).sort((a, b) => a - b);
+    if (days.some((d, i) => i > 0 && d - days[i - 1] < 2)) bad('playoff games on consecutive days', `${s.id} ${days.join(',')}`);
+  }
 }
 
 function checkLottery() {
@@ -178,6 +192,8 @@ for (let s = 0; s < seasons; s++) {
   checkOptions(true);
   S.faAdvance(L, 10);
   check();
+  S.faAdvance(L, 30);
+  if (L.faDay !== 30) bad('free agency past day 30', String(L.faDay));
   S.newSeason(L);
   check();
   const sz = L.teams.map((t) => std(t.tid).length);
