@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoRotation, roleMemory, rosterSeason } from '../ai/coachAI';
+import { autoRotation, roleMemory, rosterSeason, sortByPosition } from '../ai/coachAI';
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
 import { Rng } from '../random';
 import type { Player } from '../types';
@@ -81,6 +81,13 @@ describe('rotation AI: role memory', () => {
     expect(Math.max(...healthy)).toBeLessThanOrEqual(38);
     // at least ten healthy players get a real look
     expect(healthy.filter((m) => m >= 8).length).toBeGreaterThanOrEqual(9);
+  });
+
+  it('lists the starters 1 through 5: a tall point guard still comes first', () => {
+    const ps = roster(6).slice(0, 5);
+    (['C', 'SF', 'PG', 'PF', 'SG'] as const).forEach((pos, i) => (ps[i].pos = pos));
+    ps[2].ratings.hgt = 70;
+    expect(sortByPosition(ps).map((p) => p.pos)).toEqual(['PG', 'SG', 'SF', 'PF', 'C']);
   });
 
   it('caps planned minutes even with short-stamina rosters', () => {

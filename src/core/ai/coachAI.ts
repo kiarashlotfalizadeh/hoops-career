@@ -1,7 +1,7 @@
 // Automatic coaching: builds rotations and fits tactics to a roster. Used for AI teams,
 // for the user's "Auto" buttons, and by the assistant coach to propose changes.
 
-import type { OffRole, Player, Rotation, ShotFreedom, Tactics, Team } from '../types';
+import type { OffRole, Player, Pos, Rotation, ShotFreedom, Tactics, Team } from '../types';
 import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
@@ -95,9 +95,11 @@ export function bestLineup(players: Player[], pool = 9, roles?: Map<number, Role
   return best;
 }
 
-/** Sort a lineup into a conventional 1-5 order for display. */
+const POS_ORDER: Record<Pos, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+
+/** Sort a lineup into a conventional 1-5 order for display: by position, then size and handling. */
 export function sortByPosition(ps: Player[]): Player[] {
-  return [...ps].sort((a, b) => a.ratings.hgt - b.ratings.hgt + (b.ratings.hnd - a.ratings.hnd) * 0.15);
+  return [...ps].sort((a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos] || a.ratings.hgt - b.ratings.hgt + (b.ratings.hnd - a.ratings.hnd) * 0.15);
 }
 
 /**
