@@ -51,7 +51,8 @@ export interface LabSummary {
   oppPlayTypes: Record<string, { freq: number; ppp: number }>;
   players: Record<number, { min: number; pts: number; usg: number; ts: number }>;
   oppPlayers: Record<number, { min: number; pts: number; usg: number; ts: number }>;
-  impacts: Record<string, number>;
+  /** Points per game each tactical effect earned each side: both can gain from the same one (each side's drop coverage conceding pull-ups). */
+  impacts: Record<string, { us: number; them: number }>;
   /** Per-game point margins (side A minus side B), in seed order, for paired comparisons. */
   margins: number[];
 }
@@ -105,7 +106,7 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   const opt: Record<string, { poss: number; pts: number }> = {};
   const pl: Record<number, { sec: number; pts: number; use: number; teamUse: number; fga: number; fta: number }> = {};
   const opl: Record<number, { sec: number; pts: number; use: number; teamUse: number; fga: number; fta: number }> = {};
-  const impacts: Record<string, number> = {};
+  const impacts: Record<string, { us: number; them: number }> = {};
   for (let g = 0; g < req.games; g++) {
     // each game gets its own seed so two configurations can be compared game by game
     const rng = new Rng((req.seed + Math.imul(g + 1, 2654435761)) >>> 0);
@@ -158,8 +159,9 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
       e.pts += v.pts;
     }
     for (const im of res.impacts ?? []) {
-      const sign = im.t === aSide ? 1 : -1;
-      impacts[im.key] = (impacts[im.key] ?? 0) + sign * im.pts;
+      const e = (impacts[im.key] ??= { us: 0, them: 0 });
+      if (im.t === aSide) e.us += im.pts;
+      else e.them += im.pts;
     }
     onGame?.();
   }
@@ -187,7 +189,10 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   };
   const ortg = (pf / Math.max(1, possA)) * 100;
   const drtg = (pa / Math.max(1, possB)) * 100;
-  for (const k of Object.keys(impacts)) impacts[k] /= n;
+  for (const e of Object.values(impacts)) {
+    e.us /= n;
+    e.them /= n;
+  }
   return {
     games: n,
     wins,

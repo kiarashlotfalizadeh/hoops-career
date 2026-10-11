@@ -392,8 +392,14 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
     .filter((x) => x.p)
     .sort((a, b) => b.min - a.min);
   const pts = Object.entries(r.playTypes).sort((a, b) => b[1].freq - a[1].freq);
+  // each side's gains on their own line: netted, both teams' drop coverage conceding pull-ups cancelled out
   const impacts = Object.entries(r.impacts)
     .filter(([k]) => IMPACT_TEXT[k])
+    .flatMap(([k, v]): [string, number][] => [
+      [k, v.us],
+      [k, -v.them],
+    ])
+    .filter(([, v]) => Math.abs(v) >= 0.05)
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
     .slice(0, 6);
   return (
@@ -475,7 +481,7 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
               const X = v >= 0 ? me.name : them.name;
               const Y = v >= 0 ? them.name : me.name;
               return (
-                <div key={k} className="row top small">
+                <div key={`${k}${v >= 0 ? '+' : '-'}`} className="row top small">
                   <span className={`num bold ${v >= 0 ? 'good' : 'bad'}`} style={{ width: 44 }}>
                     {signed(v)}
                   </span>

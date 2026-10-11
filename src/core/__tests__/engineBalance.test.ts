@@ -48,7 +48,7 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
   // the AI coaches' in-game adjustments would react to the change being measured
   const side = (tid: number, opp: number) => ({ ...buildSimInput(league, tid, 1, 'regular', opp), adjust: false });
   const base = pairs.map(([a, b]) => runLab({ a: side(a, b), b: side(b, a), games, seed: 4242 + a }));
-  const tags = (r: LabSummary, prefixes: string[]) => Object.entries(r.impacts).reduce((s, [k, v]) => s + (prefixes.some((p) => k.startsWith(p)) ? v : 0), 0);
+  const tags = (r: LabSummary, prefixes: string[]) => Object.entries(r.impacts).reduce((s, [k, v]) => s + (prefixes.some((p) => k.startsWith(p)) ? v.us - v.them : 0), 0);
   /** Measured change (points per game, paired) and the change in the matching tags. */
   const measure = (patch: TacticsPatch, prefixes: string[]) => {
     const rs = pairs.map(([a, b]) => runLab({ a: side(a, b), b: side(b, a), games, seed: 4242 + a, patch }));

@@ -59,7 +59,7 @@ const cfgs = all.filter(([k]) => !which.length || which.includes(k));
 
 const base: LabSummary[] = pairs.map(([a, b]) => runLab({ a: side(a), b: side(b), games, seed: 4242 + a }));
 const avg = (f: (r: LabSummary) => number, rs: LabSummary[]) => rs.reduce((s, r) => s + f(r), 0) / rs.length;
-const tags = (r: LabSummary, prefixes: string[]) => Object.entries(r.impacts).reduce((s, [k, v]) => s + (prefixes.some((p) => k.startsWith(p)) ? v : 0), 0);
+const tags = (r: LabSummary, prefixes: string[]) => Object.entries(r.impacts).reduce((s, [k, v]) => s + (prefixes.some((p) => k.startsWith(p)) ? v.us - v.them : 0), 0);
 const stats = (rs: LabSummary[]) =>
   `oppTov ${(avg((r) => r.oppShot.tov, rs) * 100).toFixed(1)} orb% ${(avg((r) => r.shot.orb, rs) * 100).toFixed(1)} oppOrb% ${(avg((r) => r.oppShot.orb, rs) * 100).toFixed(1)} trans ${(avg((r) => r.playTypes.transition?.freq ?? 0, rs) * 100).toFixed(1)}% oppTrans ${(avg((r) => r.oppPlayTypes.transition?.freq ?? 0, rs) * 100).toFixed(1)}% oppFTr ${avg((r) => r.oppShot.ftRate, rs).toFixed(3)}`;
 console.log(`${games} games x ${pairs.length} matchups; base net ${avg((r) => r.net, base).toFixed(2)} | ${stats(base)}`);
