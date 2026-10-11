@@ -157,4 +157,12 @@ describe('engine rules', () => {
     expect(a.changes).toBeGreaterThan(0);
     expect(run()).toEqual(a);
   });
+
+  it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {
+    type Sim = { T: { guardOf: Map<number, { pid: number }> }[]; starTarget(def: unknown, off: unknown): { pid: number } };
+    const sim = (plan: 'none' | 'deny') => new GameSim(side(16), side(17, { defense: { starPlan: plan, starTarget: null } }), { rng: new Rng(2), type: 'regular' }) as unknown as Sim;
+    const denied = sim('deny');
+    const star = denied.starTarget(denied.T[1], denied.T[0]).pid;
+    expect(denied.T[1].guardOf.get(star)!.pid).toBe(sim('none').T[1].guardOf.get(star)!.pid);
+  });
 });
