@@ -164,7 +164,9 @@ function PowerRankings({ league }: { league: League }) {
   return (
     <>
       <div className="row between">
-        <span className="small dim">Ranked by net rating (points per 100 possessions)</span>
+        <span className="small dim">
+          {list.every((x) => x.gp === 0) ? 'Ranked by roster strength (TAL) until games are played' : list.some((x) => x.gp < 10) ? 'Net rating, blended with roster strength early on' : 'Ranked by net rating (points per 100 possessions)'}
+        </span>
         <Help title="Power rankings">
           <p style={{ margin: 0 }}>Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
           <p style={{ margin: 0 }}>Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until about ten games are played.</p>

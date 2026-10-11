@@ -236,9 +236,9 @@ export function DayScoreboard({ league }: { league: League }) {
           <ChevronRight size={20} />
         </button>
       </div>
-      {!isToday && (
+      {day !== fallback && (
         <button className="btn xs ghost" style={{ alignSelf: 'center' }} onClick={() => setDayStr('')}>
-          Jump to {days.includes(league.day) ? 'today' : 'next game day'}
+          Jump to {fallback === league.day ? 'today' : fallback > league.day ? 'next game day' : 'latest games'}
         </button>
       )}
       <div className="lg-sb-grid">

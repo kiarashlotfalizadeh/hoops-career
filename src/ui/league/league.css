@@ -1204,7 +1204,7 @@ a.bk-s:hover {
 /* ------------------------------------------------------------------ history */
 .lg-season {
   display: grid;
-  grid-template-columns: 64px 54px minmax(0, 1fr) auto;
+  grid-template-columns: 74px 54px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
@@ -1218,6 +1218,7 @@ a.bk-s:hover {
   font-weight: 700;
   font-size: 16px;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 .lg-season .rec {
   font-weight: 750;
