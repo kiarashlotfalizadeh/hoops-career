@@ -70,6 +70,24 @@ describe('engine rules', () => {
     expect(t.on.every((x) => x.out === 0)).toBe(true);
   });
 
+  it('plays exactly 48 minutes and books the opening five as starters', () => {
+    for (let g = 0; g < 4; g++) {
+      const sim = new GameSim(side(2), side(3), { rng: new Rng(300 + g), type: 'regular', injuries: false });
+      const opening = sim.T.map((t) => t.on.map((p) => p.pid).sort((a, b) => a - b));
+      const res = sim.simToEnd();
+      const total = 5 * (48 + 5 * res.ot) * 60;
+      for (const [i, tb] of [res.home, res.away].entries()) {
+        expect(Math.abs(sim.T[i].players.reduce((a, p) => a + p.b.sec, 0) - total)).toBeLessThan(1e-6);
+        expect(
+          tb.players
+            .filter((p) => p.gs)
+            .map((p) => p.pid)
+            .sort((a, b) => a - b),
+        ).toEqual(opening[i]);
+      }
+    }
+  });
+
   it('awards free throws only in the penalty, with the two-minute rule in every period and four fouls in overtime', () => {
     const sim = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false }) as unknown as Internals;
     const t = sim.T[1];

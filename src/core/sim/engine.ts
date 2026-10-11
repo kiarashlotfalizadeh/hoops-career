@@ -435,6 +435,8 @@ export class GameSim {
     for (const t of this.T) {
       t.plan = this.makePlan(t);
       this.setLineup(t, this.initialLineup(t));
+      // the starters are the five on the floor for the tip (the plan may have swapped one in for balance)
+      for (const p of t.players) p.starter = p.on;
     }
     this.refreshMatchups();
     // opening tip: size + explosiveness of the centers
@@ -566,11 +568,7 @@ export class GameSim {
     const src = t.players.map((p) => ({ pid: p.pid, available: p.out === 0, guard: p.guard, big: p.big, endurance: p.r.end }));
     const planPlayers = planInputs(src, rot, { playoffs: this.opts.type === 'playoffs' });
     if (!planPlayers.length) return [];
-    const starters = new Set(planPlayers.slice(0, 5).map((p) => p.pid));
-    for (const p of t.players) {
-      if (p.out === 0) p.starter = starters.has(p.pid);
-      p.cap = rot.caps[p.pid] || undefined;
-    }
+    for (const p of t.players) p.cap = rot.caps[p.pid] || undefined;
     const plan = buildMinutePlan(planPlayers);
     for (const slot of plan) for (const pid of slot) t.byId.get(pid)!.planMin++;
     return plan;
@@ -799,6 +797,8 @@ export class GameSim {
   }
 
   private endPeriod(): boolean {
+    // the last fraction of a second still counts: exactly 48 minutes (plus overtime) are played
+    this.tick(this.clock);
     const [h, a] = this.T;
     if (this.q >= 4 && h.score !== a.score) {
       this.over = true;
