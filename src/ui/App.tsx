@@ -109,6 +109,7 @@ function TopBar() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const run = useFlowRunner();
+  const { pathname } = useLocation();
   const sim = useStore((s) => s.sim);
   const v = useStore((s) => s.v);
   const t = league.teams[league.userTid];
@@ -117,7 +118,7 @@ function TopBar() {
   // standings scans every game: recompute per league change, not per render
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const status = useMemo(() => statusLine(league), [league, v]);
-  const actions = open ? flowActions(league) : [];
+  const actions = open ? flowActions(league, { onLive: pathname === '/live' }) : [];
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
@@ -276,7 +277,8 @@ function GameShell() {
           <Route path="/rotation" element={<Rotation />} />
           <Route path="/tactics" element={<Tactics />} />
           <Route path="/lab" element={<TacticsLab />} />
-          <Route path="/live" element={<Live />} />
+          {/* each visit sets up its own game: "Watch & coach live" from a finished game's card mounts a fresh one */}
+          <Route path="/live" element={<Live key={loc.key} />} />
           <Route path="/game/:gid" element={<GameView />} />
           <Route path="/league" element={<LeagueHub />} />
           <Route path="/league/:tab" element={<LeagueTabRedirect />} />

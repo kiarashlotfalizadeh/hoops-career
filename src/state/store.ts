@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { League } from '../core/types';
 import { saveLeague, setLastLeagueId } from './persistence';
+import { clearLive, pendingLive } from './live';
 import { simDay, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
@@ -12,7 +13,9 @@ export type SimTarget =
   | { kind: 'allStar' }
   | { kind: 'deadline' }
   | { kind: 'endRegular' }
-  | { kind: 'endPostseason' };
+  | { kind: 'endPostseason' }
+  /** Through the play-in and the playoffs in one go (for teams that are out). */
+  | { kind: 'endPlayoffs' };
 
 export interface SimProgress {
   label: string;
@@ -55,6 +58,7 @@ export function allStarStop(l: League) {
 }
 
 function targetDone(l: League, target: SimTarget, startDay: number, startPhase: string): boolean {
+  if (target.kind === 'endPlayoffs') return l.phase !== 'playin' && l.phase !== 'playoffs';
   if (l.phase !== startPhase) return true;
   if (!(l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs')) return true;
   switch (target.kind) {
@@ -94,6 +98,7 @@ function estimateTotal(l: League, target: SimTarget): number {
     case 'endRegular':
       return Math.max(1, l.regularSeasonDays - l.day + 1);
     case 'endPostseason':
+    case 'endPlayoffs':
       return 60;
   }
 }
@@ -105,6 +110,7 @@ export const useStore = create<AppState>((set, get) => ({
   stopRequested: false,
   toasts: [],
   setLeague: (l) => {
+    clearLive();
     set({ league: l, v: get().v + 1 });
     setLastLeagueId(l?.id ?? null);
   },
@@ -137,16 +143,18 @@ export const useStore = create<AppState>((set, get) => ({
     const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
     const inboxBefore = bigNews();
     set({ sim: { label: 'Simulating', done: 0, total }, stopRequested: false });
+    // a live game left mid-way finishes from its current score: re-simming it would record it twice
+    const live = pendingLive(l);
     let days = 0;
     try {
       for (;;) {
         if (get().stopRequested) break;
-        const report = simDay(l);
+        if (live && !live.committed) live.commit(l);
+        else simDay(l);
         days++;
         // re-render league views weekly during long sims; the progress bar updates daily
         const refresh = days % 7 === 0 || total <= 7;
         set(refresh ? { sim: { label: 'Simulating', done: days, total: Math.max(total, days) }, v: get().v + 1 } : { sim: { label: 'Simulating', done: days, total: Math.max(total, days) } });
-        if (report.phaseChanged) break;
         if (targetDone(l, target, startDay, startPhase)) break;
         // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
         if (l.settings.stopOnNews !== false && days > 1 && target.kind !== 'days' && bigNews() > inboxBefore) {
