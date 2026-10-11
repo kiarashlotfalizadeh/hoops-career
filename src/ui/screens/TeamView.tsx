@@ -12,8 +12,8 @@ import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
-import { f1, latestLine, moneyM, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
-import { OutcomeTag, SectionLabel, StrategyTag, TabBar, ordinal, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
+import { f1, latestLine, moneyM, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
+import { OutcomeTag, SectionLabel, StrategyTag, TabBar, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
 
@@ -68,8 +68,9 @@ function Hero({ league, tid }: { league: League; tid: number }) {
   const pay = payroll(league, tid, cs);
   const tr = teamRatings(ts);
   const gp = ts.won + ts.lost;
-  const off = OFF_PRESETS.find((p) => p.id === team.coach.offPhilosophy);
-  const def = DEF_PRESETS.find((p) => p.id === team.coach.defPhilosophy);
+  // the playbook the team runs now, as its Tactics tab and scouting report say (the coach's roots are on the Tactics tab)
+  const off = OFF_PRESETS.find((p) => p.id === team.tactics.offPreset);
+  const def = DEF_PRESETS.find((p) => p.id === team.tactics.defPreset);
   const [c1] = team.colors;
   const outcome = seasonOutcome(league, tid, ts);
   return (
@@ -106,7 +107,7 @@ function Hero({ league, tid }: { league: League; tid: number }) {
           <div style={{ textAlign: 'right', minWidth: 0 }}>
             <div className="small bold ellipsis">{isUser ? league.coachName : team.coach.name}</div>
             <div className="tiny dim2 ellipsis">
-              {off?.name ?? 'Balanced'} · {def?.name ?? 'Man'}
+              {off?.name ?? 'Custom offense'} · {def?.name ?? 'Custom defense'}
             </div>
           </div>
         </div>
