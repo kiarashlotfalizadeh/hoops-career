@@ -8,9 +8,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 
-const port = 4179;
+const port = Number(process.env.SMOKE_PORT ?? 4179);
 const base = `http://127.0.0.1:${port}`;
-const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'], { stdio: 'ignore' });
+// a server already on the port (say, a leftover preview of another checkout) would be tested instead of this build
+const portTaken = await fetch(base).then(
+  () => true,
+  () => false,
+);
+if (portTaken) {
+  console.error(`Port ${port} is already in use: stop that server or set SMOKE_PORT.`);
+  process.exit(1);
+}
+// vite itself, not through npx: killing npx would leave the preview server running
+const server = spawn(process.execPath, [join('node_modules', 'vite', 'bin', 'vite.js'), 'preview', '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
+  stdio: 'ignore',
+});
 const fail = [];
 const step = (s) => console.log(`- ${s}`);
 

@@ -1,0 +1,11 @@
+# generated, vendored or native-project files
+dist
+dev-dist
+coverage
+data
+android
+ios
+public
+src/data/seed.json
+package-lock.json
+.claude
