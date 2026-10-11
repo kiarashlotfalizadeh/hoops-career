@@ -66,6 +66,22 @@ describe('saving', () => {
     expect(n.saves).toBe(2);
   });
 
+  it('a new league counts as unsaved until its first save works', async () => {
+    const l = testLeague('new');
+    st().setLeague(l);
+    expect(st().dirty).toBe(true);
+    failPuts(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
+    expect(await st().save()).toBe(false);
+    expect(st()).toMatchObject({ dirty: true, saveProblem: { kind: 'quota' } });
+    vi.mocked(IDBObjectStore.prototype.put).mockRestore();
+    // hiding the app flushes it
+    expect(await st().flush()).toBe(true);
+    expect(st().dirty).toBe(false);
+    expect((await loadLeague(l.id))!.day).toBe(l.day);
+    st().setLeague(await loadLeague(l.id));
+    expect(st().dirty).toBe(false);
+  });
+
   it('opening another league keeps the unsaved changes of the one it replaces', async () => {
     const a = testLeague('replaced');
     st().setLeague(a);
