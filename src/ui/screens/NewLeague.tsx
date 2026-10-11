@@ -14,6 +14,8 @@ import type { Settings } from '../../core/types';
 
 type Step = 'type' | 'team' | 'setup';
 
+const market = (pop: number) => (pop >= 9 ? 'Huge' : pop >= 5 ? 'Large' : pop >= 2.5 ? 'Mid-size' : 'Small');
+
 export default function NewLeague() {
   const nav = useNavigate();
   const setLeague = useStore((s) => s.setLeague);
@@ -46,8 +48,9 @@ export default function NewLeague() {
       .finally(() => setSeedLoaded(true));
   }, []);
 
+  // real rosters only: a fictional league's players are generated when it is created
   const teamInfo = useMemo(() => {
-    if (!seed) return null;
+    if (!seed || kind !== 'real') return null;
     const rostered = seed.players.filter((p) => p.team);
     const scale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
     const by: Record<number, { name: string; ovr: number }[]> = {};
@@ -63,7 +66,7 @@ export default function NewLeague() {
       out[+k] = { top: list.slice(0, 3), strength: top8.reduce((a, x) => a + x.ovr, 0) / Math.max(1, top8.length) };
     }
     return out;
-  }, [seed]);
+  }, [seed, kind]);
 
   const rank = useMemo(() => {
     if (!teamInfo) return null;
@@ -152,14 +155,15 @@ export default function NewLeague() {
                 >
                   <TeamLogo tid={i} size={44} />
                   <div className="bold small">{fr.name}</div>
-                  {rank && <div className="tiny dim">Power #{rank[i]}</div>}
+                  <div className="tiny dim">{rank ? `Power #${rank[i]}` : `${market(fr.pop)} market`}</div>
                 </button>
               ))}
           </div>
           <Card title={`${f.region} ${f.name}`} right={<TeamLogo tid={tid} size={32} />}>
             <div className="small dim2">
-              {f.arena} · Market: {f.pop >= 9 ? 'Huge' : f.pop >= 5 ? 'Large' : f.pop >= 2.5 ? 'Mid-size' : 'Small'} ({f.pop}M) · {f.div} Division
+              {f.arena} · Market: {market(f.pop)} ({f.pop}M) · {f.div} Division
             </div>
+            {kind === 'fictional' && <div className="small dim" style={{ marginTop: 8 }}>Rosters are generated when the league is created, so every player here will be new.</div>}
             {teamInfo?.[tid] && (
               <div className="col" style={{ marginTop: 10, gap: 6 }}>
                 {teamInfo[tid].top.map((p) => (
