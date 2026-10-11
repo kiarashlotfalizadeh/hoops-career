@@ -383,6 +383,25 @@ function ScrollTop() {
   return null;
 }
 
+/** A fired coach's old team isn't his to run: the front-office screens wait until he takes another job. */
+function FiredGate({ children }: { children: ReactNode }) {
+  const fired = useStore((s) => !!s.league?.fired);
+  const nav = useNavigate();
+  if (!fired) return <>{children}</>;
+  return (
+    <main className="page">
+      <div className="card col" role="alert" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <AlertTriangle className="bad" size={24} />
+        <h2>You were fired</h2>
+        <div className="small dim2">The front office isn't yours to run anymore. Take over another team to trade, sign and draft again.</div>
+        <button className="btn primary" onClick={() => nav('/settings?sheet=switch')}>
+          Find a new job
+        </button>
+      </div>
+    </main>
+  );
+}
+
 function LeagueTabRedirect() {
   const { tab } = useParams();
   return <Navigate to={`/league?tab=${tab ?? 'standings'}`} replace />;
@@ -411,11 +430,46 @@ function GameShell() {
             <Route path="/league" element={<LeagueHub />} />
             <Route path="/league/:tab" element={<LeagueTabRedirect />} />
             <Route path="/team/:tid" element={<TeamView />} />
-            <Route path="/office" element={<Office />} />
-            <Route path="/trade" element={<Trade />} />
-            <Route path="/free-agents" element={<FreeAgents />} />
-            <Route path="/resign" element={<Resign />} />
-            <Route path="/draft" element={<Draft />} />
+            <Route
+              path="/office"
+              element={
+                <FiredGate>
+                  <Office />
+                </FiredGate>
+              }
+            />
+            <Route
+              path="/trade"
+              element={
+                <FiredGate>
+                  <Trade />
+                </FiredGate>
+              }
+            />
+            <Route
+              path="/free-agents"
+              element={
+                <FiredGate>
+                  <FreeAgents />
+                </FiredGate>
+              }
+            />
+            <Route
+              path="/resign"
+              element={
+                <FiredGate>
+                  <Resign />
+                </FiredGate>
+              }
+            />
+            <Route
+              path="/draft"
+              element={
+                <FiredGate>
+                  <Draft />
+                </FiredGate>
+              }
+            />
             <Route path="/finances" element={<Finances />} />
             <Route path="/owner" element={<Finances />} />
             <Route path="/inbox" element={<Inbox />} />
