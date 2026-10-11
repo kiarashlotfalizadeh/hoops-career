@@ -18,9 +18,20 @@ describe('schedule', () => {
     expect(cup).toBeDefined();
     expect(games.some((g) => g.day >= cup!.qfDays[0] && g.day <= cup!.finalDay)).toBe(false);
   });
+  it('keeps every team off back-to-backs into the knockout window and out of the championship night', () => {
+    // anyone might play a quarterfinal on the first night or the championship on the last
+    const on = (t: number, d: number) => games.some((g) => g.day === d && (g.home === t || g.away === t));
+    for (const t of teams) {
+      expect(on(t.tid, cup!.qfDays[0] - 2) && on(t.tid, cup!.qfDays[0] - 1)).toBe(false);
+      expect(on(t.tid, cup!.finalDay + 1) && on(t.tid, cup!.finalDay + 2)).toBe(false);
+    }
+  });
   it('never has a team play three days running', () => {
     for (const t of teams) {
-      const days = games.filter((g) => g.home === t.tid || g.away === t.tid).map((g) => g.day).sort((a, b) => a - b);
+      const days = games
+        .filter((g) => g.home === t.tid || g.away === t.tid)
+        .map((g) => g.day)
+        .sort((a, b) => a - b);
       for (let i = 2; i < days.length; i++) expect(days[i] - days[i - 2]).toBeGreaterThan(2);
     }
   });

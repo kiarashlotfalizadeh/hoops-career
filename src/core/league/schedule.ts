@@ -64,7 +64,11 @@ export function buildMatchups(teams: Team[], season: number): Matchup[] {
     confDivs[t.conf] ??= [];
     if (!confDivs[t.conf].includes(t.div)) confDivs[t.conf].push(t.div);
   }
-  const divIndex = (t: Team) => teams.filter((x) => x.div === t.div).sort((a, b) => a.tid - b.tid).findIndex((x) => x.tid === t.tid);
+  const divIndex = (t: Team) =>
+    teams
+      .filter((x) => x.div === t.div)
+      .sort((a, b) => a.tid - b.tid)
+      .findIndex((x) => x.tid === t.tid);
   for (let i = 0; i < teams.length; i++) {
     for (let j = i + 1; j < teams.length; j++) {
       const a = teams[i];
@@ -166,8 +170,9 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
       plays[m.away].add(d);
     }
   }
-  // anyone could have a quarterfinal on the window's first night: no back-to-back into it
-  if (cup) for (const p of plays) p.add(cup.setup.qfDays[0]);
+  // anyone could have a quarterfinal on the window's first night or play in the championship on its
+  // last: no back-to-back into the window, or straight out of it
+  if (cup) for (const p of plays) p.add(cup.setup.qfDays[0]).add(cup.setup.finalDay);
   const on = (t: number, d: number) => plays[t].has(d);
   const threeInThree = (t: number, d: number) => (on(t, d - 1) && on(t, d - 2)) || (on(t, d - 1) && on(t, d + 1)) || (on(t, d + 1) && on(t, d + 2));
   const games: ScheduledGame[] = [];
