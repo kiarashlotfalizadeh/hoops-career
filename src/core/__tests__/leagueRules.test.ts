@@ -11,7 +11,7 @@ import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from
 import { validateTrade } from '../league/trades';
 import { buildSimInput, wearInjuryRisk } from '../league/games';
 import { finalsHomeCourt, standings } from '../league/standings';
-import { schedulePlayoffDay } from '../league/playoffs';
+import { processPlayoffResult, schedulePlayoffDay } from '../league/playoffs';
 import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
@@ -390,6 +390,28 @@ describe('playoff calendar (L10)', () => {
     l.day = 111;
     schedulePlayoffDay(l);
     expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([113]);
+  });
+
+  it("the next game, and the next round's opener, are on the calendar as soon as a result is in", () => {
+    const l = league();
+    const east = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    l.phase = 'playoffs';
+    l.schedule = [];
+    l.day = 100;
+    // the East semifinals are done; one conference final is under way
+    l.playoffs = [
+      { id: 'E2-0', round: 2, conf: 'E', high: east[0], low: east[1], highSeed: 1, lowSeed: 4, highWins: 4, lowWins: 1, winner: east[0] },
+      { id: 'E2-1', round: 2, conf: 'E', high: east[2], low: east[3], highSeed: 2, lowSeed: 3, highWins: 3, lowWins: 3 },
+    ];
+    const game7 = { gid: 1, day: 100, home: east[2], away: east[3], type: 'playoffs' as const, seriesId: 'E2-1', played: true };
+    l.schedule.push(game7);
+    processPlayoffResult(l, game7, true);
+    // East finals wait for the West; with no West bracket here, the opener follows the semis
+    const opener = l.schedule.filter((g) => !g.played);
+    expect(opener.map((g) => [g.seriesId, g.day])).toEqual([['E3-0', 103]]);
+    opener[0].played = true;
+    processPlayoffResult(l, opener[0], true);
+    expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([105]);
   });
 
   it('wear recovers on postseason days too', () => {
