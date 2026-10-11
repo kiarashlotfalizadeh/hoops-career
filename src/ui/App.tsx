@@ -169,7 +169,7 @@ function statusLine(league: League): string {
     case 'resign':
       return `Re-sign period · ${league.season}`;
     case 'freeAgency':
-      return `Free agency · day ${league.faDay + 1}`;
+      return `Free agency · day ${Math.min(30, league.faDay + 1)}`;
     default:
       return PHASE_LABEL[league.phase] ?? '';
   }
