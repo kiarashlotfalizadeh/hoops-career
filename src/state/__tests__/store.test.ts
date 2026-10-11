@@ -66,6 +66,15 @@ describe('saving', () => {
     expect(n.saves).toBe(2);
   });
 
+  it('opening another league keeps the unsaved changes of the one it replaces', async () => {
+    const a = testLeague('replaced');
+    st().setLeague(a);
+    await st().save();
+    st().mutate((x) => (x.name = 'renamed'), false);
+    st().setLeague(testLeague('opened'));
+    await vi.waitFor(async () => expect((await loadLeague(a.id))!.name).toBe('renamed'));
+  });
+
   it('stops saving a copy another window has saved over', async () => {
     st().setLeague(testLeague('stale'));
     useStore.setState({ saveProblem: problemOf(new SaveConflictError()) });

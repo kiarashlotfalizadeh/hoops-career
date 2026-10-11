@@ -169,6 +169,11 @@ export const useStore = create<AppState>((set, get) => ({
   dirty: false,
   saveProblem: null,
   setLeague: (l) => {
+    const old = get().league;
+    // another league opened over this one (Back to the main menu, then another save): keep its
+    // unsaved changes. A reload of the same league is a way back from them, so it skips this.
+    if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict')
+      void (saving ?? Promise.resolve()).then(() => saveLeague(old)).catch((e) => console.error('save failed', e));
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;
     clearLive();
