@@ -207,7 +207,8 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
     spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
     ath: 52 + (has ? 5 * z('dunkRate') + 3 * z('blkPct') + 3 * z('orbPct') + 2 * z('transShare') : 5 * z('blkPct') + 4 * z('orbPct') + 4 * z('ftr')) - 0.05 * h - Math.max(0, age - 29) * 2 + rng.normal(0, 3),
     str: 48 + 10 * wz + 3 * hz,
-    end: clamp(38 + (a.mpg - 18) * 1.5, 25, 92),
+    // real minutes reflect role as much as conditioning: floor by age so a bench player can still carry ~30 if promoted
+    end: clamp(38 + (a.mpg - 18) * 1.5, age <= 30 ? 48 : age <= 33 ? 44 : 40, 92),
     ins: has ? 50 + 10 * z('rimPct') + 3 * z('ftr') + 2 * z('dunkRate') + 3 * hz : 50 + 9 * z('fg2Pct') + 4 * z('ftr') + 4 * hz,
     mid: has ? 48 + 9 * z('midPct') + 4 * z('paintPct') + 3 * z('pullupShare') + 3 * z('ftPct') - 2 * hz : 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
     tp: 47 + 11 * z('fg3Pct') + 11 * z('tpa36'),
