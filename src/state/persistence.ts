@@ -19,8 +19,11 @@ export interface LeagueMeta {
   rev?: number;
 }
 
-/** Format of the league record. Bump it, with a step in migrate(), when that format changes. */
-export const SAVE_VERSION = 1;
+/**
+ * Format of the league record. Bump it, with a step in migrate(), when that format changes.
+ * 2: older ratings snapshots keep only OVR and potential (no `r`), which version-1 builds read unguarded.
+ */
+export const SAVE_VERSION = 2;
 
 /** Another window saved (or deleted) this league after this one read it. */
 export class SaveConflictError extends Error {
@@ -221,6 +224,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Hoops Career. Update the app to open it.');
   if (!isLeague(x)) throw new Error(notALeague);
   for (const m of x.inbox) if (m.link !== undefined && !isRoute(m.link)) delete m.link;
+  // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
   x.version = SAVE_VERSION;
   return x;
 }
