@@ -1279,7 +1279,8 @@ export class GameSim {
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
     // the period is about to run out: push it up the floor and get a shot off before the buzzer
-    if (this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
+    // (unless it's a lead to run out: then the clock dies with the ball)
+    if (!late.milk && this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
     let shotClock = GAME.shotClock - (ctx === 'orb' ? 10 : 0);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
