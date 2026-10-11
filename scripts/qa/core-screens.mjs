@@ -28,7 +28,7 @@ await first.click(); await page.waitForTimeout(400); await shot('14-player', tru
 await page.goto(`${base}/#/lab`); await page.waitForTimeout(400);
 await page.getByRole('button', { name: /Run/ }).click();
 await page.waitForSelector('text=Win %', { timeout: 120000 }); await shot('15-lab', true);
-await page.getByRole('tab', { name: 'Counters' }).click();
+await page.getByRole('radio', { name: 'Counters' }).click();
 await page.getByRole('button', { name: /Run/ }).click();
 await page.waitForSelector('text=Counters, ranked', { timeout: 240000 }); await shot('16-lab-counters', true);
 // start season
@@ -41,7 +41,8 @@ await page.goto(`${base}/#/`); await page.waitForTimeout(500); await shot('18-ho
 await page.goto(`${base}/#/live`); await page.waitForTimeout(6000); await shot('19-live');
 await page.getByRole('button', { name: 'Plan' }).click(); await shot('20-live-plan');
 await page.keyboard.press('Escape');
-await page.getByRole('button', { name: 'End' }).click();
+await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+await page.locator('.sheet').getByRole('button', { name: /Sim to final/ }).click();
 await page.waitForTimeout(1500); await shot('21-live-final');
 await page.getByRole('button', { name: /Game report/ }).click();
 await page.waitForTimeout(800); await shot('22-report', true);

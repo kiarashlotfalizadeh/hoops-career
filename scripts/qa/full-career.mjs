@@ -49,7 +49,8 @@ if (await live.count()) {
   await live.click();
   await page.waitForTimeout(5000);
   await shot('01-live', false);
-  await page.getByRole('button', { name: 'End' }).click();
+  await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+  await page.locator('.sheet').getByRole('button', { name: /Sim to final/ }).click();
   await page.waitForTimeout(2500);
   await shot('02-live-final', false);
   const rep = page.getByRole('button', { name: /Game report/ });

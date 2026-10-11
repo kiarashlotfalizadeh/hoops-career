@@ -43,8 +43,8 @@ async function snap(pg, dir, name, route) {
   await pg.goto(`${base}/#${route}`);
   await pg.waitForTimeout(700);
   await pg.screenshot({ path: `${dir}/${name}.png`, fullPage: true });
-  // every tab of the screen's first tab bar
-  const tabs = pg.locator('main [role=tablist], .page [role=tablist], [role=tablist]').first().locator('[role=tab]');
+  // every option of the screen's first tab bar (segmented bars are radio groups)
+  const tabs = pg.locator('main [role=tablist], main [role=radiogroup]').first().locator('[role=tab], [role=radio]');
   const n = Math.min(await tabs.count(), 9);
   for (let i = 1; i < n; i++) {
     const t = tabs.nth(i);
@@ -111,11 +111,19 @@ if (stages.includes('mid')) {
     await phone.waitForTimeout(4000);
     mkdirSync(`${out}/live`, { recursive: true });
     await phone.screenshot({ path: `${out}/live/phone-live.png` });
-    for (const name of ['Box', 'Tactics', 'Subs', 'Plays', 'Coach']) {
-      const b = phone.getByRole('tab', { name: new RegExp(name, 'i') }).first();
-      if (await b.count()) { await b.click().catch(() => {}); await phone.waitForTimeout(400); await phone.screenshot({ path: `${out}/live/phone-live-${name}.png`, fullPage: true }); }
+    // the in-game sheets: substitutions, the game plan and the box score
+    for (const name of ['Subs', 'Plan', 'Box']) {
+      const b = phone.getByRole('button', { name, exact: true }).first();
+      if (await b.count()) {
+        await b.click().catch(() => {});
+        await phone.waitForTimeout(400);
+        await phone.screenshot({ path: `${out}/live/phone-live-${name}.png`, fullPage: true });
+        await phone.keyboard.press('Escape');
+        await phone.waitForTimeout(200);
+      }
     }
-    await phone.getByRole('button', { name: 'End' }).click().catch(() => {});
+    await phone.getByRole('button', { name: 'Sim to final', exact: true }).click().catch(() => {});
+    await phone.locator('.sheet').getByRole('button', { name: /Sim to final/ }).click().catch(() => {});
     await phone.waitForTimeout(2500);
     await phone.screenshot({ path: `${out}/live/phone-final.png`, fullPage: true });
   } else await phone.keyboard.press('Escape');

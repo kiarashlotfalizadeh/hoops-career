@@ -74,12 +74,12 @@ if (await tryClick(page.locator('table.fo-contracts tbody tr.clickable').first()
 await go('/trade?with=3');
 await shot('o05-trade');
 await tryClick(page.locator('.fo-asset:visible').nth(0), 'their player');
-await tryClick(page.getByRole('tab', { name: /Your assets/ }), 'your assets tab');
+await tryClick(page.getByRole('radio', { name: /Your assets/ }), 'your assets tab');
 await tryClick(page.locator('.fo-asset:visible').nth(3), 'my player');
 await shot('o06-trade-selected');
 await shot('o07-trade-full', true);
 if (await tryClick(page.getByRole('button', { name: 'What would make this work?' }), 'make it work')) await shot('o08-trade-makework');
-await tryClick(page.getByRole('tab', { name: 'Trading block' }), 'block tab');
+await tryClick(page.getByRole('radio', { name: 'Trading block' }), 'block tab');
 await tryClick(page.locator('.hscroll .chip').first(), 'block chip');
 await page.waitForTimeout(600);
 await shot('o09-trade-block');
@@ -97,11 +97,11 @@ if (await tryClick(page.locator('.fo-prow').first(), 'fa row')) {
 
 await go('/draft');
 await shot('o13-draft-board');
-await tryClick(page.getByRole('tab', { name: 'Combine' }), 'combine');
+await tryClick(page.getByRole('radio', { name: 'Combine' }), 'combine');
 await shot('o14-draft-combine');
-await tryClick(page.getByRole('tab', { name: 'My Picks' }), 'my picks');
+await tryClick(page.getByRole('radio', { name: 'My Picks' }), 'my picks');
 await shot('o15-draft-mypicks');
-await tryClick(page.getByRole('tab', { name: 'Big Board' }), 'board');
+await tryClick(page.getByRole('radio', { name: 'Big Board' }), 'board');
 if (await tryClick(page.locator('.fo-prow').first(), 'prospect')) {
   await shot('o16-draft-prospect');
   await closeSheet();
@@ -109,11 +109,11 @@ if (await tryClick(page.locator('.fo-prow').first(), 'prospect')) {
 
 await go('/finances');
 await shot('o17-finances');
-await tryClick(page.getByRole('tab', { name: 'Budget' }), 'budget');
+await tryClick(page.getByRole('radio', { name: 'Budget' }), 'budget');
 await shot('o18-finances-budget', true);
-await tryClick(page.getByRole('tab', { name: 'Owner' }), 'owner');
+await tryClick(page.getByRole('radio', { name: 'Owner' }), 'owner');
 await shot('o19-owner', true);
-await tryClick(page.getByRole('tab', { name: 'History' }), 'history');
+await tryClick(page.getByRole('radio', { name: 'History' }), 'history');
 await shot('o20-fin-history');
 
 await go('/settings');
@@ -203,9 +203,9 @@ if (stage === 'all') {
   await go('/draft');
   await shot('s16-draft-results');
   await go('/finances');
-  await tryClick(page.getByRole('tab', { name: 'History' }), 'history');
+  await tryClick(page.getByRole('radio', { name: 'History' }), 'history');
   await shot('s17-fin-history');
-  await tryClick(page.getByRole('tab', { name: 'Owner' }), 'owner');
+  await tryClick(page.getByRole('radio', { name: 'Owner' }), 'owner');
   await shot('s18-owner-after', true);
 }
 
