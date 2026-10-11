@@ -30,7 +30,7 @@ export function useQueryParam<T extends string>(key: string, def: T, allowed?: r
 }
 
 /** Sticky, horizontally scrollable tab bar that keeps the active tab in view. */
-export function TabBar<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+export function TabBar<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
   // Fade hints on whichever edge has more tabs to scroll to.
   useEffect(() => {
@@ -49,16 +49,9 @@ export function TabBar<T extends string>({ value, options, onChange }: { value: 
       window.removeEventListener('resize', update);
     };
   }, []);
-  useEffect(() => {
-    const seg = ref.current?.querySelector<HTMLElement>('.seg');
-    const btn = ref.current?.querySelector<HTMLElement>('button.on');
-    if (!seg || !btn) return;
-    const target = btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2;
-    seg.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
-  }, [value]);
   return (
     <div className="lg-tabs" ref={ref}>
-      <Segmented value={value} options={options} onChange={onChange} />
+      <Segmented value={value} options={options} onChange={onChange} label={label} />
     </div>
   );
 }
@@ -71,11 +64,7 @@ export function useGamesByGid(league: League): Map<number, GameResult> {
   }, [league]);
 }
 
-export const ordinal = (n: number) => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
-};
+export { ordinal } from '../stats';
 
 export const confName = (c: 'E' | 'W' | 'F') => (c === 'E' ? 'East' : c === 'W' ? 'West' : 'Finals');
 

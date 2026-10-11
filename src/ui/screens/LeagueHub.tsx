@@ -43,7 +43,7 @@ export default function LeagueHub() {
           </Link>
         }
       />
-      <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} />
+      <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} label="League sections" />
       {tab === 'standings' && <StandingsTab league={league} />}
       {tab === 'schedule' && <ScheduleTab />}
       {tab === 'stats' && <StatsTab league={league} />}

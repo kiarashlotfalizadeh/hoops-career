@@ -79,6 +79,9 @@ export function shade(hex: string, amt: number) {
 }
 
 /** One-of-several switch: a radio group, so arrow keys move the choice and Tab leaves it. */
+/** Script scrolls ignore the CSS reduced-motion rule: smooth only when the device allows motion. */
+export const scrollBehavior = (): ScrollBehavior => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
 export function Segmented<T extends string>({
   value,
   options,
@@ -98,9 +101,7 @@ export function Segmented<T extends string>({
     const seg = ref.current;
     const btn = seg?.querySelector<HTMLElement>('button.on');
     if (!seg || !btn || seg.scrollWidth <= seg.clientWidth) return;
-    // script scrolls ignore the CSS reduced-motion rule, so check the setting here
-    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: smooth ? 'smooth' : 'auto' });
+    seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: scrollBehavior() });
   }, [value]);
   const current = Math.max(
     0,

@@ -133,7 +133,7 @@ export default function Tactics() {
           </div>
         </Card>
       ))}
-      {tabs.length > 1 && <TabBar value={tab} onChange={(id) => setParams({ tab: id }, { replace: true })} options={tabs} />}
+      {tabs.length > 1 && <TabBar value={tab} onChange={(id) => setParams({ tab: id }, { replace: true })} options={tabs} label="Tactics sections" />}
 
       {tab === 'playbook' && (
         <>

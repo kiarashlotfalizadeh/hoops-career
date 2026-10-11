@@ -29,11 +29,7 @@ export const fmtMs = (k: number, d = 1) => `${k >= 0 ? '+' : '-'}$${(Math.abs(k)
 /** "26-27" style short season label. */
 export const shortSeason = (season: number) => `${String((season - 1) % 100).padStart(2, '0')}-${String(season % 100).padStart(2, '0')}`;
 
-export const ordinal = (n: number) => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
-};
+export { ordinal } from '../stats';
 
 // tones match the league screens' strategy tags
 export { STRATEGY_META } from '../league/shared';
