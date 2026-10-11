@@ -4,7 +4,6 @@ import { Ban, Check, Handshake, Info, RotateCcw, Ticket, X } from 'lucide-react'
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
-import { pendingOption } from '../../core/league/contracts';
 import { capPayroll } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
@@ -16,7 +15,7 @@ import {
   pickLabel,
   salaryMatchGap,
   tradeRoster,
-  untradeableReason,
+  untradeable,
   validateTrade,
   type TradeEval,
   type TradeOffer,
@@ -24,7 +23,7 @@ import {
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented } from '../components/ui';
+import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '../components/ui';
 import { STRATEGY_META, Callout, capSeason, contractYearsLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { rosterNames } from '../stats';
@@ -259,7 +258,7 @@ export default function Trade() {
             setGet({ pids: o.b.pids, dpids: o.b.dpids });
             setSide('theirs');
             setTab('build');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: scrollBehavior() });
           }}
         />
       )}
@@ -274,7 +273,7 @@ function TeamPicker({ league, partner, onPick }: { league: League; partner: numb
   useEffect(() => {
     const el = ref.current?.querySelector<HTMLElement>('.fo-team.on');
     const box = ref.current;
-    if (el && box) box.scrollTo({ left: el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2, behavior: 'smooth' });
+    if (el && box) box.scrollTo({ left: el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2, behavior: scrollBehavior() });
   }, [partner]);
   const teams = league.teams.filter((t) => t.tid !== league.userTid).sort((a, b) => a.abbrev.localeCompare(b.abbrev));
   return (
@@ -456,6 +455,7 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
 }
 
 function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
+  const locked = untradeable(league, p);
   return (
     <button className={`fo-asset ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
       <span className="fo-check">
@@ -480,9 +480,9 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
               2-WAY
             </span>
           )}
-          {untradeableReason(league, p) && (
+          {locked && (
             <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              {pendingOption(league, p) === 'player' ? 'OPTION' : 'EXPIRING'}
+              {{ expiring: 'EXPIRING', option: 'OPTION', signed: 'SIGNED' }[locked.kind]}
             </span>
           )}
         </div>

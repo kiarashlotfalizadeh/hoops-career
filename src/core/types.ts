@@ -196,6 +196,8 @@ export interface Player {
   joinedSeason: number;
   /** The team that last traded him away, and when: he can't go straight back to it that season. */
   tradedFrom?: { tid: number; season: number };
+  /** Signed as a free agent or re-signed: he can't be traded before this season day (NBA: December 15, or three months after signing). */
+  tradeLock?: { season: number; day: number };
   experience: number; // NBA seasons completed
   retiredSeason?: number;
   hof?: boolean;

@@ -221,12 +221,18 @@ export function signingRoute(league: League, tid: number, amount: number, season
   return null;
 }
 
+/** Season day of December 15 (day 0 is October 20). */
+export const DEC_15 = 56;
+
 export function signPlayer(league: League, p: Player, tid: number, amount: number, years: number, opts: { news?: boolean; start?: number; twoWay?: boolean } = {}) {
   const prevTid = p.tid;
   p.tid = tid;
   p.contract = makeContract(league, amount, years, opts.start ?? league.season, opts.twoWay ? undefined : p.experience);
   if (opts.twoWay) p.contract.twoWay = true;
   if (prevTid !== tid) p.joinedSeason = league.season;
+  // like the NBA's: no trading him until December 15 of his first season, or three months after
+  // signing if that is later (otherwise a free agent could be signed and flipped for more value)
+  p.tradeLock = p.contract.start > league.season ? { season: p.contract.start, day: DEC_15 } : { season: league.season, day: Math.max(DEC_15, league.day + 90) };
   p.asking = undefined;
   p.faDays = undefined;
   p.mood.tradeRequest = false;

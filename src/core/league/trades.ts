@@ -3,7 +3,7 @@
 // AI-to-AI deals and occasional AI-initiated offers.
 
 import type { DraftPick, League, Player } from '../types';
-import { CAP } from '../constants';
+import { CAP, seasonLabel } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
 import {
@@ -13,6 +13,7 @@ import {
   addInbox,
   addNews,
   curTeamSeason,
+  fmtDate,
   inSeason,
   playerName,
   prospects,
@@ -249,14 +250,25 @@ export function teamAccepts(league: League, offer: TradeOffer, tid: number): boo
  * Why a player can't be moved right now, or null. After the season, a contract that ends before
  * next season is only a set of Bird rights: he can be re-signed or let go, not traded (otherwise
  * expiring deals are free value one way or the other). The same goes for a player option until he
- * decides after the draft: a star about to opt out would otherwise sell at full value.
+ * decides after the draft: a star about to opt out would otherwise sell at full value. And a
+ * signing waits until December 15 or three months (see signPlayer), as in the NBA.
  */
-export function untradeableReason(league: League, p: Player): string | null {
+export function untradeable(league: League, p: Player): { kind: 'expiring' | 'option' | 'signed'; why: string } | null {
   const cs = contractSeason(league);
-  if (cs > league.season && p.tid >= 0 && contractExp(p.contract) < cs) return `${playerName(p)}'s contract is up: he can be re-signed or let go, not traded.`;
-  if (cs > league.season && pendingOption(league, p) === 'player') return `${playerName(p)} decides on his player option after the draft: he can't be traded until then.`;
+  if (cs > league.season && p.tid >= 0 && contractExp(p.contract) < cs)
+    return { kind: 'expiring', why: `${playerName(p)}'s contract is up: he can be re-signed or let go, not traded.` };
+  if (cs > league.season && pendingOption(league, p) === 'player')
+    return { kind: 'option', why: `${playerName(p)} decides on his player option after the draft: he can't be traded until then.` };
+  const lock = p.tradeLock;
+  if (lock && (league.season < lock.season || (league.season === lock.season && league.day < lock.day)))
+    return {
+      kind: 'signed',
+      why: `${playerName(p)} signed recently: he can be traded from ${fmtDate(lock.season, lock.day)}${lock.season > league.season ? ` (${seasonLabel(lock.season)})` : ''}.`,
+    };
   return null;
 }
+
+export const untradeableReason = (league: League, p: Player): string | null => untradeable(league, p)?.why ?? null;
 
 /**
  * The standard roster a trade counts: after the season, only players under contract for next

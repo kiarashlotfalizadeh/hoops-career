@@ -6,6 +6,7 @@ import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
 import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster, teamPlayers, twoWayRoster } from '../league/helpers';
 import {
+  DEC_15,
   MLE_YEARS,
   askingContract,
   marketSalary,
@@ -30,6 +31,7 @@ import {
   playerValueFor,
   salaryMatchGap,
   teamAccepts,
+  untradeableReason,
   validateTrade,
   type TradeOffer,
 } from '../league/trades';
@@ -269,6 +271,29 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, offer([rookie.pid], [])).some((e) => /can't get him back/.test(e))).toBe(true);
     l.season++;
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
+  });
+
+  it("doesn't trade a signing before December 15, or three months after an in-season signing", () => {
+    const l = league();
+    l.phase = 'freeAgency';
+    const summer = freeAgents(l)[0];
+    signPlayer(l, summer, U, CAP_FOR(l).vetMin, 1, { start: l.season + 1, news: false });
+    expect(validateTrade(l, offer([summer.pid], [])).some((e) => /signed recently/.test(e))).toBe(true);
+    // a summer signing waits until December 15 of his first season
+    l.season++;
+    l.phase = 'regular';
+    l.day = DEC_15 - 1;
+    expect(untradeableReason(l, summer)).toMatch(/Dec 15/);
+    l.day = DEC_15;
+    expect(untradeableReason(l, summer)).toBeNull();
+    // in season, three months when that runs past December 15
+    const fall = freeAgents(l)[0];
+    l.day = 40;
+    signPlayer(l, fall, U, CAP_FOR(l).vetMin, 1, { news: false });
+    l.day = 129;
+    expect(untradeableReason(l, fall)).not.toBeNull();
+    l.day = 130;
+    expect(untradeableReason(l, fall)).toBeNull();
   });
 
   it("gives a casual player's own assets the casual discount, but not ones he just traded for", () => {
