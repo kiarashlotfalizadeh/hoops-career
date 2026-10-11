@@ -1,13 +1,18 @@
-// Browser smoke test for CI: serves the production build, plays the opening week of the real
-// league on a phone viewport, opens every main screen (phone and tablet) and round-trips a
-// backup export/import. Fails on any page error, console error or missing screen.
-// Usage: npm run build && node scripts/qa/smoke.mjs
+// Browser smoke test for CI: serves the production build, coaches the opening-night game live
+// and plays the opening week of the real league on a phone viewport, opens every main screen
+// (phone and tablet), runs the Tactics Lab's worker and round-trips a backup export/import.
+// Fails on any page error, console error or missing screen.
+// Usage: npm run build && npm run smoke (SMOKE_PORT picks the preview port, default 4179)
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 
+if (!existsSync(join('dist', 'index.html'))) {
+  console.error('No production build in dist/: run npm run build first.');
+  process.exit(1);
+}
 const port = Number(process.env.SMOKE_PORT ?? 4179);
 const base = `http://127.0.0.1:${port}`;
 // a server already on the port (say, a leftover preview of another checkout) would be tested instead of this build
@@ -65,13 +70,33 @@ try {
     .getByRole('button', { name: /^Start regular season/ })
     .click();
   await page.waitForTimeout(800);
+
+  // the opening-night game, live: the court plays, then sims to the final
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  const quick = page
+  const watch = page.locator('.sheet').getByRole('button', { name: /^Watch & coach live/ });
+  if (!(await watch.count())) {
+    await page
+      .locator('.sheet')
+      .getByRole('button', { name: /^Sim to next game/ })
+      .click();
+    await waitSim();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+  }
+  await watch.click();
+  const bug = page.locator('.live-bug');
+  const tipoff = await bug.getAttribute('aria-label', { timeout: 15_000 });
+  await page
+    .waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, tipoff, { timeout: 15_000 })
+    .catch(() => fail.push(`live game clock never moved (${tipoff})`));
+  await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+  await page
     .locator('.sheet')
-    .getByRole('button', { name: /^Quick sim this game|^Sim 1 week/ })
-    .first();
-  await quick.click();
-  await waitSim();
+    .getByRole('button', { name: /Sim to final/ })
+    .click();
+  await page.getByRole('button', { name: /Game report/ }).waitFor({ timeout: 30_000 });
+  step(`coached a live game to the final (${await bug.getAttribute('aria-label')})`);
+
+  await page.goto(`${base}/#/`);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await page
     .locator('.sheet')
@@ -124,6 +149,18 @@ try {
     await page.waitForSelector('text=Game report');
     step('opened a game report');
   } else fail.push('no recent game on Home');
+
+  // the Tactics Lab sims in a Web Worker, which the production build bundles on its own
+  await page.goto(`${base}/#/lab`);
+  await page.getByRole('button', { name: '20 games', exact: true }).click();
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await page
+    .getByText('Win %', { exact: true })
+    .waitFor({ timeout: 60_000 })
+    .then(
+      () => step('ran a Tactics Lab projection'),
+      () => fail.push('the Tactics Lab never showed a result'),
+    );
 
   // backup round trip
   await page.goto(`${base}/#/settings`);
