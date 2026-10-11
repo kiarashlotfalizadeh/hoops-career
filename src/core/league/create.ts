@@ -112,7 +112,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
   // undrafted (or no draft data): the stats only go back three seasons, so a veteran counts the
   // years since a typical undrafted debut at 22 (VanVleet 10, not 3), which sets his max and minimum
   const realSeasons = new Set(sp.stats.filter((s) => s.real).map((s) => s.season)).size;
-  const experience = sp.draft ? Math.max(0, season - 1 - sp.draft.year) : realSeasons && Math.max(realSeasons, season - sp.bornYear - 22);
+  const experience = sp.draft ? Math.max(0, season - 1 - sp.draft.year) : realSeasons ? Math.max(realSeasons, season - sp.bornYear - 22) : 0;
   const p: Player = {
     pid,
     bbrefId: sp.id,
