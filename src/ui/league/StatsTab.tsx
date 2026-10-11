@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import type { League, Player, PlayerStats, Pos, TeamSeason } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { seasonTotals } from '../../core/league/helpers';
@@ -89,17 +89,25 @@ export function StatsTab({ league }: { league: League }) {
           ))}
         </select>
         <div className="chips">
-          <button className={`chip ${!playoffs ? 'on' : ''}`} style={{ height: 34 }} onClick={() => setPo('reg')}>
+          <button className={`chip ${!playoffs ? 'on' : ''}`} style={{ height: 34 }} aria-pressed={!playoffs} onClick={() => setPo('reg')}>
             Regular season
           </button>
-          <button className={`chip ${playoffs ? 'on' : ''}`} style={{ height: 34 }} onClick={() => setPo('po')}>
+          <button className={`chip ${playoffs ? 'on' : ''}`} style={{ height: 34 }} aria-pressed={playoffs} disabled={real && !playoffs} onClick={() => setPo('po')}>
             Playoffs
           </button>
         </div>
       </div>
-      {view === 'leaders' && <Leaders league={league} rows={rows} season={season} playoffs={playoffs} />}
-      {view === 'players' && <PlayerStatsTable league={league} rows={rows} season={season} playoffs={playoffs} real={real} />}
-      {view === 'teams' && <TeamStatsTable league={league} season={season} playoffs={playoffs} />}
+      {real && playoffs ? (
+        <Card>
+          <Empty>Playoff stats aren&apos;t included for imported real-life seasons. Switch to the regular season, or pick a season played in this league.</Empty>
+        </Card>
+      ) : (
+        <>
+          {view === 'leaders' && <Leaders league={league} rows={rows} season={season} playoffs={playoffs} />}
+          {view === 'players' && <PlayerStatsTable league={league} rows={rows} season={season} playoffs={playoffs} real={real} />}
+          {view === 'teams' && <TeamStatsTable league={league} season={season} playoffs={playoffs} />}
+        </>
+      )}
     </>
   );
 }
@@ -191,25 +199,37 @@ function LeaderCard({ league, cat, top }: { league: League; cat: Cat; top: StatR
 
 // ---------------------------------------------------------------- player table
 
+const PAGE = 100;
+
 function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: League; rows: StatRow[]; season: number; playoffs: boolean; real: boolean }) {
   const nav = useNavigate();
   const [qual, setQual] = useQueryParam<'q' | 'all'>('q', 'q', ['q', 'all']);
   const [pos, setPos] = useQueryParam<'all' | Pos>('pos', 'all', ['all', ...POSITIONS]);
   const [mine, setMine] = useQueryParam<'0' | '1'>('mine', '0', ['0', '1']);
+  const [mode, setMode] = useQueryParam<'pg' | 'tot'>('mode', 'pg', ['pg', 'tot']);
   const [q, setQ] = useState('');
+  // typing stays responsive: the table catches up with the search a beat later
+  const query = useDeferredValue(q);
+  const [limit, setLimit] = useState(PAGE);
   const games = teamGames(league, season, rows, playoffs);
   const minGp = Math.max(1, Math.ceil(games * 0.3));
   const hasAdv = real && rows.some((r) => r.s.adv);
-  const needle = q.trim().toLowerCase();
-  const filtered = rows.filter(
-    (r) =>
-      (qual === 'all' || r.s.gp >= minGp) &&
-      (pos === 'all' || r.p.pos === pos) &&
-      (mine === '0' || r.tid === league.userTid) &&
-      (!needle || `${r.p.firstName} ${r.p.lastName}`.toLowerCase().includes(needle)),
-  );
+  const tot = mode === 'tot';
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return rows.filter(
+      (r) =>
+        (qual === 'all' || r.s.gp >= minGp) &&
+        (pos === 'all' || r.p.pos === pos) &&
+        (mine === '0' || r.tid === league.userTid) &&
+        (!needle || `${r.p.firstName} ${r.p.lastName}`.toLowerCase().includes(needle)),
+    );
+  }, [rows, qual, minGp, pos, mine, league.userTid, query]);
 
   const cols = useMemo(() => {
+    // per-game averages to one decimal, or whole-season totals
+    const count = (pg: (r: StatRow) => number, total: (r: StatRow) => number) => (r: StatRow) => (tot ? total(r) : pg(r));
+    const fmtCount = (v: number | string) => (tot ? Math.round(v as number).toLocaleString() : f1(v as number));
     const c: Col<StatRow>[] = [
       {
         key: 'name',
@@ -226,13 +246,13 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
       },
       { key: 'tm', label: 'Team', left: true, get: (r) => teamAbbrev(league, r.tid), fmt: (v) => <span className="dim2">{v}</span> },
       { key: 'gp', label: 'GP', get: (r) => r.s.gp },
-      { key: 'min', label: 'MIN', get: (r) => r.pg.min, fmt: (v) => f1(v as number) },
-      { key: 'pts', label: 'PTS', get: (r) => r.pg.pts, fmt: (v) => <b>{f1(v as number)}</b> },
-      { key: 'reb', label: 'REB', get: (r) => r.pg.reb, fmt: (v) => f1(v as number) },
-      { key: 'ast', label: 'AST', get: (r) => r.pg.ast, fmt: (v) => f1(v as number) },
-      { key: 'stl', label: 'STL', get: (r) => r.pg.stl, fmt: (v) => f1(v as number) },
-      { key: 'blk', label: 'BLK', get: (r) => r.pg.blk, fmt: (v) => f1(v as number) },
-      { key: 'tov', label: 'TOV', get: (r) => r.pg.tov, fmt: (v) => f1(v as number) },
+      { key: 'min', label: 'MIN', get: count((r) => r.pg.min, (r) => r.s.min), fmt: fmtCount },
+      { key: 'pts', label: 'PTS', get: count((r) => r.pg.pts, (r) => r.s.pts), fmt: (v) => <b>{fmtCount(v)}</b> },
+      { key: 'reb', label: 'REB', get: count((r) => r.pg.reb, (r) => r.s.orb + r.s.drb), fmt: fmtCount },
+      { key: 'ast', label: 'AST', get: count((r) => r.pg.ast, (r) => r.s.ast), fmt: fmtCount },
+      { key: 'stl', label: 'STL', get: count((r) => r.pg.stl, (r) => r.s.stl), fmt: fmtCount },
+      { key: 'blk', label: 'BLK', get: count((r) => r.pg.blk, (r) => r.s.blk), fmt: fmtCount },
+      { key: 'tov', label: 'TOV', get: count((r) => r.pg.tov, (r) => r.s.tov), fmt: fmtCount },
       { key: 'fg', label: 'FG%', get: (r) => (r.s.fga ? r.pg.fgPct : -1), fmt: pctCell },
       { key: 'tp', label: '3P%', get: (r) => (r.s.tpa ? r.pg.tpPct : -1), fmt: pctCell },
       { key: 'ft', label: 'FT%', get: (r) => (r.s.fta ? r.pg.ftPct : -1), fmt: pctCell },
@@ -241,8 +261,8 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
       {
         key: 'pm',
         label: '+/-',
-        get: (r) => (r.s.real && !r.s.pm ? -999 : r.pg.pm),
-        fmt: (v) => (v === -999 ? '-' : <span className={(v as number) > 0 ? 'good' : (v as number) < 0 ? 'bad' : ''}>{signed(v as number)}</span>),
+        get: (r) => (r.s.real && !r.s.pm ? -Infinity : tot ? r.s.pm : r.pg.pm),
+        fmt: (v) => (v === -Infinity ? '-' : <span className={(v as number) > 0 ? 'good' : (v as number) < 0 ? 'bad' : ''}>{signed(v as number, tot ? 0 : 1)}</span>),
       },
     ];
     if (hasAdv) {
@@ -253,27 +273,38 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
       );
     }
     return c;
-  }, [league, hasAdv]);
+  }, [league, hasAdv, tot]);
+  // the same element between renders lets React skip the table while the search box updates
+  const table = useMemo(
+    () => <StatTable rows={filtered} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} highlight={(r) => r.tid === league.userTid} maxHeight={560} limit={limit} />,
+    [filtered, cols, nav, league.userTid, limit],
+  );
 
   return (
     <>
       <div className="lg-hscroll">
-        <button className={`chip ${qual === 'q' ? 'on' : ''}`} onClick={() => setQual(qual === 'q' ? 'all' : 'q')}>
+        <button className={`chip ${qual === 'q' ? 'on' : ''}`} aria-pressed={qual === 'q'} onClick={() => setQual(qual === 'q' ? 'all' : 'q')}>
           Qualified ({minGp}+ GP)
         </button>
-        <button className={`chip ${mine === '1' ? 'on' : ''}`} onClick={() => setMine(mine === '1' ? '0' : '1')}>
+        <button className={`chip ${mine === '1' ? 'on' : ''}`} aria-pressed={mine === '1'} onClick={() => setMine(mine === '1' ? '0' : '1')}>
           <TeamLogo tid={league.userTid} size={16} /> My team
         </button>
         <span className="lg-vsep" />
         {(['all', ...POSITIONS] as const).map((x) => (
-          <button key={x} className={`chip ${pos === x ? 'on' : ''}`} onClick={() => setPos(x)}>
+          <button key={x} className={`chip ${pos === x ? 'on' : ''}`} aria-pressed={pos === x} onClick={() => setPos(x)}>
             {x === 'all' ? 'All' : x}
           </button>
         ))}
       </div>
-      <div className="lg-search">
-        <Search size={15} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" aria-label="Search players" />
+      <div className="lg-sub">
+        <div className="lg-search">
+          <Search size={15} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" aria-label="Search players" />
+        </div>
+        <select className="lg-select" value={mode} onChange={(e) => setMode(e.target.value as 'pg' | 'tot')} aria-label="Per game or season totals">
+          <option value="pg">Per game</option>
+          <option value="tot">Totals</option>
+        </select>
       </div>
       {filtered.length === 0 ? (
         <Card>
@@ -281,9 +312,14 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
         </Card>
       ) : (
         <>
-          <StatTable rows={filtered} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} highlight={(r) => r.tid === league.userTid} maxHeight={560} />
+          {table}
+          {filtered.length > limit && (
+            <button className="btn sm ghost" style={{ alignSelf: 'center' }} onClick={() => setLimit(limit + PAGE)}>
+              <ChevronDown size={15} /> Show {Math.min(PAGE, filtered.length - limit)} more
+            </button>
+          )}
           <div className="lg-note">
-            {filtered.length} players · per-game averages · tap a column to sort{real ? ' · imported real-life season' : ''}
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length}` : filtered.length} players · {tot ? 'season totals' : 'per-game averages'} · tap a column to sort{real ? ' · imported real-life season' : ''}
           </div>
         </>
       )}

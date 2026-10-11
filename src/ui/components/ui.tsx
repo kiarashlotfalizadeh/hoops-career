@@ -293,7 +293,8 @@ export interface Col<T> {
   help?: string;
 }
 
-export function StatTable<T>({ rows, cols, initialSort, rowKey, onRow, highlight, maxHeight }: { rows: T[]; cols: Col<T>[]; initialSort?: string; rowKey: (r: T) => string | number; onRow?: (r: T) => void; highlight?: (r: T) => boolean; maxHeight?: number }) {
+/** Sortable table. `limit` renders only the first rows of the sorted list, for long tables that page with "Show more". */
+export function StatTable<T>({ rows, cols, initialSort, rowKey, onRow, highlight, maxHeight, limit }: { rows: T[]; cols: Col<T>[]; initialSort?: string; rowKey: (r: T) => string | number; onRow?: (r: T) => void; highlight?: (r: T) => boolean; maxHeight?: number; limit?: number }) {
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(initialSort ? { key: initialSort, dir: -1 } : null);
   const sorted = useMemo(() => {
     if (!sort) return rows;
@@ -330,7 +331,7 @@ export function StatTable<T>({ rows, cols, initialSort, rowKey, onRow, highlight
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r) => (
+          {(limit ? sorted.slice(0, limit) : sorted).map((r) => (
             <tr
               key={rowKey(r)}
               className={highlight?.(r) ? 'me' : ''}
