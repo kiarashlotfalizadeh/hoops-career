@@ -5,7 +5,19 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
 import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster, teamPlayers, twoWayRoster } from '../league/helpers';
-import { MLE_YEARS, askingContract, marketSalary, mleRoom, nonGuaranteed, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, valueScore } from '../league/contracts';
+import {
+  MLE_YEARS,
+  askingContract,
+  marketSalary,
+  mleRoom,
+  nonGuaranteed,
+  releaseDeadMoney,
+  releasePlayer,
+  signPlayer,
+  teamAppeal,
+  tradeValue,
+  valueScore,
+} from '../league/contracts';
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer } from '../league/freeAgency';
 import {
   aiProposeToUser,
@@ -233,6 +245,14 @@ describe('AI trade valuation', () => {
     // on casual a there-and-back pair would pay out a sweetener every time
     const back = offer([b.pid], [a.pid], [], [pick.dpid]);
     expect(validateTrade(l, back).filter((e) => /can't get (him|it) back/.test(e)).length).toBe(3);
+    // nor does a pick come straight back as the player it became
+    l.phase = 'draft';
+    const first = l.draftPicks.find((d) => d.tid === AI && d.round === 1 && d.season === l.season)!;
+    first.pick = 10;
+    executeTrade(l, offer([], [], [], [first.dpid]));
+    const rookie = Object.values(l.players).find((p) => p.tid === -2 && p.draft.year === l.season)!;
+    draftPlayer(l, first, rookie.pid);
+    expect(validateTrade(l, offer([rookie.pid], [])).some((e) => /can't get him back/.test(e))).toBe(true);
     l.season++;
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
   });
@@ -378,11 +398,36 @@ describe('free agency', () => {
     for (let d = 0; d < 4; d++) faDay(l, rng, 0);
     expect(star.asking.amount).toBe(start);
     faDay(l, rng, 0);
-    // nobody can pay more than the mid-level, so that's where his price goes
-    expect(star.asking.amount).toBeLessThanOrEqual(Math.max(...l.teams.map((t) => mleRoom(l, t.tid))));
+    // nobody can pay more than the mid-level (at his interest in the team), so that's where his price goes
+    expect(star.asking.amount).toBeLessThanOrEqual(Math.max(...l.teams.map((t) => mleRoom(l, t.tid) * teamAppeal(l, t.tid, star))) + 10);
     expect(star.asking.years).toBeLessThanOrEqual(3);
     for (let d = 0; d < 10 && star.tid === FREE_AGENT; d++) faDay(l, rng);
     expect(star.tid).toBeGreaterThanOrEqual(0);
+  });
+
+  it("only room on teams that would take him holds a free agent's price up", () => {
+    const l = league();
+    l.phase = 'freeAgency';
+    const s = contractSeason(l);
+    for (const t of l.teams) {
+      overCap(l, t.tid);
+      t.mleSeason = s;
+    }
+    // one team has cap space but a full roster he wouldn't crack
+    const rich = l.teams[AI];
+    rich.deadMoney = [];
+    const vetMin = CAP_FOR(l, s).vetMin;
+    for (const p of standardRoster(l, AI)) shape(l, p, 85, 27, vetMin, 2);
+    while (standardRoster(l, AI).length < CAP.rosterMax) signPlayer(l, freeAgents(l)[0], AI, vetMin, 2, { news: false, start: s });
+    for (const p of standardRoster(l, AI)) shape(l, p, 85, 27, vetMin, 2);
+    expect(CAP_FOR(l, s).salaryCap - payroll(l, AI, s)).toBeGreaterThan(30_000);
+    const fa = shape(l, freeAgents(l)[0], 75, 27);
+    fa.contract = { start: l.season, salaries: [0] };
+    fa.experience = 5;
+    fa.asking = { amount: 20_000, years: 3 };
+    fa.faDays = 1;
+    faDay(l, new Rng(2), 0);
+    expect(fa.asking.amount).toBe(vetMin);
   });
 
   it('a full AI roster adds a clearly better free agent: a swap in season, a camp body in the summer (T1)', () => {

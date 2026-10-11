@@ -204,6 +204,8 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
     p.contract = { start: league.season + 1, salaries: [twoWaySalary(league, league.season + 1), twoWaySalary(league, league.season + 2)], twoWay: true };
   }
   p.joinedSeason = league.season + 1;
+  // a pick traded away this season can't come straight back as the player it became
+  if (dp.tradedFrom) p.tradedFrom = dp.tradedFrom;
   const team = league.teams[dp.tid];
   team.rotation.order.push(p.pid);
   league.draftPicks = league.draftPicks.filter((d) => d.dpid !== dp.dpid);
