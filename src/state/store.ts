@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { League } from '../core/types';
-import { isQuotaError, loadLeague, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
+import { isQuotaError, loadLeague, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { clearLive, pendingLive } from './live';
 import { simDay, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
@@ -169,11 +169,17 @@ export const useStore = create<AppState>((set, get) => ({
   dirty: false,
   saveProblem: null,
   setLeague: (l) => {
+    const old = get().league;
+    // another league opened over this one (Back to the main menu, then another save): keep its
+    // unsaved changes. A reload of the same league is a way back from them, so it skips this.
+    if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict')
+      void (saving ?? Promise.resolve()).then(() => saveLeague(old)).catch((e) => console.error('save failed', e));
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;
     clearLive();
     // a sim still running on the old league sees the swap and stops
-    set({ league: l, v: get().v + 1, sim: null, stopRequested: false, dirty: false, saveProblem: null });
+    // a league that was never saved (just created) counts as a change until its first save works
+    set({ league: l, v: get().v + 1, sim: null, stopRequested: false, dirty: !!l && !onDevice(l), saveProblem: null });
     setLastLeagueId(l?.id ?? null);
   },
   mutate: (fn, save = true) => {

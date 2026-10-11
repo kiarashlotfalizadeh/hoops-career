@@ -416,7 +416,8 @@ export default function PlayerView() {
               <div className="col" style={{ gap: 6 }}>
                 {RATING_META.filter((m) => m.group === g).map((m) => {
                   const val = attrDisplay(p.ratings[m.key as RatingKey]);
-                  const prev = p.ratingsHistory.length > 1 ? attrDisplay(p.ratingsHistory[p.ratingsHistory.length - 2].r[m.key as RatingKey]) : null;
+                  const was = p.ratingsHistory.length > 1 ? p.ratingsHistory[p.ratingsHistory.length - 2].r?.[m.key as RatingKey] : undefined;
+                  const prev = was === undefined ? null : attrDisplay(was);
                   const open = openRating === m.key;
                   return (
                     <div key={m.key}>

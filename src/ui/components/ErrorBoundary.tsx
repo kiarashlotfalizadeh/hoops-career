@@ -1,7 +1,16 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { setLastLeagueId } from '../../state/persistence';
+import { useStore } from '../../state/store';
 import { canGoBack } from '../nav';
+
+/** Reload once the league's latest changes are on the device (or after two seconds, if the save is stuck). */
+function saveThenReload() {
+  void Promise.race([useStore.getState().flush(), new Promise((r) => setTimeout(r, 2000))]).then(() => window.location.reload());
+}
+
+/** A screen's code that never arrived: offline before the app was cached, or replaced by an update (Chrome, Safari, Firefox wording). */
+const notLoaded = (e: Error) => /dynamically imported module|module script failed/i.test(e.message);
 
 interface State {
   error: Error | null;
@@ -26,13 +35,18 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
     const { error } = this.state;
     if (!error) return this.props.children;
     const screen = this.props.scope === 'screen';
+    const offline = notLoaded(error);
     return (
       <main className="page" role="alert" style={{ paddingTop: screen ? 24 : 'max(48px, var(--safe-t))' }}>
         <div className="card col" style={{ gap: 10, alignItems: 'flex-start' }}>
           <AlertTriangle className="warn" size={28} />
-          <h2>{screen ? 'This screen hit a problem' : 'Something went wrong'}</h2>
+          <h2>{offline ? 'This screen could not be loaded' : screen ? 'This screen hit a problem' : 'Something went wrong'}</h2>
           <div className="small dim2">
-            {screen ? 'Your league is safe. Go back or reload to continue.' : 'Your saved leagues are kept on this device. Reload, or return to the main menu to pick a league.'}
+            {offline
+              ? `${screen ? 'Your league is safe.' : 'Your saved leagues are kept on this device.'} Check your connection, then reload.`
+              : screen
+                ? 'Your league is safe. Go back or reload to continue.'
+                : 'Your saved leagues are kept on this device. Reload, or return to the main menu to pick a league.'}
           </div>
           <div className="tiny dim" style={{ wordBreak: 'break-word' }}>
             {error.message}
@@ -51,7 +65,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
                 Go back
               </button>
             )}
-            <button className="btn primary" onClick={() => window.location.reload()}>
+            <button className="btn primary" onClick={saveThenReload}>
               Reload
             </button>
             <button
@@ -59,7 +73,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
               onClick={() => {
                 setLastLeagueId(null);
                 window.location.hash = '#/start';
-                window.location.reload();
+                saveThenReload();
               }}
             >
               Main menu

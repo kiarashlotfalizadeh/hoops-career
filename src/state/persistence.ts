@@ -39,6 +39,9 @@ interface Synced {
 }
 const synced = new WeakMap<League, Synced>();
 
+/** Whether this league object came from the device or has been saved to it from this window. */
+export const onDevice = (league: League) => synced.has(league);
+
 const tracked = (league: League, rev: number | undefined): Synced => ({ rev, games: new Map(league.games.map((g) => [g.gid, { g, pbp: !!g.pbp }])) });
 
 /** Key range of one league's results. */

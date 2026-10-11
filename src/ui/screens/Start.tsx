@@ -30,6 +30,13 @@ export default function Start() {
     void refresh();
   }, []);
   const open = async (id: string) => {
+    // still open (Back from the game to here): a copy from the device would drop its latest changes,
+    // unless another window has saved over them
+    const st = useStore.getState();
+    if (st.league?.id === id && st.saveProblem?.kind !== 'conflict') {
+      nav('/');
+      return;
+    }
     try {
       const l = await loadLeague(id);
       if (!l) throw new Error('That save is no longer on this device.');
@@ -42,6 +49,8 @@ export default function Start() {
   };
   const remove = async (m: LeagueMeta) => {
     setConfirm(null);
+    // the league still open behind this screen goes with it
+    if (useStore.getState().league?.id === m.id) setLeague(null);
     try {
       await deleteLeague(m.id);
     } catch (e) {

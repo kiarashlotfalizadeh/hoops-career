@@ -9,7 +9,6 @@ import type { SeedData } from '../../core/league/create';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
-import { saveLeague } from '../../state/persistence';
 import type { Settings } from '../../core/types';
 import { canGoBack } from '../nav';
 
@@ -83,13 +82,8 @@ export default function NewLeague() {
     try {
       const l = createLeague({ name: name.trim() || 'My League', userTid: tid, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null });
       setLeague(l);
-      try {
-        await saveLeague(l);
-      } catch (e) {
-        // play on; autosave retries later and Settings shows the storage state
-        console.error(e);
-        useStore.getState().toast('Could not save to device storage yet. Free some space or leave private browsing.', 'bad');
-      }
+      // if it fails, play on: the save banner says so and offers a backup, and later saves retry
+      await useStore.getState().save();
       nav('/');
     } catch (e) {
       console.error(e);

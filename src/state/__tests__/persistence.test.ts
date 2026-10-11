@@ -76,6 +76,35 @@ describe('saves', () => {
     expect((await loadLeague(l.id))!.games.map((x) => x.gid)).toEqual(kept.map((x) => x.gid));
   });
 
+  it('a save that fails halfway leaves the last one whole, and the next save catches up', async () => {
+    const l = (await loadLeague((await saved('halfway')).id))!;
+    const day = l.day;
+    const before = l.games.length;
+    simDay(l);
+    simDay(l);
+    // the league record goes in first; a result IndexedDB can't store fails after it
+    const bad = l.games.at(-1)! as unknown as { fn?: () => void };
+    bad.fn = () => {};
+    await expect(saveLeague(l)).rejects.toThrow();
+    const disk = (await loadLeague(l.id))!;
+    expect(disk.day).toBe(day);
+    expect(disk.games).toHaveLength(before);
+    delete bad.fn;
+    await saveLeague(l);
+    const back = (await loadLeague(l.id))!;
+    expect(back.day).toBe(l.day);
+    expect(back.games).toEqual(l.games);
+  });
+
+  it('lists every league with its latest record, newest first', async () => {
+    const a = await saved('list a', 0);
+    const b = await saved('list b', 3);
+    const metas = await listLeagues();
+    expect(metas.findIndex((m) => m.id === b.id)).toBeLessThan(metas.findIndex((m) => m.id === a.id));
+    const ts = b.teams[b.userTid].seasons.find((s) => s.season === b.season)!;
+    expect(metas.find((m) => m.id === b.id)).toMatchObject({ name: 'list b', phase: 'regular', season: b.season, record: `${ts.won}-${ts.lost}` });
+  });
+
   it('deleting a league removes its results too', async () => {
     const l = await saved('delete');
     await deleteLeague(l.id);
