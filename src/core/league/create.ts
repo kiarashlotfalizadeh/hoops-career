@@ -1,4 +1,4 @@
-import type { Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
+import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
@@ -106,13 +106,30 @@ export function defaultSettings(): Settings {
   return { difficulty: 'casual', injuries: true, jobSecurity: true, complexity: 'advanced', liveSpeed: 1 };
 }
 
-function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Player {
+/**
+ * NBA seasons before `season` and draft details for a seed player. Without draft data he went
+ * undrafted (or, like LeBron, was drafted before the seed's draft pages begin): with no season on
+ * record he is a rookie, one who debuted within the record has its seasons, and one already playing
+ * when it begins (`firstRecord`) counts the years since a typical undrafted debut at 22 (VanVleet 10,
+ * not the 2 on record), which sets his max, his minimum and two-way eligibility. Second-round picks
+ * are numbered within the round, as the game does.
+ */
+function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { experience: number; draft: DraftInfo } {
+  if (sp.draft) {
+    const { year, round, team } = sp.draft;
+    const pick = round === 2 && sp.draft.pick > 30 ? sp.draft.pick - 30 : sp.draft.pick;
+    return { experience: Math.max(0, season - 1 - year), draft: { year, round, pick, tid: team ? (BBREF_TO_TID[team] ?? null) : null, teamAbbrev: team } };
+  }
+  const seasons = new Set(sp.stats.filter((s) => s.real).map((s) => s.season));
+  const experience = seasons.has(firstRecord) ? Math.max(seasons.size, season - sp.bornYear - 22) : seasons.size;
+  // a 15-year veteran was almost surely drafted: his draft stays unknown rather than "undrafted"
+  return { experience, draft: { year: experience >= 15 ? 0 : season - 1 - experience, round: 0, pick: 0, tid: null } };
+}
+
+function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, firstRecord: number): Player {
   const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
   const salaries = sp.contract?.salaries?.length ? sp.contract.salaries : [0];
-  // undrafted (or no draft data): the stats only go back three seasons, so a veteran counts the
-  // years since a typical undrafted debut at 22 (VanVleet 10, not 3), which sets his max and minimum
-  const realSeasons = new Set(sp.stats.filter((s) => s.real).map((s) => s.season)).size;
-  const experience = sp.draft ? Math.max(0, season - 1 - sp.draft.year) : realSeasons ? Math.max(realSeasons, season - sp.bornYear - 22) : 0;
+  const { experience, draft } = seedCareer(sp, season, firstRecord);
   const p: Player = {
     pid,
     bbrefId: sp.id,
@@ -126,9 +143,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
     country: sp.country,
     college: sp.college,
     jersey: sp.jersey,
-    draft: sp.draft
-      ? { year: sp.draft.year, round: sp.draft.round, pick: sp.draft.pick, tid: sp.draft.team ? (BBREF_TO_TID[sp.draft.team] ?? null) : null, teamAbbrev: sp.draft.team }
-      : { year: 0, round: 0, pick: 0, tid: null },
+    draft,
     tid,
     ratings: { ...sp.ratings },
     tend: sp.tend ? { ...sp.tend } : undefined,
@@ -215,8 +230,10 @@ export function createLeague(opts: CreateOpts): League {
   teams[opts.userTid].coach.name = opts.coachName;
 
   if (opts.seed && opts.seed.players.length) {
+    // the first season the seed's stats cover
+    const firstRecord = Math.min(season - 1, ...opts.seed.players.flatMap((sp) => sp.stats.filter((s) => s.real).map((s) => s.season)));
     for (const sp of opts.seed.players) {
-      const p = seedToPlayer(sp, league.nextPid++, season, rng);
+      const p = seedToPlayer(sp, league.nextPid++, season, rng, firstRecord);
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
