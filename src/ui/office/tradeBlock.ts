@@ -52,7 +52,9 @@ function findOffers(league: League, pid: number): BlockOffer[] {
   const target = league.players[pid];
   if (!target || target.tid !== user) return [];
   const targetValue = tradeValue(league, target, me.strategy);
-  const gen = league.settings.difficulty === 'casual' ? 0.88 : league.settings.difficulty === 'hard' ? 1.12 : 1;
+  // (the casual discount doesn't cover a player we got in a trade this season)
+  const flipped = target.tradedFrom?.season === league.season;
+  const gen = league.settings.difficulty === 'casual' ? (flipped ? 1 : 0.88) : league.settings.difficulty === 'hard' ? 1.12 : 1;
   // after the season, only next season's contracts take a spot
   const userCount = tradeRoster(league, user).length;
   const max = rosterMaxNow(league);
