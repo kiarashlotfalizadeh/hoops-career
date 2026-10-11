@@ -76,6 +76,30 @@ const ZONE23: Pt[] = [
   { x: 12, y: 7 },
   { x: 0, y: 7 },
 ];
+// three across the top, two on the blocks
+const ZONE32: Pt[] = [
+  { x: -12, y: 20 },
+  { x: 0, y: 23 },
+  { x: 12, y: 20 },
+  { x: -7, y: 8 },
+  { x: 7, y: 8 },
+];
+
+// free throws: the defense takes the spots nearest the basket and the top ones, the shooter's teammates the middle
+// ones, one defender stays back for the break (lane spots 3.5 ft apart, so no two players overlap)
+const FT_OFF: Pt[] = [
+  { x: -9.5, y: 11 },
+  { x: 9.5, y: 11 },
+  { x: -16, y: 28 },
+  { x: 16, y: 28 },
+];
+const FT_DEF: Pt[] = [
+  { x: -9.5, y: 7.5 },
+  { x: 9.5, y: 7.5 },
+  { x: -9.5, y: 14.5 },
+  { x: 9.5, y: 14.5 },
+  { x: 0, y: 32 },
+];
 
 export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script {
   const off = log.off;
@@ -87,7 +111,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
   let holder = first?.pid ?? oPids[0];
   const spots = baseSpots(oInfo, holder);
   const guardOf = new Map<number, number>(Object.entries(log.guards).map(([o, d]) => [Number(o), d]));
-  const zone = log.scheme !== 'man';
+  const zone = log.scheme === 'zone32' ? ZONE32 : log.scheme === 'zone23' ? ZONE23 : null;
 
   // current positions
   const o = new Map<number, Pt>();
@@ -98,7 +122,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
     o.set(pid, { x: s.x * 0.6, y: clamp(s.y + 16, 0, startY + 4) });
   });
   const defendSpot = (dpid: number, i: number): Pt => {
-    if (zone) return ZONE23[i] ?? { x: 0, y: 10 };
+    if (zone) return zone[i] ?? { x: 0, y: 10 };
     const opid = [...guardOf.entries()].find(([, dd]) => dd === dpid)?.[0];
     const op = opid !== undefined ? o.get(opid) : undefined;
     return op ? guardSpot(op, opid === holder, log.help) : { x: 0, y: 12 };
@@ -239,9 +263,11 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
         holder = pid;
         ball = { ...target };
         follow();
-        // contest: nearest defender closes out
+        // contest: nearest defender closes out to a hand's length, on the basket side (not on top of a shooter at the rim)
         const near = [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
-        if (near !== undefined) d.set(near, { x: target.x + (BASKET.x - target.x) * 0.1, y: target.y + (BASKET.y - target.y) * 0.1 });
+        const toRim = dist(target, BASKET);
+        const [ux, uy] = toRim > 0.5 ? [(BASKET.x - target.x) / toRim, (BASKET.y - target.y) / toRim] : [0, -1];
+        if (near !== undefined) d.set(near, { x: target.x + ux * 3, y: Math.max(0.5, target.y + uy * 3) });
         snap(300);
         ball = { ...BASKET };
         const made = !!st.made;
@@ -286,8 +312,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
         moveTo(pid, { x: 0, y: 19 });
         holder = pid;
         ball = { x: 0, y: 19 };
-        oPids.forEach((p, i) => p !== pid && moveTo(p, { x: i % 2 ? 9 : -9, y: 8 + i * 2 }));
-        dPids.forEach((p, i) => d.set(p, { x: i % 2 ? -9 : 9, y: 7 + i * 2 }));
+        oPids.filter((p) => p !== pid).forEach((p, i) => moveTo(p, FT_OFF[i] ?? { x: 0, y: 30 }));
+        dPids.forEach((p, i) => d.set(p, FT_DEF[i] ?? { x: 0, y: 32 }));
         snap(450);
         ball = { ...BASKET };
         score[off] += st.v ?? 0;
