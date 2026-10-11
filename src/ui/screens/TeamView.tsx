@@ -15,6 +15,7 @@ import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, s
 import { f1, latestLine, moneyM, playerSeason, signed, teamRatings, type PerGame } from '../stats';
 import { OutcomeTag, SectionLabel, StrategyTag, TabBar, ordinal, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
+import { capPayroll } from '../../core/league/freeAgency';
 
 const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'history'] as const;
 type Tab = (typeof TABS)[number];
@@ -161,6 +162,9 @@ function payColor(league: League, pay: number, season: number) {
 function PayrollBar({ league, tid }: { league: League; tid: number }) {
   const cs = contractSeason(league);
   const pay = payroll(league, tid, cs);
+  // during the draft and re-signing window, the players a team will keep hold cap room
+  const room = capPayroll(league, tid, cs);
+  const holds = room > pay ? ' after holds' : '';
   const cap = CAP_FOR(league, cs);
   const color = payColor(league, pay, cs);
   return (
@@ -174,7 +178,7 @@ function PayrollBar({ league, tid }: { league: League; tid: number }) {
       <Bar value={(pay / (cap.luxuryTax * 1.1)) * 100} color={color} />
       <div className="row between tiny dim" style={{ marginTop: 6 }}>
         <span>Cap {moneyM(cap.salaryCap)}</span>
-        <span>{pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}</span>
+        <span>{room > cap.salaryCap ? `${moneyM(room - cap.salaryCap)} over cap${holds}` : `${moneyM(cap.salaryCap - room)} cap space${holds}`}</span>
         <span>Tax {moneyM(cap.luxuryTax)}</span>
       </div>
     </Card>

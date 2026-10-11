@@ -98,6 +98,8 @@ function periodic(league: League, rng: Rng) {
     faDay(league, rng, 0.25);
     fillRosters(league, rng);
   }
+  // front offices reassess as the record takes shape: a contender at 10-30 starts selling
+  if (d === 30 || d === 60 || d === league.tradeDeadlineDay - 5) teamStrategyUpdate(league);
   aiToAiTrade(league, rng);
   aiProposeToUser(league, rng);
 }

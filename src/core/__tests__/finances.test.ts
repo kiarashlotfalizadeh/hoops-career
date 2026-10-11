@@ -3,7 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { aiTicketPrice, assessLuxuryTax, attendanceFor, gameFinances, referencePrice, TAX_SHARE_TO_NON_TAXPAYERS } from '../league/finances';
-import { CAP_FOR, curTeamSeason, payroll, revenueScale, standardRoster } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, payroll, revenueScale, standardRoster, teamPlayers } from '../league/helpers';
+import { salaryFor } from '../playerGen';
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../league/owner';
 import { newSeason, startRegularSeason } from '../league/season';
 import { CAP } from '../constants';
@@ -30,7 +31,9 @@ describe('finances (L1, L15)', () => {
     const l = league();
     const team = l.teams[3];
     const first = gameMoney(l, 3);
-    const pay = (2 * payroll(l, 3) + 2 * team.deadMoney.reduce((a, d) => a + (d.season === l.season ? d.amount : 0), 0)) / 82;
+    // every salary is paid, two-way deals included (they only stay off the cap)
+    const salaries = teamPlayers(l, 3).reduce((a, p) => a + salaryFor(p, l.season), 0);
+    const pay = (2 * salaries + 2 * team.deadMoney.reduce((a, d) => a + (d.season === l.season ? d.amount : 0), 0)) / 82;
     const price = team.budget.ticketPrice;
     const ref = referencePrice(l, team);
     l.season += 10;

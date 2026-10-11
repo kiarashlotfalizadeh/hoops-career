@@ -36,11 +36,7 @@ export const ordinal = (n: number) => {
 };
 
 // tones match the league screens' strategy tags
-export const STRATEGY_META: Record<'contend' | 'retool' | 'rebuild', { label: string; tone: 'good' | 'info' | 'warn'; help: string }> = {
-  contend: { label: 'Contending', tone: 'good', help: 'Wants proven players who help now. Discounts draft picks.' },
-  retool: { label: 'Retooling', tone: 'warn', help: 'Balanced: values players and picks at face value.' },
-  rebuild: { label: 'Rebuilding', tone: 'info', help: 'Pays extra for young players and draft picks, marks down veterans 29+.' },
-};
+export { STRATEGY_META } from '../league/shared';
 
 export const PLAYOFF_LABEL = (round: number) =>
   round >= 5 ? 'Champion' : round === 4 ? 'Finals' : round === 3 ? 'Conf. Finals' : round === 2 ? '2nd Round' : round === 1 ? '1st Round' : round === 0 ? 'Play-In' : 'Missed';

@@ -14,7 +14,7 @@ import { f1, moneyM, p1, perGame, signed } from '../stats';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason, releasePlayer } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, marketSalary, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 
@@ -405,7 +405,9 @@ export default function PlayerView() {
         <p className="dim2">
           {p.contract.twoWay
             ? 'Two-way pay sits outside the cap, so releasing him leaves no dead money. He becomes a free agent.'
-            : `His remaining salary (${moneyM(Array.from({ length: Math.max(0, contractExp(p.contract) - league.season + 1) }, (_, i) => salaryFor(p, league.season + i)).reduce((a, b) => a + b, 0))}) stays on your books as dead money. He becomes a free agent.`}
+            : nonGuaranteed(league, p)
+              ? "His minimum deal isn't guaranteed until opening night, so releasing him now costs nothing. He becomes a free agent."
+              : `His remaining salary (${moneyM(releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0))}) stays on your books as dead money. He becomes a free agent.`}
         </p>
         <div className="row" style={{ marginTop: 12 }}>
           <button className="btn grow" onClick={() => setConfirmRelease(false)}>
