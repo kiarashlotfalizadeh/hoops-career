@@ -1,4 +1,4 @@
-import type { Contract, Mood, Player, PlayerStats, Pos, Ratings } from './types';
+import type { Contract, Mood, Player, PlayerStats, Pos, Ratings, Tendencies } from './types';
 import { Rng, clamp } from './random';
 import { NAME_POOLS } from './names';
 import { archetype, clampRatings, heightToRating, inferPos, ovrRaw, potential, toDisplay, type OvrScale } from './ratings';
@@ -95,6 +95,77 @@ export function genRatings(rng: Rng, o: GenOpts): { r: Ratings; heightIn: number
   r.oiq += old * 0.8;
   r.diq += old * 0.6;
   return { r: clampRatings(r), heightIn };
+}
+
+// ---------------------------------------------------------------- tendencies
+
+const TEND_KEYS = ['use', 'three', 'drive', 'pass', 'blk', 'stl', 'orb', 'drb', 'tov', 'pf', 'mid', 'corner', 'create'] as const;
+type TendKey = (typeof TEND_KEYS)[number];
+
+/**
+ * Hidden tendencies for players the seed didn't calibrate (draft classes, fictional leagues), drawn
+ * the way the seed's calibrated ones relate to a player's level and size: log(tendency) = b0 +
+ * b1·(OVR-75)/8 + b2·max(0, OVR-80)/8 + b3·(size-50)/15 (a minutes-weighted fit over the real
+ * players), plus a personal style with the spread left around the fit (sd). Real stars carry two to
+ * three times a role player's usage, create their own shots, foul less and leave corner threes to
+ * others; a generated 88 without tendencies shot like a role player (and the engine caps such a
+ * player's share of the offense lower), so long careers drifted toward parity and threes as real
+ * players retired. Level and size only: fits on skill profiles mislead on generated players, whose
+ * skills relate to each other differently. The event intercepts (b0) are then set so that a real
+ * league with every player replaced by a generated one keeps the real league's shot diet, assists,
+ * turnovers, steals, blocks and fouls. lo/hi are the calibration's bounds.
+ */
+const TEND_MODEL: Record<TendKey, { b: [number, number, number, number]; sd: number; lo: number; hi: number }> = {
+  use: { b: [0.285, 0.208, 0.398, -0.288], sd: 0.79, lo: 0.1, hi: 25 },
+  three: { b: [-0.22, -0.352, 0.263, -0.119], sd: 1.13, lo: 0.02, hi: 5 },
+  drive: { b: [-0.347, 0.039, -0.11, -0.012], sd: 0.78, lo: 0.15, hi: 5 },
+  pass: { b: [0.374, 0.253, -0.375, 0.071], sd: 0.51, lo: 0.25, hi: 6 },
+  blk: { b: [0.225, 0.068, 0.016, -0.278], sd: 0.35, lo: 0.15, hi: 6 },
+  stl: { b: [0.007, 0.053, 0.01, -0.058], sd: 0.21, lo: 0.2, hi: 5 },
+  orb: { b: [0.06, 0.023, -0.257, 0.064], sd: 0.54, lo: 0.08, hi: 5 },
+  drb: { b: [0.095, 0.121, -0.011, -0.239], sd: 0.25, lo: 0.08, hi: 5 },
+  tov: { b: [0.114, -0.014, -0.22, 0.293], sd: 0.27, lo: 0.3, hi: 3.5 },
+  pf: { b: [0.195, -0.32, -0.233, 0.066], sd: 0.55, lo: 0.15, hi: 3 },
+  mid: { b: [0.276, 0.098, -0.029, 0.356], sd: 0.82, lo: 0.05, hi: 6 },
+  corner: { b: [0.463, -0.105, -1.05, 0.041], sd: 0.79, lo: 0.1, hi: 6 },
+  create: { b: [-0.253, 0.348, 0.262, -0.325], sd: 0.86, lo: 0.15, hi: 5 },
+};
+
+/** The model's log-tendency for a player of this OVR and size. */
+function tendBase(k: TendKey, ovr: number, size: number): number {
+  const [c, lvl, star, hgt] = TEND_MODEL[k].b;
+  return c + (lvl * (ovr - 75)) / 8 + (star * Math.max(0, ovr - 80)) / 8 + (hgt * (size - 50)) / 15;
+}
+
+const setTend = (t: Tendencies, k: TendKey, v: number) => (t[k] = Math.round(clamp(v, TEND_MODEL[k].lo, TEND_MODEL[k].hi) * 1000) / 1000);
+
+/**
+ * Tendencies for a generated player whose ratings are final. The style draws come from a stream
+ * of his own, so every other draw (the rest of a draft class or league) stays where it was.
+ */
+export function genTendencies(p: Player, rng: Rng): Tendencies {
+  const style = new Rng(Math.imul(rng.state ^ p.pid, 0x9e3779b1));
+  const t = {} as Tendencies;
+  for (const k of TEND_KEYS) setTend(t, k, Math.exp(tendBase(k, p.ovr, p.ratings.hgt) + style.normal(0, TEND_MODEL[k].sd)));
+  return t;
+}
+
+/**
+ * Tendencies follow his level (call after a year's development, with the OVR they were last set
+ * for): his own style stays and the part that comes with quality moves, so a prospect who becomes
+ * a star takes a star's shots and an aging star hands them on. A player without tendencies (from a
+ * save made before they were generated) gets a set.
+ */
+export function followTendencies(p: Player, prevOvr: number, rng: Rng) {
+  if (!p.tend) {
+    p.tend = genTendencies(p, rng);
+    return;
+  }
+  const t = p.tend;
+  for (const k of TEND_KEYS) {
+    const before = tendBase(k, prevOvr, p.ratings.hgt);
+    setTend(t, k, (t[k] ?? Math.exp(before)) * Math.exp(tendBase(k, p.ovr, p.ratings.hgt) - before));
+  }
 }
 
 export function blankMood(): Mood {

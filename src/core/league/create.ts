@@ -4,7 +4,7 @@ import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
-import { DEFAULT_SCALE, blankMood, generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { DEFAULT_SCALE, blankMood, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
@@ -245,8 +245,10 @@ export function createLeague(opts: CreateOpts): League {
     const taken = new Set<string>();
     for (let tid = 0; tid < 30; tid++) {
       const roster: Player[] = [];
-      // contenders and rebuilding teams: the whole roster is a little better or worse
-      const quality = rng.normal(0, 0.4);
+      // contenders and rebuilding teams: the whole roster is a little better or worse. Teams' top-8
+      // OVR then spreads about 2 points, near real rosters' 1.75; a wider start (2.7) only drained
+      // away over the first few offseasons
+      const quality = rng.normal(0, 0.2);
       for (let i = 0; i < 14; i++) {
         const talent = quality + rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
         // the last three spots go to young players (some of them on rookie deals)
@@ -281,7 +283,10 @@ export function createLeague(opts: CreateOpts): League {
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
     matchRealSpread(rostered, Object.values(league.players));
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
-    for (const p of Object.values(league.players)) refreshPlayerDerived(p, season, league.ovrScale);
+    for (const p of Object.values(league.players)) {
+      refreshPlayerDerived(p, season, league.ovrScale);
+      p.tend = genTendencies(p, rng);
+    }
     fictionalContracts(league, rng);
   }
   for (const p of Object.values(league.players)) {

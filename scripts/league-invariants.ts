@@ -72,6 +72,8 @@ function check() {
         bad('rookie experience != 0', `${nm(p.pid)} exp ${p.experience}`);
     }
     if (p.tid === -1 && !(p.asking && p.asking.amount > 0)) bad('FA without asking price', nm(p.pid));
+    // generated players get tendencies like the seed's calibrated ones (without them a star plays like a role player)
+    if (p.tid >= -2 && !p.tend) bad('player without tendencies', nm(p.pid));
     if (p.tid === -3 && p.contract.salaries.some((x) => x > 0)) bad('retired with salary', nm(p.pid));
     if (p.tid === -2 && p.draft.year < season) bad('stale prospect', nm(p.pid));
     if (p.injury && !(p.injury.gamesRemaining > 0 && p.injury.gamesRemaining < 200)) bad('bad injury length', `${nm(p.pid)} ${p.injury.gamesRemaining}`);
