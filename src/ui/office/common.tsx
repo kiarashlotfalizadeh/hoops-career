@@ -35,10 +35,11 @@ export const ordinal = (n: number) => {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 };
 
+// tones match the league screens' strategy tags
 export const STRATEGY_META: Record<'contend' | 'retool' | 'rebuild', { label: string; tone: 'good' | 'info' | 'warn'; help: string }> = {
   contend: { label: 'Contending', tone: 'good', help: 'Wants proven players who help now. Discounts draft picks.' },
-  retool: { label: 'Retooling', tone: 'info', help: 'Balanced: values players and picks at face value.' },
-  rebuild: { label: 'Rebuilding', tone: 'warn', help: 'Pays extra for young players and draft picks, marks down veterans 29+.' },
+  retool: { label: 'Retooling', tone: 'warn', help: 'Balanced: values players and picks at face value.' },
+  rebuild: { label: 'Rebuilding', tone: 'info', help: 'Pays extra for young players and draft picks, marks down veterans 29+.' },
 };
 
 export const PLAYOFF_LABEL = (round: number) =>

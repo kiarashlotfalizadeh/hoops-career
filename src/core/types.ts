@@ -447,6 +447,8 @@ export interface Team {
   seasons: TeamSeason[];
   /** Dead money from released players: season -> amount. */
   deadMoney: { pid: number; name: string; season: number; amount: number }[];
+  /** Contract season the team last used its mid-level exception. */
+  mleSeason?: number;
   practice: 'light' | 'normal' | 'intense';
   timeoutsUsedThisGame?: number;
 }

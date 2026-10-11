@@ -1,13 +1,31 @@
 // Player valuation, contract demands and roster transactions under a simplified CBA:
-// soft cap (sign FAs only with space or for the minimum), unlimited re-signing of own
-// players, luxury tax, 15-man rosters, rookie scale, 125% trade salary matching.
+// soft cap (sign FAs only with space, the mid-level exception or for the minimum), unlimited
+// re-signing of own players, luxury tax, 15-man rosters, rookie scale, 125% trade salary matching.
 
-import type { League, Player } from '../types';
+import type { League, Player, Team } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
 import { CAP_FOR, addInbox, addNews, age, contractSeason, curTeamSeason, inSeason, payroll, playerName, standardRoster, teamPlayers, winPct } from './helpers';
+
+export type Strategy = Team['strategy'];
+
+/** Playoff games a team plays for, counted into what's left of a season. */
+const PLAYOFF_GAMES = 12;
+
+/**
+ * Share (0..1) of what's left of the season, playoffs included, that a player's injury costs him.
+ * In the offseason it is next season's share, after the summer heals 35 games (see newSeason).
+ */
+export function injuryShare(league: League, p: Player): number {
+  if (!p.injury) return 0;
+  let left = 82 + PLAYOFF_GAMES;
+  if (league.phase === 'regular') left = 82 * Math.max(0, 1 - league.day / Math.max(1, league.regularSeasonDays)) + PLAYOFF_GAMES;
+  else if (league.phase === 'playin' || league.phase === 'playoffs') left = PLAYOFF_GAMES;
+  const offseason = contractSeason(league) > league.season;
+  return clamp((p.injury.gamesRemaining - (offseason ? 35 : 0)) / left, 0, 1);
+}
 
 /** Blend of current and future ability used for value judgments. */
 export function valueScore(league: League, p: Player): number {
@@ -15,12 +33,18 @@ export function valueScore(league: League, p: Player): number {
   const w = clamp((26 - a) / 9, 0, 0.55);
   let s = p.ovr * (1 - w) + p.pot * w;
   if (a >= 30) s -= (a - 29) * 1.1;
-  if (p.injury && p.injury.gamesRemaining > 30) s -= 2;
+  s -= 3 * injuryShare(league, p);
   return s;
 }
 
-/** Trade value on an exponential scale (one 90 ≈ five 80s). */
-export function tradeValue(league: League, p: Player, strategy: 'contend' | 'retool' | 'rebuild' = 'retool'): number {
+/** Trade value per $1M a season of salary below (or above) what a player is worth. */
+const SURPLUS_VALUE: Record<Strategy, number> = { contend: 0.1, retool: 0.1, rebuild: 0.18 };
+
+/**
+ * Trade value on an exponential scale (one 90 ≈ five 80s), with a premium for stars and the
+ * contract's surplus or burden. A bad enough contract makes it negative: a liability.
+ */
+export function tradeValue(league: League, p: Player, strategy: Strategy = 'retool'): number {
   let s = valueScore(league, p);
   const a = age(league, p);
   if (strategy === 'rebuild') {
@@ -30,26 +54,32 @@ export function tradeValue(league: League, p: Player, strategy: 'contend' | 'ret
     s = s * 0.6 + p.ovr * 0.4 + (p.ovr >= 75 ? 1.5 : 0);
   }
   let v = Math.exp((s - 60) / 6);
+  // a star is worth more than the lesser players adding up to his value
+  if (s > 85) v *= 1 + (s - 85) * 0.05;
+  // the part of this season he'll miss matters most to a team playing for now
+  v *= 1 - injuryShare(league, p) * (strategy === 'contend' ? 0.55 : strategy === 'retool' ? 0.3 : 0.1);
   // contract surplus/burden over the seasons still to be paid (next season's books in the offseason)
   const cs = contractSeason(league);
   const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
   const sal = salaryFor(p, cs);
   const fair = marketSalary(league, p);
-  const surplus = ((fair - sal) / 1000) * Math.min(yrs, 4);
-  v += surplus * (strategy === 'rebuild' ? 0.18 : 0.1);
-  return Math.max(0.05, v);
+  return v + ((fair - sal) / 1000) * Math.min(yrs, 4) * SURPLUS_VALUE[strategy];
 }
 
+// Share of the cap a value score earns on the open market. Sized so that what rostered players
+// would earn roughly matches the league's total cap (0.85× the first curve, which came to ~1.4×),
+// easing back to the max for superstars.
 const SALARY_CURVE: [number, number][] = [
   [66, 0],
-  [70, 0.022],
-  [73, 0.045],
-  [76, 0.085],
-  [79, 0.125],
-  [82, 0.18],
-  [85, 0.25],
-  [88, 0.3],
-  [91, 0.35],
+  [70, 0.019],
+  [73, 0.038],
+  [76, 0.072],
+  [79, 0.106],
+  [82, 0.153],
+  [85, 0.213],
+  [88, 0.265],
+  [91, 0.31],
+  [94, 0.35],
 ];
 
 /** Fair annual salary ($K) for a player on the open market. */
@@ -58,7 +88,7 @@ export function marketSalary(league: League, p: Player): number {
   const s = valueScore(league, p);
   let pct = 0;
   if (s <= SALARY_CURVE[0][0]) pct = 0;
-  else if (s >= SALARY_CURVE[SALARY_CURVE.length - 1][0]) pct = 0.35;
+  else if (s >= SALARY_CURVE[SALARY_CURVE.length - 1][0]) pct = SALARY_CURVE[SALARY_CURVE.length - 1][1];
   else {
     for (let i = 1; i < SALARY_CURVE.length; i++) {
       if (s <= SALARY_CURVE[i][0]) {
@@ -106,17 +136,20 @@ export interface Ask {
 }
 
 export function askingContract(league: League, p: Player, tid?: number): Ask {
-  let amount = marketSalary(league, p);
+  const market = marketSalary(league, p);
+  let amount = market;
   // unsigned free agents lower their price as the market dries up (see faDay)
-  if (p.tid === FREE_AGENT && p.asking && p.asking.amount < amount) amount = p.asking.amount;
-  const diff = league.settings.difficulty;
-  const userTeam = tid === league.userTid;
-  if (userTeam) amount *= diff === 'casual' ? 0.9 : diff === 'hard' ? 1.12 : 1;
-  if (tid !== undefined) amount /= teamAppeal(league, tid, p);
+  const marked = p.tid === FREE_AGENT && !!p.asking && p.asking.amount < market;
+  if (marked) amount = p.asking!.amount;
+  const years = marked ? p.asking!.years : preferredYears(league, p);
   const cap = CAP_FOR(league, contractSeason(league));
-  amount = clamp(Math.round(amount / 50) * 50, p.experience >= 3 ? cap.vetMin : cap.minContract, cap.maxContract(p.experience));
-  const years = p.tid === FREE_AGENT && p.asking && p.asking.amount < marketSalary(league, p) ? p.asking.years : preferredYears(league, p);
-  return { amount, years };
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  // a minimum-level player takes the minimum from anyone
+  if (amount <= min) return { amount: min, years };
+  const diff = league.settings.difficulty;
+  if (tid === league.userTid) amount *= diff === 'casual' ? 0.9 : diff === 'hard' ? 1.12 : 1;
+  if (tid !== undefined) amount /= teamAppeal(league, tid, p);
+  return { amount: clamp(Math.round(amount / 50) * 50, min, cap.maxContract(p.experience)), years };
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {
@@ -156,15 +189,32 @@ export function rosterCount(league: League, tid: number) {
   return standardRoster(league, tid).length;
 }
 
-export function canSignFA(league: League, tid: number, amount: number): { ok: boolean; reason: string } {
-  if (rosterCount(league, tid) >= CAP.rosterMax) return { ok: false, reason: 'Roster is full (15). Release or trade someone first.' };
-  const cap = CAP_FOR(league);
-  const minLike = amount <= cap.vetMin + 1;
-  const after = payroll(league, tid) + amount;
-  if (!minLike && after > cap.salaryCap) {
-    return { ok: false, reason: `Over the cap after signing (${(after / 1000).toFixed(1)}M vs ${(cap.salaryCap / 1000).toFixed(1)}M). Only minimum contracts allowed.` };
-  }
-  return { ok: true, reason: '' };
+// ---------------------------------------------------------------- signing exceptions
+
+/** Non-taxpayer mid-level exception, as a share of the cap. */
+export const MLE_PCT = 0.085;
+/** Longest deal the mid-level exception allows. */
+export const MLE_YEARS = 4;
+
+/**
+ * Most a team can pay one free agent with its mid-level exception this season: once a season, up
+ * to 8.5% of the cap, and only while the signing keeps it under the luxury tax. 0 when used up.
+ */
+export function mleRoom(league: League, tid: number, season = contractSeason(league)): number {
+  if (league.teams[tid].mleSeason === season) return 0;
+  const cap = CAP_FOR(league, season);
+  return Math.max(0, Math.min(Math.round((cap.salaryCap * MLE_PCT) / 10) * 10, cap.luxuryTax - payroll(league, tid, season)));
+}
+
+export type SigningRoute = 'min' | 'space' | 'mle';
+
+/** How a team can pay a free agent this much a season: the minimum, cap space, the mid-level exception, or not at all. */
+export function signingRoute(league: League, tid: number, amount: number, season = contractSeason(league)): SigningRoute | null {
+  const cap = CAP_FOR(league, season);
+  if (amount <= cap.vetMin + 1) return 'min';
+  if (payroll(league, tid, season) + amount <= cap.salaryCap) return 'space';
+  if (amount <= mleRoom(league, tid, season)) return 'mle';
+  return null;
 }
 
 export function signPlayer(league: League, p: Player, tid: number, amount: number, years: number, opts: { news?: boolean; start?: number; twoWay?: boolean } = {}) {
@@ -195,16 +245,39 @@ export function releaseBlockedReason(league: League, p: Player): string | null {
   return standardRoster(league, p.tid).length <= CAP.rosterMin ? `Rosters need at least ${CAP.rosterMin} players during the season. Sign a replacement first.` : null;
 }
 
+/**
+ * A minimum deal signed for the season ahead is a camp deal: like the NBA's, it isn't guaranteed
+ * until opening night, so a preseason cut costs nothing.
+ */
+export function nonGuaranteed(league: League, p: Player): boolean {
+  const c = p.contract;
+  // stored salaries are rounded to $10K, so a minimum deal can sit a few $K above the minimum
+  return !inSeason(league) && !c.twoWay && c.start === contractSeason(league) && salaryFor(p, c.start) <= CAP_FOR(league, c.start).vetMin + 10;
+}
+
+/**
+ * Salary a release leaves on the books, by season: everything still to be paid from the current
+ * contract season (next season's books in the offseason). Two-way pay sits outside the cap and camp
+ * deals aren't guaranteed, so neither leaves dead money.
+ */
+export function releaseDeadMoney(league: League, p: Player): { season: number; amount: number }[] {
+  if (p.contract.twoWay || nonGuaranteed(league, p)) return [];
+  const out: { season: number; amount: number }[] = [];
+  for (let s = contractSeason(league); s <= contractExp(p.contract); s++) {
+    const amount = salaryFor(p, s);
+    if (amount > 0) out.push({ season: s, amount });
+  }
+  return out;
+}
+
+/** Days between a free agent's price cuts while he goes unsigned (see faDay). */
+export const FA_PRICE_CUT_DAYS = 5;
+
 export function releasePlayer(league: League, p: Player, opts: { news?: boolean } = {}) {
   const tid = p.tid;
   if (tid < 0) return;
   const team = league.teams[tid];
-  // remaining guaranteed salary stays on the books (rookie 2nd-round deals and minimums too);
-  // two-way pay sits outside the cap, so it leaves no dead money
-  for (let s = league.season; s <= contractExp(p.contract) && !p.contract.twoWay; s++) {
-    const amt = salaryFor(p, s);
-    if (amt > 0) team.deadMoney.push({ pid: p.pid, name: playerName(p), season: s, amount: amt });
-  }
+  for (const d of releaseDeadMoney(league, p)) team.deadMoney.push({ pid: p.pid, name: playerName(p), ...d });
   p.tid = FREE_AGENT;
   p.contract = { start: league.season, salaries: [0] };
   team.rotation.order = team.rotation.order.filter((x) => x !== p.pid);
@@ -212,7 +285,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean 
   team.rotation.closers = team.rotation.closers.filter((x) => x !== p.pid);
   p.asking = undefined;
   p.asking = askingContract(league, p);
-  p.faDays = 30;
+  p.faDays = FA_PRICE_CUT_DAYS;
   if (opts.news !== false) addNews(league, { kind: 'release', text: `The ${team.name} released ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
 }
 
@@ -227,6 +300,14 @@ export function twoWaySalary(league: League, season = contractSeason(league)): n
 export function twoWayEligible(p: Player): boolean {
   return p.experience <= 3;
 }
+
+/** A free agent who'd take a two-way deal from this team: young enough, and minimum-level on the open market. */
+export function wantsTwoWay(league: League, p: Player, tid?: number): boolean {
+  return twoWayEligible(p) && askingContract(league, p, tid).amount <= CAP_FOR(league, contractSeason(league)).vetMin + 1;
+}
+
+/** Two-way deals run two seasons, one for a player in his last season of eligibility. */
+export const twoWayYears = (p: Player) => (p.experience >= 3 ? 1 : 2);
 
 /** Promote a two-way player to a standard deal at the minimum for his remaining seasons. */
 export function convertTwoWay(league: League, pid: number): { ok: boolean; reason: string } {

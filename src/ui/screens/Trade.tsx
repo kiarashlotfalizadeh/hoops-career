@@ -4,7 +4,8 @@ import { Ban, Check, Handshake, Info, RotateCcw, Ticket, X } from 'lucide-react'
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
-import { evaluateTrade, executeTrade, makeItWork, pickLabel, untradeableReason, validateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import { capPayroll } from '../../core/league/freeAgency';
+import { MAX_FIRSTS_OUT, capSalary, evaluateTrade, executeTrade, makeItWork, pickLabel, salaryMatchGap, untradeableReason, validateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -115,7 +116,9 @@ export default function Trade() {
   const whatWorks = () => {
     const r = makeItWork(league, offer);
     if (!r) {
-      useStore.getState().toast(`${pt.abbrev} can't find a version of this they'd take. Ask for less.`, 'bad');
+      const gap = salaryMatchGap(league, offer, 'a');
+      const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+      useStore.getState().toast(gap > 0 ? `You need to send at least ${fmtM(out + gap)} in salary, and no player of yours makes that work.` : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`, 'bad');
       return;
     }
     const addP = r.a.pids.filter((x) => !offer.a.pids.includes(x));
@@ -129,7 +132,7 @@ export default function Trade() {
     <main className="page">
       <PageHeader
         title="Trade"
-        sub={league.phase === 'regular' && !closed ? `Deadline ${league.day <= league.tradeDeadlineDay ? `in ${league.tradeDeadlineDay - league.day} days` : 'passed'} · salaries for ${seasonLabel(s)}` : `Salaries for ${seasonLabel(s)}`}
+        sub={league.phase === 'regular' && !closed ? `${deadlineLabel(league.tradeDeadlineDay - league.day)} · salaries for ${seasonLabel(s)}` : `Salaries for ${seasonLabel(s)}`}
         back
         right={
           <Help title="Trade rules">
@@ -140,13 +143,16 @@ export default function Trade() {
               <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season no team can drop below {CAP.rosterMin}. Two-way players don't count, but each team has only {TWO_WAY_MAX} two-way slots.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded.
+              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded. Until free agency opens, each team's own expiring players it plans to keep count against its cap at about their asking price (cap holds).
             </p>
             <p style={{ margin: 0 }}>
-              <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens at the draft.
+              <b>Draft picks.</b> No team can be left without a first-round pick in two drafts in a row, and no AI team gives up more than {MAX_FIRSTS_OUT} firsts in one deal.
             </p>
             <p style={{ margin: 0 }}>
-              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract. Contenders want help now; rebuilders pay more for youth and picks and less for veterans. Several lesser players for one star gets a small discount.
+              <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens after the playoffs, with the draft lottery.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract: a bad contract counts against a package, and taking on salary over the tax costs them. Contenders want help now; rebuilders pay more for youth and picks and less for veterans. A star is worth more than several lesser players, and players they'd have to waive to fit the roster count for nothing.
             </p>
           </Help>
         }
@@ -239,7 +245,8 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   const ts = curTeamSeason(league, tid);
   const prev = t.seasons.find((x) => x.season === league.season - 1);
   const rec = ts.won + ts.lost > 0 ? `${ts.won}-${ts.lost}` : prev ? `${prev.won}-${prev.lost} last season` : '0-0';
-  const pay = payroll(league, tid, season);
+  const pay = capPayroll(league, tid, season);
+  const holds = pay - payroll(league, tid, season);
   const cap = CAP_FOR(league, season);
   const st = STRATEGY_META[t.strategy];
   const n = teamPlayers(league, tid).length;
@@ -266,6 +273,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
       <div className="tiny dim" style={{ marginTop: 8 }}>
         {st.help}
         {ts.won + ts.lost >= 10 ? ` Winning ${Math.round(winPct(ts) * 100)}% this season.` : ''}
+        {holds > 0 ? ` Payroll includes ${fmtM(holds)} in cap holds for players they plan to re-sign.` : ''}
       </div>
     </Card>
   );
@@ -416,12 +424,15 @@ function PickAsset({ league, dp, on, onToggle }: { league: League; dp: DraftPick
 
 // ------------------------------------------------------------------ sticky summary dock
 
+const deadlineLabel = (days: number) => (days < 0 ? 'Deadline passed' : days === 0 ? 'Deadline today' : `Deadline in ${days} day${days === 1 ? '' : 's'}`);
+
 function reaction(ev: TradeEval): { pct: number; label: string; color: string } {
   if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)' };
   const gap = -ev.delta;
   const rel = ev.valueOut > 0 ? gap / ev.valueOut : gap > 0 ? 1 : 0;
   const pct = Math.max(4, Math.min(94, (1 - rel) * 100));
-  if (ev.delta >= -0.01) return { pct: 100, label: 'They would take it', color: 'var(--good)' };
+  // value is there but something else blocks it: the rules, or too many first-round picks
+  if (ev.delta >= 0) return ev.ok ? { pct: 94, label: ev.message, color: 'var(--warn)' } : { pct: 100, label: 'They would take it', color: 'var(--good)' };
   if (rel > 0.6) return { pct, label: 'Not even close', color: 'var(--bad)' };
   if (rel > 0.25) return { pct, label: 'You need to add significant value', color: 'var(--warn)' };
   return { pct, label: 'Close — add a little more', color: 'var(--tier-elite)' };
@@ -430,9 +441,10 @@ function reaction(ev: TradeEval): { pct: number; label: string; color: string } 
 function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league: League; offer: TradeOffer; ev: TradeEval | null; empty: boolean; season: number; onPropose: () => void; onWork: () => void }) {
   const user = league.userTid;
   const cap = CAP_FOR(league, season);
-  const out = offer.a.pids.reduce((a, pid) => a + salaryFor(league.players[pid], season), 0);
-  const inc = offer.b.pids.reduce((a, pid) => a + salaryFor(league.players[pid], season), 0);
-  const after = payroll(league, user, season) - out + inc;
+  // two-way pay sits outside the cap: it neither counts nor matches
+  const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
+  const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
+  const after = capPayroll(league, user, season) - out + inc;
   // standard roster spots (two-way players don't count)
   const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
   const rosterAfter = standardRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
@@ -450,6 +462,10 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
   }
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
+  // the helper can fix our side's salary matching and the value, nothing else
+  const gapA = salaryMatchGap(league, offer, 'a');
+  const theyreOver = salaryMatchGap(league, offer, 'b') > 0;
+  const fixable = !ev.accept && !theyreOver && ruleErrors.length <= (gapA > 0 ? 1 : 0);
   return (
     <div className="fo-dock">
       <div className="row between" style={{ gap: 8, marginBottom: 6 }}>
@@ -504,8 +520,8 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
         </div>
       )}
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
-        <button className="btn sm grow" style={{ paddingInline: 8 }} disabled={ev.accept || ruleErrors.some((e) => !e.includes('125%'))} onClick={onWork}>
-          What would make this work?
+        <button className="btn sm grow" style={{ paddingInline: 8 }} disabled={!fixable} onClick={onWork}>
+          {theyreOver ? "They can't absorb that salary" : 'What would make this work?'}
         </button>
         <button className={`btn sm ${ev.accept ? 'good' : 'primary'}`} disabled={!ev.ok} onClick={onPropose}>
           <Handshake size={16} /> Propose
@@ -554,7 +570,7 @@ function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: Leagu
             const t = league.teams[o.tid];
             const ratio = o.myValue / Math.max(0.01, o.targetValue);
             const tone = ratio >= 1.1 ? { l: 'Overpay', c: 'var(--good)' } : ratio >= 0.9 ? { l: 'Fair value', c: 'var(--info)' } : ratio >= 0.7 ? { l: 'Below value', c: 'var(--warn)' } : { l: 'Lowball', c: 'var(--bad)' };
-            const inSal = o.offer.b.pids.reduce((a, x) => a + salaryFor(league.players[x], capSeason(league)), 0);
+            const inSal = o.offer.b.pids.reduce((a, x) => a + capSalary(league, x), 0);
             return (
               <Card key={o.tid} className="tight">
                 <div className="row" style={{ gap: 10 }}>

@@ -6,9 +6,9 @@ import type { Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
-import { CAP_FOR, payroll, playerName, standardRoster } from '../../core/league/helpers';
-import { askingContract, makeContract, marketSalary, teamAppeal, willSign } from '../../core/league/contracts';
-import { userOffer, userResign } from '../../core/league/freeAgency';
+import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
+import { MLE_YEARS, askingContract, makeContract, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
+import { signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
 import { useLeague, useStore } from '../../state/store';
 import { Avatar, Help, Sheet } from '../components/ui';
 import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta } from './common';
@@ -37,7 +37,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const maxAmt = cap.maxContract(p.experience);
   const [amount, setAmount] = useState(() => clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt));
-  const [years, setYears] = useState(ask.years);
+  // a mid-level offer can run 4 years at most
+  const [years, setYears] = useState(() => (mode === 'fa' && signingRoute(league, tid, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
 
   // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount)
@@ -65,8 +66,15 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const isMin = amount <= cap.vetMin + 1;
   const after = pay + amount;
   const rosterN = standardRoster(league, tid).length;
-  const rosterBlocked = mode === 'fa' && rosterN >= CAP.rosterMax;
-  const capBlocked = mode === 'fa' && !isMin && after > cap.salaryCap;
+  const rosterMax = rosterMaxNow(league);
+  // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
+  const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
+  const rosterBlocked = mode === 'fa' && rosterN >= rosterMax;
+  const route = signingRoute(league, tid, amount, season);
+  const mle = mleRoom(league, tid, season);
+  const capBlocked = mode === 'fa' && !route;
+  const mleTooLong = mode === 'fa' && route === 'mle' && years > MLE_YEARS;
+  const blocked = !!closed || rosterBlocked || capBlocked || mleTooLong;
   const contract = makeContract(league, amount, years, season);
   const total = contract.salaries.reduce((a, b) => a + b, 0);
   const taxBill = after > cap.luxuryTax ? (after - cap.luxuryTax) * CAP.taxRate : 0;
@@ -188,12 +196,22 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
         <div className="tiny dim">Runs through {seasonLabel(season + years - 1)} with 5% annual raises. Each year away from what he wants adds ~3% to his price.</div>
       </div>
 
-      {rosterBlocked && (
+      {closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>Your roster is full ({CAP.rosterMax}).</b> Release or trade someone from the Office first.
+          <b>Signing is closed.</b> {closed}
         </Callout>
       )}
-      {capBlocked && !rosterBlocked && (
+      {rosterBlocked && !closed && (
+        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
+          <b>Your roster is full ({rosterMax}).</b> Release or trade someone from the Office first.
+        </Callout>
+      )}
+      {mleTooLong && !closed && !rosterBlocked && (
+        <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
+          <b>Mid-level deals run {MLE_YEARS} years at most.</b> Offer {MLE_YEARS} years or fewer.
+        </Callout>
+      )}
+      {capBlocked && !rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
           <div className="row between" style={{ gap: 8 }}>
             <b>Not enough cap space.</b>
@@ -204,21 +222,31 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
               <p style={{ margin: 0 }}>
                 Once you're over the cap you can still add players on <b>minimum contracts</b> (up to {fmtM(cap.vetMin, 2)} per season), as long as you have a roster spot.
               </p>
+              <p style={{ margin: 0 }}>
+                Once a season you can also use the <b>mid-level exception</b>: one signing over the cap, up to {MLE_YEARS} years, as long as it keeps you under the tax line ({fmtM(cap.luxuryTax)}).{' '}
+                {mle > 0 ? `You can offer up to ${fmtM(mle, 2)} with it now.` : "It isn't available to you right now."}
+              </p>
               <p style={{ margin: 0 }}>To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).</p>
             </Help>
           </div>
           <div className="small dim2" style={{ marginTop: 2 }}>
-            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can only offer the minimum ({fmtM(cap.vetMin, 2)}).
+            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can offer the minimum ({fmtM(cap.vetMin, 2)}){mle > 0 ? ` or up to ${fmtM(mle, 2)} with your mid-level exception` : ''}.
           </div>
-          <button className="btn xs" style={{ marginTop: 8 }} onClick={() => set(Math.min(cap.vetMin, maxAmt))}>
-            Offer the minimum instead
-          </button>
+          <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
+            {mle > cap.vetMin && (
+              <button className="btn xs" onClick={() => (set(Math.floor(Math.min(mle, maxAmt) / STEP) * STEP), setYears(Math.min(years, MLE_YEARS)))}>
+                Use the mid-level ({fmtM(mle)})
+              </button>
+            )}
+            <button className="btn xs" onClick={() => set(Math.min(cap.vetMin, maxAmt))}>
+              Offer the minimum instead
+            </button>
+          </div>
           {ask.amount > cap.vetMin && <div className="tiny dim" style={{ marginTop: 6 }}>He's asking {fmtM(ask.amount, 2)}, so he's unlikely to take a minimum deal.</div>}
         </Callout>
       )}
 
-      {!capBlocked &&
-        !rosterBlocked &&
+      {!blocked &&
         (verdict.ok ? (
           <Callout tone="good" icon={<CircleCheck size={18} className="good" />}>
             <b>He'll sign at this number.</b>
@@ -240,7 +268,15 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
         <div className="card tight col" style={{ gap: 8 }}>
           <div className="row between">
             <div className="small bold">Cap impact · {seasonLabel(season)}</div>
-            {isMin ? <span className="tag good">Minimum deal</span> : <span className="tag">Uses cap space</span>}
+            {isMin ? (
+              <span className="tag good">Minimum deal</span>
+            ) : route === 'mle' ? (
+              <span className="tag info">Mid-level exception</span>
+            ) : route === 'space' ? (
+              <span className="tag">Uses cap space</span>
+            ) : (
+              <span className="tag bad">Over the cap</span>
+            )}
           </div>
           <div className="grid2">
             <div>
@@ -258,6 +294,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
           </div>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           {isMin && after > cap.salaryCap && <div className="tiny dim">Minimum contracts (up to {fmtM(cap.vetMin, 2)}) can be signed even when you're over the cap.</div>}
+          {route === 'mle' && <div className="tiny dim">Uses your mid-level exception: once a season, up to {MLE_YEARS} years, and it keeps you under the tax line.</div>}
         </div>
       ) : (
         <div className="card tight col" style={{ gap: 8 }}>
@@ -283,7 +320,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>
-        <button className={`btn grow ${verdict.ok && !capBlocked && !rosterBlocked ? 'primary' : ''}`} disabled={capBlocked || rosterBlocked} onClick={submit}>
+        <button className={`btn grow ${verdict.ok && !blocked ? 'primary' : ''}`} disabled={blocked} onClick={submit}>
           {mode === 'fa' ? 'Offer' : 'Re-sign'} {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
         </button>
       </div>

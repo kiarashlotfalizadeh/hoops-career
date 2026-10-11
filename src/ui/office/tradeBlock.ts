@@ -2,11 +2,9 @@
 // would actually accept. Same idea as aiProposeToUser in core/league/trades.ts, but
 // exhaustive across teams, including draft picks, and verified with evaluateTrade.
 import type { League } from '../../core/types';
-import { salaryFor } from '../../core/playerGen';
 import { rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { tradeValue } from '../../core/league/contracts';
-import { evaluateTrade, pickValue, untradeableReason, type TradeOffer } from '../../core/league/trades';
-import { capSeason } from './common';
+import { MAX_FIRSTS_OUT, PICK_LENS, capSalary, evaluateTrade, pickValue, pickValueFor, playerValueFor, untradeableReason, type TradeOffer } from '../../core/league/trades';
 
 export interface BlockOffer {
   tid: number;
@@ -16,9 +14,6 @@ export interface BlockOffer {
   /** Value of the user's player to the user's team. */
   targetValue: number;
 }
-
-type Strategy = 'contend' | 'retool' | 'rebuild';
-const pickMult = (s: Strategy) => (s === 'rebuild' ? 1.35 : s === 'contend' ? 0.7 : 1);
 
 interface Asset {
   kind: 'p' | 'd';
@@ -40,7 +35,6 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
   const me = league.teams[user];
   const target = league.players[pid];
   if (!target || target.tid !== user) return [];
-  const s = capSeason(league);
   const targetValue = tradeValue(league, target, me.strategy);
   const gen = league.settings.difficulty === 'casual' ? 0.88 : league.settings.difficulty === 'hard' ? 1.12 : 1;
   const userCount = standardRoster(league, user).length;
@@ -49,7 +43,7 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
 
   for (const t of league.teams) {
     if (t.tid === user) continue;
-    const want = tradeValue(league, target, t.strategy);
+    const want = playerValueFor(league, target, t.tid, true);
     const budget = want / gen;
     // players they can actually move (no expiring deals after the season, two-ways stay put)
     const roster = standardRoster(league, t.tid).filter((p) => !untradeableReason(league, p));
@@ -58,14 +52,12 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
     // and so must we
     const maxPlayersIn = Math.min(3, max - userCount + 1);
     if (maxPlayersIn < minPlayersOut) continue;
+    const player = (pid: number): Asset => ({ kind: 'p', id: pid, ai: playerValueFor(league, league.players[pid], t.tid, false), mine: tradeValue(league, league.players[pid], me.strategy), sal: capSalary(league, pid) });
     const assets: Asset[] = [
-      ...roster.map((p) => ({ kind: 'p' as const, id: p.pid, ai: tradeValue(league, p, t.strategy), mine: tradeValue(league, p, me.strategy), sal: salaryFor(p, s) })),
+      ...roster.map((p) => player(p.pid)),
       ...league.draftPicks
         .filter((d) => d.tid === t.tid)
-        .map((d) => {
-          const pv = pickValue(league, d);
-          return { kind: 'd' as const, id: d.dpid, ai: pv * pickMult(t.strategy), mine: pv * pickMult(me.strategy), sal: 0 };
-        }),
+        .map((d) => ({ kind: 'd' as const, id: d.dpid, ai: pickValueFor(league, d, t.tid, false), mine: pickValue(league, d) * PICK_LENS[me.strategy], sal: 0 })),
     ]
       // ignore throw-ins worth almost nothing
       .filter((a) => a.mine >= targetValue * 0.06)
@@ -80,7 +72,7 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
         if (skip.has(i)) continue;
         const a = assets[i];
         if (a.kind === 'p' && np >= maxPlayersIn) continue;
-        if (a.kind === 'd' && nd >= 2) continue;
+        if (a.kind === 'd' && nd >= MAX_FIRSTS_OUT) continue;
         if (sum + a.ai > cap) continue;
         pkg.push(a);
         sum += a.ai;
@@ -92,7 +84,7 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
 
     // salary fillers: low-value contracts the AI is happy to send to make the money work
     const fillers = roster
-      .map((p) => ({ kind: 'p' as const, id: p.pid, ai: tradeValue(league, p, t.strategy), mine: tradeValue(league, p, me.strategy), sal: salaryFor(p, s) }))
+      .map((p) => player(p.pid))
       .filter((a) => a.sal > 0)
       .sort((x, y) => x.ai / x.sal - y.ai / y.sal);
 
