@@ -1098,8 +1098,8 @@ a.bk-s:hover {
 .lg-strip {
   position: relative;
   display: grid;
-  /* payroll gets a little more room: its label carries the season in the offseason */
-  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr);
+  /* payroll gets more room: its label carries the season in the offseason ("Payroll 27-28") */
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.5fr);
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--line-2);
@@ -1120,6 +1120,10 @@ a.bk-s:hover {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
+  /* one line: a season label must not break at its hyphen */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lg-strip .v {
   font-family: var(--display);
