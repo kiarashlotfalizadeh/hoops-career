@@ -14,6 +14,7 @@ import { askingContract, releasePlayer, valueScore } from './contracts';
 import { addInbox, playerName, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './trades';
 import { fillRosters, trimRosters } from './freeAgency';
+import { ratingMeans } from './progression';
 
 export interface SeedPlayer {
   id: string;
@@ -221,6 +222,7 @@ export function createLeague(opts: CreateOpts): League {
       p.faDays = 30;
     }
   }
+  league.ratingAnchors = ratingMeans(league);
   ensureFuturePicks(league, season + 3);
   generateDraftClass(league, season, rng);
   // preseason cuts: real contract lists include two-way and camp deals, so AI teams trim to 15

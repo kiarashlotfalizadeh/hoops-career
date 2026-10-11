@@ -8,6 +8,7 @@ import { standings } from '../src/core/league/standings';
 import { nextPick } from '../src/core/league/draft';
 import { expiringPlayers, userResign } from '../src/core/league/freeAgency';
 import { askingContract } from '../src/core/league/contracts';
+import { ovrRaw } from '../src/core/ratings';
 
 const seasons = Number(process.argv[2] ?? 2);
 const seedIdx = process.argv.indexOf('--seed');
@@ -74,5 +75,17 @@ for (let s = 0; s < seasons; s++) {
   console.log(`New season ${league.season}: roster sizes ${Math.min(...sizes)}-${Math.max(...sizes)}, payroll ${Math.min(...pays).toFixed(0)}-${Math.max(...pays).toFixed(0)}M (cap ${(CAP_FOR(league).salaryCap / 1000).toFixed(0)}M); players ${Object.keys(league.players).length}; FAs ${Object.values(league.players).filter((p) => p.tid === -1).length}`);
   const json = JSON.stringify(league);
   console.log(`League JSON size: ${(json.length / 1e6).toFixed(2)} MB`);
+  // long-run health: rating distribution, raw skill level, economy, scoring
+  const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
+  const ovrs = rostered.map((p) => p.ovr).sort((a, b) => b - a);
+  const rawMean = rostered.reduce((a, p) => a + ovrRaw(p.ratings), 0) / rostered.length;
+  const sal = rostered.map((p) => p.contract.salaries[Math.max(0, league.season - p.contract.start)] ?? 0).sort((a, b) => b - a);
+  const games = league.games.filter((g) => g.season === league.season - 1 && g.type === 'regular');
+  const ppg = games.reduce((a, g) => a + g.home.pts + g.away.pts, 0) / Math.max(1, games.length * 2);
+  const capNow = CAP_FOR(league).salaryCap;
+  const maxDeals = sal.filter((x) => x >= capNow * 0.25).length;
+  const capX = league.teams.map((t) => ({ t: t.abbrev, x: payroll(league, t.tid) / capNow, user: t.tid === league.userTid })).sort((a, b) => b.x - a.x);
+  console.log(`  payroll / cap: ${capX.slice(0, 5).map((r) => `${r.t}${r.user ? '*' : ''} ${r.x.toFixed(2)}`).join(', ')} … median ${capX[15].x.toFixed(2)}, min ${capX[29].x.toFixed(2)}`);
+  console.log(`  health: rostered ${rostered.length}, OVR mean ${(ovrs.reduce((a, b) => a + b, 0) / ovrs.length).toFixed(1)}, ≥90: ${ovrs.filter((o) => o >= 90).length}, ≥85: ${ovrs.filter((o) => o >= 85).length}, raw mean ${rawMean.toFixed(1)} | salaries ≥25% cap: ${maxDeals}, top-15 avg ${(sal.slice(0, 15).reduce((a, b) => a + b, 0) / 15 / 1000).toFixed(0)}M | last season ppg ${ppg.toFixed(1)} | retired ${Object.values(league.players).filter((p) => p.tid === -3).length}`);
 }
 console.log(`\nTotal ${(performance.now() - t0) / 1000}s`);

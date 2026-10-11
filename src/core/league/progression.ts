@@ -2,7 +2,7 @@
 // training focus, coaching quality, practice intensity and playing time.
 
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
-import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
+import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
 import { RATING_KEYS, ovrRaw, potential, toDisplay, archetype } from '../ratings';
 import { playerAge } from '../playerGen';
@@ -130,17 +130,49 @@ function devContext(league: League, p: Player): DevContext {
   };
 }
 
+/** League-wide mean of each attribute among rostered players. */
+export function ratingMeans(league: League): Partial<Record<RatingKey, number>> {
+  const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
+  const out: Partial<Record<RatingKey, number>> = {};
+  for (const k of RATING_KEYS) out[k] = rostered.reduce((a, p) => a + p.ratings[k], 0) / Math.max(1, rostered.length);
+  return out;
+}
+
+/**
+ * Hold the league's talent level steady: after a year of development (young players rise,
+ * veterans fade, rookies arrive, retirees leave), shift every attribute so its league-wide mean
+ * among rostered players matches the anchor set when the league was created. Individual arcs
+ * are untouched relative to the league; scoring, OVR meaning and salaries stay stable for decades.
+ */
+export function anchorRatings(league: League) {
+  league.ratingAnchors ??= ratingMeans(league);
+  const now = ratingMeans(league);
+  for (const k of RATING_KEYS) {
+    if (k === 'hgt') continue;
+    const d = (league.ratingAnchors[k] ?? now[k]!) - now[k]!;
+    if (Math.abs(d) < 0.05) continue;
+    for (const p of Object.values(league.players)) {
+      if (p.tid === RETIRED) continue;
+      p.ratings[k] = clamp(Math.round((p.ratings[k] + d) * 10) / 10, 1, 100);
+    }
+  }
+}
+
 /** Offseason development for everyone (run at the start of a new season). */
 export function annualProgression(league: League, rng: Rng): { pid: number; delta: number }[] {
   const out: { pid: number; delta: number }[] = [];
+  const before = new Map(Object.values(league.players).map((p) => [p.pid, p.ovr]));
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
-    const before = p.ovr;
     develop(p, league.season, devContext(league, p), rng, p.tid === DRAFT_PROSPECT ? 0.5 : 0.8);
+  }
+  anchorRatings(league);
+  for (const p of Object.values(league.players)) {
+    if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
     refreshDerived(league, p);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
-    out.push({ pid: p.pid, delta: p.ovr - before });
+    out.push({ pid: p.pid, delta: p.ovr - (before.get(p.pid) ?? p.ovr) });
   }
   return out;
 }

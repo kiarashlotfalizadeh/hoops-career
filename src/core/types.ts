@@ -717,6 +717,8 @@ export interface League {
   rng: number; // RNG state
   /** Piecewise mapping from raw composite to 40-99 display scale. */
   ovrScale: { raw: number[]; disp: number[] };
+  /** League-wide mean of each attribute among rostered players, held steady year to year so the league neither inflates nor deflates. */
+  ratingAnchors?: Partial<Record<RatingKey, number>>;
   /** Days of the regular season (last scheduled day). */
   regularSeasonDays: number;
   tradeDeadlineDay: number;

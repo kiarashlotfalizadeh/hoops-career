@@ -1,3 +1,5 @@
+import { anchorRatings, ratingMeans } from '../league/progression';
+import { RATING_KEYS } from '../ratings';
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { autoDraftUserPick, startDraft } from '../league/season';
@@ -39,5 +41,15 @@ describe('offseason regressions', () => {
     league.phase = 'freeAgency';
     expect(contractSeason(league)).toBe(league.season + 1);
     expect(marketSalary(league, p)).toBeGreaterThanOrEqual(inSeason);
+  });
+
+  it('holds the league talent level steady across seasons', () => {
+    const league = createLeague({ name: 'a', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 31 });
+    const before = ratingMeans(league);
+    // a year of runaway development everywhere
+    for (const p of Object.values(league.players)) for (const k of RATING_KEYS) if (k !== 'hgt') p.ratings[k] = Math.min(100, p.ratings[k] + 6);
+    anchorRatings(league);
+    const after = ratingMeans(league);
+    for (const k of RATING_KEYS) expect(Math.abs((after[k] ?? 0) - (before[k] ?? 0))).toBeLessThan(0.6);
   });
 });

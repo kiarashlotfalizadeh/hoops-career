@@ -199,8 +199,14 @@ function retirements(league: League, rng: Rng) {
     const a = playerAge(p, league.season);
     let prob = 0;
     if (a >= 34) prob = 1 / (1 + Math.exp(-((a - 37.5) * 0.9 + (72 - p.ovr) * 0.18)));
-    else if (p.tid === FREE_AGENT && a >= 30 && p.ovr < 64) prob = 0.4;
-    else if (p.tid === FREE_AGENT && p.ovr < 56) prob = 0.5;
+    else if (p.tid === FREE_AGENT) {
+      // nobody wanted him: unsigned veterans and fringe players move on
+      const playedThisSeason = p.stats.some((s) => s.season === league.season && s.gp > 0);
+      if (a >= 30 && p.ovr < 68) prob = 0.5;
+      else if (p.ovr < 60) prob = 0.6;
+      else if (!playedThisSeason && p.ovr < 70) prob = 0.45;
+      else if (!playedThisSeason && a >= 27) prob = 0.25;
+    }
     // players under contract rarely walk away
     if (p.tid >= 0 && p.contract.start + p.contract.salaries.length - 1 > league.season) prob *= 0.25;
     if (rng.chance(prob)) {
