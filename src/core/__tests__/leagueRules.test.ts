@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { advanceDay, faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
-import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
@@ -625,6 +625,23 @@ describe('free agency calendar (UI2-22)', () => {
     l.faDay = 27;
     faAdvance(l, 7);
     expect(l.faDay).toBe(30);
+  });
+
+  it('the summer has dates: draft night in late June, free agency from June 30, a day per free-agency day', () => {
+    const l = league();
+    l.phase = 'draftLottery';
+    l.day = 238; // Finals night, mid-June
+    runLottery(l, new Rng(2));
+    expect(startDraft(l)).toBe(true);
+    const md = () => [dayToDate(l.season, l.day).getUTCMonth(), dayToDate(l.season, l.day).getUTCDate()];
+    expect(md()).toEqual([5, 25]);
+    expect(l.news[l.news.length - 1].day).toBe(l.day);
+    expect(finishDraftPhase(l)).toBe(true);
+    expect(startFreeAgency(l)).toBe(true);
+    expect(md()).toEqual([5, 30]);
+    faAdvance(l, 3);
+    expect(md()).toEqual([6, 3]);
+    expect(l.inbox[0].day).toBeLessThanOrEqual(l.day);
   });
 });
 
