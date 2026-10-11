@@ -333,7 +333,8 @@ function HallOfFame({ league }: { league: League }) {
 function LegendCard({ league, p, hof }: { league: League; p: Player; hof?: boolean }) {
   const c = careerTotals(p);
   const peak = Math.max(p.ovr, ...p.ratingsHistory.map((r) => r.ovr));
-  const from = p.draft.year > 0 ? p.draft.year + 1 : Math.min(...[...c.seasons, p.retiredSeason ?? league.season]);
+  // a draft year the seed doesn't know (LeBron's predates its draft pages): count back his NBA seasons
+  const from = p.draft.year > 0 ? p.draft.year + 1 : Math.min((p.retiredSeason ?? league.season) - p.experience, ...c.seasons);
   // imported veterans' records start with the seed's real seasons, not their rookie year
   const tracked = c.seasons.size ? Math.min(...c.seasons) : from;
   // Most-played team for the logo

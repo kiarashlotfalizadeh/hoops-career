@@ -142,7 +142,8 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     bornYear: sp.bornYear,
     country: sp.country,
     college: sp.college,
-    jersey: sp.jersey,
+    // Basketball Reference lists every number a player wore that season ("6, 9"): the latest is his
+    jersey: sp.jersey.split(',').pop()!.trim(),
     draft,
     tid,
     ratings: { ...sp.ratings },
