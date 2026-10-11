@@ -5,17 +5,17 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { advanceDay, faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
-import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
-import { buildSimInput, wearInjuryRisk } from '../league/games';
+import { buildSimInput, ensureRotation, wearInjuryRisk } from '../league/games';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
 import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
-import { lotteryOdds, runLottery } from '../league/draft';
+import { generateDraftClass, lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
@@ -172,6 +172,24 @@ describe('offseason', () => {
     for (const tid of [2, 3, 4]) expect(odds.get(tid)).toBeCloseTo((140 + 125 + 105) / 3);
     expect(odds.get(5)).toBe(90);
     expect([...odds.values()].reduce((a, b) => a + b, 0)).toBeCloseTo(1000);
+  });
+
+  it('a new arrival whose number is taken picks a free one; nobody joins sharing a name', () => {
+    const l = league();
+    const tid = aiTeam(l);
+    const [vet] = teamPlayers(l, tid);
+    const newcomer = teamPlayers(l, tid === 5 ? 6 : 5)[0];
+    const number = vet.jersey;
+    newcomer.jersey = number;
+    newcomer.tid = tid;
+    ensureRotation(l, tid);
+    const numbers = teamPlayers(l, tid).map((p) => p.jersey);
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(vet.jersey).toBe(number);
+    expect(newcomer.jersey).not.toBe(number);
+    withRng(l, (rng) => generateDraftClass(l, l.season + 1, rng));
+    const names = Object.values(l.players).map((p) => `${p.firstName} ${p.lastName}`);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it('contract options: opt-outs, AI and user team options (bug 10)', () => {

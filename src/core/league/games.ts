@@ -50,12 +50,67 @@ function benchTwoWays(rot: Rotation, players: Player[]) {
   rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 
+/** Numbers a newcomer picks from first (any free number from 0-99 after that). */
+export const JERSEYS = [
+  '0',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '17',
+  '20',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '30',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '41',
+  '44',
+  '55',
+];
+
+/**
+ * One number per player on a team: players already in the rotation keep theirs (then the
+ * longest-serving), and a draftee, signing or trade arrival whose number is taken picks a free one.
+ */
+function settleJerseys(players: Player[], incumbents: Set<number>) {
+  const order = [...players].sort((a, b) => Number(incumbents.has(b.pid)) - Number(incumbents.has(a.pid)) || a.joinedSeason - b.joinedSeason || a.pid - b.pid);
+  const used = new Set<string>();
+  for (const p of order) {
+    if (p.jersey && !used.has(p.jersey)) {
+      used.add(p.jersey);
+      continue;
+    }
+    let free = JERSEYS.filter((j) => !used.has(j));
+    if (!free.length) free = Array.from({ length: 100 }, (_, i) => String(i)).filter((j) => !used.has(j));
+    p.jersey = free[(Math.imul(p.pid, 0x9e3779b1) >>> 0) % free.length];
+    used.add(p.jersey);
+  }
+}
+
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
 export function ensureRotation(league: League, tid: number) {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
   const pids = new Set(players.map((p) => p.pid));
   const rot = team.rotation;
+  settleJerseys(players, new Set(rot.order));
   const stale = rot.order.some((pid) => !pids.has(pid)) || players.some((p) => !rot.order.includes(p.pid));
   const isUser = tid === league.userTid;
   if (!isUser || !rot.manual) {

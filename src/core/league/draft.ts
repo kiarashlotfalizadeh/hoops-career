@@ -49,6 +49,8 @@ function prospectLevel(i: number): number {
 /** Generate a class of prospects for the draft held at the end of `year`'s season. */
 export function generateDraftClass(league: League, year: number, rng: Rng, size = 72) {
   const created: Player[] = [];
+  // nobody arrives sharing a name with a player still in the league
+  const taken = new Set(Object.values(league.players).flatMap((p) => (p.tid === RETIRED ? [] : [playerName(p)])));
   for (let i = 0; i < size; i++) {
     const t = i / size;
     const talent = 0.85 - 2.4 * Math.pow(t, 0.75) + rng.normal(0, 0.45);
@@ -62,6 +64,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
       scale: league.ovrScale,
       intlBias: 1.6,
       draftYear: year,
+      taken,
     });
     p.bornYear = year - age;
     p.growth = clamp(rng.normal(0.15, 0.45), -1, 1);
