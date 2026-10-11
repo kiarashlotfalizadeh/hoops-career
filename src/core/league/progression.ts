@@ -39,7 +39,8 @@ const GROUP_OF: Record<RatingKey, Group> = {
 // added) average out to about zero and the anchor only corrects drift. A uniform cut there used to
 // shift the whole age curve down, so players peaked at 24-25 and fell 3-4 OVR a year after 30.
 // Young players climb about 2 OVR a year, skills and IQ hold into the late 20s and athleticism
-// fades first: players peak around 26-27, slip slowly to 30, then lose 1-2 OVR a year.
+// fades first: players peak around 26-27, slip slowly to 30, then lose 1-2 OVR a year, and more
+// each year after 35.
 const CURVES: Record<Group, number[]> = {
   athletic: [1.3, 0.9, 0.5, 0.4, 0.2, 0.1, 0.1, -0.1, -0.2, -0.4, -0.7, -1, -1.3, -1.7, -2.1, -2.6, -3],
   end: [0.7, 0.7, 0.5, 0.4, 0.2, -0.1, -0.3, -0.3, -0.2, -0.3, -0.4, -0.6, -0.9, -1.3, -1.7, -2, -2.4],
@@ -91,9 +92,10 @@ export const FOCUS_META: Record<TrainingFocus, { label: string; help: string }> 
   conditioning: { label: 'Conditioning', help: 'Stamina, strength and speed. Slows athletic decline for veterans.' },
 };
 
+/** Past 35 the decline keeps speeding up (x1.25 at 36 to x2 from 39): very few play into their 40s. */
 function curve(g: Group, a: number) {
   const idx = clamp(a - 19, 0, 16);
-  return CURVES[g][idx];
+  return CURVES[g][idx] * (a > 35 ? Math.min(2, 1 + 0.25 * (a - 35)) : 1);
 }
 
 export interface DevContext {

@@ -33,6 +33,24 @@ describe('training focus (L12)', () => {
   });
 });
 
+describe('age curve', () => {
+  it('declines faster each year past 35, so stars fade out of their late 30s', () => {
+    const l = league();
+    const ctx = { coachDev: 50, coachingBudget: 50, practice: 'normal' as const, mpg: 25 };
+    const ps = Object.values(l.players).filter((p) => p.tid >= 0);
+    // the same players aged to 34, 37 and 40: average one-year OVR change at each age
+    const at = (age: number) =>
+      ps.reduce((sum, p) => {
+        const c = structuredClone(p);
+        c.bornYear = l.season - age;
+        return sum + develop(c, l.season, ctx, new Rng(500 + p.pid), 1, l.ovrScale);
+      }, 0) / ps.length;
+    const [a34, a37, a40] = [at(34), at(37), at(40)];
+    expect(a37).toBeLessThan(a34 - 0.8);
+    expect(a40).toBeLessThan(a37 - 0.8);
+  });
+});
+
 describe('league anchor (L9)', () => {
   it('pulls a widened OVR spread back toward the spread at league creation', () => {
     const l = league();
