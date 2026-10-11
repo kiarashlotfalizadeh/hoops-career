@@ -275,7 +275,11 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
   if (s.series) {
     const ser = s.series;
     return (
-      <button className={cls} onClick={() => onOpen(ser)} aria-label={`${seriesLabel(ser)} details`}>
+      <button
+        className={cls}
+        onClick={() => onOpen(ser)}
+        aria-label={`${seriesLabel(ser)}: ${league.teams[ser.high].abbrev} ${ser.highWins}, ${league.teams[ser.low].abbrev} ${ser.lowWins}. Series details`}
+      >
         {body}
       </button>
     );
