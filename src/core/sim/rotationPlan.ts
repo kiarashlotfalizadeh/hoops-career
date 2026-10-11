@@ -2,6 +2,8 @@
 // substitution plan. The live engine follows the plan at dead balls, overriding it for
 // fouls, fatigue, injuries and blowouts. This is what makes minute settings reliable.
 
+import type { Pos, Rotation } from '../types';
+
 export interface PlanPlayer {
   pid: number;
   minutes: number;
@@ -10,6 +12,80 @@ export interface PlanPlayer {
   guard: boolean; // can handle the ball
   big: boolean;
   endurance: number; // 0..100
+  /** Hard minute cap: the plan never goes past it while anyone else has minutes to give. */
+  cap?: number;
+}
+
+/** A rostered player as the plan sees him. */
+export interface PlanSource {
+  pid: number;
+  /** False when injured or resting: his planned minutes go to teammates. */
+  available: boolean;
+  guard: boolean;
+  big: boolean;
+  endurance: number;
+}
+
+/** Ball handler / big flags the plan uses for positional sanity. */
+export function planRoles(r: { hnd: number; hgt: number }, pos: Pos): { guard: boolean; big: boolean } {
+  return { guard: r.hnd >= 55 || pos === 'PG' || pos === 'SG', big: r.hgt >= 60 || pos === 'C' };
+}
+
+/**
+ * What the stint plan is built from: the available players in depth order, with the minutes
+ * of unavailable teammates handed out (bench first), a starter's share for a starter with no
+ * minutes set, hard caps, and for auto-managed teams the shorter playoff rotation. The engine
+ * and the Rotation screen's preview both use it, so the preview shows what the engine plays.
+ */
+export function planInputs(roster: PlanSource[], rot: Rotation, opts: { playoffs?: boolean } = {}): PlanPlayer[] {
+  const inOrder = new Map(rot.order.map((pid, i) => [pid, i]));
+  // starters are the first five available in the depth order
+  const ordered = roster.filter((p) => p.available).sort((a, b) => (inOrder.get(a.pid) ?? 99) - (inOrder.get(b.pid) ?? 99));
+  const missing = roster.filter((p) => !p.available).reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+  const mins = ordered.map((p) => rot.minutes[p.pid] ?? 0);
+  let toGive = missing;
+  if (toGive > 0) {
+    // give to the next bench players first (those with low minutes), then spread
+    for (let i = 5; i < mins.length && toGive > 0; i++) {
+      const add = Math.min(toGive, Math.max(0, 22 - mins[i]));
+      mins[i] += add;
+      toGive -= add;
+    }
+    for (let i = 0; i < mins.length && toGive > 0; i++) {
+      const add = Math.min(toGive, Math.max(0, 38 - mins[i]));
+      mins[i] += add;
+      toGive -= add;
+    }
+  }
+  // a starter without planned minutes (new to the depth chart) gets a starter's share
+  for (let i = 0; i < Math.min(5, mins.length); i++) if (!rot.minutes[ordered[i].pid]) mins[i] = Math.max(mins[i], 24);
+  const caps = ordered.map((p) => rot.caps[p.pid] || undefined);
+  if (opts.playoffs && !rot.manual) {
+    // playoff rotations shorten to eight: the top five play ~10% more (42 at most), nobody past
+    // the eighth man plays, and the rescale to 240 goes to the regulars
+    const rank = mins.map((_, i) => i).sort((a, b) => mins[b] - mins[a]);
+    rank.forEach((i, r) => {
+      if (r < 5) {
+        mins[i] *= 1.1;
+        caps[i] = Math.min(caps[i] ?? 42, 42);
+      } else if (r >= 8) mins[i] = 0;
+    });
+  }
+  const closerSet = new Set(rot.closers.filter((pid) => ordered.some((p) => p.pid === pid)));
+  for (const p of ordered) {
+    if (closerSet.size >= 5) break;
+    closerSet.add(p.pid);
+  }
+  return ordered.map((p, i) => ({
+    pid: p.pid,
+    minutes: caps[i] !== undefined ? Math.min(mins[i], caps[i]!) : mins[i],
+    starter: i < 5,
+    closer: closerSet.has(p.pid),
+    guard: p.guard,
+    big: p.big,
+    endurance: p.endurance,
+    cap: caps[i],
+  }));
 }
 
 export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
@@ -19,30 +95,44 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
     // fall back to an even split among the first 10
     return players.map((_, i) => (i < 10 ? total / Math.min(10, players.length) : 0));
   }
+  const lim = players.map((p) => Math.min(46, p.cap ?? 46));
   let scaled = raw.map((m) => (m * total) / sum);
-  // cap at 46 and redistribute overflow to the rest
-  for (let iter = 0; iter < 5; iter++) {
-    let overflow = 0;
-    scaled = scaled.map((m) => {
-      if (m > 46) {
-        overflow += m - 46;
-        return 46;
+  // cap at 46 (or the player's hard cap) and hand the overflow to the rest of the rotation; if
+  // they are all capped, to the deep bench; only past that do caps give
+  const spread = (open: (i: number) => boolean) => {
+    for (let iter = 0; iter < 8; iter++) {
+      let overflow = 0;
+      scaled = scaled.map((m, i) => {
+        if (m > lim[i]) {
+          overflow += m - lim[i];
+          return lim[i];
+        }
+        return m;
+      });
+      if (overflow < 0.01) return 0;
+      const room = scaled.reduce((a, m, i) => a + (m < lim[i] && open(i) ? lim[i] - m : 0), 0);
+      if (room <= overflow) {
+        scaled = scaled.map((m, i) => (open(i) ? Math.max(m, lim[i]) : m));
+        return overflow - room;
       }
-      return m;
-    });
-    if (overflow < 0.01) break;
-    const room = scaled.reduce((a, m, i) => a + (m < 46 && raw[i] > 0 ? 46 - m : 0), 0);
-    if (room <= 0) break;
-    scaled = scaled.map((m, i) => (m < 46 && raw[i] > 0 ? m + (overflow * (46 - m)) / room : m));
-  }
-  // integer minutes via largest remainder
+      scaled = scaled.map((m, i) => (m < lim[i] && open(i) ? m + (overflow * (lim[i] - m)) / room : m));
+    }
+    return 0;
+  };
+  let left = spread((i) => raw[i] > 0);
+  if (left > 0) left = spread(() => true);
+  if (left > 0) scaled = scaled.map((m) => (m * total) / (total - left));
+  // integer minutes via largest remainder, never rounding a capped player past his cap
   const floors = scaled.map((m) => Math.floor(m));
   let rem = total - floors.reduce((a, b) => a + b, 0);
   const order = scaled.map((m, i) => [m - Math.floor(m), i] as const).sort((a, b) => b[0] - a[0]);
-  for (const [, i] of order) {
-    if (rem <= 0) break;
-    floors[i]++;
-    rem--;
+  for (const pass of [0, 1]) {
+    for (const [, i] of order) {
+      if (rem <= 0) break;
+      if (pass === 0 && floors[i] + 1 > lim[i]) continue;
+      floors[i]++;
+      rem--;
+    }
   }
   return floors;
 }

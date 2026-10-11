@@ -57,6 +57,11 @@ export const TARGETS = {
   tov: 13.9,
   pf: 19.4,
   pts: 114.4,
+  /** Game-to-game shape: SD of the final margin, share of games decided by 20+, overtime rate, correlation of the two scores. */
+  marginSd: 13,
+  blowout20: 0.17,
+  otRate: 0.055,
+  scoreCorr: 0.3,
 };
 
 export const PHASE_LABEL: Record<string, string> = {

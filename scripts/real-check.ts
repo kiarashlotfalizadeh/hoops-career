@@ -77,6 +77,22 @@ const lg: [string, number, number][] = [
 ];
 console.log('League per team game (sim vs 2025-26 NBA):');
 console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixed(1)} (${t < 2 ? t.toFixed(3) : t.toFixed(1)}, ${(((v - t) / t) * 100).toFixed(0)}%)`).join(' · '));
+// ---- game-to-game shape, and how margin turns into wins (NBA: ~2.7 wins per point of average margin, win SD ~12)
+{
+  const played = league.games.filter((g) => g.season === season && g.type === 'regular');
+  const margins = played.map((g) => g.home.pts - g.away.pts);
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const sd = (xs: number[]) => Math.sqrt(xs.reduce((a, b) => a + (b - mean(xs)) ** 2, 0) / (xs.length - 1));
+  const cov = (xs: number[], ys: number[]) => xs.reduce((a, x, i) => a + (x - mean(xs)) * (ys[i] - mean(ys)), 0) / (xs.length - 1);
+  const hs = played.map((g) => g.home.pts);
+  const as = played.map((g) => g.away.pts);
+  const ts = league.teams.map((t) => t.seasons.find((x) => x.season === season)!).filter(Boolean);
+  const wins = ts.map((x) => x.won);
+  const diff = ts.map((x) => (x.ptsFor - x.ptsAgainst) / Math.max(1, x.won + x.lost));
+  console.log(
+    `  games: margin SD ${sd(margins).toFixed(1)} (${TARGETS.marginSd}), 20+ ${((margins.filter((m) => Math.abs(m) >= 20).length / margins.length) * 100).toFixed(1)}% (${TARGETS.blowout20 * 100}%), OT ${((played.filter((g) => g.ot > 0).length / played.length) * 100).toFixed(1)}% (${TARGETS.otRate * 100}%), score corr ${(cov(hs, as) / sd(hs) / sd(as)).toFixed(2)} (${TARGETS.scoreCorr}); ${(cov(wins, diff) / sd(diff) ** 2).toFixed(2)} wins per point of margin (NBA ~2.7), win SD ${sd(wins).toFixed(1)} (NBA ~12)`,
+  );
+}
 const zl = (z: 'rim' | 'paint' | 'mid' | 'three') => `${z} ${((100 * engineDiag.ast[z]) / Math.max(1, engineDiag.made[z])).toFixed(0)}%`;
 console.log(`  assisted share of makes: ${zl('rim')}, ${zl('paint')}, ${zl('mid')}, ${zl('three')} (NBA ~65/45/40/85)`);
 

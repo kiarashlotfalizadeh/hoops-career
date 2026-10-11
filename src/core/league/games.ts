@@ -112,7 +112,7 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
     for (const it of plan.items) t = applyPatch(t, it.patch);
     return { team: { ...team, tactics: t }, players, perf, rest, injuryMult };
   }
-  return { team, players, perf, rest, injuryMult };
+  return { team, players, perf, rest, injuryMult, adjust: tid !== league.userTid };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {

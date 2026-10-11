@@ -588,6 +588,8 @@ export interface GameResult {
   lineups?: LineupStat[];
   /** Score margin flow (home - away) sampled per possession, for charts. */
   flow?: number[];
+  /** Index into flow where each period (Q1, Q2, ..., OT) starts. */
+  flowPeriods?: number[];
   /** Compact play-by-play for detailed (user) games. */
   pbp?: PbpEntry[];
   /** Player of the game. */

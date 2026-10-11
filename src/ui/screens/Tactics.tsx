@@ -231,7 +231,7 @@ export default function Tactics() {
               <Slider label="Help defense" value={t.defense.help} onChange={(x) => edit((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack the paint" help="Packing the paint walls off drives and post-ups but gives up kick-out threes. Stay home against good shooting teams." />
               <Slider label="Ball pressure" value={t.defense.pressure} onChange={(x) => edit((tt) => void (tt.defense.pressure = x))} left="Contain" right="Swarm" help="More steals and turnovers, but quick creators blow by and backdoor cuts open up. Also more fouls." />
               <Slider label="Physicality" value={t.defense.physicality} onChange={(x) => edit((tt) => void (tt.defense.physicality = x))} left="Clean" right="Physical" help="Tighter contests vs more free throws for the opponent." />
-              <Slider label="Transition defense" value={t.defense.getBack} onChange={(x) => edit((tt) => void (tt.defense.getBack = x))} left="Crash glass" right="Sprint back" help="How hard you sprint back after shots. Limits fast breaks." />
+              <Slider label="Transition defense" value={t.defense.getBack} onChange={(x) => edit((tt) => void (tt.defense.getBack = x))} left="Jog back" right="Sprint back" help="How hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash boards (Offense) sets how many go to the glass." />
             </div>
           </Card>
           <Card title="Full-court press">

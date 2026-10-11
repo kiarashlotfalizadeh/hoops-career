@@ -1,15 +1,13 @@
 // Tactics Lab: run batches of games between two configurations and summarize the result.
 // Pure and serializable so it can run in a Web Worker.
 
-import type { DefenseTactics, GameManagement, OffenseTactics, Player, Tactics, Team, TeamBox } from '../types';
-import { GameSim } from '../sim/engine';
+import type { DefenseTactics, GameManagement, OffenseTactics, Tactics, Team, TeamBox } from '../types';
+import { GameSim, type SimTeamInput } from '../sim/engine';
 import { Rng } from '../random';
 import { cloneTactics } from '../sim/tactics';
 
-export interface LabSide {
-  team: Team;
-  players: Player[];
-}
+/** A side as real games build it (morale/wear, rest, injury risk), so Lab games play like them. */
+export type LabSide = SimTeamInput;
 
 export interface TacticsPatch {
   offense?: Partial<OffenseTactics>;
@@ -112,8 +110,8 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     // each game gets its own seed so two configurations can be compared game by game
     const rng = new Rng((req.seed + Math.imul(g + 1, 2654435761)) >>> 0);
     const aHome = g % 2 === 0;
-    const A = { team: teamA, players: req.a.players };
-    const B = { team: teamB, players: req.b.players };
+    const A = { ...req.a, team: teamA };
+    const B = { ...req.b, team: teamB };
     const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: 'regular', injuries: false });
     const res = sim.simToEnd();
     const a = aHome ? res.home : res.away;
