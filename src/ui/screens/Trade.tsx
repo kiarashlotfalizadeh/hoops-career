@@ -12,6 +12,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented } from '../components/ui';
 import { STRATEGY_META, Callout, capSeason, contractYearsLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
+import { rosterNames } from '../stats';
 
 interface Sel {
   pids: number[];
@@ -340,6 +341,7 @@ function DealCard({ league, partner, give, get, onGive, onGet, onReset }: { leag
 
 function AssetList({ league, tid, season, sel, onChange, title }: { league: League; tid: number; season: number; sel: Sel; onChange: (s: Sel) => void; title: string }) {
   const players = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
+  const nameOf = rosterNames(players, { initial: true });
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   return (
     <Card className="flush" title={undefined}>
@@ -354,7 +356,7 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
       </div>
       <div className="list">
         {players.map((p) => (
-          <PlayerAsset key={p.pid} league={league} p={p} season={season} on={sel.pids.includes(p.pid)} onToggle={() => onChange({ ...sel, pids: toggle(sel.pids, p.pid) })} />
+          <PlayerAsset key={p.pid} league={league} p={p} name={nameOf(p.pid)} season={season} on={sel.pids.includes(p.pid)} onToggle={() => onChange({ ...sel, pids: toggle(sel.pids, p.pid) })} />
         ))}
       </div>
       <div className="fo-sec" style={{ margin: '10px 12px 4px' }}>
@@ -375,7 +377,7 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
   );
 }
 
-function PlayerAsset({ league, p, season, on, onToggle }: { league: League; p: Player; season: number; on: boolean; onToggle: () => void }) {
+function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
   return (
     <button className={`fo-asset ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
       <span className="fo-check">
@@ -384,9 +386,7 @@ function PlayerAsset({ league, p, season, on, onToggle }: { league: League; p: P
       <Ovr v={p.ovr} size="sm" />
       <div className="grow" style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 5 }}>
-          <span className="fo-name small">
-            {p.firstName[0]}. {p.lastName}
-          </span>
+          <span className="fo-name small">{name}</span>
           {p.injury && <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>INJ</span>}
           {p.mood.tradeRequest && <span className="tag warn" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>REQ</span>}
           {p.contract.twoWay && <span className="tag" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>2-WAY</span>}

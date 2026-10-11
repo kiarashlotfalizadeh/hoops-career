@@ -12,7 +12,7 @@ import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
-import { f1, latestLine, moneyM, playerSeason, signed, teamRatings, type PerGame } from '../stats';
+import { f1, latestLine, moneyM, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
 import { OutcomeTag, SectionLabel, StrategyTag, TabBar, ordinal, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
@@ -218,6 +218,7 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
     [league, tid, v],
   );
   if (!roster.length) return <Empty>No players on the roster.</Empty>;
+  const nameOf = rosterNames(roster, { initial: true });
   const starters = new Set(team.rotation.order.slice(0, 5));
   const groups = [
     { label: 'Starters', list: roster.filter((p) => starters.has(p.pid)) },
@@ -233,7 +234,7 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
             <SectionLabel right={g.label === 'Starters' ? <span className="tiny dim">{anyCur ? `${seasonLabel(league.season)} per game` : 'Last season per game'}</span> : undefined}>{g.label}</SectionLabel>
             <Card className="flush lg-flat">
               {g.list.map((p) => (
-                <PlayerRow key={p.pid} league={league} p={p} min={team.rotation.minutes[p.pid]} />
+                <PlayerRow key={p.pid} league={league} p={p} name={nameOf(p.pid)} min={team.rotation.minutes[p.pid]} />
               ))}
             </Card>
           </div>
@@ -243,7 +244,7 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
   );
 }
 
-function PlayerRow({ league, p, min }: { league: League; p: Player; min?: number }) {
+function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: string; min?: number }) {
   const cur = playerSeason(p, league.season);
   const line: PerGame | null = cur && cur.gp > 0 ? cur : latestLine(league, p)?.pg ?? null;
   const age = league.season - p.bornYear;
@@ -252,7 +253,7 @@ function PlayerRow({ league, p, min }: { league: League; p: Player; min?: number
       <Avatar p={p} />
       <div style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 6 }}>
-          <span className="bold ellipsis">{shortName(p)}</span>
+          <span className="bold ellipsis">{name}</span>
           {p.mood.tradeRequest && <span className="tag warn">Wants out</span>}
         </div>
         <div className="tiny dim ellipsis">
@@ -289,9 +290,10 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
     [league, tid, v],
   );
   const cols = useMemo<Col<{ p: Player; pg: PerGame }>[]>(() => {
+    const nameOf = rosterNames(rows.map((r) => r.p), { initial: true });
     const pc = (x: number | string) => (typeof x === 'number' && x >= 0 ? (x * 100).toFixed(1) : '-');
     return [
-      { key: 'n', label: 'Player', left: true, sticky: true, get: (r) => r.p.lastName, fmt: (_x, r) => <span className="lg-pcell"><span className="n">{shortName(r.p)}</span><span className="tiny dim">{r.p.pos}</span></span> },
+      { key: 'n', label: 'Player', left: true, sticky: true, get: (r) => r.p.lastName, fmt: (_x, r) => <span className="lg-pcell"><span className="n">{nameOf(r.p.pid)}</span><span className="tiny dim">{r.p.pos}</span></span> },
       { key: 'gp', label: 'GP', get: (r) => r.pg.gp },
       { key: 'min', label: 'MIN', get: (r) => r.pg.min, fmt: (x) => f1(x as number) },
       { key: 'pts', label: 'PTS', get: (r) => r.pg.pts, fmt: (x) => <b>{f1(x as number)}</b> },
@@ -307,7 +309,7 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
       { key: 'usg', label: 'USG%', get: (r) => r.pg.usg, fmt: pc },
       { key: 'pm', label: '+/-', get: (r) => r.pg.pm, fmt: (x) => <span className={(x as number) > 0 ? 'good' : (x as number) < 0 ? 'bad' : ''}>{signed(x as number)}</span> },
     ];
-  }, []);
+  }, [rows]);
   if (!rows.length) return <Card><Empty>No games played this season yet.</Empty></Card>;
   return <StatTable rows={rows} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} />;
 }
@@ -323,6 +325,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
     [league, tid, cs, v],
   );
   const cap = CAP_FOR(league, cs);
+  const nameOf = rosterNames(rows, { initial: true });
   const cols = useMemo<Col<Player>[]>(
     () => [
       {
@@ -333,7 +336,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
         get: (p) => p.lastName,
         fmt: (_x, p) => (
           <span className="lg-pcell">
-            <span className="n">{shortName(p)}</span>
+            <span className="n">{nameOf(p.pid)}</span>
             {p.contract.twoWay && <span className="tag">2W</span>}
           </span>
         ),
@@ -401,6 +404,7 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
   const coachOff = OFF_PRESETS.find((p) => p.id === team.coach.offPhilosophy);
   const coachDef = DEF_PRESETS.find((p) => p.id === team.coach.defPhilosophy);
   const roster = rosterSorted(league, tid);
+  const minNames = rosterNames(roster, { initial: true });
   const byMin = [...roster].filter((p) => (team.rotation.minutes[p.pid] ?? 0) > 0).sort((a, b) => (team.rotation.minutes[b.pid] ?? 0) - (team.rotation.minutes[a.pid] ?? 0));
   const star = t.defense.starTarget !== null ? league.players[t.defense.starTarget] : undefined;
   return (
@@ -479,7 +483,7 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
             {byMin.slice(0, 11).map((p, i) => (
               <Link key={p.pid} to={`/player/${p.pid}`} className="lg-meter" style={{ gridTemplateColumns: '118px minmax(0,1fr) 28px' }}>
                 <span className="ellipsis" style={{ fontWeight: i < 5 ? 700 : 500 }}>
-                  {shortName(p)}
+                  {minNames(p.pid)}
                 </span>
                 <Bar value={team.rotation.minutes[p.pid] ?? 0} max={42} color={i < 5 ? 'var(--accent)' : 'var(--text-dim)'} />
                 <span className="val">{Math.round(team.rotation.minutes[p.pid] ?? 0)}</span>

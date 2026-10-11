@@ -12,6 +12,7 @@ import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet, activateOnKey } from '../components/ui';
 import { CapBar, CenterBar, Gauge, SecTitle, capSeason, contractYearsLabel, fmtM, isOffseason, ownerVerdict, playerMeta, shortSeason } from '../office/common';
+import { rosterNames } from '../stats';
 
 interface Tile {
   to: string;
@@ -412,6 +413,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
   const s0 = capSeason(league);
   const seasons = [s0, s0 + 1, s0 + 2, s0 + 3];
   const roster = teamPlayers(league, tid).sort((a, b) => salaryFor(b, s0) - salaryFor(a, s0) || contractExp(b.contract) - contractExp(a.contract) || b.ovr - a.ovr);
+  const nameOf = rosterNames(roster, { initial: true });
   const dead = new Map<number, { name: string; by: Record<number, number> }>();
   for (const d of team.deadMoney) {
     if (d.season < s0 || d.season > s0 + 3) continue;
@@ -459,7 +461,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                   <td className="l sticky">
                     <div className="row" style={{ gap: 5 }}>
                       <span className="fo-name small" style={{ maxWidth: 96 }}>
-                        {p.firstName[0]}. {p.lastName}
+                        {nameOf(p.pid)}
                       </span>
                       {p.contract.rookie && <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>R</span>}
                       {p.contract.twoWay && <span className="tag" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>2W</span>}
