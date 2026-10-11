@@ -169,7 +169,7 @@ export default function Rotation() {
       <LineupsCard />
 
       <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
-        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} />}
+        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={(pid) => byId.get(pid)?.lastName ?? ''} />}
       </Sheet>
     </main>
   );
@@ -195,11 +195,42 @@ function LineupsCard() {
   );
 }
 
-function EditPlayer({ p, rot, update, close }: { p: Player; rot: RotationT; update: (fn: (r: RotationT) => void) => void; close: () => void }) {
+function EditPlayer({ p, rot, update, close, order, names }: { p: Player; rot: RotationT; update: (fn: (r: RotationT) => void) => void; close: () => void; order: number[]; names: (pid: number) => string }) {
   const m = rot.minutes[p.pid] ?? 0;
   const cap = rot.caps[p.pid] ?? 0;
+  const at = order.indexOf(p.pid);
+  // one tap instead of a run of arrow taps: trade depth-chart spots with anyone
+  const swap = (other: number) =>
+    update((r) => {
+      const o = order.slice();
+      const j = o.indexOf(other);
+      if (at < 0 || j < 0) return;
+      [o[at], o[j]] = [o[j], o[at]];
+      r.order = o;
+      // the role moves with the spot: he takes the other player's minutes and vice versa
+      const mine = r.minutes[p.pid] ?? 0;
+      r.minutes[p.pid] = r.minutes[other] ?? 0;
+      r.minutes[other] = mine;
+    });
   return (
     <div className="col" style={{ gap: 16 }}>
+      <div className="col" style={{ gap: 6 }}>
+        <div className="small bold">
+          {at < 5 ? `Starter (spot ${at + 1})` : `Bench, ${at + 1}th on the depth chart`} · swap spot and minutes with
+        </div>
+        <div className="chips">
+          {order
+            .filter((pid) => pid !== p.pid)
+            .map((pid) => {
+              const j = order.indexOf(pid);
+              return (
+                <button key={pid} className="chip" onClick={() => swap(pid)}>
+                  {j < 5 ? <span className="tag info" style={{ height: 16, padding: '0 4px' }}>S</span> : <span className="dim tiny">{j + 1}</span>} {names(pid)}
+                </button>
+              );
+            })}
+        </div>
+      </div>
       <Slider label="Target minutes" value={m} min={0} max={44} onChange={(x) => update((r) => void (r.minutes[p.pid] = x))} format={(x) => `${x} min`} help={p.mood.expectedMin ? `He expects about ${p.mood.expectedMin} minutes. Big gaps hurt his mood.` : undefined} />
       <Slider label="Hard minute cap" value={cap} min={0} max={44} onChange={(x) => update((r) => { if (x === 0) delete r.caps[p.pid]; else r.caps[p.pid] = x; })} format={(x) => (x ? `${x} min` : 'None')} help="Load management: never exceed this, even in close games." />
       <Toggle
