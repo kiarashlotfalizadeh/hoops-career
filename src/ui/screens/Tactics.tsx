@@ -3,17 +3,19 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
-import type { ActionType, DefScheme, OffRole, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
+import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META, applyDefPreset, applyOffPreset, cloneTactics } from '../../core/sim/tactics';
 import { autoTactics, defPresetFit, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
-import { Avatar, Card, Chips, Help, Ovr, PageHeader, Segmented, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
+import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
+import { RoleEditor } from '../components/RoleEditor';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
-import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
+import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { IMPACT_TEXT } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
+import { rosterNames } from '../stats';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
 
@@ -298,7 +300,7 @@ function InsightsTab() {
         <span className={`num bold ${x.forUser ? 'good' : 'bad'}`} style={{ width: 44, flex: 'none' }}>{x.forUser ? '+' : '-'}{x.perGame.toFixed(1)}</span>
         <div className="grow">
           <div>{cap(tpl.text(X, Y, ''))}</div>
-          {!x.forUser && tpl.advice && <div className="tiny" style={{ color: 'var(--warn)' }}>{tpl.advice}</div>}
+          {!x.forUser && tpl.advice && <div className="tiny" style={{ color: 'var(--warn)' }}>{adviceFor(tpl.advice, league.settings.complexity)}</div>}
         </div>
       </div>
     );
@@ -341,6 +343,7 @@ function RolesTab() {
   const team = league.teams[league.userTid];
   const t = team.tactics;
   const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
+  const nameOf = useMemo(() => rosterNames(players, { initial: true }), [players]);
   const [pick, setPick] = useState<number | null>(null);
   const edit = (fn: (tt: TacticsT) => void) =>
     useStore.getState().mutate((l) => {
@@ -360,7 +363,7 @@ function RolesTab() {
               <div key={pl.pid} className="listrow clickable" role="button" tabIndex={0} onClick={() => setPick(pl.pid)} onKeyDown={activateOnKey(() => setPick(pl.pid))}>
                 <Avatar p={pl} />
                 <div className="grow">
-                  <div className="bold small ellipsis">{pl.firstName[0]}. {pl.lastName}</div>
+                  <div className="bold small ellipsis">{nameOf(pl.pid)}</div>
                   <div className="tiny dim">{ROLE_META[role].label}{archetype(pl.ratings).role !== role ? ' (out of position)' : ''}</div>
                 </div>
                 <Tag tone={fr === 1 ? 'good' : fr === -1 ? 'warn' : undefined}>{fr === 1 ? 'Green light' : fr === -1 ? 'Limited' : 'Normal'}</Tag>
@@ -378,44 +381,14 @@ function RolesTab() {
               const on = t.offense.screeners.includes(pl.pid);
               return (
                 <button key={pl.pid} className={`chip ${on ? 'on' : ''}`} onClick={() => edit((tt) => void (tt.offense.screeners = on ? tt.offense.screeners.filter((x) => x !== pl.pid) : [...tt.offense.screeners, pl.pid]))}>
-                  {pl.lastName}
+                  {nameOf(pl.pid)}
                 </button>
               );
             })}
         </div>
       </Card>
       <Sheet open={!!p} onClose={() => setPick(null)} title={p ? `${p.firstName} ${p.lastName}` : ''}>
-        {p && (
-          <div className="col" style={{ gap: 14 }}>
-            <div className="small dim2">Natural fit: {ROLE_META[archetype(p.ratings).role].label} ({p.archetype}).</div>
-            <div className="col" style={{ gap: 6 }}>
-              {(Object.keys(ROLE_META) as OffRole[]).map((r) => {
-                const on = (t.offense.roles[p.pid] ?? archetype(p.ratings).role) === r;
-                return (
-                  <button key={r} className="card tight" style={{ textAlign: 'left', borderColor: on ? 'var(--accent)' : undefined }} onClick={() => edit((tt) => void (tt.offense.roles[p.pid] = r))}>
-                    <div className="bold small">{ROLE_META[r].label}</div>
-                    <div className="tiny dim">{ROLE_META[r].help}</div>
-                  </button>
-                );
-              })}
-            </div>
-            <div>
-              <div className="small bold" style={{ marginBottom: 6 }}>Shot freedom</div>
-              <Segmented
-                value={String(t.offense.freedom[p.pid] ?? 0)}
-                onChange={(x) => edit((tt) => void (tt.offense.freedom[p.pid] = Number(x) as ShotFreedom))}
-                options={[
-                  { id: '-1', label: 'Limited' },
-                  { id: '0', label: 'Normal' },
-                  { id: '1', label: 'Green light' },
-                ]}
-              />
-            </div>
-            <button className="btn block" onClick={() => setPick(null)}>
-              Done
-            </button>
-          </div>
-        )}
+        {p && <RoleEditor p={p} onDone={() => setPick(null)} />}
       </Sheet>
     </>
   );

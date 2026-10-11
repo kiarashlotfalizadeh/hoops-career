@@ -64,7 +64,8 @@ export function shade(hex: string, amt: number) {
   return `#${[n(0), n(2), n(4)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
 }
 
-export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+/** One-of-several switch: a radio group, so arrow keys move the choice and Tab leaves it. */
+export function Segmented<T extends string>({ value, options, onChange, label, disabled }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; label?: string; disabled?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   // when the options overflow a narrow phone, keep the selected one in view
   useEffect(() => {
@@ -73,10 +74,19 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
     if (!seg || !btn || seg.scrollWidth <= seg.clientWidth) return;
     seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: 'smooth' });
   }, [value]);
+  const current = Math.max(0, options.findIndex((o) => o.id === value));
+  const onKey = (e: ReactKeyboardEvent, i: number) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? options.length - 1 : step ? (i + step + options.length) % options.length : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    onChange(options[j].id);
+    ref.current?.querySelectorAll<HTMLElement>('button')[j]?.focus();
+  };
   return (
-    <div className="seg" role="tablist" ref={ref}>
-      {options.map((o) => (
-        <button key={o.id} role="tab" aria-selected={value === o.id} className={value === o.id ? 'on' : ''} onClick={() => onChange(o.id)}>
+    <div className="seg" role="radiogroup" aria-label={label} ref={ref}>
+      {options.map((o, i) => (
+        <button key={o.id} role="radio" aria-checked={value === o.id} tabIndex={i === current ? 0 : -1} disabled={disabled} className={value === o.id ? 'on' : ''} onClick={() => onChange(o.id)} onKeyDown={(e) => onKey(e, i)}>
           {o.label}
         </button>
       ))}
@@ -84,11 +94,11 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
   );
 }
 
-export function Chips<T extends string | number>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+export function Chips<T extends string | number>({ value, options, onChange, disabled }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; disabled?: boolean }) {
   return (
     <div className="chips">
       {options.map((o) => (
-        <button key={String(o.id)} className={`chip ${value === o.id ? 'on' : ''}`} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
+        <button key={String(o.id)} className={`chip ${value === o.id ? 'on' : ''}`} aria-pressed={value === o.id} disabled={disabled} onClick={() => onChange(o.id)}>
           {o.label}
         </button>
       ))}
@@ -147,7 +157,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const [drag, setDrag] = useState(0);
-  const start = useRef<number | null>(null);
+  const start = useRef<{ x: number; y: number; locked: boolean } | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
@@ -185,13 +195,26 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
     if (!open) setDrag(0);
   }, [open]);
   if (!open) return null;
-  // swipe down from the top of the sheet to dismiss
+  // swipe down from the top of the sheet to dismiss; sliders, tables and scrollers keep their own drags
   const onTouchStart = (e: React.TouchEvent) => {
-    start.current = (ref.current?.scrollTop ?? 0) <= 0 ? e.touches[0].clientY : null;
+    const t = e.touches[0];
+    start.current = (ref.current?.scrollTop ?? 0) <= 0 && !ownsDrag(e.target as Element, ref.current) ? { x: t.clientX, y: t.clientY, locked: false } : null;
   };
   const onTouchMove = (e: React.TouchEvent) => {
-    if (start.current === null) return;
-    setDrag(Math.max(0, e.touches[0].clientY - start.current));
+    const s = start.current;
+    if (!s) return;
+    const dx = e.touches[0].clientX - s.x;
+    const dy = e.touches[0].clientY - s.y;
+    if (!s.locked) {
+      if (Math.hypot(dx, dy) < 8) return;
+      // decide once, on the first real move: only a mostly vertical, downward drag dismisses
+      if (dy <= Math.abs(dx) + 6) {
+        start.current = null;
+        return;
+      }
+      s.locked = true;
+    }
+    setDrag(Math.max(0, dy));
   };
   const onTouchEnd = () => {
     if (drag > 90) onClose();
@@ -213,6 +236,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
       >
         <div className="sheet-grip" />
         <div className={`sheet-head ${title ? '' : 'bare'}`}>
@@ -226,6 +250,15 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
     </>,
     document.body,
   );
+}
+
+/** A touch that starts on a control or a sideways scroller belongs to it, not to swipe-to-close. */
+function ownsDrag(target: Element, sheet: Element | null): boolean {
+  if (target.closest('input, textarea, select, .tablewrap, .hscroll, .seg, .chips')) return true;
+  for (let el: Element | null = target; el && el !== sheet; el = el.parentElement) {
+    if (el.scrollWidth > el.clientWidth && /auto|scroll/.test(getComputedStyle(el).overflowX)) return true;
+  }
+  return false;
 }
 
 /** Tap-to-explain: the core of progressive disclosure. */
@@ -248,12 +281,14 @@ export function Help({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-export function PageHeader({ title, sub, back, right }: { title: ReactNode; sub?: ReactNode; back?: boolean; right?: ReactNode }) {
+/** `backTo` is where Back goes when there is no in-app page behind this one (a deep link or a reload). */
+export function PageHeader({ title, sub, back, backTo = '/', right }: { title: ReactNode; sub?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode }) {
   const nav = useNavigate();
+  const goBack = () => (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ? nav(-1) : nav(backTo, { replace: true }));
   return (
     <div className="row" style={{ gap: 8, minHeight: 44 }}>
       {back && (
-        <button className="iconbtn" onClick={() => nav(-1)} aria-label="Back">
+        <button className="iconbtn" onClick={goBack} aria-label="Back">
           <ChevronLeft size={22} />
         </button>
       )}

@@ -1,5 +1,5 @@
 // Season-level aggregation of the user's stored games: lineups, play types, tactical effects.
-import type { League } from '../core/types';
+import type { League, Settings } from '../core/types';
 
 export interface LineupAgg {
   key: string;
@@ -82,4 +82,16 @@ export function seasonImpacts(league: League, tid = league.userTid): { key: stri
       return { key, forUser: f === '1', perGame: games ? v / games : 0, games };
     })
     .sort((a, b) => b.perGame - a.perGame);
+}
+
+/**
+ * Advice names Tactics tabs as Expert mode lays them out: point at what the user's coaching depth
+ * shows instead (roles are set from a player's page; Simple has no Offense or Defense tab).
+ */
+export function adviceFor(text: string, complexity: Settings['complexity']): string {
+  if (complexity === 'expert') return text;
+  const out = text.replace(/\(Tactics > Roles\)/g, "(Set role, on the player's page)");
+  if (complexity !== 'simple') return out;
+  const bare = out.replace(/ \((Offense|Defense)( > [^)]*)?\)/g, '');
+  return bare === out ? out : `${bare} (Needs Advanced coaching depth, in Settings.)`;
 }

@@ -1,26 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { haptic } from '../../native';
-import { useNavigate } from 'react-router-dom';
-import { Activity, ChevronsRight, Hand, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Activity, ChevronsRight, FastForward, Hand, Home as HomeIcon, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
+import { useLeague, useStore, useVersion } from '../../state/store';
 import { prepareLive, clearLive, type LiveGame } from '../../state/live';
 import { buildScript, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { composites } from '../../core/ratings';
-import type { PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
+import type { League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
 import { COVERAGE_META, PRESS_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { IMPACT_TEXT } from '../../core/analysis/gameReport';
+import { buildSimInput } from '../../core/league/games';
 import { shade } from '../components/ui';
-import type { SP } from '../../core/sim/engine';
+import type { GameSim, SP } from '../../core/sim/engine';
+import { periodLabel, rosterNames } from '../stats';
+import { adviceFor } from '../seasonAnalysis';
+import { colorDistance } from '../teamColors';
+import { flowActions } from '../flow';
 
 const SPEEDS = [
   { id: 1, label: '1×' },
   { id: 2, label: '2×' },
   { id: 4, label: '4×' },
 ];
+
+const FEED_MAX = 80;
 
 function fmtClock(sec: number) {
   const s = Math.max(0, sec);
@@ -35,44 +42,163 @@ interface Suggestion {
   action?: { label: string; run: () => void };
 }
 
+type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
+
+/**
+ * Clock and score as the court animates them. A tiny store outside React state, so only the
+ * scorebug re-renders, at most ~4 times a second plus each basket, instead of the whole page.
+ */
+function createTicker(clock: number, score: [number, number]) {
+  let state = { clock, score };
+  let last = 0;
+  const subs = new Set<() => void>();
+  return {
+    get: () => state,
+    subscribe: (fn: () => void) => {
+      subs.add(fn);
+      return () => void subs.delete(fn);
+    },
+    set(c: number, s: [number, number] | null, force = false) {
+      const score = s ?? state.score;
+      const scored = score[0] !== state.score[0] || score[1] !== state.score[1];
+      const now = performance.now();
+      if (!force && !scored && (now - last < 250 || fmtClock(c) === fmtClock(state.clock))) return;
+      last = now;
+      state = { clock: c, score };
+      subs.forEach((f) => f());
+    },
+  };
+}
+type Ticker = ReturnType<typeof createTicker>;
+
+/** What the user's side of a live game was built from, to spot edits made away from /live. */
+interface Setup {
+  tactics: Tactics;
+  sig: string;
+  rotation: string;
+}
+const setups = new WeakMap<LiveGame, Setup>();
+
+function userSetup(league: League, lg: LiveGame): Setup {
+  const g = lg.game;
+  const tactics = buildSimInput(league, league.userTid, g.day, g.type, lg.userSide === 0 ? g.away : g.home).team.tactics;
+  return { tactics, sig: JSON.stringify(tactics), rotation: JSON.stringify(league.teams[league.userTid].rotation) };
+}
+
+/** Per-type points per possession across this season's stored games (both teams), with engine-typical fallbacks. */
+const DEFAULT_PPP: Record<string, number> = { pnrBH: 0.85, pnrRoll: 1.3, iso: 0.95, post: 1.0, spotup: 1.05, offscreen: 1.05, handoff: 1.0, cut: 1.35, transition: 1.3, putback: 1.4, misc: 0.2 };
+function playTypeBaselines(league: League): Record<string, number> {
+  const sum: Record<string, { poss: number; pts: number }> = {};
+  for (const g of league.games) {
+    if (g.season !== league.season) continue;
+    for (const box of [g.home, g.away]) {
+      for (const [k, v] of Object.entries(box.playTypes ?? {})) {
+        const e = (sum[k] ??= { poss: 0, pts: 0 });
+        e.poss += v.poss;
+        e.pts += v.pts;
+      }
+    }
+  }
+  const out = { ...DEFAULT_PPP };
+  for (const [k, v] of Object.entries(sum)) if (v.poss >= 300) out[k] = v.pts / v.poss;
+  return out;
+}
+
+/** How unusual a play type's points are against its baseline, in standard errors (scores are mostly 2s and 3s). */
+function zScore(v: { poss: number; pts: number }, base: number) {
+  const sd = Math.sqrt(Math.max(0.5, 2.3 * base - base * base));
+  return (v.pts / v.poss - base) / (sd / Math.sqrt(v.poss));
+}
+
 export default function Live() {
   const league = useLeague();
   const nav = useNavigate();
+  const loc = useLocation();
+  const simBusy = useStore((s) => !!s.sim);
   const liveRef = useRef<LiveGame | null>(null);
-  const [ready, setReady] = useState(false);
-  const [none, setNone] = useState(false);
+  const pbpRead = useRef(0);
+  const announced = useRef('');
+  const [game, setGame] = useState<LiveGame | null>(null);
+  const [status, setStatus] = useState<Status>('loading');
+  const [ticker, setTicker] = useState<Ticker>(() => createTicker(720, [0, 0]));
   const [script, setScript] = useState<Script | null>(null);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
-  const [clock, setClock] = useState(720);
-  const [score, setScore] = useState<[number, number]>([0, 0]);
-  const [feed, setFeed] = useState<PossLog[]>([]);
-  const [panel, setPanel] = useState<'none' | 'subs' | 'tactics' | 'stats'>('none');
+  const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
+  const [panel, setPanel] = useState<'none' | 'subs' | 'tactics' | 'stats' | 'end'>('none');
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
-  const [over, setOver] = useState(false);
-  const [committedGid, setCommittedGid] = useState<number | null>(null);
+  const [resultGid, setResultGid] = useState<number | null>(null);
+  const [banner, setBanner] = useState<{ text: string; id: number } | null>(null);
+  const [announce, setAnnounce] = useState('');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const baselines = useMemo(() => playTypeBaselines(league), [league.season]);
 
-  useEffect(() => {
+  /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included). */
+  const flushFeed = useCallback(() => {
+    const lg = liveRef.current;
+    if (!lg) return;
+    const pbp = lg.sim.pbp;
+    if (pbp.length <= pbpRead.current) return;
+    const fresh = pbp.slice(pbpRead.current).map((e, j) => ({ i: pbpRead.current + j, e })).reverse();
+    pbpRead.current = pbp.length;
+    setFeed((f) => [...fresh, ...f].slice(0, FEED_MAX));
+  }, []);
+
+  const attach = useCallback((lg: LiveGame | null) => {
+    liveRef.current = lg;
+    setGame(lg);
+    setScript(null);
+    setDismissed([]);
+    setPanel('none');
+    setBanner(null);
+    setResultGid(null);
+    setAnnounce('');
+    if (!lg) {
+      setStatus('none');
+      return;
+    }
+    const pbp = lg.sim.pbp;
+    pbpRead.current = pbp.length;
+    setFeed(pbp.slice(-FEED_MAX).map((e, j) => ({ i: pbp.length - Math.min(FEED_MAX, pbp.length) + j, e })).reverse());
+    const score: [number, number] = [lg.sim.T[0].score, lg.sim.T[1].score];
+    announced.current = score.join('-');
+    setTicker(createTicker(lg.sim.clock, score));
+    setStatus('live');
+  }, []);
+
+  /** The game this screen is coaching was played without it (simmed from the Play menu). */
+  const playedElsewhere = useCallback((lg: LiveGame) => !lg.committed && useStore.getState().league!.games.some((g) => g.gid === lg.game.gid), []);
+
+  const start = useCallback(() => {
     let lg: LiveGame | null = null;
     useStore.getState().mutate((l) => {
       lg = prepareLive(l);
     });
-    if (!lg) {
-      setNone(true);
-      return;
+    const found = lg as LiveGame | null;
+    if (found && !found.committed) {
+      // resuming: Tactics or game-plan edits made away from this screen take over; the stint plan can't change mid-game
+      const l = useStore.getState().league!;
+      const now = userSetup(l, found);
+      const seen = setups.get(found);
+      const notes: string[] = [];
+      if (seen && seen.sig !== now.sig) {
+        found.sim.setTactics(found.userSide, now.tactics);
+        notes.push('Your tactics changes are in effect.');
+      }
+      if (seen && seen.rotation !== now.rotation) notes.push('Rotation changes apply from the next game.');
+      if (notes.length) useStore.getState().toast(notes.join(' '));
+      setups.set(found, now);
     }
-    liveRef.current = lg;
-    const g = lg as LiveGame;
-    setScore([g.sim.T[0].score, g.sim.T[1].score]);
-    setClock(g.sim.clock);
-    setReady(true);
-  }, []);
+    attach(found);
+  }, [attach]);
 
-  const live = liveRef.current;
-  const userSide = live?.userSide ?? 0;
-  const home = live ? league.teams[live.game.home] : null;
-  const away = live ? league.teams[live.game.away] : null;
+  // a fresh visit to /live (also from the final card or the Play menu) picks up today's game; one in progress keeps going
+  useEffect(() => {
+    const lg = liveRef.current;
+    if (lg && !lg.committed && !playedElsewhere(lg)) return;
+    start();
+  }, [loc.key, start, playedElsewhere]);
 
   const info = useCallback(
     (pid: number) => {
@@ -83,63 +209,95 @@ export default function Live() {
     [league],
   );
 
+  const showFinal = useCallback(
+    (lg: LiveGame) => {
+      const res = lg.committed!;
+      setStatus('final');
+      setResultGid(res.gid);
+      ticker.set(0, [res.home.pts, res.away.pts], true);
+      const [h, a] = lg.sim.T;
+      setAnnounce(`Final: ${a.team.abbrev} ${res.away.pts}, ${h.team.abbrev} ${res.home.pts}`);
+      const me = lg.userSide === 0 ? res.home.pts : res.away.pts;
+      const them = lg.userSide === 0 ? res.away.pts : res.home.pts;
+      haptic(me > them ? 'success' : 'warning');
+    },
+    [ticker],
+  );
+
+  const showSimmed = useCallback(
+    (lg: LiveGame) => {
+      const res = useStore.getState().league!.games.find((g) => g.gid === lg.game.gid);
+      clearLive();
+      setStatus('simmed');
+      setResultGid(res?.gid ?? null);
+      if (res) ticker.set(0, [res.home.pts, res.away.pts], true);
+      setAnnounce('This game was simulated.');
+    },
+    [ticker],
+  );
+
   const finish = useCallback(() => {
     const lg = liveRef.current;
-    if (!lg || lg.committed) return;
-    let gid = 0;
-    useStore.getState().mutate((l) => {
-      const res = lg.commit(l);
-      gid = res.gid;
-    });
-    clearLive();
-    setCommittedGid(gid);
-    const me = lg.sim.T[lg.userSide].score;
-    const them = lg.sim.T[1 - lg.userSide].score;
-    haptic(me > them ? 'success' : 'warning');
-  }, []);
+    if (!lg) return;
+    if (!lg.committed && !playedElsewhere(lg)) {
+      useStore.getState().mutate((l) => void lg.commit(l));
+      clearLive();
+    }
+    if (lg.committed) showFinal(lg);
+    else showSimmed(lg);
+  }, [playedElsewhere, showFinal, showSimmed]);
+
+  // another screen finished this game (the Play menu's sims): stop animating a ghost
+  const v = useVersion();
+  useEffect(() => {
+    const lg = liveRef.current;
+    if (!lg || status !== 'live') return;
+    if (lg.committed) showFinal(lg);
+    else if (playedElsewhere(lg)) showSimmed(lg);
+  }, [v, status, playedElsewhere, showFinal, showSimmed]);
 
   const nextPossession = useCallback(() => {
     const lg = liveRef.current;
-    if (!lg) return;
-    if (lg.over) {
-      setOver(true);
-      setScore([lg.sim.T[0].score, lg.sim.T[1].score]);
-      finish();
-      return;
+    if (!lg || lg.committed || playedElsewhere(lg)) return finish();
+    // screen readers hear the score the court just finished showing, at most once a possession
+    const shown = ticker.get().score;
+    if (shown.join('-') !== announced.current) {
+      announced.current = shown.join('-');
+      setAnnounce(`${lg.sim.T[1].team.abbrev} ${shown[1]}, ${lg.sim.T[0].team.abbrev} ${shown[0]}`);
     }
     let logs: PossLog[] = [];
     let guard = 0;
     while (!logs.length && !lg.over && guard++ < 5) logs = lg.step();
-    if (!logs.length) {
-      setTick((t) => t + 1);
-      if (lg.over) {
-        setOver(true);
-        setScore([lg.sim.T[0].score, lg.sim.T[1].score]);
-        finish();
-      }
-      return;
-    }
-    const lastLog = logs[logs.length - 1];
-    setFeed((f) => [...logs.slice().reverse(), ...f].slice(0, 60));
-    setScript(buildScript(lastLog, info));
+    flushFeed();
+    if (!logs.length) return finish();
+    setScript(buildScript(logs[logs.length - 1], info));
     setTick((t) => t + 1);
-  }, [info, finish]);
+  }, [info, finish, flushFeed, playedElsewhere, ticker]);
 
   useEffect(() => {
-    if (ready && !script) nextPossession();
-  }, [ready, script, nextPossession]);
+    if (status === 'live' && !script) nextPossession();
+  }, [status, script, nextPossession]);
 
   const skip = (to: 'quarter' | 'end') => {
     const lg = liveRef.current;
-    if (!lg) return;
-    const logs = lg.simTo(to);
-    setFeed((f) => [...logs.slice(-30).reverse(), ...f].slice(0, 60));
-    setScore([lg.sim.T[0].score, lg.sim.T[1].score]);
-    setClock(lg.sim.clock);
-    if (lg.over) {
-      setOver(true);
-      finish();
-    } else nextPossession();
+    if (!lg || status !== 'live') return;
+    lg.simTo(to);
+    flushFeed();
+    ticker.set(lg.sim.clock, [lg.sim.T[0].score, lg.sim.T[1].score], true);
+    if (lg.over) finish();
+    else nextPossession();
+  };
+
+  const userSide = game?.userSide ?? 0;
+
+  const callTimeout = (reason?: string) => {
+    const lg = liveRef.current;
+    if (!lg || !lg.sim.callTimeout(userSide, reason)) return;
+    const abbrev = lg.sim.T[userSide].team.abbrev;
+    flushFeed();
+    setBanner({ text: `TIMEOUT ${abbrev}`, id: Date.now() });
+    setAnnounce(`Timeout ${abbrev}.`);
+    setTick((x) => x + 1);
   };
 
   const applyTactics = (fn: (t: Tactics) => void, persist: boolean) => {
@@ -154,122 +312,119 @@ export default function Live() {
         fn(tt);
         tt.manual = true;
       });
+      // this screen made the change: resuming later shouldn't treat it as an outside edit
+      setups.set(lg, userSetup(useStore.getState().league!, lg));
     }
     setTick((x) => x + 1);
   };
 
+  const home = game ? league.teams[game.game.home] : null;
+  const away = game ? league.teams[game.game.away] : null;
+  const colors = useMemo<[[string, string], [string, string]] | null>(() => {
+    if (!home || !away) return null;
+    const c: [[string, string], [string, string]] = [
+      [home.colors[0], home.colors[1] === home.colors[0] ? home.colors[2] : home.colors[1]],
+      [away.colors[0], away.colors[1] === away.colors[0] ? away.colors[2] : away.colors[1]],
+    ];
+    if (colorDistance(c[0][0], c[1][0]) < 90) c[1] = ['#f1f1f1', away.colors[0]];
+    return c;
+  }, [home, away]);
+
+  // teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on every other screen
+  const nameOf = useMemo(() => {
+    if (!game) return () => '';
+    const side = new Map<number, number>();
+    const per = game.sim.T.map((t, i) => {
+      for (const sp of t.players) side.set(sp.pid, i);
+      return rosterNames(t.players.map((sp) => league.players[sp.pid] ?? { pid: sp.pid, firstName: '', lastName: sp.name }));
+    });
+    return (pid: number) => per[side.get(pid) ?? 0](pid);
+  }, [game, league]);
+
+  const over = status !== 'live';
   const suggestions = useMemo<Suggestion[]>(() => {
     const lg = liveRef.current;
     if (!lg || over) return [];
     const me = lg.sim.T[userSide];
     const them = lg.sim.T[1 - userSide];
     const out: Suggestion[] = [];
-    if (them.run >= 8 && me.timeouts > 0) out.push({ id: `run-${them.score}`, text: `${away && home ? (userSide === 0 ? away.name : home.name) : 'They'} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => (lg.sim.callTimeout(userSide, 'stop the run'), setTick((x) => x + 1)) } });
+    if (them.run >= 8 && me.timeouts > 0) out.push({ id: `run-${them.score}`, text: `${them.team.name} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
     for (const p of me.on) {
       if (p.energy < 0.55) {
         const bench = me.players.filter((b) => !b.on && b.out === 0 && b.energy > 0.8).sort((a, b) => b.c.create + b.c.helpD - (a.c.create + a.c.helpD))[0];
-        out.push({ id: `tired-${p.pid}-${Math.round(p.energy * 10)}`, text: `${p.name} is gassed (${Math.round(p.energy * 100)}% energy).`, action: bench ? { label: `Sub ${bench.name}`, run: () => (lg.sim.substitute(userSide, p.pid, bench.pid), setTick((x) => x + 1)) } : undefined });
+        out.push({ id: `tired-${p.pid}-${Math.round(p.energy * 10)}`, text: `${nameOf(p.pid)} is gassed (${Math.round(p.energy * 100)}% energy).`, action: bench ? { label: `Sub ${nameOf(bench.pid)}`, run: () => (lg.sim.substitute(userSide, p.pid, bench.pid), setTick((x) => x + 1)) } : undefined });
       }
-      if (p.fouls >= Math.min(lg.sim.q + 1, 5) && lg.sim.q < 4) out.push({ id: `fouls-${p.pid}-${p.fouls}`, text: `${p.name} has ${p.fouls} fouls.` });
+      if (p.fouls >= Math.min(lg.sim.q + 1, 5) && lg.sim.q < 4) out.push({ id: `fouls-${p.pid}-${p.fouls}`, text: `${nameOf(p.pid)} has ${p.fouls} fouls.` });
     }
-    // opponent play types torching us
+    // opponent play types torching us: well above this season's norm for that play, on a real sample
     for (const [k, v] of Object.entries(them.pt)) {
-      if (v.poss >= 8 && v.pts / v.poss >= 1.3) {
-        const ft = k as FinishType;
-        const cov = me.t.defense.pnr;
-        let advice: Suggestion['action'];
-        let text = `Their ${FINISH_LABEL[ft]} is scoring ${(v.pts / v.poss).toFixed(2)} per possession.`;
-        if (ft === 'pnrBH' && cov === 'drop') {
-          text += ' Drop is giving their handlers room.';
-          advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
-        } else if (ft === 'spotup' && me.t.defense.help > 55) {
-          text += ' Too much help is leaving shooters open.';
-          advice = { label: 'Stay home', run: () => applyTactics((t) => void (t.defense.help = 35), false) };
-        } else if (ft === 'transition') {
-          advice = { label: 'Sprint back', run: () => applyTactics((t) => void ((t.defense.getBack = 85), (t.offense.crashBoards = Math.min(t.offense.crashBoards, 30))), false) };
-        } else if (ft === 'post') {
-          advice = { label: 'Double the post', run: () => applyTactics((t) => void (t.defense.help = 80), false) };
-        } else if (ft === 'pnrRoll' && cov !== 'drop') {
-          advice = { label: 'Go to Drop', run: () => applyTactics((t) => void (t.defense.pnr = 'drop'), false) };
-        }
-        out.push({ id: `pt-${k}`, text, action: advice });
+      const base = baselines[k];
+      if (base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
+      const ft = k as FinishType;
+      const cov = me.t.defense.pnr;
+      let advice: Suggestion['action'];
+      let text = `Their ${FINISH_LABEL[ft]} is scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
+      if (ft === 'pnrBH' && cov === 'drop') {
+        text += ' Drop is giving their handlers room.';
+        advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
+      } else if (ft === 'spotup' && me.t.defense.help > 55) {
+        text += ' Too much help is leaving shooters open.';
+        advice = { label: 'Stay home', run: () => applyTactics((t) => void (t.defense.help = 35), false) };
+      } else if (ft === 'transition') {
+        advice = { label: 'Sprint back', run: () => applyTactics((t) => void ((t.defense.getBack = 85), (t.offense.crashBoards = Math.min(t.offense.crashBoards, 30))), false) };
+      } else if (ft === 'post') {
+        advice = { label: 'Double the post', run: () => applyTactics((t) => void (t.defense.help = 80), false) };
+      } else if (ft === 'pnrRoll' && cov !== 'drop') {
+        advice = { label: 'Go to Drop', run: () => applyTactics((t) => void (t.defense.pnr = 'drop'), false) };
       }
+      out.push({ id: `pt-${k}`, text, action: advice });
     }
     for (const [k, v] of Object.entries(me.pt)) {
-      if (v.poss >= 9 && v.pts / v.poss <= 0.75) out.push({ id: `mypt-${k}`, text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP). Consider running other actions.` });
+      const base = baselines[k];
+      if (base !== undefined && v.poss >= 12 && zScore(v, base) < -2) out.push({ id: `mypt-${k}`, text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP, league ${base.toFixed(2)}). Consider running other actions.` });
     }
     // biggest tactical edge against us so far
     const worst = [...lg.sim.impacts.values()].filter((im) => im.t !== userSide && im.pts >= 2.5 && IMPACT_TEXT[im.key]?.advice).sort((a, b) => b.pts - a.pts)[0];
     if (worst) {
-      const X = (userSide === 0 ? away : home)?.name ?? 'They';
-      const Y = (userSide === 0 ? home : away)?.name ?? 'You';
-      out.push({ id: `imp-${worst.key}`, text: `${IMPACT_TEXT[worst.key].text(X, Y, '')} ${IMPACT_TEXT[worst.key].advice}` });
+      out.push({ id: `imp-${worst.key}`, text: `${IMPACT_TEXT[worst.key].text(them.team.name, me.team.name, '')} ${adviceFor(IMPACT_TEXT[worst.key].advice!, league.settings.complexity)}` });
     }
     return out.filter((s) => !dismissed.includes(s.id)).slice(0, 2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, dismissed, over]);
+  }, [tick, dismissed, over, nameOf, baselines]);
 
-  if (none) {
+  const nextAction = flowActions(league).find((a) => a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame');
+  const nextGame = async () => {
+    if (nextAction?.sim) await useStore.getState().simulate(nextAction.sim);
+    start();
+  };
+
+  if (status === 'none') {
     return (
       <main className="page">
-        <PageHeader title="Live" back />
+        <PageHeader title="Live" back backTo="/" />
         <Empty>No game for your team today.</Empty>
-        {(league?.phase === 'regular' || league?.phase === 'playin' || league?.phase === 'playoffs') && (
-          <button
-            className="btn primary block big"
-            onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' }).then(() => nav('/'))}
-          >
+        {nextAction?.sim && (
+          <button className="btn primary block big" disabled={simBusy} onClick={() => void nextGame()}>
             <ChevronsRight size={18} /> Sim to game day
           </button>
         )}
       </main>
     );
   }
-  if (!ready || !live || !home || !away) return <main className="page"><Empty>Preparing the arena…</Empty></main>;
+  if (!game || !home || !away || !colors) return <main className="page"><Empty>Preparing the arena…</Empty></main>;
 
-  const sim = live.sim;
+  const sim = game.sim;
   const me = sim.T[userSide];
-  const qLabel = sim.q <= 4 ? `Q${sim.q}` : `OT${sim.q - 4 > 1 ? sim.q - 4 : ''}`;
-  const colors: [[string, string], [string, string]] = [
-    [home.colors[0], home.colors[1] === home.colors[0] ? home.colors[2] : home.colors[1]],
-    [away.colors[0], away.colors[1] === away.colors[0] ? away.colors[2] : away.colors[1]],
-  ];
-  if (colorDistance(colors[0][0], colors[1][0]) < 90) colors[1] = ['#f1f1f1', away.colors[0]];
+  const quarter = script?.q ?? sim.q;
+  const won = resultGid !== null && (() => {
+    const res = league.games.find((g) => g.gid === resultGid);
+    return !!res && (userSide === 0 ? res.home.pts > res.away.pts : res.away.pts > res.home.pts);
+  })();
 
   return (
     <main className="page full" style={{ gap: 10 }}>
-      {/* scorebug */}
-      <div className="card tight" style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}>
-        <div className="scorebug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? 'final' : `${qLabel} ${fmtClock(clock)}`}`}>
-          <div className="row" style={{ gap: 6, minWidth: 0 }}>
-            <TeamLogo tid={away.tid} size={34} />
-            <div style={{ minWidth: 0 }}>
-              <div className="bold">{away.abbrev}</div>
-              <div className="tiny dim nowrap">
-                TO {sim.T[1].timeouts}
-                {sim.T[0].fouls >= 5 && <span className="warn" title="In the bonus"> ●</span>}
-              </div>
-            </div>
-            <span className="score" style={{ marginLeft: 'auto' }}>{score[1]}</span>
-          </div>
-          <div className="col center" style={{ gap: 0, minWidth: 56 }}>
-            <span className="display bold" style={{ fontSize: 15 }}>{over ? 'FINAL' : qLabel}</span>
-            <span className="display num" style={{ fontSize: 20 }}>{over ? '' : fmtClock(clock)}</span>
-          </div>
-          <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
-            <TeamLogo tid={home.tid} size={34} />
-            <div className="right" style={{ minWidth: 0 }}>
-              <div className="bold">{home.abbrev}</div>
-              <div className="tiny dim nowrap">
-                {sim.T[1].fouls >= 5 && <span className="warn" title="In the bonus">● </span>}
-                TO {sim.T[0].timeouts}
-              </div>
-            </div>
-            <span className="score" style={{ marginRight: 'auto' }}>{score[0]}</span>
-          </div>
-        </div>
-        <div className="sr-only" aria-live="polite">{over ? `Final: ${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}` : ''}</div>
-      </div>
+      <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} />
+      <div className="sr-only" aria-live="polite">{announce}</div>
 
       <div className="live-grid">
       <div className="col live-left" style={{ gap: 10 }}>
@@ -282,13 +437,12 @@ export default function Live() {
           colors={colors}
           jersey={(pid) => league.players[pid]?.jersey || '0'}
           onDone={nextPossession}
-          onTick={(c, s) => {
-            setClock((prev) => (Math.abs(prev - c) > 0.4 ? c : prev));
-            if (s) setScore((prev) => (prev[0] !== s[0] || prev[1] !== s[1] ? s : prev));
-          }}
+          onTick={(c, s) => ticker.set(c, s)}
+          label={over ? 'Court: the game is over.' : `Court: ${script?.label ?? 'tip-off'}.`}
+          banner={banner}
         />
         {script && !over && (
-          <div className="pill" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', maxWidth: '85%' }}>
+          <div className="pill" aria-hidden="true" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', maxWidth: '85%' }}>
             <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
             <span className="ellipsis small">{script.label}</span>
           </div>
@@ -296,37 +450,56 @@ export default function Live() {
       </div>
 
       {/* controls */}
-      {!over ? (
-        <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => setPaused((p) => !p)} aria-label={paused ? 'Play' : 'Pause'}>
+      {status === 'live' ? (
+        <div className="row live-ctl" style={{ gap: 6, flexWrap: 'wrap' }}>
+          <button className="btn sm" onClick={() => setPaused((p) => !p)} aria-label={paused ? 'Resume' : 'Pause'}>
             {paused ? <Play size={16} /> : <Pause size={16} />}
           </button>
-          <div className="seg" style={{ flex: 'none' }}>
+          <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
             {SPEEDS.map((s) => (
-              <button key={s.id} className={speed === s.id ? 'on' : ''} onClick={() => setSpeed(s.id)} style={{ padding: '0 10px' }}>
+              <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => setSpeed(s.id)} style={{ padding: '0 10px' }}>
                 {s.label}
               </button>
             ))}
           </div>
           <div className="grow" />
-          <button className="btn sm" onClick={() => skip('quarter')}>
+          <button className="btn sm" onClick={() => skip('quarter')} aria-label="Qtr: sim to the end of the quarter">
             <ChevronsRight size={16} /> Qtr
           </button>
-          <button className="btn sm" onClick={() => skip('end')}>
-            End
+          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPanel('end')}>
+            Sim to final
           </button>
         </div>
       ) : (
         <Card accent>
-          <div className="bold" style={{ fontSize: 18 }}>
-            Final: {away.abbrev} {score[1]}, {home.abbrev} {score[0]}
-          </div>
-          <div className="small dim" style={{ marginBottom: 10 }}>
-            {(userSide === 0 ? score[0] > score[1] : score[1] > score[0]) ? 'Win! ' : 'Loss. '}The full breakdown shows exactly why.
-          </div>
-          <button className="btn primary block" disabled={committedGid === null} onClick={() => committedGid !== null && nav(`/game/${committedGid}`, { replace: true })}>
-            <Activity size={16} /> Game report
+          {status === 'final' ? (
+            <>
+              <div className="bold" style={{ fontSize: 18 }}>
+                Final: {away.abbrev} {ticker.get().score[1]}, {home.abbrev} {ticker.get().score[0]}
+              </div>
+              <div className="small dim" style={{ marginBottom: 10 }}>
+                {won ? 'Win! ' : 'Loss. '}The full breakdown shows exactly why.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bold" style={{ fontSize: 18 }}>This game was simulated</div>
+              <div className="small dim" style={{ marginBottom: 10 }}>It was played out from the Play menu, so the result stands.</div>
+            </>
+          )}
+          <button className="btn primary block" disabled={resultGid === null} onClick={() => resultGid !== null && nav(`/game/${resultGid}`, { replace: true })}>
+            <Activity size={16} /> {status === 'final' ? 'Game report' : 'Box score'}
           </button>
+          <div className="row" style={{ marginTop: 8 }}>
+            <button className="btn grow" onClick={() => nav('/', { replace: true })}>
+              <HomeIcon size={16} /> Home
+            </button>
+            {nextAction && (
+              <button className="btn grow" disabled={simBusy} onClick={() => void nextGame()}>
+                Next game <ChevronsRight size={16} />
+              </button>
+            )}
+          </div>
         </Card>
       )}
 
@@ -358,8 +531,8 @@ export default function Live() {
       ))}
 
       {!over && (
-        <div className="grid4">
-          <button className="btn sm" disabled={me.timeouts <= 0} onClick={() => (sim.callTimeout(userSide), setTick((x) => x + 1))}>
+        <div className="grid4 live-ctl">
+          <button className="btn sm" disabled={me.timeouts <= 0} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
             <Timer size={16} /> TO
           </button>
           <button className="btn sm" onClick={() => setPanel('subs')}>
@@ -374,61 +547,112 @@ export default function Live() {
         </div>
       )}
 
-      {/* on-court strip */}
-      <Card title="On the floor" right={<span className="tiny dim">energy · fouls</span>}>
-        <div className="col" style={{ gap: 6 }}>
-          {me.on.map((p) => (
-            <PlayerStrip key={p.pid} p={p} />
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Play-by-play">
-        <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-          {feed.flatMap((f) =>
-            f.lines
-              .slice()
-              .reverse()
-              .map((line, j) => (
-                // stable key: new possessions are prepended, so index keys would remount every row
-                <div key={`${f.q}:${f.clockStart}:${f.clockEnd}:${f.score.join('-')}:${f.off}:${j}`} className="row top small" style={{ gap: 8 }}>
-                  <span className="tiny dim num" style={{ width: 54 }}>Q{f.q} {fmtClock(f.clockEnd)}</span>
-                  <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, background: f.off === 0 ? colors[0][0] : colors[1][0], flex: 'none' }} />
-                  <span className="grow dim2">{line}</span>
-                </div>
-              )),
-          )}
-        </div>
-      </Card>
+      {/* a game simulated elsewhere: the coached version never happened, so don't show its floor or plays */}
+      {status !== 'simmed' && (
+        <>
+          <Card title="On the floor" right={<span className="tiny dim">energy · fouls</span>}>
+            <div className="col" style={{ gap: 6 }}>
+              {me.on.map((p) => (
+                <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} />
+              ))}
+            </div>
+          </Card>
+          <Feed feed={feed} colors={colors} />
+        </>
+      )}
 
       </div>
       </div>
 
       <Sheet open={panel === 'subs'} onClose={() => setPanel('none')} title="Substitutions">
-        <SubsPanel live={live} side={userSide} onChange={() => setTick((x) => x + 1)} />
+        <SubsPanel live={game} side={userSide} nameOf={nameOf} onChange={() => setTick((x) => x + 1)} />
       </Sheet>
       <Sheet open={panel === 'tactics'} onClose={() => setPanel('none')} title="In-game adjustments">
-        <TacticsPanel live={live} side={userSide} apply={applyTactics} />
+        <TacticsPanel live={game} side={userSide} nameOf={nameOf} apply={applyTactics} />
       </Sheet>
       <Sheet open={panel === 'stats'} onClose={() => setPanel('none')} title="Live box score">
-        <StatsPanel live={live} side={userSide} league={league} />
+        <StatsPanel live={game} side={userSide} league={league} nameOf={nameOf} tick={tick} />
+      </Sheet>
+      <Sheet open={panel === 'end'} onClose={() => setPanel('none')} title="Sim to the final buzzer?">
+        <p className="dim2">The rest of the game plays out instantly with your current plan and rotation.</p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="btn grow" onClick={() => setPanel('none')}>
+            Keep coaching
+          </button>
+          <button
+            className="btn primary grow"
+            onClick={() => {
+              setPanel('none');
+              skip('end');
+            }}
+          >
+            <FastForward size={16} /> Sim to final
+          </button>
+        </div>
       </Sheet>
     </main>
   );
 }
 
-function colorDistance(a: string, b: string) {
-  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [r1, g1, b1] = p(a);
-  const [r2, g2, b2] = p(b);
-  return Math.hypot(r1 - r2, g1 - g2, b1 - b2);
+function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; sim: GameSim; home: Team; away: Team; quarter: number; over: boolean }) {
+  const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
+  const qLabel = periodLabel(quarter);
+  return (
+    <div className="card tight" style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}>
+      <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? 'final' : `${qLabel} ${fmtClock(clock)}`}`}>
+        <div className="row" style={{ gap: 6, minWidth: 0 }}>
+          <TeamLogo tid={away.tid} size={28} />
+          <div style={{ minWidth: 0 }}>
+            <div className="bold">{away.abbrev}</div>
+            <div className="tiny dim nowrap">
+              TO {sim.T[1].timeouts}
+              {sim.T[0].fouls >= 5 && <span className="warn" title="In the bonus"> ●</span>}
+            </div>
+          </div>
+          <span className="score" style={{ marginLeft: 'auto' }}>{score[1]}</span>
+        </div>
+        <div className="col center" style={{ gap: 0, minWidth: 56 }}>
+          <span className="display bold" style={{ fontSize: 15 }}>{over ? 'FINAL' : qLabel}</span>
+          <span className="display num" style={{ fontSize: 20 }}>{over ? '' : fmtClock(clock)}</span>
+        </div>
+        <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
+          <TeamLogo tid={home.tid} size={28} />
+          <div className="right" style={{ minWidth: 0 }}>
+            <div className="bold">{home.abbrev}</div>
+            <div className="tiny dim nowrap">
+              {sim.T[1].fouls >= 5 && <span className="warn" title="In the bonus">● </span>}
+              TO {sim.T[0].timeouts}
+            </div>
+          </div>
+          <span className="score" style={{ marginRight: 'auto' }}>{score[0]}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function PlayerStrip({ p }: { p: SP }) {
+/** The play-by-play only re-renders when new lines arrive, not on every animation frame. */
+const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEntry }[]; colors: [[string, string], [string, string]] }) {
+  return (
+    <Card title="Play-by-play">
+      <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+        {feed.map(({ i, e }) => (
+          <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
+            <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>{periodLabel(e.q)} {fmtClock(e.clock)}</span>
+            <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, background: e.t === -1 ? 'transparent' : colors[e.t][0], flex: 'none' }} />
+            <span className="grow dim2" style={{ fontWeight: e.kind === 'period' || e.kind === 'timeout' ? 700 : undefined }}>{e.text}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+});
+
+function PlayerStrip({ p, name }: { p: SP; name: string }) {
   const e = Math.round(p.energy * 100);
   return (
     <div className="row small" style={{ gap: 8 }}>
-      <span className="bold ellipsis" style={{ width: 92 }}>{p.name}</span>
+      <span className="bold ellipsis" style={{ width: 92 }}>{name}</span>
       <div className="grow">
         <div className="bar" style={{ height: 6 }}>
           <div style={{ width: `${e}%`, background: e < 55 ? 'var(--bad)' : e < 72 ? 'var(--warn)' : 'var(--good)' }} />
@@ -441,7 +665,7 @@ function PlayerStrip({ p }: { p: SP }) {
   );
 }
 
-function SubsPanel({ live, side, onChange }: { live: LiveGame; side: 0 | 1; onChange: () => void }) {
+function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 | 1; nameOf: (pid: number) => string; onChange: () => void }) {
   const t = live.sim.T[side];
   const [outPid, setOut] = useState<number | null>(null);
   const [, force] = useState(0);
@@ -461,9 +685,9 @@ function SubsPanel({ live, side, onChange }: { live: LiveGame; side: 0 | 1; onCh
       <div className="small dim">{outPid === null ? 'Tap a player on the floor, then a bench player.' : 'Now pick who comes in.'}</div>
       <div className="col" style={{ gap: 6 }}>
         {t.on.map((p) => (
-          <button key={p.pid} className={`card tight row ${outPid === p.pid ? 'accent' : ''}`} style={{ gap: 8 }} onClick={() => setOut(p.pid)}>
+          <button key={p.pid} className={`card tight row ${outPid === p.pid ? 'accent' : ''}`} style={{ gap: 8 }} aria-pressed={outPid === p.pid} onClick={() => setOut(p.pid)}>
             <Tag tone="info">ON</Tag>
-            <span className="bold grow" style={{ textAlign: 'left' }}>{p.name}</span>
+            <span className="bold grow" style={{ textAlign: 'left' }}>{nameOf(p.pid)}</span>
             <span className="small num">{Math.round(p.energy * 100)}%</span>
             <span className="small dim num">{p.fouls}F · {p.b.pts}p · {(p.b.sec / 60).toFixed(0)}m</span>
           </button>
@@ -484,7 +708,7 @@ function SubsPanel({ live, side, onChange }: { live: LiveGame; side: 0 | 1; onCh
             }}
           >
             <Tag>{p.out === 1 ? 'FOULED OUT' : p.out === 2 ? (p.dnp === 'Rest' ? 'REST' : 'OUT') : 'BENCH'}</Tag>
-            <span className="grow" style={{ textAlign: 'left' }}>{p.name}</span>
+            <span className="grow" style={{ textAlign: 'left' }}>{nameOf(p.pid)}</span>
             <span className="small num">{Math.round(p.energy * 100)}%</span>
             <span className="small dim num">{p.fouls}F · {(p.b.sec / 60).toFixed(0)}m</span>
           </button>
@@ -494,7 +718,7 @@ function SubsPanel({ live, side, onChange }: { live: LiveGame; side: 0 | 1; onCh
   );
 }
 
-function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; apply: (fn: (t: Tactics) => void, persist: boolean) => void }) {
+function TacticsPanel({ live, side, nameOf, apply }: { live: LiveGame; side: 0 | 1; nameOf: (pid: number) => string; apply: (fn: (t: Tactics) => void, persist: boolean) => void }) {
   const [persist, setPersist] = useState(false);
   const [, force] = useState(0);
   const t = live.sim.T[side].t;
@@ -510,7 +734,7 @@ function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; appl
         <div className="small bold" style={{ marginBottom: 6 }}>Pick & roll coverage</div>
         <Chips value={t.defense.pnr} onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))} options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))} />
       </div>
-      <Segmented value={t.defense.scheme} onChange={(x) => set((tt) => void (tt.defense.scheme = x))} options={[{ id: 'man', label: 'Man' }, { id: 'zone23', label: '2-3 Zone' }, { id: 'zone32', label: '3-2 Zone' }]} />
+      <Segmented value={t.defense.scheme} onChange={(x) => set((tt) => void (tt.defense.scheme = x))} label="Defensive scheme" options={[{ id: 'man', label: 'Man' }, { id: 'zone23', label: '2-3 Zone' }, { id: 'zone32', label: '3-2 Zone' }]} />
       <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack paint" />
       <Slider label="Ball pressure" value={t.defense.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} left="Contain" right="Swarm" />
       <div>
@@ -522,12 +746,12 @@ function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; appl
         <Chips value={t.defense.starPlan} onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))} options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))} />
         {t.defense.starPlan !== 'none' && (
           <div className="chips" style={{ marginTop: 8 }}>
-            <button className={`chip ${t.defense.starTarget === null ? 'on' : ''}`} onClick={() => set((tt) => void (tt.defense.starTarget = null))}>
+            <button className={`chip ${t.defense.starTarget === null ? 'on' : ''}`} aria-pressed={t.defense.starTarget === null} onClick={() => set((tt) => void (tt.defense.starTarget = null))}>
               Auto
             </button>
             {opp.on.map((p) => (
-              <button key={p.pid} className={`chip ${t.defense.starTarget === p.pid ? 'on' : ''}`} onClick={() => set((tt) => void (tt.defense.starTarget = p.pid))}>
-                {p.name}
+              <button key={p.pid} className={`chip ${t.defense.starTarget === p.pid ? 'on' : ''}`} aria-pressed={t.defense.starTarget === p.pid} onClick={() => set((tt) => void (tt.defense.starTarget = p.pid))}>
+                {nameOf(p.pid)}
               </button>
             ))}
           </div>
@@ -540,12 +764,13 @@ function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; appl
             const cur = live.sim.T[side].guardOf.get(o.pid);
             return (
               <div key={o.pid} className="col" style={{ gap: 4 }}>
-                <div className="small"><b>{o.name}</b> <span className="dim">guarded by {cur?.name ?? '—'}{t.defense.matchups[o.pid] !== undefined ? ' (assigned)' : ''}</span></div>
+                <div className="small"><b>{nameOf(o.pid)}</b> <span className="dim">guarded by {cur ? nameOf(cur.pid) : '—'}{t.defense.matchups[o.pid] !== undefined ? ' (assigned)' : ''}</span></div>
                 <div className="chips">
                   {live.sim.T[side].on.map((d) => (
                     <button
                       key={d.pid}
                       className={`chip ${t.defense.matchups[o.pid] === d.pid ? 'on' : ''}`}
+                      aria-pressed={t.defense.matchups[o.pid] === d.pid}
                       style={{ height: 28, fontSize: 12 }}
                       onClick={() =>
                         set((tt) => {
@@ -557,7 +782,7 @@ function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; appl
                         })
                       }
                     >
-                      {d.name}
+                      {nameOf(d.pid)}
                     </button>
                   ))}
                 </div>
@@ -578,14 +803,16 @@ function TacticsPanel({ live, side, apply }: { live: LiveGame; side: 0 | 1; appl
   );
 }
 
-function StatsPanel({ live, side, league }: { live: LiveGame; side: 0 | 1; league: ReturnType<typeof useLeague> }) {
+function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side: 0 | 1; league: League; nameOf: (pid: number) => string; tick: number }) {
   const [team, setTeam] = useState<0 | 1>(side);
-  const res = live.sim.result();
+  // the box only changes between possessions
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const res = useMemo(() => live.sim.result(), [live, tick]);
   const tb = team === 0 ? res.home : res.away;
   const pt = Object.entries(tb.playTypes).sort((a, b) => b[1].poss - a[1].poss);
   return (
     <div className="col" style={{ gap: 12 }}>
-      <Segmented value={String(team)} onChange={(v) => setTeam(Number(v) as 0 | 1)} options={[{ id: '1', label: league.teams[res.away.tid].abbrev }, { id: '0', label: league.teams[res.home.tid].abbrev }]} />
+      <Segmented value={String(team)} onChange={(v) => setTeam(Number(v) as 0 | 1)} label="Team" options={[{ id: '1', label: league.teams[res.away.tid].abbrev }, { id: '0', label: league.teams[res.home.tid].abbrev }]} />
       <div className="tablewrap">
         <table className="stats">
           <thead>
@@ -606,7 +833,7 @@ function StatsPanel({ live, side, league }: { live: LiveGame; side: 0 | 1; leagu
               .filter((p) => p.min > 0)
               .map((p) => (
                 <tr key={p.pid}>
-                  <td className="l sticky">{p.name.split(' ').slice(-1)[0]}</td>
+                  <td className="l sticky">{nameOf(p.pid)}</td>
                   <td>{Math.round(p.min)}</td>
                   <td className="bold">{p.pts}</td>
                   <td>{p.orb + p.drb}</td>

@@ -112,12 +112,31 @@ export const f0 = (v: number) => (isFinite(v) ? v.toFixed(0) : '-');
 export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '-');
 export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '-');
 export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '-');
-export const moneyM = (k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;
+/** Q1..Q4, then OT, 2OT, 3OT. */
+export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
+export const moneyM =(k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;
 
-/** Last names for a roster, with a first initial where teammates share one (Jalen and Jaylin Williams on OKC). */
-export function rosterNames(players: { pid: number; firstName: string; lastName: string }[]): (pid: number) => string {
-  const count = new Map<string, number>();
-  for (const p of players) count.set(p.lastName, (count.get(p.lastName) ?? 0) + 1);
-  const names = new Map(players.map((p) => [p.pid, (count.get(p.lastName) ?? 0) > 1 && p.firstName ? `${p.firstName[0]}. ${p.lastName}` : p.lastName]));
+/**
+ * Last names for a roster, with as much of the first name as it takes to tell teammates apart:
+ * Jalen, Jaylin and Kenrich Williams on OKC read "Jal. Williams", "Jay. Williams", "K. Williams".
+ * `initial` always shows at least the first initial (box scores).
+ */
+export function rosterNames(players: { pid: number; firstName: string; lastName: string }[], { initial = false } = {}): (pid: number) => string {
+  const byLast = new Map<string, { pid: number; firstName: string; lastName: string }[]>();
+  for (const p of players) byLast.set(p.lastName, [...(byLast.get(p.lastName) ?? []), p]);
+  const names = new Map<number, string>();
+  for (const group of byLast.values()) {
+    for (const p of group) {
+      const first = p.firstName;
+      if (!first || (group.length === 1 && !initial)) {
+        names.set(p.pid, p.lastName);
+        continue;
+      }
+      const others = group.filter((o) => o !== p).map((o) => o.firstName.toLowerCase());
+      let n = 1;
+      while (n < first.length && others.some((o) => o.startsWith(first.slice(0, n).toLowerCase()))) n++;
+      names.set(p.pid, n < first.length ? `${first.slice(0, n)}. ${p.lastName}` : `${first} ${p.lastName}`);
+    }
+  }
   return (pid) => names.get(pid) ?? '';
 }

@@ -1,6 +1,6 @@
 import { attrDisplay } from '../../core/ratings';
 import { Fragment, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, BedDouble, Wand2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
@@ -18,22 +18,30 @@ export default function Rotation() {
   const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
   const byId = new Map(players.map((p) => [p.pid, p]));
   const nameOf = rosterNames(players);
+  const fullNameOf = rosterNames(players, { initial: true });
   const order = rot.order.filter((pid) => byId.has(pid));
   for (const p of players) if (!order.includes(p.pid)) order.push(p.pid);
   const [edit, setEdit] = useState<number | null>(null);
+  // the rotation Auto replaced, until the next edit
+  const [undo, setUndo] = useState<RotationT | null>(null);
 
-  const update = (fn: (r: RotationT) => void) =>
+  const update = (fn: (r: RotationT) => void) => {
+    setUndo(null);
     useStore.getState().mutate((l) => {
       const r = l.teams[l.userTid].rotation;
       fn(r);
       r.manual = true;
     });
+  };
 
   const healthyOrder = order.filter((pid) => !byId.get(pid)?.injury);
   const total = healthyOrder.reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
   const starters = healthyOrder.slice(0, 5).map((pid) => byId.get(pid)!);
   const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
   const closers = rot.closers.filter((pid) => byId.has(pid));
+  // the engine starts the first five healthy players: the Bench heading goes after the fifth
+  const startSet = new Set(healthyOrder.slice(0, 5));
+  const benchFrom = healthyOrder.length >= 5 ? order.indexOf(healthyOrder[4]) + 1 : order.length;
 
   // planned stints visual (what the engine will follow)
   const plan = useMemo(() => {
@@ -59,19 +67,21 @@ export default function Rotation() {
   const ep = edit !== null ? byId.get(edit) : null;
 
   return (
-    <main className="page">
+    <main className="page" style={{ paddingBottom: undo ? 'calc(var(--nav-h) + 96px)' : undefined }}>
       <PageHeader
         title="Rotation"
         back
+        backTo="/roster"
         sub={rot.manual ? 'Custom rotation' : 'Assistant-managed (updates for injuries automatically)'}
         right={
           <button
             className="btn sm"
-            onClick={() =>
+            onClick={() => {
+              setUndo(structuredClone(rot));
               useStore.getState().mutate((l) => {
                 l.teams[l.userTid].rotation = autoRotation(rosterSorted(l, l.userTid), l.teams[l.userTid].rotation);
-              })
-            }
+              });
+            }}
           >
             <Wand2 size={16} /> Auto
           </button>
@@ -105,20 +115,21 @@ export default function Rotation() {
             const pg = playerSeason(p, league.season);
             return (
               <Fragment key={pid}>
-              {(i === 0 || i === 5) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
-              <div className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: i < 5 ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
-                <div className="col" style={{ gap: 2 }}>
-                  <button className="iconbtn" style={{ width: 30, height: 26 }} onClick={() => move(pid, -1)} aria-label="Move up" disabled={i === 0}>
+              {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
+              <div className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: startSet.has(pid) ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
+                <div className="move-arrows">
+                  <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0}>
                     <ArrowUp size={16} />
                   </button>
-                  <button className="iconbtn" style={{ width: 30, height: 26 }} onClick={() => move(pid, 1)} aria-label="Move down" disabled={i === order.length - 1}>
+                  <button className="iconbtn" onClick={() => move(pid, 1)} aria-label={`Move ${p.firstName} ${p.lastName} down`} disabled={i === order.length - 1}>
                     <ArrowDown size={16} />
                   </button>
                 </div>
                 <Avatar p={p} />
-                <div className="grow" role="button" tabIndex={0} aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`} onClick={() => setEdit(pid)} onKeyDown={activateOnKey(() => setEdit(pid))} style={{ cursor: 'pointer' }}>
+                <div className="grow" role="button" tabIndex={0} aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`} onClick={() => setEdit(pid)} onKeyDown={activateOnKey(() => setEdit(pid))} style={{ cursor: 'pointer', minWidth: 0 }}>
                   <div className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <span className="bold ellipsis" style={{ minWidth: 0 }}>{p.firstName[0]}. {p.lastName}</span>
+                    <span className="bold ellipsis" style={{ minWidth: 0 }}>{fullNameOf(pid)}</span>
+                    {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
                     {closers.includes(pid) && <Tag>Closer</Tag>}
                     {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
                   </div>
@@ -158,7 +169,7 @@ export default function Rotation() {
               );
             })}
         </div>
-        <div className="row between tiny dim" style={{ marginTop: 6, paddingLeft: 76, paddingRight: 26 }}>
+        <div className="tiny dim" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', marginTop: 6, paddingLeft: 76, paddingRight: 26 }}>
           <span>Q1</span>
           <span>Q2</span>
           <span>Q3</span>
@@ -171,6 +182,24 @@ export default function Rotation() {
       <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
         {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} />}
       </Sheet>
+
+      {undo && (
+        <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
+          <div className="grow small">
+            <div className="bold">Assistant's rotation applied</div>
+            <div className="dim">{undo.manual ? 'Your custom rotation was replaced.' : 'Refreshed for the current roster.'}</div>
+          </div>
+          <button
+            className="btn sm"
+            onClick={() => {
+              useStore.getState().mutate((l) => void (l.teams[l.userTid].rotation = undo));
+              setUndo(null);
+            }}
+          >
+            <Undo2 size={16} /> Undo
+          </button>
+        </div>
+      )}
     </main>
   );
 }

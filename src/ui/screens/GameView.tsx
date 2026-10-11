@@ -9,8 +9,11 @@ import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart } from '../components/charts';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
-import type { GameResult, TeamBox } from '../../core/types';
-import { p1, signed } from '../stats';
+import { GAME } from '../../core/constants';
+import type { GameResult, League, TeamBox } from '../../core/types';
+import { p1, periodLabel, rosterNames, signed } from '../stats';
+import { adviceFor } from '../seasonAnalysis';
+import { matchupColors } from '../teamColors';
 
 type Tab = 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 
@@ -20,11 +23,12 @@ export default function GameView() {
   const g = league.games.find((x) => x.gid === Number(gid));
   const userGame = !!g && (g.home.tid === league.userTid || g.away.tid === league.userTid);
   const report = useMemo(() => (g && userGame && g.impacts ? buildGameReport(league, g) : null), [g, userGame, league]);
+  const userNames = useMemo(() => (g && userGame ? boxNames(league, g.home.tid === league.userTid ? g.home : g.away) : null), [g, userGame, league]);
   const [tab, setTab] = useQueryParam<Tab>('tab', report ? 'report' : 'box', ['report', 'box', 'shots', 'flow', 'pbp']);
   if (!g) {
     return (
       <main className="page">
-        <PageHeader title="Game" back />
+        <PageHeader title="Game" back backTo="/" />
         <Empty>This game is no longer stored. Detailed results are kept for the current season.</Empty>
       </main>
     );
@@ -38,10 +42,26 @@ export default function GameView() {
     ...(g.flow?.length ? [{ id: 'flow' as Tab, label: 'Flow' }] : []),
     ...(g.pbp?.length ? [{ id: 'pbp' as Tab, label: 'PBP' }] : []),
   ];
+  // the user's team carries the accent in two-team comparisons, wherever it played (side 0 = home)
+  const accentSide = userGame && g.home.tid === league.userTid ? 0 : 1;
+  const [awayColor, homeColor] = accentSide === 0 ? ['var(--text-dim)', 'var(--accent)'] : ['var(--accent)', 'var(--text-dim)'];
+  const comparison: { label: string; a: number; b: number; pct?: boolean }[] = [
+    { label: 'FG%', a: (g.away.t.fgm / Math.max(1, g.away.t.fga)) * 100, b: (g.home.t.fgm / Math.max(1, g.home.t.fga)) * 100, pct: true },
+    { label: '3P%', a: (g.away.t.tpm / Math.max(1, g.away.t.tpa)) * 100, b: (g.home.t.tpm / Math.max(1, g.home.t.tpa)) * 100, pct: true },
+    { label: 'Rebounds', a: g.away.t.orb + g.away.t.drb, b: g.home.t.orb + g.home.t.drb },
+    { label: 'Assists', a: g.away.t.ast, b: g.home.t.ast },
+    { label: 'Turnovers', a: g.away.t.tov, b: g.home.t.tov },
+    { label: 'Paint pts', a: g.away.extra.paint, b: g.home.extra.paint },
+    // quick-simmed games saved before fast breaks were tracked read 0-0
+    ...(g.away.extra.fastBreak || g.home.extra.fastBreak ? [{ label: 'Fast break', a: g.away.extra.fastBreak, b: g.home.extra.fastBreak }] : []),
+    { label: '2nd chance', a: g.away.extra.secondChance, b: g.home.extra.secondChance },
+    { label: 'Bench pts', a: g.away.extra.bench, b: g.home.extra.bench },
+  ];
+  const flowColors = matchupColors(home.colors, away.colors);
   const typeLabel = cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season');
   return (
     <main className="page">
-      <PageHeader title="Game report" back sub={`${typeLabel} · ${fmtDate(g.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}${g.att ? ` · Att ${g.att.toLocaleString()}` : ''}`} />
+      <PageHeader title="Game report" back backTo="/" sub={`${typeLabel} · ${fmtDate(g.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}${g.att ? ` · Att ${g.att.toLocaleString()}` : ''}`} />
       <Card accent>
         <div className="scorebug">
           <Link to={`/team/${away.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
@@ -60,7 +80,7 @@ export default function GameView() {
         </div>
         <QuarterTable g={g} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
       </Card>
-      {tabs.length > 1 && <Segmented value={tab} onChange={setTab} options={tabs} />}
+      {tabs.length > 1 && <Segmented value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
 
       {tab === 'report' && report && (
         <>
@@ -81,7 +101,7 @@ export default function GameView() {
                       <div className="tiny dim">{f.detail}</div>
                       {f.advice && (
                         <div className="small" style={{ marginTop: 4, color: 'var(--warn)' }}>
-                          <Lightbulb size={13} style={{ verticalAlign: -2 }} /> {f.advice}
+                          <Lightbulb size={13} style={{ verticalAlign: -2 }} /> {adviceFor(f.advice, league.settings.complexity)}
                         </div>
                       )}
                     </div>
@@ -126,7 +146,7 @@ export default function GameView() {
                 {report.grades.map((gr) => (
                   <Link key={gr.pid} to={`/player/${gr.pid}`} className="row small">
                     <span className={`display bold`} style={{ width: 30, fontSize: 18, color: gr.grade.startsWith('A') ? 'var(--good)' : gr.grade.startsWith('B') ? 'var(--info)' : gr.grade.startsWith('C') ? 'var(--warn)' : 'var(--bad)' }}>{gr.grade}</span>
-                    <span className="bold" style={{ width: 96 }}>{league.players[gr.pid]?.lastName}</span>
+                    <span className="bold ellipsis" style={{ width: 96, flex: 'none' }}>{userNames?.(gr.pid) || league.players[gr.pid]?.lastName}</span>
                     <span className="dim grow ellipsis">{gr.note}</span>
                   </Link>
                 ))}
@@ -140,7 +160,7 @@ export default function GameView() {
                   {report.lineups.map((l, i) => (
                     <div key={i} className="row small top">
                       <span className={`num bold ${l.pm >= 0 ? 'good' : 'bad'}`} style={{ width: 36 }}>{signed(l.pm, 0)}</span>
-                      <span className="grow dim2">{l.pids.map((pid) => league.players[pid]?.lastName ?? '?').join(', ')}</span>
+                      <span className="grow dim2">{l.pids.map((pid) => userNames?.(pid) || '?').join(', ')}</span>
                       <span className="dim tiny num">{l.min.toFixed(0)}m</span>
                     </div>
                   ))}
@@ -162,19 +182,13 @@ export default function GameView() {
 
       {tab === 'box' && (
         <>
-          <BoxTable box={g.away} title={`${away.region} ${away.name}`} pog={g.pog} />
-          <BoxTable box={g.home} title={`${home.region} ${home.name}`} pog={g.pog} />
+          <BoxTable box={g.away} title={`${away.region} ${away.name}`} pog={g.pog} league={league} />
+          <BoxTable box={g.home} title={`${home.region} ${home.name}`} pog={g.pog} league={league} />
           <Card title="Team comparison" right={<span className="tiny dim">{away.abbrev} · {home.abbrev}</span>}>
             <div className="col" style={{ gap: 10 }}>
-              <CompareBar label="FG%" a={(g.away.t.fgm / Math.max(1, g.away.t.fga)) * 100} b={(g.home.t.fgm / Math.max(1, g.home.t.fga)) * 100} />
-              <CompareBar label="3P%" a={(g.away.t.tpm / Math.max(1, g.away.t.tpa)) * 100} b={(g.home.t.tpm / Math.max(1, g.home.t.tpa)) * 100} />
-              <CompareBar label="Rebounds" a={g.away.t.orb + g.away.t.drb} b={g.home.t.orb + g.home.t.drb} fmt={(v) => String(v)} />
-              <CompareBar label="Assists" a={g.away.t.ast} b={g.home.t.ast} fmt={(v) => String(v)} />
-              <CompareBar label="Turnovers" a={g.away.t.tov} b={g.home.t.tov} fmt={(v) => String(v)} higherBetter={false} />
-              <CompareBar label="Paint pts" a={g.away.extra.paint} b={g.home.extra.paint} fmt={(v) => String(v)} />
-              <CompareBar label="Fast break" a={g.away.extra.fastBreak} b={g.home.extra.fastBreak} fmt={(v) => String(v)} />
-              <CompareBar label="2nd chance" a={g.away.extra.secondChance} b={g.home.extra.secondChance} fmt={(v) => String(v)} />
-              <CompareBar label="Bench pts" a={g.away.extra.bench} b={g.home.extra.bench} fmt={(v) => String(v)} />
+              {comparison.map((c) => (
+                <CompareBar key={c.label} label={c.label} a={c.a} b={c.b} fmt={c.pct ? undefined : (v) => String(v)} higherBetter={c.label !== 'Turnovers'} colorA={awayColor} colorB={homeColor} />
+              ))}
             </div>
           </Card>
         </>
@@ -188,7 +202,7 @@ export default function GameView() {
             const made = shots.filter((s) => s.made).length;
             return (
               <Card key={side} title={`${t.name} · ${made}/${shots.length}`}>
-                <ShotChart shots={shots} color={side === 0 ? 'var(--accent)' : '#7dd3fc'} />
+                <ShotChart shots={shots} color={side === accentSide ? 'var(--accent)' : '#7dd3fc'} />
                 <div className="grid3" style={{ marginTop: 8 }}>
                   {(['rim', 'mid', 'ab3'] as const).map((z) => {
                     const zs = shots.filter((s) => (z === 'ab3' ? s.zone === 'ab3' || s.zone === 'c3' : z === 'mid' ? s.zone === 'mid' || s.zone === 'paint' : s.zone === 'rim'));
@@ -210,13 +224,7 @@ export default function GameView() {
 
       {tab === 'flow' && g.flow && (
         <Card title="Score margin" right={<span className="tiny dim">{home.abbrev} above · {away.abbrev} below</span>}>
-          <FlowChart flow={g.flow} colorA={home.colors[0]} colorB={away.colors[0]} height={150} />
-          <div className="row between tiny dim">
-            <span>Q1</span>
-            <span>Q2</span>
-            <span>Q3</span>
-            <span>Q4</span>
-          </div>
+          <FlowChart flow={g.flow} colorA={flowColors[0]} colorB={flowColors[1]} periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]} height={150} />
           <div className="small dim" style={{ marginTop: 8 }}>
             Largest leads: {home.abbrev} {g.home.extra.biggestLead}, {away.abbrev} {g.away.extra.biggestLead}.
           </div>
@@ -228,7 +236,7 @@ export default function GameView() {
           <div className="col" style={{ gap: 6 }}>
             {g.pbp.map((e, i) => (
               <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
-                <span className="tiny dim num" style={{ width: 56 }}>Q{e.q} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}</span>
+                <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>{periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}</span>
                 <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>{e.text}</span>
                 <span className="tiny num dim">{e.as}-{e.hs}</span>
               </div>
@@ -276,9 +284,25 @@ function QuarterTable({ g, abbrevs }: { g: GameResult; abbrevs: Record<number, s
   );
 }
 
-function BoxTable({ box, title, pog }: { box: TeamBox; title: string; pog?: number }) {
+/** Collision-aware names for one side of a box score (current players by record, others by the stored name). */
+function boxNames(league: League, box: TeamBox, initial = false) {
+  return rosterNames(
+    box.players.map((b) => {
+      const p = league.players[b.pid];
+      const [first, ...rest] = b.name.split(' ');
+      return { pid: b.pid, firstName: p ? p.firstName : rest.length ? first : '', lastName: p ? p.lastName : rest.length ? rest.join(' ') : first };
+    }),
+    { initial },
+  );
+}
+
+/** "Injured (Concussion)" reads "Injured: Concussion" inside the DNP list's own parentheses. */
+const dnpLabel = (dnp: string) => dnp.replace(/^Injured \((.+)\)$/, 'Injured: $1');
+
+function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; pog?: number; league: League }) {
   const rows = box.players.filter((p) => p.min > 0);
   const dnp = box.players.filter((p) => p.min <= 0);
+  const name = boxNames(league, box, true);
   return (
     <Card title={title} className="flush">
       <div className="tablewrap" style={{ border: 'none', borderRadius: 0 }}>
@@ -305,7 +329,7 @@ function BoxTable({ box, title, pog }: { box: TeamBox; title: string; pog?: numb
               <tr key={p.pid}>
                 <td className="l sticky">
                   <Link to={`/player/${p.pid}`}>
-                    <span className={p.gs ? 'bold' : ''}>{shortName(p.name)}</span>
+                    <span className={p.gs ? 'bold' : ''}>{name(p.pid)}</span>
                     {p.pid === pog && <span className="tag warn" style={{ marginLeft: 4, height: 16 }}>POG</span>}
                   </Link>
                 </td>
@@ -341,12 +365,7 @@ function BoxTable({ box, title, pog }: { box: TeamBox; title: string; pog?: numb
           </tbody>
         </table>
       </div>
-      {dnp.length > 0 && <div className="tiny dim" style={{ padding: '8px 12px' }}>DNP: {dnp.map((p) => `${shortName(p.name)} (${p.dnp ?? 'Coach'})`).join(', ')}</div>}
+      {dnp.length > 0 && <div className="tiny dim" style={{ padding: '8px 12px' }}>DNP: {dnp.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}</div>}
     </Card>
   );
-}
-
-function shortName(name: string) {
-  const parts = name.split(' ');
-  return parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(' ')}` : name;
 }

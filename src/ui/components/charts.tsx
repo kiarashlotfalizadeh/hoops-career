@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ShotRecord } from '../../core/types';
+import { periodLabel } from '../stats';
 
 /** Track an element's width so charts draw at their real size instead of a letterboxed 320px. */
 function useWidth(fallback = 320) {
@@ -55,8 +56,11 @@ export function LineChart({ points, height = 120, color = 'var(--accent)', yMin,
   );
 }
 
-/** Score margin flow (positive = team A ahead). */
-export function FlowChart({ flow, colorA, colorB, height = 110 }: { flow: number[]; colorA: string; colorB: string; height?: number }) {
+/**
+ * Score margin flow (positive = team A ahead). `periods` are the periods' lengths in game seconds
+ * (four quarters, then any overtimes): dividers and Q1..OT labels sit where each one starts.
+ */
+export function FlowChart({ flow, colorA, colorB, periods, height = 110 }: { flow: number[]; colorA: string; colorB: string; periods: number[]; height?: number }) {
   const [ref, w] = useWidth();
   const clip = useId().replace(/:/g, '');
   const h = height;
@@ -65,9 +69,11 @@ export function FlowChart({ flow, colorA, colorB, height = 110 }: { flow: number
   const x = (i: number) => (i / (flow.length - 1)) * w;
   const y = (v: number) => h / 2 - (v / max) * (h / 2 - 6);
   const d = flow.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const total = periods.reduce((a, p) => a + p, 0);
+  const starts = periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
   return (
     <div ref={ref}>
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label="Score margin over the game">
+    <svg viewBox={`0 0 ${w} ${h + 16}`} width="100%" height={h + 16} role="img" aria-label="Score margin over the game">
       <defs>
         <clipPath id={`${clip}-top`}>
           <rect x="0" y="0" width={w} height={h / 2} />
@@ -76,8 +82,13 @@ export function FlowChart({ flow, colorA, colorB, height = 110 }: { flow: number
           <rect x="0" y={h / 2} width={w} height={h / 2} />
         </clipPath>
       </defs>
-      {[0.25, 0.5, 0.75].map((q) => (
-        <line key={q} x1={w * q} x2={w * q} y1={0} y2={h} stroke="var(--line)" />
+      {starts.map((sx, i) => (
+        <g key={i}>
+          {i > 0 && <line x1={sx} x2={sx} y1={0} y2={h} stroke="var(--line)" />}
+          <text x={(sx + (starts[i + 1] ?? w)) / 2} y={h + 12} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+            {periodLabel(i + 1)}
+          </text>
+        </g>
       ))}
       <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="var(--line-2)" />
       <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.35} clipPath={`url(#${clip}-top)`} />

@@ -38,6 +38,20 @@ export function teamAccent(colors: [string, string, string]): string {
   return cands[0]?.c ?? DEFAULT_ACCENT;
 }
 
+/** Straight-line RGB distance (0..441): under ~90 two team colours read as the same. */
+export function colorDistance(a: string, b: string): number {
+  const [r1, g1, b1] = rgb(a);
+  const [r2, g2, b2] = rgb(b);
+  return Math.hypot(r1 - r2, g1 - g2, b1 - b2) * 255;
+}
+
+/** One readable colour per team for two-team charts, with the away side switching when they clash. */
+export function matchupColors(home: [string, string, string], away: [string, string, string]): [string, string] {
+  const h = teamAccent(home);
+  const a = [teamAccent(away), ...away, '#e8ecf3'].find((c) => luminance(c) > 0.03 && colorDistance(c, h) >= 90) ?? '#e8ecf3';
+  return [h, a];
+}
+
 /** Set --accent, --accent-ink (text on accent fills) and --accent-text (accent-coloured text). */
 export function applyAccent(colors: [string, string, string] | null) {
   const accent = colors ? teamAccent(colors) : DEFAULT_ACCENT;

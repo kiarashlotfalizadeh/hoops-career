@@ -9,7 +9,13 @@ export interface CourtProps {
   jersey: (pid: number) => string;
   onDone: () => void;
   onTick?: (clock: number, score: [number, number] | null) => void;
+  /** What the court shows, for screen readers. */
+  label: string;
+  /** A call between possessions (a timeout) flashed over the court; a new id replays it. */
+  banner?: { text: string; id: number } | null;
 }
+
+const BANNER_MS = 1600;
 
 const W_FT = 50;
 const H_FT = 47;
@@ -18,15 +24,20 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) /
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
-export function Court({ script, speed, paused, colors, jersey, onDone, onTick }: CourtProps) {
+export function Court({ script, speed, paused, colors, jersey, onDone, onTick, label, banner }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, score: null as [number, number] | null });
   const props = useRef({ speed, paused, colors, jersey, onDone, onTick });
   props.current = { speed, paused, colors, jersey, onDone, onTick };
+  const flash = useRef<{ text: string; start: number } | null>(null);
 
   useEffect(() => {
     state.current = { t: 0, last: 0, script, done: false, score: null };
   }, [script]);
+
+  useEffect(() => {
+    flash.current = banner ? { text: banner.text, start: performance.now() } : null;
+  }, [banner]);
 
   useEffect(() => {
     let raf = 0;
@@ -48,8 +59,10 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick }:
       const dt = s.last ? Math.min(100, now - s.last) : 0;
       s.last = now;
       if (!props.current.paused && !s.done) s.t += dt * props.current.speed;
+      const fl = flash.current;
+      const flAge = fl ? now - fl.start : BANNER_MS;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
-      const sig = `${canvas.width}|${s.t}|${s.done}`;
+      const sig = `${canvas.width}|${s.t}|${s.done}|${flAge < BANNER_MS ? Math.floor(flAge / 16) : ''}`;
       if (sig === drawn && s.script === lastScript) return;
       drawn = sig;
       lastScript = s.script;
@@ -57,7 +70,12 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick }:
       const k = cssW / W_FT;
       drawCourt(ctx, cssW, cssH, k);
       const sc = s.script;
-      if (!sc || sc.frames.length === 0) return;
+      if (sc && sc.frames.length > 0) drawScript(sc);
+      if (fl && flAge < BANNER_MS) drawFlash(ctx, k, fl.text, 'info', 0, 26, Math.min(1, flAge / 150, (BANNER_MS - flAge) / 400));
+    };
+    const drawScript = (sc: Script) => {
+      const s = state.current;
+      const k = canvas.clientWidth / W_FT;
       // locate segment
       let acc = 0;
       let i = 1;
@@ -116,7 +134,7 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick }:
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  return <canvas ref={ref} style={{ width: '100%', display: 'block', borderRadius: 12, touchAction: 'pan-y' }} />;
+  return <canvas ref={ref} role="img" aria-label={label} style={{ width: '100%', display: 'block', borderRadius: 12, touchAction: 'pan-y' }} />;
 }
 
 function drawCourt(ctx: CanvasRenderingContext2D, w: number, h: number, k: number) {
