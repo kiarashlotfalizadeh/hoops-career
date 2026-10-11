@@ -51,6 +51,25 @@ describe('import', () => {
     expect((await loadLeague(back.id))!.inbox[0].link).toBeUndefined();
   });
 
+  it('a crafted backup cannot reach the prototypes of the objects it is read into', async () => {
+    const l = played('proto');
+    const plant = (o: object) => {
+      Object.defineProperty(o, '__proto__', { value: { polluted: true }, enumerable: true });
+      Object.defineProperty(o, 'constructor', { value: { prototype: { polluted: true } }, enumerable: true });
+    };
+    const p = Object.values(l.players).find((x) => x.tid === l.userTid)!;
+    [l, l.settings, l.teams[l.userTid], l.teams[l.userTid].tactics, l.teams[l.userTid].rotation, p, p.ratings, l.games[0]].forEach(plant);
+    const back = await importLeague(backup(l));
+    useStore.getState().setLeague(back);
+    await useStore.getState().simulate({ kind: 'days', n: 3 });
+    useStore.getState().mutate((x) => (x.name = 'saved again'));
+    await useStore.getState().save();
+    await loadLeague(back.id);
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    expect((Object.prototype as { polluted?: boolean }).polluted).toBeUndefined();
+    expect(back.day).toBe(l.day + 3);
+  });
+
   it('refuses files that are not backups, too big, or from a newer version', async () => {
     await expect(importLeague(new File(['{"nope"'], 'x.json'))).rejects.toThrow('not a Hoops Career backup');
     await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Hoops Career backup');
