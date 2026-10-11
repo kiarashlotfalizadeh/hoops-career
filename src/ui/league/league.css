@@ -52,9 +52,11 @@
   display: flex;
   gap: 6px;
   overflow-x: auto;
+  /* sideways only: room above and below for the chips' tap areas, so a vertical swipe scrolls the page */
+  overflow-y: hidden;
   scrollbar-width: none;
-  margin: 0 -14px;
-  padding: 0 14px;
+  margin: -4px -14px;
+  padding: 4px 14px;
 }
 .lg-hscroll::-webkit-scrollbar {
   display: none;

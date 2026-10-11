@@ -1117,8 +1117,11 @@ table.stats th.sorted {
   display: flex;
   gap: 10px;
   overflow-x: auto;
+  /* sideways only: room above and below for tap areas and focus rings, so a vertical swipe scrolls the page */
+  overflow-y: hidden;
   scrollbar-width: none;
-  padding-bottom: 2px;
+  margin: -4px 0;
+  padding: 4px 0 6px;
 }
 .hscroll::-webkit-scrollbar {
   display: none;
