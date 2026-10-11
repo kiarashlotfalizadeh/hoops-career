@@ -455,7 +455,13 @@ export default function Live() {
     return (
       <main className="page">
         <PageHeader title="Live" back backTo="/" />
-        <Empty>No game for your team today.</Empty>
+        <Empty>
+          {league.phase === 'preseason'
+            ? 'No games yet: start the regular season from Home or the Play menu.'
+            : ['regular', 'playin', 'playoffs'].includes(league.phase)
+              ? 'No game for your team today.'
+              : 'No games until next season.'}
+        </Empty>
         {nextAction?.sim && (
           <button className="btn primary block big" disabled={simBusy} onClick={() => void nextGame()}>
             <ChevronsRight size={18} /> Sim to game day
