@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from 'react';
+import { useStore } from '../state/store';
 
 const KEY = 'hc:chunk-reload';
 
@@ -34,6 +35,8 @@ export function lazyRetry<T extends ComponentType<object>>(load: () => Promise<{
     } catch (e) {
       if (!reloadedOnce()) {
         markReloaded(true);
+        // the league's latest changes (a sim in progress included) go to the device first
+        await Promise.race([useStore.getState().flush(), new Promise((r) => setTimeout(r, 2000))]);
         window.location.reload();
         return new Promise<{ default: T }>(() => {});
       }
