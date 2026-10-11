@@ -8,6 +8,7 @@ import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel, type Composites } from '../../core/ratings';
 import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
+import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, moneyM, p1, perGame, signed } from '../stats';
 import { contractExp, salaryFor } from '../../core/playerGen';
@@ -116,12 +117,13 @@ export default function PlayerView() {
   const p = league.players[Number(pid)];
   const [tab, setTab] = useQueryParam<Tab>('tab', 'overview', ['overview', 'ratings', 'stats', 'log', 'dev']);
   const [confirmRelease, setConfirmRelease] = useState(false);
+  const [roleOpen, setRoleOpen] = useState(false);
   const [openRating, setOpenRating] = useState<string | null>(null);
   const pctile = useSkillPercentiles(league);
   if (!p) {
     return (
       <main className="page">
-        <PageHeader title="Player" back />
+        <PageHeader title="Player" back backTo="/roster" />
         <Empty>Player not found.</Empty>
       </main>
     );
@@ -144,7 +146,7 @@ export default function PlayerView() {
 
   return (
     <main className="page">
-      <PageHeader title={p.lastName} sub={status} back />
+      <PageHeader title={p.lastName} sub={status} back backTo={mine ? '/roster' : team ? `/team/${team.tid}` : '/'} />
       <Card accent>
         <div className="row top" style={{ gap: 14 }}>
           <Avatar p={p} size="lg" />
@@ -158,7 +160,7 @@ export default function PlayerView() {
             <div className="small dim">
               {p.country}
               {p.college ? ` · ${p.college}` : ''}
-              {p.draft.round > 0 ? ` · ${p.draft.year} R${p.draft.round} #${p.draft.pick}` : p.draft.year ? ` · Undrafted` : ''}
+              {p.draft.round > 0 ? ` · ${p.draft.year} R${p.draft.round} #${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ` · Undrafted` : ''}
             </div>
             <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
               <Tag tone="info">{p.archetype}</Tag>
@@ -186,6 +188,7 @@ export default function PlayerView() {
       <Segmented
         value={tab}
         onChange={setTab}
+        label="Player sections"
         options={[
           { id: 'overview', label: 'Overview' },
           { id: 'ratings', label: 'Ratings' },
@@ -250,7 +253,7 @@ export default function PlayerView() {
                 )}
                 {team && (
                   <div className="small dim2">
-                    Shot freedom: {['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1]} · Planned minutes: {team.rotation.minutes[p.pid] ?? 0}
+                    Shot freedom: {['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1]} · Planned minutes: {p.injury ? 'out (injured)' : team.rotation.minutes[p.pid] ?? 0}
                   </div>
                 )}
                 {cur && (
@@ -260,9 +263,9 @@ export default function PlayerView() {
                 )}
                 {mine && (
                   <div className="row" style={{ gap: 6 }}>
-                    <Link to="/tactics?tab=roles" className="btn xs">
+                    <button className="btn xs" onClick={() => setRoleOpen(true)}>
                       Set role
-                    </Link>
+                    </button>
                     <Link to="/rotation" className="btn xs">
                       Minutes
                     </Link>
@@ -395,6 +398,9 @@ export default function PlayerView() {
       {tab === 'log' && <GameLog p={p} league={league} onOpen={(gid) => nav(`/game/${gid}`)} />}
       {tab === 'dev' && <DevTab p={p} league={league} mine={mine} />}
 
+      <Sheet open={roleOpen} onClose={() => setRoleOpen(false)} title={`${p.firstName} ${p.lastName}: role`}>
+        <RoleEditor p={p} onDone={() => setRoleOpen(false)} />
+      </Sheet>
       <Sheet open={confirmRelease} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
         <p className="dim2">
           {p.contract.twoWay

@@ -9,7 +9,7 @@ import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col, act
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { f1, moneyM, p1, playerSeason, signed } from '../stats';
+import { f1, moneyM, p1, playerSeason, rosterNames, signed } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 
@@ -32,6 +32,7 @@ export default function Roster() {
   const tid = league.userTid;
   const team = league.teams[tid];
   const roster = useMemo(() => rosterSorted(league, tid), [league, tid, v]);
+  const nameOf = useMemo(() => rosterNames(roster, { initial: true }), [roster]);
   // between seasons, count and pay next season's contracts (the same view as Office and Re-sign)
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
@@ -42,7 +43,7 @@ export default function Roster() {
   const age = (p: Player) => league.season - p.bornYear;
 
   const ratingCols: Col<Player>[] = [
-    { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{p.firstName[0]}. {p.lastName}</span> },
+    { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (v) => <Ovr v={v as number} size="sm" /> },
     { key: 'pot', label: 'POT', get: (p) => p.pot },
     ...(['hgt', 'spd', 'ath', 'ins', 'mid', 'tp', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'diq', 'dreb'] as const).map((k) => ({
@@ -54,7 +55,7 @@ export default function Roster() {
   ];
 
   const statCols: Col<Player>[] = [
-    { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{p.firstName[0]}. {p.lastName}</span> },
+    { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     { key: 'gp', label: 'GP', get: (p) => playerSeason(p, league.season)?.gp ?? 0 },
     { key: 'min', label: 'MIN', get: (p) => playerSeason(p, league.season)?.min ?? 0, fmt: (v) => f1(v as number) },
     { key: 'pts', label: 'PTS', get: (p) => playerSeason(p, league.season)?.pts ?? 0, fmt: (v) => f1(v as number) },
@@ -70,7 +71,7 @@ export default function Roster() {
 
   const seasons = [0, 1, 2, 3].map((i) => league.season + i);
   const contractCols: Col<Player>[] = [
-    { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{p.firstName[0]}. {p.lastName}</span> },
+    { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     ...seasons.map((s) => ({
       key: `s${s}`,
       label: `${String(s - 1).slice(2)}-${String(s).slice(2)}`,
