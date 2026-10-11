@@ -84,7 +84,8 @@ export default function Roster() {
     { key: 'on', label: 'ON NET', get: (p) => playerSeason(p, league.season)?.onOff ?? 0, fmt: (v) => signed(v as number) },
   ];
 
-  const seasons = [0, 1, 2, 3].map((i) => league.season + i);
+  // from the season the payroll above counts (next season once this one is over), like the cap sheet
+  const seasons = [0, 1, 2, 3].map((i) => s0 + i);
   const contractCols: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     ...seasons.map((s) => ({
