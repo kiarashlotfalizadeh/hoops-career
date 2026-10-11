@@ -81,7 +81,7 @@ export default function NewLeague() {
     setBusy(true);
     await new Promise((r) => setTimeout(r, 30));
     try {
-      const l = createLeague({ name: name || 'My League', userTid: tid, coachName: coach || 'Coach', settings, seed: kind === 'real' ? seed : null });
+      const l = createLeague({ name: name.trim() || 'My League', userTid: tid, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null });
       setLeague(l);
       try {
         await saveLeague(l);
@@ -235,11 +235,11 @@ export default function NewLeague() {
             <div className="col" style={{ gap: 10 }}>
               <label className="col" style={{ gap: 4 }}>
                 <span className="small dim">Coach / GM name</span>
-                <input className="input" value={coach} placeholder="Your name" onChange={(e) => setCoach(e.target.value)} />
+                <input className="input" value={coach} placeholder="Your name" maxLength={40} onChange={(e) => setCoach(e.target.value)} />
               </label>
               <label className="col" style={{ gap: 4 }}>
                 <span className="small dim">League name</span>
-                <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="input" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
               </label>
             </div>
           </Card>
