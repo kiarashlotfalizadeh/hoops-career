@@ -73,7 +73,8 @@ function combos<T>(arr: T[], k: number): T[][] {
 }
 
 export function bestLineup(players: Player[], pool = 9, roles?: Map<number, RoleMemory | null>): Player[] {
-  const key = (p: Player) => roleRank(p, roles?.get(p.pid) ?? null);
+  // candidates by what each brings to a lineup's score: quality, plus an incumbent's edge
+  const key = (p: Player) => p.ovr + startBonus(roles?.get(p.pid) ?? null);
   const cands = [...players].sort((a, b) => key(b) - key(a)).slice(0, pool);
   if (cands.length <= 5) return cands;
   let best = cands.slice(0, 5);
@@ -114,20 +115,23 @@ export function sustainableMinutes(p: Player): number {
 //
 // Real coaches hand out minutes by role as much as by talent: last season's regular-season
 // minutes and starts are a strong prior for this season's (real minutes track stamina, i.e.
-// role, far better than OVR). The memory fades: it carries at most 60% of the weight of a
-// player's plan, less when his OVR has moved a lot since, and none for players without a
-// sample, so improved young players still play their way into the rotation and each simulated
-// season's minutes become the next season's memory.
+// role, far better than OVR). The memory counts once, in each player's minutes (and in who
+// keeps a starting job), never in the pecking order those minutes come from. It fades: it
+// carries at most 75% of a player's minutes, less when his OVR has moved a lot since or the
+// role was a small one (real players under 12 minutes a game who stick around play about 6
+// more the next season, almost regardless of last season's number), and none for players
+// without a sample, so improved young players still play their way into the rotation and each
+// simulated season's minutes become the next season's memory.
 
 /** Most a remembered role can weigh in a player's minutes (the rest follows current quality). */
-const ROLE_WEIGHT = 0.6;
+const ROLE_WEIGHT = 0.75;
 
 export interface RoleMemory {
   /** Minutes per game in the role season. */
   mpg: number;
   /** Share of games started. */
   gs: number;
-  /** Weight of the memory in the plan, 0..0.6. */
+  /** Weight of the memory in the plan, 0..0.75. */
   w: number;
 }
 
@@ -179,62 +183,87 @@ export function roleMemory(p: Player, season: number | null): RoleMemory | null 
   const hist = p.ratingsHistory ?? [];
   const then = hist.find((h) => h.season >= roleSeason) ?? hist[hist.length - 1];
   const dOvr = then ? Math.abs(p.ovr - then.ovr) : 0;
-  const w = ROLE_WEIGHT * rel * clamp(1 - (dOvr - 2) / 10, 0.25, 1);
+  // a small role is mostly circumstance: full weight from 12 minutes, 40% at 7 or less
+  const w = ROLE_WEIGHT * rel * clamp(1 - (dOvr - 2) / 10, 0.25, 1) * clamp((src.mpg - 4) / 8, 0.4, 1);
   return { mpg: src.mpg, gs: src.gs, w };
-}
-
-/** Pecking order: quality, nudged toward last season's role. */
-export function roleRank(p: Player, r: RoleMemory | null): number {
-  if (!r) return p.ovr;
-  // last season's minutes as an OVR equivalent (across the league, real minutes per game track
-  // OVR at about 0.8 points per minute around a 26-minute, 76.6-OVR regular), blended with OVR
-  const roleOvr = 76.6 + 0.8 * (r.mpg - 26.1);
-  return p.ovr + r.w * (roleOvr - p.ovr);
-}
-
-/** Incumbent starters keep an edge for the job (worth ~7 OVR for a full-time starter). */
-function startBonus(r: RoleMemory | null): number {
-  return r ? 12 * r.w * r.gs : 0;
 }
 
 /** Ceiling for planned minutes: real heavy-minute starters top out around 37-38. */
 const MAX_PLAN = 38;
 
+/** Incumbent starters keep an edge for the job (worth ~7 OVR for a full-time starter). */
+function startBonus(r: RoleMemory | null): number {
+  return r ? (7 * r.w * r.gs) / ROLE_WEIGHT : 0;
+}
+
+/**
+ * A remembered role as healthy-night minutes. Minutes per game played include the nights
+ * teammates sat, so a 20-minute bench role is about 16 minutes when everyone is available,
+ * while heavy-minute players play a little under their plan (fouls, blowouts): 34 a game takes
+ * a 37-minute plan. Fitted on simulated seasons; it puts memory on the same scale as the
+ * depth-chart minutes it blends with, so players without a memory aren't squeezed twice.
+ */
+function healthyMinutes(mpg: number): number {
+  return clamp(1.5 * mpg - 14, 0, MAX_PLAN);
+}
+
 export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 0);
   const season = rosterSeason(players);
   const roles = new Map(players.map((p) => [p.pid, roleMemory(p, season)]));
-  const rk = (p: Player) => roleRank(p, roles.get(p.pid) ?? null);
   const starters = sortByPosition(bestLineup(healthy, 9, roles));
-  const bench = healthy.filter((p) => !starters.includes(p)).sort((a, b) => rk(b) - rk(a));
-  const injured = players.filter((p) => !healthy.includes(p)).sort((a, b) => b.ovr - a.ovr);
-  const order = [...starters, ...bench, ...injured].map((p) => p.pid);
-  // starter minutes follow quality, not position: the best starter gets the biggest share
-  const depth = [...[...starters].sort((a, b) => rk(b) - rk(a)), ...bench];
+  const byOvr = (a: Player, b: Player) => b.ovr - a.ovr;
+  // the pecking order is quality alone (starter minutes follow it too, not position); memory
+  // comes in below, once
+  let depth = [...[...starters].sort(byOvr), ...healthy.filter((p) => !starters.includes(p)).sort(byOvr)];
   const base = defaultMinutesByDepth(depth.length);
   // stars play more, weak starters less: adjust by OVR relative to team
   const avgStarter = starters.reduce((a, p) => a + p.ovr, 0) / Math.max(1, starters.length);
-  const want = depth.map((p, i) => {
+  let talent = depth.map((p, i) => {
     let m = base[i] ?? 0;
     if (i < 5) m += (p.ovr - avgStarter) * 0.3;
     if (i >= 5 && i < 9) m += (p.ovr - (depth[4]?.ovr ?? p.ovr)) * 0.4;
-    m = Math.max(0, m);
-    // role memory: blend toward last season's minutes (heavy-minute players play a little
-    // under their plan, so their memory is lifted slightly)
-    const r = roles.get(p.pid);
-    if (r) m = (1 - r.w) * m + r.w * (r.mpg + 3 * clamp((r.mpg - 12) / 20, 0, 1));
-    return m;
+    return Math.max(0, m);
   });
+  // role memory: blend toward last season's minutes, as healthy-night minutes
+  let want = depth.map((p, i) => {
+    const r = roles.get(p.pid);
+    return r ? (1 - r.w) * talent[i] + r.w * healthyMinutes(r.mpg) : talent[i];
+  });
+  // the bench lines up by those minutes, so the deep bench (first to give up time) is the
+  // players with the least claim on it
+  const benchIx = depth
+    .map((_, i) => i)
+    .slice(5)
+    .sort((a, b) => want[b] - want[a]);
+  const reorder = <T>(xs: T[]) => [...xs.slice(0, 5), ...benchIx.map((i) => xs[i])];
+  depth = reorder(depth);
+  talent = reorder(talent);
+  want = reorder(want);
   // stamina sets what a player can sustain; a proven heavy-minute role counts too
   const caps = depth.map((p) => {
     const r = roles.get(p.pid);
-    return Math.min(MAX_PLAN, Math.max(sustainableMinutes(p), r && r.w >= 0.2 ? r.mpg + 2 : 0));
+    return Math.min(MAX_PLAN, Math.max(sustainableMinutes(p), r && r.w >= 0.2 ? Math.max(r.mpg + 2, healthyMinutes(r.mpg)) : 0));
   });
   let mins = want.map((m, i) => Math.min(m, caps[i]));
   let total = mins.reduce((a, b) => a + b, 0);
   if (total > 240) {
-    // too many claims on the minutes: the bench gives up time first, the deep bench most (each
-    // keeps at least half), then everyone
+    // too many claims on the minutes: remembered minutes beyond a player's talent share go
+    // first, the deeper on the bench the more (nobody drops below that share or his own claim,
+    // whichever is less, so a newcomer's share isn't squeezed twice)
+    const floor = mins.map((m, i) => Math.min(m, talent[i]));
+    const kept = (lam: number) => mins.map((m, i) => (i < 5 ? m : floor[i] + (m - floor[i]) * clamp(1 - lam * (i - 4), 0, 1)));
+    let lo = 0;
+    let hi = 1;
+    for (let it = 0; it < 30; it++) {
+      const mid = (lo + hi) / 2;
+      if (kept(mid).reduce((a, b) => a + b, 0) > 240) lo = mid;
+      else hi = mid;
+    }
+    mins = kept(hi);
+    total = mins.reduce((a, b) => a + b, 0);
+    // then the bench gives up its shares, the deep bench most (each keeps at least half), then
+    // everyone
     for (let pass = 0; pass < 3 && total > 240.5; pass++) {
       const wts = mins.map((m, i) => (i >= 5 && m > want[i] / 2 + 0.05 ? m * (1 + 0.15 * (i - 5)) : 0));
       const sw = wts.reduce((a, b) => a + b, 0);
@@ -264,7 +293,10 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   }
   const minutes: Record<number, number> = {};
   depth.forEach((p, i) => (minutes[p.pid] = Math.round(mins[i])));
+  const injured = players.filter((p) => !healthy.includes(p)).sort(byOvr);
   for (const p of injured) minutes[p.pid] = 0;
+  const bench = depth.slice(5).sort((a, b) => minutes[b.pid] - minutes[a.pid]);
+  const order = [...starters, ...bench, ...injured].map((p) => p.pid);
   const closers = sortByPosition(bestLineup(healthy, 8, roles)).map((p) => p.pid);
   return {
     order,
