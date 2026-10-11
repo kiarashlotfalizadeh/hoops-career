@@ -433,7 +433,8 @@ export function newSeason(league: League): boolean {
         if (p.injury.gamesRemaining <= 0) p.injury = null;
       }
       p.mood.score *= 0.5;
-      p.mood.tradeRequest = false;
+      // a request stands while he's still unhappy on a roster (opening night re-evaluates it)
+      p.mood.tradeRequest &&= p.tid >= 0 && p.mood.score <= -2;
     }
     const prog = annualProgression(league, rng);
     const mine = prog.filter((x) => league.players[x.pid]?.tid === league.userTid).sort((a, b) => b.delta - a.delta);

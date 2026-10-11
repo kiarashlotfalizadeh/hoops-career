@@ -1,6 +1,6 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
-// windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar, awards
-// and the owner. Fast: no full-season sims.
+// windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar, awards,
+// the owner, morale and wear. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
@@ -9,6 +9,7 @@ import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine,
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
+import { buildSimInput, wearInjuryRisk } from '../league/games';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { schedulePlayoffDay } from '../league/playoffs';
 import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
@@ -493,5 +494,41 @@ describe('development (L14)', () => {
       return RATING_KEYS.reduce((a, k) => a + p.ratings[k], 0);
     };
     expect(grow(32)).toBeGreaterThan(grow(3));
+  });
+});
+
+describe('morale and wear (L17)', () => {
+  it('a player who asked out weighs on his teammates', () => {
+    const l = league();
+    const [star, mate] = standardRoster(l, U);
+    for (const p of teamPlayers(l, U)) p.mood = { ...p.mood, score: 0, tradeRequest: false };
+    const before = buildSimInput(l, U, 0, 'regular').perf!;
+    star.mood.tradeRequest = true;
+    const after = buildSimInput(l, U, 0, 'regular').perf!;
+    expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
+    expect(after[star.pid]).toBeCloseTo(before[star.pid]);
+  });
+
+  it('worn-down players carry extra injury risk', () => {
+    const p = standardRoster(league(), U)[0];
+    p.wear = 30;
+    expect(wearInjuryRisk(p)).toBe(0);
+    p.wear = 70;
+    expect(wearInjuryRisk(p)).toBeCloseTo(0.3);
+    p.wear = 100;
+    expect(wearInjuryRisk(p)).toBeCloseTo(0.6);
+  });
+
+  it('trade requests that still apply survive the summer', () => {
+    const l = league();
+    const [angry, calmer] = standardRoster(l, U);
+    const fa = freeAgents(l)[0];
+    for (const [p, score] of [[angry, -8], [calmer, -3], [fa, -8]] as const) p.mood = { ...p.mood, score, tradeRequest: true };
+    l.phase = 'freeAgency';
+    l.faDay = 30;
+    expect(newSeason(l)).toBe(true);
+    expect(angry.mood.tradeRequest).toBe(angry.tid === U);
+    expect(calmer.mood.tradeRequest).toBe(false);
+    expect(fa.mood.tradeRequest).toBe(false);
   });
 });
