@@ -9,7 +9,7 @@ import { startRegularSeason, simDay } from '../src/core/league/season';
 import { teamPlayers, playerName, seasonTotals } from '../src/core/league/helpers';
 import { standings } from '../src/core/league/standings';
 import { CAP, TARGETS } from '../src/core/constants';
-import { FREE_AGENT } from '../src/core/types';
+import { FREE_AGENT, type Player } from '../src/core/types';
 import { engineDiag, resetEngineDiag } from '../src/core/sim/engine';
 import { awardLadder } from '../src/core/league/awards';
 
@@ -41,6 +41,7 @@ const rows = Object.values(league.players)
       rgp, rmpg: rt('min'), rppg: rt('pts'), rapg: rt('ast'), rrpg: rt('orb') + rt('drb'), rspg: rt('stl'), rbpg: rt('blk'), rtpm: rt('tpm'), rtov: rt('tov'),
       rim: share(tot, 'rimA'), mid: share(tot, 'midA'), three: share(tot, 'tpa'), rrim: share(rt, 'rimA'), rmid: share(rt, 'midA'), rthree: share(rt, 'tpa'),
       rimPct: tot('rimM') / Math.max(0.01, tot('rimA')), rrimPct: rt('rimM') / Math.max(0.01, rt('rimA')), hasZones: rt('rimA') > 0,
+      ts: tot('pts') / Math.max(0.01, 2 * (tot('fga') + 0.44 * tot('fta'))), rts: rt('pts') / Math.max(0.01, 2 * (rt('fga') + 0.44 * rt('fta'))),
     };
   })
   .filter((r) => r.gp >= 20);
@@ -77,6 +78,8 @@ const lg: [string, number, number][] = [
 ];
 console.log('League per team game (sim vs 2025-26 NBA):');
 console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixed(1)} (${t < 2 ? t.toFixed(3) : t.toFixed(1)}, ${(((v - t) / t) * 100).toFixed(0)}%)`).join(' · '));
+/** Recency weights for real seasons. */
+const w3: Record<number, number> = { 2026: 1, 2025: 0.6, 2024: 0.3 };
 // ---- game-to-game shape, and how margin turns into wins (NBA: ~2.7 wins per point of average margin, win SD ~12)
 {
   const played = league.games.filter((g) => g.season === season && g.type === 'regular');
@@ -90,8 +93,18 @@ console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixe
   const wins = ts.map((x) => x.won);
   const diff = ts.map((x) => (x.ptsFor - x.ptsAgainst) / Math.max(1, x.won + x.lost));
   console.log(
-    `  games: margin SD ${sd(margins).toFixed(1)} (${TARGETS.marginSd}), 20+ ${((margins.filter((m) => Math.abs(m) >= 20).length / margins.length) * 100).toFixed(1)}% (${TARGETS.blowout20 * 100}%), OT ${((played.filter((g) => g.ot > 0).length / played.length) * 100).toFixed(1)}% (${TARGETS.otRate * 100}%), score corr ${(cov(hs, as) / sd(hs) / sd(as)).toFixed(2)} (${TARGETS.scoreCorr}); ${(cov(wins, diff) / sd(diff) ** 2).toFixed(2)} wins per point of margin (NBA ~2.7), win SD ${sd(wins).toFixed(1)} (NBA ~12)`,
+    `  games: margin SD ${sd(margins).toFixed(1)} (${TARGETS.marginSd}), 20+ ${((margins.filter((m) => Math.abs(m) >= 20).length / margins.length) * 100).toFixed(1)}% (${TARGETS.blowout20 * 100}%), OT ${((played.filter((g) => g.ot > 0).length / played.length) * 100).toFixed(1)}% (${TARGETS.otRate * 100}%), score corr ${(cov(hs, as) / sd(hs) / sd(as)).toFixed(2)} (${TARGETS.scoreCorr}); ${(cov(wins, diff) / sd(diff) ** 2).toFixed(2)} wins per point of margin (NBA ~2.7), win SD ${sd(wins).toFixed(1)} (NBA ~12), wins ${Math.min(...wins)}-${Math.max(...wins)}`,
   );
+  // team net ratings vs what the same players' real box plus-minus (3 seasons) says at the minutes they got
+  const bpm = (p: Player) => {
+    let v = 0;
+    let m = 0;
+    for (const s of p.stats) if (s.real && !s.playoffs && w3[s.season] && s.adv) { v += s.adv.bpm * s.min * w3[s.season]; m += s.min * w3[s.season]; }
+    return m >= 300 ? v / m : -2;
+  };
+  const net = ts.map((x) => ((x.ptsFor - x.ptsAgainst) / ((x.poss + x.oppPoss) / 2)) * 100);
+  const proj = league.teams.map((t) => Object.values(league.players).reduce((a, p) => a + (bpm(p) * p.stats.filter((s) => s.season === season && !s.playoffs && s.tid === t.tid).reduce((b, s) => b + s.min, 0)) / (82 * 48), 0));
+  console.log(`  team net rating SD ${sd(net).toFixed(2)} (NBA ~5-6); vs the players' real BPM at sim minutes (SD ${sd(proj).toFixed(2)}): r ${(cov(net, proj) / sd(net) / sd(proj)).toFixed(2)}, slope ${(cov(net, proj) / sd(proj) ** 2).toFixed(2)}`);
 }
 const zl = (z: 'rim' | 'paint' | 'mid' | 'three') => `${z} ${((100 * engineDiag.ast[z]) / Math.max(1, engineDiag.made[z])).toFixed(0)}%`;
 console.log(`  assisted share of makes: ${zl('rim')}, ${zl('paint')}, ${zl('mid')}, ${zl('three')} (NBA ~65/45/40/85)`);
@@ -121,8 +134,9 @@ const corr = (xs: number[], ys: number[]) => {
   for (let i = 0; i < n; i++) { a += (xs[i] - mx) * (ys[i] - my); b += (xs[i] - mx) ** 2; c += (ys[i] - my) ** 2; }
   return a / Math.sqrt(b * c);
 };
+const sdOf = (xs: number[]) => Math.sqrt(xs.reduce((a, x) => a + (x - xs.reduce((b, y) => b + y, 0) / xs.length) ** 2, 0) / (xs.length - 1));
 const mae = (xs: number[], ys: number[]) => xs.reduce((a, x, i) => a + Math.abs(x - ys[i]), 0) / xs.length;
-console.log(`\nSim vs real correlation over ${both.length} regulars: MPG ${corr(both.map((r) => r.mpg), both.map((r) => r.rmpg)).toFixed(3)}, PPG ${corr(both.map((r) => r.ppg), both.map((r) => r.rppg)).toFixed(3)}, APG ${corr(both.map((r) => r.apg), both.map((r) => r.rapg)).toFixed(3)}, RPG ${corr(both.map((r) => r.rpg), both.map((r) => r.rrpg)).toFixed(3)}, SPG ${corr(both.map((r) => r.spg), both.map((r) => r.rspg)).toFixed(3)}, BPG ${corr(both.map((r) => r.bpg), both.map((r) => r.rbpg)).toFixed(3)}, 3PM ${corr(both.map((r) => r.tpm), both.map((r) => r.rtpm)).toFixed(3)}`);
+console.log(`\nSim vs real correlation over ${both.length} regulars: MPG ${corr(both.map((r) => r.mpg), both.map((r) => r.rmpg)).toFixed(3)}, PPG ${corr(both.map((r) => r.ppg), both.map((r) => r.rppg)).toFixed(3)}, APG ${corr(both.map((r) => r.apg), both.map((r) => r.rapg)).toFixed(3)}, RPG ${corr(both.map((r) => r.rpg), both.map((r) => r.rrpg)).toFixed(3)}, SPG ${corr(both.map((r) => r.spg), both.map((r) => r.rspg)).toFixed(3)}, BPG ${corr(both.map((r) => r.bpg), both.map((r) => r.rbpg)).toFixed(3)}, 3PM ${corr(both.map((r) => r.tpm), both.map((r) => r.rtpm)).toFixed(3)}, TS% ${corr(both.map((r) => r.ts), both.map((r) => r.rts)).toFixed(3)} (SD ${sdOf(both.map((r) => r.ts)).toFixed(3)} vs ${sdOf(both.map((r) => r.rts)).toFixed(3)} real)`);
 // minutes over everyone with a real 2025-26 sample, including players the plan left out
 const mrows = Object.values(league.players)
   .map((p) => {
@@ -143,7 +157,6 @@ const lines = league.games.filter((g) => g.season === season && g.type === 'regu
 const top = (f: (b: (typeof lines)[0]) => number, n = 5) => [...lines].sort((a, b) => f(b) - f(a)).slice(0, n).map((b) => `${b.name} ${f(b)}`).join(', ');
 console.log(`Game highs — pts: ${top((b) => b.pts)}; ast: ${top((b) => b.ast)}; reb: ${top((b) => b.orb + b.drb)}; 50+ pt games ${lines.filter((b) => b.pts >= 50).length}, 40+ ${lines.filter((b) => b.pts >= 40).length}, 15+ ast games ${lines.filter((b) => b.ast >= 15).length}, 20+ ast ${lines.filter((b) => b.ast >= 20).length}`);
 // production vs his real rate (three seasons, recency-weighted per 36) at the minutes he got
-const w3: Record<number, number> = { 2026: 1, 2025: 0.6, 2024: 0.3 };
 const rate = (p: (typeof rows)[0]['p'], k: 'pts' | 'ast') => {
   let v = 0;
   let m = 0;

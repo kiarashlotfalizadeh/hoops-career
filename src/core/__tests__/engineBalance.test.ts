@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { buildSimInput, ensureRotation } from '../league/games';
+import { teamPlayers } from '../league/helpers';
 import { pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
@@ -102,5 +103,36 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
     const corr = hs.reduce((a, h, i) => a + (h - mean(hs)) * (as[i] - mean(as)), 0) / (hs.length - 1) / sd(hs) / sd(as);
     expect(sd(margins)).toBeLessThan(15.5);
     expect(corr).toBeGreaterThan(0.15);
+  });
+
+  it("spreads teams as far apart as their players' real plus-minus says", () => {
+    // each team's projection: its players' real box plus-minus (three seasons) at their planned minutes
+    const W: Record<number, number> = { 2026: 1, 2025: 0.6, 2024: 0.3 };
+    const proj = league.teams.map((t) =>
+      teamPlayers(league, t.tid).reduce((a, p) => {
+        let v = 0;
+        let m = 0;
+        for (const s of p.stats) if (s.real && !s.playoffs && W[s.season] && s.adv) { v += s.adv.bpm * s.min * W[s.season]; m += s.min * W[s.season]; }
+        return a + ((m >= 300 ? v / m : -2) * (t.rotation.minutes[p.pid] ?? 0)) / 48;
+      }, 0),
+    );
+    const pts = league.teams.map(() => ({ diff: 0, poss: 0 }));
+    let n = 0;
+    for (let h = 0; h < 30; h++)
+      for (let a = 0; a < 30; a++) {
+        if (a === h) continue;
+        const res = new GameSim(side(h, a), side(a, h), { rng: new Rng(++n), type: 'regular', injuries: false }).simToEnd();
+        for (const [t, o] of [[res.home, res.away], [res.away, res.home]]) {
+          pts[t.tid].diff += t.pts - o.pts;
+          pts[t.tid].poss += t.poss;
+        }
+      }
+    const net = pts.map((x) => (x.diff / x.poss) * 100);
+    const mean = (x: number[]) => x.reduce((a, b) => a + b, 0) / x.length;
+    const cov = (x: number[], y: number[]) => x.reduce((a, v, i) => a + (v - mean(x)) * (y[i] - mean(y)), 0) / (x.length - 1);
+    const slope = cov(net, proj) / cov(proj, proj);
+    expect(slope).toBeGreaterThan(0.65);
+    expect(slope).toBeLessThan(1.35);
+    expect(cov(net, proj) / Math.sqrt(cov(net, net) * cov(proj, proj))).toBeGreaterThan(0.75);
   });
 });
