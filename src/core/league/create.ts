@@ -1,11 +1,11 @@
-import type { Injury, League, Player, PlayerStats, Pos, Ratings, Settings, Tendencies } from '../types';
+import type { Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
 import { DEFAULT_SCALE, blankMood, generatePlayer, refreshPlayerDerived } from '../playerGen';
-import { archetype, buildOvrScale, ovrRaw } from '../ratings';
+import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
@@ -232,8 +232,10 @@ export function createLeague(opts: CreateOpts): League {
     const taken = new Set<string>();
     for (let tid = 0; tid < 30; tid++) {
       const roster: Player[] = [];
+      // contenders and rebuilding teams: the whole roster is a little better or worse
+      const quality = rng.normal(0, 0.4);
       for (let i = 0; i < 14; i++) {
-        const talent = rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
+        const talent = quality + rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
         // the last three spots go to young players (some of them on rookie deals)
         const age = i >= 11 ? Math.round(clamp(rng.normal(21, 1.2), 19, 23)) : Math.round(clamp(rng.normal(26.5, 4), 19, 37));
         // the last spot goes to a center if the roster has none yet
@@ -264,6 +266,7 @@ export function createLeague(opts: CreateOpts): League {
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
+    matchRealSpread(rostered, Object.values(league.players));
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
     for (const p of Object.values(league.players)) refreshPlayerDerived(p, season, league.ovrScale);
     fictionalContracts(league, rng);
@@ -323,6 +326,59 @@ export function createLeague(opts: CreateOpts): League {
     });
   }
   return league;
+}
+
+/** Raw OVR (ovrRaw) of the real 2026-27 rosters at each OVR_ANCHORS quantile, as the seed rates them. */
+const REAL_RAW_QUANTILES = [41.76, 44.38, 44.97, 46.24, 47.98, 50.01, 52.81, 56.58, 58.83, 61.72, 66.09];
+
+/**
+ * Generated talent moves every skill together, so a generated league spread overall ability more
+ * than real rosters do (raw OVR SD about 9 against 4). Development and aging move attributes by the
+ * same amounts in any league, so a fictional player's OVR barely moved: rookies gained a point a
+ * year, veterans hardly declined into their late 30s and POT overshot by four. Each player's level
+ * is moved along his skills (his profile kept) to the same place in the real league's distribution,
+ * by his quantile among `rostered`; `all` gets the same mapping.
+ */
+function matchRealSpread(rostered: Player[], all: Player[]) {
+  // the shape only: the average stays where it was generated (skill levels set the scoring level)
+  const avg = () => rostered.reduce((a, p) => a + ovrRaw(p.ratings), 0) / rostered.length;
+  const avg0 = avg();
+  const median = OVR_ANCHORS.findIndex(([q]) => q === 0.5);
+  const centre = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings))).raw[median];
+  const to = REAL_RAW_QUANTILES.map((x) => x - REAL_RAW_QUANTILES[median] + centre);
+  const shift = (p: Player, raw: number) => {
+    const w = ovrWeights(p.ratings);
+    const d = raw / SKILL_KEYS.reduce((t, key) => t + w[key], 0);
+    for (const key of SKILL_KEYS) p.ratings[key] = clamp(p.ratings[key] + d, 1, 100);
+  };
+  const stats = (k: RatingKey) => {
+    const m = rostered.reduce((a, p) => a + p.ratings[k], 0) / rostered.length;
+    return { m, sd: Math.sqrt(rostered.reduce((a, p) => a + (p.ratings[k] - m) ** 2, 0) / rostered.length) };
+  };
+  const skill0 = new Map(SKILL_KEYS.map((k) => [k, stats(k)]));
+  // alternate: level onto the real quantiles, then give each skill back its spread (players come out
+  // more specialised, like real ones, rather than uniformly worse or better)
+  for (let pass = 0; pass < 4; pass++) {
+    if (pass) {
+      for (const k of SKILL_KEYS) {
+        const { m, sd } = stats(k);
+        if (sd > 0) for (const p of all) p.ratings[k] = clamp(skill0.get(k)!.m + ((p.ratings[k] - m) * skill0.get(k)!.sd) / sd, 1, 100);
+      }
+    }
+    const from = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings))).raw;
+    // piecewise linear between matching quantiles, extended with the end segments' slopes
+    const map = (raw: number) => {
+      let i = 1;
+      while (i < from.length - 1 && raw > from[i]) i++;
+      return to[i - 1] + ((raw - from[i - 1]) * (to[i] - to[i - 1])) / (from[i] - from[i - 1]);
+    };
+    for (const p of all) shift(p, map(ovrRaw(p.ratings)) - ovrRaw(p.ratings));
+  }
+  const off = avg0 - avg();
+  for (const p of all) {
+    shift(p, off);
+    for (const key of SKILL_KEYS) p.ratings[key] = Math.round(p.ratings[key] * 10) / 10;
+  }
 }
 
 /**

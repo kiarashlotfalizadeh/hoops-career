@@ -257,7 +257,8 @@ export function fromDisplay(disp: number, scale: OvrScale): number {
   return xs[n - 1];
 }
 
-const SKILL_KEYS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
+/** Learned skills: everything but size and the physical tools. */
+export const SKILL_KEYS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
 
 /** Shift skill ratings uniformly (physical tools untouched) until display OVR reaches `target`. */
 export function shiftToOvr(r: Ratings, target: number, scale: OvrScale): Ratings {
