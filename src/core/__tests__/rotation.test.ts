@@ -68,16 +68,30 @@ describe('plan inputs', () => {
     expect(planInputs(src, r).find((p) => p.pid === 4)!.minutes).toBe(24);
   });
 
-  it("hands an injured starter's minutes to the bench first", () => {
+  it("hands an injured starter's minutes to his replacement, then the bench", () => {
     const pp = planInputs(
       src.map((p) => (p.pid === 1 ? { ...p, available: false } : p)),
       rot(),
     );
     expect(pp.map((p) => p.pid)).not.toContain(1);
-    // the sixth man starts; the next bench players fill up to 22 before anyone else gets more
+    // the sixth man starts and takes the starter's 34; the next bench players fill up to 22 before anyone else gets more
     expect(pp[4].pid).toBe(5);
+    expect(pp.find((p) => p.pid === 5)!.minutes).toBe(34);
     expect(pp.find((p) => p.pid === 7)!.minutes).toBe(22);
     expect(pp.find((p) => p.pid === 0)!.minutes).toBe(36);
+  });
+
+  it('gives promoted starters the missing starters minutes before the deep bench gets any', () => {
+    const pp = planInputs(
+      src.map((p) => (p.pid >= 1 && p.pid <= 3 ? { ...p, available: false } : p)),
+      rot(),
+    );
+    const m = mins(pp);
+    // reserves 5, 6 and 7 start in place of 1, 2 and 3 and play their 34, 33 and 31
+    expect(pp.slice(0, 5).map((p) => p.pid)).toEqual([0, 4, 5, 6, 7]);
+    for (const pid of [5, 6, 7]) expect(m[pid]).toBeGreaterThanOrEqual(30);
+    for (const pid of [10, 11]) expect(m[pid]).toBeLessThan(Math.min(m[5], m[6], m[7]));
+    expect(Object.values(m).reduce((a, b) => a + b, 0)).toBe(240);
   });
 
   it('shortens auto-managed playoff rotations to eight, with the top five playing more', () => {

@@ -40,12 +40,22 @@ export function planRoles(r: { hnd: number; hgt: number }, pos: Pos): { guard: b
 export function planInputs(roster: PlanSource[], rot: Rotation, opts: { playoffs?: boolean } = {}): PlanPlayer[] {
   const inOrder = new Map(rot.order.map((pid, i) => [pid, i]));
   // starters are the first five available in the depth order
-  const ordered = roster.filter((p) => p.available).sort((a, b) => (inOrder.get(a.pid) ?? 99) - (inOrder.get(b.pid) ?? 99));
+  const depth = [...roster].sort((a, b) => (inOrder.get(a.pid) ?? 99) - (inOrder.get(b.pid) ?? 99));
+  const ordered = depth.filter((p) => p.available);
   const missing = roster.filter((p) => !p.available).reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
   const mins = ordered.map((p) => rot.minutes[p.pid] ?? 0);
   let toGive = missing;
   if (toGive > 0) {
-    // give to the next bench players first (those with low minutes), then spread
+    // a reserve promoted into the starting five takes over the minutes of the starter he replaces
+    const outStarters = depth.slice(0, 5).filter((p) => !p.available);
+    let k = 0;
+    for (let i = 0; i < Math.min(5, ordered.length) && toGive > 0 && k < outStarters.length; i++) {
+      if (depth.indexOf(ordered[i]) < 5) continue;
+      const add = Math.min(toGive, Math.max(0, (rot.minutes[outStarters[k++].pid] ?? 0) - mins[i]));
+      mins[i] += add;
+      toGive -= add;
+    }
+    // then to the next bench players (those with low minutes), then spread
     for (let i = 5; i < mins.length && toGive > 0; i++) {
       const add = Math.min(toGive, Math.max(0, 22 - mins[i]));
       mins[i] += add;
