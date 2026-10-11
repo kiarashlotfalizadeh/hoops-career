@@ -121,7 +121,11 @@ function slotRange(lo: number, hi: number): [number, number] {
 type Sel = (n: number) => number[];
 
 export function parseSel(s: string): Sel | null {
-  const k = s.toLowerCase().replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').trim();
+  const k = s
+    .toLowerCase()
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s+/g, ' ')
+    .trim();
   switch (k) {
     case 'most':
     case 'more':
@@ -166,12 +170,15 @@ function parseList(t: string): PickExpr[] {
   const roman = /\s*\((?:iv|v|i{1,3})\)\s*/;
   const letter = /\s*\((?:a|b|c|d)\)\s*/;
   const splitter = roman.test(text) ? new RegExp(roman.source, 'g') : letter.test(text) ? new RegExp(letter.source, 'g') : null;
-  const parts = splitter
-    ? text.split(splitter)
-    : text.split(/\s*,\s*(?:and\s+)?|\s+and\s+/);
+  const parts = splitter ? text.split(splitter) : text.split(/\s*,\s*(?:and\s+)?|\s+and\s+/);
   const out: PickExpr[] = [];
   for (let p of parts) {
-    p = p.trim().replace(/^(?:and\s+)/, '').replace(/[,\s]+$/, '').replace(/\s+and$/, '').trim();
+    p = p
+      .trim()
+      .replace(/^(?:and\s+)/, '')
+      .replace(/[,\s]+$/, '')
+      .replace(/\s+and$/, '')
+      .trim();
     if (!p) continue;
     const e = parseExpr(p);
     if (e) out.push(e);
@@ -267,7 +274,10 @@ function evalOne(e: PickExpr, ctx: Ctx): string[] {
   }
   const vals = [...new Set(e.items.map((it) => evalOne(it, ctx)[0]).filter((x): x is string => !!x))];
   vals.sort((a, b) => ctx.proj.slot(a, ctx.season) - ctx.proj.slot(b, ctx.season));
-  return e.sel(vals.length).map((i) => vals[i]).filter((x) => x !== undefined);
+  return e
+    .sel(vals.length)
+    .map((i) => vals[i])
+    .filter((x) => x !== undefined);
 }
 
 function leavesOf(e: PickExpr, ctx: Ctx): PickExpr[] {
@@ -307,7 +317,10 @@ function poolClaims(row: RawPickRow, owner: string, ctx: Ctx, notes: string[]): 
     }
   };
   for (let clause of text.split(/;|\bthen\b/i)) {
-    clause = clause.trim().replace(/^or\s+/i, '').replace(/,$/, '');
+    clause = clause
+      .trim()
+      .replace(/^or\s+/i, '')
+      .replace(/,$/, '');
     if (!clause) continue;
     const def = /in all other scenarios/i.test(clause);
     clause = clause.replace(/\s*in all other scenarios\s*/i, ' ').trim();
@@ -347,7 +360,15 @@ function poolClaims(row: RawPickRow, owner: string, ctx: Ctx, notes: string[]): 
         }
         const leaves = leavesOf(base, ctx).map((l) => evalOne(l, ctx)[0]);
         leaves.sort((a, b) => ctx.proj.slot(a, ctx.season) - ctx.proj.slot(b, ctx.season));
-        give(to, sel(leaves.length).map((i) => leaves[i]), poolWeight(base), def, range, condP, chain);
+        give(
+          to,
+          sel(leaves.length).map((i) => leaves[i]),
+          poolWeight(base),
+          def,
+          range,
+          condP,
+          chain,
+        );
       }
       continue;
     }
@@ -359,7 +380,18 @@ function poolClaims(row: RawPickRow, owner: string, ctx: Ctx, notes: string[]): 
     }
     let m: RegExpMatchArray | null;
     if ((m = clause.match(/^others? ?$/i)) || (m = clause.match(/^others?$/i))) {
-      if (base) give(to, leavesOf(base, ctx).map((l) => evalOne(l, ctx)[0]).filter((o) => !assigned.has(o)), poolWeight(base), def, range, condP, chain);
+      if (base)
+        give(
+          to,
+          leavesOf(base, ctx)
+            .map((l) => evalOne(l, ctx)[0])
+            .filter((o) => !assigned.has(o)),
+          poolWeight(base),
+          def,
+          range,
+          condP,
+          chain,
+        );
       continue;
     }
     if ((m = clause.match(/^(.+?) favorable of (.+)$/i))) {
@@ -395,10 +427,11 @@ function poolClaims(row: RawPickRow, owner: string, ctx: Ctx, notes: string[]): 
 function swapClaims(holder: string, other: string, otherRange: [number, number] | null, ctx: Ctx, src: string): Claim[] {
   const s = (t: string) => ctx.proj.slot(t, ctx.season);
   const ok = !otherRange || (s(other) >= otherRange[0] - 0.5 && s(other) <= otherRange[1] + 0.5);
-  if (!ok || holder === other) return [
-    { to: holder, origin: holder, w: SWAP_W, src },
-    { to: other, origin: other, w: SWAP_W, src },
-  ];
+  if (!ok || holder === other)
+    return [
+      { to: holder, origin: holder, w: SWAP_W, src },
+      { to: other, origin: other, w: SWAP_W, src },
+    ];
   const better = s(holder) <= s(other) ? holder : other;
   const worse = better === holder ? other : holder;
   return [
@@ -495,9 +528,7 @@ export function resolvePicks(rows: RawPickRow[], proj: PickProjection, first: nu
   for (const round of [1, 2] as const) {
     for (let season = first; season <= last; season++) {
       const ctx: Ctx = { proj, season, round, done, firstSeason: first };
-      const claims = uniq
-        .filter((r) => r.year === season && (round === 1 ? /first/i : /second/i).test(r.round))
-        .flatMap((r) => rowClaims(r, ctx, notes));
+      const claims = uniq.filter((r) => r.year === season && (round === 1 ? /first/i : /second/i).test(r.round)).flatMap((r) => rowClaims(r, ctx, notes));
       // "if not already settled": discount by the chance an earlier pick of that team conveyed
       const settled = (origin: string) => {
         let stay = 1;
@@ -572,7 +603,15 @@ export function parseLdSport(py: string, round: 1 | 2 = 1): Map<string, { sure: 
     }
     items.push(cur);
     // the round is the last word once trailing "(If ...)" notes are dropped
-    const firsts = items.filter((i) => tag.test(i.replace(/(\s*\((?:[^()]|\([^()]*\))*\))+\s*$/, '').trim().split(/\s+/).pop() ?? ''));
+    const firsts = items.filter((i) =>
+      tag.test(
+        i
+          .replace(/(\s*\((?:[^()]|\([^()]*\))*\))+\s*$/, '')
+          .trim()
+          .split(/\s+/)
+          .pop() ?? '',
+      ),
+    );
     out.set(`${team}:${y[1]}`, { sure: firsts.filter((i) => !/\(If /.test(i)).length, max: firsts.length });
   }
   return out;

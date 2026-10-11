@@ -22,8 +22,8 @@ import {
   twoWayRoster,
   winPct,
 } from './helpers';
-import { type Strategy, marketSalary, rookieContract, tradeValue, valueScore } from './contracts';
-import { capPayroll } from './freeAgency';
+import { type Strategy, marketSalary, pendingOption, rookieContract, tradeValue, valueScore } from './contracts';
+import { capPayroll, withHoldsMemo } from './freeAgency';
 
 export interface TradeSide {
   tid: number;
@@ -174,7 +174,7 @@ function moneyCost(league: League, tid: number, inSal: number, outSal: number): 
 /** In the offseason a roster can run to 21 but only 15 make opening night: the value of the extra players a team would have to waive. */
 function cutCost(league: League, tid: number, out: number[], inc: number[]): number {
   if (inSeason(league)) return 0;
-  const before = standardRoster(league, tid);
+  const before = tradeRoster(league, tid);
   const after = [...before.filter((p) => !out.includes(p.pid)), ...inc.map((pid) => league.players[pid]).filter((p) => !p.contract.twoWay)];
   if (after.length <= CAP.rosterMax) return 0;
   const strategy = league.teams[tid].strategy;
@@ -219,7 +219,21 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const costs = moneyCost(league, tid, sideSalary(league, other), sideSalary(league, mine)) + cutCost(league, tid, mine.pids, other.pids);
   const valueIn = players(other, true, other.pids.length > mine.pids.length) + picks(other, true) - costs;
   const valueOut = players(mine, false, mine.pids.length > other.pids.length) + picks(mine, false);
-  const delta = valueIn - valueOut - (generosity - 1) * Math.abs(valueOut);
+  let slack = (generosity - 1) * Math.abs(valueOut);
+  if (generosity < 1) {
+    // a casual GM's discount covers the other side's own assets, not ones it just traded for:
+    // passed along from team to team, it compounded 12% a trade (an 84 became a 93 in three hops)
+    const assets = [
+      ...other.pids.map((pid) => ({ a: league.players[pid], v: Math.max(0, playerValueFor(league, league.players[pid], tid, true)) })),
+      ...other.dpids.flatMap((d) => {
+        const dp = findPick(league, d);
+        return dp ? [{ a: dp, v: pickValueFor(league, dp, tid, true) }] : [];
+      }),
+    ];
+    const total = assets.reduce((s, x) => s + x.v, 0);
+    if (total > 0) slack *= assets.reduce((s, x) => s + (x.a.tradedFrom?.season === league.season ? 0 : x.v), 0) / total;
+  }
+  const delta = valueIn - valueOut - slack;
   const tooManyFirsts = mine.dpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
   return { delta, valueIn, valueOut, accept: delta >= 0 && !tooManyFirsts, tooManyFirsts };
 }
@@ -234,13 +248,27 @@ export function teamAccepts(league: League, offer: TradeOffer, tid: number): boo
 /**
  * Why a player can't be moved right now, or null. After the season, a contract that ends before
  * next season is only a set of Bird rights: he can be re-signed or let go, not traded (otherwise
- * expiring deals are free value one way or the other).
+ * expiring deals are free value one way or the other). The same goes for a player option until he
+ * decides after the draft: a star about to opt out would otherwise sell at full value.
  */
 export function untradeableReason(league: League, p: Player): string | null {
   const cs = contractSeason(league);
   if (cs > league.season && p.tid >= 0 && contractExp(p.contract) < cs) return `${playerName(p)}'s contract is up: he can be re-signed or let go, not traded.`;
+  if (cs > league.season && pendingOption(league, p) === 'player') return `${playerName(p)} decides on his player option after the draft: he can't be traded until then.`;
   return null;
 }
+
+/**
+ * The standard roster a trade counts: after the season, only players under contract for next
+ * season (expiring deals are leaving, or are re-signed into their own spot).
+ */
+export function tradeRoster(league: League, tid: number): Player[] {
+  const cs = contractSeason(league);
+  return standardRoster(league, tid).filter((p) => contractExp(p.contract) >= cs);
+}
+
+/** "the 2028 1st" or a player's name, for rule messages. */
+const assetName = (league: League, a: Player | DraftPick) => ('pid' in a ? playerName(a) : `the ${pickLabel(league, a)}`);
 
 /**
  * Extra salary a side must send for its team to pass the 125% rule (0 when it passes). Payroll
@@ -281,6 +309,7 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
   if (league.phase === 'playoffs' || league.phase === 'playin') errors.push('No trades during the postseason.');
   const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;
   const maxSize = rosterMaxNow(league);
+  const s = season(league);
   for (const [key, mine, other] of [
     ['a', offer.a, offer.b],
     ['b', offer.b, offer.a],
@@ -298,20 +327,31 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       const dp = findPick(league, dpid);
       if (!dp || dp.tid !== mine.tid) errors.push('A draft pick in the deal is no longer owned by that team.');
     }
+    // nothing goes straight back to the team that just traded it away: a there-and-back pair of
+    // trades shouldn't pay out (a casual discount, a pick bought cheap on draft night and sold back as the player)
+    for (const a of [...other.pids.map((pid) => league.players[pid]), ...other.dpids.map((d) => findPick(league, d))]) {
+      if (a?.tradedFrom?.tid === mine.tid && a.tradedFrom.season === league.season)
+        errors.push(`${abbrev} traded ${assetName(league, a)} away this season and can't get ${'pid' in a ? 'him' : 'it'} back until next season.`);
+    }
     // standard roster spots: the cap only binds a team taking in bodies, the floor one sending them out
     const out = mine.pids.filter((pid) => !twoWay(pid)).length;
     const inc = other.pids.filter((pid) => !twoWay(pid)).length;
-    const size = standardRoster(league, mine.tid).length - out + inc;
+    const size = tradeRoster(league, mine.tid).length - out + inc;
     if (inc > out && size > maxSize) errors.push(`${abbrev} would have ${size} players (max ${maxSize}${inSeason(league) ? '' : ' in the offseason'}).`);
     if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players (minimum ${CAP.rosterMin} during the season).`);
     const twIn = other.pids.filter(twoWay).length;
     const twAfter = twoWayRoster(league, mine.tid).length - mine.pids.filter(twoWay).length + twIn;
     if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players (max ${TWO_WAY_MAX}).`);
+    const inSal = sideSalary(league, other);
+    const outSal = sideSalary(league, mine);
     if (salaryMatchGap(league, offer, key) > 0) {
-      const inSal = sideSalary(league, other);
-      const maxIn = sideSalary(league, mine) * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
+      const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
       errors.push(`${abbrev} is over the cap and can take back at most 125% of outgoing salary ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`);
     }
+    // the mid-level is for teams under the tax, so using it caps the team at the tax line for that season
+    const tax = CAP_FOR(league, s).luxuryTax;
+    if (league.teams[mine.tid].mleSeason === s && inSal > outSal && capPayroll(league, mine.tid, s) - outSal + inSal > tax)
+      errors.push(`${abbrev} used the mid-level exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`);
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
   }
@@ -320,6 +360,10 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
 }
 
 export function evaluateTrade(league: League, offer: TradeOffer): TradeEval {
+  return withHoldsMemo(() => evaluate(league, offer));
+}
+
+function evaluate(league: League, offer: TradeOffer): TradeEval {
   const errors = validateTrade(league, offer);
   const diff = league.settings.difficulty;
   // casual AIs accept slightly unfavorable deals; hard AIs want a premium
@@ -348,6 +392,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
       from.rotation.restB2B = from.rotation.restB2B.filter((x) => x !== pid);
       delete from.tactics.offense.roles[pid];
       delete from.tactics.offense.freedom[pid];
+      p.tradedFrom = { tid: p.tid, season: league.season };
       p.tid = to;
       p.joinedSeason = league.season;
       p.mood.tradeRequest = false;
@@ -358,7 +403,9 @@ export function executeTrade(league: League, offer: TradeOffer) {
   const movePicks = (dpids: number[], to: number) => {
     for (const dpid of dpids) {
       const dp = findPick(league, dpid);
-      if (dp) dp.tid = to;
+      if (!dp) continue;
+      dp.tradedFrom = { tid: dp.tid, season: league.season };
+      dp.tid = to;
     }
   };
   move(offer.a.pids, offer.b.tid);
@@ -393,17 +440,37 @@ const withA = (offer: TradeOffer, pids: number[], dpids: number[] = []): TradeOf
   b: offer.b,
 });
 
+/** Side A would end up over the roster limit: sending one more of its players fixes that. */
+function aRosterOver(league: League, o: TradeOffer): boolean {
+  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  return std(o.b.pids) > std(o.a.pids) && tradeRoster(league, o.a.tid).length - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
+}
+
+/** Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding side A's players can fix (its salary matching, a full roster)? */
+export function canMakeWork(league: League, o: TradeOffer): boolean {
+  if (salaryMatchGap(league, o, 'b') > 0) return false;
+  return validateTrade(league, o).length <= (salaryMatchGap(league, o, 'a') > 0 ? 1 : 0) + (aRosterOver(league, o) ? 1 : 0);
+}
+
+/** A deal the AI would take, or why none was found: no player (or pair) of A's fixes the salary matching, or not enough value. */
+export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null; why: 'salary' | 'value' };
+
 /**
  * Ask the AI what it would need from side A to accept. When A is over the cap and takes back too
  * much salary, first add the least valuable player (or pair) whose salary fixes the matching, then
- * top up the value with picks (players once the picks run out). Returns the adjusted offer, or
- * null when nothing works (see salaryMatchGap for the salary A would need to send).
+ * top up the value: each round adds the smallest pick or player that covers what's missing, else
+ * the most valuable one (a full roster takes a player). See salaryMatchGap for the salary A would
+ * need to send.
  */
-export function makeItWork(league: League, offer: TradeOffer): TradeOffer | null {
+export function makeItWork(league: League, offer: TradeOffer): WorkResult {
+  return withHoldsMemo(() => findWork(league, offer));
+}
+
+function findWork(league: League, offer: TradeOffer): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
   const gapA = salaryMatchGap(league, cur, 'a');
-  if (salaryMatchGap(league, cur, 'b') > 0 || validateTrade(league, cur).length > (gapA > 0 ? 1 : 0)) return null;
+  if (!canMakeWork(league, cur)) return { offer: null, why: 'value' };
   const legal = (o: TradeOffer) => validateTrade(league, o).length === 0;
   const spare = () =>
     standardRoster(league, cur.a.tid)
@@ -417,13 +484,13 @@ export function makeItWork(league: League, offer: TradeOffer): TradeOffer | null
       for (let j = i + 1; j < pool.length; j++) if (pool[i].sal + pool[j].sal >= gapA) options.push({ pids: [pool[i].p.pid, pool[j].p.pid], v: pool[i].v + pool[j].v });
     }
     const fix = options.sort((x, y) => x.v - y.v).find((o) => legal(withA(cur, o.pids)));
-    if (!fix) return null;
+    if (!fix) return { offer: null, why: 'salary' };
     cur = withA(cur, fix.pids);
   }
   for (let iter = 0; iter < 6; iter++) {
     const ev = evaluateTrade(league, cur);
-    if (ev.accept) return cur;
-    if (!ev.ok) return null;
+    if (ev.accept) return { offer: cur };
+    if (!ev.ok && !canMakeWork(league, cur)) break;
     const need = -ev.delta;
     const picks = league.draftPicks
       .filter((d) => d.tid === cur.a.tid && !cur.a.dpids.includes(d.dpid) && legal(withA(cur, [], [d.dpid])))
@@ -431,13 +498,16 @@ export function makeItWork(league: League, offer: TradeOffer): TradeOffer | null
     const players = spare()
       .map(({ p }) => ({ next: withA(cur, [p.pid]), v: playerValueFor(league, p, ai, true) }))
       .filter((c) => c.v > 0 && legal(c.next));
-    const cands = picks.length ? picks : players;
-    if (!cands.length) return null;
-    // smallest asset that covers the gap, else the biggest one
+    // picks and players together: a pile of picks alone often can't reach a good player's value
+    const cands = [...picks, ...players];
+    if (!cands.length) break;
+    // smallest asset that covers the gap, unless that is a big overpay (a star for a role player's
+    // worth of value) and something smaller can close most of it; else the biggest one
     const covering = cands.filter((c) => c.v >= need).sort((a, b) => a.v - b.v);
-    cur = (covering[0] ?? cands.sort((a, b) => b.v - a.v)[0]).next;
+    const short = cands.filter((c) => c.v < need).sort((a, b) => b.v - a.v);
+    cur = (covering[0] && (covering[0].v <= need * 1.5 + 2 || !short.length) ? covering[0] : short[0]).next;
   }
-  return evaluateTrade(league, cur).accept ? cur : null;
+  return evaluateTrade(league, cur).accept ? { offer: cur } : { offer: null, why: 'value' };
 }
 
 // ---------------------------------------------------------------- AI front offices

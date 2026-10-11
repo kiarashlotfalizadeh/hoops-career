@@ -378,7 +378,8 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
             </div>
             {onDraft && (
               <button
-                className="btn xs good"
+                className="btn sm good"
+                aria-label={`Draft ${playerName(p)}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDraft(p.pid);

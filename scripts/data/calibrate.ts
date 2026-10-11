@@ -38,7 +38,30 @@ interface SimAcc {
   astM: number;
 }
 
-const blank = (): SimAcc => ({ sec: 0, fga: 0, fg3a: 0, fg3: 0, fg2a: 0, fg2: 0, fta: 0, ft: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pts: 0, pf: 0, rimA: 0, rimM: 0, midA: 0, midM: 0, c3A: 0, astM: 0 });
+const blank = (): SimAcc => ({
+  sec: 0,
+  fga: 0,
+  fg3a: 0,
+  fg3: 0,
+  fg2a: 0,
+  fg2: 0,
+  fta: 0,
+  ft: 0,
+  orb: 0,
+  drb: 0,
+  ast: 0,
+  stl: 0,
+  blk: 0,
+  tov: 0,
+  pts: 0,
+  pf: 0,
+  rimA: 0,
+  rimM: 0,
+  midA: 0,
+  midM: 0,
+  c3A: 0,
+  astM: 0,
+});
 
 /** Share of games a player misses in calibration (real regulars miss roughly one game in eight). */
 const ABSENCE = 0.1;
@@ -91,7 +114,11 @@ function calibSides(league: League): { next: CalibSide[]; real: CalibSide[] } {
     if (rows.length) tid = rows.reduce((a, b) => (b.min > a.min ? b : a)).tid;
     if (tid >= 0 && realRoster.has(tid)) realRoster.get(tid)!.push(p);
   }
-  const real = league.teams.map((t) => ({ team: { ...t, tactics: cloneTactics(t.tactics), rotation: { ...t.rotation } }, players: realRoster.get(t.tid)!, setups: [] as { t: Tactics; w: number }[] }));
+  const real = league.teams.map((t) => ({
+    team: { ...t, tactics: cloneTactics(t.tactics), rotation: { ...t.rotation } },
+    players: realRoster.get(t.tid)!,
+    setups: [] as { t: Tactics; w: number }[],
+  }));
   for (const side of [...next, ...real]) {
     if (side.players.length < 5) continue;
     side.team.rotation = autoRotation(side.players, side.team.rotation);
@@ -284,7 +311,12 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
     for (const key of Object.keys(err)) err[key] = ['rim', 'mid', 'unast', 'rimPct'].includes(key) ? (zoneCount.n ? err[key] / zoneCount.n : 0) : count ? err[key] / count : 0;
     for (const p of Object.values(league.players)) refreshPlayerDerived(p as Player, league.season, league.ovrScale);
     reports.push({ iter, players: count, err });
-    log(`  pass ${iter + 1}: ${count} players · mean abs error ` + Object.entries(err).map(([k, v]) => `${k} ${v.toFixed(3)}`).join(', '));
+    log(
+      `  pass ${iter + 1}: ${count} players · mean abs error ` +
+        Object.entries(err)
+          .map(([k, v]) => `${k} ${v.toFixed(3)}`)
+          .join(', '),
+    );
   });
   return reports;
 }

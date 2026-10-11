@@ -7,7 +7,7 @@ import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { Player, Rotation as RotationT } from '../../core/types';
-import { f1, playerSeason, rosterNames } from '../stats';
+import { f1, ordinal, playerSeason, rosterNames } from '../stats';
 import { seasonLineups } from '../seasonAnalysis';
 
 export default function Rotation() {
@@ -36,6 +36,7 @@ export default function Rotation() {
 
   const healthyOrder = order.filter((pid) => !byId.get(pid)?.injury);
   const total = healthyOrder.reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
+  const injuredMin = order.reduce((a, pid) => a + (byId.get(pid)?.injury ? (rot.minutes[pid] ?? 0) : 0), 0);
   const starters = healthyOrder.slice(0, 5).map((pid) => byId.get(pid)!);
   const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
   const closers = rot.closers.filter((pid) => byId.has(pid));
@@ -95,6 +96,7 @@ export default function Rotation() {
           <div>
             <div className="bold">Minutes: {total} / 240</div>
             <div className="small dim">Targets are scaled to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
+            {injuredMin > 0 && <div className="small warn">Injured players' {injuredMin} minutes go to the healthy ones: the stint plan shows who gets them.</div>}
           </div>
           <Help title="How rotations work">
             <p>
@@ -145,7 +147,8 @@ export default function Rotation() {
                     onKeyDown={activateOnKey(() => setEdit(pid))}
                     style={{ cursor: 'pointer', minWidth: 0 }}
                   >
-                    <div className="row" style={{ gap: 6, minWidth: 0 }}>
+                    {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
+                    <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
                       <span className="bold ellipsis" style={{ minWidth: 0 }}>
                         {fullNameOf(pid)}
                       </span>
@@ -180,8 +183,14 @@ export default function Rotation() {
             .filter((pid) => (plan.norm[pid] ?? 0) > 0)
             .map((pid) => {
               return (
-                <div key={pid} className="row" style={{ gap: 6 }}>
-                  <span className="tiny ellipsis" style={{ width: 70 }}>
+                <div
+                  key={pid}
+                  className="row"
+                  style={{ gap: 6 }}
+                  role="img"
+                  aria-label={`${nameOf(pid)}: ${plan.norm[pid]} minutes, on the floor in minutes ${stints(plan.slots, pid)}`}
+                >
+                  <span className="tiny ellipsis" style={{ width: 110, flex: 'none' }}>
                     {nameOf(pid)}
                   </span>
                   <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(48, 1fr)', gap: 1 }}>
@@ -199,7 +208,7 @@ export default function Rotation() {
               );
             })}
         </div>
-        <div className="tiny dim" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', marginTop: 6, paddingLeft: 76, paddingRight: 26 }}>
+        <div className="tiny dim" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', marginTop: 6, paddingLeft: 116, paddingRight: 26 }}>
           <span>Q1</span>
           <span>Q2</span>
           <span>Q3</span>
@@ -210,7 +219,7 @@ export default function Rotation() {
       <LineupsCard />
 
       <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
-        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} />}
+        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starting={startSet.has(ep.pid)} />}
       </Sheet>
 
       {undo && (
@@ -232,6 +241,22 @@ export default function Rotation() {
       )}
     </main>
   );
+}
+
+/** "1-8, 20-26, 41-48": the minutes of the game a player is planned on the floor (the stint plan for screen readers). */
+function stints(slots: number[][], pid: number) {
+  const out: string[] = [];
+  let from = -1;
+  slots.forEach((slot, s) => {
+    const on = slot.includes(pid);
+    if (on && from < 0) from = s;
+    if (from >= 0 && (!on || s === slots.length - 1)) {
+      const to = on ? s : s - 1;
+      out.push(from === to ? `${from + 1}` : `${from + 1}-${to + 1}`);
+      from = -1;
+    }
+  });
+  return out.join(', ');
 }
 
 function LineupsCard() {
@@ -278,6 +303,7 @@ function EditPlayer({
   close,
   order,
   names,
+  starting,
 }: {
   p: Player;
   rot: RotationT;
@@ -285,6 +311,8 @@ function EditPlayer({
   close: () => void;
   order: number[];
   names: (pid: number) => string;
+  /** Among the first five healthy players, the ones who start tonight. */
+  starting: boolean;
 }) {
   const m = rot.minutes[p.pid] ?? 0;
   const cap = rot.caps[p.pid] ?? 0;
@@ -305,7 +333,9 @@ function EditPlayer({
   return (
     <div className="col" style={{ gap: 16 }}>
       <div className="col" style={{ gap: 6 }}>
-        <div className="small bold">{at < 5 ? `Starter (spot ${at + 1})` : `Bench, ${at + 1}th on the depth chart`} · swap spot and minutes with</div>
+        <div className="small bold">
+          {starting ? 'Starter' : at < 5 ? 'Starter when healthy' : 'Bench'}, {ordinal(at + 1)} on the depth chart · swap spot and minutes with
+        </div>
         <div className="chips">
           {order
             .filter((pid) => pid !== p.pid)
@@ -357,7 +387,11 @@ function EditPlayer({
           })
         }
         label="Closing lineup"
-        help="Closers play the end of the 4th quarter and overtime (up to five)."
+        help={
+          !rot.closers.includes(p.pid) && rot.closers.length >= 5 && names(rot.closers[0])
+            ? `Closers play the end of the 4th quarter and overtime. You have five: adding him replaces ${names(rot.closers[0])}.`
+            : 'Closers play the end of the 4th quarter and overtime (up to five).'
+        }
       />
       <Toggle
         on={rot.restB2B.includes(p.pid)}

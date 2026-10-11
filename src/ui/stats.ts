@@ -112,6 +112,12 @@ export const f0 = (v: number) => (isFinite(v) ? v.toFixed(0) : '-');
 export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '-');
 export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '-');
 export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '-');
+/** 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 101st, 111th. */
+export const ordinalSuffix = (n: number) => {
+  const v = Math.abs(n) % 100;
+  return v >= 11 && v <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][v % 10] ?? 'th');
+};
+export const ordinal = (n: number) => `${n}${ordinalSuffix(n)}`;
 /** Q1..Q4, then OT, 2OT, 3OT. */
 export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
 export const moneyM = (k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;

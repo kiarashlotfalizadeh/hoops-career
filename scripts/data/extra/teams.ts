@@ -13,7 +13,15 @@ export function teamByName(name: string): string | undefined {
 
 /** RealGM (UTH, SAN, PHL, GOS...), NBA.com (BKN, CHA, PHX) and BBRef codes → BBRef code. */
 const CODE: Record<string, string> = {
-  UTH: 'UTA', SAN: 'SAS', PHL: 'PHI', GOS: 'GSW', BKN: 'BRK', CHA: 'CHO', PHX: 'PHO', NOR: 'NOP', NOH: 'NOP',
+  UTH: 'UTA',
+  SAN: 'SAS',
+  PHL: 'PHI',
+  GOS: 'GSW',
+  BKN: 'BRK',
+  CHA: 'CHO',
+  PHX: 'PHO',
+  NOR: 'NOP',
+  NOH: 'NOP',
 };
 for (const f of FRANCHISES) {
   CODE[f.bbref] = f.bbref;

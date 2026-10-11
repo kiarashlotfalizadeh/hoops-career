@@ -149,8 +149,15 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shot
   const arcR = 23.75;
   const by = 5.25;
   const cornerY = by + Math.sqrt(arcR * arcR - 22 * 22);
+  const made = shots.filter((s) => s.made).length;
   return (
-    <svg viewBox={`0 0 ${size} ${h}`} width="100%" style={{ maxWidth: size * 1.4, display: 'block', margin: '0 auto' }} role="img">
+    <svg
+      viewBox={`0 0 ${size} ${h}`}
+      width="100%"
+      style={{ maxWidth: size * 1.4, display: 'block', margin: '0 auto' }}
+      role="img"
+      aria-label={`Shot chart: ${made} of ${shots.length} shots made`}
+    >
       <rect x={0} y={0} width={size} height={h} rx={8} fill="#1a140f" />
       <g stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} fill="none">
         <rect x={sx(-8)} y={0} width={sx(8) - sx(-8)} height={sy(19)} />
@@ -195,17 +202,20 @@ export function CompareBar({
   higherBetter?: boolean;
 }) {
   const total = Math.abs(a) + Math.abs(b) || 1;
-  const aWins = higherBetter ? a > b : a < b;
+  // a tie (as shown) favours neither side
+  const tie = fmt(a) === fmt(b);
+  const aWins = !tie && (higherBetter ? a > b : a < b);
+  const bWins = !tie && !aWins;
   return (
     <div className="col" style={{ gap: 4 }}>
       <div className="row between small">
-        <span className={`num ${aWins ? 'bold' : 'dim2'}`}>{fmt(a)}</span>
+        <span className={`num ${aWins ? 'bold' : tie ? '' : 'dim2'}`}>{fmt(a)}</span>
         <span className="tiny dim upper">{label}</span>
-        <span className={`num ${!aWins ? 'bold' : 'dim2'}`}>{fmt(b)}</span>
+        <span className={`num ${bWins ? 'bold' : tie ? '' : 'dim2'}`}>{fmt(b)}</span>
       </div>
       <div className="row" style={{ gap: 3 }}>
-        <div style={{ flex: Math.abs(a) / total, height: 6, borderRadius: 3, background: colorA, opacity: aWins ? 1 : 0.45 }} />
-        <div style={{ flex: Math.abs(b) / total, height: 6, borderRadius: 3, background: colorB, opacity: !aWins ? 1 : 0.45 }} />
+        <div style={{ flex: Math.abs(a) / total, height: 6, borderRadius: 3, background: colorA, opacity: aWins || tie ? 1 : 0.45 }} />
+        <div style={{ flex: Math.abs(b) / total, height: 6, borderRadius: 3, background: colorB, opacity: bWins || tie ? 1 : 0.45 }} />
       </div>
     </div>
   );

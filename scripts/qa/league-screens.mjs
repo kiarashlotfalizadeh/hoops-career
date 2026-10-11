@@ -19,10 +19,11 @@ const ctxOpts = wide
   : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const executablePath = process.env.CHROMIUM || undefined;
 let ctx;
+let browser;
 if (process.env.PROFILE) {
   ctx = await chromium.launchPersistentContext(process.env.PROFILE, { ...ctxOpts, executablePath });
 } else {
-  const browser = await chromium.launch({ executablePath });
+  browser = await chromium.launch({ executablePath });
   ctx = await browser.newContext(ctxOpts);
 }
 const page = ctx.pages()[0] ?? (await ctx.newPage());
@@ -194,3 +195,5 @@ if (stage === 'post') {
 
 console.log(errors.length ? `errors (${errors.length}):\n${errors.join('\n')}` : 'errors: none');
 await ctx.close();
+// closing the context alone leaves a launched browser running, and the script never exits
+await browser?.close();

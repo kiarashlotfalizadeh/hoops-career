@@ -10,7 +10,7 @@ import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented,
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
-import { f1, moneyM, p1, perGame, signed } from '../stats';
+import { f1, moneyM, ordinalSuffix, p1, perGame, signed } from '../stats';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
@@ -154,11 +154,16 @@ export default function PlayerView() {
       : p.tid === DRAFT_PROSPECT
         ? `${p.draft.year} draft prospect`
         : p.tid === RETIRED
-          ? `Retired ${p.retiredSeason ?? ''}`
+          ? `Retired${p.retiredSeason ? ` after ${seasonLabel(p.retiredSeason)}` : ''}`
           : team
             ? `${team.region} ${team.name}`
             : '';
   const contribs = ovrContributions(league, p);
+  const pluses = contribs.parts.filter((x) => x.delta > 0).slice(0, 4);
+  const minuses = contribs.parts
+    .filter((x) => x.delta < 0)
+    .slice(-3)
+    .reverse();
 
   return (
     <main className="page">
@@ -242,7 +247,7 @@ export default function PlayerView() {
                     <Bar value={pc} color={pc >= 85 ? 'var(--tier-elite)' : pc >= 65 ? 'var(--good)' : pc >= 35 ? 'var(--info)' : 'var(--bad)'} />
                     <span className="num right small">
                       {pc}
-                      <span className="dim tiny">th</span>
+                      <span className="dim tiny">{ordinalSuffix(pc)}</span>
                     </span>
                   </div>
                 );
@@ -252,29 +257,23 @@ export default function PlayerView() {
           <div className="md-grid2">
             <Card title="Why he's a" right={<Ovr v={p.ovr} size="sm" />}>
               <div className="small dim" style={{ marginBottom: 8 }}>
-                {contribs.gap >= 0 ? `${contribs.gap} points above` : `${-contribs.gap} points below`} an average NBA player ({AVERAGE_OVR}). Biggest reasons, in OVR points:
+                {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} point${Math.abs(contribs.gap) === 1 ? '' : 's'} ${contribs.gap > 0 ? 'above' : 'below'}`} an average
+                NBA player ({AVERAGE_OVR}). Biggest reasons, in OVR points:
               </div>
               <div className="col" style={{ gap: 6 }}>
-                {contribs.parts
-                  .filter((x) => x.delta > 0)
-                  .slice(0, 4)
-                  .map((x) => (
-                    <div key={x.key} className="row between small">
-                      <span>{x.label}</span>
-                      <span className="good num">+{x.delta}</span>
-                    </div>
-                  ))}
-                <div className="divider" />
-                {contribs.parts
-                  .filter((x) => x.delta < 0)
-                  .slice(-3)
-                  .reverse()
-                  .map((x) => (
-                    <div key={x.key} className="row between small">
-                      <span>{x.label}</span>
-                      <span className="bad num">{x.delta}</span>
-                    </div>
-                  ))}
+                {pluses.map((x) => (
+                  <div key={x.key} className="row between small">
+                    <span>{x.label}</span>
+                    <span className="good num">+{x.delta}</span>
+                  </div>
+                ))}
+                {pluses.length > 0 && minuses.length > 0 && <div className="divider" />}
+                {minuses.map((x) => (
+                  <div key={x.key} className="row between small">
+                    <span>{x.label}</span>
+                    <span className="bad num">{x.delta}</span>
+                  </div>
+                ))}
               </div>
             </Card>
             <Card title="Role & usage">
@@ -309,17 +308,20 @@ export default function PlayerView() {
             </Card>
           </div>
           <div className="md-grid2">
-            <Card title="Mood">
-              <div className="row" style={{ gap: 8 }}>
-                <span style={{ color: mood.color, fontSize: 18 }}>{mood.emoji}</span>
-                <span className="bold">{mood.label}</span>
-                {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
-              </div>
-              <div className="col small dim2" style={{ marginTop: 8, gap: 4 }}>
-                {p.mood.notes.length ? p.mood.notes.map((n) => <div key={n}>• {n}</div>) : <div>No complaints.</div>}
-                {p.mood.expectedMin > 0 && <div className="dim">Expects about {p.mood.expectedMin} minutes a night.</div>}
-              </div>
-            </Card>
+            {/* retired players and prospects have no mood to show */}
+            {p.tid !== RETIRED && p.tid !== DRAFT_PROSPECT && (
+              <Card title="Mood">
+                <div className="row" style={{ gap: 8 }}>
+                  <span style={{ color: mood.color, fontSize: 18 }}>{mood.emoji}</span>
+                  <span className="bold">{mood.label}</span>
+                  {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
+                </div>
+                <div className="col small dim2" style={{ marginTop: 8, gap: 4 }}>
+                  {p.mood.notes.length ? p.mood.notes.map((n) => <div key={n}>• {n}</div>) : <div>No complaints.</div>}
+                  {p.mood.expectedMin > 0 && <div className="dim">Expects about {p.mood.expectedMin} minutes a night.</div>}
+                </div>
+              </Card>
+            )}
             <Card title="Contract">
               {p.tid >= 0 ? (
                 <div className="col" style={{ gap: 6 }}>
@@ -350,6 +352,8 @@ export default function PlayerView() {
                     Make an offer
                   </Link>
                 </div>
+              ) : p.tid === DRAFT_PROSPECT ? (
+                <div className="small dim2">Eligible for the {p.draft.year} draft.</div>
               ) : (
                 <div className="small dim">—</div>
               )}
@@ -550,12 +554,13 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
       <Segmented
         value={po ? 'po' : 'rs'}
         onChange={(v) => setPo(v === 'po')}
+        label="Season type"
         options={[
           { id: 'rs', label: 'Regular season' },
           { id: 'po', label: 'Playoffs' },
         ]}
       />
-      {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>No stats.</Empty>}
+      {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
       <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those.</div>
     </>
   );
@@ -630,20 +635,22 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
         }
       >
         <div className="small dim2">
-          {age <= 22
-            ? 'Young and raw. Expect big jumps with minutes and good coaching.'
-            : age <= 26
-              ? 'Still improving, especially skills and decision-making.'
-              : age <= 30
-                ? 'In his prime. Skill gains offset early athletic decline.'
-                : age <= 33
-                  ? 'Veteran. Athleticism is fading; IQ and shooting hold up.'
-                  : 'Late career. Expect steady decline; conditioning work slows it.'}
+          {p.tid === RETIRED
+            ? `Retired${p.retiredSeason ? ` after the ${seasonLabel(p.retiredSeason)} season` : ''}.`
+            : age <= 22
+              ? 'Young and raw. Expect big jumps with minutes and good coaching.'
+              : age <= 26
+                ? 'Still improving, especially skills and decision-making.'
+                : age <= 30
+                  ? 'In his prime. Skill gains offset early athletic decline.'
+                  : age <= 33
+                    ? 'Veteran. Athleticism is fading; IQ and shooting hold up.'
+                    : 'Late career. Expect steady decline; conditioning work slows it.'}
         </div>
-        <div className="row" style={{ marginTop: 10, gap: 14 }}>
+        <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi k="Age" v={age} />
           <Kpi k="Potential" v={p.pot} />
-          <Kpi k="Season wear" v={Math.round(p.wear)} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />
+          {p.tid >= 0 && <Kpi k="Season wear" v={Math.round(p.wear)} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />}
         </div>
       </Card>
       {mine && (

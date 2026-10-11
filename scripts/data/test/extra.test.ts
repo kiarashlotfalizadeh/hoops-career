@@ -8,7 +8,15 @@ import { ALL_TEAMS } from '../extra/teams';
 import type { SeedPlayer } from '../../../src/core/league/create';
 import { emptyRatings } from '../../../src/core/ratings';
 
-const row = (p: Partial<RawPickRow> & Pick<RawPickRow, 'teamOwner' | 'year' | 'round'>): RawPickRow => ({ teamFrom: null, swapOwner: null, swapOption: null, protections: null, pickPool: null, rank: null, ...p });
+const row = (p: Partial<RawPickRow> & Pick<RawPickRow, 'teamOwner' | 'year' | 'round'>): RawPickRow => ({
+  teamFrom: null,
+  swapOwner: null,
+  swapOption: null,
+  protections: null,
+  pickPool: null,
+  rank: null,
+  ...p,
+});
 
 // strength = alphabetical index: ATL is the weakest team (most favorable pick), WAS the best
 const strength = Object.fromEntries(ALL_TEAMS.map((t, i) => [t, i]));
@@ -21,7 +29,9 @@ const resolve = (rows: RawPickRow[]) => {
 
 describe('future draft picks (RealGM rows → one owner per pick)', () => {
   it('cleans asides but keeps list markers', () => {
-    expect(cleanPickText('More favorable of (i) ATL and (ii) less favorable of UTH (cannot be 1-5) and CLE [CLE may convey] (via UTH swap for CLE; via ATL)*;')).toBe('More favorable of (i) ATL and (ii) less favorable of UTH and CLE');
+    expect(cleanPickText('More favorable of (i) ATL and (ii) less favorable of UTH (cannot be 1-5) and CLE [CLE may convey] (via UTH swap for CLE; via ATL)*;')).toBe(
+      'More favorable of (i) ATL and (ii) less favorable of UTH and CLE',
+    );
   });
 
   it('gives every pick exactly one owner, defaulting to its original team', () => {
@@ -37,12 +47,24 @@ describe('future draft picks (RealGM rows → one owner per pick)', () => {
       row({ teamOwner: 'Dallas Mavericks', year: 2027, round: 'First Round', protections: '3-30 to Charlotte Hornets' }),
       row({ teamOwner: 'Charlotte Hornets', year: 2027, round: 'First Round', teamFrom: 'Dallas Mavericks', protections: '1-2 to Dallas Mavericks' }),
       // pool: Atlanta gets the less favorable (better team's) pick of Milwaukee (16) and New Orleans (19)
-      row({ teamOwner: 'Atlanta Hawks', year: 2027, round: 'First Round', pickPool: 'Milwaukee Bucks, New Orleans Pelicans', rank: 'Less favorable of MIL and NOP if either or both 5-30 (via NOP)' }),
+      row({
+        teamOwner: 'Atlanta Hawks',
+        year: 2027,
+        round: 'First Round',
+        pickPool: 'Milwaukee Bucks, New Orleans Pelicans',
+        rank: 'Less favorable of MIL and NOP if either or both 5-30 (via NOP)',
+      }),
       // swap: Washington (best) may swap with Atlanta (worst)
       row({ teamOwner: 'Washington Wizards', year: 2028, round: 'First Round', swapOption: 'Atlanta Hawks' }),
       row({ teamOwner: 'Atlanta Hawks', year: 2028, round: 'First Round', swapOwner: 'Washington Wizards' }),
       // three-way pool with explicit recipients
-      row({ teamOwner: 'Boston Celtics', year: 2028, round: 'First Round', pickPool: 'x', rank: 'Most and least favorable of BOS, POR and MIL to POR; second most favorable to WAS (via BOS to POR)' }),
+      row({
+        teamOwner: 'Boston Celtics',
+        year: 2028,
+        round: 'First Round',
+        pickPool: 'x',
+        rank: 'Most and least favorable of BOS, POR and MIL to POR; second most favorable to WAS (via BOS to POR)',
+      }),
     ]);
     expect(get(2027, 1, 'NYK').owner).toBe('BRK');
     expect(get(2027, 1, 'DAL')).toMatchObject({ owner: 'CHO', protection: 2 });
@@ -94,7 +116,21 @@ describe('schedule, injuries, two-way contracts, positions', () => {
   });
 
   const player = (id: string, first: string, last: string, team: string | null): SeedPlayer => ({
-    id, first, last, team, pos: 'SF', heightIn: 79, weightLb: 220, bornYear: 1998, country: 'USA', college: '', jersey: '', contract: team ? { salaries: [5000] } : null, draft: null, ratings: emptyRatings(), stats: [],
+    id,
+    first,
+    last,
+    team,
+    pos: 'SF',
+    heightIn: 79,
+    weightLb: 220,
+    bornYear: 1998,
+    country: 'USA',
+    college: '',
+    jersey: '',
+    contract: team ? { salaries: [5000] } : null,
+    draft: null,
+    ratings: emptyRatings(),
+    stats: [],
   });
 
   it('maps injury reports to types and counts games to the return date', () => {
@@ -121,7 +157,13 @@ describe('schedule, injuries, two-way contracts, positions', () => {
     expect(daysFromNote('expected to miss four-to-six weeks')).toBe(42);
     expect(daysFromNote('Rest — rest')).toBeNull();
     const p2 = [player('claxtni01', 'Nic', 'Claxton', 'GSW')];
-    attachInjuries(p2, [{ team: 'GSW', name: 'Nic Claxton', status: 'Day-To-Day', detail: 'Hamstring — will be re-evaluated in two weeks', returnDate: '2026-10-21' }], schedule, 2027, '2026-10-11');
+    attachInjuries(
+      p2,
+      [{ team: 'GSW', name: 'Nic Claxton', status: 'Day-To-Day', detail: 'Hamstring — will be re-evaluated in two weeks', returnDate: '2026-10-21' }],
+      schedule,
+      2027,
+      '2026-10-11',
+    );
     expect(p2[0].injury).toMatchObject({ returnDay: 5 });
   });
 
@@ -145,12 +187,14 @@ describe('schedule, injuries, two-way contracts, positions', () => {
   });
 
   it('takes positions from box scores, else infers them from G/F/C, size and skills', () => {
-    expect(statsPosition([
-      { season: 2025, team: 'OKC', pos: 'PF', g: 70, mp: 30 },
-      { season: 2026, team: 'TOT', pos: 'SF', g: 60, mp: 30 },
-      { season: 2026, team: 'OKC', pos: 'SG', g: 40, mp: 30 },
-      { season: 2026, team: 'MEM', pos: 'SF', g: 20, mp: 30 },
-    ])).toBe('SG');
+    expect(
+      statsPosition([
+        { season: 2025, team: 'OKC', pos: 'PF', g: 70, mp: 30 },
+        { season: 2026, team: 'TOT', pos: 'SF', g: 60, mp: 30 },
+        { season: 2026, team: 'OKC', pos: 'SG', g: 40, mp: 30 },
+        { season: 2026, team: 'MEM', pos: 'SF', g: 20, mp: 30 },
+      ]),
+    ).toBe('SG');
     expect(statsPosition([])).toBeNull();
     const r = emptyRatings();
     expect(inferPosition('G', 74, { ...r, hnd: 70, pas: 68 })).toBe('PG');

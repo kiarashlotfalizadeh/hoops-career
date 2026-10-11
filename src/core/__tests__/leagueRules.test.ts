@@ -363,7 +363,8 @@ describe('signing window (bug 12) and two-way contracts', () => {
     expect(standardRoster(l, U).length).toBe(n);
     expect(teamPlayers(l, U).length).toBe(n + 1);
     expect(payroll(l, U)).toBe(pay);
-    // at 15 standard players he can't be converted; with a spot open he takes the minimum
+    // in season (the offseason allows 21) at 15 standard players he can't be converted; with a spot open he takes the minimum
+    l.phase = 'regular';
     expect(standardRoster(l, U).length).toBe(CAP.rosterMax);
     expect(convertTwoWay(l, young.pid).ok).toBe(false);
     releasePlayer(l, standardRoster(l, U).sort((a, b) => a.ovr - b.ovr)[0], { news: false });

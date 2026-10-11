@@ -3,7 +3,21 @@ import { FREE_AGENT } from '../types';
 import { Rng } from '../random';
 import { CAP } from '../constants';
 import { contractExp, playerAge } from '../playerGen';
-import { CAP_FOR, TWO_WAY_MAX, contractSeason, addInbox, addNews, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, twoWayRoster } from './helpers';
+import {
+  CAP_FOR,
+  OFFSEASON_ROSTER_MAX,
+  TWO_WAY_MAX,
+  contractSeason,
+  addInbox,
+  addNews,
+  freeAgents,
+  payroll,
+  playerName,
+  rosterMaxNow,
+  standardRoster,
+  teamPlayers,
+  twoWayRoster,
+} from './helpers';
 import {
   FA_PRICE_CUT_DAYS,
   MLE_YEARS,
@@ -16,6 +30,7 @@ import {
   releasePlayer,
   signPlayer,
   signingRoute,
+  teamAppeal,
   twoWayEligible,
   twoWaySalary,
   twoWayYears,
@@ -94,10 +109,32 @@ export function capHolds(league: League, tid: number): { p: Player; amount: numb
     .map((p) => ({ p, amount: askingContract(league, p, tid).amount }));
 }
 
+let holdsMemo: Map<number, number> | null = null;
+
+/**
+ * Run a read-only batch (trade evaluations) with each team's cap holds worked out once: an AI
+ * team's holds replay its whole re-signing plan, which made the trading block slow in the summer.
+ */
+export function withHoldsMemo<T>(fn: () => T): T {
+  if (holdsMemo) return fn();
+  holdsMemo = new Map();
+  try {
+    return fn();
+  } finally {
+    holdsMemo = null;
+  }
+}
+
 /** Payroll for cap purposes: committed salary and dead money, plus cap holds for next season during the draft and re-signing window. */
 export function capPayroll(league: League, tid: number, season = contractSeason(league)): number {
   const pay = payroll(league, tid, season);
-  return season === league.season + 1 ? pay + capHolds(league, tid).reduce((a, h) => a + h.amount, 0) : pay;
+  if (season !== league.season + 1) return pay;
+  let holds = holdsMemo?.get(tid);
+  if (holds === undefined) {
+    holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
+    holdsMemo?.set(tid, holds);
+  }
+  return pay + holds;
 }
 
 /** Give up the rights to an expiring player during the re-signing window: he hits the market and his cap hold goes away. */
@@ -147,17 +184,24 @@ const deadIfCut = (league: League, p: Player) => releaseDeadMoney(league, p).red
 /** A free agent must beat a swapped-out player by 4 points of value, plus a point per $1M of dead money the release leaves. */
 const swapBar = (league: League, p: Player) => valueScore(league, p) + 4 + deadIfCut(league, p) / 1000;
 
-/** The player a full AI roster would swap out for a better free agent (dead money at most 2.2× the veteran minimum), or undefined. */
+/**
+ * The player a full AI roster would give up for a better free agent, or undefined. In season that
+ * is a release on the spot, so the dead money it leaves is held to 2.2× the veteran minimum. In
+ * the summer the newcomer just joins camp (up to 21) and the cuts come by value on opening night,
+ * so the bar is whoever would lose the 15th spot.
+ */
 function swapCandidate(league: League, tid: number, season: number): Player | undefined {
   const roster = standardRoster(league, tid);
   if (roster.length < CAP.rosterMax) return undefined;
+  const byBar = (xs: Player[]) => xs.sort((a, b) => swapBar(league, a) - swapBar(league, b));
+  if (season > league.season) return roster.length < OFFSEASON_ROSTER_MAX ? byBar(roster)[roster.length - CAP.rosterMax] : undefined;
   const limit = CAP_FOR(league, season).vetMin * 2.2;
-  return roster.filter((x) => deadIfCut(league, x) <= limit).sort((a, b) => swapBar(league, a) - swapBar(league, b))[0];
+  return byBar(roster.filter((x) => deadIfCut(league, x) <= limit))[0];
 }
 
 /**
  * One AI team's shot at the market: the best fit it can pay (cap space, the mid-level exception
- * or the minimum). A full roster can only swap a cheap player out for a clearly better one.
+ * or the minimum). A full roster only adds a clearly better player than the one he'd displace.
  */
 function aiSign(league: League, t: Team, rng: Rng, season: number) {
   const roster = standardRoster(league, t.tid);
@@ -185,7 +229,8 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
   if (!rng.chance(patience)) return;
   const route = signingRoute(league, t.tid, ask.amount, season);
   if (route === 'mle') t.mleSeason = season;
-  if (cut) releasePlayer(league, cut, { news: false });
+  // (summer signings just join camp: opening-night cuts trim the roster back to 15)
+  if (cut && season === league.season) releasePlayer(league, cut, { news: false });
   // minimum deals are short: a season, two for a young player
   const years = route === 'min' ? (playerAge(pick, season) <= 25 ? 2 : 1) : route === 'mle' ? Math.min(MLE_YEARS, ask.years) : ask.years;
   signPlayer(league, pick, t.tid, ask.amount, years, { start: season });
@@ -194,18 +239,25 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
 /**
  * One day of free agency: AI teams make offers, players accept the best fit, open two-way slots
  * go to young minimum-level players, and unsigned players cut their price every 5 days: by 15%, or
- * down to the most any AI team could still pay (cap space or mid-level), on deals of 3 years at
- * most. In season this runs once a week, so every call is a price cut.
+ * down to the most an AI team that would take him could still pay (cap space or mid-level, at his
+ * interest in that team), on deals of 3 years at most. In season this runs once a week, so every
+ * call is a price cut.
  */
 export function faDay(league: League, rng: Rng, intensity = 1) {
   const season = contractSeason(league);
   const cap = CAP_FOR(league, season);
   const offseason = season > league.season;
   const ai = rng.shuffle(league.teams.filter((t) => t.tid !== league.userTid));
-  // price cuts come first, so AI teams get the first look at a new price. The market can pay at
-  // most the best cap space or mid-level among AI teams that can still add a player.
-  const buyers = ai.filter((t) => standardRoster(league, t.tid).length < CAP.rosterMax || swapCandidate(league, t.tid, season));
-  const room = Math.max(0, ...buyers.map((t) => Math.max(cap.salaryCap - payroll(league, t.tid, season), mleRoom(league, t.tid, season))));
+  // price cuts come first, so AI teams get the first look at a new price. Buyers are the teams with
+  // a roster spot, or a player he'd clearly beat for one, and money beyond the minimum.
+  const buyers = ai.flatMap((t) => {
+    const cut = swapCandidate(league, t.tid, season);
+    if (standardRoster(league, t.tid).length >= CAP.rosterMax && !cut) return [];
+    const room = Math.max(cap.salaryCap - payroll(league, t.tid, season), mleRoom(league, t.tid, season));
+    return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity }] : [];
+  });
+  // what a player is asking a team is his price over his interest in it (see askingContract)
+  const roomFor = (p: Player) => Math.max(0, ...buyers.filter((b) => valueScore(league, p) >= b.bar).map((b) => b.room * teamAppeal(league, b.t.tid, p)));
   for (const p of freeAgents(league)) {
     if (p.faDays === undefined) continue;
     // (saves from before the 5-day clock can still be counting down from 30)
@@ -213,7 +265,7 @@ export function faDay(league: League, rng: Rng, intensity = 1) {
     if (p.faDays > 0) continue;
     const ask = Math.min(p.asking?.amount ?? Infinity, marketSalary(league, p));
     const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-    p.asking = { amount: Math.max(min, Math.round(Math.min(ask * 0.85, room) / 10) * 10), years: Math.min(3, p.asking?.years ?? preferredYears(league, p)) };
+    p.asking = { amount: Math.max(min, Math.round(Math.min(ask * 0.85, roomFor(p)) / 10) * 10), years: Math.min(3, p.asking?.years ?? preferredYears(league, p)) };
     p.faDays = FA_PRICE_CUT_DAYS;
   }
   for (const t of ai) {

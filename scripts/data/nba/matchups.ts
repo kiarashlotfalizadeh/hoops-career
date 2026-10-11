@@ -68,14 +68,30 @@ export async function processMatchups(file: string, season: number, log = consol
     a[1] += r.pp;
     offPts.set(r.off, a);
   }
-  const leaguePpp = [...offPts.values()].reduce((s, a) => s + a[0], 0) / Math.max(1, [...offPts.values()].reduce((s, a) => s + a[1], 0));
+  const leaguePpp =
+    [...offPts.values()].reduce((s, a) => s + a[0], 0) /
+    Math.max(
+      1,
+      [...offPts.values()].reduce((s, a) => s + a[1], 0),
+    );
   const rate = (off: number) => {
     const [p, pp] = offPts.get(off) ?? [0, 0];
     return (p + leaguePpp * 200) / (pp + 200); // regressed toward league rate
   };
   const defenders: Record<number, DefMatchup> = {};
   for (const r of rows) {
-    const d = (defenders[r.def] ??= { id: r.def, name: names[r.def] ?? '', partialPoss: 0, ptsAllowed: 0, ptsExpected: 0, fgaAgainst: 0, fgmAgainst: 0, threesAgainst: 0, switches: 0, helpBlocks: 0 });
+    const d = (defenders[r.def] ??= {
+      id: r.def,
+      name: names[r.def] ?? '',
+      partialPoss: 0,
+      ptsAllowed: 0,
+      ptsExpected: 0,
+      fgaAgainst: 0,
+      fgmAgainst: 0,
+      threesAgainst: 0,
+      switches: 0,
+      helpBlocks: 0,
+    });
     d.partialPoss += r.pp;
     d.ptsAllowed += r.pts;
     d.ptsExpected += rate(r.off) * r.pp;

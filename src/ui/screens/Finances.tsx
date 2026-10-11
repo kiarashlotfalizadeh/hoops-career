@@ -4,7 +4,8 @@ import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
 import type { Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, payroll, revenueScale, winPct } from '../../core/league/helpers';
+import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster, winPct } from '../../core/league/helpers';
+import { salaryFor } from '../../core/playerGen';
 import {
   ARENA_CAPACITY,
   NATIONAL_REVENUE,
@@ -72,8 +73,10 @@ function Overview({ team }: { team: Team }) {
   const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0);
   const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
   const shortfall = Math.max(0, cap.minPayroll - pay);
+  // two-way deals sit outside the cap and the tax, but they are still paid
+  const twoWayPay = twoWayRoster(league, team.tid).reduce((a, p) => a + salaryFor(p, league.season), 0);
   const expenses = [
-    { k: 'Payroll', v: pay, c: 'var(--accent)' },
+    { k: twoWayPay > 0 ? 'Payroll (incl. two-way)' : 'Payroll', v: pay + twoWayPay, c: 'var(--accent)' },
     { k: 'Staff & facilities budgets', v: budgets, c: 'var(--tier-star)' },
     { k: 'Arena & operations', v: OPERATIONS_PER_SEASON * scale, c: 'var(--tier-low)' },
     ...(tax > 0 ? [{ k: 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),

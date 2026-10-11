@@ -14,6 +14,8 @@ import { COLLEGE_SEASONS } from './sources';
 const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) };
 
 export interface CollegeAgg {
+  /** ESPN athlete id (the same person across seasons and transfers). */
+  athleteId: string;
   name: string;
   team: string;
   teamId: string;
@@ -62,8 +64,31 @@ export async function loadCollege(dir: string, log = console.log): Promise<Map<s
       team.set(tk, t);
       const id = String(r.athlete_id);
       const p = players.get(id) ?? {
-        name: String(r.athlete_display_name ?? ''), team: String(r.team_display_name ?? ''), teamId: tk, season, games: 0, min: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
-        orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0, teamFga: 0, teamFta: 0, teamTov: 0, teamMin: 0,
+        athleteId: id,
+        name: String(r.athlete_display_name ?? ''),
+        team: String(r.team_display_name ?? ''),
+        teamId: tk,
+        season,
+        games: 0,
+        min: 0,
+        fgm: 0,
+        fga: 0,
+        tpm: 0,
+        tpa: 0,
+        ftm: 0,
+        fta: 0,
+        orb: 0,
+        drb: 0,
+        ast: 0,
+        stl: 0,
+        blk: 0,
+        tov: 0,
+        pf: 0,
+        pts: 0,
+        teamFga: 0,
+        teamFta: 0,
+        teamTov: 0,
+        teamMin: 0,
       };
       p.games++;
       p.min += n(r.minutes);
@@ -136,13 +161,23 @@ export function collegePop(all: Map<string, CollegeAgg[]>): CollegePop {
   return { mean, sd };
 }
 
-/** Pick the right college player for a name (two players can share one); prefer the college listed by the draft. */
+/**
+ * Pick the right college player for a name (two players can share one) and return his latest
+ * season. Roster pages list every school a transfer attended ("Santa Clara, Ohio State"), so a
+ * season at any of them identifies him, and his latest season may be at a school spelled
+ * differently ("UNC" for North Carolina).
+ */
 export function findCollege(all: Map<string, CollegeAgg[]>, name: string, college?: string): CollegeAgg | undefined {
   const c = (all.get(normName(name)) ?? []).filter((x) => x.min >= 100);
   if (!c.length) return undefined;
-  const want = (college ?? '').toLowerCase().split(' ')[0];
+  const wants = (college ?? '')
+    .toLowerCase()
+    .split(',')
+    .map((s) => s.trim().split(' ')[0])
+    .filter(Boolean);
   const ranked = [...c].sort((a, b) => b.season - a.season || b.min - a.min);
-  return (want && ranked.find((x) => x.team.toLowerCase().includes(want))) || ranked[0];
+  const hit = ranked.find((x) => wants.some((w) => x.team.toLowerCase().includes(w)));
+  return hit ? ranked.find((x) => x.athleteId === hit.athleteId) : ranked[0];
 }
 
 /**

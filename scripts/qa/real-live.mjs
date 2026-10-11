@@ -36,11 +36,12 @@ for (const [tag, viewport] of [
   await page.goto(`${base}/#/live`);
   await page.waitForTimeout(8000);
   await shot('live');
+  // exact: the top bar's "Inbox, 2 unread" button matches "Box" too
   await page
-    .getByRole('button', { name: 'Box' })
+    .getByRole('button', { name: 'Box', exact: true })
     .click()
     .catch(() => {});
-  await shot('live-box');
+  await shot('live-box', true);
   await ctx.close();
 }
 console.log('errors:', errors.length ? errors.slice(0, 10) : 'none');

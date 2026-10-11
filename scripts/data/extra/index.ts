@@ -55,9 +55,19 @@ export async function applyExtras(seed: SeedData): Promise<void> {
       const per: Record<string, number> = {};
       for (const g of parsed.schedule.games) for (const t of g.split(':')[1].split('@')) per[t] = (per[t] ?? 0) + 1;
       const counts = Object.values(per);
-      console.log(`  schedule: ${parsed.schedule.games.length} regular-season games (${Math.min(...counts)}-${Math.max(...counts)} per team), ${parsed.placeholders} Cup placeholders; opening night: ${parsed.schedule.games.filter((g) => g.startsWith('0:')).map((g) => g.slice(2)).join(', ')}`);
+      console.log(
+        `  schedule: ${parsed.schedule.games.length} regular-season games (${Math.min(...counts)}-${Math.max(...counts)} per team), ${parsed.placeholders} Cup placeholders; opening night: ${parsed.schedule.games
+          .filter((g) => g.startsWith('0:'))
+          .map((g) => g.slice(2))
+          .join(', ')}`,
+      );
       const cup = parsed.schedule.cup;
-      if (cup) console.log(`  NBA Cup: ${Object.entries(cup.groups).map(([id, t]) => `${id} ${t.join('/')}`).join('; ')}; knockout days ${cup.qf.join('/')}, ${cup.sf}, final ${cup.final}`);
+      if (cup)
+        console.log(
+          `  NBA Cup: ${Object.entries(cup.groups)
+            .map(([id, t]) => `${id} ${t.join('/')}`)
+            .join('; ')}; knockout days ${cup.qf.join('/')}, ${cup.sf}, final ${cup.final}`,
+        );
       else console.warn('  NBA Cup: groups or knockout dates missing; the schedule is completed to 82 games without a Cup');
     }
   }
@@ -68,7 +78,11 @@ export async function applyExtras(seed: SeedData): Promise<void> {
     const tw = markTwoWays(seed.players, swish, seasonLabel(season));
     const per: Record<string, number> = {};
     for (const p of tw.marked) per[p.team!] = (per[p.team!] ?? 0) + 1;
-    console.log(`  two-way contracts: ${tw.marked.length} marked (${Object.entries(per).map(([t, n]) => `${t}:${n}`).join(' ')})`);
+    console.log(
+      `  two-way contracts: ${tw.marked.length} marked (${Object.entries(per)
+        .map(([t, n]) => `${t}:${n}`)
+        .join(' ')})`,
+    );
     if (tw.moved.length) console.log(`    joined their two-way team: ${tw.moved.join(', ')}`);
     if (tw.missing.length) console.log(`    ${tw.missing.length} listed players aren't in the seed (no NBA or college record we use); ignored`);
   } else for (const p of seed.players) if (p.contract) delete p.contract.twoWay;
@@ -95,9 +109,13 @@ export async function applyExtras(seed: SeedData): Promise<void> {
     const last = season + PICK_YEARS - 1;
     const proj = projectionFromStrength(teamStrength(seed.players), season);
     const { picks, notes } = resolvePicks(rows, proj, season, last);
-    seed.picks = picks.filter((p) => p.owner !== p.original || p.protection).map((p) => ({ season: p.season, round: p.round, original: p.original, owner: p.owner, ...(p.protection ? { protection: p.protection } : {}) }));
+    seed.picks = picks
+      .filter((p) => p.owner !== p.original || p.protection)
+      .map((p) => ({ season: p.season, round: p.round, original: p.original, owner: p.owner, ...(p.protection ? { protection: p.protection } : {}) }));
     seed.picksThrough = last;
-    console.log(`  draft picks ${season}-${last}: ${rows.length} RealGM rows → ${seed.picks.length} picks away from their original team or protected (${seed.picks.filter((p) => p.protection).length} protected)`);
+    console.log(
+      `  draft picks ${season}-${last}: ${rows.length} RealGM rows → ${seed.picks.length} picks away from their original team or protected (${seed.picks.filter((p) => p.protection).length} protected)`,
+    );
     for (const n of notes) console.log(`    note: ${n}`);
     const ld = existsSync(extraPath('draft-picks-ldsport.py')) ? parseLdSport(readFileSync(extraPath('draft-picks-ldsport.py'), 'utf8')) : null;
     const mism: string[] = [];

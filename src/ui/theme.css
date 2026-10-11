@@ -253,6 +253,12 @@ h3 {
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
+/* phones: one column with the page's own 14px between cards (not stacked edge to edge) */
+.md-grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
 @media (min-width: 760px) {
   .md-grid2 {
     display: grid;
@@ -585,6 +591,22 @@ h3 {
 .chip:disabled,
 .seg button:disabled {
   opacity: 0.5;
+}
+/* compact 32-34px controls keep their look but take taps on the bar and gaps around them (about 40px) */
+.btn.sm,
+.seg button,
+.chip {
+  position: relative;
+}
+.btn.sm::after,
+.seg button::after,
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: -3px -1px;
+}
+.chip::after {
+  inset: -3px;
 }
 .tag {
   display: inline-flex;
@@ -1249,5 +1271,41 @@ body:has(.input:focus) .simbar {
   .live-court {
     width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - 140px) * 50 / 47));
     margin: 0 auto;
+  }
+}
+
+/* touch screens: every compact control answers a 44px finger. Tab-bar options and chips grow a little
+   (the bar's own padding and the gaps around chips make up the rest); buttons only widen their hit area */
+@media (pointer: coarse) {
+  .seg button {
+    height: 38px;
+  }
+  .chip {
+    height: 36px;
+  }
+  .chip::after {
+    inset: -4px -3px;
+  }
+  .btn.sm::after {
+    inset: -5px -1px;
+  }
+  .btn.xs::after {
+    inset: -8px -2px;
+  }
+  .help-btn::after {
+    inset: -11px;
+  }
+  /* the live transport row stays one slim line: its speed options keep their size and reach out instead */
+  .live-ctl .seg button {
+    height: 34px;
+  }
+  .live-ctl .btn.sm::after,
+  .live-ctl .seg button::after {
+    inset: -5px -1px;
+  }
+  /* the league hub's season / team pickers and its player search (league.css sets 34px) */
+  select.lg-select,
+  div.lg-search input {
+    height: 40px;
   }
 }

@@ -25,49 +25,54 @@ export function rapm(seasons: RapmInput[], lambda: number, prior?: { off: Record
   // index players
   const idx = new Map<number, number>();
   const ids: number[] = [];
-  for (const s of seasons) for (const st of s.stints) for (const pid of [...st.off, ...st.def]) if (!idx.has(pid)) {
-    idx.set(pid, ids.length);
-    ids.push(pid);
-  }
+  for (const s of seasons)
+    for (const st of s.stints)
+      for (const pid of [...st.off, ...st.def])
+        if (!idx.has(pid)) {
+          idx.set(pid, ids.length);
+          ids.push(pid);
+        }
   const n = ids.length;
   const m = 2 * n + 1; // offense cols, defense cols, home
   const H = m - 1;
   // weighted mean target
   let sw = 0;
   let swy = 0;
-  for (const s of seasons) for (const st of s.stints) {
-    if (st.poss <= 0) continue;
-    const w = st.poss * s.weight;
-    sw += w;
-    swy += w * ((100 * st.pts) / st.poss);
-  }
+  for (const s of seasons)
+    for (const st of s.stints) {
+      if (st.poss <= 0) continue;
+      const w = st.poss * s.weight;
+      sw += w;
+      swy += w * ((100 * st.pts) / st.poss);
+    }
   const mu = swy / sw;
   const A = new Float64Array(m * m);
   const b = new Float64Array(m);
   const poss = new Float64Array(n);
   const cols: number[] = [];
-  for (const s of seasons) for (const st of s.stints) {
-    if (st.poss <= 0) continue;
-    const w = st.poss * s.weight;
-    const y = (100 * st.pts) / st.poss - mu;
-    cols.length = 0;
-    for (const pid of st.off) cols.push(idx.get(pid)!);
-    for (const pid of st.def) cols.push(n + idx.get(pid)!);
-    if (st.home) cols.push(H);
-    for (const i of cols) {
-      b[i] += w * y;
-      const row = i * m;
-      for (const j of cols) A[row + j] += w;
+  for (const s of seasons)
+    for (const st of s.stints) {
+      if (st.poss <= 0) continue;
+      const w = st.poss * s.weight;
+      const y = (100 * st.pts) / st.poss - mu;
+      cols.length = 0;
+      for (const pid of st.off) cols.push(idx.get(pid)!);
+      for (const pid of st.def) cols.push(n + idx.get(pid)!);
+      if (st.home) cols.push(H);
+      for (const i of cols) {
+        b[i] += w * y;
+        const row = i * m;
+        for (const j of cols) A[row + j] += w;
+      }
+      for (const pid of st.off) poss[idx.get(pid)!] += w;
+      for (const pid of st.def) poss[idx.get(pid)!] += w;
     }
-    for (const pid of st.off) poss[idx.get(pid)!] += w;
-    for (const pid of st.def) poss[idx.get(pid)!] += w;
-  }
   // ridge toward the prior (defense coefficients are "points allowed", so the prior flips sign)
   for (let i = 0; i < 2 * n; i++) {
     A[i * m + i] += lambda;
     if (prior) {
       const pid = ids[i % n];
-      b[i] += lambda * (i < n ? prior.off[pid] ?? 0 : -(prior.def[pid] ?? 0));
+      b[i] += lambda * (i < n ? (prior.off[pid] ?? 0) : -(prior.def[pid] ?? 0));
     }
   }
   A[H * m + H] += 1e-6;
