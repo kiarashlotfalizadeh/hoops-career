@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { hallOfFameScore, newSeason, simDay, startRegularSeason } from '../league/season';
-import { standardRoster, statsLine, teamPlayers } from '../league/helpers';
+import { curTeamSeason, standardRoster, statsLine, teamPlayers } from '../league/helpers';
 import { releasePlayer, valueScore } from '../league/contracts';
+import { gameFinances } from '../league/finances';
 import { CAP } from '../constants';
 import type { League, Player } from '../types';
 import { RETIRED } from '../types';
@@ -31,6 +32,19 @@ describe('box scores (L3)', () => {
     for (const g of ai) for (const b of [...g.home.players, ...g.away.players]) expect(b.min).toBeGreaterThan(0);
     // season minutes are stored to a tenth
     for (const p of Object.values(l.players)) for (const s of p.stats) if (!s.real) expect(Math.round(s.min * 10) / 10).toBe(s.min);
+  });
+});
+
+describe('attendance (L7)', () => {
+  it('postseason gates earn revenue but are not counted as regular-season attendance', () => {
+    const l = league();
+    const team = l.teams[1];
+    const ts = curTeamSeason(l, 1);
+    gameFinances(l, team, true, true);
+    expect(ts.attendance).toBe(0);
+    expect(ts.revenue).toBeGreaterThan(0);
+    const crowd = gameFinances(l, team, true, false);
+    expect(ts.attendance).toBe(crowd);
   });
 });
 

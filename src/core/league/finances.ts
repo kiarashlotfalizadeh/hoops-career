@@ -40,7 +40,8 @@ export function gameFinances(league: League, team: Team, home: boolean, playoffs
     const merch = 1_150 * (0.5 + team.hype) * (0.7 + team.pop / 15);
     const localTv = 600 * (0.6 + team.pop / 12);
     revenue += gate + merch + localTv;
-    ts.attendance += att;
+    // attendance is a regular-season figure (per home game on the Finances screen)
+    if (!playoffs) ts.attendance += att;
   }
   if (!playoffs) revenue += 130_000 / 82; // national media & league revenue share
   let expenses = 0;
