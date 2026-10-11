@@ -11,7 +11,7 @@ import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from
 import { validateTrade } from '../league/trades';
 import { buildSimInput, wearInjuryRisk } from '../league/games';
 import { finalsHomeCourt, standings } from '../league/standings';
-import { processPlayoffResult, schedulePlayoffDay } from '../league/playoffs';
+import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
 import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
@@ -366,6 +366,70 @@ describe('standings tiebreaks: NBA procedure (L5, L18)', () => {
   });
 });
 
+describe('play-in and playoff bracket (L19)', () => {
+  /** Win the next game of a series for `winner`, through the scheduled game. */
+  function win(l: League, id: string, winner: number) {
+    schedulePlayoffDay(l);
+    const g = l.schedule.find((x) => x.seriesId === id && !x.played)!;
+    g.played = true;
+    processPlayoffResult(l, g, g.home === winner);
+  }
+
+  it('seeds 1-6, plays 7v8 and 9v10, then the last spot, and pairs 1-8, 4-5, 3-6, 2-7 with higher seeds first', () => {
+    const l = league();
+    for (const conf of ['E', 'W'] as const)
+      l.teams
+        .filter((t) => t.conf === conf)
+        .forEach((t, i) => ([curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [60 - i * 2, 22 + i * 2]));
+    const east = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    l.games = [];
+    startPlayIn(l);
+    expect(east.slice(0, 6).map((tid) => curTeamSeason(l, tid).seed)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(l.playIn.filter((p) => p.conf === 'E').map((p) => [p.home, p.away])).toEqual([
+      [east[6], east[7]],
+      [east[8], east[9]],
+    ]);
+    // 8 beats 7, 10 beats 9: 7 hosts 10 for the last spot, and 10 takes it
+    const play = (id: string, homeWon: boolean) => {
+      const g = l.schedule.find((x) => x.seriesId === id && !x.played)!;
+      g.played = true;
+      processPlayInResult(l, g, homeWon);
+    };
+    for (const conf of ['E', 'W']) {
+      play(`${conf}-78`, false);
+      play(`${conf}-910`, false);
+    }
+    const last = l.playIn.find((p) => p.id === 'E-8')!;
+    expect([last.home, last.away]).toEqual([east[6], east[9]]);
+    play('E-8', false);
+    play('W-8', true);
+    expect(playInDone(l)).toBe(true);
+    expect(curTeamSeason(l, east[7]).seed).toBe(7);
+    expect(curTeamSeason(l, east[9]).seed).toBe(8);
+    expect(curTeamSeason(l, east[6]).playoffRound).toBe(-1);
+    startPlayoffs(l);
+    const r1 = l.playoffs.filter((s) => s.conf === 'E');
+    expect(r1.map((s) => [s.highSeed, s.lowSeed])).toEqual([
+      [1, 8],
+      [4, 5],
+      [3, 6],
+      [2, 7],
+    ]);
+    // upsets everywhere but 4-5: the 8 seed meets the 4 seed with home court going to the 4
+    for (const s of l.playoffs.filter((x) => x.round === 1)) for (let i = 0; i < 4; i++) win(l, s.id, s.highSeed === 4 ? s.high : s.low);
+    const r2 = l.playoffs.find((s) => s.id === 'E2-0')!;
+    expect([r2.highSeed, r2.lowSeed]).toEqual([4, 8]);
+    expect(r2.high).toBe(east[3]);
+    expect(l.playoffs.filter((s) => s.round === 2).length).toBe(4);
+    for (const round of [2, 3]) for (const s of l.playoffs.filter((x) => x.round === round)) for (let i = 0; i < 4; i++) win(l, s.id, s.high);
+    const finals = l.playoffs.find((s) => s.round === 4)!;
+    for (let i = 0; i < 4; i++) win(l, finals.id, finals.low);
+    expect(champion(l)).toBe(finals.low);
+    expect(curTeamSeason(l, finals.low).playoffRound).toBe(5);
+    expect(curTeamSeason(l, finals.high).playoffRound).toBe(4);
+  });
+});
+
 describe('playoff calendar (L10)', () => {
   it('series play every other day with two days off between rounds', () => {
     const l = league();
@@ -473,6 +537,21 @@ describe('awards (L13, L18)', () => {
     expect(l.teams[sub.tid].conf).toBe('E');
     expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
   });
+
+  it('MVP needs 65 games and 20 minutes; Rookie of the Year goes to a rookie (L19)', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [short, full] = standardRoster(l, U).filter((p) => p.draft.year !== l.season - 1);
+    line(short, 64, 64, 40);
+    line(full, 65, 65, 30);
+    const vet = standardRoster(l, aiTeam(l)).find((p) => p.draft.year !== l.season - 1)!;
+    line(vet, 70, 0, 28);
+    vet.experience = 0;
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.mvp).toBe(full.pid);
+    expect(l.players[aw.roy!].draft.year).toBe(l.season - 1);
+    expect(aw.allNba.flat()).not.toContain(short.pid);
+  });
 });
 
 describe('free agency calendar (UI2-22)', () => {
@@ -485,7 +564,26 @@ describe('free agency calendar (UI2-22)', () => {
   });
 });
 
-describe('owner (L11)', () => {
+describe('owner (L11, L19)', () => {
+  it('fires after the grace period for a bad record, never during it or with job security off', () => {
+    const l = league();
+    const ts = curTeamSeason(l, U);
+    [ts.won, ts.lost, ts.playoffRound] = [15, 67, -1];
+    const review = (tenureStart: number, jobSecurity: boolean) => {
+      l.ownerMood = { wins: -0.8, playoffs: -0.25, money: 0, total: -0.6 };
+      l.tenureStart = tenureStart;
+      l.settings.jobSecurity = jobSecurity;
+      ownerEvaluation(l);
+    };
+    review(l.season - 1, true);
+    expect(l.fired).toBeFalsy();
+    review(l.season - 3, false);
+    expect(l.fired).toBeFalsy();
+    review(l.season - 3, true);
+    expect(l.fired).toBe(true);
+    expect(l.inbox[0].subject).toBe("You're fired");
+  });
+
   it('a fired coach is not reviewed again; taking over a team clears the old plan and board', () => {
     const l = league();
     l.fired = true;
