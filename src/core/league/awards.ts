@@ -209,13 +209,25 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
   for (const conf of ['E', 'W'] as const) {
     const pool = all.filter((c) => league.teams[c.p.tid]?.conf === conf);
     const ranked = [...pool].sort((a, b) => b.gmsc + b.winPct * 6 + b.p.ovr * 0.1 - (a.gmsc + a.winPct * 6 + a.p.ovr * 0.1));
-    const picks = ranked.slice(0, 12);
+    // the NBA's format: two guards and three frontcourt players start, and the reserves are two
+    // more guards, three more frontcourt players and two wild cards
+    const chosen = new Set<Cand>();
+    const take = (n: number, fits: (c: Cand) => boolean) => {
+      for (const c of ranked) {
+        if (n === 0 || chosen.size === 12) return;
+        if (chosen.has(c) || !fits(c)) continue;
+        chosen.add(c);
+        n--;
+      }
+    };
+    const guard = (c: Cand) => c.p.pos === 'PG' || c.p.pos === 'SG';
+    take(4, guard);
+    take(6, (c) => !guard(c));
+    take(12, () => true);
+    const picks = ranked.filter((c) => chosen.has(c));
     // injured selections keep the honor; the next healthy players in the conference take their spots
     const hurt = picks.filter((c) => c.p.injury);
-    const subs = ranked
-      .slice(12)
-      .filter((c) => !c.p.injury)
-      .slice(0, hurt.length);
+    const subs = ranked.filter((c) => !chosen.has(c) && !c.p.injury).slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
     out[conf] = [...picks, ...subs].map((c) => c.p.pid);
   }

@@ -597,6 +597,20 @@ describe('awards (L13, L18)', () => {
     expect(l.awards.find((a) => a.season === l.season)!.coyCoach).toBe(coach);
   });
 
+  it('All-Stars come four guards and six frontcourt players at least, plus two wild cards', () => {
+    const l = league();
+    const line = seasonOf(l);
+    for (const p of Object.values(l.players)) p.injury = null;
+    // the East's guards have the best seasons by far
+    const east = Object.values(l.players).filter((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E');
+    for (const p of east) if (p.pos === 'PG' || p.pos === 'SG') line(p, 70, 70, 35);
+    const as = selectAllStars(l);
+    const guards = as.E.filter((pid) => ['PG', 'SG'].includes(l.players[pid].pos)).length;
+    expect(as.E.length).toBe(12);
+    expect(guards).toBeGreaterThanOrEqual(4);
+    expect(guards).toBeLessThanOrEqual(6);
+  });
+
   it('All-Rookie has a 1st and a 2nd team', () => {
     const l = league();
     seasonOf(l);
