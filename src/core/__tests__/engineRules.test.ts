@@ -70,6 +70,38 @@ describe('engine rules', () => {
     expect(t.on.every((x) => x.out === 0)).toBe(true);
   });
 
+  it('never plays four: a sixth foul with nobody left costs a technical, and the last man disqualified comes back for an injured one', () => {
+    type SP = { out: number; pid: number; fouls: number; on: boolean; outAt?: number };
+    type Short = {
+      T: { on: SP[]; players: SP[]; tot: { fta: number } }[];
+      chargeFoul(t: unknown, p: unknown): void;
+      replace(t: unknown, p: unknown): boolean;
+    };
+    const sim = new GameSim(side(0), side(1), { rng: new Rng(4), type: 'regular', injuries: false }) as unknown as Short;
+    const [t, opp] = sim.T;
+    const bench = t.players.filter((x) => !x.on);
+    bench.forEach((x, i) => {
+      x.out = i < 2 ? 1 : 2;
+      x.fouls = i < 2 ? 6 : 0;
+      x.outAt = i < 2 ? 100 * (i + 1) : undefined;
+    });
+    const p = t.on[0];
+    p.fouls = 5;
+    const fta = opp.tot.fta;
+    sim.chargeFoul(t, p);
+    expect(p.out).toBe(1);
+    expect(p.on).toBe(true);
+    expect(t.on.length).toBe(5);
+    expect(opp.tot.fta).toBe(fta + 1);
+    // an injury with no healthy sub: the most recently disqualified player (bench[1]) returns
+    const hurt = t.on[1];
+    hurt.out = 2;
+    expect(sim.replace(t, hurt)).toBe(true);
+    expect(hurt.on).toBe(false);
+    expect(bench[1].on).toBe(true);
+    expect(new Set(t.on.map((x) => x.pid)).size).toBe(5);
+  });
+
   it('plays exactly 48 minutes, books the opening five as starters and gets a shot off late in a period', () => {
     for (let g = 0; g < 4; g++) {
       const sim = new GameSim(side(2), side(3), { rng: new Rng(300 + g), type: 'regular', injuries: false });
@@ -102,6 +134,18 @@ describe('engine rules', () => {
       if (off.fga + off.fta + off.tov > before) shots++;
     }
     expect(shots).toBeGreaterThanOrEqual(18);
+  });
+
+  it('allows only two timeouts after the 3:00 mark of the fourth quarter', () => {
+    const game = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false });
+    const sim = game as unknown as Internals & { T: { timeouts: number }[] };
+    sim.q = 4;
+    sim.clock = 170;
+    sim.T[0].timeouts = 4;
+    expect(game.callTimeout(0)).toBe(true);
+    expect(sim.T[0].timeouts).toBe(1);
+    expect(game.callTimeout(0)).toBe(true);
+    expect(game.callTimeout(0)).toBe(false);
   });
 
   it('awards free throws only in the penalty, with the two-minute rule in every period and four fouls in overtime', () => {

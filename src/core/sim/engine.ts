@@ -224,6 +224,8 @@ export interface SP {
   fouls: number;
   on: boolean;
   out: 0 | 1 | 2; // 0 ok, 1 fouled out, 2 injured
+  /** Game second he fouled out. */
+  outAt?: number;
   starter: boolean;
   ftPct: number;
   hot: number;
@@ -693,6 +695,7 @@ export class GameSim {
 
   callTimeout(side: 0 | 1, reason = '') {
     const t = this.T[side];
+    this.lateTimeouts();
     if (t.timeouts <= 0) return false;
     t.timeouts--;
     for (const tm of this.T) for (const p of tm.players) p.energy = Math.min(1, p.energy + (p.on ? 0.05 : 0.02));
@@ -970,7 +973,13 @@ export class GameSim {
     }
   }
 
+  /** NBA: no more than two timeouts each after the 3:00 mark of the fourth quarter. */
+  private lateTimeouts() {
+    if (this.q === 4 && this.clock <= 180) for (const t of this.T) t.timeouts = Math.min(t.timeouts, 2);
+  }
+
   private autoTimeouts() {
+    this.lateTimeouts();
     for (const t of this.T) {
       const opp = this.T[1 - t.side];
       if (!t.t.manage.autoTimeouts || t.manualSubs) continue;
@@ -2376,23 +2385,60 @@ export class GameSim {
     p.fouls++;
     p.b.pf++;
     t.tot.pf++;
-    if (p.fouls >= GAME.foulOut) {
+    if (p.fouls < GAME.foulOut) return;
+    if (p.out === 0) {
       p.out = 1;
+      p.outAt = this.elapsed;
       this.addPbp(t.side, `${p.name} has fouled out.`, 'foul');
-      this.replace(t, p);
     }
+    // NBA rules: with nobody left to come in he stays on, and every foul from his sixth on adds a technical
+    if (!this.replace(t, p)) this.technical(t);
   }
 
-  /** Immediate replacement for a player who can't continue: same size if possible, never one at his minute cap if anyone else can go. */
-  private replace(t: ST, p: SP) {
-    const bench = t.players.filter((x) => !x.on && x.out === 0);
-    if (!bench.length) return;
+  /**
+   * Immediate replacement for a player who can't continue: same size if possible, never one at his
+   * minute cap if anyone else can go. With nobody left, an injured player is replaced by the most
+   * recently disqualified one (NBA rules); a team never plays four.
+   */
+  private replace(t: ST, p: SP): boolean {
+    let bench = t.players.filter((x) => !x.on && x.out === 0);
+    if (!bench.length && p.out === 2)
+      bench = t.players
+        .filter((x) => !x.on && x.out === 1)
+        .sort((a, b) => (b.outAt ?? 0) - (a.outAt ?? 0))
+        .slice(0, 1);
+    if (!bench.length) return false;
     const score = (x: SP) => (this.capped(x) ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
     this.applySub(
       t,
       t.on.map((x) => (x === p ? rep : x)),
     );
+    return true;
+  }
+
+  /** Technical foul on `t`: one free throw for the other side's best shooter on the floor; the possession carries on. */
+  private technical(t: ST) {
+    const opp = this.T[1 - t.side];
+    const sh = opp.on.reduce((a, x) => (x.ftPct > a.ftPct ? x : a), opp.on[0]);
+    sh.b.fta++;
+    opp.tot.fta++;
+    for (const x of opp.on) x.b.tFta++;
+    const made = this.rng.chance(sh.ftPct);
+    if (made) {
+      sh.b.ftm++;
+      opp.tot.ftm++;
+      // a point for the game, not for this possession's play type or its fast-break / second-chance tallies
+      const keep = { pts: this.possPts, second: this.secondChance, trans: this.inTransition, ctx: this.possCtxForTOPts };
+      this.secondChance = this.inTransition = false;
+      this.possCtxForTOPts = 'start';
+      this.score(opp, t, sh, 1);
+      this.possPts = keep.pts;
+      this.secondChance = keep.second;
+      this.inTransition = keep.trans;
+      this.possCtxForTOPts = keep.ctx;
+    }
+    this.addPbp(opp.side, `Technical foul on ${t.team.abbrev} (a disqualified player stays in). ${sh.name} ${made ? 'makes' : 'misses'} the free throw.`, 'ft');
   }
 
   private turnover(off: ST, def: ST, handler: SP, stealer: SP | null, finish: FinishType | 'press' | 'transition' | 'shotclock') {
