@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, BedDouble, Wand2 } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
-import { buildMinutePlan, normalizeMinutes, type PlanPlayer } from '../../core/sim/rotationPlan';
+import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, playerSeason, rosterNames } from '../stats';
@@ -35,12 +35,15 @@ export default function Rotation() {
   const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
   const closers = rot.closers.filter((pid) => byId.has(pid));
 
-  // planned stints visual (what the engine will follow)
+  // planned stints visual: the engine's own plan inputs (injured players' minutes handed out, caps)
   const plan = useMemo(() => {
-    const pp: PlanPlayer[] = healthyOrder.map((pid, i) => {
-      const p = byId.get(pid)!;
-      return { pid, minutes: rot.minutes[pid] ?? 0, starter: i < 5, closer: closers.includes(pid), guard: p.ratings.hnd >= 55 || p.pos === 'PG' || p.pos === 'SG', big: p.ratings.hgt >= 60 || p.pos === 'C', endurance: p.ratings.end };
-    });
+    const pp = planInputs(
+      order.map((pid) => {
+        const p = byId.get(pid)!;
+        return { pid, available: !p.injury, ...planRoles(p.ratings, p.pos), endurance: p.ratings.end };
+      }),
+      rot,
+    );
     const norm = normalizeMinutes(pp);
     return { slots: buildMinutePlan(pp), norm: Object.fromEntries(pp.map((x, i) => [x.pid, norm[i]])) as Record<number, number> };
     // eslint-disable-next-line react-hooks/exhaustive-deps
