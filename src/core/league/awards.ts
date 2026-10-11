@@ -106,7 +106,8 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const dpoy = rank(eligible, (c) => dpoyScore(c, dctx));
   const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.min(minG, 50));
   const roy = rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05);
-  const bench = eligible.filter((c) => c.s.gs <= c.gp / 2);
+  // NBA rule: more games off the bench than as a starter
+  const bench = eligible.filter((c) => c.s.gs < c.gp - c.s.gs);
   const smoy = rank(bench, (c) => c.gmsc + c.pmPerGame * 0.2);
   const mip = rank(eligible.filter((c) => c.p.draft.year !== season - 1), (c) => {
     const prev = seasonTotals(c.p, season - 1, false);
@@ -127,7 +128,8 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   })[0];
   const allNba = [mvp.slice(0, 5), mvp.slice(5, 10), mvp.slice(10, 15)].map((t) => t.map((c) => c.p.pid));
   const allDef = [dpoy.slice(0, 5), dpoy.slice(5, 10)].map((t) => t.map((c) => c.p.pid));
-  const allRookie = roy.slice(0, 5).map((c) => c.p.pid);
+  // 1st team then 2nd team, flat: the first five are the 1st team
+  const allRookie = roy.slice(0, 10).map((c) => c.p.pid);
   const existing = league.awards.find((a) => a.season === season);
   const awards: SeasonAwards = {
     ...(existing ?? { allStars: { E: [], W: [] } }),
@@ -155,7 +157,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   give(awards.mip, 'Most Improved Player');
   allNba.forEach((team, i) => team.forEach((pid) => give(pid, `All-NBA ${['1st', '2nd', '3rd'][i]} Team`)));
   allDef.forEach((team, i) => team.forEach((pid) => give(pid, `All-Defensive ${['1st', '2nd'][i]} Team`)));
-  allRookie.forEach((pid) => give(pid, 'All-Rookie Team'));
+  allRookie.forEach((pid, i) => give(pid, `All-Rookie ${i < 5 ? '1st' : '2nd'} Team`));
   const nm = (pid?: number) => (pid !== undefined ? playerName(league.players[pid]) : '—');
   addNews(league, {
     kind: 'award',
@@ -179,10 +181,16 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
 export function selectAllStars(league: League): SeasonAwards['allStars'] {
   const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0);
   const out: SeasonAwards['allStars'] = { E: [], W: [] };
+  const replacements: { text: string; pid: number }[] = [];
   for (const conf of ['E', 'W'] as const) {
     const pool = all.filter((c) => league.teams[c.p.tid]?.conf === conf);
     const ranked = [...pool].sort((a, b) => b.gmsc + b.winPct * 6 + b.p.ovr * 0.1 - (a.gmsc + a.winPct * 6 + a.p.ovr * 0.1));
-    out[conf] = ranked.slice(0, 12).map((c) => c.p.pid);
+    const picks = ranked.slice(0, 12);
+    // injured selections keep the honor; the next healthy players in the conference take their spots
+    const hurt = picks.filter((c) => c.p.injury);
+    const subs = ranked.slice(12).filter((c) => !c.p.injury).slice(0, hurt.length);
+    subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
+    out[conf] = [...picks, ...subs].map((c) => c.p.pid);
   }
   let aw = league.awards.find((a) => a.season === league.season);
   if (!aw) {
@@ -192,6 +200,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
   for (const pid of [...out.E, ...out.W]) league.players[pid].awards.push({ season: league.season, type: 'All-Star' });
   const mine = [...out.E, ...out.W].filter((pid) => league.players[pid].tid === league.userTid);
   addNews(league, { kind: 'award', text: `All-Stars announced. East: ${out.E.slice(0, 5).map((pid) => league.players[pid].lastName).join(', ')}... West: ${out.W.slice(0, 5).map((pid) => league.players[pid].lastName).join(', ')}...`, tids: [], pids: [...out.E, ...out.W] });
+  if (replacements.length) addNews(league, { kind: 'award', text: `All-Star replacements: ${replacements.map((r) => r.text).join('; ')}.`, tids: [], pids: replacements.map((r) => r.pid) });
   if (mine.length) {
     addInbox(league, { from: 'League Office', subject: 'All-Star selections', body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`, tone: 'good', link: '/league?tab=awards' });
   }

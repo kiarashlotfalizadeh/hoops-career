@@ -1,5 +1,6 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
-// windows, draft order, two-way contracts, phase guards, tiebreaks and the playoff calendar. Fast: no full-season sims.
+// windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar
+// and awards. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
@@ -10,6 +11,7 @@ import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from
 import { validateTrade } from '../league/trades';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { schedulePlayoffDay } from '../league/playoffs';
+import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { runLottery } from '../league/draft';
 import { contractExp, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
@@ -395,5 +397,54 @@ describe('playoff calendar (L10)', () => {
     p.wear = 40;
     advanceDay(l);
     expect(p.wear).toBeCloseTo(39.25);
+  });
+});
+
+describe('awards (L13, L18)', () => {
+  /** Every rostered player gets a 70-game line (half of them starters); returns a setter for one line. */
+  function seasonOf(l: League) {
+    for (const t of l.teams) [curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [41, 41];
+    const line = (p: Player, gp: number, gs: number, ppg: number) => {
+      const s = statsLine(p, l.season, p.tid, false);
+      Object.assign(s, { gp, gs, min: 24 * gp, pts: ppg * gp, fgm: (ppg / 2.2) * gp, fga: (ppg / 1.1) * gp });
+    };
+    for (const p of Object.values(l.players)) if (p.tid >= 0) line(p, 70, (p.pid % 2) * 70, 6);
+    return line;
+  }
+
+  it('Sixth Man needs more games off the bench than as a starter (half and half is out)', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [half, bench] = standardRoster(l, U);
+    line(half, 70, 35, 30);
+    line(bench, 70, 34, 25);
+    expect(computeRegularSeasonAwards(l).smoy).toBe(bench.pid);
+  });
+
+  it('All-Rookie has a 1st and a 2nd team', () => {
+    const l = league();
+    seasonOf(l);
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.allRookie.length).toBe(10);
+    expect(new Set(aw.allRookie).size).toBe(10);
+    expect(l.players[aw.allRookie[0]].awards.some((a) => a.type === 'All-Rookie 1st Team')).toBe(true);
+    expect(l.players[aw.allRookie[9]].awards.some((a) => a.type === 'All-Rookie 2nd Team')).toBe(true);
+  });
+
+  it('an injured All-Star keeps the honor and gets a replacement from his conference', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const star = Object.values(l.players).find((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E')!;
+    line(star, 70, 70, 40);
+    for (const p of Object.values(l.players)) p.injury = null;
+    star.injury = { type: 'Sprained Ankle', gamesRemaining: 5, gamesTotal: 6, severity: 'minor' };
+    const as = selectAllStars(l);
+    expect(as.E).toContain(star.pid);
+    expect(as.E.length).toBe(13);
+    expect(as.W.length).toBe(12);
+    const sub = l.players[as.E[12]];
+    expect(sub.injury).toBeNull();
+    expect(l.teams[sub.tid].conf).toBe('E');
+    expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
   });
 });
