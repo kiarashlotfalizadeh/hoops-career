@@ -86,7 +86,7 @@ export const JERSEYS = [
 ];
 
 /**
- * One number per player on a team: players already in the rotation keep theirs (then the
+ * One number per player on a team: players who already wore theirs here keep them (then the
  * longest-serving), and a draftee, signing or trade arrival whose number is taken picks a free one.
  */
 function settleJerseys(players: Player[], incumbents: Set<number>) {
@@ -115,7 +115,9 @@ export function ensureRotation(league: League, tid: number) {
   const players = teamPlayers(league, tid);
   const pids = new Set(players.map((p) => p.pid));
   const rot = team.rotation;
-  settleJerseys(players, new Set(rot.order));
+  // (arrivals are already in the rotation order: the incumbents are who was numbered at the last game)
+  settleJerseys(players, new Set(team.numbered ?? rot.order));
+  team.numbered = players.map((p) => p.pid);
   const stale = rot.order.some((pid) => !pids.has(pid)) || players.some((p) => !rot.order.includes(p.pid));
   const isUser = tid === league.userTid;
   if (!isUser || !rot.manual) {

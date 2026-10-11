@@ -183,7 +183,9 @@ describe('offseason', () => {
     const newcomer = teamPlayers(l, tid === 5 ? 6 : 5)[0];
     const number = vet.jersey;
     newcomer.jersey = number;
+    // as a trade or signing brings him in: on the team and in its rotation order
     newcomer.tid = tid;
+    l.teams[tid].rotation.order.push(newcomer.pid);
     ensureRotation(l, tid);
     const numbers = teamPlayers(l, tid).map((p) => p.jersey);
     expect(new Set(numbers).size).toBe(numbers.length);

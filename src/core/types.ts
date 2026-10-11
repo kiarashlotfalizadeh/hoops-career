@@ -446,6 +446,8 @@ export interface Team {
   deadMoney: { pid: number; name: string; season: number; amount: number }[];
   /** Contract season the team last used its mid-level exception. */
   mleSeason?: number;
+  /** Players whose jersey numbers were settled at the team's last game: they keep them over arrivals. */
+  numbered?: number[];
   practice: 'light' | 'normal' | 'intense';
   timeoutsUsedThisGame?: number;
 }
