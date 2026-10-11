@@ -327,8 +327,8 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       const dp = findPick(league, dpid);
       if (!dp || dp.tid !== mine.tid) errors.push('A draft pick in the deal is no longer owned by that team.');
     }
-    // no flipping an asset straight back: on casual, AI GMs take a little less than fair value, so a
-    // there-and-back pair of trades would otherwise pay out every time
+    // nothing goes straight back to the team that just traded it away: a there-and-back pair of
+    // trades shouldn't pay out (a casual discount, a pick bought cheap on draft night and sold back as the player)
     for (const a of [...other.pids.map((pid) => league.players[pid]), ...other.dpids.map((d) => findPick(league, d))]) {
       if (a?.tradedFrom?.tid === mine.tid && a.tradedFrom.season === league.season)
         errors.push(`${abbrev} traded ${assetName(league, a)} away this season and can't get ${'pid' in a ? 'him' : 'it'} back until next season.`);
