@@ -154,6 +154,11 @@ describe('engine rules', () => {
     sim.checkSubs(t);
     const starters = t.team.rotation.order.slice(0, 5);
     expect(t.on.some((p) => starters.includes(p.pid))).toBe(false);
+    // a deep-bench player who gets hurt is replaced from the deep bench, not by a starter
+    const hurt = t.on[0] as { pid: number; out: number };
+    hurt.out = 2;
+    (sim as unknown as { replace(t: unknown, p: unknown): boolean }).replace(t, hurt);
+    expect(t.on.some((p) => starters.includes(p.pid))).toBe(false);
     // the lead falls to 8 with 1:40 left: no minute mark or fatigue change needed to react
     t.subSig = sim.subSignature(t);
     sim.T[1].score = 92;

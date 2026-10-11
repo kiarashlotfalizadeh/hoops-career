@@ -863,7 +863,8 @@ export class GameSim {
     let desired: SP[];
     const margin = Math.abs(this.T[0].score - this.T[1].score);
     // once the bench is in it stays: a lead dipping to 14 with seconds left doesn't bring the starters back
-    if (this.q >= 4 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) t.garbage = true;
+    // (and nobody empties the bench for the last half minute)
+    if (this.q >= 4 && this.clock >= 30 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) t.garbage = true;
     else if (margin <= 6 + this.clock / 30) t.garbage = false;
     const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
     const ordered = t.players.filter(avail);
@@ -2410,7 +2411,9 @@ export class GameSim {
         .sort((a, b) => (b.outAt ?? 0) - (a.outAt ?? 0))
         .slice(0, 1);
     if (!bench.length) return false;
-    const score = (x: SP) => (this.capped(x) ? 0 : 2) + (x.big === p.big ? 1 : 0);
+    // in garbage time the deep bench fills in for its own: a starter doesn't come back to replace one
+    const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
+    const score = (x: SP) => (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
     this.applySub(
       t,
