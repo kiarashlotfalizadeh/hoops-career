@@ -64,8 +64,31 @@ export async function loadCollege(dir: string, log = console.log): Promise<Map<s
       team.set(tk, t);
       const id = String(r.athlete_id);
       const p = players.get(id) ?? {
-        athleteId: id, name: String(r.athlete_display_name ?? ''), team: String(r.team_display_name ?? ''), teamId: tk, season, games: 0, min: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
-        orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0, teamFga: 0, teamFta: 0, teamTov: 0, teamMin: 0,
+        athleteId: id,
+        name: String(r.athlete_display_name ?? ''),
+        team: String(r.team_display_name ?? ''),
+        teamId: tk,
+        season,
+        games: 0,
+        min: 0,
+        fgm: 0,
+        fga: 0,
+        tpm: 0,
+        tpa: 0,
+        ftm: 0,
+        fta: 0,
+        orb: 0,
+        drb: 0,
+        ast: 0,
+        stl: 0,
+        blk: 0,
+        tov: 0,
+        pf: 0,
+        pts: 0,
+        teamFga: 0,
+        teamFta: 0,
+        teamTov: 0,
+        teamMin: 0,
       };
       p.games++;
       p.min += n(r.minutes);

@@ -64,8 +64,7 @@ export function crosswalk(nba: NbaPerson[], bbref: BbrefRow[]): { map: Map<numbe
     const k = `${r.season}|${r.team}`;
     (seasonTeam.get(k) ?? seasonTeam.set(k, []).get(k)!).push({ id: r.id, norm: n });
   }
-  const teamOk = (id: string, p: NbaPerson) =>
-    Object.entries(p.teams).some(([s, tri]) => (seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []).some((x) => x.id === id));
+  const teamOk = (id: string, p: NbaPerson) => Object.entries(p.teams).some(([s, tri]) => (seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []).some((x) => x.id === id));
   const map = new Map<number, string>();
   const used = new Set<string>();
   const key = (p: NbaPerson) => {

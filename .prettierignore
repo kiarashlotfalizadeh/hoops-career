@@ -2,7 +2,8 @@
 dist
 dev-dist
 coverage
-data
+# the raw downloads only: a bare `data` would also skip scripts/data and src/data
+/data
 android
 ios
 public

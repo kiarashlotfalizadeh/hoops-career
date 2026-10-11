@@ -7,8 +7,36 @@ export const ROSTER_SEASONS = [2027, 2026];
 export const DRAFT_YEARS = Array.from({ length: 21 }, (_, i) => 2006 + i); // 2006..2026
 
 export const TEAM_CODES = [
-  'ATL', 'BOS', 'BRK', 'CHO', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GSW', 'HOU', 'IND', 'LAC', 'LAL', 'MEM',
-  'MIA', 'MIL', 'MIN', 'NOP', 'NYK', 'OKC', 'ORL', 'PHI', 'PHO', 'POR', 'SAC', 'SAS', 'TOR', 'UTA', 'WAS',
+  'ATL',
+  'BOS',
+  'BRK',
+  'CHO',
+  'CHI',
+  'CLE',
+  'DAL',
+  'DEN',
+  'DET',
+  'GSW',
+  'HOU',
+  'IND',
+  'LAC',
+  'LAL',
+  'MEM',
+  'MIA',
+  'MIL',
+  'MIN',
+  'NOP',
+  'NYK',
+  'OKC',
+  'ORL',
+  'PHI',
+  'PHO',
+  'POR',
+  'SAC',
+  'SAS',
+  'TOR',
+  'UTA',
+  'WAS',
 ];
 
 export interface Source {

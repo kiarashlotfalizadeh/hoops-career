@@ -57,7 +57,10 @@ export async function buildNbaProfile(log = console.log): Promise<NbaProfile> {
     }
   }
   log(`  RAPM over ${pbp.reduce((a, s) => a + s.stints.length, 0)} stints (λ = ${RAPM_LAMBDA})`);
-  const r = rapm(pbp.map((s) => ({ stints: s.stints, weight: RAPM_WEIGHTS[s.season] ?? 0.3 })), RAPM_LAMBDA);
+  const r = rapm(
+    pbp.map((s) => ({ stints: s.stints, weight: RAPM_WEIGHTS[s.season] ?? 0.3 })),
+    RAPM_LAMBDA,
+  );
   const league = pbp.map((s) => {
     const poss = s.stints.reduce((a, x) => a + x.poss, 0);
     const pts = s.stints.reduce((a, x) => a + x.pts, 0);

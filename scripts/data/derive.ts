@@ -134,7 +134,31 @@ const bayes = (m: number, n: number, prior: number, k: number) => (m + prior * k
 export function pbpFeatures(b?: PbpAgg) {
   const N = NaN;
   if (!b || b.mins < 60) {
-    return { rimPct: N, paintPct: N, midPct: N, rimShare: N, midShare: N, unast: N, pullupShare: N, driveShare: N, postShare: N, cutRate: N, dunkRate: N, transShare: N, sfdRate: N, orbTrue: N, drbTrue: N, badPassRate: N, lostBallRate: N, rimDeter: N, rimFgAllowed: N, blkRim: N, mdSaved: N, rapmO: N, rapmD: N };
+    return {
+      rimPct: N,
+      paintPct: N,
+      midPct: N,
+      rimShare: N,
+      midShare: N,
+      unast: N,
+      pullupShare: N,
+      driveShare: N,
+      postShare: N,
+      cutRate: N,
+      dunkRate: N,
+      transShare: N,
+      sfdRate: N,
+      orbTrue: N,
+      drbTrue: N,
+      badPassRate: N,
+      lostBallRate: N,
+      rimDeter: N,
+      rimFgAllowed: N,
+      blkRim: N,
+      mdSaved: N,
+      rapmO: N,
+      rapmD: N,
+    };
   }
   const fga = b.fga.rim + b.fga.paint + b.fga.mid + b.fga.c3 + b.fga.ab3;
   const fgm = b.fgm.rim + b.fgm.paint + b.fgm.mid + b.fgm.c3 + b.fgm.ab3;
@@ -212,7 +236,12 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
   const r: Ratings = {
     hgt: h,
     spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
-    ath: 52 + (has ? 5 * z('dunkRate') + 3 * z('blkPct') + 3 * z('orbPct') + 2 * z('transShare') : 5 * z('blkPct') + 4 * z('orbPct') + 4 * z('ftr')) - 0.05 * h - Math.max(0, age - 29) * 2 + rng.normal(0, 3),
+    ath:
+      52 +
+      (has ? 5 * z('dunkRate') + 3 * z('blkPct') + 3 * z('orbPct') + 2 * z('transShare') : 5 * z('blkPct') + 4 * z('orbPct') + 4 * z('ftr')) -
+      0.05 * h -
+      Math.max(0, age - 29) * 2 +
+      rng.normal(0, 3),
     str: 48 + 10 * wz + 3 * hz,
     // real minutes reflect role as much as conditioning: a soft floor by age lifts bench players
     // (so one promoted can carry mid-20s minutes) but keeps their order, so stamina still says
@@ -222,13 +251,17 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
     mid: has ? 48 + 9 * z('midPct') + 4 * z('paintPct') + 3 * z('pullupShare') + 3 * z('ftPct') - 2 * hz : 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
     tp: 47 + 11 * z('fg3Pct') + 11 * z('tpa36'),
     ft: clamp((a.ftPct - 0.42) / 0.0052, 1, 100),
-    hnd: has ? 50 + 6 * z('usg') + 6 * z('unast') + 3 * z('pullupShare') + 4 * z('astPct') - 4 * z('lostBallRate') - 5 * hz : 50 + 8 * z('usg') + 8 * z('astPct') - 3 * z('tovPct') - 6 * hz,
+    hnd: has
+      ? 50 + 6 * z('usg') + 6 * z('unast') + 3 * z('pullupShare') + 4 * z('astPct') - 4 * z('lostBallRate') - 5 * hz
+      : 50 + 8 * z('usg') + 8 * z('astPct') - 3 * z('tovPct') - 6 * hz,
     pas: has ? 50 + 12 * z('astPct') + 2 * z('obpm') - 3 * z('badPassRate') : 50 + 13 * z('astPct') + 2 * z('obpm'),
     oiq: has ? 50 + 5 * z('obpm') + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg') : 50 + 8 * z('obpm') + 4 * z('ts') + 3 * z('usg'),
     drw: has ? 48 + 9 * z('sfdRate') + 5 * z('fta36') : 48 + 11 * z('fta36') + 3 * z('ftr'),
     post: has ? 30 + 8 * hz + 9 * z('postShare') + 4 * z('usg') + 4 * wz : 30 + 9 * hz + 6 * z('usg') + 5 * wz - 4 * z('tpar'),
     perD: has ? 50 + 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 50 + 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz,
-    intD: has ? 46 + 5 * z('rapmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct') : 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
+    intD: has
+      ? 46 + 5 * z('rapmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct')
+      : 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
     stl: 50 + 14 * z('stlPct'),
     blk: 46 + 13 * z('blkPct') + 4 * hz,
     diq: has ? 50 + 5 * z('dbpm') + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 50 + 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct'),

@@ -67,14 +67,61 @@ export function profilesByBbref(prof: NbaProfile, bbref: BbrefRow[], log = conso
     }
   });
   const { map, unmatched } = crosswalk([...people.values()], bbref);
-  log(`  crosswalk: ${map.size} of ${people.size} NBA.com players matched${unmatched.length ? ` (unmatched: ${unmatched.slice(0, 8).map((p) => p.name).join(', ')})` : ''}`);
+  log(
+    `  crosswalk: ${map.size} of ${people.size} NBA.com players matched${
+      unmatched.length
+        ? ` (unmatched: ${unmatched
+            .slice(0, 8)
+            .map((p) => p.name)
+            .join(', ')})`
+        : ''
+    }`,
+  );
   const out = new Map<string, PbpAgg>();
   for (const [pid, bid] of map) {
     const a: PbpAgg = {
-      nbaId: pid, mins: 0, fga: ZERO_Z(), fgm: ZERO_Z(), astFgm: 0, pullup: 0, pullup3: 0, drive: 0, cut: 0, putback: 0, post: 0, trans: 0, dunk: 0, lob: 0,
-      fta: 0, sfDrawn: 0, ast: 0, astRim: 0, ast3: 0, tov: 0, tovBadPass: 0, tovLostBall: 0, orb: 0, drb: 0, orbChances: 0, drbChances: 0, stl: 0, blk: 0, blkRim: 0,
-      pf: 0, chargesDrawn: 0, offPoss: 0, defPoss: 0, oppFga: 0, oppRimA: 0, oppRimM: 0, teamFga: 0, mdSaved: 0, mdPoss: 0,
-      rapmO: prof.rapm.off[pid] ?? 0, rapmD: prof.rapm.def[pid] ?? 0, rapmPoss: prof.rapm.poss[pid] ?? 0,
+      nbaId: pid,
+      mins: 0,
+      fga: ZERO_Z(),
+      fgm: ZERO_Z(),
+      astFgm: 0,
+      pullup: 0,
+      pullup3: 0,
+      drive: 0,
+      cut: 0,
+      putback: 0,
+      post: 0,
+      trans: 0,
+      dunk: 0,
+      lob: 0,
+      fta: 0,
+      sfDrawn: 0,
+      ast: 0,
+      astRim: 0,
+      ast3: 0,
+      tov: 0,
+      tovBadPass: 0,
+      tovLostBall: 0,
+      orb: 0,
+      drb: 0,
+      orbChances: 0,
+      drbChances: 0,
+      stl: 0,
+      blk: 0,
+      blkRim: 0,
+      pf: 0,
+      chargesDrawn: 0,
+      offPoss: 0,
+      defPoss: 0,
+      oppFga: 0,
+      oppRimA: 0,
+      oppRimM: 0,
+      teamFga: 0,
+      mdSaved: 0,
+      mdPoss: 0,
+      rapmO: prof.rapm.off[pid] ?? 0,
+      rapmD: prof.rapm.def[pid] ?? 0,
+      rapmPoss: prof.rapm.poss[pid] ?? 0,
     };
     let mdSaved = 0;
     let mdPoss = 0;

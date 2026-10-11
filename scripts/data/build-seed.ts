@@ -6,7 +6,19 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
-import { COUNTRY_NAMES, parseAdvanced, parseContracts, parseDraft, parsePerGame, parseRoster, type AdvRow, type ContractRow, type DraftRow, type PerGameRow, type RosterRow } from './parse';
+import {
+  COUNTRY_NAMES,
+  parseAdvanced,
+  parseContracts,
+  parseDraft,
+  parsePerGame,
+  parseRoster,
+  type AdvRow,
+  type ContractRow,
+  type DraftRow,
+  type PerGameRow,
+  type RosterRow,
+} from './parse';
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
 import { calibrate } from './calibrate';
 import { buildNbaProfile } from './nba/build';
@@ -57,10 +69,11 @@ async function main() {
     console.log(`season ${s}: ${parsed.rows.length} per-game rows`);
   }
   const rosters: RosterRow[] = [];
-  for (const s of ROSTER_SEASONS) for (const t of TEAM_CODES) {
-    const html = read(`roster_${t}_${s}`);
-    if (html) rosters.push(...parseRoster(html, t, s));
-  }
+  for (const s of ROSTER_SEASONS)
+    for (const t of TEAM_CODES) {
+      const html = read(`roster_${t}_${s}`);
+      if (html) rosters.push(...parseRoster(html, t, s));
+    }
   const drafts: DraftRow[] = [];
   for (const y of DRAFT_YEARS) {
     const html = read(`draft_${y}`);
@@ -108,7 +121,10 @@ async function main() {
   if (existsSync(join(NBA_RAW, `cdnnba_${STAT_SEASONS[STAT_SEASONS.length - 1] - 1}.tar.xz`))) {
     console.log('NBA.com play-by-play:');
     prof = await buildNbaProfile();
-    pbpById = profilesByBbref(prof, perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })));
+    pbpById = profilesByBbref(
+      prof,
+      perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })),
+    );
   } else console.log('NBA.com play-by-play not found (npm run data:fetch-nba); using box scores only');
 
   // college production for rookies and recent draftees
@@ -245,7 +261,22 @@ async function main() {
           teamFta: 0,
           teamTov: 0,
           adv: a
-            ? { per: a.per, ts: a.ts, usg: a.usgPct, astPct: a.astPct, trbPct: a.trbPct, stlPct: a.stlPct, blkPct: a.blkPct, tovPct: a.tovPct, ws: a.ws, ws48: a.ws48, obpm: a.obpm, dbpm: a.dbpm, bpm: a.bpm, vorp: a.vorp }
+            ? {
+                per: a.per,
+                ts: a.ts,
+                usg: a.usgPct,
+                astPct: a.astPct,
+                trbPct: a.trbPct,
+                stlPct: a.stlPct,
+                blkPct: a.blkPct,
+                tovPct: a.tovPct,
+                ws: a.ws,
+                ws48: a.ws48,
+                obpm: a.obpm,
+                dbpm: a.dbpm,
+                bpm: a.bpm,
+                vorp: a.vorp,
+              }
             : undefined,
         };
       });
@@ -273,10 +304,17 @@ async function main() {
     if (agg && agg.rawMin >= 300) targets.push({ idx: players.length, agg, rel });
     players.push(sp);
   }
-  console.log(`players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`);
+  console.log(
+    `players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`,
+  );
   const teamCounts: Record<string, number> = {};
   for (const p of players) if (p.team) teamCounts[p.team] = (teamCounts[p.team] ?? 0) + 1;
-  console.log('roster sizes:', Object.entries(teamCounts).map(([t, n]) => `${t}:${n}`).join(' '));
+  console.log(
+    'roster sizes:',
+    Object.entries(teamCounts)
+      .map(([t, n]) => `${t}:${n}`)
+      .join(' '),
+  );
 
   // level players with little or no NBA sample before calibrating, so the AI coaches hand
   // out realistic minutes during the calibration games
@@ -284,7 +322,14 @@ async function main() {
   levelPlayers(players, aggs, levelTargets, false);
 
   // calibrate in the engine
-  const seed: SeedData = { version: 1, generated: new Date().toISOString(), source: 'Basketball Reference: 2023-24 to 2025-26 per-game & advanced; current contracts', season: 2027, players, realAvgs: realAvgs(leagueAvg[2026]) };
+  const seed: SeedData = {
+    version: 1,
+    generated: new Date().toISOString(),
+    source: 'Basketball Reference: 2023-24 to 2025-26 per-game & advanced; current contracts',
+    season: 2027,
+    players,
+    realAvgs: realAvgs(leagueAvg[2026]),
+  };
   const league = createLeague({ name: 'calib', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed, rngSeed: 99, preseasonCuts: false });
   const pidByIdx = new Map<number, number>();
   for (const p of Object.values(league.players)) {
@@ -321,7 +366,11 @@ async function main() {
   levelPlayers(players, aggs, levelTargets, true);
   // leveling moves role players' skills, which shifts usage around them: settle again
   for (const [idx, pid] of pidByIdx) league.players[pid].ratings = { ...players[idx].ratings };
-  league.ovrScale = buildOvrScale(Object.values(league.players).filter((p) => p.tid >= 0).map((p) => ovrRaw(p.ratings)));
+  league.ovrScale = buildOvrScale(
+    Object.values(league.players)
+      .filter((p) => p.tid >= 0)
+      .map((p) => ovrRaw(p.ratings)),
+  );
   for (const p of Object.values(league.players)) refreshPlayerDerived(p, league.season, league.ovrScale);
   calibrate(league, tmap, [
     { games: 82, damp: 0.5 },
@@ -339,25 +388,57 @@ async function main() {
   const posCount: Record<string, number> = {};
   const rostered = players.filter((p) => p.team);
   for (const p of rostered) posCount[p.pos] = (posCount[p.pos] ?? 0) + 1;
-  console.log(`positions (under contract): ${['PG', 'SG', 'SF', 'PF', 'C'].map((k) => `${k} ${posCount[k] ?? 0} (${Math.round(((posCount[k] ?? 0) / rostered.length) * 100)}%)`).join(', ')}; ${inferredPos.size} inferred from G/F/C + ratings`);
+  console.log(
+    `positions (under contract): ${['PG', 'SG', 'SF', 'PF', 'C'].map((k) => `${k} ${posCount[k] ?? 0} (${Math.round(((posCount[k] ?? 0) / rostered.length) * 100)}%)`).join(', ')}; ${inferredPos.size} inferred from G/F/C + ratings`,
+  );
   const spot = ['gilgesh01', 'willija06', 'willike04', 'carusal01', 'topicni01', 'brunsja01', 'jokicni01', 'jamesle01', 'tatumja01'];
-  console.log(`  e.g. ${spot.map((id) => players.find((p) => p.id === id)).filter((p) => p).map((p) => `${p!.first} ${p!.last} ${p!.pos}`).join(', ')}`);
+  console.log(
+    `  e.g. ${spot
+      .map((id) => players.find((p) => p.id === id))
+      .filter((p) => p)
+      .map((p) => `${p!.first} ${p!.last} ${p!.pos}`)
+      .join(', ')}`,
+  );
 
   // sanity report: OVR vs real impact
   const finalScale = buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
-  const rows = players
-    .map((p) => ({ p, a: aggs.get(p.id), ovr: toDisplay(ovrRaw(p.ratings), finalScale) }))
-    .filter((x) => x.a && x.a.rawMin >= 1500);
-  const corr = pearson(rows.map((x) => x.ovr), rows.map((x) => x.a!.adv.bpm));
+  const rows = players.map((p) => ({ p, a: aggs.get(p.id), ovr: toDisplay(ovrRaw(p.ratings), finalScale) })).filter((x) => x.a && x.a.rawMin >= 1500);
+  const corr = pearson(
+    rows.map((x) => x.ovr),
+    rows.map((x) => x.a!.adv.bpm),
+  );
   console.log(`OVR vs BPM correlation (1500+ min): ${corr.toFixed(3)} over ${rows.length} players`);
   const rr = rows.filter((x) => x.a!.pbp);
-  if (rr.length) console.log(`OVR vs RAPM correlation (1500+ min): ${pearson(rr.map((x) => x.ovr), rr.map((x) => x.a!.pbp!.rapmO + x.a!.pbp!.rapmD)).toFixed(3)} over ${rr.length} players`);
-  const top = [...players].map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team })).sort((a, b) => b.ovr - a.ovr).slice(0, 30);
+  if (rr.length)
+    console.log(
+      `OVR vs RAPM correlation (1500+ min): ${pearson(
+        rr.map((x) => x.ovr),
+        rr.map((x) => x.a!.pbp!.rapmO + x.a!.pbp!.rapmD),
+      ).toFixed(3)} over ${rr.length} players`,
+    );
+  const top = [...players]
+    .map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team }))
+    .sort((a, b) => b.ovr - a.ovr)
+    .slice(0, 30);
   console.log('Top 30:', top.map((x) => `${x.n} ${x.ovr}`).join(', '));
   if (process.env.HC_REPORT) {
     const report = players.map((p) => {
       const a = aggs.get(p.id);
-      return { id: p.id, name: `${p.first} ${p.last}`, team: p.team, age: 2027 - p.bornYear, pick: p.draft?.pick ?? null, rawMin: a?.rawMin ?? 0, wMin: a?.wMin ?? 0, mpg: a?.mpg ?? 0, adv: a?.adv ?? null, per36: a?.per36 ?? null, rapm: a?.pbp ? { o: a.pbp.rapmO, d: a.pbp.rapmD, poss: a.pbp.rapmPoss } : null, ratings: p.ratings, tend: p.tend };
+      return {
+        id: p.id,
+        name: `${p.first} ${p.last}`,
+        team: p.team,
+        age: 2027 - p.bornYear,
+        pick: p.draft?.pick ?? null,
+        rawMin: a?.rawMin ?? 0,
+        wMin: a?.wMin ?? 0,
+        mpg: a?.mpg ?? 0,
+        adv: a?.adv ?? null,
+        per36: a?.per36 ?? null,
+        rapm: a?.pbp ? { o: a.pbp.rapmO, d: a.pbp.rapmD, poss: a.pbp.rapmPoss } : null,
+        ratings: p.ratings,
+        tend: p.tend,
+      };
     });
     writeFileSync(process.env.HC_REPORT, JSON.stringify({ ovrScale: finalScale, players: report }));
   }
@@ -411,8 +492,7 @@ function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Ma
         targets.set(p.id, Math.round(priorOvr(p)));
         // stamina sets sustainable minutes; a prospect's should match the role his level earns
         p.ratings.end = clamp(Math.round(42 + (priorOvr(p) - 70) * 1.2), 30, 60);
-      }
-      else if (a.rawMin < 400) targets.set(p.id, Math.round((a.rawMin / 400) * disp(p) + (1 - a.rawMin / 400) * priorOvr(p)));
+      } else if (a.rawMin < 400) targets.set(p.id, Math.round((a.rawMin / 400) * disp(p) + (1 - a.rawMin / 400) * priorOvr(p)));
     }
   }
   let moved = 0;

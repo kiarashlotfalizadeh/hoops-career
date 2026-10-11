@@ -14,4 +14,4 @@ async function main() {
   const ex = needle ? rows.find((r) => JSON.stringify(r, (_k, v) => (typeof v === 'bigint' ? Number(v) : v)).includes(needle)) : rows[0];
   console.log(JSON.stringify(ex, (_k, v) => (typeof v === 'bigint' ? Number(v) : v)).slice(0, 2500));
 }
-if (process.argv[1]?.endsWith("peek-parquet.ts")) void main();
+if (process.argv[1]?.endsWith('peek-parquet.ts')) void main();

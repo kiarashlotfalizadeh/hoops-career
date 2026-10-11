@@ -78,7 +78,12 @@ describe('NBA.com data pipeline', () => {
     const all = new Map([
       [
         'sam smith',
-        [season('1', 'Santa Clara Broncos', 2025, 700), season('1', 'Ohio State Buckeyes', 2026, 800), season('2', 'North Carolina Tar Heels', 2026, 900), season('2', 'Arizona Wildcats', 2025, 750)],
+        [
+          season('1', 'Santa Clara Broncos', 2025, 700),
+          season('1', 'Ohio State Buckeyes', 2026, 800),
+          season('2', 'North Carolina Tar Heels', 2026, 900),
+          season('2', 'Arizona Wildcats', 2025, 750),
+        ],
       ],
     ]);
     // the roster page lists every school; the latest season wins
@@ -90,6 +95,29 @@ describe('NBA.com data pipeline', () => {
 });
 
 const blankCollege: CollegeAgg = {
-  athleteId: '', name: '', team: '', teamId: '', season: 0, games: 30, min: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0,
-  teamFga: 0, teamFta: 0, teamTov: 0, teamMin: 0,
+  athleteId: '',
+  name: '',
+  team: '',
+  teamId: '',
+  season: 0,
+  games: 30,
+  min: 0,
+  fgm: 0,
+  fga: 0,
+  tpm: 0,
+  tpa: 0,
+  ftm: 0,
+  fta: 0,
+  orb: 0,
+  drb: 0,
+  ast: 0,
+  stl: 0,
+  blk: 0,
+  tov: 0,
+  pf: 0,
+  pts: 0,
+  teamFga: 0,
+  teamFta: 0,
+  teamTov: 0,
+  teamMin: 0,
 };

@@ -87,11 +87,61 @@ export interface SeasonPbp {
 
 function blank(id: number, nameI: string): PlayerPbp {
   return {
-    id, nameI, teams: {}, games: 0, secs: 0, offPoss: 0, defPoss: 0, ptsFor: 0, ptsAgainst: 0, fga: zz(), fgm: zz(), astFgm2: 0, astFgm3: 0,
-    pullup: 0, pullupM: 0, pullup3: 0, drive: 0, driveM: 0, cut: 0, cutM: 0, lob: 0, dunk: 0, putback: 0, putbackM: 0, post: 0, postM: 0, trans: 0, transM: 0,
-    fta: 0, ftm: 0, sfDrawn: 0, and1: 0, ast: 0, astZone: zz(), tov: 0, tovBadPass: 0, tovLostBall: 0, tovOffFoul: 0, tovOther: 0,
-    orb: 0, drb: 0, orbChances: 0, drbChances: 0, stl: 0, blk: 0, blkZone: zz(), pf: 0, pfShooting: 0, pfOffensive: 0, chargesDrawn: 0,
-    teamFga: 0, oppFga: 0, oppRimA: 0, oppRimM: 0, opp3A: 0,
+    id,
+    nameI,
+    teams: {},
+    games: 0,
+    secs: 0,
+    offPoss: 0,
+    defPoss: 0,
+    ptsFor: 0,
+    ptsAgainst: 0,
+    fga: zz(),
+    fgm: zz(),
+    astFgm2: 0,
+    astFgm3: 0,
+    pullup: 0,
+    pullupM: 0,
+    pullup3: 0,
+    drive: 0,
+    driveM: 0,
+    cut: 0,
+    cutM: 0,
+    lob: 0,
+    dunk: 0,
+    putback: 0,
+    putbackM: 0,
+    post: 0,
+    postM: 0,
+    trans: 0,
+    transM: 0,
+    fta: 0,
+    ftm: 0,
+    sfDrawn: 0,
+    and1: 0,
+    ast: 0,
+    astZone: zz(),
+    tov: 0,
+    tovBadPass: 0,
+    tovLostBall: 0,
+    tovOffFoul: 0,
+    tovOther: 0,
+    orb: 0,
+    drb: 0,
+    orbChances: 0,
+    drbChances: 0,
+    stl: 0,
+    blk: 0,
+    blkZone: zz(),
+    pf: 0,
+    pfShooting: 0,
+    pfOffensive: 0,
+    chargesDrawn: 0,
+    teamFga: 0,
+    oppFga: 0,
+    oppRimA: 0,
+    oppRimM: 0,
+    opp3A: 0,
   };
 }
 
@@ -278,10 +328,11 @@ function processGame(rows: Row[], out: SeasonPbp) {
       // time on court
       const dt = Math.max(0, prevClock - r.clock);
       if (dt > 0) {
-        for (const t of [home, away]) for (const pid of on[t]) {
-          P(pid).secs += dt;
-          played.add(pid);
-        }
+        for (const t of [home, away])
+          for (const pid of on[t]) {
+            P(pid).secs += dt;
+            played.add(pid);
+          }
         prevClock = r.clock;
       }
       if (r.type === 'substitution') {

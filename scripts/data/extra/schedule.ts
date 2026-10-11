@@ -75,7 +75,11 @@ export function parseNbaSchedule(json: unknown, season: number): ScheduleParse |
   // only a complete Cup: six groups of five, 60 group games, two quarterfinal nights, one semifinal and one final night
   if (Object.keys(groups).length === 6 && Object.values(groups).every((g) => g.size === 5) && groupGames.length === 60 && qf.length === 2 && sf.length === 1 && fin.length === 1) {
     schedule.cup = {
-      groups: Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([id, set]) => [id, [...set].sort()])),
+      groups: Object.fromEntries(
+        Object.entries(groups)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([id, set]) => [id, [...set].sort()]),
+      ),
       games: groupGames.sort(),
       qf: [qf[0], qf[1]],
       sf: sf[0],

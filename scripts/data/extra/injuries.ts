@@ -56,7 +56,8 @@ export async function loadInjuries(jsonFile: string, parquetFile: string): Promi
     const asOf = new Date(json.fetchedAt ?? statSync(jsonFile).mtimeMs).toISOString().slice(0, 10);
     return { rows: parseEspnMirror(json), source: 'ESPN via BenoParadise/nba-injuries', asOf };
   }
-  if (existsSync(parquetFile)) return { rows: await parseSdvParquet(parquetFile), source: 'ESPN via sportsdataverse', asOf: new Date(statSync(parquetFile).mtimeMs).toISOString().slice(0, 10) };
+  if (existsSync(parquetFile))
+    return { rows: await parseSdvParquet(parquetFile), source: 'ESPN via sportsdataverse', asOf: new Date(statSync(parquetFile).mtimeMs).toISOString().slice(0, 10) };
   return null;
 }
 
@@ -64,7 +65,9 @@ const NUM: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, f
 
 /** Days out a note implies ("re-evaluated in two weeks", "miss four-to-six weeks"), if it says. */
 export function daysFromNote(detail: string): number | null {
-  const m = detail.match(/\b(a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|couple|few|\d+)(?:(?: of)?\s*(?:to|-|or)\s*(one|two|three|four|five|six|seven|eight|nine|ten|twelve|\d+))?\s+(week|month)s?\b/i);
+  const m = detail.match(
+    /\b(a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|couple|few|\d+)(?:(?: of)?\s*(?:to|-|or)\s*(one|two|three|four|five|six|seven|eight|nine|ten|twelve|\d+))?\s+(week|month)s?\b/i,
+  );
   if (!m) return null;
   const n = (w?: string) => (w ? (NUM[w.toLowerCase()] ?? Number(w)) : NaN);
   const k = Math.max(n(m[1]), Number.isFinite(n(m[2])) ? n(m[2]) : 0);
