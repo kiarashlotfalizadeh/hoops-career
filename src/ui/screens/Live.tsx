@@ -274,7 +274,7 @@ export default function Live() {
       <div className="live-grid">
       <div className="col live-left" style={{ gap: 10 }}>
       {/* court */}
-      <div style={{ position: 'relative' }}>
+      <div className="live-court" style={{ position: 'relative' }}>
         <Court
           script={script}
           speed={speed}

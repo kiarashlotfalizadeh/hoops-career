@@ -184,9 +184,9 @@ function BottomNav() {
         {NAV_ITEMS.map((it) => {
           const active = section === it;
           return (
-            <NavLink key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined}>
+            <NavLink key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
               <it.icon size={21} />
-              {it.label}
+              <span className="nav-label">{it.label}</span>
             </NavLink>
           );
         })}
