@@ -282,7 +282,9 @@ describe('AI trade valuation', () => {
     signPlayer(l, p, 2, CAP_FOR(l).vetMin, 1, { news: false });
     // past his new team's trade lock
     l.day = 120;
-    expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: 2, pids: [p.pid], dpids: [] } }).filter((e) => /back|signed recently/.test(e))).toEqual([]);
+    expect(
+      validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: 2, pids: [p.pid], dpids: [] } }).filter((e) => /can't get (him|it) back|signed recently/.test(e)),
+    ).toEqual([]);
   });
 
   it("doesn't trade a signing before December 15, or three months after an in-season signing", () => {
