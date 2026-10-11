@@ -128,7 +128,7 @@ export default function Inbox() {
                     <div style={{ minWidth: 0 }}>
                       <div className="from">{m.from}</div>
                       <div className="subj">{m.subject}</div>
-                      {!open && <div className="prev">{m.body.replace(/\n+/g, ' ')}</div>}
+                      {!open && <div className="prev">{m.body.replace(/([^.!?:])\n+/g, '$1 · ').replace(/\n+/g, ' ')}</div>}
                     </div>
                     <span className="when">
                       {!m.read && <span className="lg-dot" aria-label="Unread" />}

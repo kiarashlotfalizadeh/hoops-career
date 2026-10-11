@@ -1,3 +1,4 @@
+import { TabBar } from '../league/shared';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
@@ -111,7 +112,7 @@ export default function Tactics() {
           </div>
         </Card>
       ))}
-      {tabs.length > 1 && <Segmented value={tab} onChange={(id) => setParams({ tab: id }, { replace: true })} options={tabs} />}
+      {tabs.length > 1 && <TabBar value={tab} onChange={(id) => setParams({ tab: id }, { replace: true })} options={tabs} />}
 
       {tab === 'playbook' && (
         <>

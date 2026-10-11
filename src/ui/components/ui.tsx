@@ -65,8 +65,16 @@ export function shade(hex: string, amt: number) {
 }
 
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // when the options overflow a narrow phone, keep the selected one in view
+  useEffect(() => {
+    const seg = ref.current;
+    const btn = seg?.querySelector<HTMLElement>('button.on');
+    if (!seg || !btn || seg.scrollWidth <= seg.clientWidth) return;
+    seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: 'smooth' });
+  }, [value]);
   return (
-    <div className="seg" role="tablist">
+    <div className="seg" role="tablist" ref={ref}>
       {options.map((o) => (
         <button key={o.id} role="tab" aria-selected={value === o.id} className={value === o.id ? 'on' : ''} onClick={() => onChange(o.id)}>
           {o.label}
