@@ -148,18 +148,19 @@ export default function Live() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const baselines = useMemo(() => playTypeBaselines(league), [league.season]);
 
-  /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included). */
-  const flushFeed = useCallback(() => {
+  /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included); returns the new lines, newest first. */
+  const flushFeed = useCallback((): PbpEntry[] => {
     const lg = liveRef.current;
-    if (!lg) return;
+    if (!lg) return [];
     const pbp = lg.sim.pbp;
-    if (pbp.length <= pbpRead.current) return;
+    if (pbp.length <= pbpRead.current) return [];
     const fresh = pbp
       .slice(pbpRead.current)
       .map((e, j) => ({ i: pbpRead.current + j, e }))
       .reverse();
     pbpRead.current = pbp.length;
     setFeed((f) => [...fresh, ...f].slice(0, FEED_MAX));
+    return fresh.map((x) => x.e);
   }, []);
 
   const attach = useCallback((lg: LiveGame | null) => {
@@ -282,17 +283,22 @@ export default function Live() {
   const nextPossession = useCallback(() => {
     const lg = liveRef.current;
     if (!lg || lg.committed || playedElsewhere(lg)) return finish();
-    // screen readers hear the score the court just finished showing, at most once a possession
+    // the play-by-play catches up with the court only now, so it never gives away a play still being drawn
+    const lines = flushFeed();
+    // screen readers hear the basket and the score the court just finished showing, at most once a possession
     const shown = ticker.get().score;
     if (shown.join('-') !== announced.current) {
       announced.current = shown.join('-');
-      setAnnounce(`${lg.sim.T[1].team.abbrev} ${shown[1]}, ${lg.sim.T[0].team.abbrev} ${shown[0]}`);
+      const basket = lines.find((e) => e.kind === 'make' || e.kind === 'ft');
+      setAnnounce(`${basket ? `${basket.text} ` : ''}${lg.sim.T[1].team.abbrev} ${shown[1]}, ${lg.sim.T[0].team.abbrev} ${shown[0]}.`);
     }
     let logs: PossLog[] = [];
     let guard = 0;
     while (!logs.length && !lg.over && guard++ < 5) logs = lg.step();
-    flushFeed();
-    if (!logs.length) return finish();
+    if (!logs.length) {
+      flushFeed();
+      return finish();
+    }
     setScript(buildScript(logs[logs.length - 1], info));
     setTick((t) => t + 1);
   }, [info, finish, flushFeed, playedElsewhere, ticker]);
@@ -313,7 +319,8 @@ export default function Live() {
       setScript(null);
       setAtBreak(true);
       setPaused(true);
-      setBanner({ text: `END OF ${periodLabel(lg.sim.q)}`, id: Date.now() });
+      const [h, a] = lg.sim.T;
+      setAnnounce(`End of ${periodLabel(lg.sim.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     } else nextPossession();
   };
   const togglePause = () => {
@@ -329,7 +336,6 @@ export default function Live() {
     const lg = liveRef.current;
     if (!lg || !lg.sim.callTimeout(userSide, reason)) return;
     const abbrev = lg.sim.T[userSide].team.abbrev;
-    flushFeed();
     setBanner({ text: `TIMEOUT ${abbrev}`, id: Date.now() });
     setAnnounce(`Timeout ${abbrev}.`);
     setTick((x) => x + 1);
@@ -494,9 +500,25 @@ export default function Live() {
               jersey={(pid) => league.players[pid]?.jersey || '0'}
               onDone={nextPossession}
               onTick={(c, s) => ticker.set(c, s)}
-              label={over ? 'Court: the game is over.' : `Court: ${script?.label ?? 'tip-off'}.`}
+              label={over ? 'Court: the game is over.' : atBreak ? `Court: end of ${periodLabel(sim.q)}.` : `Court: ${script?.label ?? 'tip-off'}.`}
               banner={banner}
             />
+            {atBreak && !over && (
+              <div
+                className="col center fade-in"
+                style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, background: 'rgba(6,8,12,0.62)' }}
+              >
+                <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase' }}>
+                  {sim.q === 2 ? 'Halftime' : `End of ${periodLabel(sim.q)}`}
+                </div>
+                <div className="small dim2" style={{ maxWidth: 280 }}>
+                  Subs and adjustments you make now apply from the first possession of {periodLabel(sim.q + 1)}.
+                </div>
+                <button className="btn primary sm" onClick={togglePause}>
+                  <Play size={16} fill="currentColor" /> Start {periodLabel(sim.q + 1)}
+                </button>
+              </div>
+            )}
             {script && !over && (
               <div className="pill" aria-hidden="true" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', maxWidth: '85%' }}>
                 <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
@@ -734,7 +756,7 @@ function PlayerStrip({ p, name }: { p: SP; name: string }) {
   const e = Math.round(p.energy * 100);
   return (
     <div className="row small" style={{ gap: 8 }}>
-      <span className="bold ellipsis" style={{ width: 92 }}>
+      <span className="bold ellipsis" style={{ width: 128 }}>
         {name}
       </span>
       <div className="grow">
@@ -748,7 +770,7 @@ function PlayerStrip({ p, name }: { p: SP; name: string }) {
       <span className={`num tiny ${p.fouls >= 4 ? 'bad' : 'dim'}`} style={{ width: 24, textAlign: 'right' }}>
         {p.fouls}F
       </span>
-      <span className="num tiny dim2" style={{ width: 36, textAlign: 'right' }}>
+      <span className="num tiny dim2" style={{ width: 28, textAlign: 'right' }}>
         {p.b.pts}p
       </span>
     </div>
