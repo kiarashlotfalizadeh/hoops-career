@@ -190,6 +190,13 @@ export function popStats(aggs: Agg[]): PopStats {
   return { mean, sd };
 }
 
+/** Stamina from real minutes per game, with a soft age-based floor (half the shortfall below it is forgiven). */
+export function staminaFromMinutes(mpg: number, age: number): number {
+  const raw = 38 + (mpg - 18) * 1.5;
+  const floor = age <= 30 ? 48 : age <= 33 ? 44 : 40;
+  return clamp(raw >= floor ? raw : floor - (floor - raw) * 0.5, 25, 92);
+}
+
 /** Derive ratings from stats. `rel` (0..1) is the sample reliability used to regress. */
 export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string): { r: Ratings; tend: Tendencies; rel: number } {
   const f = features(a) as Record<string, number>;
@@ -207,8 +214,10 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
     spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
     ath: 52 + (has ? 5 * z('dunkRate') + 3 * z('blkPct') + 3 * z('orbPct') + 2 * z('transShare') : 5 * z('blkPct') + 4 * z('orbPct') + 4 * z('ftr')) - 0.05 * h - Math.max(0, age - 29) * 2 + rng.normal(0, 3),
     str: 48 + 10 * wz + 3 * hz,
-    // real minutes reflect role as much as conditioning: floor by age so a bench player can still carry ~30 if promoted
-    end: clamp(38 + (a.mpg - 18) * 1.5, age <= 30 ? 48 : age <= 33 ? 44 : 40, 92),
+    // real minutes reflect role as much as conditioning: a soft floor by age lifts bench players
+    // (so one promoted can carry mid-20s minutes) but keeps their order, so stamina still says
+    // who has carried a big role (the rotation AI also remembers last season's minutes)
+    end: staminaFromMinutes(a.mpg, age),
     ins: has ? 50 + 10 * z('rimPct') + 3 * z('ftr') + 2 * z('dunkRate') + 3 * hz : 50 + 9 * z('fg2Pct') + 4 * z('ftr') + 4 * hz,
     mid: has ? 48 + 9 * z('midPct') + 4 * z('paintPct') + 3 * z('pullupShare') + 3 * z('ftPct') - 2 * hz : 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
     tp: 47 + 11 * z('fg3Pct') + 11 * z('tpa36'),

@@ -34,6 +34,10 @@ for (let i = 0; i < 30; i++) {
   teams[i].tactics = autoTactics(teams[i], rosters[i], false);
 }
 
+const presetCount: Record<string, number> = {};
+for (const t of teams) presetCount[`${t.tactics.offPreset}/${t.tactics.defPreset}`] = (presetCount[`${t.tactics.offPreset}/${t.tactics.defPreset}`] ?? 0) + 1;
+console.log('AI presets:', Object.entries(presetCount).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', '));
+
 const sum: Record<string, number> = {};
 const add = (k: string, v: number) => (sum[k] = (sum[k] ?? 0) + v);
 const ptTotals: Record<string, { poss: number; pts: number }> = {};

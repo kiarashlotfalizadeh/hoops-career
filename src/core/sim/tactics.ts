@@ -43,7 +43,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Give the star the ball',
     description: 'Your best creator runs high pick-and-rolls and isolations while four teammates space the floor.',
     bestFor: 'One elite creator (high handling, passing and pull-up shooting) surrounded by shooters.',
-    values: { pace: 44, transition: 45, actions: { pnr: 88, iso: 68, post: 12, handoff: 25, motion: 28 }, threePoint: 68, rimAttack: 60, crashBoards: 30, huntMismatch: true },
+    values: { pace: 44, transition: 45, actions: { pnr: 82, iso: 58, post: 15, handoff: 32, motion: 36 }, threePoint: 68, rimAttack: 60, crashBoards: 30, huntMismatch: true },
   },
   {
     id: 'fiveOut',

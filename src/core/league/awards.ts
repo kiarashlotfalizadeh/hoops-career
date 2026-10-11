@@ -1,5 +1,6 @@
 import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites } from '../ratings';
+import { clamp } from '../random';
 import { addInbox, addNews, curTeamSeason, playerName, seasonTotals, teamName, winPct } from './helpers';
 
 export function gameScore(s: PlayerStats): number {
@@ -37,10 +38,60 @@ export function mvpScore(c: Cand) {
   return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 14 + c.pmPerGame * 0.3;
 }
 
-export function dpoyScore(c: Cand) {
+/**
+ * Defensive Player of the Year: defensive quality, rim protection and event production
+ * (capped, so a gambler's steals or a backup's blocks can't carry it), how good his team's
+ * defense was and how much it held up with him on the floor, and a real workload.
+ */
+export function dpoyScore(c: Cand, ctx: DefContext = { lgDRtg: 0, teamDRtg: new Map() }) {
   const cm = composites(c.p.ratings);
   const per = (x: number) => x / c.gp;
-  return per(c.s.stl) * 1.7 + per(c.s.blk) * 1.8 + per(c.s.drb) * 0.3 + (cm.perDef + cm.intDef + cm.rimProt + c.p.ratings.diq) / 40 + c.winPct * 3 + (c.mpg - 28) * 0.05;
+  const dRat = 0.25 * cm.perDef + 0.25 * cm.intDef + 0.3 * cm.rimProt + 0.2 * c.p.ratings.diq;
+  // without league context (live ladders) the team terms drop out
+  const teamD = ctx.lgDRtg > 0 ? ctx.teamDRtg.get(c.s.tid) ?? ctx.lgDRtg : 0;
+  // on/off: points allowed per 100 with him on the floor vs his team's season
+  const onD = ctx.lgDRtg > 0 && c.s.onPoss >= 400 ? (c.s.onPtsAgainst / c.s.onPoss) * 100 : teamD;
+  return (
+    dRat / 4 +
+    1.2 * Math.min(per(c.s.blk), 3.5) +
+    0.6 * Math.min(per(c.s.stl), 2.5) +
+    0.1 * per(c.s.drb) +
+    0.5 * (ctx.lgDRtg - teamD) +
+    0.2 * clamp(teamD - onD, -6, 6) +
+    0.15 * (Math.min(c.mpg, 36) - 30)
+  );
+}
+
+export interface DefContext {
+  lgDRtg: number;
+  /** Points allowed per 100 possessions by team id. */
+  teamDRtg: Map<number, number>;
+}
+
+export function defContext(league: League, season = league.season): DefContext {
+  const teamDRtg = new Map<number, number>();
+  let pa = 0;
+  let poss = 0;
+  for (const t of league.teams) {
+    const ts = t.seasons.find((x) => x.season === season);
+    if (!ts || ts.oppPoss <= 0) continue;
+    teamDRtg.set(t.tid, (ts.ptsAgainst / ts.oppPoss) * 100);
+    pa += ts.ptsAgainst;
+    poss += ts.oppPoss;
+  }
+  return { lgDRtg: poss ? (pa / poss) * 100 : 0, teamDRtg };
+}
+
+/** Top of the MVP / DPOY ladders with the award's own eligibility and context. */
+export function awardLadder(league: League, award: 'mvp' | 'dpoy', n = 5): { pid: number; score: number }[] {
+  const minG = gamesThreshold(league);
+  const eligible = candidates(league).filter((c) => c.gp >= minG && c.mpg >= 20);
+  const dctx = defContext(league, league.season);
+  const f = award === 'mvp' ? mvpScore : (c: Cand) => dpoyScore(c, dctx);
+  return eligible
+    .map((c) => ({ pid: c.p.pid, score: f(c) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n);
 }
 
 export function computeRegularSeasonAwards(league: League): SeasonAwards {
@@ -50,7 +101,8 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const eligible = all.filter((c) => c.gp >= minG && c.mpg >= 20);
   const rank = <T>(arr: T[], f: (x: T) => number) => [...arr].sort((a, b) => f(b) - f(a));
   const mvp = rank(eligible, mvpScore);
-  const dpoy = rank(eligible, dpoyScore);
+  const dctx = defContext(league, season);
+  const dpoy = rank(eligible, (c) => dpoyScore(c, dctx));
   const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.min(minG, 50));
   const roy = rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05);
   const bench = eligible.filter((c) => c.s.gs <= c.gp / 2);
