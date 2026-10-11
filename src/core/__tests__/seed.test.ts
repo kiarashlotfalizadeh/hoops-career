@@ -24,6 +24,9 @@ describe.skipIf(!real)('real-player seed', () => {
     // efficient bench bigs no longer outrank stars
     const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
     if (kessler) expect(kessler.ovr).toBeLessThan(88);
+    // undrafted veterans count their years in the league, not just the three seasons on record
+    const vanVleet = players.find((p) => p.bbrefId === 'vanvlfr01');
+    if (vanVleet && !seed.players.find((sp) => sp.id === 'vanvlfr01')?.draft) expect(vanVleet.experience).toBeGreaterThanOrEqual(8);
     // AI teams make preseason cuts (two-way contracts don't count); every roster can field a team
     for (const t of league.teams) {
       const roster = teamPlayers(league, t.tid);

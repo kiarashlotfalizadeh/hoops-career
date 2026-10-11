@@ -109,15 +109,10 @@ export function defaultSettings(): Settings {
 function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Player {
   const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
   const salaries = sp.contract?.salaries?.length ? sp.contract.salaries : [0];
-  const experience = sp.draft
-    ? Math.max(0, season - 1 - sp.draft.year)
-    : Math.max(
-        0,
-        sp.stats
-          .filter((s) => s.real)
-          .map((s) => s.season)
-          .filter((v, i, a) => a.indexOf(v) === i).length,
-      );
+  // undrafted (or no draft data): the stats only go back three seasons, so a veteran counts the
+  // years since a typical undrafted debut at 22 (VanVleet 10, not 3), which sets his max and minimum
+  const realSeasons = new Set(sp.stats.filter((s) => s.real).map((s) => s.season)).size;
+  const experience = sp.draft ? Math.max(0, season - 1 - sp.draft.year) : realSeasons && Math.max(realSeasons, season - sp.bornYear - 22);
   const p: Player = {
     pid,
     bbrefId: sp.id,
