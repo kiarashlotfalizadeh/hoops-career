@@ -24,7 +24,7 @@ export const FINISH_LABEL: Record<FinishType, string> = {
   cut: 'Cut',
   transition: 'Transition',
   putback: 'Putback',
-  misc: 'Other',
+  misc: 'Turnover / clock',
 };
 
 export type StepKind =

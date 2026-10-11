@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Award, Crown, Medal, Shield, Sparkles, Star, TrendingUp, Trophy, Users } from 'lucide-react';
 import type { League, Player, SeasonAwards } from '../../core/types';
 import { curTeamSeason, seasonTotals, winPct } from '../../core/league/helpers';
-import { dpoyScore, gameScore, mvpScore } from '../../core/league/awards';
+import { defContext, dpoyScore, gameScore, mvpScore } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -245,10 +245,12 @@ function AwardRace({ league }: { league: League }) {
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
     const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.max(1, Math.round(played * 0.5)));
+    // same team-defense context the real vote uses
+    const dctx = defContext(league, season);
     return {
       played,
       mvp: rank(eligible, mvpScore),
-      dpoy: rank(eligible, dpoyScore),
+      dpoy: rank(eligible, (c) => dpoyScore(c, dctx)),
       roy: rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05),
       smoy: rank(
         eligible.filter((c) => c.s.gs <= c.gp / 2),

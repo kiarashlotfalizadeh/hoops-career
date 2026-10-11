@@ -27,11 +27,16 @@ function benchTwoWays(rot: Rotation, players: Player[]) {
   const twoWay = new Set(players.filter((p) => p.contract.twoWay).map((p) => p.pid));
   if (!twoWay.size || players.filter((p) => !p.contract.twoWay && !p.injury).length < 9) return;
   rot.order = [...rot.order.filter((pid) => !twoWay.has(pid)), ...rot.order.filter((pid) => twoWay.has(pid))];
-  const freed = [...twoWay].reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
-  const kept = rot.order.filter((pid) => !twoWay.has(pid) && (rot.minutes[pid] ?? 0) > 0);
-  const base = kept.reduce((a, pid) => a + rot.minutes[pid], 0);
-  if (freed > 0 && base > 0) for (const pid of kept) rot.minutes[pid] = Math.round(rot.minutes[pid] * (1 + freed / base));
+  let freed = [...twoWay].reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
   for (const pid of twoWay) rot.minutes[pid] = 0;
+  // hand the freed minutes to the lightest-used rotation players first, never past 38
+  const kept = rot.order.filter((pid) => !twoWay.has(pid) && (rot.minutes[pid] ?? 0) > 0);
+  while (freed > 0) {
+    const next = kept.filter((pid) => (rot.minutes[pid] ?? 0) < 38).sort((a, b) => (rot.minutes[a] ?? 0) - (rot.minutes[b] ?? 0))[0];
+    if (next === undefined) break;
+    rot.minutes[next] = (rot.minutes[next] ?? 0) + 1;
+    freed--;
+  }
   rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 

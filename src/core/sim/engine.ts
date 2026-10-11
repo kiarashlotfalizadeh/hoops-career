@@ -379,6 +379,9 @@ export class GameSim {
       }
       return sp;
     });
+    // teammates who share a last name (Jalen and Jaylin Williams) get initials in play-by-play
+    const dupes = new Set(players.map((x) => x.name).filter((n, i, a) => a.indexOf(n) !== i));
+    for (const sp of players) if (dupes.has(sp.name) && sp.full.includes(' ')) sp.name = `${sp.full[0]}. ${sp.name}`;
     return {
       side,
       tid: input.team.tid,
