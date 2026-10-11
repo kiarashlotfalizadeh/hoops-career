@@ -70,7 +70,11 @@ export default function Tactics() {
   const snapshot = useRef<TacticsT>(cloneTactics(t));
   const changed = JSON.stringify(snapshot.current) !== JSON.stringify(t);
   const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
-  const healthy = useMemo(() => players.filter((p) => !p.injury), [players]);
+  // the roster as the assistant judges it (rankedPresets): a knock of five games or fewer doesn't swing the fits
+  const healthy = useMemo(() => {
+    const fit = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
+    return fit.length >= 8 ? fit : players;
+  }, [players]);
   const prof = useMemo(() => rosterProfile(healthy), [healthy]);
   const offFit = useMemo(() => fitScale(offPresetFit(prof)), [prof]);
   const defFit = useMemo(() => fitScale(defPresetFit(prof)), [prof]);

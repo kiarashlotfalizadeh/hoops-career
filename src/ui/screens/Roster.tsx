@@ -9,7 +9,7 @@ import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col, act
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { f1, moneyM, p1, playerSeason, rosterNames, signed } from '../stats';
+import { f1, latestLine, moneyM, p1, playerSeason, rosterNames, signed, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 
@@ -69,22 +69,29 @@ export default function Roster() {
     })),
   ];
 
+  // before anyone plays, each player's latest season (as the team page does) instead of a table of zeros;
+  // a player without one reads "-" and sorts last
+  const anyCur = roster.some((p) => (playerSeason(p, league.season)?.gp ?? 0) > 0);
+  const lines = new Map(roster.map((p) => [p.pid, anyCur ? playerSeason(p, league.season) : (latestLine(league, p)?.pg ?? null)]));
+  const stat = (p: Player, k: keyof PerGame) => lines.get(p.pid)?.[k] ?? -Infinity;
   const statCols: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
-    { key: 'gp', label: 'GP', get: (p) => playerSeason(p, league.season)?.gp ?? 0 },
-    { key: 'min', label: 'MIN', get: (p) => playerSeason(p, league.season)?.min ?? 0, fmt: (v) => f1(v as number) },
-    { key: 'pts', label: 'PTS', get: (p) => playerSeason(p, league.season)?.pts ?? 0, fmt: (v) => f1(v as number) },
-    { key: 'reb', label: 'REB', get: (p) => playerSeason(p, league.season)?.reb ?? 0, fmt: (v) => f1(v as number) },
-    { key: 'ast', label: 'AST', get: (p) => playerSeason(p, league.season)?.ast ?? 0, fmt: (v) => f1(v as number) },
-    { key: 'stl', label: 'STL', get: (p) => playerSeason(p, league.season)?.stl ?? 0, fmt: (v) => f1(v as number) },
-    { key: 'blk', label: 'BLK', get: (p) => playerSeason(p, league.season)?.blk ?? 0, fmt: (v) => f1(v as number) },
-    { key: 'ts', label: 'TS%', get: (p) => playerSeason(p, league.season)?.tsPct ?? 0, fmt: (v) => p1(v as number) },
-    { key: 'tp', label: '3P%', get: (p) => playerSeason(p, league.season)?.tpPct ?? 0, fmt: (v) => p1(v as number) },
-    { key: 'usg', label: 'USG', get: (p) => playerSeason(p, league.season)?.usg ?? 0, fmt: (v) => p1(v as number) },
-    { key: 'on', label: 'ON NET', get: (p) => playerSeason(p, league.season)?.onOff ?? 0, fmt: (v) => signed(v as number) },
+    { key: 'gp', label: 'GP', get: (p) => lines.get(p.pid)?.gp ?? 0 },
+    { key: 'min', label: 'MIN', get: (p) => stat(p, 'min'), fmt: (v) => f1(v as number) },
+    { key: 'pts', label: 'PTS', get: (p) => stat(p, 'pts'), fmt: (v) => f1(v as number) },
+    { key: 'reb', label: 'REB', get: (p) => stat(p, 'reb'), fmt: (v) => f1(v as number) },
+    { key: 'ast', label: 'AST', get: (p) => stat(p, 'ast'), fmt: (v) => f1(v as number) },
+    { key: 'stl', label: 'STL', get: (p) => stat(p, 'stl'), fmt: (v) => f1(v as number) },
+    { key: 'blk', label: 'BLK', get: (p) => stat(p, 'blk'), fmt: (v) => f1(v as number) },
+    { key: 'ts', label: 'TS%', get: (p) => stat(p, 'tsPct'), fmt: (v) => p1(v as number) },
+    { key: 'tp', label: '3P%', get: (p) => stat(p, 'tpPct'), fmt: (v) => p1(v as number) },
+    { key: 'usg', label: 'USG', get: (p) => stat(p, 'usg'), fmt: (v) => p1(v as number) },
+    // imported seasons carry no on-court tracking
+    { key: 'on', label: 'ON NET', get: (p) => (anyCur ? stat(p, 'onOff') : -Infinity), fmt: (v) => signed(v as number) },
   ];
 
-  const seasons = [0, 1, 2, 3].map((i) => league.season + i);
+  // from the season the payroll above counts (next season once this one is over), like the cap sheet
+  const seasons = [0, 1, 2, 3].map((i) => s0 + i);
   const contractCols: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     ...seasons.map((s) => ({
@@ -117,6 +124,7 @@ export default function Roster() {
       <Segmented
         value={view}
         onChange={setView}
+        label="Roster view"
         options={[
           { id: 'players', label: 'Players' },
           { id: 'ratings', label: 'Ratings' },
@@ -182,7 +190,12 @@ export default function Roster() {
         </Card>
       )}
       {view === 'ratings' && <StatTable rows={roster} cols={ratingCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />}
-      {view === 'stats' && <StatTable rows={roster} cols={statCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />}
+      {view === 'stats' && (
+        <>
+          <StatTable rows={roster} cols={statCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
+          {!anyCur && <div className="small dim">No games yet this season: each player's latest season, per game.</div>}
+        </>
+      )}
       {view === 'contracts' && (
         <>
           <StatTable rows={roster} cols={contractCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />

@@ -1,16 +1,16 @@
 import { useQueryParam } from '../league/shared';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Lightbulb } from 'lucide-react';
 import { useLeague } from '../../state/store';
 import { buildGameReport } from '../../core/analysis/gameReport';
-import { Card, Empty, PageHeader, Segmented, Tag } from '../components/ui';
+import { Card, Chips, Empty, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart } from '../components/charts';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
-import type { GameResult, League, TeamBox } from '../../core/types';
+import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
 import { p1, periodLabel, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
@@ -162,16 +162,20 @@ export default function GameView() {
                       className={`display bold`}
                       style={{
                         width: 30,
+                        flex: 'none',
                         fontSize: 18,
                         color: gr.grade.startsWith('A') ? 'var(--good)' : gr.grade.startsWith('B') ? 'var(--info)' : gr.grade.startsWith('C') ? 'var(--warn)' : 'var(--bad)',
                       }}
                     >
                       {gr.grade}
                     </span>
-                    <span className="bold ellipsis" style={{ width: 96, flex: 'none' }}>
-                      {userNames?.(gr.pid) || league.players[gr.pid]?.lastName}
+                    {/* name over the line: long names and the minutes no longer get cut off on a phone */}
+                    <span className="grow">
+                      <span className="bold">{userNames?.(gr.pid) || league.players[gr.pid]?.lastName}</span>
+                      <span className="dim tiny" style={{ display: 'block' }}>
+                        {gr.note}
+                      </span>
                     </span>
-                    <span className="dim grow ellipsis">{gr.note}</span>
                   </Link>
                 ))}
               </div>
@@ -198,8 +202,9 @@ export default function GameView() {
             <Card title="Momentum swings">
               <div className="col" style={{ gap: 4 }}>
                 {report.runs.map((r, i) => (
-                  <div key={i} className={`small ${r.side === 'user' ? 'good' : 'bad'}`}>
-                    {r.text}
+                  <div key={i} className="small">
+                    <span className={r.side === 'user' ? 'good' : 'bad'}>{r.text}</span>
+                    <span className="dim"> · {runContext(g, accentSide, r.startIdx, r.endIdx)}</span>
                   </div>
                 ))}
               </div>
@@ -291,26 +296,49 @@ export default function GameView() {
         </Card>
       )}
 
-      {tab === 'pbp' && g.pbp && (
-        <Card>
-          <div className="col" style={{ gap: 6 }}>
-            {g.pbp.map((e, i) => (
-              <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
-                <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>
-                  {periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}
-                </span>
-                <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>
-                  {e.text}
-                </span>
-                <span className="tiny num dim">
-                  {e.as}-{e.hs}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      {tab === 'pbp' && g.pbp && <PlayByPlay pbp={g.pbp} />}
     </main>
+  );
+}
+
+/** When a run happened and the margin it turned, from the user's side: "Q2-Q3, from down 13 to up 4". */
+function runContext(g: GameResult, userSide: 0 | 1, start: number, end: number) {
+  const flow = g.flow ?? [];
+  const margin = (i: number) => (userSide === 0 ? 1 : -1) * (flow[i] ?? 0);
+  const says = (m: number) => (m === 0 ? 'tied' : m > 0 ? `up ${m}` : `down ${-m}`);
+  const period = (i: number) => (g.flowPeriods ?? []).reduce((q, at, k) => (at <= i ? k + 1 : q), 0);
+  // flow[start] is the margin before the run's first possession
+  const [a, b] = [period(start + 1), period(end)];
+  const when = !a ? '' : a === b ? `${periodLabel(a)}, ` : `${periodLabel(a)}-${periodLabel(b)}, `;
+  return `${when}from ${says(margin(start))} to ${says(margin(end))}`;
+}
+
+/** A coached game's play-by-play runs to hundreds of lines: one period at a time on request. */
+function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
+  const [q, setQ] = useState(0);
+  const periods = Math.max(4, ...pbp.map((e) => e.q));
+  const rows = q ? pbp.filter((e) => e.q === q) : pbp;
+  return (
+    <>
+      <Chips value={q} onChange={setQ} options={[{ id: 0, label: 'All' }, ...Array.from({ length: periods }, (_, i) => ({ id: i + 1, label: periodLabel(i + 1) }))]} />
+      <Card>
+        <div className="col" style={{ gap: 6 }}>
+          {rows.map((e, i) => (
+            <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
+              <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>
+                {periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}
+              </span>
+              <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>
+                {e.text}
+              </span>
+              <span className="tiny num dim">
+                {e.as}-{e.hs}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </>
   );
 }
 
@@ -321,7 +349,7 @@ function pppColor(ppp: number, poss: number) {
 
 function QuarterTable({ g, abbrevs }: { g: GameResult; abbrevs: Record<number, string> }) {
   const n = Math.max(g.home.quarters.length, g.away.quarters.length);
-  const label = (i: number) => (i < 4 ? `${i + 1}` : `OT${i - 3 > 1 ? i - 3 : ''}`);
+  const label = (i: number) => (i < 4 ? `${i + 1}` : periodLabel(i + 1));
   return (
     <div className="tablewrap" style={{ marginTop: 12, background: 'transparent', border: 'none' }}>
       <table className="stats">
@@ -394,7 +422,8 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
             {rows.map((p) => (
               <tr key={p.pid}>
                 <td className="l sticky">
-                  <Link to={`/player/${p.pid}`}>
+                  {/* the whole name cell is the link, not just the 16px of text */}
+                  <Link to={`/player/${p.pid}`} style={{ display: 'block', margin: -8, padding: 8 }}>
                     <span className={p.gs ? 'bold' : ''}>{name(p.pid)}</span>
                     {p.pid === pog && (
                       <span className="tag warn" style={{ marginLeft: 4, height: 16 }}>

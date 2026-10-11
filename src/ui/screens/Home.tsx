@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
-import { normalizeLink, ordinal } from '../league/shared';
+import { normalizeLink } from '../league/shared';
 import { userGameOnDay } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
@@ -11,7 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Kpi, Ovr } from '../components/ui';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
-import { f1, playerSeason, rosterNames, signed, teamRatings } from '../stats';
+import { f1, ordinal, playerSeason, rosterNames, signed, teamRatings } from '../stats';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
 
@@ -179,7 +179,7 @@ export default function Home() {
                   </div>
                 </div>
               ) : null}
-              <Link to={`/lab?opp=${oppTid}`} className="small" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+              <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650, alignSelf: 'flex-start' }}>
                 Build a game plan in the Tactics Lab →
               </Link>
             </div>
@@ -306,13 +306,13 @@ export default function Home() {
             </Link>
           }
         >
-          <div className="col" style={{ gap: 4 }}>
+          <div className="col" style={{ gap: 0 }}>
             {window.map((r) => (
               <Link
                 key={r.tid}
                 to={`/team/${r.tid}`}
                 className="row"
-                style={{ padding: '4px 0', fontWeight: r.tid === league.userTid ? 750 : 500, color: r.tid === league.userTid ? 'var(--text)' : 'var(--text-2)' }}
+                style={{ minHeight: 36, fontWeight: r.tid === league.userTid ? 750 : 500, color: r.tid === league.userTid ? 'var(--text)' : 'var(--text-2)' }}
               >
                 <span className="num dim" style={{ width: 18 }}>
                   {r.confRank}
@@ -356,14 +356,14 @@ export default function Home() {
             )}
           </Card>
           <Card title="Recent games">
-            <div className="col" style={{ gap: 6 }}>
+            <div className="col" style={{ gap: 0 }}>
               {recent.map((g) => {
                 const home = g.home.tid === league.userTid;
                 const us = home ? g.home : g.away;
                 const them = home ? g.away : g.home;
                 const won = us.pts > them.pts;
                 return (
-                  <Link key={g.gid} to={`/game/${g.gid}`} className="row">
+                  <Link key={g.gid} to={`/game/${g.gid}`} className="row" style={{ minHeight: 36 }}>
                     <span className={`tag ${won ? 'good' : 'bad'}`}>{won ? 'W' : 'L'}</span>
                     <span className="small dim" style={{ width: 22 }}>
                       {home ? 'vs' : '@'}
@@ -395,7 +395,7 @@ export default function Home() {
             .sort((a, b) => b.ovr - a.ovr)
             .slice(0, 8)
             .map((p) => (
-              <Link key={p.pid} to={`/player/${p.pid}`} className="kpi" style={{ minWidth: 112 }}>
+              <Link key={p.pid} to={`/player/${p.pid}`} className="kpi" style={{ minWidth: 112, maxWidth: 180, flex: 'none' }}>
                 <div className="row between">
                   <Ovr v={p.ovr} size="sm" />
                   <span className="tiny dim">{p.pos}</span>
