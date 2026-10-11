@@ -69,9 +69,9 @@ export function ownerEvaluation(league: League) {
       important: true,
       from: 'Owner',
       subject: "You're fired",
-      body: 'The results have not been good enough. We are going in a different direction. (You can keep playing by taking over another team from Settings.)',
+      body: 'The results have not been good enough. We are going in a different direction. (Take over another team to keep your career going: the league waits until you do.)',
       tone: 'bad',
-      link: '/settings',
+      link: '/settings?sheet=switch',
     });
     return;
   }

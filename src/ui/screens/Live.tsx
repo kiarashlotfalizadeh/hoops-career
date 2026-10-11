@@ -445,7 +445,7 @@ export default function Live() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, dismissed, over, nameOf, baselines]);
 
-  const nextAction = flowActions(league).find((a) => a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame');
+  const nextAction = flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame'));
   const nextGame = async () => {
     if (nextAction?.sim) await useStore.getState().simulate(nextAction.sim);
     start();

@@ -27,7 +27,19 @@ function stillAlive(league: League): boolean {
 }
 
 /** `onLive`: the Live screen is open, so a game in progress is all the menu offers. */
-export function flowActions(league: League, { onLive = false } = {}): FlowAction[] {
+export function flowActions(league: League, opts: { onLive?: boolean } = {}): FlowAction[] {
+  if (!league.fired) return phaseActions(league, opts);
+  // fired: the old team isn't yours to run, so nothing moves on until you take over another one
+  const why = 'You were fired: take over another team first.';
+  return [
+    { id: 'job', label: 'Find a new job', sub: 'Take over another team to keep your career going.', primary: true, to: '/settings?sheet=switch' },
+    ...phaseActions(league, opts)
+      .filter((x) => x.cmd || x.sim)
+      .map((x) => ({ ...x, primary: false, disabled: why })),
+  ];
+}
+
+function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
   const a: FlowAction[] = [];
   switch (league.phase) {
     case 'preseason': {

@@ -305,6 +305,7 @@ function stepienError(league: League, offer: TradeOffer, side: TradeSide): strin
 
 export function validateTrade(league: League, offer: TradeOffer): string[] {
   const errors: string[] = [];
+  if (league.fired && (offer.a.tid === league.userTid || offer.b.tid === league.userTid)) errors.push('You were fired: take over another team to make trades.');
   if (league.phase === 'regular' && league.day > league.tradeDeadlineDay) errors.push('The trade deadline has passed.');
   if (league.phase === 'playoffs' || league.phase === 'playin') errors.push('No trades during the postseason.');
   const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;

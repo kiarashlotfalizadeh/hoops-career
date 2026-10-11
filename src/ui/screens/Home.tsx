@@ -87,10 +87,10 @@ export default function Home() {
             <AlertTriangle className="bad" />
             <div className="grow">
               <div className="bold">You have been fired.</div>
-              <div className="small dim">Take over another team from Settings to keep playing.</div>
+              <div className="small dim">The team is out of your hands. Take over another one to keep your career going.</div>
             </div>
-            <Link className="btn sm" to="/settings">
-              Settings
+            <Link className="btn sm" to="/settings?sheet=switch">
+              Find a job
             </Link>
           </div>
         </Card>

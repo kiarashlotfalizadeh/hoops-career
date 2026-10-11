@@ -6,6 +6,8 @@ import { useStore } from '../store';
 import { flowActions, type FlowAction } from '../../ui/flow';
 import { faAdvance, finishDraftPhase, newSeason, startDraft, startFreeAgency, startRegularSeason } from '../../core/league/season';
 import { fmtDate } from '../../core/league/helpers';
+import { takeOverTeam } from '../../core/league/owner';
+import { validateTrade } from '../../core/league/trades';
 import type { League } from '../../core/types';
 import { testLeague } from './fixtures';
 
@@ -76,5 +78,23 @@ describe('Play menu', () => {
     while (flowActions(l)[0].id !== 'next') l.day++;
     const next = l.schedule.filter((g) => !g.played && g.day > l.day && (g.home === l.userTid || g.away === l.userTid)).sort((a, b) => a.day - b.day)[0];
     expect(flowActions(l)[0].sub).toBe(fmtDate(l.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' }));
+  });
+
+  it("a fired coach finds a new job before the league moves on, and can't trade for the old team", () => {
+    const l = testLeague('fired');
+    l.phase = 'draftLottery';
+    l.fired = true;
+    const acts = flowActions(l);
+    expect(acts[0]).toMatchObject({ id: 'job', primary: true, to: '/settings?sheet=switch' });
+    expect(acts.filter((a) => a.primary)).toHaveLength(1);
+    // the draft (and every other step forward) waits, saying why
+    expect(acts.find((a) => a.cmd === 'startDraft')?.disabled).toMatch(/fired/);
+    const other = (l.userTid + 1) % 30;
+    const offer = { a: { tid: l.userTid, pids: [], dpids: [] }, b: { tid: other, pids: [], dpids: [] } };
+    expect(validateTrade(l, offer).some((e) => /fired/.test(e))).toBe(true);
+    takeOverTeam(l, other);
+    expect(flowActions(l)[0]).toMatchObject({ cmd: 'startDraft', primary: true });
+    expect(flowActions(l)[0].disabled).toBeUndefined();
+    expect(validateTrade(l, { a: { ...offer.b }, b: { ...offer.a } }).some((e) => /fired/.test(e))).toBe(false);
   });
 });

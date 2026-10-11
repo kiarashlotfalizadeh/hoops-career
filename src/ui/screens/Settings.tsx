@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Database, Download, HardDrive, LogOut, Save, Shuffle, Trash2, TriangleAlert } from 'lucide-react';
 import { exportLeague } from '../../state/backup';
 import { ImportButton } from '../components/ImportButton';
@@ -33,7 +33,9 @@ export default function Settings() {
   const mutate = (fn: (l: League) => void) => useStore.getState().mutate(fn);
   const [name, setName] = useState(league.name);
   const [coach, setCoach] = useState(league.coachName);
-  const [sheet, setSheet] = useState<null | 'switch' | 'delete' | 'unsaved'>(null);
+  const [params] = useSearchParams();
+  // "Find a new job" (Play menu, Home) opens straight onto the team picker
+  const [sheet, setSheet] = useState<null | 'switch' | 'delete' | 'unsaved'>(() => (params.get('sheet') === 'switch' ? 'switch' : null));
   const [busy, setBusy] = useState(false);
   // leaving or swapping leagues mid-sim would strand the sim on a league nobody sees
   const simming = useStore((s) => !!s.sim);
