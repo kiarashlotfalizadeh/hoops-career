@@ -79,7 +79,7 @@ export default function Inbox() {
           All <span className="tiny dim">{sorted.length}</span>
         </button>
         <button className={`chip ${filter === 'unread' ? 'on' : ''}`} onClick={() => setFilter('unread')}>
-          Unread {unread > 0 && <span className="tiny" style={{ color: 'var(--accent)' }}>{unread}</span>}
+          Unread {unread > 0 && <span className="tiny" style={{ color: 'var(--accent-text)' }}>{unread}</span>}
         </button>
       </div>
       {list.length === 0 ? (

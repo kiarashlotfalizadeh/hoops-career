@@ -236,28 +236,35 @@ export default function Live() {
     <main className="page full" style={{ gap: 10 }}>
       {/* scorebug */}
       <div className="card tight" style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}>
-        <div className="scorebug">
-          <div className="row" style={{ gap: 8 }}>
-            <TeamLogo tid={away.tid} size={38} />
-            <div>
+        <div className="scorebug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? 'final' : `${qLabel} ${fmtClock(clock)}`}`}>
+          <div className="row" style={{ gap: 6, minWidth: 0 }}>
+            <TeamLogo tid={away.tid} size={34} />
+            <div style={{ minWidth: 0 }}>
               <div className="bold">{away.abbrev}</div>
-              <div className="tiny dim">TO {sim.T[1].timeouts}{sim.T[0].fouls >= 5 ? ' · BONUS' : ''}</div>
+              <div className="tiny dim nowrap">
+                TO {sim.T[1].timeouts}
+                {sim.T[0].fouls >= 5 && <span className="warn" title="In the bonus"> ●</span>}
+              </div>
             </div>
             <span className="score" style={{ marginLeft: 'auto' }}>{score[1]}</span>
           </div>
-          <div className="col center" style={{ gap: 0, minWidth: 64 }}>
+          <div className="col center" style={{ gap: 0, minWidth: 56 }}>
             <span className="display bold" style={{ fontSize: 15 }}>{over ? 'FINAL' : qLabel}</span>
             <span className="display num" style={{ fontSize: 20 }}>{over ? '' : fmtClock(clock)}</span>
           </div>
-          <div className="row" style={{ gap: 8, flexDirection: 'row-reverse' }}>
-            <TeamLogo tid={home.tid} size={38} />
-            <div className="right">
+          <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
+            <TeamLogo tid={home.tid} size={34} />
+            <div className="right" style={{ minWidth: 0 }}>
               <div className="bold">{home.abbrev}</div>
-              <div className="tiny dim">TO {sim.T[0].timeouts}{sim.T[1].fouls >= 5 ? ' · BONUS' : ''}</div>
+              <div className="tiny dim nowrap">
+                {sim.T[1].fouls >= 5 && <span className="warn" title="In the bonus">● </span>}
+                TO {sim.T[0].timeouts}
+              </div>
             </div>
             <span className="score" style={{ marginRight: 'auto' }}>{score[0]}</span>
           </div>
         </div>
+        <div className="sr-only" aria-live="polite">{over ? `Final: ${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}` : ''}</div>
       </div>
 
       <div className="live-grid">
@@ -374,12 +381,13 @@ export default function Live() {
 
       <Card title="Play-by-play">
         <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-          {feed.flatMap((f, i) =>
+          {feed.flatMap((f) =>
             f.lines
               .slice()
               .reverse()
               .map((line, j) => (
-                <div key={`${i}-${j}`} className="row top small" style={{ gap: 8 }}>
+                // stable key: new possessions are prepended, so index keys would remount every row
+                <div key={`${f.q}:${f.clockStart}:${f.clockEnd}:${f.score.join('-')}:${f.off}:${j}`} className="row top small" style={{ gap: 8 }}>
                   <span className="tiny dim num" style={{ width: 54 }}>Q{f.q} {fmtClock(f.clockEnd)}</span>
                   <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, background: f.off === 0 ? colors[0][0] : colors[1][0], flex: 'none' }} />
                   <span className="grow dim2">{line}</span>

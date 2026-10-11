@@ -312,7 +312,7 @@ function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; c
         <>
           <SecTitle>Selections</SecTitle>
           <Card className="flush">
-            <div className="list">
+            <div className="list wide2">
               {(all ? picks : picks.slice(0, 8)).map((p) => (
                 <SelectionRow key={p.pid} league={league} p={p} />
               ))}
@@ -355,7 +355,7 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
   if (!list.length) return <Empty>No prospects left on the board.</Empty>;
   return (
     <Card className="flush">
-      <div className="list">
+      <div className="list wide2">
         {list.slice(0, limit).map((p) => (
           <div key={p.pid} className="fo-prow" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => onOpen(p.pid)} onKeyDown={(e) => e.key === 'Enter' && onOpen(p.pid)}>
             <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>

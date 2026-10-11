@@ -13,3 +13,4 @@ android/.gradle
 ios/App/Pods
 ios/App/build
 *.log
+.claude/worktrees

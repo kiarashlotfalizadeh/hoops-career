@@ -8,7 +8,7 @@ import { deleteLeague } from '../../state/persistence';
 import { useLeague, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
-import { STRATEGY_META, SecTitle, fmtM, teamAccentColor } from '../office/common';
+import { STRATEGY_META, SecTitle, fmtM } from '../office/common';
 
 const APP_VERSION = '1.0.0';
 
@@ -216,7 +216,7 @@ export default function Settings() {
           <div className="row top" style={{ gap: 10 }}>
             <Database size={18} className="dim" style={{ flex: 'none', marginTop: 1 }} />
             <div>
-              <b className="dim2">Data sources.</b> Real-league player ratings are derived from Basketball Reference per-game and advanced stats for the 2023-24, 2024-25 and 2025-26 seasons. Rosters and salaries come from Basketball Reference's contracts page. Fictional leagues use generated players.
+              <b className="dim2">Data sources.</b> Rosters and salaries come from Basketball Reference's contracts page. Ratings are built from 2023-24 to 2025-26 per-game and advanced stats (Basketball Reference), NBA.com play-by-play, lineup and matchup data (shot zones, shot creation, adjusted plus-minus), and college box scores for rookies, then calibrated in the engine. Fictional leagues use generated players.
             </div>
           </div>
           <div className="row top" style={{ gap: 10 }}>
@@ -274,7 +274,6 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
       l.fired = false;
       l.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
     });
-    document.documentElement.style.setProperty('--accent', teamAccentColor(target.colors));
     useStore.getState().toast(`Welcome to the ${target.region} ${target.name}, Coach.`, 'good');
     onClose();
     setPick(null);

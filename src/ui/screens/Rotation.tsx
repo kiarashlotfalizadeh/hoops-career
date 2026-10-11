@@ -1,11 +1,11 @@
 import { attrDisplay } from '../../core/ratings';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, BedDouble, Wand2 } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, type PlanPlayer } from '../../core/sim/rotationPlan';
-import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle } from '../components/ui';
+import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, playerSeason } from '../stats';
 import { seasonLineups } from '../seasonAnalysis';
@@ -103,7 +103,9 @@ export default function Rotation() {
             const m = rot.minutes[pid] ?? 0;
             const pg = playerSeason(p, league.season);
             return (
-              <div key={pid} className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: i < 5 ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
+              <Fragment key={pid}>
+              {(i === 0 || i === 5) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
+              <div className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: i < 5 ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
                 <div className="col" style={{ gap: 2 }}>
                   <button className="iconbtn" style={{ width: 30, height: 26 }} onClick={() => move(pid, -1)} aria-label="Move up" disabled={i === 0}>
                     <ArrowUp size={16} />
@@ -113,10 +115,9 @@ export default function Rotation() {
                   </button>
                 </div>
                 <Avatar p={p} />
-                <div className="grow" onClick={() => setEdit(pid)} style={{ cursor: 'pointer' }}>
-                  <div className="row" style={{ gap: 6 }}>
-                    <span className="bold ellipsis">{p.firstName[0]}. {p.lastName}</span>
-                    {i < 5 && <Tag tone="info">Starter</Tag>}
+                <div className="grow" role="button" tabIndex={0} aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`} onClick={() => setEdit(pid)} onKeyDown={activateOnKey(() => setEdit(pid))} style={{ cursor: 'pointer' }}>
+                  <div className="row" style={{ gap: 6, minWidth: 0 }}>
+                    <span className="bold ellipsis" style={{ minWidth: 0 }}>{p.firstName[0]}. {p.lastName}</span>
                     {closers.includes(pid) && <Tag>Closer</Tag>}
                     {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
                   </div>
@@ -127,11 +128,12 @@ export default function Rotation() {
                     <div style={{ width: `${(m / 44) * 100}%` }} />
                   </div>
                 </div>
-                <div className="col" style={{ alignItems: 'flex-end', gap: 2 }} onClick={() => setEdit(pid)}>
+                <div className="col" style={{ alignItems: 'flex-end', gap: 2, cursor: 'pointer' }} onClick={() => setEdit(pid)}>
                   <span className="display num" style={{ fontSize: 22 }}>{m}</span>
                   <Ovr v={p.ovr} size="sm" />
                 </div>
               </div>
+              </Fragment>
             );
           })}
         </div>

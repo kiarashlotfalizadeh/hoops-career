@@ -39,7 +39,7 @@ export default function TeamView() {
   }
   return (
     <main className="page" key={tid}>
-      <PageHeader title={team.abbrev} sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`} back />
+      <PageHeader title={team.name} sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`} back />
       <Hero league={league} tid={tid} />
       <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} />
       {tab === 'roster' && <RosterTab league={league} tid={tid} />}

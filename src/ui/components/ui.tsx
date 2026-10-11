@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, HelpCircle } from 'lucide-react';
+import { ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { ovrColor } from '../../core/ratings';
 import { FRANCHISES } from '../../core/teams';
 
 export function Card({ title, right, children, className = '', onClick, accent }: { title?: ReactNode; right?: ReactNode; children?: ReactNode; className?: string; onClick?: () => void; accent?: boolean }) {
   return (
-    <section className={`card ${accent ? 'accent' : ''} ${onClick ? 'clickable' : ''} ${className}`} onClick={onClick}>
+    <section
+      className={`card ${accent ? 'accent' : ''} ${onClick ? 'clickable' : ''} ${className}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? activateOnKey(onClick) : undefined}
+    >
       {(title || right) && (
         <div className="card-h">
           {typeof title === 'string' ? <h3>{title}</h3> : title}
@@ -18,6 +24,17 @@ export function Card({ title, right, children, className = '', onClick, accent }
       {children}
     </section>
   );
+}
+
+/** Enter/Space activation for clickable non-button elements (rows, cards). */
+export function activateOnKey(fn: () => void) {
+  return (e: ReactKeyboardEvent) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fn();
+    }
+  };
 }
 
 export function Ovr({ v, size = '' }: { v: number; size?: '' | 'sm' | 'lg' }) {
@@ -63,7 +80,7 @@ export function Chips<T extends string | number>({ value, options, onChange }: {
   return (
     <div className="chips">
       {options.map((o) => (
-        <button key={String(o.id)} className={`chip ${value === o.id ? 'on' : ''}`} onClick={() => onChange(o.id)}>
+        <button key={String(o.id)} className={`chip ${value === o.id ? 'on' : ''}`} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
           {o.label}
         </button>
       ))}
@@ -111,20 +128,91 @@ export function Bar({ value, max = 100, color, height = 6 }: { value: number; ma
   );
 }
 
+let openSheets = 0;
+
+/**
+ * Bottom sheet on phones, centred dialog on tablets. Focus moves in and is restored on close,
+ * Tab stays inside, Escape / the close button / a backdrop tap / a downward swipe dismiss it,
+ * and the page behind doesn't scroll.
+ */
 export function Sheet({ open, onClose, children, title }: { open: boolean; onClose: () => void; children: ReactNode; title?: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const [drag, setDrag] = useState(0);
+  const start = useRef<number | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const prev = document.activeElement as HTMLElement | null;
+    openSheets++;
+    document.body.classList.add('sheet-open');
+    ref.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRef.current();
+      if (e.key !== 'Tab' || !ref.current) return;
+      const f = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')];
+      if (!f.length) return;
+      const first = f[0];
+      const last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (--openSheets <= 0) {
+        openSheets = 0;
+        document.body.classList.remove('sheet-open');
+      }
+      prev?.focus?.({ preventScroll: true });
+    };
+  }, [open]);
+  useEffect(() => {
+    if (!open) setDrag(0);
+  }, [open]);
   if (!open) return null;
+  // swipe down from the top of the sheet to dismiss
+  const onTouchStart = (e: React.TouchEvent) => {
+    start.current = (ref.current?.scrollTop ?? 0) <= 0 ? e.touches[0].clientY : null;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (start.current === null) return;
+    setDrag(Math.max(0, e.touches[0].clientY - start.current));
+  };
+  const onTouchEnd = () => {
+    if (drag > 90) onClose();
+    else setDrag(0);
+    start.current = null;
+  };
   return createPortal(
     <>
       <div className="sheet-backdrop" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true">
+      <div
+        ref={ref}
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : 'Dialog'}
+        tabIndex={-1}
+        style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
         <div className="sheet-grip" />
-        {title && <h2 style={{ marginBottom: 12 }}>{title}</h2>}
+        <div className="sheet-head">
+          {title ? <h2 id={titleId}>{title}</h2> : <span />}
+          <button className="iconbtn sheet-close" onClick={onClose} aria-label="Close">
+            <X size={20} />
+          </button>
+        </div>
         {children}
       </div>
     </>,
@@ -218,20 +306,31 @@ export function StatTable<T>({ rows, cols, initialSort, rowKey, onRow, highlight
             {cols.map((c) => (
               <th
                 key={c.key}
+                scope="col"
                 className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''} ${sort?.key === c.key ? 'sorted' : ''}`}
                 style={{ minWidth: c.width }}
                 title={c.help}
+                aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
                 onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left ? 1 : -1 }))}
               >
-                {c.label}
-                {sort?.key === c.key ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
+                <button type="button" className="th-sort" aria-label={`Sort by ${c.help ?? c.label}`} onClick={(e) => e.preventDefault()}>
+                  {c.label}
+                  {sort?.key === c.key ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
+                </button>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <tr key={rowKey(r)} className={highlight?.(r) ? 'me' : ''} onClick={onRow ? () => onRow(r) : undefined} style={{ cursor: onRow ? 'pointer' : undefined }}>
+            <tr
+              key={rowKey(r)}
+              className={highlight?.(r) ? 'me' : ''}
+              onClick={onRow ? () => onRow(r) : undefined}
+              tabIndex={onRow ? 0 : undefined}
+              onKeyDown={onRow ? activateOnKey(() => onRow(r)) : undefined}
+              style={{ cursor: onRow ? 'pointer' : undefined }}
+            >
               {cols.map((c) => {
                 const v = c.get(r);
                 return (

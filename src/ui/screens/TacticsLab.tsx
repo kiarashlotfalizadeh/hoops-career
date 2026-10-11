@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Beaker, Check, Play } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
-import { labWorker } from '../../state/labClient';
+import { resetLab, withLab } from '../../state/labClient';
 import type { CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
 import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
@@ -41,6 +41,17 @@ export default function TacticsLab() {
   const [result, setResult] = useState<LabSummary | null>(null);
   const [baseResult, setBaseResult] = useState<LabSummary | null>(null);
   const [cands, setCands] = useState<CandidateResult[] | null>(null);
+  const mounted = useRef(true);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  // leaving mid-run stops the worker so the next visit isn't queued behind stale sims
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (busyRef.current) resetLab();
+    };
+  }, []);
   const [applied, setApplied] = useState<string[]>([]);
   const user = league.userTid;
   const scout = useMemo(() => scoutTeam(league, opp), [league, opp]);
@@ -57,25 +68,26 @@ export default function TacticsLab() {
       ensureRotation(league, opp);
       const b = sideFor(league, opp);
       const seed = (league.rng ^ (opp * 7919)) >>> 0;
-      const w = labWorker();
-      if (mode === 'project') {
-        setResult(await w.runLab({ a: sideFor(league, user), b, games, seed }));
-      } else if (mode === 'compare') {
-        const base = baseline ?? league.teams[user].tactics;
-        const [r0, r1] = await Promise.all([w.runLab({ a: sideFor(league, user, base), b, games, seed }), w.runLab({ a: sideFor(league, user), b, games, seed })]);
-        setBaseResult(r0);
-        setResult(r1);
-      } else {
-        const candidates = counterCandidates(league, user, opp);
-        const out = await w.evaluate(sideFor(league, user), b, candidates, Math.max(20, Math.round(games * 0.75)), seed);
-        setBaseResult(out.base);
-        setCands(out.results);
-      }
+      await withLab(async (w) => {
+        if (mode === 'project') {
+          setResult(await w.runLab({ a: sideFor(league, user), b, games, seed }));
+        } else if (mode === 'compare') {
+          const base = baseline ?? league.teams[user].tactics;
+          const [r0, r1] = await Promise.all([w.runLab({ a: sideFor(league, user, base), b, games, seed }), w.runLab({ a: sideFor(league, user), b, games, seed })]);
+          setBaseResult(r0);
+          setResult(r1);
+        } else {
+          const candidates = counterCandidates(league, user, opp);
+          const out = await w.evaluate(sideFor(league, user), b, candidates, Math.max(20, Math.round(games * 0.75)), seed);
+          setBaseResult(out.base);
+          setCands(out.results);
+        }
+      });
     } catch (e) {
       console.error(e);
-      useStore.getState().toast('The lab hit an error running sims.', 'bad');
+      if (mounted.current) useStore.getState().toast(`The lab could not finish: ${e instanceof Error ? e.message : 'unknown error'}`, 'bad');
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
 
@@ -151,7 +163,7 @@ export default function TacticsLab() {
       {!busy && !result && !cands && (
         <Empty>
           <Beaker size={28} style={{ opacity: 0.6 }} />
-          <div style={{ marginTop: 8 }}>Pick an opponent and run the sims.</div>
+          <div style={{ marginTop: 8 }}>Tap Run to simulate this matchup with your current plan.</div>
         </Empty>
       )}
 

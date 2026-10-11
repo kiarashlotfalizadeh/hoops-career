@@ -125,7 +125,7 @@ export function TeamScheduleList({ league, tid, h2hTid, collapse = true }: { lea
                 <div className="bold ellipsis">{opp.name}</div>
                 <div className="tiny dim ellipsis">
                   {typeLabel ? (
-                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                    <span style={{ color: 'var(--accent-text)', fontWeight: 700 }}>
                       {typeLabel}
                       {' · '}
                     </span>

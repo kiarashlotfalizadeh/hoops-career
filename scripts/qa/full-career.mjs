@@ -14,7 +14,7 @@ const t0 = Date.now();
 const log = (s) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${s}`);
 const shot = async (name, full = true) => { await page.waitForTimeout(400); await page.screenshot({ path: `${out}/${name}.png`, fullPage: full }); };
 const waitSim = async () => { await page.waitForTimeout(400); await page.waitForSelector('.simbar', { state: 'detached', timeout: 600000 }).catch(() => {}); await page.waitForTimeout(400); };
-const phase = async () => (await page.locator('.topbar .sub').first().textContent())?.trim();
+const phase = async () => `${await page.locator('.topbar').first().getAttribute('data-phase')} · ${(await page.locator('.topbar .sub').first().textContent())?.trim()}`;
 const play = async (label) => {
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await page.waitForTimeout(300);

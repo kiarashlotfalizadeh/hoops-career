@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useQueryParam } from '../league/shared';
 import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
 import type { Team } from '../../core/types';
@@ -21,7 +21,7 @@ const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string
 export default function Finances() {
   const league = useLeague();
   const loc = useLocation();
-  const [tab, setTab] = useState<Tab>(loc.pathname === '/owner' ? 'owner' : 'overview');
+  const [tab, setTab] = useQueryParam<Tab>('tab', loc.pathname === '/owner' ? 'owner' : 'overview', ['overview', 'budget', 'owner', 'history']);
   const team = league.teams[league.userTid];
   return (
     <main className="page">
@@ -144,7 +144,8 @@ function BudgetTab({ team }: { team: Team }) {
       icon: <GraduationCap size={18} />,
       effect: (lvl) => {
         const d = ((lvl - 50) / 50) * 0.5;
-        return `Player development ${d >= 0 ? '+' : ''}${d.toFixed(2)} rating pts per skill / year`;
+        if (Math.abs(d) < 0.005) return 'League-average player development';
+        return `Player development ${d > 0 ? '+' : ''}${d.toFixed(2)} rating pts per skill / year vs average`;
       },
       help: 'Assistant coaches, skills trainers and analytics staff. Better coaching makes every skill rating improve a little faster each offseason and during in-season development check-ins. Young players benefit most because they grow the most.',
     },
@@ -154,7 +155,8 @@ function BudgetTab({ team }: { team: Team }) {
       icon: <HeartPulse size={18} />,
       effect: (lvl) => {
         const f = (1.12 - 0.25 * (lvl / 100)) / (1.12 - 0.25 * 0.5) - 1;
-        return `Injuries last ${Math.abs(Math.round(f * 100))}% ${f <= 0 ? 'shorter' : 'longer'} than average`;
+        if (Math.round(f * 100) === 0) return 'League-average injury recovery';
+        return `Injuries last ${Math.abs(Math.round(f * 100))}% ${f < 0 ? 'shorter' : 'longer'} than average`;
       },
       help: 'Doctors, physios and sports science. A bigger health budget shortens injury recovery times and, above average, sometimes clears players a game early.',
     },
@@ -164,7 +166,8 @@ function BudgetTab({ team }: { team: Team }) {
       icon: <Building2 size={18} />,
       effect: (lvl) => {
         const fans = Math.round(((lvl - 50) / 500) * ARENA_CAPACITY);
-        return `${fans >= 0 ? '+' : ''}${fans.toLocaleString()} fans per home game vs average`;
+        if (fans === 0) return 'League-average fan demand';
+        return `${fans > 0 ? '+' : ''}${fans.toLocaleString()} fans per home game vs average`;
       },
       help: 'Arena upgrades, practice facility and fan experience. Better facilities raise demand for tickets, which means bigger crowds and more gate revenue.',
     },
@@ -194,7 +197,7 @@ function BudgetTab({ team }: { team: Team }) {
           <Card key={it.k}>
             <div className="row between" style={{ marginBottom: 8 }}>
               <div className="row" style={{ gap: 8 }}>
-                <span style={{ color: 'var(--accent)' }}>{it.icon}</span>
+                <span style={{ color: 'var(--accent-text)' }}>{it.icon}</span>
                 <h3 style={{ fontSize: 15 }}>{it.label}</h3>
                 <Help title={it.label}>
                   <p style={{ margin: 0 }}>{it.help}</p>
@@ -219,7 +222,7 @@ function BudgetTab({ team }: { team: Team }) {
               left="Bare bones"
               right="Best in league"
             />
-            <div className="small" style={{ marginTop: 6, color: lvl >= 50 ? 'var(--good)' : 'var(--warn)' }}>
+            <div className="small" style={{ marginTop: 6, color: lvl > 50 ? 'var(--good)' : lvl < 50 ? 'var(--warn)' : 'var(--text-2)' }}>
               {it.effect(lvl)}
             </div>
           </Card>

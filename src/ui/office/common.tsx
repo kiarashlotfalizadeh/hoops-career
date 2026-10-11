@@ -217,16 +217,3 @@ export function Callout({ tone, icon, children }: { tone?: 'good' | 'bad' | 'war
   );
 }
 
-/** Pick a readable accent from a team's colors (mirrors the shell's logic). */
-export function teamAccentColor(colors: [string, string, string]): string {
-  const info = (hex: string) => {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.slice(0, 2), 16) / 255;
-    const g = parseInt(h.slice(2, 4), 16) / 255;
-    const b = parseInt(h.slice(4, 6), 16) / 255;
-    return { l: 0.2126 * r + 0.7152 * g + 0.0722 * b, s: Math.max(r, g, b) - Math.min(r, g, b) };
-  };
-  const c = colors.map((x) => ({ x, ...info(x) })).filter((y) => y.l > 0.12 && y.l < 0.8);
-  c.sort((a, b) => b.s - a.s);
-  return c[0]?.x ?? '#3b82f6';
-}

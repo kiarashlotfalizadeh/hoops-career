@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useQueryParam } from '../league/shared';
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Lightbulb } from 'lucide-react';
 import { useLeague } from '../../state/store';
@@ -18,7 +19,7 @@ export default function GameView() {
   const g = league.games.find((x) => x.gid === Number(gid));
   const userGame = !!g && (g.home.tid === league.userTid || g.away.tid === league.userTid);
   const report = useMemo(() => (g && userGame && g.impacts ? buildGameReport(league, g) : null), [g, userGame, league]);
-  const [tab, setTab] = useState<Tab>(report ? 'report' : 'box');
+  const [tab, setTab] = useQueryParam<Tab>('tab', report ? 'report' : 'box', ['report', 'box', 'shots', 'flow', 'pbp']);
   if (!g) {
     return (
       <main className="page">

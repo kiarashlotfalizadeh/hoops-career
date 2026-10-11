@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Database, Shuffle } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
@@ -20,7 +20,15 @@ export default function NewLeague() {
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedLoaded, setSeedLoaded] = useState(false);
   const [kind, setKind] = useState<'real' | 'fictional'>('real');
-  const [step, setStep] = useState<Step>('type');
+  // steps live in the URL so the system Back button walks back through them
+  const [sp, setSp] = useSearchParams();
+  const step: Step = sp.get('step') === 'team' || sp.get('step') === 'setup' ? (sp.get('step') as Step) : 'type';
+  const setStep = (st: Step) => setSp(st === 'type' ? {} : { step: st });
+  const back = () => {
+    if (step === 'type') nav('/start');
+    else if ((window.history.state as { idx?: number } | null)?.idx) nav(-1);
+    else setStep(step === 'setup' ? 'team' : 'type');
+  };
   const [tid, setTid] = useState<number>(19);
   const [conf, setConf] = useState<'E' | 'W'>('E');
   const [name, setName] = useState('My League');
@@ -66,17 +74,29 @@ export default function NewLeague() {
   const create = async () => {
     setBusy(true);
     await new Promise((r) => setTimeout(r, 30));
-    const l = createLeague({ name: name || 'My League', userTid: tid, coachName: coach || 'Coach', settings, seed: kind === 'real' ? seed : null });
-    await saveLeague(l);
-    setLeague(l);
-    nav('/');
+    try {
+      const l = createLeague({ name: name || 'My League', userTid: tid, coachName: coach || 'Coach', settings, seed: kind === 'real' ? seed : null });
+      setLeague(l);
+      try {
+        await saveLeague(l);
+      } catch (e) {
+        // play on; autosave retries later and Settings shows the storage state
+        console.error(e);
+        useStore.getState().toast('Could not save to device storage yet. Free some space or leave private browsing.', 'bad');
+      }
+      nav('/');
+    } catch (e) {
+      console.error(e);
+      useStore.getState().toast('Could not create the league. Please try again.', 'bad');
+      setBusy(false);
+    }
   };
 
   const f = FRANCHISES[tid];
   return (
-    <main className="page" style={{ paddingBottom: 40 }}>
+    <main className="page standalone" style={{ paddingBottom: 40 }}>
       <div className="row">
-        <button className="iconbtn" onClick={() => (step === 'type' ? nav('/start') : setStep(step === 'setup' ? 'team' : 'type'))} aria-label="Back">
+        <button className="iconbtn" onClick={back} aria-label="Back">
           <ChevronLeft size={22} />
         </button>
         <h1 style={{ textTransform: 'uppercase', fontSize: 26 }}>New League</h1>
@@ -92,11 +112,11 @@ export default function NewLeague() {
               <div className="grow">
                 <h3>Real 2026-27 NBA</h3>
                 <div className="dim2 small" style={{ marginTop: 4 }}>
-                  Every team as signed on Basketball Reference's contracts page. Ratings derived from 2023-24 to 2025-26 per-game and advanced stats, then calibrated so players reproduce their real numbers in the engine.
+                  Opening-night rosters and contracts. Ratings come from three seasons of box scores, NBA.com play-by-play and impact data, then are calibrated so every player reproduces his real numbers in the engine.
                 </div>
                 {!seedLoaded && <div className="row small dim" style={{ marginTop: 8 }}><Spinner /> Loading rosters…</div>}
                 {seedLoaded && !seed && <div className="small warn" style={{ marginTop: 8 }}>Seed data is not bundled in this build yet. Use a fictional league for now.</div>}
-                {seed && <div className="small dim" style={{ marginTop: 8 }}>{seed.players.length} players · {seed.source}</div>}
+                {seed && <div className="small dim" style={{ marginTop: 8 }}>{seed.players.length} players · 30 teams · stats through 2025-26</div>}
               </div>
             </div>
           </Card>

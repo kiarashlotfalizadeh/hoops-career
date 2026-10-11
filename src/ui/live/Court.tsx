@@ -32,6 +32,8 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick }:
     let raf = 0;
     const canvas = ref.current!;
     const ctx = canvas.getContext('2d')!;
+    let drawn = '';
+    let lastScript: typeof state.current.script | undefined;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const s = state.current;
@@ -45,7 +47,12 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick }:
       }
       const dt = s.last ? Math.min(100, now - s.last) : 0;
       s.last = now;
-      if (!props.current.paused) s.t += dt * props.current.speed;
+      if (!props.current.paused && !s.done) s.t += dt * props.current.speed;
+      // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
+      const sig = `${canvas.width}|${s.t}|${s.done}`;
+      if (sig === drawn && s.script === lastScript) return;
+      drawn = sig;
+      lastScript = s.script;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const k = cssW / W_FT;
       drawCourt(ctx, cssW, cssH, k);

@@ -10,6 +10,9 @@ interface InjuryType {
   severity: Injury['severity'];
 }
 
+/** Injuries shorter than this skip the inbox (they still show on the roster and in rotations). */
+const MAIL_MIN_GAMES = 4;
+
 export const INJURY_TYPES: InjuryType[] = [
   { name: 'Sprained Ankle', weight: 22, min: 1, max: 8, severity: 'minor' },
   { name: 'Knee Soreness', weight: 12, min: 1, max: 5, severity: 'minor' },
@@ -56,7 +59,8 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;
   if (inj.gamesRemaining >= 5 || p.ovr >= 80) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
-  if (p.tid === league.userTid) {
+  // day-to-day knocks only show on the roster; the inbox is for absences that change plans
+  if (p.tid === league.userTid && inj.gamesRemaining >= MAIL_MIN_GAMES) {
     // a long absence for one of the top eight players is worth pausing a long sim for
     const rot = league.teams[p.tid].rotation;
     const top8 = [...rot.order].sort((a, b) => (rot.minutes[b] ?? 0) - (rot.minutes[a] ?? 0)).slice(0, 8);
@@ -80,7 +84,7 @@ export function healOneGame(league: League, p: Player, rng: Rng) {
   const extra = rng.chance((health - 50) / 250) ? 1 : 0;
   p.injury.gamesRemaining -= 1 + extra;
   if (p.injury.gamesRemaining <= 0) {
-    if (p.tid === league.userTid) {
+    if (p.tid === league.userTid && p.injury.gamesTotal >= MAIL_MIN_GAMES) {
       addInbox(league, { from: 'Medical Staff', subject: `${playerName(p)} is cleared`, body: `${playerName(p)} has recovered from his ${p.injury.type.toLowerCase()} and is available.`, tone: 'good', link: `/player/${p.pid}` });
     }
     p.injury = null;

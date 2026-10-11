@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useQueryParam } from '../league/shared';
+import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity, ListOrdered, Workflow } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
-import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col } from '../components/ui';
+import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col, activateOnKey } from '../components/ui';
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
@@ -26,7 +27,7 @@ export default function Roster() {
   const league = useLeague();
   const nav = useNavigate();
   const v = useStore((s) => s.v);
-  const [view, setView] = useState<View>('players');
+  const [view, setView] = useQueryParam<View>('view', 'players', ['players', 'ratings', 'stats', 'contracts']);
   const tid = league.userTid;
   const team = league.teams[tid];
   const roster = useMemo(() => rosterSorted(league, tid), [league, tid, v]);
@@ -102,13 +103,13 @@ export default function Roster() {
       />
       {view === 'players' && (
         <Card className="flush">
-          <div className="list">
+          <div className="list wide2">
             {roster.map((p, i) => {
               const pg = playerSeason(p, league.season);
               const role = team.tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
               const mins = team.rotation.minutes[p.pid] ?? 0;
               return (
-                <div key={p.pid} className="listrow clickable" onClick={() => nav(`/player/${p.pid}`)}>
+                <div key={p.pid} className="listrow clickable" role="button" tabIndex={0} onClick={() => nav(`/player/${p.pid}`)} onKeyDown={activateOnKey(() => nav(`/player/${p.pid}`))}>
                   <span className="tiny dim num" style={{ width: 14 }}>{i < 5 ? 'S' : i + 1}</span>
                   <Avatar p={p} />
                   <div className="grow">
@@ -145,7 +146,7 @@ export default function Roster() {
         <>
           <StatTable rows={roster} cols={contractCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
           <div className="small dim">
-            Cap {moneyM(cap.salaryCap)} · Tax line {moneyM(cap.luxuryTax)}. Orange = option year. Full cap sheet in <Link to="/office" style={{ color: 'var(--accent)' }}>Front Office</Link>.
+            Cap {moneyM(cap.salaryCap)} · Tax line {moneyM(cap.luxuryTax)}. Orange = option year. Full cap sheet in <Link to="/office" style={{ color: 'var(--accent-text)' }}>Front Office</Link>.
           </div>
         </>
       )}

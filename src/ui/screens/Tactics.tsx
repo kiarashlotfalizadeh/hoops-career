@@ -7,7 +7,7 @@ import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEM
 import { autoTactics, defPresetFit, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
-import { Avatar, Card, Chips, Help, Ovr, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
+import { Avatar, Card, Chips, Help, Ovr, PageHeader, Segmented, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
 import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
@@ -56,7 +56,7 @@ export default function Tactics() {
   const snapshot = useRef<TacticsT>(cloneTactics(t));
   const changed = JSON.stringify(snapshot.current) !== JSON.stringify(t);
   const players = useMemo(() => rosterSorted(league, league.userTid), [league, v]);
-  const healthy = players.filter((p) => !p.injury);
+  const healthy = useMemo(() => players.filter((p) => !p.injury), [players]);
   const prof = useMemo(() => rosterProfile(healthy), [healthy]);
   const offFit = useMemo(() => fitScale(offPresetFit(prof)), [prof]);
   const defFit = useMemo(() => fitScale(defPresetFit(prof)), [prof]);
@@ -116,10 +116,11 @@ export default function Tactics() {
       {tab === 'playbook' && (
         <>
           <Card title="Offensive playbook" right={<Help title="Playbooks">A playbook sets pace, shot profile and which actions you run. "Fit" scores how well your current roster suits it: creators, shooters, passers, bigs and athleticism. You can fine-tune any playbook in the Offense tab.</Help>}>
-            <div className="col" style={{ gap: 8 }}>
+            <div className="col grid-md2" style={{ gap: 8 }}>
               {OFF_PRESETS.map((p) => (
                 <button
                   key={p.id}
+                  aria-pressed={t.offPreset === p.id}
                   className="card tight"
                   style={{ textAlign: 'left', borderColor: t.offPreset === p.id ? 'var(--accent)' : undefined, background: t.offPreset === p.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined }}
                   onClick={() =>
@@ -140,10 +141,11 @@ export default function Tactics() {
             </div>
           </Card>
           <Card title="Defensive identity">
-            <div className="col" style={{ gap: 8 }}>
+            <div className="col grid-md2" style={{ gap: 8 }}>
               {DEF_PRESETS.map((p) => (
                 <button
                   key={p.id}
+                  aria-pressed={t.defPreset === p.id}
                   className="card tight"
                   style={{ textAlign: 'left', borderColor: t.defPreset === p.id ? 'var(--accent)' : undefined, background: t.defPreset === p.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined }}
                   onClick={() =>
@@ -354,7 +356,7 @@ function RolesTab() {
             const role = t.offense.roles[pl.pid] ?? archetype(pl.ratings).role;
             const fr = (t.offense.freedom[pl.pid] ?? 0) as ShotFreedom;
             return (
-              <div key={pl.pid} className="listrow clickable" onClick={() => setPick(pl.pid)}>
+              <div key={pl.pid} className="listrow clickable" role="button" tabIndex={0} onClick={() => setPick(pl.pid)} onKeyDown={activateOnKey(() => setPick(pl.pid))}>
                 <Avatar p={pl} />
                 <div className="grow">
                   <div className="bold small ellipsis">{pl.firstName[0]}. {pl.lastName}</div>

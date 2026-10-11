@@ -1,17 +1,18 @@
+import { useQueryParam } from '../league/shared';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
-import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrRaw, tierLabel, toDisplay, type Composites } from '../../core/ratings';
+import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel, type Composites } from '../../core/ratings';
 import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { LineChart } from '../components/charts';
 import { f1, moneyM, p1, perGame, signed } from '../stats';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
-import { FOCUS_META } from '../../core/league/progression';
+import { FOCUS_META, ratingMeans } from '../../core/league/progression';
 import { askingContract, marketSalary, releasePlayer } from '../../core/league/contracts';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
@@ -54,20 +55,34 @@ function useSkillPercentiles(league: League) {
         if (arr[mid] < val) lo = mid + 1;
         else hi = mid;
       }
-      return arr.length ? Math.round((lo / arr.length) * 100) : 50;
+      return arr.length ? Math.min(99, Math.max(1, Math.round((lo / arr.length) * 100))) : 50;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [league, v]);
 }
 
+/** Median OVR of rostered players (the display scale puts the 50th percentile here). */
+const AVERAGE_OVR = 74;
+
+/**
+ * Where a player's OVR comes from: each attribute's weighted gap to the league average,
+ * scaled so the parts add up to his distance from an average player.
+ */
 function ovrContributions(league: League, p: Player) {
-  const base = ovrRaw(p.ratings);
-  const disp = toDisplay(base, league.ovrScale);
-  return RATING_META.map((m) => {
-    const r = { ...p.ratings, [m.key]: 50 };
-    const without = toDisplay(ovrRaw(r), league.ovrScale);
-    return { key: m.key, label: m.label, delta: disp - without, raw: base - ovrRaw(r) };
-  }).sort((a, b) => b.raw - a.raw);
+  const means = league.ratingAnchors ?? ratingMeans(league);
+  const w = ovrWeights(p.ratings);
+  const parts = RATING_META.map((m) => {
+    const k = m.key as RatingKey;
+    return { key: m.key, label: m.label, raw: w[k] * (p.ratings[k] - (means[k] ?? 50)) };
+  });
+  const total = parts.reduce((a, x) => a + x.raw, 0);
+  const gap = p.ovr - AVERAGE_OVR;
+  // display points per raw point: proportional share of the gap when the signs agree
+  const k = Math.abs(total) > 0.5 && Math.sign(total) === Math.sign(gap) ? gap / total : 1.6;
+  return {
+    gap,
+    parts: parts.map((x) => ({ ...x, delta: Math.round(x.raw * k) })).sort((a, b) => b.raw - a.raw),
+  };
 }
 
 function seasonsOf(p: Player) {
@@ -99,8 +114,9 @@ export default function PlayerView() {
   const nav = useNavigate();
   const { pid } = useParams();
   const p = league.players[Number(pid)];
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useQueryParam<Tab>('tab', 'overview', ['overview', 'ratings', 'stats', 'log', 'dev']);
   const [confirmRelease, setConfirmRelease] = useState(false);
+  const [openRating, setOpenRating] = useState<string | null>(null);
   const pctile = useSkillPercentiles(league);
   if (!p) {
     return (
@@ -198,23 +214,24 @@ export default function PlayerView() {
           <div className="md-grid2">
             <Card title="Why he's a" right={<Ovr v={p.ovr} size="sm" />}>
               <div className="small dim" style={{ marginBottom: 8 }}>
-                Overall measures on-court value on a 40-99 scale. These ratings move it most compared with a league-average player:
+                {contribs.gap >= 0 ? `${contribs.gap} points above` : `${-contribs.gap} points below`} an average NBA player ({AVERAGE_OVR}). Biggest reasons, in OVR points:
               </div>
               <div className="col" style={{ gap: 6 }}>
-                {contribs.slice(0, 4).map((x) => (
+                {contribs.parts.filter((x) => x.delta > 0).slice(0, 4).map((x) => (
                   <div key={x.key} className="row between small">
                     <span>{x.label}</span>
-                    <span className="good num">+{Math.max(0, x.delta)}</span>
+                    <span className="good num">+{x.delta}</span>
                   </div>
                 ))}
                 <div className="divider" />
-                {contribs
+                {contribs.parts
+                  .filter((x) => x.delta < 0)
                   .slice(-3)
                   .reverse()
                   .map((x) => (
                     <div key={x.key} className="row between small">
                       <span>{x.label}</span>
-                      <span className="bad num">{Math.min(0, x.delta)}</span>
+                      <span className="bad num">{x.delta}</span>
                     </div>
                   ))}
               </div>
@@ -325,28 +342,28 @@ export default function PlayerView() {
 
       {tab === 'ratings' && (
         <>
+          <div className="tiny dim" style={{ margin: '0 2px 8px' }}>Tap a rating to see what it does in the engine.</div>
           {(['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const).map((g) => (
             <Card key={g} title={g}>
               <div className="col" style={{ gap: 6 }}>
                 {RATING_META.filter((m) => m.group === g).map((m) => {
                   const val = attrDisplay(p.ratings[m.key as RatingKey]);
                   const prev = p.ratingsHistory.length > 1 ? attrDisplay(p.ratingsHistory[p.ratingsHistory.length - 2].r[m.key as RatingKey]) : null;
+                  const open = openRating === m.key;
                   return (
-                    <div key={m.key} className="ratingrow" style={{ gridTemplateColumns: '108px 1fr 54px' }}>
-                      <span className="row" style={{ gap: 6 }}>
+                    <div key={m.key}>
+                      <button className="ratingrow block" style={{ gridTemplateColumns: '108px 1fr 54px', width: '100%', textAlign: 'left' }} onClick={() => setOpenRating(open ? null : m.key)} aria-expanded={open}>
                         <span className="dim2">{m.label}</span>
-                      </span>
-                      <Bar value={((val - 40) / 59) * 100} color={val >= 85 ? 'var(--tier-elite)' : val >= 75 ? 'var(--good)' : val >= 64 ? 'var(--info)' : 'var(--text-dim)'} />
-                      <span className="num right bold">
-                        {val}
-                        {prev !== null && val !== prev && <span className={`tiny ${val > prev ? 'good' : 'bad'}`}> {val > prev ? '+' : ''}{val - prev}</span>}
-                      </span>
+                        <Bar value={((val - 40) / 59) * 100} color={val >= 85 ? 'var(--tier-elite)' : val >= 75 ? 'var(--good)' : val >= 64 ? 'var(--info)' : 'var(--text-dim)'} />
+                        <span className="num right bold">
+                          {val}
+                          {prev !== null && val !== prev && <span className={`tiny ${val > prev ? 'good' : 'bad'}`}> {val > prev ? '+' : ''}{val - prev}</span>}
+                        </span>
+                      </button>
+                      {open && <div className="tiny dim fade-in" style={{ padding: '2px 0 6px' }}>{m.help}</div>}
                     </div>
                   );
                 })}
-              </div>
-              <div className="tiny dim" style={{ marginTop: 8 }}>
-                {RATING_META.filter((m) => m.group === g).map((m) => `${m.label}: ${m.help}`).join(' ')}
               </div>
             </Card>
           ))}

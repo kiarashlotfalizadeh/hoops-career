@@ -10,7 +10,7 @@ import { draftOrder, nextPick } from '../../core/league/draft';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet } from '../components/ui';
+import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet, activateOnKey } from '../components/ui';
 import { CapBar, CenterBar, Gauge, SecTitle, capSeason, contractYearsLabel, fmtM, isOffseason, ownerVerdict, playerMeta, shortSeason } from '../office/common';
 
 interface Tile {
@@ -340,7 +340,7 @@ function Spotlight({ league }: { league: League }) {
             Trades are frozen until the season ends. {exp.length ? `${exp.length} of your contracts expire this summer.` : 'None of your contracts expire this summer.'}
           </div>
           {exp.length > 0 && (
-            <Link to="/resign" className="small bold" style={{ color: 'var(--accent)', display: 'inline-block', marginTop: 8 }}>
+            <Link to="/resign" className="small bold" style={{ color: 'var(--accent-text)', display: 'inline-block', marginTop: 8 }}>
               Preview expiring contracts →
             </Link>
           )}
@@ -413,14 +413,14 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
               const exp = contractExp(p.contract);
               const anySalary = seasons.some((s) => salaryFor(p, s) > 0);
               return (
-                <tr key={p.pid} className="clickable" onClick={() => onPick(p.pid)}>
+                <tr key={p.pid} className="clickable" tabIndex={0} onClick={() => onPick(p.pid)} onKeyDown={activateOnKey(() => onPick(p.pid))}>
                   <td className="l sticky">
                     <div className="row" style={{ gap: 5 }}>
                       <span className="fo-name small" style={{ maxWidth: 96 }}>
                         {p.firstName[0]}. {p.lastName}
                       </span>
-                      {p.contract.rookie && <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 9 }}>R</span>}
-                      {p.injury && <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 9 }}>INJ</span>}
+                      {p.contract.rookie && <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>R</span>}
+                      {p.injury && <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>INJ</span>}
                     </div>
                     <div className="tiny dim">
                       {p.pos} · {league.season - p.bornYear}

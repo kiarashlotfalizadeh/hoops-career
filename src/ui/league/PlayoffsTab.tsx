@@ -449,7 +449,7 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
               <span className="small">
                 {league.teams[upcoming.away].abbrev} @ {league.teams[upcoming.home].abbrev}
               </span>
-              <span className="tiny" style={{ color: 'var(--accent)', fontWeight: 700 }}>
+              <span className="tiny" style={{ color: 'var(--accent-text)', fontWeight: 700 }}>
                 {upcoming.day === league.day ? 'Today' : fmtDate(league.season, upcoming.day)}
               </span>
             </div>

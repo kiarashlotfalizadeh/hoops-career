@@ -112,4 +112,4 @@ export const f0 = (v: number) => (isFinite(v) ? v.toFixed(0) : '-');
 export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '-');
 export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '-');
 export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '-');
-export const moneyM = (k: number, d = 1) => `$${(k / 1000).toFixed(d)}M`;
+export const moneyM = (k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;

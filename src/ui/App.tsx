@@ -1,49 +1,42 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
-import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
 import { useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague } from '../state/persistence';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
+import { confStandings } from '../core/league/standings';
+import type { League } from '../core/types';
+import { ordinal } from './league/shared';
 import { TeamLogo } from './components/TeamLogo';
 import { Sheet, Spinner } from './components/ui';
 import { flowActions } from './flow';
 import { useFlowRunner } from './useFlow';
+import { lazyRetry } from './lazyRetry';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { applyAccent } from './teamColors';
 
-const Start = lazy(() => import('./screens/Start'));
-const NewLeague = lazy(() => import('./screens/NewLeague'));
-const Home = lazy(() => import('./screens/Home'));
-const Roster = lazy(() => import('./screens/Roster'));
-const PlayerView = lazy(() => import('./screens/PlayerView'));
-const Rotation = lazy(() => import('./screens/Rotation'));
-const Tactics = lazy(() => import('./screens/Tactics'));
-const TacticsLab = lazy(() => import('./screens/TacticsLab'));
-const Live = lazy(() => import('./screens/Live'));
-const GameView = lazy(() => import('./screens/GameView'));
-const LeagueHub = lazy(() => import('./screens/LeagueHub'));
-const TeamView = lazy(() => import('./screens/TeamView'));
-const Office = lazy(() => import('./screens/Office'));
-const Trade = lazy(() => import('./screens/Trade'));
-const FreeAgents = lazy(() => import('./screens/FreeAgents'));
-const Resign = lazy(() => import('./screens/Resign'));
-const Draft = lazy(() => import('./screens/Draft'));
-const Finances = lazy(() => import('./screens/Finances'));
-const Inbox = lazy(() => import('./screens/Inbox'));
-const Settings = lazy(() => import('./screens/Settings'));
-const History = lazy(() => import('./screens/History'));
-
-export function teamAccent(colors: [string, string, string]): string {
-  const lum = (hex: string) => {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.slice(0, 2), 16) / 255;
-    const g = parseInt(h.slice(2, 4), 16) / 255;
-    const b = parseInt(h.slice(4, 6), 16) / 255;
-    return { l: 0.2126 * r + 0.7152 * g + 0.0722 * b, s: Math.max(r, g, b) - Math.min(r, g, b) };
-  };
-  const cands = colors.map((c) => ({ c, ...lum(c) })).filter((x) => x.l > 0.12 && x.l < 0.8);
-  cands.sort((a, b) => b.s - a.s);
-  return cands[0]?.c ?? '#3b82f6';
-}
+const Start = lazyRetry(() => import('./screens/Start'));
+const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
+const Home = lazyRetry(() => import('./screens/Home'));
+const Roster = lazyRetry(() => import('./screens/Roster'));
+const PlayerView = lazyRetry(() => import('./screens/PlayerView'));
+const Rotation = lazyRetry(() => import('./screens/Rotation'));
+const Tactics = lazyRetry(() => import('./screens/Tactics'));
+const TacticsLab = lazyRetry(() => import('./screens/TacticsLab'));
+const Live = lazyRetry(() => import('./screens/Live'));
+const GameView = lazyRetry(() => import('./screens/GameView'));
+const LeagueHub = lazyRetry(() => import('./screens/LeagueHub'));
+const TeamView = lazyRetry(() => import('./screens/TeamView'));
+const Office = lazyRetry(() => import('./screens/Office'));
+const Trade = lazyRetry(() => import('./screens/Trade'));
+const FreeAgents = lazyRetry(() => import('./screens/FreeAgents'));
+const Resign = lazyRetry(() => import('./screens/Resign'));
+const Draft = lazyRetry(() => import('./screens/Draft'));
+const Finances = lazyRetry(() => import('./screens/Finances'));
+const Inbox = lazyRetry(() => import('./screens/Inbox'));
+const Settings = lazyRetry(() => import('./screens/Settings'));
+const History = lazyRetry(() => import('./screens/History'));
 
 function Boot({ children }: { children: ReactNode }) {
   const league = useStore((s) => s.league);
@@ -74,10 +67,40 @@ function Boot({ children }: { children: ReactNode }) {
   const userTid = useStore((s) => s.league?.userTid);
   useEffect(() => {
     const t = league && userTid !== undefined ? league.teams[userTid] : undefined;
-    document.documentElement.style.setProperty('--accent', t ? teamAccent(t.colors) : '#3b82f6');
+    applyAccent(t ? t.colors : null);
   }, [league, userTid]);
   if (!ready) return <div className="empty" style={{ marginTop: '40vh' }}>Loading…</div>;
   return <>{children}</>;
+}
+
+/** One short line under the team name: where the season stands, sized to fit a phone. */
+function statusLine(league: League): string {
+  const date = fmtDate(league.season, league.day);
+  const t = league.teams[league.userTid];
+  switch (league.phase) {
+    case 'preseason':
+      return `Preseason · ${seasonLabel(league.season)}`;
+    case 'regular': {
+      const ts = curTeamSeason(league, league.userTid);
+      if (ts.won + ts.lost === 0) return `${date} · Opening week`;
+      const rank = confStandings(league, t.conf).findIndex((r) => r.tid === t.tid) + 1;
+      return `${date} · ${ordinal(rank)} ${t.conf === 'E' ? 'East' : 'West'}`;
+    }
+    case 'playin':
+      return `Play-in · ${date}`;
+    case 'playoffs':
+      return `Playoffs · ${date}`;
+    case 'draftLottery':
+      return `Draft lottery · ${league.season}`;
+    case 'draft':
+      return `${league.season} NBA Draft`;
+    case 'resign':
+      return `Re-sign period · ${league.season}`;
+    case 'freeAgency':
+      return `Free agency · day ${league.faDay + 1}`;
+    default:
+      return PHASE_LABEL[league.phase] ?? '';
+  }
 }
 
 function TopBar() {
@@ -86,28 +109,28 @@ function TopBar() {
   const [open, setOpen] = useState(false);
   const run = useFlowRunner();
   const sim = useStore((s) => s.sim);
+  const v = useStore((s) => s.v);
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
-  const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
-  const actions = flowActions(league);
+  // standings scans every game: recompute per league change, not per render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const status = useMemo(() => statusLine(league), [league, v]);
+  const actions = open ? flowActions(league) : [];
   return (
-    <header className="topbar">
+    <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
-        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')} aria-label="Home">
+        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')} aria-label={`${t.region} ${t.name}, ${ts.won}-${ts.lost}, ${status}. Home`}>
           <TeamLogo tid={t.tid} size={34} />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
               {t.abbrev} <span className="num">{ts.won}-{ts.lost}</span>
             </div>
-            <div className="sub ellipsis">
-              {seasonLabel(league.season)} · {PHASE_LABEL[league.phase]}
-              {inSeason ? ` · ${fmtDate(league.season, league.day)}` : ''}
-            </div>
+            <div className="sub ellipsis">{status}</div>
           </div>
         </button>
         <div className="grow" />
-        <button className="iconbtn" onClick={() => nav('/inbox')} aria-label="Inbox">
+        <button className="iconbtn" onClick={() => nav('/inbox')} aria-label={unread ? `Inbox, ${unread} unread` : 'Inbox'}>
           <Bell size={20} />
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
         </button>
@@ -141,23 +164,30 @@ function TopBar() {
   );
 }
 
+const NAV_ITEMS = [
+  { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game'] },
+  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/player'] },
+  { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab'] },
+  { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
+  { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
+];
+
+/** Bottom tabs; sub-screens light up the section they belong to. */
 function BottomNav() {
-  const items = [
-    { to: '/', label: 'Home', icon: HomeIcon, end: true },
-    { to: '/roster', label: 'Team', icon: Users },
-    { to: '/tactics', label: 'Tactics', icon: Workflow },
-    { to: '/league', label: 'League', icon: Trophy },
-    { to: '/office', label: 'Office', icon: Briefcase },
-  ];
+  const { pathname } = useLocation();
+  const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : pathname.startsWith(it.to))) ?? NAV_ITEMS.find((it) => it.also.some((p) => pathname.startsWith(p)));
   return (
-    <nav className="bottomnav">
+    <nav className="bottomnav" aria-label="Main">
       <div className="bottomnav-inner">
-        {items.map((it) => (
-          <NavLink key={it.to} to={it.to} end={it.end} className={({ isActive }) => `navitem ${isActive ? 'active' : ''}`}>
-            <it.icon size={21} />
-            {it.label}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map((it) => {
+          const active = section === it;
+          return (
+            <NavLink key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined}>
+              <it.icon size={21} />
+              {it.label}
+            </NavLink>
+          );
+        })}
       </div>
     </nav>
   );
@@ -169,7 +199,7 @@ function SimBar() {
   if (!sim) return null;
   const pct = Math.min(100, (sim.done / Math.max(1, sim.total)) * 100);
   return (
-    <div className="simbar fade-in">
+    <div className="simbar fade-in" role="status" aria-live="polite">
       <Spinner />
       <div className="grow">
         <div className="small bold">
@@ -189,7 +219,7 @@ function SimBar() {
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
   return (
-    <div className="toasts">
+    <div className="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} className={`toast ${t.tone}`}>
           {t.text}
@@ -199,11 +229,23 @@ function Toasts() {
   );
 }
 
+const scrollPositions = new Map<string, number>();
+
+/** New screens start at the top; Back/Forward return to where you were on that screen. */
 function ScrollTop() {
   const loc = useLocation();
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [loc.pathname]);
+  const type = useNavigationType();
+  useLayoutEffect(() => {
+    const key = loc.key;
+    const y = type === 'POP' ? scrollPositions.get(key) ?? 0 : 0;
+    window.scrollTo(0, y);
+    // lazy screens may render after this; try again once they have height
+    const timers = y ? [60, 200, 450].map((ms) => setTimeout(() => window.scrollY < y - 2 && window.scrollTo(0, y), ms)) : [];
+    return () => {
+      timers.forEach(clearTimeout);
+      scrollPositions.set(key, window.scrollY);
+    };
+  }, [loc.key, type]);
   return null;
 }
 
@@ -214,15 +256,17 @@ function LeagueTabRedirect() {
 
 function GameShell() {
   const league = useStore((s) => s.league);
+  const loc = useLocation();
   if (!league) return <Navigate to="/start" replace />;
   return (
     <div className="app">
       <TopBar />
+      <ErrorBoundary scope="screen" key={loc.pathname}>
       <Suspense fallback={<div className="empty">Loading…</div>}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/roster" element={<Roster />} />
-          <Route path="/player/:pid" element={<PlayerView />} />
+          <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
           <Route path="/rotation" element={<Rotation />} />
           <Route path="/tactics" element={<Tactics />} />
           <Route path="/lab" element={<TacticsLab />} />
@@ -244,6 +288,7 @@ function GameShell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
       <SimBar />
       <BottomNav />
     </div>
@@ -253,6 +298,7 @@ function GameShell() {
 export function App() {
   return (
     <HashRouter>
+      <ErrorBoundary>
       <ScrollTop />
       <Boot>
         <Suspense fallback={<div className="empty">Loading…</div>}>
@@ -264,6 +310,7 @@ export function App() {
         </Suspense>
         <Toasts />
       </Boot>
+      </ErrorBoundary>
     </HashRouter>
   );
 }

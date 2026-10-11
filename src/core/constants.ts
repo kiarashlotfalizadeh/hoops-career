@@ -73,7 +73,8 @@ export const PHASE_LABEL: Record<string, string> = {
 export const seasonLabel = (season: number) => `${season - 1}-${String(season % 100).padStart(2, '0')}`;
 
 export const money = (k: number, digits = 1) => {
-  const m = k / 1000;
-  if (Math.abs(m) >= 1) return `$${m.toFixed(digits)}M`;
-  return `$${Math.round(k)}K`;
+  const sign = k < 0 ? '-' : '';
+  const m = Math.abs(k) / 1000;
+  if (m >= 1) return `${sign}$${m.toFixed(digits)}M`;
+  return `${sign}$${Math.round(Math.abs(k))}K`;
 };

@@ -6,26 +6,38 @@ import { useStore } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
-import { Card, Empty, Sheet } from '../components/ui';
+import { Card, Empty, Sheet, activateOnKey } from '../components/ui';
 
 export default function Start() {
   const nav = useNavigate();
   const setLeague = useStore((s) => s.setLeague);
   const [leagues, setLeagues] = useState<LeagueMeta[] | null>(null);
   const [confirm, setConfirm] = useState<LeagueMeta | null>(null);
-  const refresh = () => listLeagues().then(setLeagues).catch(() => setLeagues([]));
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () =>
+    listLeagues()
+      .then(setLeagues)
+      .catch((e) => {
+        console.error(e);
+        setError('Saved leagues could not be read from device storage (private browsing or storage blocked).');
+        setLeagues([]);
+      });
   useEffect(() => {
     void refresh();
   }, []);
   const open = async (id: string) => {
-    const l = await loadLeague(id);
-    if (l) {
+    try {
+      const l = await loadLeague(id);
+      if (!l) throw new Error('missing');
       setLeague(l);
       nav('/');
+    } catch (e) {
+      console.error(e);
+      useStore.getState().toast('That save could not be opened. It may be damaged; you can delete it.', 'bad');
     }
   };
   return (
-    <main className="page" style={{ paddingBottom: 40 }}>
+    <main className="page standalone" style={{ paddingBottom: 40 }}>
       <div className="col" style={{ alignItems: 'center', textAlign: 'center', marginTop: 28, gap: 6 }}>
         <div className="row" style={{ gap: 6 }}>
           {[19, 13, 20, 1, 7].map((tid) => (
@@ -44,13 +56,13 @@ export default function Start() {
         {leagues === null ? (
           <Empty>Loading…</Empty>
         ) : leagues.length === 0 ? (
-          <Empty>No saved leagues yet.</Empty>
+          <Empty>{error ?? 'No saved leagues yet.'}</Empty>
         ) : (
           <div className="list" style={{ margin: '0 -14px' }}>
             {leagues.map((m) => {
               const tid = FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
               return (
-                <div key={m.id} className="listrow clickable" onClick={() => void open(m.id)}>
+                <div key={m.id} className="listrow clickable" role="button" tabIndex={0} onClick={() => void open(m.id)} onKeyDown={activateOnKey(() => void open(m.id))}>
                   <TeamLogo tid={tid >= 0 ? tid : 0} size={38} />
                   <div className="grow">
                     <div className="bold ellipsis">{m.name}</div>

@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
-import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
+import { ordinal } from '../league/shared';
 import { userGameOnDay } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Kpi, Ovr } from '../components/ui';
+import { Card, Kpi, Ovr } from '../components/ui';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
 import { f1, playerSeason, signed, teamRatings } from '../stats';
@@ -129,7 +130,7 @@ export default function Home() {
                   </div>
                 </div>
               ) : null}
-              <Link to={`/lab?opp=${oppTid}`} className="small" style={{ color: 'var(--accent)', fontWeight: 650 }}>
+              <Link to={`/lab?opp=${oppTid}`} className="small" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
                 Build a game plan in the Tactics Lab →
               </Link>
             </div>
@@ -175,7 +176,7 @@ export default function Home() {
 
       {inSeason && (
         <div className="grid4">
-          <Kpi k="Record" v={`${ts.won}-${ts.lost}`} sub={myRank >= 0 ? `${myRank + 1}${['st', 'nd', 'rd'][myRank] ?? 'th'} in ${team.conf === 'E' ? 'East' : 'West'}` : ''} />
+          <Kpi k="Record" v={`${ts.won}-${ts.lost}`} sub={myRank >= 0 ? `${ordinal(myRank + 1)} in ${team.conf === 'E' ? 'East' : 'West'}` : ''} />
           <Kpi k="Off Rtg" v={f1(tr.ortg)} />
           <Kpi k="Def Rtg" v={f1(tr.drtg)} />
           <Kpi k="Net" v={signed(tr.net)} color={tr.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
@@ -232,26 +233,26 @@ export default function Home() {
         </Card>
       </div>
 
-      <div className="md-grid2">
-        <Card title="Team leaders">
-          {leaders.every((l) => !l.best) ? (
-            <div className="small dim">No games played yet.</div>
-          ) : (
-            <div className="grid3">
-              {leaders.map(({ k, best }) => (
-                <Link key={k} to={best ? `/player/${best.pid}` : '/roster'} className="kpi">
-                  <span className="k">{k}</span>
-                  <span className="v">{best ? f1(best.v) : '-'}</span>
-                  <span className="tiny dim ellipsis">{best?.name ?? ''}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
-        <Card title="Recent games">
-          {recent.length === 0 ? (
-            <Empty>No games yet.</Empty>
-          ) : (
+      {recent.length === 0 ? (
+        <SeasonOutlook league={league} />
+      ) : (
+        <div className="md-grid2">
+          <Card title="Team leaders">
+            {leaders.every((l) => !l.best) ? (
+              <div className="small dim">No games played yet.</div>
+            ) : (
+              <div className="grid3">
+                {leaders.map(({ k, best }) => (
+                  <Link key={k} to={best ? `/player/${best.pid}` : '/roster'} className="kpi">
+                    <span className="k">{k}</span>
+                    <span className="v">{best ? f1(best.v) : '-'}</span>
+                    <span className="tiny dim ellipsis">{best?.name ?? ''}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card title="Recent games">
             <div className="col" style={{ gap: 6 }}>
               {recent.map((g) => {
                 const home = g.home.tid === league.userTid;
@@ -270,9 +271,9 @@ export default function Home() {
                 );
               })}
             </div>
-          )}
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
 
       <Card title="Top of the roster" right={<Link className="small dim" to="/roster">Roster</Link>}>
         <div className="hscroll">
@@ -295,6 +296,33 @@ export default function Home() {
   );
 }
 
+/** Before the first game: where the roster stacks up, by the same talent measure as Power rankings. */
+function SeasonOutlook({ league }: { league: League }) {
+  const team = league.teams[league.userTid];
+  const talent = (tid: number) => {
+    const top8 = teamPlayers(league, tid).map((p) => p.ovr).sort((a, b) => b - a).slice(0, 8);
+    return top8.reduce((a, x) => a + x, 0) / Math.max(1, top8.length);
+  };
+  const ranked = league.teams.map((t) => ({ tid: t.tid, conf: t.conf, v: talent(t.tid) })).sort((a, b) => b.v - a.v);
+  const leagueRank = ranked.findIndex((x) => x.tid === team.tid) + 1;
+  const confRank = ranked.filter((x) => x.conf === team.conf).findIndex((x) => x.tid === team.tid) + 1;
+  const roster = teamPlayers(league, team.tid);
+  const avgAge = roster.reduce((a, p) => a + age(league, p), 0) / Math.max(1, roster.length);
+  const pay = payroll(league, team.tid);
+  const cap = CAP_FOR(league);
+  const outlook = confRank <= 4 ? 'Contender: the talent to host a playoff series.' : confRank <= 6 ? 'Playoff team on paper, with little margin.' : confRank <= 10 ? 'Play-in range: coaching and health decide it.' : 'Long shot: development and the draft matter most.';
+  return (
+    <Card title="Season outlook" right={<Link className="small dim" to="/league?tab=standings&view=power">Power</Link>}>
+      <div className="grid3">
+        <Kpi k="Talent" v={`#${leagueRank}`} sub={`${ordinal(confRank)} in ${team.conf === 'E' ? 'East' : 'West'}`} />
+        <Kpi k="Payroll" v={`$${(pay / 1000).toFixed(0)}M`} sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} />
+        <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length} players`} />
+      </div>
+      <div className="small dim2" style={{ marginTop: 10 }}>{outlook}</div>
+    </Card>
+  );
+}
+
 function Onboarding() {
   const steps = [
     { to: '/tactics', title: 'Pick a game plan', body: 'Choose an offensive playbook and defensive identity. Fit scores show what suits your roster; every control explains itself.' },
@@ -307,7 +335,7 @@ function Onboarding() {
       <div className="col" style={{ gap: 10 }}>
         {steps.map((s, i) => (
           <Link key={s.title} to={s.to} className="row top" style={{ gap: 10 }}>
-            <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent)' }}>{i + 1}</span>
+            <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent-text)' }}>{i + 1}</span>
             <div className="grow">
               <div className="bold small">{s.title}</div>
               <div className="small dim">{s.body}</div>

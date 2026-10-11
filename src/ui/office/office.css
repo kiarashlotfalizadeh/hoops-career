@@ -40,7 +40,7 @@
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .fo-big {
   font-family: var(--display);
@@ -197,7 +197,7 @@
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   color: var(--text-2);
@@ -270,7 +270,7 @@
   display: flex;
   justify-content: space-between;
   margin-top: 4px;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -495,7 +495,7 @@ table.stats.fo-contracts tr.clickable td {
   margin-left: 3px;
   padding: 0 3px;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.04em;
   vertical-align: 1px;
@@ -620,7 +620,7 @@ table.stats.fo-contracts tr.clickable td {
   position: relative;
 }
 .fo-yr small {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;

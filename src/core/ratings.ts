@@ -122,6 +122,14 @@ const OVR_BIG: Ratings = {
   hnd: 0.047, pas: 0.071, oiq: 0.152, perD: 0.055, intD: 0.05, blk: 0.011, stl: 0, diq: 0.093, oreb: 0.004, dreb: 0.055,
 };
 
+/** Per-attribute OVR weights for this body type (the guard/big blend ovrRaw uses). */
+export function ovrWeights(r: Ratings): Ratings {
+  const big = clamp((r.hgt - 40) / 40, 0, 1);
+  const w = {} as Ratings;
+  for (const k of RATING_KEYS) w[k] = ((1 - big) * OVR_GUARD[k] + big * OVR_BIG[k]) / 0.94;
+  return w;
+}
+
 /** Size-aware blend of the guard and big weightings. */
 export function ovrRaw(r: Ratings): number {
   const big = clamp((r.hgt - 40) / 40, 0, 1);

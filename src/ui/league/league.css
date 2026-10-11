@@ -138,14 +138,14 @@
   line-height: 1.45;
 }
 .lg-link {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 650;
 }
 .lg-name-link {
   font-weight: 650;
 }
 .lg-name-link:active {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ------------------------------------------------------------------ standings table */
@@ -232,7 +232,7 @@
   right: 0;
   top: -7px;
   padding: 0 0 0 6px;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -386,7 +386,7 @@
   padding: 10px 12px;
   font-size: 12.5px;
   font-weight: 650;
-  color: var(--accent);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -447,7 +447,7 @@
   margin-bottom: 3px;
 }
 .lg-sb-st .live {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .lg-sb-t {
   display: grid;
@@ -545,7 +545,7 @@
 }
 .lg-lead-row.me .nm,
 .lg-lead-top.me .nm {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* StatTable name cell */
@@ -578,7 +578,7 @@
 }
 .bk-head span {
   text-align: center;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -663,7 +663,7 @@
   grid-template-columns: 14px 18px minmax(0, 1fr) 34px;
 }
 .bk-t .sd {
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--text-dim);
   text-align: right;
   font-weight: 700;
@@ -1127,7 +1127,7 @@
   font-weight: 700;
 }
 .lg-pstats .k {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--text-dim);

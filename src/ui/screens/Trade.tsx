@@ -376,8 +376,8 @@ function PlayerAsset({ league, p, season, on, onToggle }: { league: League; p: P
           <span className="fo-name small">
             {p.firstName[0]}. {p.lastName}
           </span>
-          {p.injury && <span className="tag bad" style={{ height: 16, fontSize: 9, padding: '0 4px' }}>INJ</span>}
-          {p.mood.tradeRequest && <span className="tag warn" style={{ height: 16, fontSize: 9, padding: '0 4px' }}>REQ</span>}
+          {p.injury && <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>INJ</span>}
+          {p.mood.tradeRequest && <span className="tag warn" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>REQ</span>}
         </div>
         <div className="fo-meta tiny">
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
