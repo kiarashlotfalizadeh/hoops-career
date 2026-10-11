@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { setLastLeagueId } from '../../state/persistence';
+import { canGoBack } from '../nav';
 
 interface State {
   error: Error | null;
@@ -36,7 +37,15 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
           <div className="tiny dim" style={{ wordBreak: 'break-word' }}>{error.message}</div>
           <div className="row wrap" style={{ marginTop: 4 }}>
             {screen && (
-              <button className="btn" onClick={() => { this.setState({ error: null }); window.history.back(); }}>
+              <button
+                className="btn"
+                onClick={() => {
+                  this.setState({ error: null });
+                  // opened by a deep link or a reload: there's no screen of the app to go back to
+                  if (canGoBack()) window.history.back();
+                  else window.location.replace('#/');
+                }}
+              >
                 Go back
               </button>
             )}
