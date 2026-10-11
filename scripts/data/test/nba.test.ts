@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { splitCsv } from '../nba/csv';
 import { rapm } from '../nba/rapm';
 import { crosswalk, normName } from '../nba/crosswalk';
+import { findCollege, type CollegeAgg } from '../nba/college';
 import type { Stint } from '../nba/pbp';
 import { Rng } from '../../../src/core/random';
 
@@ -57,4 +58,66 @@ describe('NBA.com data pipeline', () => {
     expect(map.get(3)).toBe('willija06');
     expect(map.get(4)).toBe('willija07');
   });
+
+  it('lets exact names claim their ids before near-miss spellings, whatever the order', () => {
+    // "Jeff Green" has no row of his own; surname + initial on the same team must not hand him Jalen's id
+    const { map, unmatched } = crosswalk(
+      [
+        { pid: 1, name: 'Jeff Green', teams: { 2026: 'HOU' } },
+        { pid: 2, name: 'Jalen Green', teams: { 2026: 'HOU' } },
+      ],
+      [{ id: 'greenja05', name: 'Jalen Green', season: 2026, team: 'HOU' }],
+    );
+    expect(map.get(2)).toBe('greenja05');
+    expect(map.has(1)).toBe(false);
+    expect(unmatched.map((p) => p.pid)).toEqual([1]);
+  });
+
+  it("finds a transfer's latest college season and tells same-name players apart", () => {
+    const season = (athleteId: string, team: string, s: number, min: number) => ({ ...blankCollege, athleteId, name: 'Sam Smith', team, season: s, min });
+    const all = new Map([
+      [
+        'sam smith',
+        [
+          season('1', 'Santa Clara Broncos', 2025, 700),
+          season('1', 'Ohio State Buckeyes', 2026, 800),
+          season('2', 'North Carolina Tar Heels', 2026, 900),
+          season('2', 'Arizona Wildcats', 2025, 750),
+        ],
+      ],
+    ]);
+    // the roster page lists every school; the latest season wins
+    expect(findCollege(all, 'Sam Smith', 'Santa Clara, Ohio State')).toMatchObject({ athleteId: '1', season: 2026 });
+    // "UNC" doesn't spell North Carolina, but the Arizona season identifies the same athlete
+    expect(findCollege(all, 'Sam Smith', 'Arizona, UNC')).toMatchObject({ athleteId: '2', team: 'North Carolina Tar Heels' });
+    expect(findCollege(all, 'Sam Smith', undefined)).toMatchObject({ athleteId: '2', season: 2026 });
+  });
 });
+
+const blankCollege: CollegeAgg = {
+  athleteId: '',
+  name: '',
+  team: '',
+  teamId: '',
+  season: 0,
+  games: 30,
+  min: 0,
+  fgm: 0,
+  fga: 0,
+  tpm: 0,
+  tpa: 0,
+  ftm: 0,
+  fta: 0,
+  orb: 0,
+  drb: 0,
+  ast: 0,
+  stl: 0,
+  blk: 0,
+  tov: 0,
+  pf: 0,
+  pts: 0,
+  teamFga: 0,
+  teamFta: 0,
+  teamTov: 0,
+  teamMin: 0,
+};

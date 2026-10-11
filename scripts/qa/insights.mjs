@@ -1,3 +1,6 @@
+// Tactics insights, the rotation and a Lab compare (blitz vs your plan) after a few games of a
+// fictional league, on a phone and a tablet. Works on any build (dev server or preview).
+// Usage: node scripts/qa/insights.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';

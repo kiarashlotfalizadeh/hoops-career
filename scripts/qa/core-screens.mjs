@@ -1,4 +1,6 @@
-// Drives the core coaching loop on a phone viewport and captures screenshots.
+// Drives the core coaching loop on a phone viewport and captures screenshots: tactics, rotation,
+// roster, the Lab (projection and counters), a live game and its report. Works on any build.
+// Usage: node scripts/qa/core-screens.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';

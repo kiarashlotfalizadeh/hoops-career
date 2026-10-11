@@ -24,6 +24,10 @@ on:
         default: false
 permissions:
   contents: write
+# two runs would race to push the seed to main and the pages to data-raw
+concurrency:
+  group: seed
+  cancel-in-progress: false
 jobs:
   seed:
     runs-on: ubuntu-latest
@@ -53,8 +57,10 @@ jobs:
       # always fresh: the injury report changes hourly and pick ownership with every trade
       - name: Fetch schedule, pick ownership, injuries and two-way contracts
         run: npm run data:fetch-extra -- --force
+      # also after a failed fetch (rate limits): the pages that did arrive aren't fetched again next time
       - name: Archive raw pages
-        if: ${{ !inputs.extras_only }}
+        id: archive
+        if: ${{ !cancelled() && !inputs.extras_only }}
         run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba --exclude=data/raw/extra data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
       # allowed to fail so the fetched pages still reach data-raw below; the last step fails the run
       - name: Build seed (parse, derive, calibrate)
@@ -89,7 +95,7 @@ jobs:
             echo "seed unchanged"
           fi
       - name: Push raw pages to data-raw branch
-        if: ${{ always() && !inputs.extras_only }}
+        if: ${{ !cancelled() && !inputs.extras_only && steps.archive.outcome == 'success' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
