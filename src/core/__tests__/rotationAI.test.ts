@@ -39,7 +39,11 @@ describe('rotation AI: role memory', () => {
     const r = roleMemory(ps[0], SEASON)!;
     expect(r.mpg).toBeCloseTo(30, 5);
     expect(r.gs).toBe(1);
-    expect(r.w).toBeCloseTo(0.6, 5);
+    expect(r.w).toBeCloseTo(0.75, 5);
+    // from the second season on, the simulated season is the memory
+    ps[1].stats[0].real = false;
+    ps[1].stats[0].min = 22 * 70;
+    expect(roleMemory(ps[1], SEASON)!.mpg).toBeCloseTo(22, 5);
     // a fictional roster with no history has no memory
     expect(rosterSeason(ps.map((p) => ({ ...p, ratingsHistory: [] })))).toBeNull();
   });
@@ -53,6 +57,31 @@ describe('rotation AI: role memory', () => {
     expect(rot.minutes[2]).toBeLessThan(plain.minutes[2] - 6);
     expect(Math.abs(total(rot.minutes) - 240)).toBeLessThanOrEqual(3);
     expect(Math.max(...Object.values(rot.minutes))).toBeLessThanOrEqual(38);
+  });
+
+  it('counts a remembered bench role once: the veteran is not buried behind a newcomer', () => {
+    // player 5 (OVR 76.5) was an 18-mpg reserve; player 7 (73.5) missed last season; the deep
+    // bench all played real minutes elsewhere, so the claims overfill 240
+    const ps = roster(6, (_, i) => [34, 33, 31, 30, 29, 18, 24, null, 22, 20, 18, 17, 16, 15][i]);
+    const plain = autoRotation(ps.map((p) => ({ ...p, stats: [] })));
+    const rot = autoRotation(ps);
+    // his memory pulls him toward a bench role, but not twice: he stays ahead of the lesser
+    // newcomer and of the deep bench, at no less than his own blended claim
+    expect(rot.minutes[5]).toBeGreaterThan(rot.minutes[7]);
+    expect(rot.order.indexOf(5)).toBeLessThan(rot.order.indexOf(7));
+    expect(rot.minutes[5]).toBeGreaterThanOrEqual(14);
+    for (const i of [9, 10, 11, 12, 13]) expect(rot.minutes[5]).toBeGreaterThan(rot.minutes[i]);
+    // a newcomer's talent share is already a healthy-night share: it isn't squeezed again
+    expect(rot.minutes[7]).toBeGreaterThanOrEqual(plain.minutes[7] - 1);
+    expect(Math.abs(total(rot.minutes) - 240)).toBeLessThanOrEqual(3);
+  });
+
+  it('trusts a small role less than an established one', () => {
+    const ps = roster(7, (_, i) => (i === 8 ? 20 : i === 9 ? 6 : 25));
+    const big = roleMemory(ps[8], SEASON)!;
+    const small = roleMemory(ps[9], SEASON)!;
+    expect(big.w).toBeCloseTo(0.75, 5);
+    expect(small.w).toBeCloseTo(0.75 * 0.4, 5);
   });
 
   it('lets a much-improved young player play his way past an old role', () => {
