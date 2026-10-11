@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
-import { ordinal } from '../league/shared';
+import { normalizeLink, ordinal } from '../league/shared';
 import { userGameOnDay } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
@@ -29,6 +29,12 @@ function phaseTitle(league: League): string {
     default:
       return `${PHASE_LABEL[league.phase]} · ${seasonLabel(league.season)}`;
   }
+}
+
+/** Inbox links come from saves, imported backups included: follow in-app paths only. */
+function inAppLink(link: string | undefined, fallback: string) {
+  const l = link ? normalizeLink(link) : '';
+  return /^\/(?![/\\])/.test(l) ? l : fallback;
 }
 
 function nextUserGame(league: League) {
@@ -69,6 +75,7 @@ export default function Home() {
   });
   const recent = league.games.filter((g) => g.season === league.season && (g.home.tid === league.userTid || g.away.tid === league.userTid)).slice(-5).reverse();
   const tr = teamRatings(ts);
+  const played = ts.won + ts.lost > 0;
   const primary = actions.find((a) => a.primary);
 
   return (
@@ -194,9 +201,9 @@ export default function Home() {
       {inSeason && (
         <div className="grid4">
           <Kpi k="Record" v={`${ts.won}-${ts.lost}`} sub={myRank >= 0 ? `${ordinal(myRank + 1)} in ${team.conf === 'E' ? 'East' : 'West'}` : ''} />
-          <Kpi k="Off Rtg" v={f1(tr.ortg)} />
-          <Kpi k="Def Rtg" v={f1(tr.drtg)} />
-          <Kpi k="Net" v={signed(tr.net)} color={tr.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
+          <Kpi k="Off Rtg" v={played ? f1(tr.ortg) : '–'} />
+          <Kpi k="Def Rtg" v={played ? f1(tr.drtg) : '–'} />
+          <Kpi k="Net" v={played ? signed(tr.net) : '–'} color={!played ? undefined : tr.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
         </div>
       )}
 
@@ -218,13 +225,13 @@ export default function Home() {
       )}
 
       <div className="md-grid2">
-        <Card title={<h3><Mail size={14} style={{ verticalAlign: -2 }} /> Inbox</h3>} right={<Link className="small dim" to="/inbox">All</Link>}>
+        <Card title={<h3><Mail size={14} style={{ verticalAlign: -2 }} /> Inbox</h3>} right={<Link className="card-link" to="/inbox">All</Link>}>
           {unread.length === 0 ? (
             <div className="small dim">No new messages.</div>
           ) : (
             <div className="col" style={{ gap: 10 }}>
               {unread.map((m) => (
-                <Link key={m.id} to={m.link ?? '/inbox'} onClick={() => useStore.getState().mutate((l) => { const x = l.inbox.find((y) => y.id === m.id); if (x) x.read = true; })}>
+                <Link key={m.id} to={inAppLink(m.link, '/inbox')} onClick={() => useStore.getState().mutate((l) => { const x = l.inbox.find((y) => y.id === m.id); if (x) x.read = true; })}>
                   <div className="small dim">{m.from}</div>
                   <div className="bold small">{m.subject}</div>
                   <div className="small dim2" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.body}</div>
@@ -234,7 +241,7 @@ export default function Home() {
           )}
         </Card>
 
-        <Card title={`${team.conf === 'E' ? 'East' : 'West'} standings`} right={<Link className="small dim" to="/league">Full</Link>}>
+        <Card title={`${team.conf === 'E' ? 'East' : 'West'} standings`} right={<Link className="card-link" to="/league">Full</Link>}>
           <div className="col" style={{ gap: 4 }}>
             {window.map((r) => (
               <Link key={r.tid} to={`/team/${r.tid}`} className="row" style={{ padding: '4px 0', fontWeight: r.tid === league.userTid ? 750 : 500, color: r.tid === league.userTid ? 'var(--text)' : 'var(--text-2)' }}>
@@ -292,7 +299,7 @@ export default function Home() {
         </div>
       )}
 
-      <Card title="Top of the roster" right={<Link className="small dim" to="/roster">Roster</Link>}>
+      <Card title="Top of the roster" right={<Link className="card-link" to="/roster">Roster</Link>}>
         <div className="hscroll">
           {[...roster]
             .sort((a, b) => b.ovr - a.ovr)
@@ -329,7 +336,7 @@ function SeasonOutlook({ league }: { league: League }) {
   const cap = CAP_FOR(league);
   const outlook = confRank <= 4 ? 'Contender: the talent to host a playoff series.' : confRank <= 6 ? 'Playoff team on paper, with little margin.' : confRank <= 10 ? 'Play-in range: coaching and health decide it.' : 'Long shot: development and the draft matter most.';
   return (
-    <Card title="Season outlook" right={<Link className="small dim" to="/league?tab=standings&view=power">Power</Link>}>
+    <Card title="Season outlook" right={<Link className="card-link" to="/league?tab=standings&view=power">Power</Link>}>
       <div className="grid3">
         <Kpi k="Talent" v={`#${leagueRank}`} sub={`${ordinal(confRank)} in ${team.conf === 'E' ? 'East' : 'West'}`} />
         <Kpi k="Payroll" v={`$${(pay / 1000).toFixed(0)}M`} sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} />
