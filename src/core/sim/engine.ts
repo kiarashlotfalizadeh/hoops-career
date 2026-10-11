@@ -43,7 +43,7 @@ export const K = {
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
   foulRate: { rim: 0.208, paint: 0.106, mid: 0.041, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
   /** Share of misses that are blocks, for an average contesting defender. */
-  blockMiss: { rim: 0.246, paint: 0.158, mid: 0.041, c3: 0.017, ab3: 0.017 } as Record<ShotZone, number>,
+  blockMiss: { rim: 0.24, paint: 0.154, mid: 0.04, c3: 0.0165, ab3: 0.0165 } as Record<ShotZone, number>,
   /** Extra share of misses blocked by the shooter's own defender (from behind, on the contest). */
   chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
   orbBase: 0.262,
@@ -90,10 +90,20 @@ export const K = {
   /** Score effects: past this second-half margin the leader eases off and the trailer plays
    * loose, up to this much field-goal percentage either way, reached this many points later. */
   easeFrom: 8,
-  ease: 0.05,
+  ease: 0.058,
   easeSpan: 12,
   clutchSec: 240,
   clutchEase: 0.05,
+  /**
+   * Team feel vs team defense: field-goal percentage per 50 points of difference between the
+   * offense's feel (oiq/pas/hnd) and the defense's team defense (diq/perD/intD), past the gap at
+   * which real-league scoring is unchanged. Sized so team net ratings track what the players'
+   * real box plus-minus says: the OVR model weights these attributes most, and the per-player
+   * matchups alone left team defense barely mattering. A matchup form, so fictional leagues
+   * (whose players rate higher on both ends) keep their scoring.
+   */
+  feel: 0.22,
+  feelGap: 3,
   /** Full-court press: turnover rate against average ball handlers. */
   pressTO: 0.06,
   /** Blitz: trap turnover rate for an average trap and handler, and the 4-on-3's openness behind it. */
@@ -247,6 +257,9 @@ export interface ST {
   speed: number;
   /** How much bite ball pressure has with this lineup: quick hands and on-ball defense. */
   pressQ: number;
+  /** The unit's feel on offense (reads, passing, handling) and its team defense (help, on-ball, inside). */
+  feelQ: number;
+  defQ: number;
   /** guardOf[offensePid] = my defender (filled on the DEFENSIVE team). */
   guardOf: Map<number, SP>;
   lineupKey: string;
@@ -496,6 +509,8 @@ export class GameSim {
       helpQ: 50,
       speed: 50,
       pressQ: 50,
+      feelQ: 50,
+      defQ: 50,
       guardOf: new Map(),
       lineupKey: '',
       ls: null,
@@ -564,6 +579,8 @@ export class GameSim {
     t.passQ = (passes[0] * 0.45 + passes[1] * 0.35 + passes[2] * 0.2) || 50;
     t.helpQ = on.reduce((a, p) => a + p.c.helpD, 0) / on.length;
     t.pressQ = on.reduce((a, p) => a + (p.c.steal + p.c.perDef) / 2, 0) / on.length;
+    t.feelQ = on.reduce((a, p) => a + 0.6 * p.r.oiq + 0.25 * p.r.pas + 0.15 * p.r.hnd, 0) / on.length;
+    t.defQ = on.reduce((a, p) => a + 0.5 * p.r.diq + 0.3 * p.r.perD + 0.2 * p.r.intD, 0) / on.length;
     t.speed = on.reduce((a, p) => a + p.r.spd, 0) / on.length;
     t.lineupKey = on.map((p) => p.pid).sort((a, b) => a - b).join('-');
     t.ls = null;
@@ -2289,6 +2306,9 @@ export class GameSim {
       if (zone === 'rim' || zone === 'paint') p -= ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07;
       else p -= ((c.c.perDef * this.dq(c) - 50) / 50) * 0.022;
     }
+    // the offense's feel (reads, passing, handling) against the defense's team defense (help,
+    // on-ball, inside): what lets good teams get good shots and bad ones not, beyond the matchups
+    p += ((off.feelQ - def.defQ - K.feelGap) / 50) * K.feel;
     // fatigue
     p -= (1 - sh.energy) * 0.12;
     // physicality: tighter contests
