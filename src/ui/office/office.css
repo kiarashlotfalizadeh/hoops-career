@@ -422,6 +422,7 @@
   font-weight: 650;
 }
 .fo-pill .x {
+  position: relative;
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -429,6 +430,12 @@
   place-items: center;
   color: var(--text-dim);
   flex: none;
+}
+/* 40px touch target around the small visible button */
+.fo-pill .x::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
 }
 
 /* ------------------------------------------------------------ sticky dock */

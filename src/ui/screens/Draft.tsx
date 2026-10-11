@@ -4,14 +4,14 @@ import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucid
 import type { CombineResults, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, withRng, winPct } from '../../core/league/helpers';
-import { LOTTERY_ODDS, aiChoose, draftOrder, draftUntilUser, nextPick } from '../../core/league/draft';
+import { LOTTERY_ODDS, aiChoose, draftOrder, draftStandings, draftUntilUser, nextPick } from '../../core/league/draft';
 import { pickLabel } from '../../core/league/trades';
 import { finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, type Col } from '../components/ui';
+import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, activateOnKey, type Col } from '../components/ui';
 import { OvrPot, SecTitle, ordinal } from '../office/common';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mine' | 'results';
@@ -126,7 +126,7 @@ export default function Draft() {
               <b>Lottery.</b> The 14 non-playoff teams are entered in a lottery for the top 4 picks. The worst three records have the best odds (14% each). Everyone else picks in reverse order of record.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals (team option on year 4), cheaper the later the pick. Second-rounders get 2-year minimum deals.
+              <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals (team option on year 4), cheaper the later the pick. Second-rounders get 2-year minimum deals, not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p style={{ margin: 0 }}>
               <b>Big Board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
@@ -357,7 +357,7 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
     <Card className="flush">
       <div className="list wide2">
         {list.slice(0, limit).map((p) => (
-          <div key={p.pid} className="fo-prow" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => onOpen(p.pid)} onKeyDown={(e) => e.key === 'Enter' && onOpen(p.pid)}>
+          <div key={p.pid} className="fo-prow" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => onOpen(p.pid)} onKeyDown={activateOnKey(() => onOpen(p.pid))}>
             <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
             <OvrPot p={p} />
             <div className="grow" style={{ minWidth: 0 }}>
@@ -428,11 +428,12 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
 function LotteryView({ league }: { league: League }) {
   const order = draftOrder(league).filter((d) => d.round === 1 && (d.pick ?? 99) <= 14);
   if (!order.length) return <Empty>Lottery results will appear here after the playoffs.</Empty>;
-  const lotteryTeams = league.teams
-    .map((t) => ({ tid: t.tid, ts: curTeamSeason(league, t.tid) }))
-    .filter((x) => x.ts.playoffRound < 1)
-    .sort((a, b) => winPct(a.ts) - winPct(b.ts) || a.ts.ptsFor - a.ts.ptsAgainst - (b.ts.ptsFor - b.ts.ptsAgainst));
-  const pre = new Map(lotteryTeams.map((x, i) => [x.tid, i + 1]));
+  // the same pre-lottery order the lottery used (ties broken by a seeded draw)
+  const pre = new Map(
+    draftStandings(league)
+      .filter((x) => !x.playoff)
+      .map((x, i) => [x.tid, i + 1]),
+  );
   return (
     <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
@@ -506,17 +507,16 @@ function MyPicks({ league }: { league: League }) {
               <div key={d.dpid} className="listrow">
                 <TeamLogo tid={d.originalTid} size={30} />
                 <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="bold">{pickLabel(league, d)}</div>
+                  <div className="bold ellipsis">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
                     {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · drafted after {seasonLabel(d.season)}
                   </div>
                 </div>
-                {d.pick ? (
-                  <span className="tag info">#{overall(d.round, d.pick)} overall</span>
-                ) : d.season === league.season && gp >= 10 ? (
+                {/* the label carries the overall number once the order is set */}
+                {!d.pick && d.season === league.season && gp >= 10 ? (
                   <span className="tag">Proj. #{overall(d.round, proj(d.originalTid))}</span>
                 ) : (
-                  <span className="tag">
+                  <span className={`tag ${d.pick ? 'info' : ''}`}>
                     <Ticket size={11} /> R{d.round}
                   </span>
                 )}
@@ -533,13 +533,11 @@ function MyPicks({ league }: { league: League }) {
               {owed.map((d) => (
                 <div key={d.dpid} className="listrow">
                   <TeamLogo tid={d.tid} size={30} />
-                  <div className="grow">
-                    <div className="bold">
-                      {d.season} {d.round === 1 ? '1st' : '2nd'} round
-                    </div>
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="bold ellipsis">{pickLabel(league, d)}</div>
                     <div className="tiny dim">Owned by {league.teams[d.tid].region} {league.teams[d.tid].name}</div>
                   </div>
-                  {d.pick && <span className="tag">#{overall(d.round, d.pick)}</span>}
+                  <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
                 </div>
               ))}
             </div>

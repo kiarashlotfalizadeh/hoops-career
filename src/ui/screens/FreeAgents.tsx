@@ -3,8 +3,8 @@ import { CalendarDays, FastForward, Lock, Newspaper, SkipForward } from 'lucide-
 import type { Player, Pos } from '../../core/types';
 import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, standardRoster, twoWayRoster } from '../../core/league/helpers';
-import { askingContract, teamAppeal, twoWayEligible, twoWaySalary, valueScore } from '../../core/league/contracts';
+import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
+import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, twoWaySalary, twoWayYears, valueScore, wantsTwoWay } from '../../core/league/contracts';
 import { signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { faAdvance } from '../../core/league/season';
 import { playerAge } from '../../core/playerGen';
@@ -23,8 +23,10 @@ export default function FreeAgents() {
   const cap = CAP_FOR(league, s);
   const pay = payroll(league, tid, s);
   const space = cap.salaryCap - pay;
-  // two-way players don't use one of the 15 standard spots
+  const mle = mleRoom(league, tid, s);
+  // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;
+  const max = rosterMaxNow(league);
   const tw = twoWayRoster(league, tid).length;
   const closed = signingClosedReason(league);
   const [pos, setPos] = useState<'all' | Pos>('all');
@@ -39,19 +41,25 @@ export default function FreeAgents() {
 
   const all = useMemo(
     () =>
-      freeAgents(league).map((p) => ({
-        p,
-        ask: askingContract(league, p, tid),
-        appeal: teamAppeal(league, tid, p),
-        val: valueScore(league, p),
-        age: playerAge(p, league.season),
-      })),
-    [league, v, tid],
+      freeAgents(league).map((p) => {
+        const ask = askingContract(league, p, tid);
+        return {
+          p,
+          ask,
+          appeal: teamAppeal(league, tid, p),
+          val: valueScore(league, p),
+          age: playerAge(p, league.season),
+          route: signingRoute(league, tid, ask.amount, s),
+          twoWay: wantsTwoWay(league, p, tid),
+        };
+      }),
+    [league, v, tid, s],
   );
 
-  const signable = (ask: number) => ask <= cap.vetMin + 1 || ask <= space;
+  // what the user could actually do today: the window is open and there's a spot to fill
+  const canAdd = !closed && (twoWayMode ? tw < TWO_WAY_MAX : n < max);
   const rows = all
-    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!onlySignable || signable(r.ask.amount)) && (!twoWayMode || twoWayEligible(r.p)))
+    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!twoWayMode || r.twoWay) && (!onlySignable || (canAdd && (twoWayMode || r.route))))
     .sort((a, b) => {
       switch (sort) {
         case 'ovr':
@@ -103,16 +111,19 @@ export default function FreeAgents() {
               <b>Cap space.</b> You can sign anyone whose contract fits under the {fmtM(cap.salaryCap)} cap. You have <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(s)}.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Minimum deals.</b> Over the cap, you can still sign players for the minimum (up to {fmtM(cap.vetMin, 2)}).
+              <b>Minimum deals.</b> Over the cap, you can still sign players for the minimum (up to {fmtM(cap.vetMin, 2)}). A minimum deal signed for the coming season isn't guaranteed until opening night.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Mid-level exception.</b> Once a season, if the signing keeps you under the tax line ({fmtM(cap.luxuryTax)}), you can sign one player over the cap for up to {fmtM(cap.salaryCap * MLE_PCT)}, for up to {MLE_YEARS} years. {mle > 0 ? `You can use up to ${fmtM(mle)} now.` : "You can't use it right now (used this season, or it would take you over the tax)."}
             </p>
             <p style={{ margin: 0 }}>
               <b>Asking price.</b> Offers at or above a player's ask are accepted on the spot. Interest in your team (winning, hype, market, playing time) moves his price.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Timing.</b> The summer market lasts 30 days. AI teams sign players every day, and stars go fast. During the season, unsigned players are still available.
+              <b>Timing.</b> The summer market lasts 30 days. AI teams sign players every day, and stars go fast. Unsigned players cut their price every few days, and during the season they are still available.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Roster.</b> Maximum {CAP.rosterMax} players, plus up to {TWO_WAY_MAX} on two-way deals.
+              <b>Roster.</b> Up to 21 players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
             </p>
             <p style={{ margin: 0 }}>
               <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {fmtM(twoWaySalary(league, s), 2)}. They don't use a roster spot or count against the cap, and sit at the end of the bench unless you run short.
@@ -132,8 +143,13 @@ export default function FreeAgents() {
 
       <div className="grid3">
         <Kpi k="Cap space" v={fmtM(space)} color={space > 0 ? 'var(--good)' : 'var(--warn)'} sub={space > 0 ? 'to spend' : 'min deals only'} />
-        <Kpi k="Roster" v={`${n}/${CAP.rosterMax}`} color={n >= CAP.rosterMax ? 'var(--bad)' : undefined} sub={`${n >= CAP.rosterMax ? 'full' : `${CAP.rosterMax - n} open`} · two-way ${tw}/${TWO_WAY_MAX}`} />
-        <Kpi k="Minimum" v={fmtM(cap.vetMin, 2)} sub="always allowed" />
+        <Kpi
+          k="Roster"
+          v={`${n}/${max}`}
+          color={n >= max ? 'var(--bad)' : n > CAP.rosterMax ? 'var(--warn)' : undefined}
+          sub={`${n >= max ? 'full' : n > CAP.rosterMax ? `${CAP.rosterMax} by opening night` : `${max - n} open`} · two-way ${tw}/${TWO_WAY_MAX}`}
+        />
+        <Kpi k="Mid-level" v={mle > 0 ? fmtM(mle) : '—'} color={mle > 0 ? 'var(--good)' : undefined} sub={mle > 0 ? `once · min ${fmtM(cap.vetMin, 2)} always` : `min ${fmtM(cap.vetMin, 2)} always`} />
       </div>
 
       {fa && (
@@ -197,6 +213,8 @@ export default function FreeAgents() {
             Two-way offers ({tw}/{TWO_WAY_MAX})
           </button>
         </div>
+        {onlySignable && !canAdd && <div className="small warn">{closed ?? (twoWayMode ? `All ${TWO_WAY_MAX} two-way slots are taken.` : `Your roster is full (${max}). Release or trade someone to sign a free agent.`)}</div>}
+        {twoWayMode && <div className="tiny dim">Players with three seasons or fewer who'd sign for the minimum. Two-way deals pay {fmtM(twoWaySalary(league, s), 2)} outside the cap.</div>}
         <Segmented
           value={sort}
           onChange={setSort}
@@ -215,10 +233,8 @@ export default function FreeAgents() {
       ) : (
         <Card className="flush">
           <div className="list wide2">
-            {rows.slice(0, limit).map(({ p, ask, appeal }) => {
+            {rows.slice(0, limit).map(({ p, ask, appeal, route }) => {
               const ai = appealInfo(appeal);
-              const isMin = ask.amount <= cap.vetMin + 1;
-              const fits = ask.amount <= space;
               return (
                 <button key={p.pid} className="fo-prow" onClick={() => (twoWayMode ? setTwoWaySel(p.pid) : setSel(p.pid))}>
                   <OvrPot p={p} />
@@ -233,15 +249,34 @@ export default function FreeAgents() {
                         <span className="fo-dot" style={{ background: ai.color }} />
                         {ai.label}
                       </span>
-                      {isMin ? <span className="tiny good">Min deal</span> : fits ? <span className="tiny good">Fits your space</span> : space > 0 ? <span className="tiny warn">More than your space</span> : <span className="tiny dim">Needs cap space</span>}
+                      {twoWayMode ? (
+                        <span className="tiny good">Two-way</span>
+                      ) : route === 'min' ? (
+                        <span className="tiny good">Min deal</span>
+                      ) : route === 'space' ? (
+                        <span className="tiny good">Fits your space</span>
+                      ) : route === 'mle' ? (
+                        <span className="tiny good">Mid-level</span>
+                      ) : space > 0 ? (
+                        <span className="tiny warn">More than your space</span>
+                      ) : (
+                        <span className="tiny dim">Needs cap space</span>
+                      )}
                     </div>
                   </div>
-                  <div className="fo-money">
-                    <div className="a">{fmtM(ask.amount)}</div>
-                    <div className="b">
-                      {ask.years} yr{ask.years > 1 ? 's' : ''}
+                  {twoWayMode ? (
+                    <div className="fo-money">
+                      <div className="a">{fmtM(twoWaySalary(league, s), 2)}</div>
+                      <div className="b">two-way · {twoWayYears(p)} yr{twoWayYears(p) > 1 ? 's' : ''}</div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="fo-money">
+                      <div className="a">{fmtM(ask.amount)}</div>
+                      <div className="b">
+                        {ask.years} yr{ask.years > 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -266,6 +301,7 @@ function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
   const open = !!p && p.tid === FREE_AGENT;
   const s = capSeason(league);
   const used = twoWayRoster(league, league.userTid).length;
+  const blocked = !p ? null : (signingClosedReason(league) ?? (used >= TWO_WAY_MAX ? `All ${TWO_WAY_MAX} two-way slots are taken.` : !wantsTwoWay(league, p, league.userTid) ? `${p.lastName} wants a standard contract.` : null));
   const offer = () => {
     if (!p) return;
     let res = { ok: false, reason: '' };
@@ -287,16 +323,17 @@ function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
             <OvrPot p={p} />
           </div>
           <div className="small dim2">
-            {fmtM(twoWaySalary(league, s), 2)} per season for {p.experience >= 3 ? 1 : 2} season{p.experience >= 3 ? '' : 's'}, starting {seasonLabel(s)}. No roster spot or cap room needed; he sits at the end of the bench unless you run short, and can be converted to a standard minimum deal later when a roster spot is open.
+            {fmtM(twoWaySalary(league, s), 2)} per season for {twoWayYears(p)} season{twoWayYears(p) > 1 ? 's' : ''}, starting {seasonLabel(s)}. No roster spot or cap room needed; he sits at the end of the bench unless you run short, and can be converted to a standard minimum deal later when a roster spot is open.
           </div>
           <div className="small">
             Two-way slots used: <b>{used}/{TWO_WAY_MAX}</b>
           </div>
+          {blocked && <div className="small warn">{blocked}</div>}
           <div className="row">
             <button className="btn grow" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn primary grow" disabled={used >= TWO_WAY_MAX || !!signingClosedReason(league)} onClick={offer}>
+            <button className="btn primary grow" disabled={!!blocked} onClick={offer}>
               Offer two-way deal
             </button>
           </div>
