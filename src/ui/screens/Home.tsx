@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
-import { normalizeLink, ordinal } from '../league/shared';
+import { normalizeLink } from '../league/shared';
 import { userGameOnDay } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
@@ -11,7 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Kpi, Ovr } from '../components/ui';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
-import { f1, playerSeason, rosterNames, signed, teamRatings } from '../stats';
+import { f1, ordinal, playerSeason, rosterNames, signed, teamRatings } from '../stats';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
 
