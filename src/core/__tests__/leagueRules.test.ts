@@ -10,6 +10,7 @@ import { askingContract, convertTwoWay, decideTeamOption, pendingOption, release
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
 import { buildSimInput, ensureRotation, wearInjuryRisk } from '../league/games';
+import { rankedPresets } from '../ai/coachAI';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
 import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
@@ -752,6 +753,26 @@ describe('morale and wear (L17)', () => {
     expect(injuryText('Back Spasms', true)).toBe('back spasms');
     expect(injuryText('Plantar Fasciitis', true)).toBe('plantar fasciitis');
     expect(injuryText('Ruptured Achilles')).toBe('ruptured Achilles');
+  });
+
+  it("an assistant-run playbook follows long injuries; the user's own tactics stay put", () => {
+    const l = league();
+    l.teams[U].tactics.manual = true;
+    const mine = structuredClone(l.teams[U].tactics);
+    const before = l.teams.map((t) => t.tactics.offPreset + t.tactics.defPreset);
+    // every team loses its two best players for a month
+    for (const t of l.teams)
+      for (const p of teamPlayers(l, t.tid)
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 2))
+        p.injury = { type: 'Calf Strain', gamesRemaining: 30, gamesTotal: 30, severity: 'moderate' };
+    for (const t of l.teams) ensureRotation(l, t.tid);
+    for (const t of l.teams.filter((x) => x.tid !== U)) {
+      const best = rankedPresets(t, teamPlayers(l, t.tid));
+      expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([best.off[0], best.def[0]]);
+    }
+    expect(l.teams.some((t, i) => t.tid !== U && t.tactics.offPreset + t.tactics.defPreset !== before[i])).toBe(true);
+    expect(l.teams[U].tactics).toEqual(mine);
   });
 
   it('worn-down players carry extra injury risk', () => {

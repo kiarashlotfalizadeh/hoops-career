@@ -3,7 +3,7 @@
 import type { GameResult, League, Player, Rotation, ScheduledGame, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
-import { autoRotation, autoTactics } from '../ai/coachAI';
+import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
 import { addInbox, addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
@@ -104,6 +104,11 @@ function settleJerseys(players: Player[], incumbents: Set<number>) {
   }
 }
 
+function bestPresetsChanged(team: Team, players: Player[]): boolean {
+  const best = rankedPresets(team, players);
+  return best.off[0] !== team.tactics.offPreset || best.def[0] !== team.tactics.defPreset;
+}
+
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
 export function ensureRotation(league: League, tid: number) {
   const team = league.teams[tid];
@@ -124,7 +129,10 @@ export function ensureRotation(league: League, tid: number) {
   }
   if (!isUser || !team.rotation.manual) benchTwoWays(team.rotation, players);
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
-  if ((!isUser || !team.tactics.manual) && (stale || missingRoles)) {
+  // an assistant-run playbook follows the healthy roster: a long injury starting or ending can change
+  // the best fit (the Tactics screen's fit scores count the same players)
+  const refit = (!isUser || !team.tactics.manual) && !stale && !missingRoles && bestPresetsChanged(team, players);
+  if ((!isUser || !team.tactics.manual) && (stale || missingRoles || refit)) {
     team.tactics = autoTactics(team, players, isUser);
   } else if (missingRoles) {
     // manual tactics: fill roles/freedom for newly acquired players only
