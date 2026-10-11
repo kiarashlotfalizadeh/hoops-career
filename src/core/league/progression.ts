@@ -5,7 +5,7 @@ import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
 import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, potential, toDisplay, archetype } from '../ratings';
-import { playerAge } from '../playerGen';
+import { followTendencies, playerAge } from '../playerGen';
 import { seasonTotals } from './helpers';
 
 type Group = 'athletic' | 'end' | 'str' | 'shooting' | 'skill' | 'iq' | 'perim' | 'interior' | 'reb' | 'hgt';
@@ -248,6 +248,10 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
     refreshDerived(league, p);
+    // tendencies follow the year's change in level: from the OVR of his latest snapshot, which they
+    // were set for (in-season development and injuries since count too), or for a prospect without
+    // one, from before this summer's development
+    followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
     // older snapshots only chart OVR: full ratings on every one grew the save by a few hundred KB a season

@@ -4,7 +4,7 @@ import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
-import { DEFAULT_SCALE, blankMood, generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { DEFAULT_SCALE, blankMood, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
@@ -280,7 +280,10 @@ export function createLeague(opts: CreateOpts): League {
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
     matchRealSpread(rostered, Object.values(league.players));
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
-    for (const p of Object.values(league.players)) refreshPlayerDerived(p, season, league.ovrScale);
+    for (const p of Object.values(league.players)) {
+      refreshPlayerDerived(p, season, league.ovrScale);
+      p.tend = genTendencies(p, rng);
+    }
     fictionalContracts(league, rng);
   }
   for (const p of Object.values(league.players)) {

@@ -1,7 +1,7 @@
 import type { CombineResults, DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
-import { contractExp, generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { composites, ratingToHeight, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
@@ -71,6 +71,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     // level to how real classes arrive: ~77 at the top a year out, ~68 by the end of round one
     p.ratings = shiftToOvr(p.ratings, Math.round(prospectLevel(i) + rng.normal(0, 2.2)), league.ovrScale);
     refreshPlayerDerived(p, league.season, league.ovrScale);
+    p.tend = genTendencies(p, rng);
     p.contract = { start: year + 1, salaries: [0] };
     league.players[p.pid] = p;
     created.push(p);
