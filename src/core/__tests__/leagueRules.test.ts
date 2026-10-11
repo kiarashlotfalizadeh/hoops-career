@@ -1,5 +1,5 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
-// windows, draft order, two-way contracts and phase guards. Fast: no full-season sims.
+// windows, draft order, two-way contracts, phase guards and tiebreaks. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
@@ -8,7 +8,7 @@ import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine,
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
-import { standings } from '../league/standings';
+import { finalsHomeCourt, standings } from '../league/standings';
 import { runLottery } from '../league/draft';
 import { contractExp, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
@@ -299,5 +299,62 @@ describe('signing window (bug 12) and two-way contracts', () => {
     const vet = freeAgents(l).find((p) => p.experience > 3)!;
     expect(userTwoWayOffer(l, vet.pid).ok).toBe(false);
     expect(vet.tid).toBe(FREE_AGENT);
+  });
+});
+
+describe('standings tiebreaks: NBA procedure (L5, L18)', () => {
+  // three East teams tied at 50-32; A leads its division, B and C trail better teams in theirs
+  function tied() {
+    const l = league();
+    const east = l.teams.filter((t) => t.conf === 'E');
+    const divs = [...new Set(east.map((t) => t.div))];
+    const inDiv = (d: number) => east.filter((t) => t.div === divs[d]).map((t) => t.tid);
+    const [A, B, C] = [inDiv(0)[0], inDiv(1)[1], inDiv(2)[1]];
+    const rec = (tid: number, w: number) => ([curTeamSeason(l, tid).won, curTeamSeason(l, tid).lost] = [w, 82 - w]);
+    for (const t of east) rec(t.tid, 30);
+    [A, B, C].forEach((tid) => rec(tid, 50));
+    rec(inDiv(1)[0], 60);
+    rec(inDiv(2)[0], 58);
+    return { l, A, B, C };
+  }
+  const game = (l: League, w: number, lo: number) => ({ type: 'regular', season: l.season, home: { tid: w, pts: 110 }, away: { tid: lo, pts: 100 } });
+  const eastOrder = (l: League) => standings(l).filter((r) => r.conf === 'E').map((r) => r.tid);
+
+  it('3+ tied teams: division leader before head-to-head; the rest restart as a two-team tie', () => {
+    const { l, A, B, C } = tied();
+    // A lost all four to B and C; C won the B-C season series
+    l.games = [game(l, B, A), game(l, B, A), game(l, C, A), game(l, C, A), game(l, C, B), game(l, C, B)] as unknown as League['games'];
+    expect(eastOrder(l).filter((tid) => [A, B, C].includes(tid))).toEqual([A, C, B]);
+  });
+
+  it('2 tied teams: head-to-head before division leader', () => {
+    const { l, A, B, C } = tied();
+    curTeamSeason(l, C).won = 49;
+    curTeamSeason(l, C).lost = 33;
+    l.games = [game(l, B, A), game(l, B, A)] as unknown as League['games'];
+    expect(eastOrder(l).filter((tid) => tid === A || tid === B)).toEqual([B, A]);
+  });
+
+  it('a tie nothing breaks goes to a fixed drawing, not the lowest team id', () => {
+    const l = league();
+    for (const t of l.teams) [curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [41, 41];
+    l.games = [];
+    const order = eastOrder(l);
+    expect(eastOrder(l)).toEqual(order);
+    expect(order).not.toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('Finals home court between equal records goes by head-to-head, not to the East', () => {
+    const l = league();
+    const e = l.teams.find((t) => t.conf === 'E')!.tid;
+    const w = l.teams.find((t) => t.conf === 'W')!.tid;
+    for (const tid of [e, w]) [curTeamSeason(l, tid).won, curTeamSeason(l, tid).lost] = [55, 27];
+    l.games = [game(l, w, e), game(l, w, e)] as unknown as League['games'];
+    expect(finalsHomeCourt(l, e, w)).toBe(w);
+    // season series split: record against the other conference
+    l.games = [game(l, e, w), game(l, w, e)] as unknown as League['games'];
+    curTeamSeason(l, e).confWon = 30;
+    curTeamSeason(l, w).confWon = 40;
+    expect(finalsHomeCourt(l, e, w)).toBe(e);
   });
 });

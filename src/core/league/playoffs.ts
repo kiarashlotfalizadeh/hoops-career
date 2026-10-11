@@ -1,5 +1,5 @@
 import type { League, PlayInGame, PlayoffSeries, ScheduledGame } from '../types';
-import { confStandings } from './standings';
+import { confStandings, finalsHomeCourt } from './standings';
 import { addInbox, addNews, curTeamSeason, teamName } from './helpers';
 
 export function startPlayIn(league: League) {
@@ -171,9 +171,7 @@ function advanceRounds(league: League) {
       const w = rs.find((s) => s.conf === 'W')!;
       const te = e.winner!;
       const tw = w.winner!;
-      const eTs = curTeamSeason(league, te);
-      const wTs = curTeamSeason(league, tw);
-      const eHigh = eTs.won / Math.max(1, eTs.won + eTs.lost) >= wTs.won / Math.max(1, wTs.won + wTs.lost);
+      const eHigh = finalsHomeCourt(league, te, tw) === te;
       league.playoffs.push({
         id: 'F4-0',
         round: 4,
