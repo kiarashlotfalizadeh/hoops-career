@@ -67,12 +67,16 @@ npm run bench        # engine calibration bench vs 2025-26 averages
 npm run season-test  # multi-season end-to-end run
 npm run real-check   # one real-league season vs real 2025-26 stats
 npm run build        # production PWA in dist/
+npm run smoke        # browser smoke test on the production build (also runs in CI)
 ```
+
+Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir>` screenshots every screen and tab on a phone and a tablet at six points of a season (preseason, trade deadline, after the playoffs, draft, re-sign period, free agency). `scripts/qa/full-career.mjs` plays a whole career loop through the Play menu.
 
 ## Ship to phones
 
-- **PWA**: deploy `dist/` to any static host and use "Add to Home Screen". It works offline after the first load, and saves stay on the device (IndexedDB).
-- **Android**: the *Android APK* workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`.
+- **PWA**: deploy `dist/` to any static host and use "Add to Home Screen". It works offline after the first load, and saves stay on the device (IndexedDB, with persistent storage requested). A new version downloads in the background and applies on the next launch, never mid-game.
+- **Backups**: Settings → Export backup saves the league as a JSON file (the share sheet in the app, a download on the web). Import it from Settings or the start screen on any device.
+- **Android**: the *Android APK* workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`. The native shell adds the hardware Back button (closes sheets first), haptics, edge-to-edge insets and no service worker (the files ship in the APK).
 - **iOS**: `npm run cap:sync && npx cap open ios` on a Mac with Xcode.
 - **GitHub Pages**: run the *Deploy PWA to Pages* workflow manually after setting Settings → Pages → Source to "GitHub Actions". Pages on a private repo needs a paid GitHub plan.
 
