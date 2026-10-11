@@ -68,27 +68,39 @@ export function crosswalk(nba: NbaPerson[], bbref: BbrefRow[]): { map: Map<numbe
     Object.entries(p.teams).some(([s, tri]) => (seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []).some((x) => x.id === id));
   const map = new Map<number, string>();
   const used = new Set<string>();
-  const unmatched: NbaPerson[] = [];
+  const key = (p: NbaPerson) => {
+    const n = normName(p.name);
+    return ALIASES[n] ?? n;
+  };
+  const claim = (p: NbaPerson, id: string | undefined) => {
+    if (!id || used.has(id)) return false;
+    map.set(p.pid, id);
+    used.add(id);
+    return true;
+  };
+  // exact names first, so a near-miss spelling ("Jeff Green" for a missing row) can't take the id
+  // of a teammate whose name matches exactly ("Jalen Green") just because it came first
+  const rest: NbaPerson[] = [];
   for (const p of nba) {
-    let n = normName(p.name);
-    n = ALIASES[n] ?? n;
+    const exact = [...(byName.get(key(p)) ?? [])];
+    if (!claim(p, exact.length === 1 ? exact[0] : exact.find((x) => teamOk(x, p)))) rest.push(p);
+  }
+  const unmatched: NbaPerson[] = [];
+  for (const p of rest) {
+    const n = key(p);
     let id: string | undefined;
-    const exact = [...(byName.get(n) ?? [])];
-    if (exact.length === 1) id = exact[0];
-    else if (exact.length > 1) id = exact.find((x) => teamOk(x, p));
-    if (!id) {
-      // same team and season: surname and first initial
-      const parts = n.split(' ');
-      const last = parts[parts.length - 1];
-      const cands = new Set<string>();
-      for (const [s, tri] of Object.entries(p.teams))
-        for (const x of seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []) {
-          const xp = x.norm.split(' ');
-          if (xp[xp.length - 1] === last && xp[0][0] === parts[0][0]) cands.add(x.id);
-          else if (lev(x.norm, n) <= 2) cands.add(x.id);
-        }
-      if (cands.size === 1) id = [...cands][0];
-    }
+    // same team and season: surname and first initial
+    const parts = n.split(' ');
+    const last = parts[parts.length - 1];
+    const cands = new Set<string>();
+    for (const [s, tri] of Object.entries(p.teams))
+      for (const x of seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []) {
+        if (used.has(x.id)) continue;
+        const xp = x.norm.split(' ');
+        if (xp[xp.length - 1] === last && xp[0][0] === parts[0][0]) cands.add(x.id);
+        else if (lev(x.norm, n) <= 2) cands.add(x.id);
+      }
+    if (cands.size === 1) id = [...cands][0];
     if (!id) {
       // anywhere, close spelling
       let best: string | undefined;
@@ -96,17 +108,14 @@ export function crosswalk(nba: NbaPerson[], bbref: BbrefRow[]): { map: Map<numbe
       for (const [nm, ids] of byName) {
         if (Math.abs(nm.length - n.length) > 2) continue;
         const d = lev(nm, n);
-        if (d < bd && ids.size === 1) {
+        if (d < bd && ids.size === 1 && !used.has([...ids][0])) {
           bd = d;
           best = [...ids][0];
         }
       }
       if (best && bd <= 2) id = best;
     }
-    if (id && !used.has(id)) {
-      map.set(p.pid, id);
-      used.add(id);
-    } else unmatched.push(p);
+    if (!claim(p, id)) unmatched.push(p);
   }
   return { map, unmatched };
 }
