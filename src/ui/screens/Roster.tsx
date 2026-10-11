@@ -1,3 +1,4 @@
+import { capSeason, isOffseason } from '../office/common';
 import { useQueryParam } from '../league/shared';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { f1, moneyM, p1, playerSeason, signed } from '../stats';
 import type { Player } from '../../core/types';
-import { CAP } from '../../core/constants';
+import { CAP, seasonLabel } from '../../core/constants';
 
 type View = 'players' | 'ratings' | 'stats' | 'contracts';
 
@@ -31,8 +32,13 @@ export default function Roster() {
   const tid = league.userTid;
   const team = league.teams[tid];
   const roster = useMemo(() => rosterSorted(league, tid), [league, tid, v]);
-  const cap = CAP_FOR(league);
-  const pay = payroll(league, tid);
+  // between seasons, count and pay next season's contracts (the same view as Office and Re-sign)
+  const s0 = capSeason(league);
+  const cap = CAP_FOR(league, s0);
+  const pay = payroll(league, tid, s0);
+  const standard = roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) >= s0).length;
+  const twoWays = roster.filter((p) => p.contract.twoWay).length;
+  const expiring = isOffseason(league) ? roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) < s0).length : 0;
   const age = (p: Player) => league.season - p.bornYear;
 
   const ratingCols: Col<Player>[] = [
@@ -78,7 +84,7 @@ export default function Roster() {
     <main className="page">
       <PageHeader
         title="Roster"
-        sub={`${roster.filter((p) => !p.contract.twoWay).length}/${CAP.rosterMax} players${roster.some((p) => p.contract.twoWay) ? ` + ${roster.filter((p) => p.contract.twoWay).length} two-way` : ''} · Payroll ${moneyM(pay)} · ${pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}`}
+        sub={`${standard}/${CAP.rosterMax} players${twoWays ? ` + ${twoWays} two-way` : ''}${expiring ? ` + ${expiring} expiring` : ''} · ${isOffseason(league) ? `${seasonLabel(s0)} payroll` : 'Payroll'} ${moneyM(pay)} · ${pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}`}
       />
       <div className="grid3">
         <Link to="/rotation" className="btn sm">
