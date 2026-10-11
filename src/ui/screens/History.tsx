@@ -189,6 +189,8 @@ function LeagueHistory({ league }: { league: League }) {
     );
   }
   const name = (pid?: number) => (pid !== undefined && league.players[pid] ? league.players[pid] : undefined);
+  // a team taken over later won its earlier titles under another coach
+  const tenure = league.tenureStart ?? league.startSeason;
   return (
     <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
       {list.map((a) => {
@@ -199,7 +201,11 @@ function LeagueHistory({ league }: { league: League }) {
           { k: 'ROY', p: name(a.roy) },
         ];
         return (
-          <Card key={a.season} title={seasonLabel(a.season)} right={a.champion === league.userTid ? <span className="tag lg-gold">Your title</span> : undefined}>
+          <Card
+            key={a.season}
+            title={seasonLabel(a.season)}
+            right={a.champion === league.userTid && a.season >= tenure ? <span className="tag lg-gold">Your title</span> : undefined}
+          >
             {a.champion !== undefined ? (
               <Link to={`/team/${a.champion}`} className="row" style={{ gap: 12, marginBottom: 8 }}>
                 <TeamLogo tid={a.champion} size={42} />
