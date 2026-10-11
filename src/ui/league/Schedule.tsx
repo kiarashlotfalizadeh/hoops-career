@@ -187,19 +187,18 @@ function rowSub(league: League, r: Row, tid: number, ranks: Map<number, Standing
   return prev && prev.won + prev.lost ? `Last season ${prev.won}-${prev.lost}` : '0-0';
 }
 
-/** "9-5", or "3-1 · Playoffs 2-4" in April: postseason games don't go into the regular-season record. */
+/** "9-5", or "3-1 · Play-In 1-0 · Playoffs 2-4" in April: postseason games don't go into the regular-season record. */
 function monthRecord(rows: Row[], season: number, month: string) {
-  const rec = { regular: [0, 0], post: [0, 0] };
+  const rec = { regular: [0, 0], playin: [0, 0], playoffs: [0, 0] };
   for (const r of rows) {
-    // the Cup championship counts in neither
-    if (!r.res || r.g.type === 'cup') continue;
+    // the Cup championship counts in none of them
+    if (!r.res || (r.g.type !== 'regular' && r.g.type !== 'playin' && r.g.type !== 'playoffs')) continue;
     const m = dayToDate(season, r.g.day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
     if (m !== month) continue;
-    rec[r.g.type === 'regular' ? 'regular' : 'post'][r.won ? 0 : 1]++;
+    rec[r.g.type][r.won ? 0 : 1]++;
   }
-  const [w, l] = rec.regular;
-  const [pw, pl] = rec.post;
-  return [w + l ? `${w}-${l}` : '', pw + pl ? `Playoffs ${pw}-${pl}` : ''].filter(Boolean).join(' · ');
+  const part = (label: string, [w, l]: number[]) => (w + l ? `${label}${w}-${l}` : '');
+  return [part('', rec.regular), part('Play-In ', rec.playin), part('Playoffs ', rec.playoffs)].filter(Boolean).join(' · ');
 }
 
 /** Scoreboard for every game on one calendar day, with a day stepper. */

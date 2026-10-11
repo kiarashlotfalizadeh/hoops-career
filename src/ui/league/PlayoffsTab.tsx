@@ -403,7 +403,8 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
 }
 
 function SeriesSheet({ league, series, onClose }: { league: League; series: PlayoffSeries | null; onClose: () => void }) {
-  const games = useMemo(() => {
+  // games keep arriving while the sheet is open during a sim
+  const games = useLeagueMemo(() => {
     if (!series) return [];
     return league.games.filter((g) => g.season === league.season && g.type === 'playoffs' && g.seriesId === series.id).sort((a, b) => a.day - b.day || a.gid - b.gid);
   }, [league, series]);
