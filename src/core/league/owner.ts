@@ -25,6 +25,7 @@ export function ownerEvaluation(league: League) {
   if (league.settings.jobSecurity && !grace && total < -0.5) {
     league.fired = true;
     addInbox(league, {
+      important: true,
       from: 'Owner',
       subject: "You're fired",
       body: 'The results have not been good enough. We are going in a different direction. (You can keep playing by taking over another team from Settings.)',

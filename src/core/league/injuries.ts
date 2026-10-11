@@ -57,7 +57,11 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;
   if (inj.gamesRemaining >= 5 || p.ovr >= 80) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
   if (p.tid === league.userTid) {
+    // a long absence for one of the top eight players is worth pausing a long sim for
+    const rot = league.teams[p.tid].rotation;
+    const top8 = [...rot.order].sort((a, b) => (rot.minutes[b] ?? 0) - (rot.minutes[a] ?? 0)).slice(0, 8);
     addInbox(league, {
+      important: inj.gamesRemaining >= 10 && top8.includes(p.pid),
       from: 'Medical Staff',
       subject: `${playerName(p)}: ${inj.type}`,
       body: `${playerName(p)} suffered a ${inj.type.toLowerCase()} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${inj.severity === 'severe' ? ' This is a long-term injury and may permanently sap some of his explosiveness.' : ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,

@@ -81,6 +81,7 @@ export function updateMorale(league: League, tid: number, notify = false) {
     if (notify && tid === league.userTid) {
       if (!wasRequest && p.mood.tradeRequest) {
         addInbox(league, {
+          important: true,
           from: playerName(p),
           subject: 'Trade request',
           body: `${playerName(p)}'s agent says he wants a trade. ${notes.join('. ')}. An unhappy star can drag down the locker room. Give him a bigger role or move him.`,

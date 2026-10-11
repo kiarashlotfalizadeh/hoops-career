@@ -174,6 +174,12 @@ export default function Settings() {
             label="Job security"
             help="The owner can fire you after repeated bad seasons (never in your first two). See Owner in Finances."
           />
+          <Toggle
+            on={st.stopOnNews !== false}
+            onChange={(v) => mutate((l) => (l.settings.stopOnNews = v))}
+            label="Pause sims for big news"
+            help="Long sims stop for a trade request, a long injury to a top-eight player, or an owner verdict. Routine news just lands in the inbox."
+          />
         </div>
       </Card>
 

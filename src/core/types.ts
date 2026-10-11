@@ -650,6 +650,8 @@ export interface InboxMessage {
   /** Optional in-app deep link. */
   link?: string;
   tone?: 'good' | 'bad' | 'neutral' | 'alert';
+  /** Big news for the GM: long sims pause for it (trade requests, key long-term injuries, owner verdicts). */
+  important?: boolean;
 }
 
 export interface SeasonAwards {
@@ -681,6 +683,8 @@ export interface Settings {
   liveSpeed: number;
   /** First-run guide dismissed. */
   onboarded?: boolean;
+  /** Pause long sims for big news (default on). */
+  stopOnNews?: boolean;
 }
 
 export interface League {

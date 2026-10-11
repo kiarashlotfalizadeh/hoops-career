@@ -124,7 +124,8 @@ export const useStore = create<AppState>((set, get) => ({
     const startDay = l.day;
     const startPhase = l.phase;
     const total = estimateTotal(l, target);
-    const inboxBefore = l.inbox.filter((m) => !m.read && (m.tone === 'bad' || m.tone === 'alert')).length;
+    const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
+    const inboxBefore = bigNews();
     set({ sim: { label: 'Simulating', done: 0, total }, stopRequested: false });
     let days = 0;
     try {
@@ -137,9 +138,8 @@ export const useStore = create<AppState>((set, get) => ({
         set(refresh ? { sim: { label: 'Simulating', done: days, total: Math.max(total, days) }, v: get().v + 1 } : { sim: { label: 'Simulating', done: days, total: Math.max(total, days) } });
         if (report.phaseChanged) break;
         if (targetDone(l, target, startDay, startPhase)) break;
-        // smart stop: something important happened to your team during a long sim
-        const alerts = l.inbox.filter((m) => !m.read && (m.tone === 'bad' || m.tone === 'alert')).length;
-        if (days > 1 && alerts > inboxBefore && target.kind !== 'days') {
+        // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
+        if (l.settings.stopOnNews !== false && days > 1 && target.kind !== 'days' && bigNews() > inboxBefore) {
           get().toast('Stopped: something needs your attention (see Inbox).', 'neutral');
           break;
         }
