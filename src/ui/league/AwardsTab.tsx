@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Award, Crown, Medal, Shield, Sparkles, Star, TrendingUp, Trophy, Users } from 'lucide-react';
 import type { League, Player, SeasonAwards } from '../../core/types';
 import { curTeamSeason, seasonTotals, winPct } from '../../core/league/helpers';
-import { defContext, dpoyScore, gameScore, mvpScore } from '../../core/league/awards';
+import { defContext, dpoyScore, gameScore, gamesThreshold, mvpScore } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -286,14 +286,15 @@ function AwardRace({ league }: { league: League }) {
       const ts = tid !== null ? league.teams[tid].seasons.find((x) => x.season === season) : undefined;
       all.push({ p, s, gp: s.gp, mpg: s.min / s.gp, gmsc: gameScore(s) / s.gp, winPct: ts ? winPct(ts) : 0.5, pmPerGame: s.pm / s.gp, tid });
     }
-    const minG = Math.max(1, Math.round(played * 0.6));
+    // the vote's own eligibility, so the ladder leader is someone who could win
+    const minG = gamesThreshold(league);
     const eligible = all.filter((c) => c.gp >= minG && c.mpg >= 20);
     const rank = (arr: Cand[], f: (c: Cand) => number) =>
       arr
         .map((c) => ({ c, score: f(c) }))
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
-    const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.max(1, Math.round(played * 0.5)));
+    const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.min(minG, 50));
     // same team-defense context the real vote uses
     const dctx = defContext(league, season);
     return {
@@ -302,7 +303,8 @@ function AwardRace({ league }: { league: League }) {
       dpoy: rank(eligible, (c) => dpoyScore(c, dctx)),
       roy: rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05),
       smoy: rank(
-        eligible.filter((c) => c.s.gs <= c.gp / 2),
+        // more games off the bench than as a starter
+        eligible.filter((c) => c.s.gs < c.gp - c.s.gs),
         (c) => c.gmsc + c.pmPerGame * 0.2,
       ),
     };
