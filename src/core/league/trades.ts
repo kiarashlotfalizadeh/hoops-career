@@ -22,7 +22,7 @@ import {
   twoWayRoster,
   winPct,
 } from './helpers';
-import { type Strategy, marketSalary, rookieContract, tradeValue, valueScore } from './contracts';
+import { type Strategy, marketSalary, pendingOption, rookieContract, tradeValue, valueScore } from './contracts';
 import { capPayroll } from './freeAgency';
 
 export interface TradeSide {
@@ -174,7 +174,7 @@ function moneyCost(league: League, tid: number, inSal: number, outSal: number): 
 /** In the offseason a roster can run to 21 but only 15 make opening night: the value of the extra players a team would have to waive. */
 function cutCost(league: League, tid: number, out: number[], inc: number[]): number {
   if (inSeason(league)) return 0;
-  const before = standardRoster(league, tid);
+  const before = tradeRoster(league, tid);
   const after = [...before.filter((p) => !out.includes(p.pid)), ...inc.map((pid) => league.players[pid]).filter((p) => !p.contract.twoWay)];
   if (after.length <= CAP.rosterMax) return 0;
   const strategy = league.teams[tid].strategy;
@@ -234,13 +234,27 @@ export function teamAccepts(league: League, offer: TradeOffer, tid: number): boo
 /**
  * Why a player can't be moved right now, or null. After the season, a contract that ends before
  * next season is only a set of Bird rights: he can be re-signed or let go, not traded (otherwise
- * expiring deals are free value one way or the other).
+ * expiring deals are free value one way or the other). The same goes for a player option until he
+ * decides after the draft: a star about to opt out would otherwise sell at full value.
  */
 export function untradeableReason(league: League, p: Player): string | null {
   const cs = contractSeason(league);
   if (cs > league.season && p.tid >= 0 && contractExp(p.contract) < cs) return `${playerName(p)}'s contract is up: he can be re-signed or let go, not traded.`;
+  if (cs > league.season && pendingOption(league, p) === 'player') return `${playerName(p)} decides on his player option after the draft: he can't be traded until then.`;
   return null;
 }
+
+/**
+ * The standard roster a trade counts: after the season, only players under contract for next
+ * season (expiring deals are leaving, or are re-signed into their own spot).
+ */
+export function tradeRoster(league: League, tid: number): Player[] {
+  const cs = contractSeason(league);
+  return standardRoster(league, tid).filter((p) => contractExp(p.contract) >= cs);
+}
+
+/** "the 2028 1st" or a player's name, for rule messages. */
+const assetName = (league: League, a: Player | DraftPick) => ('pid' in a ? playerName(a) : `the ${pickLabel(league, a)}`);
 
 /**
  * Extra salary a side must send for its team to pass the 125% rule (0 when it passes). Payroll
@@ -281,6 +295,7 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
   if (league.phase === 'playoffs' || league.phase === 'playin') errors.push('No trades during the postseason.');
   const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;
   const maxSize = rosterMaxNow(league);
+  const s = season(league);
   for (const [key, mine, other] of [
     ['a', offer.a, offer.b],
     ['b', offer.b, offer.a],
@@ -298,20 +313,31 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       const dp = findPick(league, dpid);
       if (!dp || dp.tid !== mine.tid) errors.push('A draft pick in the deal is no longer owned by that team.');
     }
+    // no flipping an asset straight back: on casual, AI GMs take a little less than fair value, so a
+    // there-and-back pair of trades would otherwise pay out every time
+    for (const a of [...other.pids.map((pid) => league.players[pid]), ...other.dpids.map((d) => findPick(league, d))]) {
+      if (a?.tradedFrom?.tid === mine.tid && a.tradedFrom.season === league.season)
+        errors.push(`${abbrev} traded ${assetName(league, a)} away this season and can't get ${'pid' in a ? 'him' : 'it'} back until next season.`);
+    }
     // standard roster spots: the cap only binds a team taking in bodies, the floor one sending them out
     const out = mine.pids.filter((pid) => !twoWay(pid)).length;
     const inc = other.pids.filter((pid) => !twoWay(pid)).length;
-    const size = standardRoster(league, mine.tid).length - out + inc;
+    const size = tradeRoster(league, mine.tid).length - out + inc;
     if (inc > out && size > maxSize) errors.push(`${abbrev} would have ${size} players (max ${maxSize}${inSeason(league) ? '' : ' in the offseason'}).`);
     if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players (minimum ${CAP.rosterMin} during the season).`);
     const twIn = other.pids.filter(twoWay).length;
     const twAfter = twoWayRoster(league, mine.tid).length - mine.pids.filter(twoWay).length + twIn;
     if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players (max ${TWO_WAY_MAX}).`);
+    const inSal = sideSalary(league, other);
+    const outSal = sideSalary(league, mine);
     if (salaryMatchGap(league, offer, key) > 0) {
-      const inSal = sideSalary(league, other);
-      const maxIn = sideSalary(league, mine) * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
+      const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
       errors.push(`${abbrev} is over the cap and can take back at most 125% of outgoing salary ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`);
     }
+    // the mid-level is for teams under the tax, so using it caps the team at the tax line for that season
+    const tax = CAP_FOR(league, s).luxuryTax;
+    if (league.teams[mine.tid].mleSeason === s && inSal > outSal && capPayroll(league, mine.tid, s) - outSal + inSal > tax)
+      errors.push(`${abbrev} used the mid-level exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`);
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
   }
@@ -348,6 +374,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
       from.rotation.restB2B = from.rotation.restB2B.filter((x) => x !== pid);
       delete from.tactics.offense.roles[pid];
       delete from.tactics.offense.freedom[pid];
+      p.tradedFrom = { tid: p.tid, season: league.season };
       p.tid = to;
       p.joinedSeason = league.season;
       p.mood.tradeRequest = false;
@@ -358,7 +385,9 @@ export function executeTrade(league: League, offer: TradeOffer) {
   const movePicks = (dpids: number[], to: number) => {
     for (const dpid of dpids) {
       const dp = findPick(league, dpid);
-      if (dp) dp.tid = to;
+      if (!dp) continue;
+      dp.tradedFrom = { tid: dp.tid, season: league.season };
+      dp.tid = to;
     }
   };
   move(offer.a.pids, offer.b.tid);

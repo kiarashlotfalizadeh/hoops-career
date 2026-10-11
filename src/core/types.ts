@@ -193,6 +193,8 @@ export interface Player {
   awards: AwardRecord[];
   /** Season he joined current team. */
   joinedSeason: number;
+  /** The team that last traded him away, and when: he can't go straight back to it that season. */
+  tradedFrom?: { tid: number; season: number };
   experience: number; // NBA seasons completed
   retiredSeason?: number;
   hof?: boolean;
@@ -465,6 +467,8 @@ export interface DraftPick {
   pick?: number;
   /** Top-N protected: if it lands in the first N picks of its round, it stays with originalTid (obligation ends). */
   protection?: number;
+  /** The team that last traded it away, and when: it can't go straight back to that team that season. */
+  tradedFrom?: { tid: number; season: number };
 }
 
 // ---------------------------------------------------------------- games

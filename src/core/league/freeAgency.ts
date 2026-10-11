@@ -3,7 +3,21 @@ import { FREE_AGENT } from '../types';
 import { Rng } from '../random';
 import { CAP } from '../constants';
 import { contractExp, playerAge } from '../playerGen';
-import { CAP_FOR, TWO_WAY_MAX, contractSeason, addInbox, addNews, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, twoWayRoster } from './helpers';
+import {
+  CAP_FOR,
+  OFFSEASON_ROSTER_MAX,
+  TWO_WAY_MAX,
+  contractSeason,
+  addInbox,
+  addNews,
+  freeAgents,
+  payroll,
+  playerName,
+  rosterMaxNow,
+  standardRoster,
+  teamPlayers,
+  twoWayRoster,
+} from './helpers';
 import {
   FA_PRICE_CUT_DAYS,
   MLE_YEARS,
@@ -147,17 +161,24 @@ const deadIfCut = (league: League, p: Player) => releaseDeadMoney(league, p).red
 /** A free agent must beat a swapped-out player by 4 points of value, plus a point per $1M of dead money the release leaves. */
 const swapBar = (league: League, p: Player) => valueScore(league, p) + 4 + deadIfCut(league, p) / 1000;
 
-/** The player a full AI roster would swap out for a better free agent (dead money at most 2.2× the veteran minimum), or undefined. */
+/**
+ * The player a full AI roster would give up for a better free agent, or undefined. In season that
+ * is a release on the spot, so the dead money it leaves is held to 2.2× the veteran minimum. In
+ * the summer the newcomer just joins camp (up to 21) and the cuts come by value on opening night,
+ * so the bar is whoever would lose the 15th spot.
+ */
 function swapCandidate(league: League, tid: number, season: number): Player | undefined {
   const roster = standardRoster(league, tid);
   if (roster.length < CAP.rosterMax) return undefined;
+  const byBar = (xs: Player[]) => xs.sort((a, b) => swapBar(league, a) - swapBar(league, b));
+  if (season > league.season) return roster.length < OFFSEASON_ROSTER_MAX ? byBar(roster)[roster.length - CAP.rosterMax] : undefined;
   const limit = CAP_FOR(league, season).vetMin * 2.2;
-  return roster.filter((x) => deadIfCut(league, x) <= limit).sort((a, b) => swapBar(league, a) - swapBar(league, b))[0];
+  return byBar(roster.filter((x) => deadIfCut(league, x) <= limit))[0];
 }
 
 /**
  * One AI team's shot at the market: the best fit it can pay (cap space, the mid-level exception
- * or the minimum). A full roster can only swap a cheap player out for a clearly better one.
+ * or the minimum). A full roster only adds a clearly better player than the one he'd displace.
  */
 function aiSign(league: League, t: Team, rng: Rng, season: number) {
   const roster = standardRoster(league, t.tid);
@@ -185,7 +206,8 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
   if (!rng.chance(patience)) return;
   const route = signingRoute(league, t.tid, ask.amount, season);
   if (route === 'mle') t.mleSeason = season;
-  if (cut) releasePlayer(league, cut, { news: false });
+  // (summer signings just join camp: opening-night cuts trim the roster back to 15)
+  if (cut && season === league.season) releasePlayer(league, cut, { news: false });
   // minimum deals are short: a season, two for a young player
   const years = route === 'min' ? (playerAge(pick, season) <= 25 ? 2 : 1) : route === 'mle' ? Math.min(MLE_YEARS, ask.years) : ask.years;
   signPlayer(league, pick, t.tid, ask.amount, years, { start: season });
