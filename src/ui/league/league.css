@@ -707,8 +707,9 @@
 .bk-t.win .w {
   color: var(--good);
 }
+/* faded, but the loser's name still reads at 4.5:1 */
 .bk-t.lose {
-  opacity: 0.42;
+  opacity: 0.55;
 }
 .bk-t .tb {
   color: var(--text-dim);
@@ -750,7 +751,7 @@
   min-width: 0;
 }
 .bk-finals .side.lose {
-  opacity: 0.45;
+  opacity: 0.55;
 }
 .bk-finals .score {
   font-family: var(--display);
