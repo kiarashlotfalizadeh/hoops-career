@@ -254,11 +254,13 @@ export default function NewLeague() {
               ]}
             />
             <div className="small dim" style={{ marginTop: 8 }}>
+              {/* the same numbers Settings quotes */}
               {settings.difficulty === 'casual'
-                ? 'AI GMs are forgiving in trades and free agents ask for a bit less.'
+                ? 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.'
                 : settings.difficulty === 'hard'
-                  ? 'AI GMs want a premium and players ask for more money.'
-                  : 'Fair trades, market-rate contracts.'}
+                  ? 'AI GMs want a 12% premium in trades, and free agents ask you for 12% more.'
+                  : 'Fair trades and market-rate contracts.'}{' '}
+              You can change this any time.
             </div>
           </Card>
           <Card title="Coaching depth">
@@ -286,7 +288,7 @@ export default function NewLeague() {
                 on={settings.injuries}
                 onChange={(v) => setSettings({ ...settings, injuries: v })}
                 label="Injuries"
-                help="Players can get hurt; fatigue and age raise the risk."
+                help="Players can get hurt; fatigue, age and injury history raise the risk."
               />
               <Toggle
                 on={settings.jobSecurity}

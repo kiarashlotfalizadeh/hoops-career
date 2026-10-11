@@ -303,7 +303,15 @@ function HallOfFame({ league }: { league: League }) {
           ))}
         </div>
       )}
-      <SectionLabel right={<span className="tiny dim">{retired.length} players</span>}>Notable retirements</SectionLabel>
+      <SectionLabel
+        right={
+          <span className="tiny dim">
+            {retired.length} player{retired.length === 1 ? '' : 's'}
+          </span>
+        }
+      >
+        Notable retirements
+      </SectionLabel>
       {retired.length === 0 ? (
         <Card>
           <Empty>Decorated and long-serving players who retire will be listed here.</Empty>

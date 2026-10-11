@@ -208,7 +208,7 @@ export default function Settings() {
             on={st.injuries}
             onChange={(v) => mutate((l) => (l.settings.injuries = v))}
             label="Injuries"
-            help="Players can get hurt; fatigue, age and injury history raise the risk."
+            help="Players can get hurt; fatigue, age and injury history raise the risk. Turning it off stops new injuries; players already hurt heal as usual."
           />
           <Toggle
             on={st.jobSecurity}

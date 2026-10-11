@@ -407,7 +407,8 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
             </button>
           )}
           <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length}` : filtered.length} players · {tot ? 'season totals' : 'per-game averages'} · tap a column to sort
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} ·{' '}
+            {tot ? 'season totals' : 'per-game averages'} · tap a column to sort
             {real ? ' · imported real-life season' : ''}
           </div>
         </>
