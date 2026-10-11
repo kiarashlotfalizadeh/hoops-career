@@ -29,7 +29,7 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { aiTicketPrice, assessLuxuryTax, profit } from './finances';
+import { aiTicketPrice, assessLuxuryTax, profit, shareRevenue } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, selectAllStars } from './awards';
@@ -235,6 +235,19 @@ export function advanceDay(league: League, report?: DayReport) {
 
 function endRegularSeason(league: League) {
   computeRegularSeasonAwards(league);
+  // revenue sharing first: the tax pot is shared on top of it
+  const shared = shareRevenue(league).get(league.userTid) ?? 0;
+  if (Math.abs(shared) >= 500)
+    addInbox(league, {
+      from: 'League Office',
+      subject: 'Revenue sharing',
+      body:
+        shared > 0
+          ? `Our local revenue (gate, merchandise, local TV) came in below the league average, so revenue sharing pays us $${(shared / 1000).toFixed(1)}M.`
+          : `Our local revenue (gate, merchandise, local TV) beat the league average, so we pay $${(-shared / 1000).toFixed(1)}M into revenue sharing.`,
+      tone: 'neutral',
+      link: '/finances',
+    });
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
   if (mine?.tax)

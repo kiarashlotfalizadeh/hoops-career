@@ -10,6 +10,7 @@ import {
   NATIONAL_REVENUE,
   OPERATIONS_PER_SEASON,
   PLAYOFF_PRICE_MULT,
+  REVENUE_SHARING,
   TAX_SHARE_TO_NON_TAXPAYERS,
   attendanceFor,
   budgetCostPerSeason,
@@ -145,7 +146,8 @@ function Overview({ team }: { team: Team }) {
         <div className="tiny dim" style={{ marginTop: 8 }}>
           National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay {CAP.taxRate}
           × on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among teams under the line), and teams under the {fmtM(cap.minPayroll)}{' '}
-          salary floor pay the shortfall to their players.
+          salary floor pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives {Math.round(REVENUE_SHARING * 100)}% of the gap between
+          its local revenue (gate, merchandise, local TV) and the league average.
         </div>
       </Card>
     </>
