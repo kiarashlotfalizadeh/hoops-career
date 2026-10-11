@@ -7,7 +7,7 @@ import { Rng, clamp } from '../random';
 import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
-import { playerAge } from '../playerGen';
+import { blankMood, playerAge } from '../playerGen';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
@@ -440,12 +440,15 @@ export function newSeason(league: League): boolean {
 /**
  * Retirees stay for history and the Hall of Fame, but after two seasons only as career records:
  * those who never played a game go, the rest lose sim-only detail (ratings snapshots beyond peak
- * and final, tendencies, scouting). Without this the save grows by every retiree's full record.
+ * and final, tendencies, scouting, mood, on-court and shot-zone context in their stat lines).
+ * Five seasons on, fringe careers without an award (under 100 games) leave too. Without this the
+ * save grows by every retiree's full record.
  */
 function compactRetired(league: League) {
   for (const p of Object.values(league.players)) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
-    if (!p.awards.length && !p.stats.some((s) => s.gp > 0)) {
+    const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
+    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5))) {
       delete league.players[p.pid];
       continue;
     }
@@ -455,12 +458,18 @@ function compactRetired(league: League) {
       const last = hist[hist.length - 1];
       p.ratingsHistory = peak === last ? [last] : [peak, last];
     }
+    // career tables still need team usage (USG) and plus-minus; on/off and shot zones only feed live seasons
+    for (const s of p.stats) {
+      s.onPoss = s.onPtsFor = s.onPtsAgainst = 0;
+      s.rimM = s.rimA = s.midM = s.midA = 0;
+      s.min = Math.round(s.min * 10) / 10;
+    }
     delete p.tend;
     delete p.prospect;
     delete p.asking;
     delete p.faDays;
     p.injury = null;
-    p.mood.notes = [];
+    p.mood = blankMood();
   }
 }
 

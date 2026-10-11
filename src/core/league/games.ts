@@ -195,7 +195,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       const s = statsLine(p, league.season, rb.tid, playoffs || g.type === 'playin');
       s.gp++;
       if (rb.starter) s.gs++;
-      s.min += b.sec / 60;
+      s.min = Math.round((s.min + b.sec / 60) * 10) / 10;
       s.fgm += b.fgm;
       s.fga += b.fga;
       s.tpm += b.tpm;
@@ -247,7 +247,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     updateHype(home, homeWon, playoffs);
     updateHype(away, !homeWon, playoffs);
   }
-  // storage policy: keep detail only for the user's games
+  // storage policy: keep detail only for the user's games; a season of other games keeps only
+  // the players who got on the floor (DNP lines were a fifth of the save mid-season)
   const userGame = g.home === league.userTid || g.away === league.userTid;
   if (!userGame) {
     delete res.shots;
@@ -255,6 +256,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.lineups;
     delete res.flow;
     delete res.pbp;
+    for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   }
   league.games.push(res);
   // trim play-by-play from older user games
