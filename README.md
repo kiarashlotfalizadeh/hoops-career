@@ -36,13 +36,18 @@ npm run data:build   # parse → derive ratings → calibrate in the engine → 
 
 Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches the pages on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, and commits `src/data/seed.json` to `main`. It also keeps the raw pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing.
 
-How ratings are made (`scripts/data/derive.ts`, `scripts/data/calibrate.ts`):
-1. Seasons are weighted by recency and minutes (2025-26 ×1.0, 24-25 ×0.6, 23-24 ×0.3). Shooting uses Bayesian priors, and everything is regressed toward the mean by sample size.
-2. Stats are mapped to 21 attributes, and per-player tendencies (usage, three-point rate, driving, passing) are set.
-3. **Engine-in-the-loop calibration**: whole seasons are simulated repeatedly, and each player's simulated per-36 profile is compared with his real one. Ratings and tendencies are nudged until he reproduces his shot volume, shot mix, 3P%/2P%, free-throw rate, assists, turnovers, rebounds, steals and blocks.
-4. Players without NBA stats (2026 draftees, international signings) are rated from draft slot, age and measurables, plus scouting-consensus profiles for headline prospects.
+The current seed has 544 players: 483 under contract for 2026-27 plus the best 61 unsigned players from 2025-26.
 
-The pipeline is covered by parser unit tests and an offline end-to-end fixture (`scripts/data/test/make-fixture.ts`). Until the seed is generated, New League offers a fictional league with real franchises.
+How ratings are made (`scripts/data/derive.ts`, `scripts/data/calibrate.ts`, `scripts/data/build-seed.ts`):
+1. Seasons are weighted by recency and minutes (2025-26 ×1.0, 24-25 ×0.6, 23-24 ×0.3). Shooting uses Bayesian priors, and small samples are regressed toward the mean.
+2. Stats map to 21 attributes. The event attributes (shot blocking, steals, rebounding, passing, ball handling) come straight from the rate stats (BLK%, STL%, ORB%, DRB%, AST%, USG%/TOV%), so a rating means what its name says.
+3. **Engine-in-the-loop calibration**: seasons are simulated repeatedly, and each player's simulated per-36 profile is compared with his real one. Shooting ratings and hidden per-player tendencies (usage, shot mix, passing, turnovers, share of rebounds, steals, blocks and fouls) are nudged until he reproduces his real line. The tendencies absorb role and opportunity (a help-side guard who blocks shots, a center whose teammates crash the glass), so they don't distort the visible ratings.
+4. **Small samples are leveled**: players without NBA minutes (2026 draftees, overseas returns) are set from draft slot and scouting-consensus reputation. Short NBA samples are shrunk toward the level their minutes per game suggest. Calibration then settles again around them.
+5. **OVR** is a fitted, size-aware blend of attributes. The weights are non-negative and were fitted so that real players' ratings predict their regressed three-season BPM, plus the minutes and usage coaches gave them (OVR vs BPM r ≈ 0.85).
+
+`npm run real-check` simulates a season with the real league and compares every regular with his real 2025-26 numbers. The current seed gets sim-vs-real correlations of about 0.87 for points, 0.85 for assists and 0.92 for rebounds per game, with league averages on 2025-26 targets.
+
+The pipeline is covered by parser unit tests, an offline end-to-end fixture (`scripts/data/test/make-fixture.ts`) and seed sanity tests. New League also offers a fictional league with real franchises.
 
 ## Develop
 
@@ -53,6 +58,7 @@ npm test             # vitest: engine, schedule, rotations, season loop, trades,
 npm run typecheck
 npm run bench        # engine calibration bench vs 2025-26 averages
 npm run season-test  # multi-season end-to-end run
+npm run real-check   # one real-league season vs real 2025-26 stats
 npm run build        # production PWA in dist/
 ```
 
@@ -80,7 +86,8 @@ android/, ios/     Capacitor native projects
 
 ## Design decisions
 
-- Ratings are shown on a 2K-style 40-99 scale, fully visible. The scale is anchored to the league's distribution, so a 90+ is MVP-level and 75 is a quality starter.
+- Ratings are shown on a 2K-style 40-99 scale, fully visible. OVR is anchored to the league's distribution, so a 90+ is MVP-level and 75 is a quality starter. Attributes use the same 40-99 scale (league median ≈ 68).
+- The contracts table includes two-way and camp deals, so some teams start with 16-20 players. AI teams make preseason cuts down to 15 at league creation. If your team is over, the Assistant GM suggests who to release before opening night.
 - Free agents and AI trades are tuned for casual play by default (difficulty can be changed in Settings).
 - Future draft-pick ownership starts with every team owning its own picks, because Basketball Reference's contracts table doesn't include pick trades.
 - Team logos are original monograms in each franchise's colors (no trademarked artwork).

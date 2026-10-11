@@ -4,7 +4,7 @@ import { Activity, ListOrdered, Workflow } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
 import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col } from '../components/ui';
-import { fmtHeight, ROLE_META, archetype } from '../../core/ratings';
+import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { f1, moneyM, p1, playerSeason, signed } from '../stats';
@@ -41,8 +41,8 @@ export default function Roster() {
     ...(['hgt', 'spd', 'ath', 'ins', 'mid', 'tp', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'diq', 'dreb'] as const).map((k) => ({
       key: k,
       label: { hgt: 'SIZ', spd: 'SPD', ath: 'EXP', ins: 'FIN', mid: 'MID', tp: '3PT', hnd: 'HND', pas: 'PAS', oiq: 'OIQ', perD: 'PER', intD: 'INT', blk: 'BLK', diq: 'DIQ', dreb: 'REB' }[k],
-      get: (p: Player) => Math.round(p.ratings[k]),
-      fmt: (v: number | string) => <span style={{ color: (v as number) >= 70 ? 'var(--good)' : (v as number) <= 35 ? 'var(--text-dim)' : undefined }}>{v}</span>,
+      get: (p: Player) => attrDisplay(p.ratings[k]),
+      fmt: (v: number | string) => <span style={{ color: (v as number) >= 80 ? 'var(--good)' : (v as number) <= 60 ? 'var(--text-dim)' : undefined }}>{v}</span>,
     })),
   ];
 

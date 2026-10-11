@@ -35,6 +35,9 @@ export const RATING_META: RatingMeta[] = [
 
 export const RATING_KEYS: RatingKey[] = RATING_META.map((m) => m.key);
 
+/** Attributes are stored 0-100 (league median ≈ 47); shown on the same 40-99 scale as OVR. */
+export const attrDisplay = (v: number) => Math.round(40 + 0.59 * clamp(v, 0, 100));
+
 export const heightToRating = (inches: number) => clamp(50 + (inches - 79.5) * 4.3, 0, 100);
 export const ratingToHeight = (h: number) => 79.5 + (h - 50) / 4.3;
 
@@ -104,19 +107,26 @@ export function composites(r: Ratings): Composites {
 
 // ---------------------------------------------------------------- overall
 
-/** Size-aware blend: guards are judged on creation and shooting, bigs on finishing and protection. */
+// OVR weights, fitted (non-negative, anchored to a hand-built prior) so that real players'
+// calibrated ratings predict their impact: three-season regressed BPM plus the minutes and
+// usage coaches actually gave them. Guards are judged mostly on feel, creation and size;
+// bigs on feel, passing, foul drawing, rebounding and rim protection. Box-score volume that
+// a lineup would get anyway (offensive boards, steals, put-backs) carries little weight.
+const OVR_GUARD: Ratings = {
+  hgt: 0.105, spd: 0.015, ath: 0.005, str: 0.05, end: 0.03, ins: 0.015, mid: 0.07, tp: 0.035, ft: 0.015, drw: 0.035, post: 0,
+  hnd: 0.09, pas: 0.08, oiq: 0.16, perD: 0.04, intD: 0.045, blk: 0.015, stl: 0.005, diq: 0.07, oreb: 0, dreb: 0.01,
+};
+const OVR_BIG: Ratings = {
+  hgt: 0.07, spd: 0.04, ath: 0.025, str: 0.03, end: 0.03, ins: 0.02, mid: 0.01, tp: 0.03, ft: 0.03, drw: 0.055, post: 0.03,
+  hnd: 0.035, pas: 0.1, oiq: 0.13, perD: 0.015, intD: 0.037, blk: 0.038, stl: 0, diq: 0.052, oreb: 0.005, dreb: 0.052,
+};
+
+/** Size-aware blend of the guard and big weightings. */
 export function ovrRaw(r: Ratings): number {
   const big = clamp((r.hgt - 40) / 40, 0, 1);
-  const shared =
-    0.1 * r.oiq + 0.07 * r.diq + 0.05 * r.ath + 0.03 * r.end + 0.03 * r.str + 0.02 * r.ft + 0.03 * r.drw;
-  const guard =
-    0.1 * r.tp + 0.09 * r.hnd + 0.09 * r.pas + 0.07 * r.spd + 0.06 * r.mid + 0.06 * r.ins + 0.07 * r.perD +
-    0.03 * r.stl + 0.03 * r.dreb + 0.03 * r.hgt;
-  const bigF =
-    0.1 * r.ins + 0.08 * r.hgt + 0.07 * r.blk + 0.07 * r.intD + 0.05 * r.oreb + 0.07 * r.dreb + 0.04 * r.str +
-    0.03 * r.post + 0.04 * r.tp + 0.03 * r.pas + 0.03 * r.spd + 0.02 * r.perD;
-  // shared ~0.33, guard ~0.63, big ~0.63
-  return (shared + (1 - big) * guard + big * bigF) / 0.96;
+  let s = 0;
+  for (const k of RATING_KEYS) s += r[k] * ((1 - big) * OVR_GUARD[k] + big * OVR_BIG[k]);
+  return s / 0.86;
 }
 
 export interface OvrScale {

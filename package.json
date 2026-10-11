@@ -15,7 +15,8 @@
     "cap:sync": "npm run build && cap sync",
     "data": "npm run data:fetch && npm run data:build",
     "bench": "tsx scripts/engine-bench.ts",
-    "season-test": "tsx scripts/season-test.ts"
+    "season-test": "tsx scripts/season-test.ts",
+    "real-check": "tsx scripts/real-check.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

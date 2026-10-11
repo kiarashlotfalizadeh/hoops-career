@@ -1,6 +1,6 @@
 import type { League, Player, PlayerStats, Pos, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
-import { START_SEASON } from '../constants';
+import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
@@ -10,10 +10,10 @@ import { generateSchedule } from './schedule';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { updateMorale } from './morale';
-import { askingContract } from './contracts';
-import { addInbox, teamPlayers } from './helpers';
+import { askingContract, releasePlayer, valueScore } from './contracts';
+import { addInbox, playerName, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './trades';
-import { fillRosters } from './freeAgency';
+import { fillRosters, trimRosters } from './freeAgency';
 
 export interface SeedPlayer {
   id: string;
@@ -53,6 +53,8 @@ export interface CreateOpts {
   settings: Settings;
   seed?: SeedData | null;
   rngSeed?: number;
+  /** Cut AI rosters to 15 at creation (default). The seed builder keeps everyone to calibrate them. */
+  preseasonCuts?: boolean;
 }
 
 export function defaultSettings(): Settings {
@@ -198,6 +200,8 @@ export function createLeague(opts: CreateOpts): League {
   }
   ensureFuturePicks(league, season + 3);
   generateDraftClass(league, season, rng);
+  // preseason cuts: real contract lists include two-way and camp deals, so AI teams trim to 15
+  if (opts.preseasonCuts !== false) trimRosters(league, (p) => releasePlayer(league, p, { news: false }));
   fillRosters(league, rng);
   const sched = generateSchedule(league.teams, season, rng, league.nextGid);
   league.schedule = sched.games;
@@ -218,5 +222,16 @@ export function createLeague(opts: CreateOpts): League {
     tone: 'good',
     link: '/tactics',
   });
+  const over = roster.length - CAP.rosterMax;
+  if (over > 0) {
+    const cuts = [...roster].sort((a, b) => valueScore(league, a) - valueScore(league, b)).slice(0, over);
+    addInbox(league, {
+      from: 'Assistant GM',
+      subject: `Preseason cuts: ${roster.length} players, room for ${CAP.rosterMax}`,
+      body: `We carry ${roster.length} players into camp, including two-way and camp contracts. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Releasing a player keeps any guaranteed salary on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
+      tone: 'alert',
+      link: '/office',
+    });
+  }
   return league;
 }

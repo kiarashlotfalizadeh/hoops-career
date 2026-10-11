@@ -28,9 +28,10 @@ interface SimAcc {
   blk: number;
   tov: number;
   pts: number;
+  pf: number;
 }
 
-const blank = (): SimAcc => ({ sec: 0, fga: 0, fg3a: 0, fg3: 0, fg2a: 0, fg2: 0, fta: 0, ft: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pts: 0 });
+const blank = (): SimAcc => ({ sec: 0, fga: 0, fg3a: 0, fg3: 0, fg2a: 0, fg2: 0, fta: 0, ft: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pts: 0, pf: 0 });
 
 export function simulateBatch(league: League, gamesPerTeam: number, seed: number): Map<number, SimAcc> {
   const rng = new Rng(seed);
@@ -67,6 +68,7 @@ export function simulateBatch(league: League, gamesPerTeam: number, seed: number
       e.blk += b.blk;
       e.tov += b.tov;
       e.pts += b.pts;
+      e.pf += b.pf;
       acc.set(rb.pid, e);
     }
   }
@@ -85,7 +87,7 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
   const reports: CalibReport[] = [];
   passes.forEach((pass, iter) => {
     const acc = simulateBatch(league, pass.games, 1000 + iter);
-    const err: Record<string, number> = { use: 0, tpar: 0, fg3: 0, fg2: 0, ftr: 0, ast: 0, tov: 0, orb: 0, drb: 0, stl: 0, blk: 0 };
+    const err: Record<string, number> = { use: 0, tpar: 0, fg3: 0, fg2: 0, ftr: 0, ast: 0, tov: 0, orb: 0, drb: 0, stl: 0, blk: 0, pf: 0 };
     let count = 0;
     for (const [pid, t] of targets) {
       const p = league.players[pid];
@@ -107,6 +109,7 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
         drb: s.drb * k,
         stl: s.stl * k,
         blk: s.blk * k,
+        pf: s.pf * k,
       };
       const tgt = {
         use: real.fga + 0.44 * real.fta + real.tov,
@@ -120,10 +123,12 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
         drb: real.drb,
         stl: real.stl,
         blk: real.blk,
+        pf: real.pf,
       };
       for (const key of Object.keys(err)) err[key] += Math.abs((sim as Record<string, number>)[key] - (tgt as Record<string, number>)[key]);
       const tend = (p.tend ??= { use: 1, three: 1, drive: 1, pass: 1 });
-      tend.use = clamp(tend.use * Math.exp(ln(tgt.use, sim.use) * 0.85 * d), 0.2, 3.5);
+      // usage responds sublinearly (a star's share saturates), so step harder than for rates
+      tend.use = clamp(tend.use * Math.exp(ln(tgt.use, sim.use) * 1.4 * d), 0.15, 10);
       if (tgt.tpar < 0.02) tend.three = clamp(tend.three * 0.6, 0.02, 3);
       else tend.three = clamp(tend.three * Math.exp(ln(tgt.tpar * 10, sim.tpar * 10) * 0.8 * d), 0.02, 3.5);
       const r = p.ratings;
@@ -134,16 +139,15 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
         r.ins += step;
         r.mid += step * 0.35;
       }
-      const ast = ln(tgt.ast, sim.ast);
-      r.pas += clamp(12 * ast * d, -8, 8);
-      tend.pass = clamp(tend.pass * Math.exp(ast * 0.35 * d), 0.3, 3);
-      const tov = ln(tgt.tov, sim.tov);
-      r.hnd -= clamp(10 * tov * d, -6, 6);
-      r.oiq -= clamp(5 * tov * d, -4, 4);
-      r.oreb += clamp(18 * ln(tgt.orb, sim.orb) * d, -8, 8);
-      r.dreb += clamp(18 * ln(tgt.drb, sim.drb) * d, -8, 8);
-      r.stl += clamp(18 * ln(tgt.stl, sim.stl) * d, -8, 8);
-      r.blk += clamp(18 * ln(tgt.blk, sim.blk) * d, -8, 8);
+      // playmaking, ball security, glass and defensive events: visible ratings stay as derived
+      // from the real rate stats; hidden tendencies absorb role and opportunity
+      tend.pass = clamp(tend.pass * Math.exp(ln(tgt.ast, sim.ast) * 0.7 * d), 0.25, 4);
+      tend.tov = clamp((tend.tov ?? 1) * Math.exp(ln(tgt.tov, sim.tov) * 0.9 * d), 0.3, 3.5);
+      tend.orb = clamp((tend.orb ?? 1) * Math.exp(ln(tgt.orb, sim.orb) * 0.9 * d), 0.08, 5);
+      tend.drb = clamp((tend.drb ?? 1) * Math.exp(ln(tgt.drb, sim.drb) * 0.9 * d), 0.08, 5);
+      tend.stl = clamp((tend.stl ?? 1) * Math.exp(ln(tgt.stl, sim.stl) * 0.9 * d), 0.2, 5);
+      tend.blk = clamp((tend.blk ?? 1) * Math.exp(ln(tgt.blk, sim.blk) * 0.9 * d), 0.15, 6);
+      tend.pf = clamp((tend.pf ?? 1) * Math.exp(ln(tgt.pf, sim.pf) * 0.9 * d), 0.15, 3);
       clampRatings(r);
     }
     for (const key of Object.keys(err)) err[key] = count ? err[key] / count : 0;

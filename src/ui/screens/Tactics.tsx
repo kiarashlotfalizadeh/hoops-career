@@ -6,7 +6,7 @@ import type { ActionType, DefScheme, OffRole, PnrCoverage, PressMode, ShotFreedo
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META, applyDefPreset, applyOffPreset, cloneTactics } from '../../core/sim/tactics';
 import { autoTactics, defPresetFit, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
-import { ROLE_META, archetype, composites } from '../../core/ratings';
+import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
@@ -209,7 +209,7 @@ export default function Tactics() {
             <div className="small dim" style={{ marginTop: 8 }}>{COVERAGE_META[t.defense.pnr].help}</div>
             {big && bigC && (
               <div className="small" style={{ marginTop: 8 }}>
-                <span className="dim">Your starting big, {big.lastName}: rim protection {Math.round(bigC.rimProt)}, speed {Math.round(big.ratings.spd)}. </span>
+                <span className="dim">Your starting big, {big.lastName}: rim protection {attrDisplay(bigC.rimProt)}, speed {attrDisplay(big.ratings.spd)}. </span>
                 {t.defense.pnr === 'drop' && (bigC.rimProt >= 60 ? <span className="good">Built for drop.</span> : <span className="warn">Not much of a rim deterrent for drop.</span>)}
                 {t.defense.pnr === 'switch' && (big.ratings.spd >= 45 ? <span className="good">Mobile enough to switch.</span> : <span className="warn">Guards will hunt him on switches.</span>)}
                 {t.defense.pnr === 'hedge' && (big.ratings.spd >= 45 ? <span className="good">Can show and recover.</span> : <span className="warn">May be slow to recover to the roller.</span>)}

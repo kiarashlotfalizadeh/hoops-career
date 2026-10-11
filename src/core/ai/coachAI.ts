@@ -5,6 +5,7 @@ import type { OffRole, Player, Rotation, ShotFreedom, Tactics, Team } from '../t
 import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
+import { clamp } from '../random';
 
 export interface LineupEval {
   score: number;
@@ -90,32 +91,47 @@ export function sortByPosition(ps: Player[]): Player[] {
   return [...ps].sort((a, b) => a.ratings.hgt - b.ratings.hgt + (b.ratings.hnd - a.ratings.hnd) * 0.15);
 }
 
+/** Minutes per game a player can sustain, from stamina (calibrated so real players match their real MPG). */
+export function sustainableMinutes(p: Player): number {
+  return clamp(19.5 + (p.ratings.end - 38) / 1.5, 12, 40);
+}
+
 export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 0);
   const starters = sortByPosition(bestLineup(healthy));
   const bench = healthy.filter((p) => !starters.includes(p)).sort((a, b) => b.ovr - a.ovr);
   const injured = players.filter((p) => !healthy.includes(p)).sort((a, b) => b.ovr - a.ovr);
   const order = [...starters, ...bench, ...injured].map((p) => p.pid);
-  const depth = [...starters, ...bench];
+  // starter minutes follow quality, not position: the best starter gets the biggest share
+  const depth = [...[...starters].sort((a, b) => b.ovr - a.ovr), ...bench];
   const base = defaultMinutesByDepth(depth.length);
   // stars play more, weak starters less: adjust by OVR relative to team
-  const minutes: Record<number, number> = {};
   const avgStarter = starters.reduce((a, p) => a + p.ovr, 0) / Math.max(1, starters.length);
-  depth.forEach((p, i) => {
+  const want = depth.map((p, i) => {
     let m = base[i] ?? 0;
-    if (i < 5) m += (p.ovr - avgStarter) * 0.45;
-    if (i >= 5 && i < 9) {
-      const gap = p.ovr - (depth[4]?.ovr ?? p.ovr);
-      m += gap * 0.4;
-    }
-    if (p.ratings.end < 40) m -= 3;
-    minutes[p.pid] = Math.max(0, Math.round(m));
+    if (i < 5) m += (p.ovr - avgStarter) * 0.3;
+    if (i >= 5 && i < 9) m += (p.ovr - (depth[4]?.ovr ?? p.ovr)) * 0.4;
+    return Math.max(0, m);
   });
-  // rebalance to 240
-  const sum = Object.values(minutes).reduce((a, b) => a + b, 0);
-  if (sum > 0) {
-    for (const pid of Object.keys(minutes)) minutes[+pid] = Math.round((minutes[+pid] * 240) / sum);
+  // stamina sets what a player can sustain; minutes he can't carry flow down the bench
+  const caps = depth.map((p) => sustainableMinutes(p));
+  let mins = want.map((m, i) => Math.min(m, caps[i]));
+  for (let iter = 0; iter < 8; iter++) {
+    const total = mins.reduce((a, b) => a + b, 0);
+    if (Math.abs(total - 240) < 0.5) break;
+    if (total > 240) {
+      mins = mins.map((m) => (m * 240) / total);
+      break;
+    }
+    // grow everyone in the rotation with headroom, in proportion to their planned share
+    const open = mins.map((m, i) => (i < 11 && m < caps[i] - 0.05 ? Math.max(m, i < 10 ? 4 : 0) : 0));
+    const room = open.reduce((a, b) => a + b, 0);
+    if (room <= 0) break;
+    const f = (240 - total) / room;
+    mins = mins.map((m, i) => (open[i] ? Math.min(caps[i], m + open[i] * f) : m));
   }
+  const minutes: Record<number, number> = {};
+  depth.forEach((p, i) => (minutes[p.pid] = Math.round(mins[i])));
   for (const p of injured) minutes[p.pid] = 0;
   const closers = sortByPosition(bestLineup(healthy, 8)).map((p) => p.pid);
   return {
@@ -216,24 +232,32 @@ export function bestPreset(fits: Record<string, number>, bias?: Record<string, n
 export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; freedom: Record<number, ShotFreedom> } {
   const roles: Record<number, OffRole> = {};
   const freedom: Record<number, ShotFreedom> = {};
-  const sorted = [...players].sort((a, b) => b.ovr - a.ovr);
+  // focal score: quality, plus how much of an offense this player has actually carried
+  const focal = (p: Player) => p.ovr + 8 * Math.log(clamp(p.tend?.use ?? 1, 0.3, 4));
+  const sorted = [...players].sort((a, b) => focal(b) - focal(a));
   let creators = 0;
-  for (const p of sorted) {
+  sorted.forEach((p, i) => {
+    const c = composites(p.ratings);
     let role = archetype(p.ratings).role;
+    // the top two options get the ball in scoring spots, whatever their position
+    if (i < 2 && p.ovr >= 78 && (p.tend?.use ?? 1) >= 1.1) {
+      if (role === 'roller' || role === 'stretch' || role === 'glue' || role === 'shooter' || role === 'slasher') role = c.postScore > c.create + 4 ? 'post' : 'scorer';
+      // only an elite passer stays a pure hub; other star bigs attack
+      else if (role === 'hub' && c.passing < 80) role = c.postScore > c.create + 4 ? 'post' : 'creator';
+      else if (role === 'playmaker' && i === 0) role = 'creator';
+    }
     if (role === 'creator') {
       creators++;
       if (creators > 1) role = 'scorer';
     }
     roles[p.pid] = role;
-  }
-  // green light for the top two scorers, limited for poor shooters
-  const scorers = sorted
-    .map((p) => ({ p, c: composites(p.ratings) }))
-    .sort((a, b) => b.c.create + b.c.midShot + b.c.pu3 - (a.c.create + a.c.midShot + a.c.pu3));
-  scorers.forEach((x, i) => {
-    if (i < 2 && x.p.ovr >= 75) freedom[x.p.pid] = 1;
-    else if (x.c.c3 < 35 && x.c.midShot < 40 && x.c.create < 40) freedom[x.p.pid] = -1;
-    else freedom[x.p.pid] = 0;
+  });
+  // green light for the top two options, limited for poor shooters
+  sorted.forEach((p, i) => {
+    const c = composites(p.ratings);
+    if (i < 2 && p.ovr >= 75) freedom[p.pid] = 1;
+    else if (c.c3 < 35 && c.midShot < 40 && c.create < 40) freedom[p.pid] = -1;
+    else freedom[p.pid] = 0;
   });
   return { roles, freedom };
 }

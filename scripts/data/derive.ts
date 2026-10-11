@@ -151,8 +151,8 @@ export function popStats(aggs: Agg[]): PopStats {
 /** Derive ratings from stats. `rel` (0..1) is the sample reliability used to regress. */
 export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string): { r: Ratings; tend: Tendencies; rel: number } {
   const f = features(a) as Record<string, number>;
-  const rel = a.wMin / (a.wMin + 900);
-  const z = (k: string) => clamp(((f[k] - pop.mean[k]) / pop.sd[k]) * rel, -3.2, 3.2);
+  const rel = a.wMin / (a.wMin + 500);
+  const z = (k: string) => clamp(((f[k] - pop.mean[k]) / pop.sd[k]) * rel, -3.6, 3.6);
   const h = heightToRating(bio.heightIn || 79);
   const hz = (h - 50) / 15;
   const wz = ((bio.weightLb || 220) - 220) / 25;

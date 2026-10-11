@@ -34,13 +34,18 @@ import { cloneTactics } from './tactics';
 
 // ---------------------------------------------------------------- tuning constants
 
+/** Who gets the block on a contested miss: mostly timing and instincts (BLK), some length and pop. */
+const blockSkill = (p: { r: { blk: number; hgt: number; ath: number } }) => 0.7 * p.r.blk + 0.18 * p.r.hgt + 0.12 * p.r.ath;
+
 export const K = {
   zoneBase: { rim: 0.652, paint: 0.462, mid: 0.42, c3: 0.383, ab3: 0.346 } as Record<ShotZone, number>,
   zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
   foulRate: { rim: 0.212, paint: 0.108, mid: 0.042, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
   /** Share of misses that are blocks, for an average contesting defender. */
-  blockMiss: { rim: 0.25, paint: 0.165, mid: 0.045, c3: 0.018, ab3: 0.018 } as Record<ShotZone, number>,
+  blockMiss: { rim: 0.235, paint: 0.155, mid: 0.042, c3: 0.017, ab3: 0.017 } as Record<ShotZone, number>,
+  /** Extra share of misses blocked by the shooter's own defender (from behind, on the contest). */
+  chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
   orbBase: 0.248,
   toBase: 0.15,
   nonShootFoul: 0.13,
@@ -53,7 +58,7 @@ export const K = {
   recover: 0.0012,
   home: 0.007,
   usageExp: 2.0,
-  usageDamp: 7,
+  usageDamp: 5,
   freedomGreen: 1.25,
   freedomLimited: 0.55,
 };
@@ -120,6 +125,16 @@ export interface SP {
   t3: number;
   td: number;
   tp: number;
+  /** hidden event tendencies: blocks, steals, offensive / defensive boards, turnovers */
+  tbk: number;
+  tsl: number;
+  tor: number;
+  tdr: number;
+  ttv: number;
+  tpf: number;
+  /** usage share above which defenses load up: real players carry their own fitted usage */
+  useCap: number;
+  useDamp: number;
   b: Box;
   injured?: boolean;
   /** Played at least a second. */
@@ -310,6 +325,14 @@ export class GameSim {
         t3: p.tend?.three ?? 1,
         td: p.tend?.drive ?? 1,
         tp: p.tend?.pass ?? 1,
+        tbk: p.tend?.blk ?? 1,
+        tsl: p.tend?.stl ?? 1,
+        tor: p.tend?.orb ?? 1,
+        tdr: p.tend?.drb ?? 1,
+        ttv: p.tend?.tov ?? 1,
+        tpf: p.tend?.pf ?? 1,
+        useCap: p.tend ? 0.38 : 0.3,
+        useDamp: p.tend ? K.usageDamp : 7,
         b: newBox(),
         played: false,
       };
@@ -820,7 +843,7 @@ export class GameSim {
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
     if (teamUse >= 12) {
       const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
-      if (share > 0.3) w *= Math.exp(-K.usageDamp * (share - 0.3));
+      if (share > p.useCap) w *= Math.exp(-p.useDamp * (share - p.useCap));
     }
     // star plan "deny": fewer touches
     const def = this.T[1 - t.side];
@@ -1076,7 +1099,7 @@ export class GameSim {
     this.impact('press_break', off.side, pBroken * 0.28);
     const r = this.rng.next();
     if (r < pTO) {
-      const stealer = def.on[this.rng.weighted(def.on.map((p) => p.c.steal))];
+      const stealer = def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
       this.turnover(off, def, h, stealer, 'press');
       return 'to';
     }
@@ -1099,10 +1122,10 @@ export class GameSim {
     adv -= (def.t.defense.getBack - 50) / 100;
     adv += this.rng.normal(0, 0.5);
     // turnover in the open floor
-    const pTO = clamp(0.085 - (h.c.ballSec - 50) / 900, 0.03, 0.14);
+    const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv, 0.02, 0.18);
     if (this.rng.chance(pTO)) {
-      const st = def.on[this.rng.weighted(def.on.map((p) => p.c.steal))];
-      this.turnover(off, def, h, this.rng.chance(0.5) ? st : null, 'transition');
+      const st = def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
+      this.turnover(off, def, h, this.stealBy(st, 0.5), 'transition');
       return;
     }
     // shot selection
@@ -1262,9 +1285,13 @@ export class GameSim {
   }
   private toChance(base: number, handler: SP, def: ST, extra = 0) {
     const pr = this.pressure(def);
-    const p = base * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra;
+    const p = base * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv + extra;
     if (pr !== 0) this.impact('pressure_to', def.side, base * 0.32 * pr * 1.05, handler.pid);
     return clamp(p, 0.01, 0.4);
+  }
+  /** Live-ball steal by `d` with base chance `base`, scaled by his steal tendency; else a dead-ball turnover. */
+  private stealBy(d: SP, base: number): SP | null {
+    return this.rng.chance(clamp(base * d.tsl, 0, 0.92)) ? d : null;
   }
   private passStep(from: SP, to: SP) {
     if (this.record) this.cur!.steps.push({ k: 'pass', pid: from.pid, pid2: to.pid });
@@ -1286,7 +1313,7 @@ export class GameSim {
           const d = this.defOf(def, p);
           w *= Math.exp(clamp((60 - d.c.perDef) / 30, -0.4, 0.9));
         }
-        return Math.pow(w / 50, 2);
+        return Math.pow(w / 50, 2) * Math.pow(p.tu, 0.75);
       });
       S = off.on[this.rng.weighted(ws)];
     }
@@ -1402,7 +1429,7 @@ export class GameSim {
     // turnover
     const pTO = this.toChance(K.toBase * 1.05, H, def, toExtra);
     if (this.rng.chance(pTO)) {
-      const stealer = this.rng.chance(0.6) ? (this.rng.chance(0.6) ? dH : dS) : null;
+      const stealer = this.stealBy(this.rng.chance(0.6) ? dH : dS, 0.6);
       this.turnover(off, def, H, stealer, 'pnrBH');
       return 'done';
     }
@@ -1415,8 +1442,8 @@ export class GameSim {
       handlerShoots * Math.pow(H.c.pu3 / 50, 2.4) * pf.three * 0.27 * fr * H.t3 * (1 + pullOpen), // pull-up 3
       handlerShoots * Math.pow(H.c.midShot / 50, 2.2) * pf.mid * 0.22 * fr * (1 + pullOpen), // pull-up 2
       handlerShoots * Math.pow(H.c.rim / 50, 1.6) * pf.rim * 0.32 * fr * H.td * (1 + advH * 0.4 + rimOpen * 0.5), // drive
-      Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
-      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(S.c.pop / 50, 2) * 0.45 * pf.three * S.t3 * (1 + popOpen) : 0.01, // pop
+      Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * Math.pow(S.tu, 0.75) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
+      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(S.c.pop / 50, 2) * Math.pow(S.tu, 0.75) * 0.45 * pf.three * S.t3 * (1 + popOpen) : 0.01, // pop
       Math.pow(H.c.passing / 50, 1.3) * H.tp * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
@@ -1461,7 +1488,7 @@ export class GameSim {
   }
 
   private kickTarget(off: ST, ...exclude: SP[]): SP {
-    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : Math.pow(p.c.c3 / 50, 3) * p.t3 * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)));
+    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : Math.pow(p.c.c3 / 50, 3) * p.t3 * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)));
     return off.on[this.rng.weighted(ws)];
   }
 
@@ -1506,7 +1533,7 @@ export class GameSim {
 
     const pTO = this.toChance(K.toBase * 0.95, A, def);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, this.rng.chance(0.55) ? D : null, 'iso');
+      this.turnover(off, def, A, this.stealBy(D, 0.55), 'iso');
       return 'done';
     }
     if (this.nonShootingFoul(off, def, A, D)) return 'done';
@@ -1559,7 +1586,7 @@ export class GameSim {
     const pTO = clamp(0.1 - escape * 0.25, 0.03, 0.2);
     this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, def.on[this.rng.weighted(def.on.map((p) => p.c.steal))], from);
+      this.turnover(off, def, A, def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))], from);
       return 'done';
     }
     // forced to give it up: 4-on-3 for teammates
@@ -1606,7 +1633,7 @@ export class GameSim {
     if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post');
     const pTO = this.toChance(K.toBase * 1.1, A, def);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, this.rng.chance(0.4) ? D : null, 'post');
+      this.turnover(off, def, A, this.stealBy(D, 0.4), 'post');
       return 'done';
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
@@ -1673,7 +1700,7 @@ export class GameSim {
     }
     const pTO = this.toChance(K.toBase * 0.7, B, def);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, this.rng.chance(0.5) ? B : Sh, this.rng.chance(0.5) ? D : null, finish);
+      this.turnover(off, def, this.rng.chance(0.5) ? B : Sh, this.stealBy(D, 0.5), finish);
       return 'done';
     }
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
@@ -1722,12 +1749,12 @@ export class GameSim {
     const passer = ballFrom ?? off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.passing / 50, 2)))];
     const pTO = this.toChance(K.toBase * 0.8, passer, def);
     if (this.rng.chance(pTO)) {
-      const st = def.on[this.rng.weighted(def.on.map((p) => p.c.steal))];
-      this.turnover(off, def, passer, this.rng.chance(0.6) ? st : null, 'spotup');
+      const st = def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
+      this.turnover(off, def, passer, this.stealBy(st, 0.6), 'spotup');
       return 'done';
     }
     const cutters = off.on.filter((p) => p !== passer);
-    const cutW = cutters.map((p) => Math.pow(p.c.cut / 50, 2.2) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1));
+    const cutW = cutters.map((p) => Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1));
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
     // backdoor cuts punish ball pressure / denial
     const backdoor = Math.max(0, pr) * 0.3;
@@ -1773,7 +1800,7 @@ export class GameSim {
       }
       case 2: {
         const drivers = off.on.filter((p) => p !== passer);
-        const dr = drivers[this.rng.weighted(drivers.map((p) => Math.pow(p.c.create / 50, 2.5) * p.freedom * p.td))];
+        const dr = drivers[this.rng.weighted(drivers.map((p) => Math.pow(p.c.create / 50, 2.5) * p.freedom * p.td * Math.pow(p.tu, 0.75)))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
         const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -0.3 : 0);
@@ -1790,7 +1817,7 @@ export class GameSim {
         return 'done';
       }
       case 3: {
-        const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom))];
+        const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom * Math.pow(p.tu, 0.75)))];
         this.passStep(passer, sh);
         this.shoot(off, def, { shooter: sh, zone: 'mid', open: advOpen * 0.5, contest: this.defOf(def, sh), assister: this.rng.chance(0.5) ? passer : null, finish: 'spotup' });
         return 'done';
@@ -1807,7 +1834,7 @@ export class GameSim {
     const pr = this.pressure(def);
     const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250);
     if (!this.rng.chance(p)) return false;
-    const fouler = this.rng.chance(0.7) ? defender : def.on[this.rng.int(0, def.on.length - 1)];
+    const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
     this.addFoul(def, fouler, false);
     this.addPbp(def.side, `Foul on ${fouler.name}.`, 'foul');
     if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: handler.pid });
@@ -1818,6 +1845,13 @@ export class GameSim {
     }
     // side out: offense keeps the ball; treat as a fresh possession phase
     return false;
+  }
+
+  /** Who is charged with a shooting foul: the help defender takes most contact, the beaten man some. */
+  private shootingFouler(def: ST, c: SP | null, sh: SP): SP {
+    const md = this.defOf(def, sh);
+    if (!c || c === md) return c ?? md;
+    return this.rng.weighted([0.6 * c.tpf, 0.4 * md.tpf]) === 0 ? c : md;
   }
 
   private addFoul(def: ST, p: SP, shooting: boolean) {
@@ -1948,7 +1982,7 @@ export class GameSim {
 
     // block?
     let blocker: SP | null = null;
-    const pBlk = c ? K.blockMiss[zone] * Math.pow(clamp(c.c.rimProt, 10, 100) / 55, 1.8) * (1 - 0.3 * clamp(open, -1, 1)) : 0;
+    const pBlk = c ? K.blockMiss[zone] * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
     // shooting foul?
     const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + 0.3 * phys) * (s.forcedFoulMult ?? 1);
     const pFoul = K.foulRate[zone] * draw;
@@ -1959,6 +1993,12 @@ export class GameSim {
     else {
       made = this.rng.chance(p);
       if (!made && c && this.rng.chance(clamp(pBlk, 0, 0.6))) blocker = c;
+      else if (!made && c) {
+        // the shooter's own man can get a piece of it too: timing and length, less about size
+        const md = this.defOf(def, sh);
+        const chase = K.chaseBlock[zone] * Math.pow(clamp(blockSkill(md), 10, 100) / 55, 2) * md.tbk * (1 - 0.3 * clamp(open, -1, 1));
+        if (md !== c && this.rng.chance(clamp(chase, 0, 0.3))) blocker = md;
+      }
     }
 
     // record attempt
@@ -2005,7 +2045,7 @@ export class GameSim {
       this.score(off, def, sh, value);
       this.addPbp(off.side, `${sh.name} ${desc} — good${ast ? ` (${ast.name} assist)` : ''}${fouled ? ', and one!' : ''}.`, 'make');
       if (fouled) {
-        const fouler = c ?? this.defOf(def, sh);
+        const fouler = this.shootingFouler(def, c, sh);
         this.addFoul(def, fouler, true);
         this.freeThrows(off, def, sh, 1);
         return;
@@ -2016,7 +2056,7 @@ export class GameSim {
     }
     sh.hot = Math.max(0, sh.hot - 1);
     if (fouled) {
-      const fouler = c ?? this.defOf(def, sh);
+      const fouler = this.shootingFouler(def, c, sh);
       this.addPbp(off.side, `${sh.name} fouled on ${desc} by ${fouler.name}.`, 'foul');
       this.addFoul(def, fouler, true);
       if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
@@ -2143,7 +2183,7 @@ export class GameSim {
     if (crash !== 0) this.impact('crash_orb', off.side, K.orbBase * 0.22 * crash * 1.05);
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {
-      const ws = off.on.map((p) => Math.pow(p.c.orb, 2) * (p === this.lastShooter ? 1.3 : 1));
+      const ws = off.on.map((p) => Math.pow(p.c.orb, 2) * p.tor * (p === this.lastShooter ? 1.3 : 1));
       const r = off.on[this.rng.weighted(ws)];
       r.b.orb++;
       off.tot.orb++;
@@ -2153,7 +2193,7 @@ export class GameSim {
       this.continueAfterOrb(off, def, r);
       return;
     }
-    const ws = def.on.map((p) => Math.pow(p.c.drb, 2.2));
+    const ws = def.on.map((p) => Math.pow(p.c.drb, 2.2) * p.tdr);
     const r = def.on[this.rng.weighted(ws)];
     r.b.drb++;
     def.tot.drb++;

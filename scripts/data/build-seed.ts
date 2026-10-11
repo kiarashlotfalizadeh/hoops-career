@@ -9,11 +9,13 @@ import { STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources
 import { COUNTRY_NAMES, parseAdvanced, parseContracts, parseDraft, parsePerGame, parseRoster, type AdvRow, type ContractRow, type DraftRow, type PerGameRow, type RosterRow } from './parse';
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
 import { calibrate } from './calibrate';
-import type { PlayerStats, Pos, Ratings, Tendencies } from '../../src/core/types';
+import { refreshPlayerDerived } from '../../src/core/playerGen';
+import type { PlayerStats, Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { BBREF_TO_TID } from '../../src/core/teams';
-import { RATING_KEYS, ovrRaw, toDisplay } from '../../src/core/ratings';
+import { RATING_KEYS, buildOvrScale, ovrRaw, toDisplay, type OvrScale } from '../../src/core/ratings';
+import { clamp } from '../../src/core/random';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const OUT = process.env.HC_SEED_OUT ?? join(process.cwd(), 'src', 'data', 'seed.json');
@@ -224,9 +226,14 @@ function main() {
   for (const p of players) if (p.team) teamCounts[p.team] = (teamCounts[p.team] ?? 0) + 1;
   console.log('roster sizes:', Object.entries(teamCounts).map(([t, n]) => `${t}:${n}`).join(' '));
 
+  // level players with little or no NBA sample before calibrating, so the AI coaches hand
+  // out realistic minutes during the calibration games
+  const levelTargets = new Map<string, number>();
+  levelPlayers(players, aggs, levelTargets, false);
+
   // calibrate in the engine
   const seed: SeedData = { version: 1, generated: new Date().toISOString(), source: 'Basketball Reference: 2023-24 to 2025-26 per-game & advanced; current contracts', season: 2027, players, realAvgs: realAvgs(leagueAvg[2026]) };
-  const league = createLeague({ name: 'calib', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed, rngSeed: 99 });
+  const league = createLeague({ name: 'calib', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed, rngSeed: 99, preseasonCuts: false });
   const pidByIdx = new Map<number, number>();
   for (const p of Object.values(league.players)) {
     const i = players.findIndex((sp) => sp.id === p.bbrefId);
@@ -241,7 +248,9 @@ function main() {
   calibrate(league, tmap, [
     { games: 40, damp: 0.75 },
     { games: 40, damp: 0.7 },
+    { games: 60, damp: 0.65 },
     { games: 60, damp: 0.6 },
+    { games: 82, damp: 0.55 },
     { games: 82, damp: 0.5 },
     { games: 120, damp: 0.45 },
     { games: 164, damp: 0.4 },
@@ -250,19 +259,131 @@ function main() {
   for (const [idx, pid] of pidByIdx) {
     const lp = league.players[pid];
     players[idx].ratings = Object.fromEntries(RATING_KEYS.map((k) => [k, Math.round(lp.ratings[k] * 10) / 10])) as unknown as Ratings;
-    if (lp.tend) players[idx].tend = { use: r3(lp.tend.use), three: r3(lp.tend.three), drive: r3(lp.tend.drive), pass: r3(lp.tend.pass) };
+    if (lp.tend) {
+      const t = lp.tend;
+      players[idx].tend = { use: r3(t.use), three: r3(t.three), drive: r3(t.drive), pass: r3(t.pass) };
+      for (const k of ['blk', 'stl', 'orb', 'drb', 'tov', 'pf'] as const) if (t[k] !== undefined) players[idx].tend![k] = r3(t[k]!);
+    }
+  }
+
+  levelPlayers(players, aggs, levelTargets, true);
+  // leveling moves role players' skills, which shifts usage around them: settle again
+  for (const [idx, pid] of pidByIdx) league.players[pid].ratings = { ...players[idx].ratings };
+  league.ovrScale = buildOvrScale(Object.values(league.players).filter((p) => p.tid >= 0).map((p) => ovrRaw(p.ratings)));
+  for (const p of Object.values(league.players)) refreshPlayerDerived(p, league.season, league.ovrScale);
+  calibrate(league, tmap, [
+    { games: 82, damp: 0.5 },
+    { games: 120, damp: 0.45 },
+    { games: 164, damp: 0.4 },
+  ]);
+  for (const [idx, pid] of pidByIdx) {
+    const lp = league.players[pid];
+    players[idx].ratings = Object.fromEntries(RATING_KEYS.map((k) => [k, Math.round(lp.ratings[k] * 10) / 10])) as unknown as Ratings;
+    if (lp.tend) players[idx].tend = Object.fromEntries(Object.entries(lp.tend).map(([k, v]) => [k, r3(v as number)])) as unknown as Tendencies;
   }
 
   // sanity report: OVR vs real impact
+  const finalScale = buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
   const rows = players
-    .map((p) => ({ p, a: aggs.get(p.id), ovr: toDisplay(ovrRaw(p.ratings), league.ovrScale) }))
+    .map((p) => ({ p, a: aggs.get(p.id), ovr: toDisplay(ovrRaw(p.ratings), finalScale) }))
     .filter((x) => x.a && x.a.rawMin >= 1500);
   const corr = pearson(rows.map((x) => x.ovr), rows.map((x) => x.a!.adv.bpm));
   console.log(`OVR vs BPM correlation (1500+ min): ${corr.toFixed(3)} over ${rows.length} players`);
-  const top = [...players].map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), league.ovrScale), t: p.team })).sort((a, b) => b.ovr - a.ovr).slice(0, 30);
+  const top = [...players].map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team })).sort((a, b) => b.ovr - a.ovr).slice(0, 30);
   console.log('Top 30:', top.map((x) => `${x.n} ${x.ovr}`).join(', '));
+  if (process.env.HC_REPORT) {
+    const report = players.map((p) => {
+      const a = aggs.get(p.id);
+      return { id: p.id, name: `${p.first} ${p.last}`, team: p.team, age: 2027 - p.bornYear, pick: p.draft?.pick ?? null, rawMin: a?.rawMin ?? 0, wMin: a?.wMin ?? 0, mpg: a?.mpg ?? 0, adv: a?.adv ?? null, per36: a?.per36 ?? null, ratings: p.ratings, tend: p.tend };
+    });
+    writeFileSync(process.env.HC_REPORT, JSON.stringify({ ovrScale: finalScale, players: report }));
+  }
   writeFileSync(OUT, JSON.stringify(seed));
   console.log(`wrote ${OUT} (${(JSON.stringify(seed).length / 1e6).toFixed(2)} MB)`);
+}
+
+const SKILLS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
+
+/** Display OVR expected from draft slot and reputation alone (no NBA sample). */
+function priorOvr(sp: SeedPlayer): number {
+  const age = 2027 - sp.bornYear;
+  const pick = sp.draft?.pick ?? null;
+  const bump = (PROSPECT_HINTS[`${sp.first} ${sp.last}`.trim()]?.bump ?? 0) * 8;
+  const yearsSince = sp.draft ? Math.max(0, 2026 - sp.draft.year) : 0;
+  if (age <= 23 && yearsSince <= 2) {
+    const base = pick === null ? 61 : pick <= 30 ? 78 - 9 * Math.pow((pick - 1) / 29, 0.8) : 65.5 - (4 * (pick - 31)) / 29;
+    return base + bump + yearsSince * 1.5;
+  }
+  // veterans without recent NBA minutes: overseas returns, long injuries, camp invites
+  return 64 + (pick !== null && pick <= 14 ? 4 : pick !== null && pick <= 30 ? 2 : 0) - Math.max(0, age - 31) * 1.5;
+}
+
+/** Shift skill ratings uniformly until the player's display OVR reaches `target`. */
+function shiftTo(r: Ratings, target: number, scale: OvrScale): Ratings {
+  const at = (d: number) => {
+    const t = { ...r };
+    for (const k of SKILLS) t[k] = clamp(r[k] + d, 1, 100);
+    return t;
+  };
+  let lo = -45;
+  let hi = 45;
+  for (let i = 0; i < 32; i++) {
+    const mid = (lo + hi) / 2;
+    if (toDisplay(ovrRaw(at(mid)), scale) < target) lo = mid;
+    else hi = mid;
+  }
+  const out = at(hi);
+  for (const k of SKILLS) out[k] = Math.round(out[k] * 10) / 10;
+  return out;
+}
+
+/**
+ * Regress small samples. No NBA minutes: draft slot / reputation. Under 400 minutes: blend
+ * toward that prior. Otherwise (after calibration only) shrink toward the level typical for
+ * the player's minutes per game, with weight minutes / (minutes + 500), so a hot 1,500-minute
+ * stretch counts for less than three full seasons. Targets are fixed on first sight; later
+ * passes only re-hit them as the display scale moves.
+ */
+function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Map<string, number>, calibrated: boolean) {
+  const scaleNow = () => buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
+  let scale = scaleNow();
+  const disp = (p: SeedPlayer) => toDisplay(ovrRaw(p.ratings), scale);
+  if (calibrated) {
+    // OVR as a function of minutes per game, fitted on reliable samples
+    const fitRows = players.map((p) => ({ a: aggs.get(p.id), o: disp(p) })).filter((x) => x.a && x.a.rawMin >= 2500);
+    const mx = fitRows.reduce((s, x) => s + x.a!.mpg, 0) / fitRows.length;
+    const my = fitRows.reduce((s, x) => s + x.o, 0) / fitRows.length;
+    const slope = fitRows.reduce((s, x) => s + (x.a!.mpg - mx) * (x.o - my), 0) / fitRows.reduce((s, x) => s + (x.a!.mpg - mx) ** 2, 0);
+    console.log(`leveling: OVR ≈ ${my.toFixed(1)} + ${slope.toFixed(2)} × (MPG − ${mx.toFixed(1)}) on ${fitRows.length} reliable players`);
+    for (const p of players) {
+      const a = aggs.get(p.id);
+      if (!a || a.rawMin < 400 || targets.has(p.id)) continue;
+      const rel = a.rawMin / (a.rawMin + 500);
+      targets.set(p.id, Math.round(rel * disp(p) + (1 - rel) * (my + slope * (a.mpg - mx))));
+    }
+  } else {
+    for (const p of players) {
+      const a = aggs.get(p.id);
+      if (!a || a.rawMin < 60) {
+        targets.set(p.id, Math.round(priorOvr(p)));
+        // stamina sets sustainable minutes; a prospect's should match the role his level earns
+        p.ratings.end = clamp(Math.round(42 + (priorOvr(p) - 70) * 1.2), 30, 60);
+      }
+      else if (a.rawMin < 400) targets.set(p.id, Math.round((a.rawMin / 400) * disp(p) + (1 - a.rawMin / 400) * priorOvr(p)));
+    }
+  }
+  let moved = 0;
+  for (let iter = 0; iter < 3; iter++) {
+    moved = 0;
+    for (const p of players) {
+      const t = targets.get(p.id);
+      if (t === undefined || disp(p) === t) continue;
+      p.ratings = shiftTo(p.ratings, t, scale);
+      moved++;
+    }
+    scale = scaleNow();
+  }
+  console.log(`leveling: ${targets.size} targets, ${moved} still moving on the last pass`);
 }
 
 function r3(x: number) {

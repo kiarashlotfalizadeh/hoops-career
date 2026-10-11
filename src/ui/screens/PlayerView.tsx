@@ -4,7 +4,7 @@ import { ArrowLeftRight } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
-import { RATING_META, ROLE_META, archetype, composites, fmtHeight, ovrRaw, tierLabel, toDisplay, type Composites } from '../../core/ratings';
+import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrRaw, tierLabel, toDisplay, type Composites } from '../../core/ratings';
 import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { LineChart } from '../components/charts';
@@ -324,14 +324,14 @@ export default function PlayerView() {
             <Card key={g} title={g}>
               <div className="col" style={{ gap: 6 }}>
                 {RATING_META.filter((m) => m.group === g).map((m) => {
-                  const val = Math.round(p.ratings[m.key as RatingKey]);
-                  const prev = p.ratingsHistory.length > 1 ? Math.round(p.ratingsHistory[p.ratingsHistory.length - 2].r[m.key as RatingKey]) : null;
+                  const val = attrDisplay(p.ratings[m.key as RatingKey]);
+                  const prev = p.ratingsHistory.length > 1 ? attrDisplay(p.ratingsHistory[p.ratingsHistory.length - 2].r[m.key as RatingKey]) : null;
                   return (
                     <div key={m.key} className="ratingrow" style={{ gridTemplateColumns: '108px 1fr 54px' }}>
                       <span className="row" style={{ gap: 6 }}>
                         <span className="dim2">{m.label}</span>
                       </span>
-                      <Bar value={val} color={val >= 75 ? 'var(--tier-elite)' : val >= 60 ? 'var(--good)' : val >= 40 ? 'var(--info)' : 'var(--text-dim)'} />
+                      <Bar value={((val - 40) / 59) * 100} color={val >= 85 ? 'var(--tier-elite)' : val >= 75 ? 'var(--good)' : val >= 64 ? 'var(--info)' : 'var(--text-dim)'} />
                       <span className="num right bold">
                         {val}
                         {prev !== null && val !== prev && <span className={`tiny ${val > prev ? 'good' : 'bad'}`}> {val > prev ? '+' : ''}{val - prev}</span>}

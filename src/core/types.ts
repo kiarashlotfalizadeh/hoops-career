@@ -227,6 +227,18 @@ export interface Tendencies {
   drive: number;
   /** Preference for passing out of actions. */
   pass: number;
+  /**
+   * Hidden event multipliers, fitted so a real player reproduces his per-36 box profile in
+   * the engine. Visible ratings say how good he is; these absorb role and opportunity
+   * (a help-side guard who blocks shots, a center whose teammates crash the glass). 1 = neutral.
+   */
+  blk?: number;
+  stl?: number;
+  orb?: number;
+  drb?: number;
+  tov?: number;
+  /** personal fouls */
+  pf?: number;
 }
 
 export interface ProspectInfo {

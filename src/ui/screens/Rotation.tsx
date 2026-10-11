@@ -1,3 +1,4 @@
+import { attrDisplay } from '../../core/ratings';
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, BedDouble, Wand2 } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
@@ -120,7 +121,7 @@ export default function Rotation() {
                     {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
                   </div>
                   <div className="tiny dim">
-                    {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina {Math.round(p.ratings.end)}{p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
+                    {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina {attrDisplay(p.ratings.end)}{p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
                   </div>
                   <div className="bar" style={{ marginTop: 5, height: 5 }}>
                     <div style={{ width: `${(m / 44) * 100}%` }} />
