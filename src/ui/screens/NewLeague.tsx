@@ -11,6 +11,7 @@ import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import { saveLeague } from '../../state/persistence';
 import type { Settings } from '../../core/types';
+import { canGoBack } from '../nav';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -28,7 +29,7 @@ export default function NewLeague() {
   const setStep = (st: Step) => setSp(st === 'type' ? {} : { step: st });
   const back = () => {
     if (step === 'type') nav('/start');
-    else if ((window.history.state as { idx?: number } | null)?.idx) nav(-1);
+    else if (canGoBack()) nav(-1);
     else setStep(step === 'setup' ? 'team' : 'type');
   };
   const [tid, setTid] = useState<number>(19);

@@ -1251,3 +1251,11 @@ a.bk-s:hover {
   flex-wrap: wrap;
   gap: 5px;
 }
+
+/* iOS zooms into focused fields under 16px now that pinch-zoom is allowed */
+@media (pointer: coarse) {
+  .lg-select,
+  .lg-search input {
+    font-size: 16px;
+  }
+}

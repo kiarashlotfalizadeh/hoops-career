@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { ovrColor } from '../../core/ratings';
 import { FRANCHISES } from '../../core/teams';
+import { useBack } from '../nav';
 
 export function Card({ title, right, children, className = '', onClick, accent }: { title?: ReactNode; right?: ReactNode; children?: ReactNode; className?: string; onClick?: () => void; accent?: boolean }) {
   return (
@@ -283,8 +283,7 @@ export function Help({ title, children }: { title: string; children: ReactNode }
 
 /** `backTo` is where Back goes when there is no in-app page behind this one (a deep link or a reload). */
 export function PageHeader({ title, sub, back, backTo = '/', right }: { title: ReactNode; sub?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode }) {
-  const nav = useNavigate();
-  const goBack = () => (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ? nav(-1) : nav(backTo, { replace: true }));
+  const goBack = useBack(backTo);
   return (
     <div className="row" style={{ gap: 8, minHeight: 44 }}>
       {back && (

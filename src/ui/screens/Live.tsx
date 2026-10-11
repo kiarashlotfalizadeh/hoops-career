@@ -124,6 +124,8 @@ export default function Live() {
   const [script, setScript] = useState<Script | null>(null);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
+  // stopped at a period's buzzer by "Qtr": the next period starts when the user resumes
+  const [atBreak, setAtBreak] = useState(false);
   const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
   const [panel, setPanel] = useState<'none' | 'subs' | 'tactics' | 'stats' | 'end'>('none');
   const [tick, setTick] = useState(0);
@@ -149,6 +151,7 @@ export default function Live() {
     liveRef.current = lg;
     setGame(lg);
     setScript(null);
+    setAtBreak(false);
     setDismissed([]);
     setPanel('none');
     setBanner(null);
@@ -275,8 +278,8 @@ export default function Live() {
   }, [info, finish, flushFeed, playedElsewhere, ticker]);
 
   useEffect(() => {
-    if (status === 'live' && !script) nextPossession();
-  }, [status, script, nextPossession]);
+    if (status === 'live' && !script && !atBreak) nextPossession();
+  }, [status, script, atBreak, nextPossession]);
 
   const skip = (to: 'quarter' | 'end') => {
     const lg = liveRef.current;
@@ -285,7 +288,19 @@ export default function Live() {
     flushFeed();
     ticker.set(lg.sim.clock, [lg.sim.T[0].score, lg.sim.T[1].score], true);
     if (lg.over) finish();
-    else nextPossession();
+    else if (to === 'quarter') {
+      // a real break: subs and tactic changes made now apply from the next period's first possession
+      setScript(null);
+      setAtBreak(true);
+      setPaused(true);
+      setBanner({ text: `END OF ${periodLabel(lg.sim.q)}`, id: Date.now() });
+    } else nextPossession();
+  };
+  const togglePause = () => {
+    if (atBreak) {
+      setAtBreak(false);
+      setPaused(false);
+    } else setPaused((p) => !p);
   };
 
   const userSide = game?.userSide ?? 0;
@@ -452,7 +467,7 @@ export default function Live() {
       {/* controls */}
       {status === 'live' ? (
         <div className="row live-ctl" style={{ gap: 6, flexWrap: 'wrap' }}>
-          <button className="btn sm" onClick={() => setPaused((p) => !p)} aria-label={paused ? 'Resume' : 'Pause'}>
+          <button className="btn sm" onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}>
             {paused ? <Play size={16} /> : <Pause size={16} />}
           </button>
           <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
@@ -463,7 +478,7 @@ export default function Live() {
             ))}
           </div>
           <div className="grow" />
-          <button className="btn sm" onClick={() => skip('quarter')} aria-label="Qtr: sim to the end of the quarter">
+          <button className="btn sm" onClick={() => skip('quarter')} disabled={atBreak} aria-label="Qtr: sim to the end of the quarter">
             <ChevronsRight size={16} /> Qtr
           </button>
           <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPanel('end')}>
