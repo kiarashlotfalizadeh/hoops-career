@@ -273,6 +273,18 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
   });
 
+  it('a released player can be traded for again once he signs elsewhere: the trade-back rule leaves with his contract', () => {
+    const l = league();
+    l.phase = 'regular';
+    const p = shape(l, standardRoster(l, U)[0], 74, 27, CAP_FOR(l).vetMin);
+    executeTrade(l, offer([p.pid], []));
+    releasePlayer(l, p, { news: false });
+    signPlayer(l, p, 2, CAP_FOR(l).vetMin, 1, { news: false });
+    // past his new team's trade lock
+    l.day = 120;
+    expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: 2, pids: [p.pid], dpids: [] } }).filter((e) => /back|signed recently/.test(e))).toEqual([]);
+  });
+
   it("doesn't trade a signing before December 15, or three months after an in-season signing", () => {
     const l = league();
     l.phase = 'freeAgency';

@@ -294,6 +294,9 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean 
   team.rotation.order = team.rotation.order.filter((x) => x !== p.pid);
   delete team.rotation.minutes[p.pid];
   team.rotation.closers = team.rotation.closers.filter((x) => x !== p.pid);
+  // a free agent like any other: the trade-back rule and the trade lock went with the old contract
+  delete p.tradedFrom;
+  delete p.tradeLock;
   p.asking = undefined;
   p.asking = askingContract(league, p);
   p.faDays = FA_PRICE_CUT_DAYS;
