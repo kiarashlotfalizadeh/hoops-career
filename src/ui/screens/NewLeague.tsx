@@ -112,7 +112,14 @@ export default function NewLeague() {
 
       {step === 'type' && (
         <>
-          <Card accent={kind === 'real'} onClick={() => seed && setKind('real')}>
+          <button
+            type="button"
+            className={`card clickable ${kind === 'real' ? 'accent' : ''}`}
+            style={{ width: '100%', textAlign: 'left' }}
+            aria-pressed={kind === 'real'}
+            disabled={!seed}
+            onClick={() => setKind('real')}
+          >
             <div className="row top">
               <Database size={28} />
               <div className="grow">
@@ -138,8 +145,14 @@ export default function NewLeague() {
                 )}
               </div>
             </div>
-          </Card>
-          <Card accent={kind === 'fictional'} onClick={() => setKind('fictional')}>
+          </button>
+          <button
+            type="button"
+            className={`card clickable ${kind === 'fictional' ? 'accent' : ''}`}
+            style={{ width: '100%', textAlign: 'left' }}
+            aria-pressed={kind === 'fictional'}
+            onClick={() => setKind('fictional')}
+          >
             <div className="row top">
               <Shuffle size={28} />
               <div className="grow">
@@ -149,7 +162,7 @@ export default function NewLeague() {
                 </div>
               </div>
             </div>
-          </Card>
+          </button>
           <button className="btn primary big block" disabled={kind === 'real' && !seed} onClick={() => setStep('team')}>
             Choose your team
           </button>
@@ -173,6 +186,7 @@ export default function NewLeague() {
                 <button
                   key={fr.abbrev}
                   className="card tight"
+                  aria-pressed={tid === i}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -282,7 +296,8 @@ export default function NewLeague() {
               />
             </div>
           </Card>
-          <button className="btn primary big block" disabled={busy} onClick={() => void create()}>
+          {/* a reload on this step starts over as a real league: wait for its rosters rather than silently make a fictional one */}
+          <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
             {busy ? <Spinner /> : null} Start career
           </button>
         </>
