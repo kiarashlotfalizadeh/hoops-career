@@ -501,9 +501,11 @@ function findWork(league: League, offer: TradeOffer): WorkResult {
     // picks and players together: a pile of picks alone often can't reach a good player's value
     const cands = [...picks, ...players];
     if (!cands.length) break;
-    // smallest asset that covers the gap, else the biggest one
+    // smallest asset that covers the gap, unless that is a big overpay (a star for a role player's
+    // worth of value) and something smaller can close most of it; else the biggest one
     const covering = cands.filter((c) => c.v >= need).sort((a, b) => a.v - b.v);
-    cur = (covering[0] ?? cands.sort((a, b) => b.v - a.v)[0]).next;
+    const short = cands.filter((c) => c.v < need).sort((a, b) => b.v - a.v);
+    cur = (covering[0] && (covering[0].v <= need * 1.5 + 2 || !short.length) ? covering[0] : short[0]).next;
   }
   return evaluateTrade(league, cur).accept ? { offer: cur } : { offer: null, why: 'value' };
 }

@@ -231,6 +231,20 @@ describe('AI trade valuation', () => {
     expect(evaluateTrade(l, r.offer!).accept).toBe(true);
   });
 
+  it('"what would make this work?" doesn\'t throw in a star to close a modest gap', () => {
+    const l = league(11);
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    for (const p of standardRoster(l, U)) shape(l, p, 72, 27, vetMin);
+    const star = shape(l, standardRoster(l, U)[0], 94, 27, vetMin);
+    const target = shape(l, standardRoster(l, AI)[0], 80, 27, vetMin);
+    const r = makeItWork(l, offer([], [target.pid]));
+    expect(r.offer).not.toBeNull();
+    expect(r.offer!.a.pids).not.toContain(star.pid);
+    expect(evaluateTrade(l, r.offer!).accept).toBe(true);
+  });
+
   it("won't take a player or pick straight back from the team it traded him to, until next season", () => {
     const l = league();
     l.phase = 'regular';
