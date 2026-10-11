@@ -223,7 +223,8 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
     [league, tid, v],
   );
   if (!roster.length) return <Empty>No players on the roster.</Empty>;
-  const nameOf = rosterNames(roster, { initial: true });
+  // the avatar already shows the initials: last names alone fit a phone ("Murray-Boyles", not "C. Murray-Boyl…")
+  const nameOf = rosterNames(roster);
   const starters = new Set(team.rotation.order.slice(0, 5));
   const groups = [
     { label: 'Starters', list: roster.filter((p) => starters.has(p.pid)) },
