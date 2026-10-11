@@ -3,19 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Ban, Check, Handshake, Info, RotateCcw, Ticket, X } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import {
-  CAP_FOR,
-  OFFSEASON_ROSTER_MAX,
-  TWO_WAY_MAX,
-  curTeamSeason,
-  payroll,
-  playerName,
-  rosterMaxNow,
-  standardRoster,
-  teamPlayers,
-  twoWayRoster,
-  winPct,
-} from '../../core/league/helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
 import { pendingOption } from '../../core/league/contracts';
 import { capPayroll } from '../../core/league/freeAgency';
 import {
@@ -308,8 +296,8 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   const holds = pay - payroll(league, tid, season);
   const cap = CAP_FOR(league, season);
   const st = STRATEGY_META[t.strategy];
+  // standard contracts: two-way deals sit outside the 15
   const n = standardRoster(league, tid).length;
-  const tw = twoWayRoster(league, tid).length;
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
@@ -321,7 +309,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
           <div className="row" style={{ gap: 6, marginTop: 2 }}>
             <span className={`tag ${st.tone}`}>{st.label}</span>
             <span className="tiny dim num">
-              {rec} · {n} players{tw ? ` + ${tw} two-way` : ''}
+              {rec} · {n} players
             </span>
           </div>
         </div>
@@ -418,6 +406,7 @@ function DealCard({
 
 function AssetList({ league, tid, season, sel, onChange, title }: { league: League; tid: number; season: number; sel: Sel; onChange: (s: Sel) => void; title: string }) {
   const players = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
+  const tw = players.filter((p) => p.contract.twoWay).length;
   const nameOf = rosterNames(players, { initial: true });
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   return (
@@ -429,7 +418,9 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
             {title}
           </h3>
         </div>
-        <span className="tiny dim">{players.length} players</span>
+        <span className="tiny dim">
+          {players.length - tw} players{tw ? ` + ${tw} two-way` : ''}
+        </span>
       </div>
       <div className="list">
         {players.map((p) => (
@@ -500,7 +491,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       </div>
       <div className="fo-money">
         <div className="a">{fmtM(salaryFor(p, season))}</div>
-        <div className="b">{contractYearsLabel(p, season)}</div>
+        <div className="b">{contractYearsLabel(league, p, season)}</div>
       </div>
     </button>
   );
