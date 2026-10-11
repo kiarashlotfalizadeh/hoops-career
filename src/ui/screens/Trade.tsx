@@ -20,6 +20,7 @@ import { pendingOption } from '../../core/league/contracts';
 import { capPayroll } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
+  canMakeWork,
   capSalary,
   evaluateTrade,
   executeTrade,
@@ -147,15 +148,15 @@ export default function Trade() {
   };
 
   const whatWorks = () => {
-    const r = makeItWork(league, offer);
+    const { offer: r, why } = makeItWork(league, offer);
     if (!r) {
       const gap = salaryMatchGap(league, offer, 'a');
       const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
       useStore
         .getState()
         .toast(
-          gap > 0
-            ? `You need to send at least ${fmtM(out + gap)} in salary, and no player of yours makes that work.`
+          why === 'salary'
+            ? `You need to send at least ${fmtM(out + gap)} in salary, and no player (or pair) of yours makes that work.`
             : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
           'bad',
         );
@@ -579,10 +580,9 @@ function Dock({
   }
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
-  // the helper can fix our side's salary matching and the value, nothing else
-  const gapA = salaryMatchGap(league, offer, 'a');
+  // the helper can fix our side's salary matching, a full roster and the value, nothing else
   const theyreOver = salaryMatchGap(league, offer, 'b') > 0;
-  const fixable = !ev.accept && !theyreOver && ruleErrors.length <= (gapA > 0 ? 1 : 0);
+  const fixable = !ev.accept && canMakeWork(league, offer);
   return (
     <div className="fo-dock">
       <div className="row between" style={{ gap: 8, marginBottom: 6 }}>

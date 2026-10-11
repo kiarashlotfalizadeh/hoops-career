@@ -422,17 +422,33 @@ const withA = (offer: TradeOffer, pids: number[], dpids: number[] = []): TradeOf
   b: offer.b,
 });
 
+/** Side A would end up over the roster limit: sending one more of its players fixes that. */
+function aRosterOver(league: League, o: TradeOffer): boolean {
+  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  return std(o.b.pids) > std(o.a.pids) && tradeRoster(league, o.a.tid).length - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
+}
+
+/** Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding side A's players can fix (its salary matching, a full roster)? */
+export function canMakeWork(league: League, o: TradeOffer): boolean {
+  if (salaryMatchGap(league, o, 'b') > 0) return false;
+  return validateTrade(league, o).length <= (salaryMatchGap(league, o, 'a') > 0 ? 1 : 0) + (aRosterOver(league, o) ? 1 : 0);
+}
+
+/** A deal the AI would take, or why none was found: no player (or pair) of A's fixes the salary matching, or not enough value. */
+export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null; why: 'salary' | 'value' };
+
 /**
  * Ask the AI what it would need from side A to accept. When A is over the cap and takes back too
  * much salary, first add the least valuable player (or pair) whose salary fixes the matching, then
- * top up the value with picks (players once the picks run out). Returns the adjusted offer, or
- * null when nothing works (see salaryMatchGap for the salary A would need to send).
+ * top up the value: each round adds the smallest pick or player that covers what's missing, else
+ * the most valuable one (a full roster takes a player). See salaryMatchGap for the salary A would
+ * need to send.
  */
-export function makeItWork(league: League, offer: TradeOffer): TradeOffer | null {
+export function makeItWork(league: League, offer: TradeOffer): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
   const gapA = salaryMatchGap(league, cur, 'a');
-  if (salaryMatchGap(league, cur, 'b') > 0 || validateTrade(league, cur).length > (gapA > 0 ? 1 : 0)) return null;
+  if (!canMakeWork(league, cur)) return { offer: null, why: 'value' };
   const legal = (o: TradeOffer) => validateTrade(league, o).length === 0;
   const spare = () =>
     standardRoster(league, cur.a.tid)
@@ -446,13 +462,13 @@ export function makeItWork(league: League, offer: TradeOffer): TradeOffer | null
       for (let j = i + 1; j < pool.length; j++) if (pool[i].sal + pool[j].sal >= gapA) options.push({ pids: [pool[i].p.pid, pool[j].p.pid], v: pool[i].v + pool[j].v });
     }
     const fix = options.sort((x, y) => x.v - y.v).find((o) => legal(withA(cur, o.pids)));
-    if (!fix) return null;
+    if (!fix) return { offer: null, why: 'salary' };
     cur = withA(cur, fix.pids);
   }
   for (let iter = 0; iter < 6; iter++) {
     const ev = evaluateTrade(league, cur);
-    if (ev.accept) return cur;
-    if (!ev.ok) return null;
+    if (ev.accept) return { offer: cur };
+    if (!ev.ok && !canMakeWork(league, cur)) break;
     const need = -ev.delta;
     const picks = league.draftPicks
       .filter((d) => d.tid === cur.a.tid && !cur.a.dpids.includes(d.dpid) && legal(withA(cur, [], [d.dpid])))
@@ -460,13 +476,14 @@ export function makeItWork(league: League, offer: TradeOffer): TradeOffer | null
     const players = spare()
       .map(({ p }) => ({ next: withA(cur, [p.pid]), v: playerValueFor(league, p, ai, true) }))
       .filter((c) => c.v > 0 && legal(c.next));
-    const cands = picks.length ? picks : players;
-    if (!cands.length) return null;
+    // picks and players together: a pile of picks alone often can't reach a good player's value
+    const cands = [...picks, ...players];
+    if (!cands.length) break;
     // smallest asset that covers the gap, else the biggest one
     const covering = cands.filter((c) => c.v >= need).sort((a, b) => a.v - b.v);
     cur = (covering[0] ?? cands.sort((a, b) => b.v - a.v)[0]).next;
   }
-  return evaluateTrade(league, cur).accept ? cur : null;
+  return evaluateTrade(league, cur).accept ? { offer: cur } : { offer: null, why: 'value' };
 }
 
 // ---------------------------------------------------------------- AI front offices

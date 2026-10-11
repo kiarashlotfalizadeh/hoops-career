@@ -9,6 +9,7 @@ import { MLE_YEARS, askingContract, marketSalary, mleRoom, nonGuaranteed, releas
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer } from '../league/freeAgency';
 import {
   aiProposeToUser,
+  canMakeWork,
   capSalary,
   evaluateTrade,
   executeTrade,
@@ -192,10 +193,30 @@ describe('AI trade valuation', () => {
     const target = shape(l, standardRoster(l, AI)[0], 74, 27, 12_000);
     const ask = offer([], [target.pid]);
     expect(salaryMatchGap(l, ask, 'a')).toBeGreaterThan(0);
-    const fixed = makeItWork(l, ask)!;
+    const fixed = makeItWork(l, ask).offer!;
     expect(fixed).not.toBeNull();
     expect(validateTrade(l, fixed)).toEqual([]);
     expect(evaluateTrade(l, fixed).accept).toBe(true);
+  });
+
+  it('"what would make this work?" sends a player when the roster is full or picks fall short', () => {
+    const l = league(11);
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    // only second-round picks left: a pile of them is worth far less than a good starter
+    l.draftPicks = l.draftPicks.filter((d) => d.tid !== U || d.round === 2);
+    for (const p of standardRoster(l, U)) shape(l, p, 66, 30, vetMin);
+    while (standardRoster(l, U).length < CAP.rosterMax) signPlayer(l, freeAgents(l)[0], U, vetMin, 1, { news: false });
+    const target = shape(l, standardRoster(l, AI)[0], 80, 26, vetMin);
+    const swap = shape(l, standardRoster(l, U)[0], 81, 26, vetMin);
+    const ask = offer([], [target.pid]);
+    // a 15-man roster can't take him for nothing, but sending a player fixes that
+    expect(validateTrade(l, ask).some((e) => e.includes('max 15'))).toBe(true);
+    expect(canMakeWork(l, ask)).toBe(true);
+    const r = makeItWork(l, ask);
+    expect(r.offer?.a.pids).toEqual([swap.pid]);
+    expect(evaluateTrade(l, r.offer!).accept).toBe(true);
   });
 
   it("won't take a player or pick straight back from the team it traded him to, until next season", () => {
