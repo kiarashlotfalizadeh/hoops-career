@@ -331,7 +331,7 @@ function HallOfFame({ league }: { league: League }) {
           </div>
           {retired.length > limit && (
             <button className="btn sm ghost" style={{ alignSelf: 'center' }} onClick={() => setLimit(limit + 25)}>
-              <ChevronDown size={15} /> Show more
+              <ChevronDown size={15} /> Show more ({retired.length - limit})
             </button>
           )}
         </>
