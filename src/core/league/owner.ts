@@ -1,6 +1,6 @@
 import type { League } from '../types';
 import { clamp } from '../random';
-import { addInbox, contractSeason, curTeamSeason, winPct } from './helpers';
+import { addInbox, contractSeason, curTeamSeason, revenueScale, winPct } from './helpers';
 import { profit } from './finances';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
@@ -30,6 +30,18 @@ export function takeOverTeam(league: League, tid: number) {
   league.tenureStart = contractSeason(league);
 }
 
+/**
+ * The owner's profit expectation in first-season dollars (grown with league revenue): hitting the
+ * target grades 0, and OWNER_PROFIT_RANGE above or below it maxes the finances grade out.
+ */
+export const OWNER_PROFIT_TARGET = 10_000;
+export const OWNER_PROFIT_RANGE = 50_000;
+
+export function ownerMoneyScore(league: League, seasonProfit: number) {
+  const s = revenueScale(league);
+  return clamp((seasonProfit - OWNER_PROFIT_TARGET * s) / (OWNER_PROFIT_RANGE * s), -1, 1);
+}
+
 /** End-of-season owner review. Components are -1..1; total is a running average. */
 export function ownerEvaluation(league: League) {
   // a fired coach has no owner until he takes over another team
@@ -39,7 +51,7 @@ export function ownerEvaluation(league: League) {
   const wins = clamp((winPct(ts) - 0.5) * 2.5, -1, 1);
   const round = ts.playoffRound;
   const playoffs = round >= 5 ? 1 : round === 4 ? 0.7 : round === 3 ? 0.45 : round === 2 ? 0.2 : round === 1 ? 0 : -0.25;
-  const money = clamp((profit(league, tid) - 15_000) / 60_000, -1, 1);
+  const money = ownerMoneyScore(league, profit(league, tid));
   const prev = league.ownerMood;
   const seasonsIn = seasonsInCharge(league);
   const w = seasonsIn <= 1 ? 1 : 0.4;

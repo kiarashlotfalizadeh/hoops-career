@@ -12,7 +12,7 @@ import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, addInbox, addNews, curTeamS
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { assessLuxuryTax, profit } from './finances';
+import { aiTicketPrice, assessLuxuryTax, profit } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, selectAllStars } from './awards';
@@ -57,6 +57,7 @@ export function startRegularSeason(league: League): string[] {
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
   for (const t of league.teams) updateMorale(league, t.tid);
+  for (const t of league.teams) if (t.tid !== league.userTid) t.budget.ticketPrice = aiTicketPrice(league, t);
   league.phase = 'regular';
   league.day = 0;
   addInbox(league, {
@@ -211,7 +212,8 @@ function endRegularSeason(league: League) {
   computeRegularSeasonAwards(league);
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
-  if (mine) addInbox(league, { from: 'Owner', subject: 'Luxury tax bill', body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`, tone: 'bad', link: '/finances' });
+  if (mine?.tax) addInbox(league, { from: 'Owner', subject: 'Luxury tax bill', body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`, tone: 'bad', link: '/finances' });
+  if (mine?.shortfall) addInbox(league, { from: 'Owner', subject: 'Under the salary floor', body: `Our payroll finished $${(mine.shortfall / 1000).toFixed(1)}M under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`, tone: 'bad', link: '/finances' });
   startPlayIn(league);
 }
 
@@ -413,6 +415,8 @@ export function newSeason(league: League): boolean {
   for (const t of league.teams) {
     const prev = t.seasons.find((s) => s.season === prevSeason);
     t.hype = clamp(t.hype * 0.85 + 0.075, 0.05, 1);
+    // ticket prices keep pace with league revenue (AI teams reprice at opening night)
+    t.budget.ticketPrice = Math.round(t.budget.ticketPrice * (1 + CAP.growth));
     teamSeason(t, league.season);
     void prev;
     t.deadMoney = t.deadMoney.filter((d) => d.season >= league.season);

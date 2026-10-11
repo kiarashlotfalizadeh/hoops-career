@@ -1,11 +1,11 @@
-import { seasonsInCharge } from '../../core/league/owner';
+import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, seasonsInCharge } from '../../core/league/owner';
 import { useQueryParam } from '../league/shared';
 import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
 import type { Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, payroll, winPct } from '../../core/league/helpers';
-import { ARENA_CAPACITY, OPERATIONS_PER_SEASON, attendanceFor, budgetCostPerSeason, profit } from '../../core/league/finances';
+import { CAP_FOR, curTeamSeason, payroll, revenueScale, winPct } from '../../core/league/helpers';
+import { ARENA_CAPACITY, NATIONAL_REVENUE, OPERATIONS_PER_SEASON, PLAYOFF_PRICE_MULT, TAX_SHARE_TO_NON_TAXPAYERS, attendanceFor, budgetCostPerSeason, profit, referencePrice } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
 import { CenterBar, Gauge, PLAYOFF_LABEL, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
@@ -57,13 +57,16 @@ function Overview({ team }: { team: Team }) {
   const attShown = homeGames ? attAvg : attendanceFor(league, team);
   const cap = CAP_FOR(league);
   const pay = payroll(league, team.tid);
-  const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(team.budget[k]), 0);
+  const scale = revenueScale(league);
+  const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0);
   const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
+  const shortfall = Math.max(0, cap.minPayroll - pay);
   const expenses = [
     { k: 'Payroll', v: pay, c: 'var(--accent)' },
     { k: 'Staff & facilities budgets', v: budgets, c: 'var(--tier-star)' },
-    { k: 'Arena & operations', v: OPERATIONS_PER_SEASON, c: 'var(--tier-low)' },
+    { k: 'Arena & operations', v: OPERATIONS_PER_SEASON * scale, c: 'var(--tier-low)' },
     ...(tax > 0 ? [{ k: 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
+    ...(shortfall > 0 ? [{ k: 'Salary floor shortfall', v: shortfall, c: 'var(--warn)' }] : []),
   ];
   const totalExp = expenses.reduce((a, e) => a + e.v, 0);
   return (
@@ -124,7 +127,7 @@ function Overview({ team }: { team: Team }) {
           </div>
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          National TV and league revenue pays every team about {fmtM(150_000)} a season. Luxury tax is billed at the end of the regular season and shared among teams under the tax line.
+          National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay {CAP.taxRate}× on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among teams under the line), and teams under the {fmtM(cap.minPayroll)} salary floor pay the shortfall to their players.
         </div>
       </Card>
     </>
@@ -138,6 +141,9 @@ function BudgetTab({ team }: { team: Team }) {
   const set = (fn: (t: Team) => void) => useStore.getState().mutate((l) => fn(l.teams[l.userTid]));
   const rank = (k: BudgetKey) => 1 + league.teams.filter((t) => t.budget[k] > team.budget[k]).length;
   const avg = (k: BudgetKey) => league.teams.reduce((a, t) => a + t.budget[k], 0) / league.teams.length;
+  const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
+  // fan demand on a temporary copy of the team, through the real attendance model
+  const withBudget = (b: Partial<Team['budget']>): Team => ({ ...team, budget: { ...team.budget, ...b } });
   const items: { k: BudgetKey; label: string; icon: JSX.Element; effect: (lvl: number) => string; help: string }[] = [
     {
       k: 'coaching',
@@ -166,27 +172,31 @@ function BudgetTab({ team }: { team: Team }) {
       label: 'Facilities',
       icon: <Building2 size={18} />,
       effect: (lvl) => {
-        const fans = Math.round(((lvl - 50) / 500) * ARENA_CAPACITY);
-        if (fans === 0) return 'League-average fan demand';
-        return `${fans > 0 ? '+' : ''}${fans.toLocaleString()} fans per home game vs average`;
+        const fans = attendanceFor(league, withBudget({ facilities: lvl })) - attendanceFor(league, withBudget({ facilities: 50 }));
+        if (fans !== 0) return `${fans > 0 ? '+' : ''}${fans.toLocaleString()} fans per home game vs average, at your ticket price`;
+        const dollars = Math.round(referencePrice(league, withBudget({ facilities: lvl })) - referencePrice(league, withBudget({ facilities: 50 })));
+        if (dollars === 0) return 'League-average fan demand';
+        return `Fans value a ticket $${Math.abs(dollars)} ${dollars > 0 ? 'more' : 'less'} than at an average arena`;
       },
       help: 'Arena upgrades, practice facility and fan experience. Better facilities raise demand for tickets, which means bigger crowds and more gate revenue.',
     },
   ];
-  // ticket price: attendance estimate on a temporary copy of the team
-  const priceAt = (price: number) => attendanceFor(league, { ...team, budget: { ...team.budget, ticketPrice: price } });
+  // ticket price: attendance estimate on a temporary copy of the team; the range grows with league revenue
+  const priceAt = (price: number) => attendanceFor(league, withBudget({ ticketPrice: price }));
   const price = team.budget.ticketPrice;
+  const scale = revenueScale(league);
+  const [minPrice, maxPrice] = [30, 250].map((x) => Math.max(5, Math.round((x * scale) / 5) * 5));
   const att = priceAt(price);
   const gate = (att * price) / 1000;
   const sweet = (() => {
     let best = { p: price, g: 0 };
-    for (let p = 30; p <= 250; p += 5) {
+    for (let p = minPrice; p <= maxPrice; p += 5) {
       const g = (priceAt(p) * p) / 1000;
       if (g > best.g) best = { p, g };
     }
     return best;
   })();
-  const totalBudget = items.reduce((a, it) => a + budgetCostPerSeason(team.budget[it.k]), 0);
+  const totalBudget = items.reduce((a, it) => a + cost(team.budget[it.k]), 0);
   return (
     <>
       <div className="small dim2">
@@ -203,7 +213,7 @@ function BudgetTab({ team }: { team: Team }) {
                 <Help title={it.label}>
                   <p style={{ margin: 0 }}>{it.help}</p>
                   <p style={{ margin: 0 }}>
-                    Cost: {fmtM(budgetCostPerSeason(1))} per season at level 1 up to {fmtM(budgetCostPerSeason(100))} at level 100. League average level: {Math.round(avg(it.k))}.
+                    Cost: {fmtM(cost(1))} per season at level 1 up to {fmtM(cost(100))} at level 100. League average level: {Math.round(avg(it.k))}.
                   </p>
                 </Help>
               </div>
@@ -219,7 +229,7 @@ function BudgetTab({ team }: { team: Team }) {
               min={1}
               max={100}
               onChange={(x) => set((t) => (t.budget[it.k] = x))}
-              format={(x) => `${fmtM(budgetCostPerSeason(x))}/season`}
+              format={(x) => `${fmtM(cost(x))}/season`}
               left="Bare bones"
               right="Best in league"
             />
@@ -238,13 +248,13 @@ function BudgetTab({ team }: { team: Team }) {
         <Slider
           label={<span className="dim2">Average ticket</span>}
           value={price}
-          min={30}
-          max={250}
+          min={minPrice}
+          max={Math.max(maxPrice, price)}
           step={5}
           onChange={(x) => set((t) => (t.budget.ticketPrice = x))}
           format={(x) => `$${x}`}
-          left="$30"
-          right="$250"
+          left={`$${minPrice}`}
+          right={`$${maxPrice}`}
         />
         <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi k="Est. crowd" v={att >= ARENA_CAPACITY ? 'Sellout' : att.toLocaleString()} sub={`${Math.round((att / ARENA_CAPACITY) * 100)}% full`} color={att >= ARENA_CAPACITY ? 'var(--good)' : undefined} />
@@ -252,7 +262,7 @@ function BudgetTab({ team }: { team: Team }) {
           <Kpi k="Season gate" v={fmtM(gate * 41)} sub="41 home games" />
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          Higher prices earn more per fan but thin the crowd. At today's demand, gate revenue peaks around <b className="dim2">${sweet.p}</b> ({fmtM(sweet.g * 41)} a season). Playoff games sell at a 60% premium.
+          Higher prices earn more per fan but thin the crowd. At today's demand, gate revenue peaks around <b className="dim2">${sweet.p}</b> ({fmtM(sweet.g * 41)} a season). Playoff games sell at a {Math.round((PLAYOFF_PRICE_MULT - 1) * 100)}% premium. Prices rise with league revenue each summer.
         </div>
       </Card>
 
@@ -291,10 +301,13 @@ function OwnerTab() {
   const seasonsIn = seasonsInCharge(league);
   const ts = curTeamSeason(league, league.userTid);
   const games = ts.won + ts.lost;
+  // the owner's profit target and range grow with league revenue
+  const scale = revenueScale(league);
+  const [target, range] = [OWNER_PROFIT_TARGET * scale, OWNER_PROFIT_RANGE * scale];
   const rows: { k: string; w: string; v: number; how: string }[] = [
     { k: 'Wins', w: '40%', v: om.wins, how: 'Regular-season win % against .500: each win above 41 adds about +3, each win below costs about 3. It maxes out around a 74-win pace.' },
     { k: 'Playoffs', w: '40%', v: om.playoffs, how: 'Missing the playoffs −25 · first round 0 · second round +20 · conference finals +45 · Finals +70 · title +100.' },
-    { k: 'Finances', w: '20%', v: om.money, how: 'Season profit. Every $4M of profit is +10; a $40M profit (or loss) maxes it out.' },
+    { k: 'Finances', w: '20%', v: om.money, how: `Season profit against his ${fmtM(target)} target: every ${fmtM(range / 10)} above it is +10 and every ${fmtM(range / 10)} short costs 10, maxing out at ${fmtMs(target + range)} (or ${fmtMs(target - range)}). The target rises with league revenue.` },
   ];
   return (
     <>
