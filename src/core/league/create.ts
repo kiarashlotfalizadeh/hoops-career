@@ -14,7 +14,7 @@ import { askingContract, releasePlayer, valueScore } from './contracts';
 import { addInbox, playerName, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './trades';
 import { fillRosters, trimRosters } from './freeAgency';
-import { ratingMeans } from './progression';
+import { ratingMeans, ratingSpreads } from './progression';
 
 export interface SeedPlayer {
   id: string;
@@ -263,6 +263,7 @@ export function createLeague(opts: CreateOpts): League {
     }
   }
   league.ratingAnchors = ratingMeans(league);
+  league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;
   ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? realSeed.picksThrough ?? 0 : 0));
   if (realSeed?.picks) applySeedPicks(league, realSeed.picks);

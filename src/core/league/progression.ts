@@ -138,22 +138,40 @@ export function ratingMeans(league: League): Partial<Record<RatingKey, number>> 
   return out;
 }
 
+/** Standard deviation per attribute among rostered players. */
+export function ratingSpreads(league: League): Partial<Record<RatingKey, number>> {
+  const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
+  const means = ratingMeans(league);
+  const out: Partial<Record<RatingKey, number>> = {};
+  for (const k of RATING_KEYS) {
+    const m = means[k]!;
+    out[k] = Math.sqrt(rostered.reduce((a, p) => a + (p.ratings[k] - m) ** 2, 0) / Math.max(1, rostered.length));
+  }
+  return out;
+}
+
 /**
- * Hold the league's talent level steady: after a year of development (young players rise,
- * veterans fade, rookies arrive, retirees leave), shift every attribute so its league-wide mean
- * among rostered players matches the anchor set when the league was created. Individual arcs
- * are untouched relative to the league; scoring, OVR meaning and salaries stay stable for decades.
+ * Hold the league's talent distribution steady: after a year of development (young players rise,
+ * veterans fade, rookies arrive, retirees leave), map every attribute back so its league-wide mean
+ * among rostered players matches the anchor set when the league was created, and pull its spread
+ * halfway back toward the original each year (otherwise stars drift upward and 90+ OVR players
+ * pile up). Individual arcs are kept relative to the league; scoring, OVR meaning and salaries
+ * stay stable for decades.
  */
 export function anchorRatings(league: League) {
   league.ratingAnchors ??= ratingMeans(league);
+  league.ratingSpreads ??= ratingSpreads(league);
   const now = ratingMeans(league);
+  const sd = ratingSpreads(league);
   for (const k of RATING_KEYS) {
     if (k === 'hgt') continue;
-    const d = (league.ratingAnchors[k] ?? now[k]!) - now[k]!;
-    if (Math.abs(d) < 0.05) continue;
+    const target = league.ratingAnchors[k] ?? now[k]!;
+    const ratio = sd[k]! > 0.5 ? (league.ratingSpreads[k] ?? sd[k]!) / sd[k]! : 1;
+    const scale = 1 + (ratio - 1) * 0.5;
+    if (Math.abs(target - now[k]!) < 0.05 && Math.abs(scale - 1) < 0.002) continue;
     for (const p of Object.values(league.players)) {
       if (p.tid === RETIRED) continue;
-      p.ratings[k] = clamp(Math.round((p.ratings[k] + d) * 10) / 10, 1, 100);
+      p.ratings[k] = clamp(Math.round((target + (p.ratings[k] - now[k]!) * scale) * 10) / 10, 1, 100);
     }
   }
 }

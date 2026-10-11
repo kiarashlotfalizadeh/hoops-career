@@ -3,11 +3,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { createLeague, defaultSettings, type SeedData } from '../src/core/league/create';
 import { startRegularSeason, simDay, startDraft, finishDraftPhase, startFreeAgency, newSeason, autoDraftUserPick } from '../src/core/league/season';
-import { teamPlayers, payroll, curTeamSeason, playerName, CAP_FOR } from '../src/core/league/helpers';
+import { teamPlayers, payroll, curTeamSeason, playerName, CAP_FOR, standardRoster, freeAgents } from '../src/core/league/helpers';
+import { CAP } from '../src/core/constants';
 import { standings } from '../src/core/league/standings';
 import { nextPick } from '../src/core/league/draft';
-import { expiringPlayers, userResign } from '../src/core/league/freeAgency';
-import { askingContract } from '../src/core/league/contracts';
+import { expiringPlayers, userOffer, userResign } from '../src/core/league/freeAgency';
+import { askingContract, releasePlayer } from '../src/core/league/contracts';
 import { ovrRaw } from '../src/core/ratings';
 
 const seasons = Number(process.argv[2] ?? 2);
@@ -23,11 +24,13 @@ for (let s = 0; s < seasons; s++) {
   const errs = startRegularSeason(league);
   if (errs.length) {
     console.log('cannot start:', errs);
-    // auto-fix user roster for the test
-    const roster = teamPlayers(league, league.userTid).sort((a, b) => a.ovr - b.ovr);
-    while (teamPlayers(league, league.userTid).length > 15) {
-      const p = roster.shift()!;
-      p.tid = -1;
+    // auto-manage the user roster for the test: cut extras, sign minimum deals to reach 13
+    const roster = standardRoster(league, league.userTid).sort((a, b) => a.ovr - b.ovr);
+    while (standardRoster(league, league.userTid).length > CAP.rosterMax) releasePlayer(league, roster.shift()!, { news: false });
+    for (const p of freeAgents(league).sort((a, b) => b.ovr - a.ovr)) {
+      if (standardRoster(league, league.userTid).length >= CAP.rosterMin) break;
+      // over the cap only minimum deals go through; take the best player who'll sign one
+      userOffer(league, p.pid, askingContract(league, p, league.userTid).amount, 1);
     }
     const e2 = startRegularSeason(league);
     if (e2.length) throw new Error(e2.join(';'));

@@ -72,8 +72,10 @@ function check() {
     if (p.tid === -3 && p.contract.salaries.some((x) => x > 0)) bad('retired with salary', nm(p.pid));
     if (p.tid === -2 && p.draft.year < season) bad('stale prospect', nm(p.pid));
     if (p.injury && !(p.injury.gamesRemaining > 0 && p.injury.gamesRemaining < 200)) bad('bad injury length', `${nm(p.pid)} ${p.injury.gamesRemaining}`);
-    const gp = p.stats.filter((s) => s.season === season && !s.playoffs && !s.real).reduce((a, s) => a + s.gp, 0);
-    if (gp > 82) bad('player >82 gp', `${nm(p.pid)} ${gp}`);
+    const rows = p.stats.filter((s) => s.season === season && !s.playoffs && !s.real);
+    const gp = rows.reduce((a, s) => a + s.gp, 0);
+    // a player traded between teams with different schedules can pass 82, as in the NBA
+    if (gp > (rows.length > 1 ? 88 : 82)) bad('player gp over the limit', `${nm(p.pid)} ${gp} (${rows.length} teams)`);
   }
   const first = ['resign', 'freeAgency'].includes(ph) ? season + 1 : season;
   const cnt = new Map<string, number>();

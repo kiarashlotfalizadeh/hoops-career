@@ -723,6 +723,8 @@ export interface League {
   ovrScale: { raw: number[]; disp: number[] };
   /** League-wide mean of each attribute among rostered players, held steady year to year so the league neither inflates nor deflates. */
   ratingAnchors?: Partial<Record<RatingKey, number>>;
+  /** League-wide spread per attribute at creation (anchorRatings keeps it from widening). */
+  ratingSpreads?: Partial<Record<RatingKey, number>>;
   /** Days of the regular season (last scheduled day). */
   regularSeasonDays: number;
   tradeDeadlineDay: number;
