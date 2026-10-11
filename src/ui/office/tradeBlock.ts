@@ -4,6 +4,7 @@
 import type { League } from '../../core/types';
 import { rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { tradeValue } from '../../core/league/contracts';
+import { withHoldsMemo } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
   PICK_LENS,
@@ -42,6 +43,10 @@ function toOffer(user: number, give: number[], tid: number, pkg: Asset[]): Trade
 }
 
 export function blockOffers(league: League, pid: number): BlockOffer[] {
+  return withHoldsMemo(() => findOffers(league, pid));
+}
+
+function findOffers(league: League, pid: number): BlockOffer[] {
   const user = league.userTid;
   const me = league.teams[user];
   const target = league.players[pid];

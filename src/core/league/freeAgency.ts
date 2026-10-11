@@ -108,10 +108,32 @@ export function capHolds(league: League, tid: number): { p: Player; amount: numb
     .map((p) => ({ p, amount: askingContract(league, p, tid).amount }));
 }
 
+let holdsMemo: Map<number, number> | null = null;
+
+/**
+ * Run a read-only batch (trade evaluations) with each team's cap holds worked out once: an AI
+ * team's holds replay its whole re-signing plan, which made the trading block slow in the summer.
+ */
+export function withHoldsMemo<T>(fn: () => T): T {
+  if (holdsMemo) return fn();
+  holdsMemo = new Map();
+  try {
+    return fn();
+  } finally {
+    holdsMemo = null;
+  }
+}
+
 /** Payroll for cap purposes: committed salary and dead money, plus cap holds for next season during the draft and re-signing window. */
 export function capPayroll(league: League, tid: number, season = contractSeason(league)): number {
   const pay = payroll(league, tid, season);
-  return season === league.season + 1 ? pay + capHolds(league, tid).reduce((a, h) => a + h.amount, 0) : pay;
+  if (season !== league.season + 1) return pay;
+  let holds = holdsMemo?.get(tid);
+  if (holds === undefined) {
+    holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
+    holdsMemo?.set(tid, holds);
+  }
+  return pay + holds;
 }
 
 /** Give up the rights to an expiring player during the re-signing window: he hits the market and his cap hold goes away. */

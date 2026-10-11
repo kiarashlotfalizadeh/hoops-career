@@ -23,7 +23,7 @@ import {
   winPct,
 } from './helpers';
 import { type Strategy, marketSalary, pendingOption, rookieContract, tradeValue, valueScore } from './contracts';
-import { capPayroll } from './freeAgency';
+import { capPayroll, withHoldsMemo } from './freeAgency';
 
 export interface TradeSide {
   tid: number;
@@ -346,6 +346,10 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
 }
 
 export function evaluateTrade(league: League, offer: TradeOffer): TradeEval {
+  return withHoldsMemo(() => evaluate(league, offer));
+}
+
+function evaluate(league: League, offer: TradeOffer): TradeEval {
   const errors = validateTrade(league, offer);
   const diff = league.settings.difficulty;
   // casual AIs accept slightly unfavorable deals; hard AIs want a premium
@@ -445,6 +449,10 @@ export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null;
  * need to send.
  */
 export function makeItWork(league: League, offer: TradeOffer): WorkResult {
+  return withHoldsMemo(() => findWork(league, offer));
+}
+
+function findWork(league: League, offer: TradeOffer): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
   const gapA = salaryMatchGap(league, cur, 'a');
