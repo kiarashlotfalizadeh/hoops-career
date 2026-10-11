@@ -541,7 +541,17 @@ export default function Live() {
               </button>
               <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
                 {SPEEDS.map((s) => (
-                  <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => setSpeed(s.id)} style={{ padding: '0 10px' }}>
+                  <button
+                    key={s.id}
+                    className={speed === s.id ? 'on' : ''}
+                    aria-pressed={speed === s.id}
+                    onClick={() => {
+                      setSpeed(s.id);
+                      // the next game starts at the speed you left this one at (it's the Settings default too)
+                      if (league.settings.liveSpeed !== s.id) useStore.getState().mutate((l) => void (l.settings.liveSpeed = s.id));
+                    }}
+                    style={{ padding: '0 10px' }}
+                  >
                     {s.label}
                   </button>
                 ))}
