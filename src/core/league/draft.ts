@@ -1,10 +1,10 @@
 import type { CombineResults, DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
-import { Rng, clamp } from '../random';
-import { generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { Rng, clamp, hashString } from '../random';
+import { contractExp, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { composites, ratingToHeight, shiftToOvr } from '../ratings';
-import { addInbox, addNews, curTeamSeason, playerName, prospects, teamPlayers, winPct } from './helpers';
-import { askingContract, rookieContract, valueScore } from './contracts';
+import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
+import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
 
@@ -105,16 +105,27 @@ export interface LotteryResult {
   order: { tid: number; odds: number; pick: number; pre: number }[];
 }
 
+/**
+ * Every team, worst record first. Like the NBA, ties are broken by a random draw, seeded by the
+ * league and season so the Draft screen shows the same pre-lottery order the lottery used.
+ */
+export function draftStandings(league: League): { tid: number; playoff: boolean }[] {
+  const draw = (tid: number) => hashString(`${league.id}:${league.season}:${tid}`);
+  return league.teams
+    .map((t) => {
+      const ts = curTeamSeason(league, t.tid);
+      return { tid: t.tid, wp: winPct(ts), playoff: ts.playoffRound >= 1, draw: draw(t.tid) };
+    })
+    .sort((a, b) => a.wp - b.wp || a.draw - b.draw)
+    .map(({ tid, playoff }) => ({ tid, playoff }));
+}
+
 /** Run the lottery for this season's draft and assign pick numbers. */
 export function runLottery(league: League, rng: Rng): LotteryResult {
   const season = league.season;
-  const recs = league.teams.map((t) => {
-    const ts = curTeamSeason(league, t.tid);
-    return { tid: t.tid, wp: winPct(ts), playoff: ts.playoffRound >= 1, diff: ts.ptsFor - ts.ptsAgainst, rand: rng.next() };
-  });
-  const byWorst = (a: (typeof recs)[0], b: (typeof recs)[0]) => a.wp - b.wp || a.diff - b.diff || a.rand - b.rand;
-  const lottery = recs.filter((r) => !r.playoff).sort(byWorst);
-  const playoff = recs.filter((r) => r.playoff).sort(byWorst);
+  const recs = draftStandings(league);
+  const lottery = recs.filter((r) => !r.playoff);
+  const playoff = recs.filter((r) => r.playoff);
   const pool = lottery.map((r, i) => ({ tid: r.tid, w: LOTTERY_ODDS[i] ?? 0, pre: i + 1 }));
   const winners: typeof pool = [];
   const remaining = [...pool];
@@ -126,7 +137,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   const lotteryOrder = [...winners, ...remaining];
   const firstRound = [...lotteryOrder.map((x) => x.tid), ...playoff.map((r) => r.tid)];
   // the second round has no lottery: straight reverse order of record across the whole league
-  const secondRound = [...recs].sort(byWorst).map((r) => r.tid);
+  const secondRound = recs.map((r) => r.tid);
   const assign = (round: 1 | 2, order: number[]) => {
     order.forEach((origTid, i) => {
       const dp = league.draftPicks.find((d) => d.season === season && d.round === round && d.originalTid === origTid);
@@ -179,6 +190,11 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
   p.tid = dp.tid;
   p.draft = { year: league.season, round: dp.round, pick: dp.pick!, tid: dp.tid };
   p.contract = rookieContract(league, dp.pick!, dp.round, league.season + 1);
+  // an AI team with 14+ players signed for next season stashes its second-rounder on a two-way deal
+  const committed = standardRoster(league, dp.tid).filter((x) => x.pid !== pid && contractExp(x.contract) > league.season).length;
+  if (dp.round === 2 && dp.tid !== league.userTid && committed >= 14 && twoWayRoster(league, dp.tid).length < TWO_WAY_MAX) {
+    p.contract = { start: league.season + 1, salaries: [twoWaySalary(league, league.season + 1), twoWaySalary(league, league.season + 2)], twoWay: true };
+  }
   p.joinedSeason = league.season + 1;
   const team = league.teams[dp.tid];
   team.rotation.order.push(p.pid);
@@ -235,7 +251,7 @@ export function finishDraft(league: League) {
       p.draft = { year: league.season, round: 0, pick: 0, tid: null };
       p.contract = { start: league.season + 1, salaries: [0] };
       p.asking = askingContract(league, p);
-      p.faDays = 30;
+      p.faDays = FA_PRICE_CUT_DAYS;
     } else {
       p.tid = RETIRED;
       p.retiredSeason = league.season;

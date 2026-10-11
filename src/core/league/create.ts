@@ -11,8 +11,8 @@ import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { updateMorale } from './morale';
-import { askingContract, releasePlayer, valueScore } from './contracts';
-import { addInbox, playerName, teamPlayers } from './helpers';
+import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
+import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './trades';
 import { fillRosters, trimRosters } from './freeAgency';
 import { ratingMeans, ratingSpreads } from './progression';
@@ -224,12 +224,28 @@ export function createLeague(opts: CreateOpts): League {
   } else {
     // fictional league
     for (let tid = 0; tid < 30; tid++) {
+      const roster: Player[] = [];
       for (let i = 0; i < 14; i++) {
         const talent = rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
-        const age = Math.round(clamp(rng.normal(26.5, 4), 19, 37));
-        const p = generatePlayer(rng, { pid: league.nextPid++, season, tid, age, talent, scale: DEFAULT_SCALE });
+        // the last three spots go to young players (some of them on rookie deals)
+        const age = i >= 11 ? Math.round(clamp(rng.normal(21, 1.2), 19, 23)) : Math.round(clamp(rng.normal(26.5, 4), 19, 37));
+        // the last spot goes to a center if the roster has none yet
+        const big = i === 13 && !roster.some((p) => p.pos === 'C');
+        let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: big ? rng.int(83, 85) : undefined });
+        for (let tries = 0; big && p.pos !== 'C' && tries < 10; tries++) p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86) });
+        league.nextPid++;
         p.experience = Math.max(0, age - 20);
         p.draft = { year: season - 1 - p.experience, round: rng.chance(0.7) ? 1 : 2, pick: rng.int(1, 30), tid: null };
+        league.players[p.pid] = p;
+        roster.push(p);
+      }
+      // two-way prospects outside the 15
+      for (let i = 0; i < 2; i++) {
+        const age = rng.int(20, 23);
+        const p = generatePlayer(rng, { pid: league.nextPid++, season, tid, age, talent: rng.normal(-1.3, 0.4), scale: DEFAULT_SCALE });
+        p.experience = rng.int(0, Math.min(2, age - 20));
+        p.draft = { year: season - 1 - p.experience, round: 2, pick: rng.int(1, 30), tid: null };
+        p.contract = { start: season, salaries: [0], twoWay: true };
         league.players[p.pid] = p;
       }
     }
@@ -239,30 +255,17 @@ export function createLeague(opts: CreateOpts): League {
       p.experience = Math.max(0, age - 21);
       league.players[p.pid] = p;
     }
-    const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
+    const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
-    // contracts for the fictional league, scaled so payrolls land near the cap
-    for (const p of Object.values(league.players)) {
-      refreshPlayerDerived(p, season, league.ovrScale);
-      if (p.tid >= 0) {
-        const ask = askingContract(league, p);
-        p.contract = { start: season, salaries: Array.from({ length: rng.int(1, 4) }, (_, i) => Math.round(ask.amount * Math.pow(1.05, i))) };
-      }
-    }
-    for (let tid = 0; tid < 30; tid++) {
-      const roster = Object.values(league.players).filter((p) => p.tid === tid);
-      const pay = roster.reduce((a, p) => a + p.contract.salaries[0], 0);
-      const target = rng.uniform(150_000, 195_000);
-      const f = target / Math.max(1, pay);
-      for (const p of roster) p.contract.salaries = p.contract.salaries.map((x) => Math.max(1_300, Math.round((x * f) / 10) * 10));
-    }
+    for (const p of Object.values(league.players)) refreshPlayerDerived(p, season, league.ovrScale);
+    fictionalContracts(league, rng);
   }
   for (const p of Object.values(league.players)) {
     refreshPlayerDerived(p, season, league.ovrScale);
     p.ratingsHistory = [{ season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } }];
     if (p.tid === FREE_AGENT) {
       p.asking = askingContract(league, p);
-      p.faDays = 30;
+      p.faDays = FA_PRICE_CUT_DAYS;
     }
   }
   league.ratingAnchors = ratingMeans(league);
@@ -271,9 +274,6 @@ export function createLeague(opts: CreateOpts): League {
   ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? realSeed.picksThrough ?? 0 : 0));
   if (realSeed?.picks) applySeedPicks(league, realSeed.picks);
   generateDraftClass(league, season, rng);
-  // preseason cuts: real contract lists include camp deals, so AI teams trim to 15 standard contracts
-  if (opts.preseasonCuts !== false) trimRosters(league, (p) => releasePlayer(league, p, { news: false }));
-  fillRosters(league, rng);
   const sched = (realSeed?.schedule && realSchedule(league.teams, realSeed.schedule, season, rng, league.nextGid)) || generateSchedule(league.teams, season, rng, league.nextGid);
   league.schedule = sched.games;
   league.nextGid += sched.games.length;
@@ -281,7 +281,12 @@ export function createLeague(opts: CreateOpts): League {
   league.allStarDay = sched.allStarDay;
   league.tradeDeadlineDay = sched.tradeDeadlineDay;
   league.cup = sched.cup ? cupState(sched.cup, season) : null;
+  // injuries first, so preseason cuts see who is out
   if (realSeed && opts.settings.injuries) applySeedInjuries(league, realSeed);
+  // preseason cuts: real contract lists include camp deals (not guaranteed until opening night), so
+  // AI teams trim to 15 standard contracts
+  if (opts.preseasonCuts !== false) trimRosters(league, (p) => releasePlayer(league, p, { news: false }));
+  fillRosters(league, rng);
   league.rng = rng.state;
   teamStrategyUpdate(league);
   for (const t of league.teams) ensureRotation(league, t.tid);
@@ -304,12 +309,56 @@ export function createLeague(opts: CreateOpts): League {
     addInbox(league, {
       from: 'Assistant GM',
       subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
-      body: `We carry ${standard.length} players on standard contracts into camp, including camp invites${twoWays ? ` (plus ${twoWays} on two-way deals, who don't count)` : ''}. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Releasing a player keeps any guaranteed salary on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
+      body: `We carry ${standard.length} players on standard contracts into camp, including camp invites${twoWays ? ` (plus ${twoWays} on two-way deals, who don't count)` : ''}. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Camp and minimum deals signed for this season aren't guaranteed until opening night, so cutting those costs nothing; anyone else's remaining salary stays on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
       tone: 'alert',
       link: '/office',
     });
   }
   return league;
+}
+
+/**
+ * Fictional contracts follow value: each player gets about his market price (with some noise).
+ * Team totals are pulled halfway toward the league average (teams budget, so payrolls don't swing
+ * as widely as talent does), then everything is scaled so the average payroll lands a little over
+ * the cap and clamped to each player's minimum and max. Each team's two or three best young
+ * players are on rookie-scale deals, some veterans hold options, and the two-way prospects get
+ * two-way deals.
+ */
+function fictionalContracts(league: League, rng: Rng) {
+  const season = league.season;
+  const cap = CAP_FOR(league, season);
+  const teams = league.teams.map((t) => {
+    const roster = standardRoster(league, t.tid);
+    const young = roster.filter((p) => p.experience <= 3).sort((a, b) => valueScore(league, b) - valueScore(league, a));
+    const rookies = new Set(young.slice(0, rng.int(2, 3)));
+    for (const p of rookies) {
+      // a first-rounder in year experience+1 of his four-year scale
+      p.draft = { ...p.draft, year: season - 1 - p.experience, round: 1 };
+      p.contract = rookieContract(league, p.draft.pick, 1, season - p.experience);
+    }
+    return roster.filter((p) => !rookies.has(p)).map((p) => ({ p, amount: marketSalary(league, p) * rng.uniform(0.8, 1.2) }));
+  });
+  const totals = teams.map((team) => team.reduce((a, x) => a + x.amount, 0));
+  const mean = totals.reduce((a, v) => a + v, 0) / totals.length;
+  const open = teams.flatMap((team, i) => team.map((x) => ({ ...x, amount: x.amount * Math.sqrt(mean / totals[i]) })));
+  for (const p of Object.values(league.players)) {
+    if (p.contract.twoWay) p.contract = { start: season, salaries: [twoWaySalary(league, season)], twoWay: true };
+  }
+  const rookiePay = Object.values(league.players).reduce((a, p) => a + (p.tid >= 0 && p.contract.rookie ? p.contract.salaries[season - p.contract.start] : 0), 0);
+  const target = league.teams.length * cap.salaryCap * 1.05 - rookiePay;
+  const limits = (p: Player) => [p.experience >= 3 ? cap.vetMin : cap.minContract, cap.maxContract(p.experience)] as const;
+  // clamping moves the total, so scale twice
+  let f = 1;
+  for (let i = 0; i < 2; i++) {
+    const total = open.reduce((a, x) => a + clamp(x.amount * f, ...limits(x.p)), 0);
+    f *= target / Math.max(1, total);
+  }
+  for (const { p, amount } of open) {
+    const years = rng.int(1, Math.min(4, preferredYears(league, p)));
+    p.contract = makeContract(league, clamp(Math.round((amount * f) / 10) * 10, ...limits(p)), years, season, p.experience);
+    if (years > 1 && p.experience >= 4 && rng.chance(0.12)) p.contract.option = rng.chance(0.7) ? 'player' : 'team';
+  }
 }
 
 /** Real pick ownership: every listed pick moves to its owner (picks start with their original team). */
