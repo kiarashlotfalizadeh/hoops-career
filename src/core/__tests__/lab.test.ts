@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab } from '../ai/lab';
+import { counterCandidates } from '../ai/advisor';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
 
@@ -46,5 +47,15 @@ describe('tactics lab & reports', () => {
     league.teams[0].tactics = drop;
     expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Hedge/);
     league.teams[0].tactics = t;
+  });
+  it('only offers counters that change something', () => {
+    const [mine, opp] = [league.teams[0], league.teams[1]];
+    const saved = [mine.tactics, opp.tactics];
+    opp.tactics = applyPatch(opp.tactics, { defense: { scheme: 'man', pnr: 'drop' } });
+    mine.tactics = applyPatch(mine.tactics, { offense: { actions: { ...mine.tactics.offense.actions, pnr: 60, handoff: 60 } } });
+    expect(counterCandidates(league, 0, 1).map((c) => c.id)).toContain('vs-drop');
+    mine.tactics = applyPatch(mine.tactics, { offense: { actions: { ...mine.tactics.offense.actions, pnr: 100, handoff: 100 } } });
+    expect(counterCandidates(league, 0, 1).map((c) => c.id)).not.toContain('vs-drop');
+    [mine.tactics, opp.tactics] = saved;
   });
 });

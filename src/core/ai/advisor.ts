@@ -5,7 +5,7 @@ import type { League, Player, PnrCoverage } from '../types';
 import { composites, ROLE_META } from '../ratings';
 import { DEF_PRESETS, OFF_PRESETS, COVERAGE_META } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
-import type { Candidate } from './lab';
+import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 
 export interface Threat {
@@ -172,7 +172,9 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     out.push({ id: 'pace-up', label: 'Push the pace', why: `${opp.name} is slow; run on them.`, patch: { offense: { pace: 78, transition: 85 } } });
   if (oppProfile.size < 48 && cur.offense.crashBoards < 70)
     out.push({ id: 'crash', label: 'Crash the glass', why: 'They are small; attack the offensive boards.', patch: { offense: { crashBoards: 78 } } });
-  return out.slice(0, 9);
+  // a counter that changes nothing (sliders already at the limit) isn't worth simulating
+  const same = JSON.stringify(cur);
+  return out.filter((c) => JSON.stringify(applyPatch(cur, c.patch)) !== same).slice(0, 9);
 }
 
 export interface Alert {
