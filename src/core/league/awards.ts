@@ -7,7 +7,7 @@ export function gameScore(s: PlayerStats): number {
   return s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
 }
 
-interface Cand {
+export interface Cand {
   p: Player;
   s: PlayerStats;
   gp: number;
@@ -32,6 +32,22 @@ function candidates(league: League, season = league.season): Cand[] {
 function gamesThreshold(league: League) {
   const played = Math.max(...league.teams.map((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost));
   return Math.round(played * (65 / 82));
+}
+
+/**
+ * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games (pro
+ * rata during the season, with real minutes); Rookie and Sixth Man of the Year don't, so they ask
+ * for a voter's 50 games. A sixth man came off the bench in more games than he started.
+ */
+function awardPools(league: League, season = league.season) {
+  const minG = gamesThreshold(league);
+  const all = candidates(league, season);
+  const regular = (c: Cand) => c.gp >= Math.min(minG, 50);
+  return {
+    eligible: all.filter((c) => c.gp >= minG && c.mpg >= 20),
+    rookies: all.filter((c) => c.p.draft.year === season - 1 && regular(c)),
+    bench: all.filter((c) => c.s.gs < c.gp - c.s.gs && regular(c) && c.mpg >= 20),
+  };
 }
 
 /** MVP: production first; winning and on-court impact break ties (teammates share those, so they can't carry a sidekick). */
@@ -83,32 +99,35 @@ export function defContext(league: League, season = league.season): DefContext {
   return { lgDRtg: poss ? (pa / poss) * 100 : 0, teamDRtg };
 }
 
+export const royScore = (c: Cand) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05;
+export const smoyScore = (c: Cand) => c.gmsc + c.pmPerGame * 0.2;
+
+/** This season's award races so far, each with the award's own eligibility, best first. */
+export function awardRaces(league: League, n = 5) {
+  const { eligible, rookies, bench } = awardPools(league);
+  const dctx = defContext(league, league.season);
+  const rank = (arr: Cand[], f: (c: Cand) => number) =>
+    arr
+      .map((c) => ({ c, score: f(c) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, n);
+  return { mvp: rank(eligible, mvpScore), dpoy: rank(eligible, (c) => dpoyScore(c, dctx)), roy: rank(rookies, royScore), smoy: rank(bench, smoyScore) };
+}
+
 /** Top of the MVP / DPOY ladders with the award's own eligibility and context. */
 export function awardLadder(league: League, award: 'mvp' | 'dpoy', n = 5): { pid: number; score: number }[] {
-  const minG = gamesThreshold(league);
-  const eligible = candidates(league).filter((c) => c.gp >= minG && c.mpg >= 20);
-  const dctx = defContext(league, league.season);
-  const f = award === 'mvp' ? mvpScore : (c: Cand) => dpoyScore(c, dctx);
-  return eligible
-    .map((c) => ({ pid: c.p.pid, score: f(c) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, n);
+  return awardRaces(league, n)[award].map(({ c, score }) => ({ pid: c.p.pid, score }));
 }
 
 export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const season = league.season;
-  const minG = gamesThreshold(league);
-  const all = candidates(league);
-  const eligible = all.filter((c) => c.gp >= minG && c.mpg >= 20);
+  const { eligible, rookies, bench } = awardPools(league, season);
   const rank = <T>(arr: T[], f: (x: T) => number) => [...arr].sort((a, b) => f(b) - f(a));
   const mvp = rank(eligible, mvpScore);
   const dctx = defContext(league, season);
   const dpoy = rank(eligible, (c) => dpoyScore(c, dctx));
-  const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.min(minG, 50));
-  const roy = rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05);
-  // NBA rule: more games off the bench than as a starter
-  const bench = eligible.filter((c) => c.s.gs < c.gp - c.s.gs);
-  const smoy = rank(bench, (c) => c.gmsc + c.pmPerGame * 0.2);
+  const roy = rank(rookies, royScore);
+  const smoy = rank(bench, smoyScore);
   const mip = rank(
     eligible.filter((c) => c.p.draft.year !== season - 1),
     (c) => {

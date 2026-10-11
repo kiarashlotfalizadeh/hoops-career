@@ -116,8 +116,9 @@ function checkClinch() {
 function checkSeasonEnd() {
   const aw = L.awards.find((a) => a.season === L.season)!;
   const gp = (pid: number) => H.seasonTotals(L.players[pid], L.season)?.gp ?? 0;
+  // 65 games for the MVP, DPOY and MIP; Rookie and Sixth Man of the Year aren't covered by the rule
   for (const k of ['mvp', 'dpoy', 'smoy', 'mip'] as const)
-    if (aw[k] === undefined || gp(aw[k]!) < 65) bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);
+    if (aw[k] === undefined || gp(aw[k]!) < (k === 'smoy' ? 50 : 65)) bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);
   if (aw.roy !== undefined && L.players[aw.roy].draft.year !== L.season - 1) bad('ROY not a rookie', nm(aw.roy));
   if (new Set(aw.allNba.flat()).size !== 15 || aw.champion === undefined) bad('All-NBA/champion', '');
   if (L.playoffs.length !== 15 || L.playoffs.some((s) => Math.max(s.highWins, s.lowWins) !== 4)) bad('playoff bracket', `${L.playoffs.length} series`);

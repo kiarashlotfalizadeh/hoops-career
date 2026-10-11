@@ -2,8 +2,8 @@ import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Award, Crown, Medal, Shield, Sparkles, Star, TrendingUp, Trophy, Users } from 'lucide-react';
 import type { League, Player, SeasonAwards } from '../../core/types';
-import { curTeamSeason, seasonTotals, winPct } from '../../core/league/helpers';
-import { defContext, dpoyScore, gameScore, mvpScore } from '../../core/league/awards';
+import { curTeamSeason } from '../../core/league/helpers';
+import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -256,50 +256,16 @@ function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
 
 // ---------------------------------------------------------------- race
 
-interface Cand {
-  p: Player;
-  s: NonNullable<ReturnType<typeof seasonTotals>>;
-  gp: number;
-  mpg: number;
-  gmsc: number;
-  winPct: number;
-  pmPerGame: number;
-  tid: number | null;
-}
+type Cand = AwardCand & { tid: number | null };
 
 function AwardRace({ league }: { league: League }) {
   const v = useStore((s) => s.v);
   const race = useMemo(() => {
-    const season = league.season;
     const played = Math.max(0, ...league.teams.map((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost));
-    const all: Cand[] = [];
-    for (const p of Object.values(league.players)) {
-      const s = seasonTotals(p, season, false);
-      if (!s || s.gp === 0) continue;
-      const tid = statTid(league, s);
-      const ts = tid !== null ? league.teams[tid].seasons.find((x) => x.season === season) : undefined;
-      all.push({ p, s, gp: s.gp, mpg: s.min / s.gp, gmsc: gameScore(s) / s.gp, winPct: ts ? winPct(ts) : 0.5, pmPerGame: s.pm / s.gp, tid });
-    }
-    const minG = Math.max(1, Math.round(played * 0.6));
-    const eligible = all.filter((c) => c.gp >= minG && c.mpg >= 20);
-    const rank = (arr: Cand[], f: (c: Cand) => number) =>
-      arr
-        .map((c) => ({ c, score: f(c) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
-    const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.max(1, Math.round(played * 0.5)));
-    // same team-defense context the real vote uses
-    const dctx = defContext(league, season);
-    return {
-      played,
-      mvp: rank(eligible, mvpScore),
-      dpoy: rank(eligible, (c) => dpoyScore(c, dctx)),
-      roy: rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05),
-      smoy: rank(
-        eligible.filter((c) => c.s.gs <= c.gp / 2),
-        (c) => c.gmsc + c.pmPerGame * 0.2,
-      ),
-    };
+    // the voters' own eligibility and formulas, with the team each player last played for
+    const withTeam = (list: { c: AwardCand; score: number }[]) => list.map(({ c, score }) => ({ c: { ...c, tid: statTid(league, c.s) }, score }));
+    const r = awardRaces(league, 5);
+    return { played, mvp: withTeam(r.mvp), dpoy: withTeam(r.dpoy), roy: withTeam(r.roy), smoy: withTeam(r.smoy) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [league, v]);
 

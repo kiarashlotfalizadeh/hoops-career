@@ -12,7 +12,7 @@ import { validateTrade } from '../league/trades';
 import { buildSimInput, wearInjuryRisk } from '../league/games';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
-import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
+import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
 import { lotteryOdds, runLottery } from '../league/draft';
@@ -540,6 +540,20 @@ describe('awards (L13, L18)', () => {
     line(half, 70, 35, 30);
     line(bench, 70, 34, 25);
     expect(computeRegularSeasonAwards(l).smoy).toBe(bench.pid);
+  });
+
+  it("Sixth Man isn't held to the 65-game rule (50 games do), and the race shows what the vote will do", () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [sixth, short] = standardRoster(l, U);
+    line(sixth, 55, 0, 25);
+    line(short, 45, 0, 30);
+    const race = awardRaces(l);
+    expect(race.smoy[0].c.p.pid).toBe(sixth.pid);
+    expect(race.mvp.some((x) => x.c.p.pid === sixth.pid)).toBe(false);
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.smoy).toBe(sixth.pid);
+    expect(aw.mvp).toBe(race.mvp[0].c.p.pid);
   });
 
   it('All-Rookie has a 1st and a 2nd team', () => {
