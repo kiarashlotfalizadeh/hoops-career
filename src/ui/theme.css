@@ -396,6 +396,18 @@ h3 {
   color: var(--text-2);
   font-size: 14px;
 }
+/* "All" / "Full" style links in a card header: small text, 40px+ target */
+.card-link {
+  position: relative;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.card-link::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+}
 .card.accent {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface-2)), var(--surface));
@@ -417,6 +429,17 @@ h3 {
   gap: 10px;
   padding: 10px 12px;
   min-height: 52px;
+}
+/* depth-chart arrows: two 40px targets stacked into the row's own padding */
+.move-arrows {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  margin: -10px -4px -10px -8px;
+}
+.move-arrows .iconbtn {
+  width: 40px;
+  height: 40px;
 }
 .list-divider {
   padding: 8px 12px 6px;
@@ -556,6 +579,10 @@ h3 {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 22%, var(--surface));
   color: var(--text);
+}
+.chip:disabled,
+.seg button:disabled {
+  opacity: 0.5;
 }
 .tag {
   display: inline-flex;
@@ -1101,7 +1128,30 @@ table.stats th.sorted {
   flex-direction: column;
   gap: 10px;
 }
-@media (min-width: 900px) {
+/* three-digit scores still clear the team names on a phone */
+.live-bug .score {
+  font-size: clamp(26px, 8vw, 40px);
+}
+/* compact live controls, 42px to the finger */
+.live-ctl .btn.sm,
+.live-ctl .seg button {
+  position: relative;
+}
+.live-ctl .btn.sm::after,
+.live-ctl .seg button::after {
+  content: '';
+  position: absolute;
+  inset: -4px -1px;
+}
+.live-ctl .seg {
+  overflow: visible;
+}
+.live-ctl.grid4 .btn.sm {
+  padding: 0 6px;
+  gap: 5px;
+}
+/* tablets, portrait too: the court sits beside the coaching panels instead of filling the screen */
+@media (min-width: 760px) {
   .live-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr);
