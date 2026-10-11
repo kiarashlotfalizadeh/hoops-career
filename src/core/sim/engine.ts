@@ -808,7 +808,7 @@ export class GameSim {
       this.addPbp(-1, `End of game. ${h.team.abbrev} ${h.score}, ${a.team.abbrev} ${a.score}.`, 'period');
       return false;
     }
-    const label = this.q <= 4 ? `${ordinal(this.q)} quarter` : `OT${this.q - 4 > 1 ? this.q - 4 : ''}`;
+    const label = periodName(this.q);
     this.addPbp(-1, `End of ${label}. ${h.team.abbrev} ${h.score}, ${a.team.abbrev} ${a.score}.`, 'period');
     this.q++;
     this.flowPeriods.push(this.flow.length);
@@ -834,8 +834,7 @@ export class GameSim {
     this.T[1].run = 0;
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
-    const label2 = this.q <= 4 ? `${ordinal(this.q)} quarter` : `overtime`;
-    this.addPbp(-1, `Start of ${label2}.`, 'period');
+    this.addPbp(-1, `Start of ${periodName(this.q)}.`, 'period');
     return true;
   }
 
@@ -2904,6 +2903,8 @@ export class GameSim {
 
   private addPbp(side: 0 | 1 | -1, text: string, kind: PbpEntry['kind']) {
     if (!this.record) return;
+    // a name that ends in a period ("Reed Jr.") closes the sentence itself
+    text = text.replace(/\.\.+/g, '.');
     this.pbp.push({ q: this.q, clock: Math.max(0, Math.round(this.clock * 10) / 10), t: side, text, hs: this.T?.[0]?.score ?? 0, as: this.T?.[1]?.score ?? 0, kind });
     if (this.cur) this.cur.lines.push(text);
   }
@@ -3008,6 +3009,11 @@ export class GameSim {
 
 function ordinal(n: number) {
   return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
+}
+
+/** "1st quarter" ... "4th quarter", then "OT", "2OT", "3OT" as the box score writes them. */
+function periodName(q: number) {
+  return q <= 4 ? `${ordinal(q)} quarter` : q === 5 ? 'OT' : `${q - 4}OT`;
 }
 
 export type { Box as SimBox, PossStep };

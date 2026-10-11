@@ -276,6 +276,22 @@ describe('engine rules', () => {
     expect(res.flowPeriods![0]).toBe(0);
   });
 
+  it('writes "Jr." names without a double period, and overtimes as OT, 2OT', () => {
+    const base = side(14);
+    const players = base.players.map((p) => ({ ...p, lastName: `${p.lastName} Jr.` }));
+    let ot = 0;
+    for (let g = 0; g < 80 && ot < 2; g++) {
+      const res = new GameSim({ ...base, players }, side(15), { rng: new Rng(700 + g), type: 'regular', record: true, injuries: false }).simToEnd();
+      for (const e of res.pbp!) expect(e.text).not.toMatch(/\.\./);
+      if (!res.ot) continue;
+      ot++;
+      expect(res.pbp!.some((e) => e.text === 'Start of OT.')).toBe(true);
+      if (res.ot >= 2) expect(res.pbp!.some((e) => e.text.startsWith('Start of 2OT.'))).toBe(true);
+      expect(res.pbp!.some((e) => /OT\d/.test(e.text))).toBe(false);
+    }
+    expect(ot).toBeGreaterThan(0);
+  });
+
   it('tells teammates who share a last name apart in play-by-play', () => {
     const base = side(12);
     const players = base.players.map((p, i) => (i < 3 ? { ...p, lastName: 'Williams', firstName: ['Jalen', 'Jaylin', 'Kenrich'][i] } : p));
