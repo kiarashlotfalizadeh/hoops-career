@@ -733,6 +733,33 @@
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+/* ------------------------------------------------------------------ NBA Cup */
+.bk-head.two,
+.bk.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.bk.two .bk-col.r2 {
+  justify-content: center;
+}
+.bk-s.cup-tie .bk-t {
+  grid-template-columns: 11px 18px minmax(0, 1fr) 28px;
+}
+a.bk-s,
+a.bk-s:hover {
+  color: inherit;
+  text-decoration: none;
+}
+table.cup-group th:last-child,
+table.cup-group td:last-child {
+  width: 44px;
+  padding-left: 0;
+}
+table.cup-group tr.cup-out td {
+  color: var(--text-dim);
+}
+table.cup-group tr.cup-out td .lg-tcell {
+  font-weight: 600;
+}
 .lg-champ {
   position: relative;
   overflow: hidden;

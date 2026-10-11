@@ -56,6 +56,9 @@ export async function applyExtras(seed: SeedData): Promise<void> {
       for (const g of parsed.schedule.games) for (const t of g.split(':')[1].split('@')) per[t] = (per[t] ?? 0) + 1;
       const counts = Object.values(per);
       console.log(`  schedule: ${parsed.schedule.games.length} regular-season games (${Math.min(...counts)}-${Math.max(...counts)} per team), ${parsed.placeholders} Cup placeholders; opening night: ${parsed.schedule.games.filter((g) => g.startsWith('0:')).map((g) => g.slice(2)).join(', ')}`);
+      const cup = parsed.schedule.cup;
+      if (cup) console.log(`  NBA Cup: ${Object.entries(cup.groups).map(([id, t]) => `${id} ${t.join('/')}`).join('; ')}; knockout days ${cup.qf.join('/')}, ${cup.sf}, final ${cup.final}`);
+      else console.warn('  NBA Cup: groups or knockout dates missing; the schedule is completed to 82 games without a Cup');
     }
   }
 

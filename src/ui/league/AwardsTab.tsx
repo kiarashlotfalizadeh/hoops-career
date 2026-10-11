@@ -9,6 +9,7 @@ import { useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty } from '../components/ui';
 import { f1, playerSeason } from '../stats';
+import { CupBanner } from './CupTab';
 import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
@@ -59,6 +60,8 @@ export function AwardsTab({ league }: { league: League }) {
           </div>
         </div>
       )}
+
+      {aw?.cupWinner !== undefined && <CupBanner league={league} season={season} tid={aw.cupWinner} runnerUp={aw.cupRunnerUp} mvp={aw.cupMvp} />}
 
       {!decided && isCurrent && <AwardRace league={league} />}
       {!decided && !isCurrent && !aw?.allStars.E.length && (

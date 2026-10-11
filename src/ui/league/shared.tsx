@@ -198,6 +198,8 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
     { label: 'MVP', n: count((t) => t === 'MVP'), gold: true },
     { label: 'Finals MVP', n: count((t) => t === 'Finals MVP'), gold: true },
     { label: 'DPOY', n: count((t) => t === 'Defensive Player of the Year') },
+    { label: 'NBA Cup', n: count((t) => t === 'NBA Cup') },
+    { label: 'Cup MVP', n: count((t) => t === 'NBA Cup MVP') },
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
@@ -209,7 +211,7 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
 }
 
 export function accoladeScore(p: Player) {
-  return p.awards.reduce((s, a) => s + (a.type === 'MVP' ? 12 : a.type === 'Finals MVP' ? 6 : a.type.startsWith('All-NBA') ? 4 : a.type === 'Defensive Player of the Year' ? 4 : a.type === 'All-Star' ? 2 : a.type === 'Champion' ? 1.5 : a.type === 'Hall of Fame' ? 0 : 0.5), 0);
+  return p.awards.reduce((s, a) => s + (a.type === 'MVP' ? 12 : a.type === 'Finals MVP' ? 6 : a.type.startsWith('All-NBA') ? 4 : a.type === 'Defensive Player of the Year' ? 4 : a.type === 'All-Star' ? 2 : a.type === 'Champion' ? 1.5 : a.type === 'NBA Cup MVP' ? 1 : a.type === 'Hall of Fame' ? 0 : 0.5), 0);
 }
 
 export function AccoladeChips({ p, max = 6 }: { p: Player; max?: number }) {

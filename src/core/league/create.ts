@@ -6,7 +6,8 @@ import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
 import { DEFAULT_SCALE, blankMood, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { archetype, buildOvrScale, ovrRaw } from '../ratings';
-import { generateSchedule, realSchedule } from './schedule';
+import { generateSchedule, realSchedule, type RealCupData } from './schedule';
+import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { updateMorale } from './morale';
@@ -69,6 +70,8 @@ export interface SeedSchedule {
   start: string;
   /** "day:AWY@HOM" with NBA tricodes, regular season only. */
   games: string[];
+  /** NBA Cup groups, group games and knockout days (see RealCupData). */
+  cup?: RealCupData;
 }
 
 export interface SeedData {
@@ -78,7 +81,7 @@ export interface SeedData {
   season: number;
   players: SeedPlayer[];
   realAvgs?: Record<string, number>;
-  /** The real regular-season schedule (completed to 82 games at league creation). */
+  /** The real regular-season schedule (80 games per team plus the Cup, or completed to 82 at creation). */
   schedule?: SeedSchedule;
   /** Real future pick ownership: picks not listed belong to their original team. */
   picks?: SeedPick[];
@@ -277,6 +280,7 @@ export function createLeague(opts: CreateOpts): League {
   league.regularSeasonDays = sched.lastDay;
   league.allStarDay = sched.allStarDay;
   league.tradeDeadlineDay = sched.tradeDeadlineDay;
+  league.cup = sched.cup ? cupState(sched.cup, season) : null;
   if (realSeed && opts.settings.injuries) applySeedInjuries(league, realSeed);
   league.rng = rng.state;
   teamStrategyUpdate(league);

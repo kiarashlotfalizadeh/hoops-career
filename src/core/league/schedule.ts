@@ -1,8 +1,11 @@
 // NBA-format 82-game schedule: 4 vs division, 3-4 vs conference, 2 vs other conference,
-// spread over ~5.5 months with an All-Star break, limited back-to-backs and no 3-in-3s.
+// spread over ~5.5 months with an All-Star break, limited back-to-backs and no 3-in-3s. With the
+// NBA Cup, 80 games are scheduled up front (group games on Cup nights) and the last two per team
+// are added in the December knockout window once the groups are decided (cup.ts).
 
-import type { ScheduledGame, Team } from '../types';
+import type { CupGroup, ScheduledGame, Team } from '../types';
 import { Rng } from '../random';
+import { cupCalendar, drawCupGroups, groupRounds, type CupSetup } from './cup';
 
 interface Matchup {
   home: number;
@@ -99,41 +102,97 @@ export interface ScheduleResult {
   lastDay: number;
   allStarDay: number;
   tradeDeadlineDay: number;
+  /** NBA Cup groups and calendar; the knockout games are scheduled once the groups are decided. */
+  cup?: CupSetup;
+}
+
+/**
+ * Set aside what the NBA Cup needs from the 82-game matchups: each group's ten games (one per
+ * pair, everyone hosting two), placed on the five Cup nights, and a home and an away game per
+ * team for the knockout window (a cycle through each conference that never pairs groupmates).
+ * Returns null, leaving the matchups untouched, if the league can't hold a Cup.
+ */
+function carveCup(matchups: Matchup[], teams: Team[], season: number, rng: Rng): { setup: CupSetup; fixed: Map<number, Matchup[]> } | null {
+  const groups = drawCupGroups(teams, season, rng);
+  if (!groups) return null;
+  const cal = cupCalendar(season);
+  const pool = matchups.slice();
+  const take = (home: number, away: number) => {
+    const i = pool.findIndex((m) => m.home === home && m.away === away);
+    if (i < 0) return false;
+    pool.splice(i, 1);
+    return true;
+  };
+  const fixed = new Map<number, Matchup[]>();
+  for (const grp of groups) {
+    const rounds = groupRounds(grp.tids);
+    for (let r = 0; r < rounds.length; r++) {
+      for (const m of rounds[r]) {
+        if (!take(m.home, m.away)) return null;
+        fixed.set(cal.nights[r], [...(fixed.get(cal.nights[r]) ?? []), m]);
+      }
+    }
+  }
+  for (const conf of ['E', 'W'] as const) {
+    const gs = groups.filter((g) => g.conf === conf);
+    const cycle: number[] = [];
+    for (let i = 0; i < 5; i++) for (const g of gs) cycle.push(g.tids[i]);
+    for (let k = 0; k < cycle.length; k++) if (!take(cycle[k], cycle[(k + 1) % cycle.length])) return null;
+  }
+  matchups.length = 0;
+  matchups.push(...pool);
+  return { setup: { groups, ...cal }, fixed };
 }
 
 export function generateSchedule(teams: Team[], season: number, rng: Rng, startGid: number): ScheduleResult {
-  const matchups = rng.shuffle(buildMatchups(teams, season));
+  const matchups = buildMatchups(teams, season);
+  const cup = carveCup(matchups, teams, season, rng);
+  rng.shuffle(matchups);
   const n = teams.length;
   const remaining = new Array(n).fill(0);
   for (const m of matchups) {
     remaining[m.home]++;
     remaining[m.away]++;
   }
-  const lastPlayed = new Array(n).fill(-10);
-  const prevPlayed = new Array(n).fill(-10);
   const allStarStart = 118; // mid-February
   const allStarLen = 6;
+  const lastTarget = 168;
+  const blocked = (d: number) => (d >= allStarStart && d < allStarStart + allStarLen) || (!!cup && d >= cup.setup.qfDays[0] && d <= cup.setup.finalDay);
+  // every day each team plays, including the Cup nights fixed in advance
+  const plays = teams.map(() => new Set<number>());
+  for (const [d, ms] of cup?.fixed ?? []) {
+    for (const m of ms) {
+      plays[m.home].add(d);
+      plays[m.away].add(d);
+    }
+  }
+  // anyone could have a quarterfinal on the window's first night: no back-to-back into it
+  if (cup) for (const p of plays) p.add(cup.setup.qfDays[0]);
+  const on = (t: number, d: number) => plays[t].has(d);
+  const threeInThree = (t: number, d: number) => (on(t, d - 1) && on(t, d - 2)) || (on(t, d - 1) && on(t, d + 1)) || (on(t, d + 1) && on(t, d + 2));
   const games: ScheduledGame[] = [];
-  let pool = matchups.slice();
+  let pool = matchups;
   let day = 0;
   let gid = startGid;
-  while (pool.length && day < 400) {
-    if (day >= allStarStart && day < allStarStart + allStarLen) {
+  while ((pool.length || (cup && day <= cup.setup.nights[cup.setup.nights.length - 1])) && day < 400) {
+    if (blocked(day)) {
       day++;
       continue;
     }
-    const daysLeft = Math.max(1, 168 - day - (day < allStarStart ? allStarLen : 0));
-    const target = Math.min(n / 2, Math.max(2, Math.round(pool.length / daysLeft + rng.normal(0, 1.6))));
+    const today = cup?.fixed.get(day) ?? [];
     const busy = new Set<number>();
+    for (const m of today) {
+      games.push({ gid: gid++, day, home: m.home, away: m.away, type: 'regular', cup: 'group' });
+      busy.add(m.home).add(m.away);
+    }
+    let daysLeft = 0;
+    for (let d = day; d < lastTarget; d++) if (!blocked(d)) daysLeft++;
+    const target = Math.min(n / 2, Math.max(2, Math.round(pool.length / Math.max(1, daysLeft) + rng.normal(0, 1.6)))) - today.length;
     // prioritize teams with many games left; avoid 3-in-3; discourage back-to-backs
     const scored = pool.map((m, idx) => {
-      const b2bH = lastPlayed[m.home] === day - 1;
-      const b2bA = lastPlayed[m.away] === day - 1;
-      const three = (t: number) => lastPlayed[t] === day - 1 && prevPlayed[t] === day - 2;
       let s = remaining[m.home] + remaining[m.away] + rng.uniform(0, 8);
-      if (b2bH) s -= 9;
-      if (b2bA) s -= 9;
-      if (three(m.home) || three(m.away)) s = -Infinity;
+      for (const t of [m.home, m.away]) if (on(t, day - 1) || on(t, day + 1)) s -= 9;
+      if (threeInThree(m.home, day) || threeInThree(m.away, day)) s = -Infinity;
       return { idx, s };
     });
     scored.sort((a, b) => b.s - a.s);
@@ -153,40 +212,66 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
       games.push({ gid: gid++, day, home: m.home, away: m.away, type: 'regular' });
       remaining[m.home]--;
       remaining[m.away]--;
-      prevPlayed[m.home] = lastPlayed[m.home];
-      prevPlayed[m.away] = lastPlayed[m.away];
-      lastPlayed[m.home] = day;
-      lastPlayed[m.away] = day;
+      plays[m.home].add(day);
+      plays[m.away].add(day);
     }
     pool = pool.filter((_, i) => !chosenSet.has(i));
     day++;
   }
   const lastDay = games.reduce((a, g) => Math.max(a, g.day), 0);
-  return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 10 };
+  return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 10, cup: cup?.setup };
 }
 
 /** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = opening night). */
 export interface RealScheduleData {
   season: number;
   games: string[];
+  /** The NBA Cup: groups ("East A" -> tricodes), which games are group games, and the knockout days. */
+  cup?: RealCupData;
+}
+
+export interface RealCupData {
+  groups: Record<string, string[]>;
+  /** Group games, as they appear in `games`. */
+  games: string[];
+  qf: [number, number];
+  sf: number;
+  final: number;
+}
+
+/** Cup groups from the seed, or null if they don't cover every team in groups of five. */
+function realCupGroups(teams: Team[], cup: RealCupData): CupGroup[] | null {
+  const tidOf = new Map(teams.map((t) => [t.abbrev, t.tid]));
+  const groups: CupGroup[] = [];
+  const seen = new Set<number>();
+  for (const [id, codes] of Object.entries(cup.groups).sort(([a], [b]) => a.localeCompare(b))) {
+    const conf = id.startsWith('East') ? 'E' : id.startsWith('West') ? 'W' : null;
+    const tids = codes.map((c) => tidOf.get(c));
+    if (!conf || tids.length !== 5 || tids.some((t) => t === undefined || teams[t].conf !== conf || seen.has(t))) return null;
+    for (const t of tids) seen.add(t!);
+    groups.push({ id, conf, tids: tids as number[] });
+  }
+  return seen.size === teams.length ? groups : null;
 }
 
 const MS_DAY = 86_400_000;
 const dateOf = (season: number, day: number) => new Date(Date.UTC(season - 1, 9, 20) + day * MS_DAY);
 
 /**
- * The real NBA schedule, completed to 82 games (41 at home) per team. The NBA publishes the
- * Cup knockout round and the games for teams knocked out of it later; the missing games are
+ * The real NBA schedule. The NBA publishes 80 games per team and adds the Cup knockouts and the
+ * games for teams knocked out of the Cup later: with the seed's Cup data those are scheduled in
+ * the December window as the Cup plays out (see cup.ts). Without it, the missing games are
  * paired within conferences (fewest existing meetings first) and placed on open December dates
- * (the Cup window) where neither team plays, never making a team play three days running.
- * Returns null if the data is unusable, so the caller can fall back to a generated schedule.
+ * where neither team plays, never making a team play three days running, for 82 games (41 at
+ * home) per team. Returns null if the data is unusable, so the caller can fall back to a
+ * generated schedule.
  */
 export function realSchedule(teams: Team[], data: RealScheduleData, season: number, rng: Rng, startGid: number): ScheduleResult | null {
   if (data.season !== season || !data.games.length) return null;
   const tidOf = new Map(teams.map((t) => [t.abbrev, t.tid]));
   const n = teams.length;
   const busy = teams.map(() => new Set<number>());
-  const real: { day: number; home: number; away: number }[] = [];
+  const real: { day: number; home: number; away: number; s: string }[] = [];
   for (const s of data.games) {
     const m = s.match(/^(\d+):([A-Z]{2,4})@([A-Z]{2,4})$/);
     if (!m) continue;
@@ -196,7 +281,7 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
     if (away === undefined || home === undefined || away === home || busy[home].has(day) || busy[away].has(day)) continue;
     busy[home].add(day);
     busy[away].add(day);
-    real.push({ day, home, away });
+    real.push({ day, home, away, s });
   }
   const games = new Array(n).fill(0);
   const homes = new Array(n).fill(0);
@@ -209,6 +294,30 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
   const needAway = games.map((c, t) => 82 - c - needHome[t]);
   // a mostly-missing or inconsistent file: use the generated schedule instead
   if (real.length < 1000 || needHome.some((x) => x < 0) || needAway.some((x) => x < 0)) return null;
+  const breakInfo = allStarBreak(real);
+
+  // with the Cup, the published 80 games are the base: the knockouts and the games for teams
+  // knocked out are scheduled in the clear December window once the groups are decided
+  const cupGroups = data.cup && realCupGroups(teams, data.cup);
+  if (cupGroups && data.cup && games.every((c) => c === 80)) {
+    const cupGames = new Set(data.cup.games);
+    const clear = real.every((g) => g.day < data.cup!.qf[0] || g.day > data.cup!.final);
+    const marked = real.filter((g) => cupGames.has(g.s));
+    if (clear && marked.length === 60) {
+      let gid = startGid;
+      const out: ScheduledGame[] = real
+        .sort((x, y) => x.day - y.day || x.home - y.home)
+        .map((g) => ({ gid: gid++, day: g.day, home: g.home, away: g.away, type: 'regular', ...(cupGames.has(g.s) ? { cup: 'group' as const } : {}) }));
+      const nights = [...new Set(marked.map((g) => g.day))].sort((a, b) => a - b);
+      return {
+        games: out,
+        lastDay: out.reduce((m, g) => Math.max(m, g.day), 0),
+        allStarDay: breakInfo.allStarDay,
+        tradeDeadlineDay: breakInfo.tradeDeadlineDay,
+        cup: { groups: cupGroups, nights, qfDays: data.cup.qf, sfDay: data.cup.sf, finalDay: data.cup.final },
+      };
+    }
+  }
 
   // pair the missing games: hosts that still need home games vs visitors that need road games
   const meet = new Map<string, number>();
@@ -245,26 +354,11 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
   }
   if (!extra) return null;
 
-  // All-Star break: the longest run of game-free days in the middle of the season
   const lastReal = real.reduce((m, g) => Math.max(m, g.day), 0);
   const perDay = new Array(lastReal + 2).fill(0);
   for (const g of real) perDay[g.day]++;
-  let breakStart = -1;
-  let breakLen = 0;
-  for (let d = 60; d < lastReal - 20; d++) {
-    if (perDay[d]) continue;
-    let e = d;
-    while (e < lastReal && !perDay[e]) e++;
-    if (e - d > breakLen) {
-      breakLen = e - d;
-      breakStart = d;
-    }
-    d = e;
-  }
-  if (breakLen < 3) {
-    breakStart = 118;
-    breakLen = 0;
-  }
+  const breakStart = breakInfo.allStarDay - 2;
+  const breakLen = breakInfo.breakLen;
   const inBreak = (d: number) => d >= breakStart && d < breakStart + breakLen;
 
   // place each extra game on the best open day: December first, the emptier the better
@@ -298,5 +392,29 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
   let gid = startGid;
   const out: ScheduledGame[] = all.map((g) => ({ gid: gid++, day: g.day, home: g.home, away: g.away, type: 'regular' }));
   const lastDay = out.reduce((m, g) => Math.max(m, g.day), 0);
-  return { games: out, lastDay, allStarDay: breakStart + 2, tradeDeadlineDay: breakStart - 10 };
+  return { games: out, lastDay, allStarDay: breakInfo.allStarDay, tradeDeadlineDay: breakInfo.tradeDeadlineDay };
+}
+
+/** All-Star break: the longest run of game-free days in the middle of the season. */
+function allStarBreak(real: { day: number }[]): { allStarDay: number; tradeDeadlineDay: number; breakLen: number } {
+  const lastReal = real.reduce((m, g) => Math.max(m, g.day), 0);
+  const perDay = new Array(lastReal + 2).fill(0);
+  for (const g of real) perDay[g.day]++;
+  let breakStart = -1;
+  let breakLen = 0;
+  for (let d = 60; d < lastReal - 20; d++) {
+    if (perDay[d]) continue;
+    let e = d;
+    while (e < lastReal && !perDay[e]) e++;
+    if (e - d > breakLen) {
+      breakLen = e - d;
+      breakStart = d;
+    }
+    d = e;
+  }
+  if (breakLen < 3) {
+    breakStart = 118;
+    breakLen = 0;
+  }
+  return { allStarDay: breakStart + 2, tradeDeadlineDay: breakStart - 10, breakLen };
 }

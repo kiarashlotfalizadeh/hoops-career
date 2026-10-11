@@ -5,7 +5,7 @@ import type { GameResult, League, ScheduledGame } from '../core/types';
 import { GameSim } from '../core/sim/engine';
 import type { PossLog } from '../core/sim/log';
 import { Rng } from '../core/random';
-import { buildSimInput, ensureRotation, playGame, userGameOnDay } from '../core/league/games';
+import { buildSimInput, ensureRotation, neutralSite, playGame, userGameOnDay } from '../core/league/games';
 import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 
@@ -28,6 +28,7 @@ export class LiveGame {
       record: true,
       keepShots: true,
       injuries: league.settings.injuries,
+      neutral: neutralSite(game),
     });
   }
 

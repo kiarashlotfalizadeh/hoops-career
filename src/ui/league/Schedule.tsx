@@ -11,6 +11,7 @@ import { ordinal, useGamesByGid, useQueryParam } from './shared';
 import { standings, type StandingRow } from '../../core/league/standings';
 
 const TYPE_LABEL: Record<string, string> = { playin: 'Play-In', playoffs: 'Playoffs', allstar: 'All-Star' };
+const CUP_SHORT: Record<string, string> = { group: 'Cup', qf: 'Cup QF', sf: 'Cup SF', final: 'Cup Final' };
 
 function record(league: League, tid: number) {
   const ts = curTeamSeason(league, tid);
@@ -26,6 +27,7 @@ function gameTag(league: League, g: ScheduledGame): string {
     const n = seriesGameNo(league, g);
     return `${ROUND_SHORT[round] ?? 'Playoffs'}${n ? ` G${n}` : ''}`;
   }
+  if (g.cup) return CUP_SHORT[g.cup];
   return TYPE_LABEL[g.type] ?? '';
 }
 

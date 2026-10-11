@@ -9,13 +9,15 @@ import { CAP } from '../constants';
 const seed = seedJson as unknown as SeedData;
 const make = (s: SeedData | null, settings = defaultSettings()) => createLeague({ name: 's', userTid: 0, coachName: 'c', settings, seed: s, rngSeed: 9 });
 
+/** With the NBA Cup, 80 games per team are scheduled up front and two more once the groups are decided. */
 function checkSchedule(league: ReturnType<typeof make>) {
   const games = league.schedule.filter((g) => g.type === 'regular');
-  expect(games.length).toBe(1230);
+  const perTeam = league.cup ? 80 : 82;
+  expect(games.length).toBe(15 * perTeam);
   for (const t of league.teams) {
     const days = games.filter((g) => g.home === t.tid || g.away === t.tid).map((g) => g.day).sort((a, b) => a - b);
-    expect(days.length).toBe(82);
-    expect(games.filter((g) => g.home === t.tid).length).toBe(41);
+    expect(days.length).toBe(perTeam);
+    expect(games.filter((g) => g.home === t.tid).length).toBe(perTeam / 2);
     for (let i = 1; i < days.length; i++) expect(days[i]).toBeGreaterThan(days[i - 1]);
     for (let i = 2; i < days.length; i++) expect(days[i] - days[i - 2]).toBeGreaterThan(2);
   }
@@ -25,7 +27,7 @@ function checkSchedule(league: ReturnType<typeof make>) {
 }
 
 describe.skipIf(!seed.schedule)('real 2026-27 schedule', () => {
-  it('plays the real games, completed to 82 per team (41 at home) on open December dates', () => {
+  it('plays the real games and the real NBA Cup groups', () => {
     const league = make(seed);
     const games = checkSchedule(league);
     const ab = (tid: number) => league.teams[tid].abbrev;
@@ -34,11 +36,28 @@ describe.skipIf(!seed.schedule)('real 2026-27 schedule', () => {
     expect(opening).toContain('BOS@DET');
     expect(dayToDate(league.season, 0).toISOString().slice(0, 10)).toBe('2026-10-20');
     const real = new Set(seed.schedule!.games);
+    expect(games.every((g) => real.has(`${g.day}:${ab(g.away)}@${ab(g.home)}`))).toBe(true);
+    if (seed.schedule!.cup) {
+      const cup = league.cup!;
+      expect(cup.groups.map((g) => g.id)).toEqual(['East A', 'East B', 'East C', 'West A', 'West B', 'West C']);
+      expect(cup.groups[0].tids.map(ab).sort()).toEqual(seed.schedule!.cup.groups['East A']);
+      expect(games.filter((g) => g.cup === 'group')).toHaveLength(60);
+      // knockouts Dec 4-5, semifinals Dec 8, championship Dec 11
+      expect([...cup.qfDays, cup.sfDay, cup.finalDay].map((d) => dayToDate(league.season, d).toISOString().slice(5, 10))).toEqual(['12-04', '12-05', '12-08', '12-11']);
+    }
+    // All-Star Sunday falls in the real February break
+    expect(dayToDate(league.season, league.allStarDay).getUTCMonth()).toBe(1);
+  });
+
+  it('completes the schedule to 82 games without Cup data', () => {
+    const league = make({ ...seed, schedule: { ...seed.schedule!, cup: undefined } });
+    expect(league.cup).toBeNull();
+    const games = checkSchedule(league);
+    const ab = (tid: number) => league.teams[tid].abbrev;
+    const real = new Set(seed.schedule!.games);
     const filled = games.filter((g) => !real.has(`${g.day}:${ab(g.away)}@${ab(g.home)}`));
     expect(filled.length).toBe(1230 - seed.schedule!.games.length);
     for (const g of filled) expect(dayToDate(league.season, g.day).getUTCMonth()).toBe(11);
-    // All-Star Sunday falls in the real February break
-    expect(dayToDate(league.season, league.allStarDay).getUTCMonth()).toBe(1);
   });
 
   it('falls back to a generated schedule when the data is missing or for another season', () => {

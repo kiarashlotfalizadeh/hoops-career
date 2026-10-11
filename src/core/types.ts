@@ -475,7 +475,11 @@ export interface DraftPick {
 
 // ---------------------------------------------------------------- games
 
-export type GameType = 'regular' | 'playin' | 'playoffs' | 'allstar';
+/** 'cup' is the NBA Cup championship game: it doesn't count in the standings or season stats. */
+export type GameType = 'regular' | 'playin' | 'playoffs' | 'allstar' | 'cup';
+
+/** NBA Cup stage of a game: group games and the quarter/semifinals are regular-season games. */
+export type CupRound = 'group' | 'qf' | 'sf' | 'final';
 
 export interface ScheduledGame {
   gid: number;
@@ -486,6 +490,7 @@ export interface ScheduledGame {
   /** Playoff series id. */
   seriesId?: string;
   played?: boolean;
+  cup?: CupRound;
 }
 
 export interface BoxLine {
@@ -574,6 +579,7 @@ export interface GameResult {
   day: number;
   type: GameType;
   seriesId?: string;
+  cup?: CupRound;
   home: TeamBox;
   away: TeamBox;
   ot: number;
@@ -675,6 +681,8 @@ export interface SeasonAwards {
   allStars: { E: number[]; W: number[] };
   allStarMvp?: number;
   cupWinner?: number;
+  cupRunnerUp?: number;
+  cupMvp?: number;
 }
 
 export interface Settings {
@@ -744,6 +752,53 @@ export interface League {
   gamePlan?: GamePlan | null;
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
+  /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
+  cup?: CupState | null;
+}
+
+export interface CupGroup {
+  /** 'East A' ... 'West C'. */
+  id: string;
+  conf: 'E' | 'W';
+  tids: number[];
+}
+
+export interface CupTie {
+  round: 'qf' | 'sf' | 'final';
+  /** 'E' / 'W' for the quarter and semifinals, 'F' for the championship. */
+  conf: 'E' | 'W' | 'F';
+  /** Better seed (hosts the quarter/semifinal; the final is on a neutral floor). */
+  high: number;
+  low: number;
+  highSeed: number;
+  lowSeed: number;
+  gid: number;
+  day: number;
+  winner?: number;
+  highPts?: number;
+  lowPts?: number;
+}
+
+/**
+ * The NBA Cup: six groups of five play four group games each on Cup nights in November. Group
+ * winners and the best runner-up in each conference reach the knockouts in December. Group,
+ * quarterfinal and semifinal games count in the standings; the championship doesn't. Teams that
+ * don't reach the knockouts (and quarterfinal losers) get their last games on open dates in the
+ * knockout window, so everyone still plays 82.
+ */
+export interface CupState {
+  season: number;
+  groups: CupGroup[];
+  /** Group-stage nights (season days). */
+  nights: number[];
+  qfDays: [number, number];
+  sfDay: number;
+  finalDay: number;
+  /** Knockout seeds per conference once the group stage is over: three group winners, then the wild card. */
+  seeds?: { E: number[]; W: number[] };
+  bracket: CupTie[];
+  champion?: number;
+  mvp?: number;
 }
 
 export interface GamePlan {

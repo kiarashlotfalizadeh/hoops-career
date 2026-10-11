@@ -7,6 +7,7 @@ import { buildGameReport } from '../../core/analysis/gameReport';
 import { Card, Empty, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart } from '../components/charts';
+import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import type { GameResult, TeamBox } from '../../core/types';
 import { p1, signed } from '../stats';
@@ -37,7 +38,7 @@ export default function GameView() {
     ...(g.flow?.length ? [{ id: 'flow' as Tab, label: 'Flow' }] : []),
     ...(g.pbp?.length ? [{ id: 'pbp' as Tab, label: 'PBP' }] : []),
   ];
-  const typeLabel = g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season';
+  const typeLabel = cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season');
   return (
     <main className="page">
       <PageHeader title="Game report" back sub={`${typeLabel} · ${fmtDate(g.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}${g.att ? ` · Att ${g.att.toLocaleString()}` : ''}`} />

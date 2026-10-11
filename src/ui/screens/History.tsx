@@ -170,7 +170,7 @@ function Franchise({ league }: { league: League }) {
 // ---------------------------------------------------------------- league
 
 function LeagueHistory({ league }: { league: League }) {
-  const list = [...league.awards].filter((a) => a.champion !== undefined || a.mvp !== undefined).sort((a, b) => b.season - a.season);
+  const list = [...league.awards].filter((a) => a.champion !== undefined || a.mvp !== undefined || a.cupWinner !== undefined).sort((a, b) => b.season - a.season);
   if (!list.length) {
     return (
       <Card>
@@ -178,7 +178,7 @@ function LeagueHistory({ league }: { league: League }) {
           <Landmark size={30} className="dim" />
           <h3>History starts here</h3>
           <div className="small dim" style={{ maxWidth: 320 }}>
-            Champions, MVPs and Finals MVPs are recorded here at the end of each season.
+            Champions, NBA Cup winners, MVPs and Finals MVPs are recorded here as each season plays out.
           </div>
         </div>
       </Card>
@@ -211,8 +211,17 @@ function LeagueHistory({ league }: { league: League }) {
               </Link>
             ) : (
               <div className="small dim" style={{ marginBottom: 8 }}>
-                Playoffs in progress
+                {a.season === league.season && (league.phase === 'regular' || league.phase === 'preseason') ? 'Season in progress' : 'Playoffs in progress'}
               </div>
+            )}
+            {a.cupWinner !== undefined && (
+              <Link to={`/team/${a.cupWinner}`} className="lg-hist-row">
+                <span className="k">NBA Cup</span>
+                <span className="row" style={{ gap: 8, minWidth: 0 }}>
+                  <span className="bold ellipsis">{league.teams[a.cupWinner].name}</span>
+                  <TeamLogo tid={a.cupWinner} size={18} />
+                </span>
+              </Link>
             )}
             {rows
               .filter((r) => r.p)

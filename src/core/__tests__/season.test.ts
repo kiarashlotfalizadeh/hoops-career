@@ -27,7 +27,9 @@ describe('full season', () => {
     startFreeAgency(league);
     newSeason(league);
     expect(league.season).toBe(2028);
-    expect(league.schedule.length).toBe(1230);
+    // 80 games per team up front; the NBA Cup knockout window adds the last two per team
+    expect(league.schedule.length).toBe(1200);
+    expect(league.cup?.season).toBe(2028);
     for (const t of league.teams) if (t.tid !== league.userTid) expect(teamPlayers(league, t.tid).length).toBeGreaterThanOrEqual(CAP.rosterMin);
   }, 180_000);
 });

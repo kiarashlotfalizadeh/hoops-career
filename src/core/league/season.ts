@@ -10,6 +10,7 @@ import { makeTeam } from '../teamFactory';
 import { playerAge } from '../playerGen';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
 import { generateSchedule } from './schedule';
+import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { assessLuxuryTax, profit } from './finances';
 import { updateMorale } from './morale';
@@ -183,6 +184,7 @@ export function postGame(league: League, g: ScheduledGame, homeWon: boolean) {
 export function advanceDay(league: League, report?: DayReport) {
   withRng(league, (rng) => {
     if (league.phase === 'regular') {
+      advanceCup(league, rng);
       periodic(league, rng);
       if (league.day === league.allStarDay) {
         selectAllStars(league);
@@ -419,6 +421,7 @@ export function newSeason(league: League): boolean {
     league.regularSeasonDays = sched.lastDay;
     league.allStarDay = sched.allStarDay;
     league.tradeDeadlineDay = sched.tradeDeadlineDay;
+    league.cup = sched.cup ? cupState(sched.cup, league.season) : null;
   });
   for (const t of league.teams) {
     t.rotation.order = t.rotation.order.filter((pid) => league.players[pid]?.tid === t.tid);

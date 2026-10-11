@@ -73,6 +73,11 @@ export function ensureRotation(league: League, tid: number) {
   }
 }
 
+/** All-Star Games and the NBA Cup championship are on a neutral floor. */
+export function neutralSite(g: ScheduledGame) {
+  return g.type === 'allstar' || g.cup === 'final';
+}
+
 export function buildSimInput(league: League, tid: number, day: number, type: ScheduledGame['type'], opp?: number): SimTeamInput {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
@@ -149,13 +154,14 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
       record: opts.record ?? false,
       keepShots: userGame,
       injuries: league.settings.injuries,
-      neutral: g.type === 'allstar',
+      neutral: neutralSite(g),
     });
     sim.simToEnd();
   }
   league.rng = rng.state;
   const res = sim.result(g.gid, league.season, g.day);
   res.seriesId = g.seriesId;
+  if (g.cup) res.cup = g.cup;
   applyResult(league, g, sim, res, rng);
   league.rng = rng.state;
   return res;
@@ -176,13 +182,17 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       recordTeamGame(teamSeason(home, league.season), homeWon, true, sameConf, sameDiv, res.home.pts, res.away.pts, res.home.poss, res.away.poss, res.home.t, res.away.t);
       recordTeamGame(teamSeason(away, league.season), !homeWon, false, sameConf, sameDiv, res.away.pts, res.home.pts, res.away.poss, res.home.poss, res.away.t, res.home.t);
     }
-    // player stats
+    // player stats (the Cup championship doesn't count in season stats, but it still wears legs)
     for (const rb of sim.rawBoxes()) {
       const p = league.players[rb.pid];
       if (!p) continue;
       if (!rb.played || rb.b.sec <= 0) continue;
-      const s = statsLine(p, league.season, rb.tid, playoffs || g.type === 'playin');
       const b = rb.b;
+      const tm = league.teams[rb.tid];
+      // wear accumulates with minutes (more under an intense practice regime)
+      p.wear = clamp(p.wear + (b.sec / 60) * 0.06 * (tm?.practice === 'intense' ? 1.15 : tm?.practice === 'light' ? 0.9 : 1), 0, 100);
+      if (g.type === 'cup') continue;
+      const s = statsLine(p, league.season, rb.tid, playoffs || g.type === 'playin');
       s.gp++;
       if (rb.starter) s.gs++;
       s.min += b.sec / 60;
@@ -211,9 +221,6 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       s.teamFga += b.tFga;
       s.teamFta += b.tFta;
       s.teamTov += b.tTov;
-      // wear accumulates with minutes (more under an intense practice regime)
-      const tm = league.teams[rb.tid];
-      p.wear = clamp(p.wear + (b.sec / 60) * 0.06 * (tm?.practice === 'intense' ? 1.15 : tm?.practice === 'light' ? 0.9 : 1), 0, 100);
     }
     // rested players
     for (const t of [home, away]) {
@@ -230,10 +237,13 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       const p = league.players[inj.pid];
       if (p) applyInjury(league, p, rng);
     }
-    // finances & hype: play-in games are postseason gate-only games, like the playoffs
+    // finances & hype: play-in games are postseason gate-only games, like the playoffs; the Cup
+    // championship is the league's event on a neutral floor
     const postseason = g.type !== 'regular';
-    res.att = gameFinances(league, home, true, postseason);
-    gameFinances(league, away, false, postseason);
+    if (g.type !== 'cup') {
+      res.att = gameFinances(league, home, true, postseason);
+      gameFinances(league, away, false, postseason);
+    }
     updateHype(home, homeWon, playoffs);
     updateHype(away, !homeWon, playoffs);
   }

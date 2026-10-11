@@ -94,7 +94,7 @@ export default function Home() {
       {next && oppTid !== undefined ? (
         <Card accent>
           <div className="row between">
-            <span className="tag info">{next.type === 'playoffs' ? 'Playoffs' : next.type === 'playin' ? 'Play-In' : `Game ${ts.won + ts.lost + 1}`}</span>
+            <span className="tag info">{next.type === 'playoffs' ? 'Playoffs' : next.type === 'playin' ? 'Play-In' : next.cup === 'final' ? 'NBA Cup Championship' : `Game ${ts.won + ts.lost + 1}${next.cup === 'group' ? ' · NBA Cup' : next.cup === 'qf' ? ' · Cup quarterfinal' : next.cup === 'sf' ? ' · Cup semifinal' : ''}`}</span>
             <span className="small dim">{fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}{next.day === league.day ? ' · Today' : ''}</span>
           </div>
           <div className="scorebug" style={{ marginTop: 12 }}>

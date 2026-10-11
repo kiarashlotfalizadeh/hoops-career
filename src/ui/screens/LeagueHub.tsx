@@ -10,12 +10,13 @@ import { StandingsTab } from '../league/StandingsTab';
 import { StatsTab } from '../league/StatsTab';
 import { PlayoffsTab } from '../league/PlayoffsTab';
 import { AwardsTab } from '../league/AwardsTab';
+import { CupTab } from '../league/CupTab';
 import { NewsTab } from '../league/NewsTab';
 import { DayScoreboard, TeamScheduleList } from '../league/Schedule';
 
-const TABS = ['standings', 'schedule', 'stats', 'playoffs', 'awards', 'news'] as const;
+const TABS = ['standings', 'schedule', 'stats', 'cup', 'playoffs', 'awards', 'news'] as const;
 type Tab = (typeof TABS)[number];
-const LABEL: Record<Tab, string> = { standings: 'Standings', schedule: 'Schedule', stats: 'Stats', playoffs: 'Playoffs', awards: 'Awards', news: 'News' };
+const LABEL: Record<Tab, string> = { standings: 'Standings', schedule: 'Schedule', stats: 'Stats', cup: 'NBA Cup', playoffs: 'Playoffs', awards: 'Awards', news: 'News' };
 
 export default function LeagueHub() {
   const league = useLeague();
@@ -46,6 +47,7 @@ export default function LeagueHub() {
       {tab === 'standings' && <StandingsTab league={league} />}
       {tab === 'schedule' && <ScheduleTab />}
       {tab === 'stats' && <StatsTab league={league} />}
+      {tab === 'cup' && <CupTab league={league} />}
       {tab === 'playoffs' && <PlayoffsTab league={league} />}
       {tab === 'awards' && <AwardsTab league={league} />}
       {tab === 'news' && <NewsTab league={league} />}
