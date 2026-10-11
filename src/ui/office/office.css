@@ -617,6 +617,15 @@ table.stats.fo-contracts tr.clickable td {
 .fo-stepper:active {
   transform: scale(0.94);
 }
+/* a 44px touch target around the compact button */
+.fo-stepper {
+  position: relative;
+}
+.fo-stepper::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+}
 .fo-yr {
   flex: 1;
   height: 44px;

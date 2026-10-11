@@ -7,7 +7,7 @@ import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
-import { CAP_FOR, addInbox, addNews, age, contractSeason, curTeamSeason, inSeason, payroll, playerName, standardRoster, teamPlayers, winPct } from './helpers';
+import { CAP_FOR, addInbox, addNews, age, contractSeason, curTeamSeason, inSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from './helpers';
 
 export type Strategy = Team['strategy'];
 
@@ -63,7 +63,9 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
   const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
   const sal = salaryFor(p, cs);
   const fair = marketSalary(league, p);
-  return v + ((fair - sal) / 1000) * Math.min(yrs, 4) * SURPLUS_VALUE[strategy];
+  const total = v + ((fair - sal) / 1000) * Math.min(yrs, 4) * SURPLUS_VALUE[strategy];
+  // after the season an undecided team option can still be declined, so it is never a burden
+  return cs > league.season && pendingOption(league, p) === 'team' ? Math.max(0, total) : total;
 }
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
@@ -234,7 +236,8 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
     const verb = prevTid === tid ? 're-signed with' : opts.twoWay ? 'signed a two-way deal with' : 'signed with';
     addNews(league, {
       kind: 'signing',
-      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr / $${((amount * years) / 1000).toFixed(1)}M.`,
+      // the total includes the yearly raises, as on the offer sheet
+      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr / $${(p.contract.salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M.`,
       tids: [tid],
       pids: [p.pid],
     });
@@ -315,7 +318,8 @@ export const twoWayYears = (p: Player) => (p.experience >= 3 ? 1 : 2);
 export function convertTwoWay(league: League, pid: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
   if (!p || p.tid < 0 || !p.contract.twoWay) return { ok: false, reason: 'He is not on a two-way contract.' };
-  if (standardRoster(league, p.tid).length >= CAP.rosterMax) return { ok: false, reason: `No open roster spot (${CAP.rosterMax}). Release or trade someone first.` };
+  const max = rosterMaxNow(league);
+  if (standardRoster(league, p.tid).length >= max) return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
   const s = contractSeason(league);
   const exp = contractExp(p.contract);
   if (exp < s) return { ok: false, reason: 'His contract is up. Re-sign him to a standard deal instead.' };

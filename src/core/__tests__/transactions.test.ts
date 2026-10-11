@@ -5,11 +5,37 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
 import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster, teamPlayers, twoWayRoster } from '../league/helpers';
-import { MLE_YEARS, askingContract, marketSalary, mleRoom, nonGuaranteed, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, valueScore } from '../league/contracts';
+import {
+  MLE_YEARS,
+  askingContract,
+  marketSalary,
+  mleRoom,
+  nonGuaranteed,
+  releaseDeadMoney,
+  releasePlayer,
+  signPlayer,
+  teamAppeal,
+  tradeValue,
+  valueScore,
+} from '../league/contracts';
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer } from '../league/freeAgency';
-import { aiProposeToUser, capSalary, evaluateTrade, makeItWork, pickValue, playerValueFor, salaryMatchGap, teamAccepts, validateTrade, type TradeOffer } from '../league/trades';
+import {
+  aiProposeToUser,
+  canMakeWork,
+  capSalary,
+  evaluateTrade,
+  executeTrade,
+  makeItWork,
+  pickValue,
+  playerValueFor,
+  salaryMatchGap,
+  teamAccepts,
+  validateTrade,
+  type TradeOffer,
+} from '../league/trades';
 import { draftPlayer, draftStandings, ensureFuturePicks, runLottery } from '../league/draft';
 import { CAP } from '../constants';
+import { contractExp } from '../playerGen';
 import { Rng } from '../random';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
@@ -179,10 +205,135 @@ describe('AI trade valuation', () => {
     const target = shape(l, standardRoster(l, AI)[0], 74, 27, 12_000);
     const ask = offer([], [target.pid]);
     expect(salaryMatchGap(l, ask, 'a')).toBeGreaterThan(0);
-    const fixed = makeItWork(l, ask)!;
+    const fixed = makeItWork(l, ask).offer!;
     expect(fixed).not.toBeNull();
     expect(validateTrade(l, fixed)).toEqual([]);
     expect(evaluateTrade(l, fixed).accept).toBe(true);
+  });
+
+  it('"what would make this work?" sends a player when the roster is full or picks fall short', () => {
+    const l = league(11);
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    // only second-round picks left: a pile of them is worth far less than a good starter
+    l.draftPicks = l.draftPicks.filter((d) => d.tid !== U || d.round === 2);
+    for (const p of standardRoster(l, U)) shape(l, p, 66, 30, vetMin);
+    while (standardRoster(l, U).length < CAP.rosterMax) signPlayer(l, freeAgents(l)[0], U, vetMin, 1, { news: false });
+    const target = shape(l, standardRoster(l, AI)[0], 80, 26, vetMin);
+    const swap = shape(l, standardRoster(l, U)[0], 81, 26, vetMin);
+    const ask = offer([], [target.pid]);
+    // a 15-man roster can't take him for nothing, but sending a player fixes that
+    expect(validateTrade(l, ask).some((e) => e.includes('max 15'))).toBe(true);
+    expect(canMakeWork(l, ask)).toBe(true);
+    const r = makeItWork(l, ask);
+    expect(r.offer?.a.pids).toEqual([swap.pid]);
+    expect(evaluateTrade(l, r.offer!).accept).toBe(true);
+  });
+
+  it('"what would make this work?" doesn\'t throw in a star to close a modest gap', () => {
+    const l = league(11);
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    for (const p of standardRoster(l, U)) shape(l, p, 72, 27, vetMin);
+    const star = shape(l, standardRoster(l, U)[0], 94, 27, vetMin);
+    const target = shape(l, standardRoster(l, AI)[0], 80, 27, vetMin);
+    const r = makeItWork(l, offer([], [target.pid]));
+    expect(r.offer).not.toBeNull();
+    expect(r.offer!.a.pids).not.toContain(star.pid);
+    expect(evaluateTrade(l, r.offer!).accept).toBe(true);
+  });
+
+  it("won't take a player or pick straight back from the team it traded him to, until next season", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    const a = shape(l, standardRoster(l, U)[0], 78, 27, vetMin);
+    const b = shape(l, standardRoster(l, AI)[0], 78, 27, vetMin);
+    const pick = l.draftPicks.find((d) => d.tid === U && d.round === 2)!;
+    const there = offer([a.pid], [b.pid], [pick.dpid]);
+    expect(evaluateTrade(l, there).accept).toBe(true);
+    executeTrade(l, there);
+    // on casual a there-and-back pair would pay out a sweetener every time
+    const back = offer([b.pid], [a.pid], [], [pick.dpid]);
+    expect(validateTrade(l, back).filter((e) => /can't get (him|it) back/.test(e)).length).toBe(3);
+    // nor does a pick come straight back as the player it became
+    l.phase = 'draft';
+    const first = l.draftPicks.find((d) => d.tid === AI && d.round === 1 && d.season === l.season)!;
+    first.pick = 10;
+    executeTrade(l, offer([], [], [], [first.dpid]));
+    const rookie = Object.values(l.players).find((p) => p.tid === -2 && p.draft.year === l.season)!;
+    draftPlayer(l, first, rookie.pid);
+    expect(validateTrade(l, offer([rookie.pid], [])).some((e) => /can't get him back/.test(e))).toBe(true);
+    l.season++;
+    expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
+  });
+
+  it("gives a casual player's own assets the casual discount, but not ones he just traded for", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.teams[2].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    const mine = shape(l, standardRoster(l, U)[0], 80, 27, vetMin);
+    const better = shape(l, standardRoster(l, 2)[0], 80.4, 27, vetMin);
+    const deal: TradeOffer = { a: { tid: U, pids: [mine.pid], dpids: [] }, b: { tid: 2, pids: [better.pid], dpids: [] } };
+    // a few percent short of fair value: fine on casual from his own roster...
+    expect(tradeValue(l, better) / tradeValue(l, mine)).toBeLessThan(1.1);
+    expect(evaluateTrade(l, deal).accept).toBe(true);
+    // ...but once he arrived in a trade this season, flipping him on is judged at fair value
+    mine.tradedFrom = { tid: AI, season: l.season };
+    expect(evaluateTrade(l, deal).accept).toBe(false);
+  });
+
+  it('a player option is settled before he can be traded after the season; a team option is never a burden then', () => {
+    const l = league();
+    const p = shape(l, standardRoster(l, U)[0], 84, 27, 8_000, 2);
+    p.contract = { start: l.season, salaries: [8_000, 8_000], option: 'player' };
+    const pick = l.draftPicks.find((d) => d.tid === AI && d.round === 2)!;
+    const sell = offer([p.pid], [], [], [pick.dpid]);
+    l.phase = 'regular';
+    expect(validateTrade(l, sell).some((e) => /player option/.test(e))).toBe(false);
+    l.phase = 'draft';
+    // an underpaid star is about to opt out: he can't be sold at full value first
+    expect(validateTrade(l, sell).some((e) => /player option/.test(e))).toBe(true);
+    p.contract.option = 'team';
+    expect(validateTrade(l, sell).some((e) => /player option/.test(e))).toBe(false);
+    // an overpaid team option can be declined after the season, so it isn't a liability to dump
+    const bust = shape(l, standardRoster(l, AI)[0], 62, 30, 30_000, 2);
+    bust.contract = { start: l.season, salaries: [30_000, 30_000], option: 'team' };
+    l.phase = 'regular';
+    expect(tradeValue(l, bust)).toBeLessThan(0);
+    l.phase = 'draft';
+    expect(tradeValue(l, bust)).toBe(0);
+  });
+
+  it('using the mid-level caps a team at the tax line in trades that season', () => {
+    const l = league();
+    l.phase = 'regular';
+    const cap = CAP_FOR(l);
+    // just under the tax, taking a $10M player for a $9M one
+    const mine = shape(l, standardRoster(l, U)[0], 70, 27, 9_000);
+    const theirs = shape(l, standardRoster(l, AI)[0], 72, 27, 10_000);
+    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.luxuryTax - 500 - payroll(l, U) });
+    const deal = offer([mine.pid], [theirs.pid]);
+    expect(validateTrade(l, deal).some((e) => /mid-level/.test(e))).toBe(false);
+    l.teams[U].mleSeason = l.season;
+    expect(validateTrade(l, deal).some((e) => /mid-level/.test(e))).toBe(true);
+    // sending out more than it takes back is always fine
+    expect(validateTrade(l, offer([mine.pid], [])).some((e) => /mid-level/.test(e))).toBe(false);
+  });
+
+  it("counts only next season's contracts against the 21-man offseason limit in trades", () => {
+    const l = league();
+    l.phase = 'draft';
+    const cs = contractSeason(l);
+    while (standardRoster(l, U).length < 21) signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l, cs).vetMin, 1, { news: false, start: cs });
+    // three of them are up this summer: they are leaving or being re-signed, not taking a camp spot
+    for (const p of standardRoster(l, U).slice(0, 3)) p.contract = { start: l.season, salaries: [CAP_FOR(l).vetMin] };
+    const theirs = standardRoster(l, AI).find((p) => contractExp(p.contract) >= cs)!;
+    expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /players \(max/.test(e))).toEqual([]);
   });
 
   it('counts two-way pay out of trade salary (T13)', () => {
@@ -277,28 +428,56 @@ describe('free agency', () => {
     for (let d = 0; d < 4; d++) faDay(l, rng, 0);
     expect(star.asking.amount).toBe(start);
     faDay(l, rng, 0);
-    // nobody can pay more than the mid-level, so that's where his price goes
-    expect(star.asking.amount).toBeLessThanOrEqual(Math.max(...l.teams.map((t) => mleRoom(l, t.tid))));
+    // nobody can pay more than the mid-level (at his interest in the team), so that's where his price goes
+    expect(star.asking.amount).toBeLessThanOrEqual(Math.max(...l.teams.map((t) => mleRoom(l, t.tid) * teamAppeal(l, t.tid, star))) + 10);
     expect(star.asking.years).toBeLessThanOrEqual(3);
     for (let d = 0; d < 10 && star.tid === FREE_AGENT; d++) faDay(l, rng);
     expect(star.tid).toBeGreaterThanOrEqual(0);
   });
 
-  it('a full AI roster swaps its weakest cheap player for a clearly better free agent (T1)', () => {
+  it("only room on teams that would take him holds a free agent's price up", () => {
     const l = league();
     l.phase = 'freeAgency';
+    const s = contractSeason(l);
     for (const t of l.teams) {
       overCap(l, t.tid);
-      while (standardRoster(l, t.tid).length < CAP.rosterMax)
-        signPlayer(l, freeAgents(l).sort((a, b) => a.ovr - b.ovr)[0], t.tid, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
+      t.mleSeason = s;
     }
-    const fa = shape(l, freeAgents(l)[0], 82, 27);
+    // one team has cap space but a full roster he wouldn't crack
+    const rich = l.teams[AI];
+    rich.deadMoney = [];
+    const vetMin = CAP_FOR(l, s).vetMin;
+    for (const p of standardRoster(l, AI)) shape(l, p, 85, 27, vetMin, 2);
+    while (standardRoster(l, AI).length < CAP.rosterMax) signPlayer(l, freeAgents(l)[0], AI, vetMin, 2, { news: false, start: s });
+    for (const p of standardRoster(l, AI)) shape(l, p, 85, 27, vetMin, 2);
+    expect(CAP_FOR(l, s).salaryCap - payroll(l, AI, s)).toBeGreaterThan(30_000);
+    const fa = shape(l, freeAgents(l)[0], 75, 27);
     fa.contract = { start: l.season, salaries: [0] };
-    fa.asking = { amount: CAP_FOR(l, contractSeason(l)).vetMin, years: 1 };
-    const rng = new Rng(6);
-    for (let d = 0; d < 10 && fa.tid === FREE_AGENT; d++) faDay(l, rng);
-    expect(fa.tid).toBeGreaterThanOrEqual(0);
-    expect(standardRoster(l, fa.tid).length).toBe(CAP.rosterMax);
+    fa.experience = 5;
+    fa.asking = { amount: 20_000, years: 3 };
+    fa.faDays = 1;
+    faDay(l, new Rng(2), 0);
+    expect(fa.asking.amount).toBe(vetMin);
+  });
+
+  it('a full AI roster adds a clearly better free agent: a swap in season, a camp body in the summer (T1)', () => {
+    for (const phase of ['regular', 'freeAgency'] as const) {
+      const l = league();
+      l.phase = phase;
+      for (const t of l.teams) {
+        overCap(l, t.tid);
+        while (standardRoster(l, t.tid).length < CAP.rosterMax)
+          signPlayer(l, freeAgents(l).sort((a, b) => a.ovr - b.ovr)[0], t.tid, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
+      }
+      const fa = shape(l, freeAgents(l)[0], 82, 27);
+      fa.contract = { start: l.season, salaries: [0] };
+      fa.asking = { amount: CAP_FOR(l, contractSeason(l)).vetMin, years: 1 };
+      const rng = new Rng(6);
+      for (let d = 0; d < 10 && fa.tid === FREE_AGENT; d++) faDay(l, rng);
+      expect(fa.tid).toBeGreaterThanOrEqual(0);
+      // in season the weakest cheap player goes now; in the summer the cuts wait for opening night
+      expect(standardRoster(l, fa.tid).length).toBe(phase === 'regular' ? CAP.rosterMax : CAP.rosterMax + 1);
+    }
   });
 
   it('camp deals are free to cut before opening night; releases count from the contract season (T10, UI2-5)', () => {

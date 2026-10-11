@@ -5,7 +5,7 @@ import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, twoWaySalary, twoWayYears, valueScore, wantsTwoWay } from '../../core/league/contracts';
-import { signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
+import { capPayroll, signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { faAdvance } from '../../core/league/season';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
@@ -22,7 +22,9 @@ export default function FreeAgents() {
   const s = capSeason(league);
   const cap = CAP_FOR(league, s);
   const pay = payroll(league, tid, s);
-  const space = cap.salaryCap - pay;
+  // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet)
+  const holds = capPayroll(league, tid, s) - pay;
+  const space = cap.salaryCap - pay - holds;
   const mle = mleRoom(league, tid, s);
   // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;
@@ -77,6 +79,7 @@ export default function FreeAgents() {
 
   const advance = (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
+    const from = Math.min(30, league.faDay + 2);
     useStore.getState().mutate((l) => faAdvance(l, days));
     const l = useStore.getState().league!;
     const signed = before
@@ -84,13 +87,14 @@ export default function FreeAgents() {
       .filter((p) => p && p.tid >= 0 && p.tid !== l.userTid)
       .sort((a, b) => b.ovr - a.ovr);
     const day = Math.min(30, l.faDay + 1);
+    const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
     useStore.getState().toast(
       signed.length
-        ? `Day ${day}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
+        ? `${when}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
             .slice(0, 2)
             .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
             .join(', ')}${signed.length > 2 ? '…' : ''}`
-        : `Day ${day}: a quiet day on the market.`,
+        : `${when}: ${day > from ? 'a quiet week' : 'a quiet day'} on the market.`,
       'neutral',
     );
   };
@@ -120,7 +124,7 @@ export default function FreeAgents() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Mid-level exception.</b> Once a season, if the signing keeps you under the tax line ({fmtM(cap.luxuryTax)}), you can sign one player over the cap for up to{' '}
-              {fmtM(cap.salaryCap * MLE_PCT)}, for up to {MLE_YEARS} years.{' '}
+              {fmtM(cap.salaryCap * MLE_PCT)}, for up to {MLE_YEARS} years; for the rest of that season, trades can't take you past the tax line.{' '}
               {mle > 0 ? `You can use up to ${fmtM(mle)} now.` : "You can't use it right now (used this season, or it would take you over the tax)."}
             </p>
             <p style={{ margin: 0 }}>
@@ -151,7 +155,12 @@ export default function FreeAgents() {
       )}
 
       <div className="grid3">
-        <Kpi k="Cap space" v={fmtM(space)} color={space > 0 ? 'var(--good)' : 'var(--warn)'} sub={space > 0 ? 'to spend' : 'min deals only'} />
+        <Kpi
+          k="Cap space"
+          v={fmtM(space)}
+          color={space > 0 ? 'var(--good)' : 'var(--warn)'}
+          sub={holds > 0 ? 'after cap holds' : space > 0 ? 'to spend' : mle > 0 ? 'min or mid-level' : 'min deals only'}
+        />
         <Kpi
           k="Roster"
           v={`${n}/${max}`}
@@ -184,10 +193,10 @@ export default function FreeAgents() {
             <div className="small dim2">Every day AI teams make offers. Players who wait too long may lower their price.</div>
           )}
           <div className="row" style={{ marginTop: 10, gap: 8 }}>
-            <button className="btn sm grow" onClick={() => advance(1)}>
+            <button className="btn sm grow" disabled={league.faDay >= 30} onClick={() => advance(1)}>
               <SkipForward size={16} /> Next day
             </button>
-            <button className="btn sm grow" onClick={() => advance(7)}>
+            <button className="btn sm grow" disabled={league.faDay >= 30} onClick={() => advance(7)}>
               <FastForward size={16} /> Advance a week
             </button>
           </div>
@@ -197,7 +206,7 @@ export default function FreeAgents() {
                 <Newspaper size={13} /> Latest signings
               </div>
               {recent.map((x) => (
-                <div key={x.id} className="small dim2 ellipsis">
+                <div key={x.id} className="small dim2">
                   {x.text}
                 </div>
               ))}
@@ -220,10 +229,10 @@ export default function FreeAgents() {
               { id: 75, label: '75+' },
             ]}
           />
-          <button className={`chip ${onlySignable ? 'on' : ''}`} onClick={() => setOnlySignable(!onlySignable)}>
+          <button className={`chip ${onlySignable ? 'on' : ''}`} aria-pressed={onlySignable} onClick={() => setOnlySignable(!onlySignable)}>
             Can sign now
           </button>
-          <button className={`chip ${twoWayMode ? 'on' : ''}`} onClick={() => (setTwoWayMode(!twoWayMode), setLimit(40))}>
+          <button className={`chip ${twoWayMode ? 'on' : ''}`} aria-pressed={twoWayMode} onClick={() => (setTwoWayMode(!twoWayMode), setLimit(40))}>
             Two-way offers ({tw}/{TWO_WAY_MAX})
           </button>
         </div>

@@ -47,11 +47,17 @@ export function playerMeta(league: League, p: Player, extra?: string): string {
   return bits.join(' · ');
 }
 
-export function contractYearsLabel(p: Player, fromSeason: number): string {
+/** The option on a contract's final season while it is still to be decided (after the season before it); an option year already under way was settled. */
+export function openOption(league: League, p: Player): 'player' | 'team' | undefined {
+  return contractExp(p.contract) > league.season ? p.contract.option : undefined;
+}
+
+export function contractYearsLabel(league: League, p: Player, fromSeason: number): string {
   const exp = contractExp(p.contract);
   const yrs = exp - fromSeason + 1;
   if (yrs <= 0) return 'Expiring';
-  return `${yrs} yr${yrs > 1 ? 's' : ''}${p.contract.option ? (p.contract.option === 'player' ? ' · PO' : ' · TO') : ''}`;
+  const opt = openOption(league, p);
+  return `${yrs} yr${yrs > 1 ? 's' : ''}${opt ? (opt === 'player' ? ' · PO' : ' · TO') : ''}`;
 }
 
 export function appealInfo(a: number): { label: string; color: string; tone: 'good' | 'info' | 'warn' | 'bad' } {

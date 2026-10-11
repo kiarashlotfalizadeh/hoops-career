@@ -42,7 +42,7 @@ describe('trades', () => {
     const offer = { a: { tid: 0, pids: [mine[0].pid], dpids: [] }, b: { tid: 1, pids: [theirs[0].pid], dpids: [] } };
     const ev = evaluateTrade(league, offer);
     expect(ev.accept).toBe(false);
-    const fixed = makeItWork(league, offer);
+    const fixed = makeItWork(league, offer).offer;
     if (fixed) expect(evaluateTrade(league, fixed).accept).toBe(true);
   });
   it('enforces roster limits', () => {

@@ -5,13 +5,14 @@ import type { League, Player } from '../../core/types';
 import { CAP, PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, rosterMaxNow, teamPlayers, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer, signingRoute, valueScore } from '../../core/league/contracts';
-import { capHolds, expiringPlayers } from '../../core/league/freeAgency';
+import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
+import { untradeableReason } from '../../core/league/trades';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet, activateOnKey } from '../components/ui';
-import { CapBar, CenterBar, Gauge, SecTitle, capSeason, contractYearsLabel, fmtM, isOffseason, ownerVerdict, playerMeta, shortSeason } from '../office/common';
+import { CapBar, CenterBar, Gauge, SecTitle, capSeason, contractYearsLabel, fmtM, isOffseason, openOption, ownerVerdict, playerMeta, shortSeason } from '../office/common';
 import { rosterNames } from '../stats';
 
 interface Tile {
@@ -47,6 +48,7 @@ export default function Office() {
   const [sel, setSel] = useState<number | null>(null);
 
   const faCount = useMemo(() => freeAgents(league).length, [league, v]);
+  const signingClosed = !!signingClosedReason(league);
   const myPicks = league.draftPicks.filter((d) => d.tid === tid);
   const expiring = league.phase === 'resign' ? expiringPlayers(league, tid) : [];
   const inPost = league.phase === 'playin' || league.phase === 'playoffs';
@@ -72,9 +74,12 @@ export default function Office() {
       sub:
         league.phase === 'freeAgency'
           ? `Day ${Math.min(30, league.faDay + 1)} of 30 · ${faCount} left`
-          : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : mle > 0 ? `${fmtM(mle)} mid-level` : 'min deals only'}`,
+          : signingClosed
+            ? `${faCount} on the market · signings reopen in free agency`
+            : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : mle > 0 ? `${fmtM(mle)} mid-level` : 'min deals only'}`,
       color: 'var(--good)',
       hot: league.phase === 'freeAgency',
+      muted: signingClosed,
     },
     {
       to: '/resign',
@@ -118,7 +123,7 @@ export default function Office() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Mid-level exception.</b> Once a season, a team that stays under the tax line can sign one free agent for up to {fmtM(cap.salaryCap * MLE_PCT)} (
-              {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap.
+              {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap. For the rest of that season, trades can't take its payroll past the tax line.
             </p>
             <p style={{ margin: 0 }}>
               <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign phase, even over the cap. Until free agency opens (or you renounce
@@ -504,6 +509,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
           <tbody>
             {roster.map((p) => {
               const exp = contractExp(p.contract);
+              const opt = openOption(league, p);
               const anySalary = seasons.some((s) => salaryFor(p, s) > 0);
               return (
                 <tr key={p.pid} className="clickable" tabIndex={0} onClick={() => onPick(p.pid)} onKeyDown={activateOnKey(() => onPick(p.pid))}>
@@ -545,9 +551,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                       return (
                         <td key={s} className={amt && !p.contract.twoWay ? '' : 'dim'}>
                           {amt ? m1(amt) : '—'}
-                          {amt > 0 && s === exp && p.contract.option && (
-                            <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span>
-                          )}
+                          {amt > 0 && s === exp && opt && <span className={`fo-opt ${opt === 'team' ? 'team' : ''}`}>{opt === 'team' ? 'TO' : 'PO'}</span>}
                         </td>
                       );
                     })
@@ -623,6 +627,8 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const blocked = releaseBlockedReason(league, p);
   const tooFew = !!blocked;
   const expiringNow = isOffseason(league) && exp <= league.season;
+  const noTrade = expiringNow ? null : untradeableReason(league, p);
+  const opt = openOption(league, p);
   const s0 = capSeason(league);
 
   const release = () => {
@@ -699,11 +705,11 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
         <Ovr v={p.ovr} />
       </div>
       <div className="row wrap" style={{ gap: 6 }}>
-        <span className="tag">{contractYearsLabel(p, s0)}</span>
+        <span className="tag">{contractYearsLabel(league, p, s0)}</span>
         {p.contract.rookie && <span className="tag info">Rookie scale</span>}
-        {p.contract.option && (
-          <span className={`tag ${p.contract.option === 'team' ? 'warn' : 'info'}`}>
-            {p.contract.option === 'team' ? 'Team' : 'Player'} option {seasonLabel(exp)}
+        {opt && (
+          <span className={`tag ${opt === 'team' ? 'warn' : 'info'}`}>
+            {opt === 'team' ? 'Team' : 'Player'} option {seasonLabel(exp)}
           </span>
         )}
         {p.mood.tradeRequest && <span className="tag bad">Wants a trade</span>}
@@ -715,9 +721,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
             <div key={s} className="row between small" style={{ padding: '3px 0', opacity: s < league.season ? 0.5 : 1 }}>
               <span className="dim2">
                 {seasonLabel(s)}
-                {s === exp && p.contract.option ? (
-                  <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span>
-                ) : null}
+                {s === exp && opt ? <span className={`fo-opt ${opt === 'team' ? 'team' : ''}`}>{opt === 'team' ? 'TO' : 'PO'}</span> : null}
               </span>
               <span className="num bold">{fmtM(amt, 2)}</span>
             </div>
@@ -727,14 +731,19 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
       {expiringNow ? (
         <div className="fo-callout warn">
           <TriangleAlert size={18} className="warn" />
-          <div>His contract is up. {league.phase === 'resign' ? 'Re-sign him now or he becomes a free agent.' : 'He is an unrestricted free agent.'}</div>
+          <div>
+            His contract is up.{' '}
+            {league.phase === 'resign'
+              ? 'Re-sign him now or he becomes a free agent.'
+              : 'You hold his rights until free agency opens: re-sign him in the re-signing period after the draft.'}
+          </div>
         </div>
       ) : null}
       <div className="grid3">
         <button className="btn" onClick={() => (onClose(), nav(`/player/${p.pid}`))}>
           Profile
         </button>
-        <button className="btn" onClick={() => (onClose(), nav(`/trade?give=${p.pid}`))}>
+        <button className="btn" disabled={expiringNow || !!noTrade} onClick={() => (onClose(), nav(`/trade?give=${p.pid}`))}>
           Trade
         </button>
         {league.phase === 'resign' && expiringNow ? (
@@ -747,7 +756,22 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
           </button>
         )}
       </div>
-      {blocked && <div className="tiny dim">{blocked}</div>}
+      {blocked ? (
+        <div className="tiny dim">{blocked}</div>
+      ) : (
+        !expiringNow && (
+          <div className="tiny dim">
+            {owed > 0
+              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}.`
+              : p.contract.twoWay
+                ? 'Releasing him costs nothing: two-way pay sits outside the cap.'
+                : camp
+                  ? "Releasing him costs nothing: his minimum deal isn't guaranteed until opening night."
+                  : 'Releasing him leaves no dead money.'}
+          </div>
+        )
+      )}
+      {noTrade && <div className="tiny dim">{noTrade}</div>}
     </div>
   );
 }
