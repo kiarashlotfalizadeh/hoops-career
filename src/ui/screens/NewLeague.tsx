@@ -21,6 +21,7 @@ export default function NewLeague() {
   const setLeague = useStore((s) => s.setLeague);
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedLoaded, setSeedLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [kind, setKind] = useState<'real' | 'fictional'>('real');
   // steps live in the URL so the system Back button walks back through them
   const [sp, setSp] = useSearchParams();
@@ -44,7 +45,11 @@ export default function NewLeague() {
         setSeed(s.players.length ? s : null);
         if (!s.players.length) setKind('fictional');
       })
-      .catch(() => setKind('fictional'))
+      // keep the choice: a league quietly turning fictional would be worse than a clear note (opening New League again retries)
+      .catch((e) => {
+        console.error(e);
+        setLoadFailed(true);
+      })
       .finally(() => setSeedLoaded(true));
   }, []);
 
@@ -129,7 +134,9 @@ export default function NewLeague() {
                 )}
                 {seedLoaded && !seed && (
                   <div className="small warn" style={{ marginTop: 8 }}>
-                    Seed data is not bundled in this build yet. Use a fictional league for now.
+                    {loadFailed
+                      ? "The real rosters couldn't load. Check your connection and open New League again, or use a fictional league."
+                      : 'Seed data is not bundled in this build yet. Use a fictional league for now.'}
                   </div>
                 )}
                 {seed && (
@@ -296,6 +303,9 @@ export default function NewLeague() {
           <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
             {busy ? <Spinner /> : null} Start career
           </button>
+          {kind === 'real' && seedLoaded && !seed && (
+            <div className="small warn">The real rosters couldn't load. Check your connection and open New League again, or go back and pick a fictional league.</div>
+          )}
         </>
       )}
     </main>
