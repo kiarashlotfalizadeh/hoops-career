@@ -249,6 +249,19 @@ function LeagueHistory({ league }: { league: League }) {
 
 // ---------------------------------------------------------------- hall of fame
 
+/**
+ * Is a retiree worth remembering, and how much: honours won in this league, or a long or productive
+ * career. Imported veterans have only their last real seasons on record, so their years in the NBA
+ * and those seasons' win shares count too.
+ */
+function careerValue(p: Player) {
+  const c = careerTotals(p);
+  const ws = p.stats.reduce((s, x) => s + (!x.playoffs && x.adv ? x.adv.ws : 0), 0);
+  const honours = accoladeScore(p);
+  const notable = honours > 0 || p.experience >= 12 || c.gp >= 600 || c.pts >= 10000 || ws >= 15;
+  return { notable, score: honours + c.pts / 2000 + p.experience / 3 + ws / 4 };
+}
+
 function HallOfFame({ league }: { league: League }) {
   const v = useStore((s) => s.v);
   const [limit, setLimit] = useState(25);
@@ -256,9 +269,11 @@ function HallOfFame({ league }: { league: League }) {
     () => {
       const all = Object.values(league.players);
       const hof = all.filter((p) => p.hof).sort((a, b) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || accoladeScore(b) - accoladeScore(a));
-      const retired = all
-        .filter((p) => p.tid === RETIRED && !p.hof && p.awards.some((a) => a.type !== 'Hall of Fame'))
-        .sort((a, b) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || accoladeScore(b) - accoladeScore(a));
+      const value = new Map(all.filter((p) => p.tid === RETIRED && !p.hof).map((p) => [p, careerValue(p)] as const));
+      const retired = [...value.entries()]
+        .filter(([, v]) => v.notable)
+        .sort(([a, va], [b, vb]) => (b.retiredSeason ?? 0) - (a.retiredSeason ?? 0) || vb.score - va.score)
+        .map(([p]) => p);
       return { hof, retired };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,7 +298,7 @@ function HallOfFame({ league }: { league: League }) {
       <SectionLabel right={<span className="tiny dim">{retired.length} players</span>}>Notable retirements</SectionLabel>
       {retired.length === 0 ? (
         <Card>
-          <Empty>Decorated players who retire will be listed here.</Empty>
+          <Empty>Decorated and long-serving players who retire will be listed here.</Empty>
         </Card>
       ) : (
         <>
@@ -307,6 +322,8 @@ function LegendCard({ league, p, hof }: { league: League; p: Player; hof?: boole
   const c = careerTotals(p);
   const peak = Math.max(p.ovr, ...p.ratingsHistory.map((r) => r.ovr));
   const from = p.draft.year > 0 ? p.draft.year + 1 : Math.min(...[...c.seasons, p.retiredSeason ?? league.season]);
+  // imported veterans' records start with the seed's real seasons, not their rookie year
+  const tracked = c.seasons.size ? Math.min(...c.seasons) : from;
   // Most-played team for the logo
   const byTeam = new Map<number, number>();
   for (const s of p.stats) if (!s.playoffs && typeof s.tid === 'number' && league.teams[s.tid]) byTeam.set(s.tid, (byTeam.get(s.tid) ?? 0) + s.gp);
@@ -322,8 +339,8 @@ function LegendCard({ league, p, hof }: { league: League; p: Player; hof?: boole
             </span>
             {hof && <Crown size={14} style={{ color: 'var(--tier-elite)', flex: 'none' }} />}
           </div>
-          <div className="tiny dim">
-            {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp} games
+          <div className="tiny dim ellipsis">
+            {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp} games{tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
           </div>
         </div>
         {mainTid !== undefined && <TeamLogo tid={mainTid} size={26} />}
