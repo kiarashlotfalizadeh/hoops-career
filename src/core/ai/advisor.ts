@@ -4,7 +4,7 @@
 import type { League, Player, PnrCoverage } from '../types';
 import { composites, ROLE_META } from '../ratings';
 import { DEF_PRESETS, OFF_PRESETS, COVERAGE_META } from '../sim/tactics';
-import { defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
+import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import type { Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 
@@ -55,7 +55,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (t.defense.press !== 'none') defense.push('Uses a full-court press, so secure ball handlers matter.');
   if (t.defense.help >= 65) defense.push('Helps aggressively off shooters into the paint.');
   if (t.defense.pressure >= 65) defense.push('Pressures the ball, which invites backdoor cuts and blow-bys.');
-  if (spacing < 42) weaknesses.push(`Poor spacing (${pct(spacing)}): pack the paint and dare them to shoot.`);
+  if (spacing < CRAMPED_SPACING) weaknesses.push(`Poor spacing (${pct(spacing)}): pack the paint and dare them to shoot.`);
   if (security < 52) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
   if (t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');

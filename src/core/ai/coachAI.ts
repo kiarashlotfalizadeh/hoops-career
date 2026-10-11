@@ -16,6 +16,9 @@ export interface LineupEval {
   notes: string[];
 }
 
+/** Spacing below which a starting five is called cramped: about the bottom fifth of real NBA starting fives. */
+export const CRAMPED_SPACING = 32;
+
 export function evaluateLineup(ps: Player[]): LineupEval {
   const cs = ps.map((p) => composites(p.ratings));
   const ovr = ps.reduce((a, p) => a + p.ovr, 0);
@@ -27,10 +30,9 @@ export function evaluateLineup(ps: Player[]): LineupEval {
   const handlers = cs.filter((c) => c.ballSec >= 55).length;
   const notes: string[] = [];
   let score = ovr;
-  if (spacing < 40) {
-    score -= (40 - spacing) * 0.35;
-    notes.push('Cramped spacing');
-  } else score += (spacing - 40) * 0.12;
+  if (spacing < 40) score -= (40 - spacing) * 0.35;
+  else score += (spacing - 40) * 0.12;
+  if (spacing < CRAMPED_SPACING) notes.push('Cramped spacing');
   if (creation < 55) {
     score -= (55 - creation) * 0.4;
     notes.push('No real creator');
