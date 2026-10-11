@@ -17,6 +17,8 @@ async function get(url: string): Promise<{ status: number; body: string }> {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const res = await fetch(url, {
+        // a stalled connection would otherwise hang the run until the CI job times out
+        signal: AbortSignal.timeout(60_000),
         headers: {
           'User-Agent': 'Mozilla/5.0 (hoops-career seed builder; personal, non-commercial; polite 1 req/3.7s)',
           Accept: 'text/html,application/xhtml+xml',

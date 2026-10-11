@@ -2,9 +2,10 @@
 # (contracts, rosters, bios, box scores; ~90 pages at 1 request / 3.7 s) plus NBA.com
 # play-by-play / matchup archives and ESPN college box scores from public GitHub datasets, and
 # the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries, two-way
-# contracts). Calibrates ratings in the engine, commits the seed to main, and stores the
-# Basketball Reference pages as a tarball on the `data-raw` branch (the GitHub datasets
-# re-download fast). With `extras_only`, it just refreshes the extras in the current seed.
+# contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only),
+# and stores the Basketball Reference pages as a tarball on the `data-raw` branch (the GitHub
+# datasets re-download fast). With `extras_only`, it just refreshes the extras in the current
+# seed. Every run uploads the seed as an artifact.
 name: Build seed data
 on:
   workflow_dispatch:
@@ -17,6 +18,10 @@ on:
         description: Only refresh schedule, pick ownership, injuries and two-way contracts (no stats re-fetch or recalibration)
         type: boolean
         default: false
+      refetch:
+        description: Ignore the Basketball Reference pages cached on data-raw and fetch them all again
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
@@ -24,16 +29,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - name: Reuse previously fetched pages
-        if: ${{ !inputs.extras_only }}
+        if: ${{ !inputs.extras_only && !inputs.refetch }}
         run: |
           if git ls-remote --exit-code origin data-raw >/dev/null 2>&1; then
             git fetch origin data-raw
@@ -51,6 +56,7 @@ jobs:
       - name: Archive raw pages
         if: ${{ !inputs.extras_only }}
         run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba --exclude=data/raw/extra data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
+      # allowed to fail so the fetched pages still reach data-raw below; the last step fails the run
       - name: Build seed (parse, derive, calibrate)
         id: build
         continue-on-error: true
@@ -63,15 +69,25 @@ jobs:
           fi
       - name: Verify app still builds and tests pass with the seed
         if: steps.build.outcome == 'success'
-        run: npm run typecheck && npm test && npm run build
+        run: npm run typecheck && npm test && npm run invariants && npm run build
+      - name: Upload seed
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: seed
+          path: src/data/seed.json
       - name: Commit seed to main
-        if: steps.build.outcome == 'success' && inputs.commit_seed
+        if: steps.build.outcome == 'success' && inputs.commit_seed && github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/data/seed.json
-          git commit -m "Update seed data" || echo "seed unchanged"
-          git push origin HEAD:main
+          if git commit -m "Update seed data"; then
+            git pull --rebase origin main
+            git push origin HEAD:main
+          else
+            echo "seed unchanged"
+          fi
       - name: Push raw pages to data-raw branch
         if: ${{ always() && !inputs.extras_only }}
         run: |
@@ -84,3 +100,8 @@ jobs:
           git add -f data-raw.tgz
           git commit -m "Basketball Reference raw pages $(date -u +%F)"
           git push -f origin HEAD:data-raw
+      - name: Fail the run if the seed build failed
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "::error::Building the seed failed: see the 'Build seed' step log."
+          exit 1
