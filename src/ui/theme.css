@@ -898,6 +898,11 @@ table.stats th.sorted {
 .sheet-close {
   margin-right: -8px;
 }
+/* untitled sheets bring their own header: keep the close button tucked into the corner */
+.sheet-head.bare {
+  height: 30px;
+  margin: -8px 0 0;
+}
 @media (min-width: 768px) {
   /* tablets: a centred dialog instead of a bottom sheet */
   .sheet {

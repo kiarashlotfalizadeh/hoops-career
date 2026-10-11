@@ -215,7 +215,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
         onTouchEnd={onTouchEnd}
       >
         <div className="sheet-grip" />
-        <div className="sheet-head">
+        <div className={`sheet-head ${title ? '' : 'bare'}`}>
           {title ? <h2 id={titleId}>{title}</h2> : <span />}
           <button className="iconbtn sheet-close" onClick={onClose} aria-label="Close">
             <X size={20} />
