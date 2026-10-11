@@ -41,7 +41,7 @@ jobs:
       - name: Build seed (parse, derive, calibrate)
         id: build
         continue-on-error: true
-        run: npm run data:build 2>&1 | tee /tmp/build.log
+        run: set -o pipefail && npm run data:build 2>&1 | tee /tmp/build.log
       - name: Verify app still builds and tests pass with the seed
         if: steps.build.outcome == 'success'
         run: npm run typecheck && npm test && npm run build
