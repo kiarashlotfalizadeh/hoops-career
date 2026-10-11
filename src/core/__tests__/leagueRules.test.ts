@@ -1,10 +1,10 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
-// windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar
-// and awards. Fast: no full-season sims.
+// windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar, awards
+// and the owner. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { advanceDay, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
+import { advanceDay, faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
@@ -12,8 +12,11 @@ import { validateTrade } from '../league/trades';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { schedulePlayoffDay } from '../league/playoffs';
 import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
+import { ownerEvaluation, takeOverTeam } from '../league/owner';
+import { inSeasonProgression } from '../league/progression';
 import { runLottery } from '../league/draft';
-import { contractExp, salaryFor } from '../playerGen';
+import { RATING_KEYS } from '../ratings';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
 import { Rng } from '../random';
 import type { League, Player, PlayoffSeries } from '../types';
@@ -446,5 +449,49 @@ describe('awards (L13, L18)', () => {
     expect(sub.injury).toBeNull();
     expect(l.teams[sub.tid].conf).toBe('E');
     expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
+  });
+});
+
+describe('free agency calendar (UI2-22)', () => {
+  it('advancing past day 30 stops on day 30', () => {
+    const l = league();
+    l.phase = 'freeAgency';
+    l.faDay = 27;
+    faAdvance(l, 7);
+    expect(l.faDay).toBe(30);
+  });
+});
+
+describe('owner (L11)', () => {
+  it('a fired coach is not reviewed again; taking over a team clears the old plan and board', () => {
+    const l = league();
+    l.fired = true;
+    const mood = { ...l.ownerMood };
+    const inbox = l.inbox.length;
+    ownerEvaluation(l);
+    expect(l.ownerMood).toEqual(mood);
+    expect(l.inbox.length).toBe(inbox);
+    l.gamePlan = { oppTid: 3, items: [] };
+    l.draftBoard = [1, 2, 3];
+    takeOverTeam(l, aiTeam(l));
+    expect(l.fired).toBe(false);
+    expect(l.gamePlan).toBeNull();
+    expect(l.draftBoard).toBeUndefined();
+  });
+});
+
+describe('development (L14)', () => {
+  it("in-season development counts this season's minutes, not last season's", () => {
+    const base = league();
+    base.phase = 'regular';
+    const young = standardRoster(base, U).find((p) => playerAge(p, base.season) <= 23)!;
+    const grow = (mpg: number) => {
+      const l = structuredClone(base);
+      const p = l.players[young.pid];
+      Object.assign(statsLine(p, l.season, U, false), { gp: 20, min: 20 * mpg });
+      inSeasonProgression(l, new Rng(5));
+      return RATING_KEYS.reduce((a, k) => a + p.ratings[k], 0);
+    };
+    expect(grow(32)).toBeGreaterThan(grow(3));
   });
 });

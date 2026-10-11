@@ -118,9 +118,10 @@ export function refreshDerived(league: League, p: Player) {
   p.archetype = archetype(p.ratings).label;
 }
 
-function devContext(league: League, p: Player): DevContext {
+/** `statsSeason` is the season whose minutes count: the one just finished in the offseason, the current one in season. */
+function devContext(league: League, p: Player, statsSeason: number): DevContext {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
-  const st = seasonTotals(p, league.season - 1) ?? seasonTotals(p, league.season);
+  const st = seasonTotals(p, statsSeason);
   const mpg = st && st.gp ? st.min / st.gp : 0;
   return {
     coachDev: team ? team.coach.development : 45,
@@ -182,7 +183,7 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
   const before = new Map(Object.values(league.players).map((p) => [p.pid, p.ovr]));
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
-    develop(p, league.season, devContext(league, p), rng, p.tid === DRAFT_PROSPECT ? 0.5 : 0.8);
+    develop(p, league.season, devContext(league, p, league.season - 1), rng, p.tid === DRAFT_PROSPECT ? 0.5 : 0.8);
   }
   anchorRatings(league);
   for (const p of Object.values(league.players)) {
@@ -203,7 +204,7 @@ export function inSeasonProgression(league: League, rng: Rng): { pid: number; de
     const a = playerAge(p, league.season);
     if (a > 26) continue;
     const before = p.ovr;
-    develop(p, league.season, devContext(league, p), rng, 0.07);
+    develop(p, league.season, devContext(league, p, league.season), rng, 0.07);
     refreshDerived(league, p);
     if (p.ovr !== before) out.push({ pid: p.pid, delta: p.ovr - before });
   }

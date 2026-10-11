@@ -359,8 +359,10 @@ export function startFreeAgency(league: League): boolean {
 
 export function faAdvance(league: League, days = 1) {
   if (league.phase !== 'freeAgency') return;
+  // free agency lasts 30 days: "advance a week" near the end stops on the last day
+  const n = Math.min(days, 30 - league.faDay);
   withRng(league, (rng) => {
-    for (let i = 0; i < days; i++) {
+    for (let i = 0; i < n; i++) {
       faDay(league, rng);
       league.faDay++;
     }

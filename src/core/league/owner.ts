@@ -23,12 +23,17 @@ export function takeOverTeam(league: League, tid: number) {
   old.tactics.manual = false;
   league.userTid = tid;
   league.fired = false;
+  // the old team's game plan and the old scouting department's board don't come along
+  league.gamePlan = null;
+  delete league.draftBoard;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
   league.tenureStart = contractSeason(league);
 }
 
 /** End-of-season owner review. Components are -1..1; total is a running average. */
 export function ownerEvaluation(league: League) {
+  // a fired coach has no owner until he takes over another team
+  if (league.fired) return;
   const tid = league.userTid;
   const ts = curTeamSeason(league, tid);
   const wins = clamp((winPct(ts) - 0.5) * 2.5, -1, 1);
