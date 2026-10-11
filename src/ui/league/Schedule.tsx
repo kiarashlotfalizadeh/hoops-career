@@ -18,7 +18,7 @@ function record(league: League, tid: number) {
   return `${ts.won}-${ts.lost}`;
 }
 
-const ROUND_SHORT = ['', '1st Rd', 'Semis', 'Conf Finals', 'Finals'];
+const ROUND_SHORT = ['', '1st Rd', 'Semis', 'Conf. Finals', 'Finals'];
 
 /** "1st Rd G4", "Finals G2", "Play-In", or '' for regular-season games. */
 function gameTag(league: League, g: ScheduledGame): string {
@@ -128,7 +128,7 @@ export function TeamScheduleList({
               <div className="lg-month">
                 <span>{month}</span>
                 {monthRec && (
-                  <span className="num small dim" style={{ fontFamily: 'var(--font)', letterSpacing: 0 }}>
+                  <span className="num small dim" style={{ fontFamily: 'var(--font)', letterSpacing: 0, textTransform: 'none' }}>
                     {monthRec}
                   </span>
                 )}
@@ -193,18 +193,19 @@ function rowSub(league: League, r: Row, tid: number, ranks: Map<number, Standing
   return prev && prev.won + prev.lost ? `Last season ${prev.won}-${prev.lost}` : '0-0';
 }
 
+/** "9-5", or "3-1 · Playoffs 2-4" in April: postseason games don't go into the regular-season record. */
 function monthRecord(rows: Row[], season: number, month: string) {
-  let w = 0;
-  let l = 0;
+  const rec = { regular: [0, 0], post: [0, 0] };
   for (const r of rows) {
-    // the Cup championship doesn't count
+    // the Cup championship counts in neither
     if (!r.res || r.g.type === 'cup') continue;
     const m = dayToDate(season, r.g.day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
     if (m !== month) continue;
-    if (r.won) w++;
-    else l++;
+    rec[r.g.type === 'regular' ? 'regular' : 'post'][r.won ? 0 : 1]++;
   }
-  return w + l ? `${w}-${l}` : '';
+  const [w, l] = rec.regular;
+  const [pw, pl] = rec.post;
+  return [w + l ? `${w}-${l}` : '', pw + pl ? `Playoffs ${pw}-${pl}` : ''].filter(Boolean).join(' · ');
 }
 
 /** Scoreboard for every game on one calendar day, with a day stepper. */
@@ -284,7 +285,12 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
   const done = !!res || !!g.played;
   const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : tag || 'Preview';
   const right = done ? tag : favorite(league, g);
-  const series = g.seriesId && g.type === 'playoffs' ? league.playoffs.find((s) => s.id === g.seriesId) : undefined;
+  // a playoff card shows the series as it stood after this game (or going into it)
+  const series =
+    g.seriesId && g.type === 'playoffs'
+      ? league.games.filter((x) => x.season === league.season && x.type === 'playoffs' && x.seriesId === g.seriesId && (x.day < g.day || x.gid === g.gid))
+      : undefined;
+  const seriesWins = (tid: number) => series?.filter((x) => (x.home.pts > x.away.pts ? x.home.tid : x.away.tid) === tid).length ?? 0;
   const lines = [
     { tid: g.away, pts: res?.away.pts },
     { tid: g.home, pts: res?.home.pts },
@@ -301,7 +307,7 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
           <TeamLogo tid={t.tid} size={22} />
           <span className="ab">
             {league.teams[t.tid].abbrev}
-            <span className="rec">{series ? `${series.high === t.tid ? series.highWins : series.lowWins}W` : record(league, t.tid)}</span>
+            <span className="rec">{series ? `${seriesWins(t.tid)}-${seriesWins(t.tid === g.home ? g.away : g.home)}` : record(league, t.tid)}</span>
           </span>
           <span className="sc">{t.pts ?? ''}</span>
         </div>
