@@ -61,7 +61,7 @@ export function AwardsTab({ league }: { league: League }) {
         </div>
       )}
 
-      {aw?.cupWinner !== undefined && <CupBanner league={league} season={season} tid={aw.cupWinner} runnerUp={aw.cupRunnerUp} mvp={aw.cupMvp} />}
+      {aw?.cupWinner !== undefined && <CupBanner league={league} season={season} tid={aw.cupWinner} runnerUp={aw.cupRunnerUp} mvp={aw.cupMvp} final={league.cup?.season === season ? league.cup.bracket.find((t) => t.round === 'final') : undefined} />}
 
       {!decided && isCurrent && <AwardRace league={league} />}
       {!decided && !isCurrent && !aw?.allStars.E.length && (
