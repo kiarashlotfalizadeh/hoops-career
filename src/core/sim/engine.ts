@@ -1322,7 +1322,9 @@ export class GameSim {
     let tag = '';
     if (final && def.t.manage.foulWhenTrailing && defDiff < 0) {
       const down = -defDiff;
-      if ((down >= 4 && down <= 9 && clock <= 50 && clock > 1) || (down <= 3 && clock <= 24 && clock > 1.2)) {
+      // only while there is time to score twice more after the free throws: down one or two, a foul
+      // still buys a last shot; down three or more with seconds left it only pads the margin
+      if ((down >= 4 && down <= 9 && clock <= 50 && clock > 6) || (down <= 3 && clock <= 24 && clock > (down === 3 ? 6 : 1.2))) {
         // offense gets the ball to its best free throw shooters
         const ws = off.on.map((p) => Math.pow(p.ftPct, 6) * (0.5 + p.c.ballSec / 100));
         fouled = off.on[this.rng.weighted(ws)];

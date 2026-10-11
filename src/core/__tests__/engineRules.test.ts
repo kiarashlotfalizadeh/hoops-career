@@ -230,6 +230,25 @@ describe('engine rules', () => {
     expect(quiet).toBe(recorded);
   });
 
+  it('fouls when trailing late only while a foul can still buy another shot', () => {
+    type F = Internals & { T: { score: number }[]; intentionalFoul(off: unknown, def: unknown): string | null };
+    const at = (clock: number, down: number) => {
+      const sim = new GameSim(side(0), side(1), { rng: new Rng(2), type: 'regular', injuries: false }) as unknown as F;
+      const [off, def] = sim.T;
+      sim.q = 4;
+      sim.clock = clock;
+      off.score = 100 + down;
+      def.score = 100;
+      return sim.intentionalFoul(off, def);
+    };
+    expect(at(20, 2)).not.toBeNull();
+    expect(at(2, 2)).not.toBeNull();
+    expect(at(20, 3)).not.toBeNull();
+    expect(at(3, 3)).toBeNull();
+    expect(at(40, 7)).not.toBeNull();
+    expect(at(4, 7)).toBeNull();
+  });
+
   it('hurries when two possessions down late, but not in a lost cause', () => {
     const sim = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false }) as unknown as Internals & { T: { score: number }[] };
     const [off, def] = sim.T;
