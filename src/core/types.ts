@@ -62,6 +62,8 @@ export interface Contract {
   rookie?: boolean;
   /** Option on the final season. */
   option?: 'player' | 'team';
+  /** Two-way contract: doesn't count toward the 15-man standard roster. */
+  twoWay?: boolean;
 }
 
 export interface Injury {
@@ -467,6 +469,8 @@ export interface DraftPick {
   tid: number;
   /** Assigned once lottery/order known. */
   pick?: number;
+  /** Top-N protected: if it lands in the first N picks of its round, it stays with originalTid (obligation ends). */
+  protection?: number;
 }
 
 // ---------------------------------------------------------------- games

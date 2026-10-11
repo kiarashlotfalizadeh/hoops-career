@@ -250,6 +250,8 @@ export interface RosterRow {
   season: number;
   jersey: string;
   pos: string;
+  /** Full label as listed ("G-F"): current-season pages only give G / F / C. */
+  posRaw: string;
   heightIn: number;
   weightLb: number;
   birthDate: string; // YYYYMMDD
@@ -274,6 +276,7 @@ export function parseRoster(html: string, team: string, season: number): RosterR
       season,
       jersey: r.number ?? r.uniform_number ?? '',
       pos: (r.pos ?? '').split('-')[0],
+      posRaw: (r.pos ?? '').trim(),
       heightIn: ft ? ft * 12 + (inch || 0) : 0,
       weightLb: num(r.weight),
       birthDate: r.birth_date__csk ?? '',

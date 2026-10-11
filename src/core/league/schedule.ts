@@ -164,3 +164,139 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   const lastDay = games.reduce((a, g) => Math.max(a, g.day), 0);
   return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 10 };
 }
+
+/** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = opening night). */
+export interface RealScheduleData {
+  season: number;
+  games: string[];
+}
+
+const MS_DAY = 86_400_000;
+const dateOf = (season: number, day: number) => new Date(Date.UTC(season - 1, 9, 20) + day * MS_DAY);
+
+/**
+ * The real NBA schedule, completed to 82 games (41 at home) per team. The NBA publishes the
+ * Cup knockout round and the games for teams knocked out of it later; the missing games are
+ * paired within conferences (fewest existing meetings first) and placed on open December dates
+ * (the Cup window) where neither team plays, never making a team play three days running.
+ * Returns null if the data is unusable, so the caller can fall back to a generated schedule.
+ */
+export function realSchedule(teams: Team[], data: RealScheduleData, season: number, rng: Rng, startGid: number): ScheduleResult | null {
+  if (data.season !== season || !data.games.length) return null;
+  const tidOf = new Map(teams.map((t) => [t.abbrev, t.tid]));
+  const n = teams.length;
+  const busy = teams.map(() => new Set<number>());
+  const real: { day: number; home: number; away: number }[] = [];
+  for (const s of data.games) {
+    const m = s.match(/^(\d+):([A-Z]{2,4})@([A-Z]{2,4})$/);
+    if (!m) continue;
+    const day = Number(m[1]);
+    const away = tidOf.get(m[2]);
+    const home = tidOf.get(m[3]);
+    if (away === undefined || home === undefined || away === home || busy[home].has(day) || busy[away].has(day)) continue;
+    busy[home].add(day);
+    busy[away].add(day);
+    real.push({ day, home, away });
+  }
+  const games = new Array(n).fill(0);
+  const homes = new Array(n).fill(0);
+  for (const g of real) {
+    games[g.home]++;
+    games[g.away]++;
+    homes[g.home]++;
+  }
+  const needHome = homes.map((h) => 41 - h);
+  const needAway = games.map((c, t) => 82 - c - needHome[t]);
+  // a mostly-missing or inconsistent file: use the generated schedule instead
+  if (real.length < 1000 || needHome.some((x) => x < 0) || needAway.some((x) => x < 0)) return null;
+
+  // pair the missing games: hosts that still need home games vs visitors that need road games
+  const meet = new Map<string, number>();
+  const mk = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+  for (const g of real) meet.set(mk(g.home, g.away), (meet.get(mk(g.home, g.away)) ?? 0) + 1);
+  let extra: { home: number; away: number }[] | null = null;
+  for (let attempt = 0; attempt < 60 && !extra; attempt++) {
+    const h = needHome.slice();
+    const a = needAway.slice();
+    const out: { home: number; away: number }[] = [];
+    const used = new Map(meet);
+    let ok = true;
+    for (;;) {
+      const hosts = teams.map((t) => t.tid).filter((t) => h[t] > 0);
+      if (!hosts.length) break;
+      const order = hosts.map((t) => ({ t, k: h[t] + a[t] + rng.next() * 0.5 })).sort((x, y) => y.k - x.k);
+      const host = order[0].t;
+      const opts = teams
+        .map((t) => t.tid)
+        .filter((t) => t !== host && a[t] > 0)
+        .map((t) => ({ t, s: (used.get(mk(host, t)) ?? 0) * 10 + (teams[t].conf !== teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
+        .sort((x, y) => x.s - y.s);
+      if (!opts.length) {
+        ok = false;
+        break;
+      }
+      const vis = opts[0].t;
+      out.push({ home: host, away: vis });
+      h[host]--;
+      a[vis]--;
+      used.set(mk(host, vis), (used.get(mk(host, vis)) ?? 0) + 1);
+    }
+    if (ok && a.every((x) => x === 0)) extra = out;
+  }
+  if (!extra) return null;
+
+  // All-Star break: the longest run of game-free days in the middle of the season
+  const lastReal = real.reduce((m, g) => Math.max(m, g.day), 0);
+  const perDay = new Array(lastReal + 2).fill(0);
+  for (const g of real) perDay[g.day]++;
+  let breakStart = -1;
+  let breakLen = 0;
+  for (let d = 60; d < lastReal - 20; d++) {
+    if (perDay[d]) continue;
+    let e = d;
+    while (e < lastReal && !perDay[e]) e++;
+    if (e - d > breakLen) {
+      breakLen = e - d;
+      breakStart = d;
+    }
+    d = e;
+  }
+  if (breakLen < 3) {
+    breakStart = 118;
+    breakLen = 0;
+  }
+  const inBreak = (d: number) => d >= breakStart && d < breakStart + breakLen;
+
+  // place each extra game on the best open day: December first, the emptier the better
+  const three = (t: number, d: number) => {
+    const b = busy[t];
+    return (b.has(d - 1) && b.has(d - 2)) || (b.has(d - 1) && b.has(d + 1)) || (b.has(d + 1) && b.has(d + 2));
+  };
+  const placed: { day: number; home: number; away: number }[] = [];
+  for (const g of rng.shuffle(extra)) {
+    let best = -1;
+    let bestScore = Infinity;
+    for (let d = 1; d <= lastReal; d++) {
+      const date = dateOf(season, d);
+      const december = date.getUTCMonth() === 11;
+      if (inBreak(d) || (december && date.getUTCDate() === 24) || busy[g.home].has(d) || busy[g.away].has(d)) continue;
+      if (three(g.home, d) || three(g.away, d)) continue;
+      const b2b = [g.home, g.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length;
+      const s = (december ? 0 : 30) + perDay[d] * 0.6 + b2b * 4 + rng.uniform(0, 0.5);
+      if (s < bestScore) {
+        bestScore = s;
+        best = d;
+      }
+    }
+    if (best < 0) return null;
+    busy[g.home].add(best);
+    busy[g.away].add(best);
+    perDay[best]++;
+    placed.push({ day: best, home: g.home, away: g.away });
+  }
+  const all = [...real, ...placed].sort((x, y) => x.day - y.day || x.home - y.home);
+  let gid = startGid;
+  const out: ScheduledGame[] = all.map((g) => ({ gid: gid++, day: g.day, home: g.home, away: g.away, type: 'regular' }));
+  const lastDay = out.reduce((m, g) => Math.max(m, g.day), 0);
+  return { games: out, lastDay, allStarDay: breakStart + 2, tradeDeadlineDay: breakStart - 10 };
+}
