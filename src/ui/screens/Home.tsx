@@ -11,7 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Kpi, Ovr } from '../components/ui';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
-import { f1, playerSeason, signed, teamRatings } from '../stats';
+import { f1, playerSeason, rosterNames, signed, teamRatings } from '../stats';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
 
@@ -56,13 +56,14 @@ export default function Home() {
   const myRank = conf.findIndex((r) => r.tid === league.userTid);
   const window = conf.slice(Math.max(0, Math.min(myRank - 3, conf.length - 7)), Math.max(7, Math.min(conf.length, myRank + 4)));
   const roster = teamPlayers(league, league.userTid);
+  const nameOf = rosterNames(roster);
   const leaders = (['pts', 'reb', 'ast'] as const).map((k) => {
     let best: { name: string; v: number; pid: number } | null = null;
     for (const p of roster) {
       const pg = playerSeason(p, league.season);
       if (!pg || pg.gp < 1) continue;
       const val = pg[k];
-      if (!best || val > best.v) best = { name: p.lastName, v: val, pid: p.pid };
+      if (!best || val > best.v) best = { name: nameOf(p.pid), v: val, pid: p.pid };
     }
     return { k, best };
   });
@@ -302,7 +303,7 @@ export default function Home() {
                   <Ovr v={p.ovr} size="sm" />
                   <span className="tiny dim">{p.pos}</span>
                 </div>
-                <span className="bold small ellipsis" style={{ marginTop: 4 }}>{p.lastName}</span>
+                <span className="bold small ellipsis" style={{ marginTop: 4 }}>{nameOf(p.pid)}</span>
                 <span className="tiny dim ellipsis">{p.archetype}</span>
               </Link>
             ))}

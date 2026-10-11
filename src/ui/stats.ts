@@ -113,3 +113,11 @@ export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '-'
 export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '-');
 export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '-');
 export const moneyM = (k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;
+
+/** Last names for a roster, with a first initial where teammates share one (Jalen and Jaylin Williams on OKC). */
+export function rosterNames(players: { pid: number; firstName: string; lastName: string }[]): (pid: number) => string {
+  const count = new Map<string, number>();
+  for (const p of players) count.set(p.lastName, (count.get(p.lastName) ?? 0) + 1);
+  const names = new Map(players.map((p) => [p.pid, (count.get(p.lastName) ?? 0) > 1 && p.firstName ? `${p.firstName[0]}. ${p.lastName}` : p.lastName]));
+  return (pid) => names.get(pid) ?? '';
+}
