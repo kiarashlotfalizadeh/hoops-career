@@ -140,10 +140,11 @@ function ResignPhase() {
         <div style={{ marginTop: 4 }}>
           <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} />
         </div>
-        <div className="grid3" style={{ marginTop: 12 }}>
-          <Kpi k="Cap space" v={fmtM(cap.salaryCap - committed - holds)} color={cap.salaryCap - committed - holds > 0 ? 'var(--good)' : 'var(--warn)'} sub={holds > 0 ? 'after holds' : undefined} />
-          <Kpi k="Under tax" v={fmtM(cap.luxuryTax - committed)} color={cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined} />
-          <Kpi k="Roster" v={`${rosterNext}/${CAP.rosterMax}`} sub={rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut` : 'under contract'} color={rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined} />
+        <div className="grid2" style={{ marginTop: 12 }}>
+          <Kpi k="Cap space" v={fmtM(cap.salaryCap - committed - holds)} color={cap.salaryCap - committed - holds > 0 ? 'var(--good)' : 'var(--warn)'} sub={holds > 0 ? 'after cap holds' : undefined} />
+          <Kpi k="Cap holds" v={fmtM(holds)} sub={holds > 0 ? 'renounce to clear' : 'none'} />
+          <Kpi k="Under tax" v={fmtM(cap.luxuryTax - committed)} color={cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined} sub="committed only" />
+          <Kpi k="Roster" v={`${rosterNext}/${CAP.rosterMax}`} sub={rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut by opening night` : 'under contract'} color={rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined} />
         </div>
         {rosterNext > CAP.rosterMax && (
           <div className="small warn" style={{ marginTop: 8 }}>
@@ -151,7 +152,7 @@ function ResignPhase() {
           </div>
         )}
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Until free agency opens they hold that cap room ({fmtM(holds)} in cap holds, {fmtM(cap.salaryCap - committed)} of space without them) unless you renounce them; what's left after re-signing is yours to use in free agency.
+          Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Until free agency opens they hold that cap room unless you renounce them; what's left after re-signing is yours to use in free agency.
         </div>
       </Card>
 
