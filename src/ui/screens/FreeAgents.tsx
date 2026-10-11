@@ -79,6 +79,7 @@ export default function FreeAgents() {
 
   const advance = (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
+    const from = Math.min(30, league.faDay + 2);
     useStore.getState().mutate((l) => faAdvance(l, days));
     const l = useStore.getState().league!;
     const signed = before
@@ -86,13 +87,14 @@ export default function FreeAgents() {
       .filter((p) => p && p.tid >= 0 && p.tid !== l.userTid)
       .sort((a, b) => b.ovr - a.ovr);
     const day = Math.min(30, l.faDay + 1);
+    const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
     useStore.getState().toast(
       signed.length
-        ? `Day ${day}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
+        ? `${when}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
             .slice(0, 2)
             .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
             .join(', ')}${signed.length > 2 ? '…' : ''}`
-        : `Day ${day}: a quiet day on the market.`,
+        : `${when}: ${day > from ? 'a quiet week' : 'a quiet day'} on the market.`,
       'neutral',
     );
   };
@@ -191,10 +193,10 @@ export default function FreeAgents() {
             <div className="small dim2">Every day AI teams make offers. Players who wait too long may lower their price.</div>
           )}
           <div className="row" style={{ marginTop: 10, gap: 8 }}>
-            <button className="btn sm grow" onClick={() => advance(1)}>
+            <button className="btn sm grow" disabled={league.faDay >= 30} onClick={() => advance(1)}>
               <SkipForward size={16} /> Next day
             </button>
-            <button className="btn sm grow" onClick={() => advance(7)}>
+            <button className="btn sm grow" disabled={league.faDay >= 30} onClick={() => advance(7)}>
               <FastForward size={16} /> Advance a week
             </button>
           </div>
