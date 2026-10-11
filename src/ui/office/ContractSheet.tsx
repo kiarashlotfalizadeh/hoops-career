@@ -37,7 +37,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const maxAmt = cap.maxContract(p.experience);
   const [amount, setAmount] = useState(() => clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt));
-  const [years, setYears] = useState(ask.years);
+  // a mid-level offer can run 4 years at most
+  const [years, setYears] = useState(() => (mode === 'fa' && signingRoute(league, tid, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
 
   // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount)

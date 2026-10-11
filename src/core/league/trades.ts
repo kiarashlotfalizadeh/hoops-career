@@ -498,8 +498,8 @@ export function aiProposeToUser(league: League, rng: Rng) {
  */
 export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
-  // ~9 attempts before the deadline
-  if (!rng.chance(0.08)) return;
+  // ~13 attempts before the deadline
+  if (!rng.chance(0.12)) return;
   const sellers = league.teams.filter((t) => t.tid !== league.userTid && t.strategy === 'rebuild');
   const buyers = league.teams.filter((t) => t.tid !== league.userTid && t.strategy === 'contend');
   if (!sellers.length || !buyers.length) return;

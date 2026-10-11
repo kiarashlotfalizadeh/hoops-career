@@ -208,7 +208,8 @@ export function faDay(league: League, rng: Rng, intensity = 1) {
   const room = Math.max(0, ...buyers.map((t) => Math.max(cap.salaryCap - payroll(league, t.tid, season), mleRoom(league, t.tid, season))));
   for (const p of freeAgents(league)) {
     if (p.faDays === undefined) continue;
-    p.faDays -= offseason ? 1 : FA_PRICE_CUT_DAYS;
+    // (saves from before the 5-day clock can still be counting down from 30)
+    p.faDays = Math.min(p.faDays, FA_PRICE_CUT_DAYS) - (offseason ? 1 : FA_PRICE_CUT_DAYS);
     if (p.faDays > 0) continue;
     const ask = Math.min(p.asking?.amount ?? Infinity, marketSalary(league, p));
     const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
