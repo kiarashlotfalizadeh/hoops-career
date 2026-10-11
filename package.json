@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Hoops Career — a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.15"
   },
   "scripts": {
     "dev": "vite",
