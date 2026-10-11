@@ -1,6 +1,6 @@
 // Phase-aware "what can I do next" actions shared by the top-bar play button and Home.
 import type { League } from '../core/types';
-import type { SimTarget } from '../state/store';
+import { allStarStop, type SimTarget } from '../state/store';
 import { canStartRegularSeason, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { fmtDate } from '../core/league/helpers';
@@ -41,8 +41,8 @@ export function flowActions(league: League): FlowAction[] {
       a.push({ id: 'day', label: 'Sim 1 day', sim: { kind: 'days', n: 1 } });
       if (league.phase === 'regular') {
         a.push({ id: 'week', label: 'Sim 1 week', sim: { kind: 'week' } });
-        if (league.day <= league.tradeDeadlineDay) a.push({ id: 'deadline', label: 'Sim to trade deadline', sim: { kind: 'deadline' } });
-        if (league.day <= league.allStarDay) a.push({ id: 'allstar', label: 'Sim to All-Star break', sim: { kind: 'allStar' } });
+        if (league.day < league.tradeDeadlineDay) a.push({ id: 'deadline', label: 'Sim to trade deadline', sim: { kind: 'deadline' } });
+        if (league.day < allStarStop(league)) a.push({ id: 'allstar', label: 'Sim to All-Star break', sim: { kind: 'allStar' } });
         a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${regularGamesLeft(league)} games left league-wide`, sim: { kind: 'endRegular' } });
       } else {
         a.push({ id: 'endpost', label: league.phase === 'playin' ? 'Sim through play-in' : 'Sim to end of playoffs', sim: { kind: 'endPostseason' } });

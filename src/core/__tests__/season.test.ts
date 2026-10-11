@@ -47,6 +47,9 @@ describe('trades', () => {
     const mine = teamPlayers(league, 0);
     const theirs = teamPlayers(league, 1).slice(0, 3);
     const offer = { a: { tid: 0, pids: [], dpids: [] }, b: { tid: 1, pids: theirs.map((p) => p.pid), dpids: [] } };
+    // 15 is the in-season limit (the offseason allows 21)
+    league.phase = 'regular';
     if (mine.length + 3 > CAP.rosterMax) expect(validateTrade(league, offer).some((e) => e.includes('max'))).toBe(true);
+    league.phase = 'preseason';
   });
 });

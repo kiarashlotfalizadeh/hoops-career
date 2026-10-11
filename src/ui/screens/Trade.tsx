@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Ban, Check, Handshake, Info, RotateCcw, Ticket, X } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, payroll, playerName, teamPlayers, winPct } from '../../core/league/helpers';
-import { evaluateTrade, executeTrade, makeItWork, pickLabel, validateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
+import { evaluateTrade, executeTrade, makeItWork, pickLabel, untradeableReason, validateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -137,7 +137,10 @@ export default function Trade() {
               <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out, plus $0.1M. Teams under the cap can absorb salary freely.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Rosters.</b> Both teams must end with {CAP.rosterMax} players or fewer.
+              <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season no team can drop below {CAP.rosterMin}. Two-way players don't count, but each team has only {TWO_WAY_MAX} two-way slots.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded.
             </p>
             <p style={{ margin: 0 }}>
               <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens at the draft.
@@ -378,6 +381,8 @@ function PlayerAsset({ league, p, season, on, onToggle }: { league: League; p: P
           </span>
           {p.injury && <span className="tag bad" style={{ height: 16, fontSize: 9, padding: '0 4px' }}>INJ</span>}
           {p.mood.tradeRequest && <span className="tag warn" style={{ height: 16, fontSize: 9, padding: '0 4px' }}>REQ</span>}
+          {p.contract.twoWay && <span className="tag" style={{ height: 16, fontSize: 9, padding: '0 4px' }}>2-WAY</span>}
+          {untradeableReason(league, p) && <span className="tag bad" style={{ height: 16, fontSize: 9, padding: '0 4px' }}>EXPIRING</span>}
         </div>
         <div className="fo-meta tiny">
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
@@ -428,8 +433,11 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
   const out = offer.a.pids.reduce((a, pid) => a + salaryFor(league.players[pid], season), 0);
   const inc = offer.b.pids.reduce((a, pid) => a + salaryFor(league.players[pid], season), 0);
   const after = payroll(league, user, season) - out + inc;
-  const rosterAfter = teamPlayers(league, user).length - offer.a.pids.length + offer.b.pids.length;
-  const theirAfter = teamPlayers(league, offer.b.tid).length - offer.b.pids.length + offer.a.pids.length;
+  // standard roster spots (two-way players don't count)
+  const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  const rosterAfter = standardRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
+  const theirAfter = standardRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
+  const maxSize = rosterMaxNow(league);
   if (empty || !ev) {
     return (
       <div className="fo-dock">
@@ -478,7 +486,7 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
         </div>
         <div>
           <div className="tiny dim upper bold">Rosters</div>
-          <div className="small num bold" style={{ color: rosterAfter > CAP.rosterMax || theirAfter > CAP.rosterMax ? 'var(--bad)' : undefined }}>
+          <div className="small num bold" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
             {rosterAfter} / {theirAfter}
           </div>
           <div className="tiny dim">you / them</div>

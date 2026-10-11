@@ -62,6 +62,8 @@ export interface Contract {
   rookie?: boolean;
   /** Option on the final season. */
   option?: 'player' | 'team';
+  /** Two-way deal: doesn't use a 15-man roster spot and is paid outside the cap and tax. */
+  twoWay?: boolean;
 }
 
 export interface Injury {
@@ -736,6 +738,8 @@ export interface League {
   realAvgs?: Record<string, number>;
   /** Opponent-specific adjustments for the user's next game against that opponent. */
   gamePlan?: GamePlan | null;
+  /** First season of the user's current job (owner grace period); defaults to startSeason. */
+  tenureStart?: number;
 }
 
 export interface GamePlan {

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../state/store';
 import type { FlowAction } from './flow';
+import type { League } from '../core/types';
 import { faAdvance, finishDraftPhase, newSeason, startDraft, startFreeAgency, startRegularSeason } from '../core/league/season';
 import { seasonLabel } from '../core/constants';
 
@@ -12,10 +13,19 @@ export function useFlowRunner() {
       nav(a.to);
       return;
     }
+    // a sim or a phase change is already running: ignore double taps
+    if (st.sim) return;
     if (a.sim) {
       await st.simulate(a.sim);
       return;
     }
+    // phase changes run behind the progress bar (buttons disabled); each is also a no-op outside
+    // its phase, so a stale dispatch can't skip ahead
+    let done = false;
+    const task = (label: string, fn: (l: League) => boolean | void) =>
+      st.task(label, (l) => {
+        done = fn(l) !== false;
+      });
     switch (a.cmd) {
       case 'watchLive':
         nav('/live');
@@ -30,34 +40,32 @@ export function useFlowRunner() {
       }
       case 'startRegular': {
         let errs: string[] = [];
-        st.mutate((l) => {
-          errs = startRegularSeason(l);
-        });
+        if (!(await task('Opening night', (l) => void (errs = startRegularSeason(l))))) return;
         if (errs.length) st.toast(errs[0], 'bad');
         else st.toast('The regular season has begun!', 'good');
         return;
       }
       case 'startDraft':
-        st.mutate((l) => startDraft(l));
+        await task('Draft night', startDraft);
         nav('/draft');
         return;
       case 'finishDraft':
-        st.mutate((l) => finishDraftPhase(l));
+        await task('Finishing the draft', finishDraftPhase);
         nav('/resign');
         return;
       case 'startFA':
-        st.mutate((l) => startFreeAgency(l));
+        await task('Opening free agency', startFreeAgency);
         nav('/free-agents');
         return;
       case 'faDay':
-        st.mutate((l) => faAdvance(l, 1));
+        await task('Free agency', (l) => faAdvance(l, 1));
         return;
       case 'faWeek':
-        st.mutate((l) => faAdvance(l, 7));
+        await task('Free agency', (l) => faAdvance(l, 7));
         return;
       case 'newSeason':
-        st.mutate((l) => newSeason(l));
-        st.toast(`Welcome to the ${seasonLabel(useStore.getState().league!.season)} season. Check the training camp report in your inbox.`, 'good');
+        await task('Training camp', newSeason);
+        if (done) st.toast(`Welcome to the ${seasonLabel(useStore.getState().league!.season)} season. Check the training camp report in your inbox.`, 'good');
         nav('/');
         return;
     }

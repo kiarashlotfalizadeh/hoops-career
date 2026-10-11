@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, FastForward, Newspaper, SkipForward } from 'lucide-react';
-import type { Pos } from '../../core/types';
-import { POSITIONS } from '../../core/types';
+import { CalendarDays, FastForward, Lock, Newspaper, SkipForward } from 'lucide-react';
+import type { Player, Pos } from '../../core/types';
+import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, freeAgents, payroll, playerName, teamPlayers } from '../../core/league/helpers';
-import { askingContract, teamAppeal, valueScore } from '../../core/league/contracts';
+import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, standardRoster, twoWayRoster } from '../../core/league/helpers';
+import { askingContract, teamAppeal, twoWayEligible, twoWaySalary, valueScore } from '../../core/league/contracts';
+import { signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { faAdvance } from '../../core/league/season';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
-import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented } from '../components/ui';
-import { OvrPot, appealInfo, capSeason, fmtM, playerMeta } from '../office/common';
+import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet } from '../components/ui';
+import { Callout, OvrPot, appealInfo, capSeason, fmtM, playerMeta } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
@@ -22,13 +23,18 @@ export default function FreeAgents() {
   const cap = CAP_FOR(league, s);
   const pay = payroll(league, tid, s);
   const space = cap.salaryCap - pay;
-  const n = teamPlayers(league, tid).length;
+  // two-way players don't use one of the 15 standard spots
+  const n = standardRoster(league, tid).length;
+  const tw = twoWayRoster(league, tid).length;
+  const closed = signingClosedReason(league);
   const [pos, setPos] = useState<'all' | Pos>('all');
   const [minOvr, setMinOvr] = useState(0);
   const [sort, setSort] = useState<SortKey>('value');
   const [onlySignable, setOnlySignable] = useState(false);
+  const [twoWayMode, setTwoWayMode] = useState(false);
   const [limit, setLimit] = useState(40);
   const [sel, setSel] = useState<number | null>(null);
+  const [twoWaySel, setTwoWaySel] = useState<number | null>(null);
   const fa = league.phase === 'freeAgency';
 
   const all = useMemo(
@@ -45,7 +51,7 @@ export default function FreeAgents() {
 
   const signable = (ask: number) => ask <= cap.vetMin + 1 || ask <= space;
   const rows = all
-    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!onlySignable || signable(r.ask.amount)))
+    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!onlySignable || signable(r.ask.amount)) && (!twoWayMode || twoWayEligible(r.p)))
     .sort((a, b) => {
       switch (sort) {
         case 'ovr':
@@ -106,15 +112,27 @@ export default function FreeAgents() {
               <b>Timing.</b> The summer market lasts 30 days. AI teams sign players every day, and stars go fast. During the season, unsigned players are still available.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Roster.</b> Maximum {CAP.rosterMax} players.
+              <b>Roster.</b> Maximum {CAP.rosterMax} players, plus up to {TWO_WAY_MAX} on two-way deals.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {fmtM(twoWaySalary(league, s), 2)}. They don't use a roster spot or count against the cap, and sit at the end of the bench unless you run short.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Window.</b> Signings are open in the preseason, through the end of the regular season, and in free agency.
             </p>
           </Help>
         }
       />
 
+      {closed && (
+        <Callout tone="warn" icon={<Lock size={16} />}>
+          {closed}
+        </Callout>
+      )}
+
       <div className="grid3">
         <Kpi k="Cap space" v={fmtM(space)} color={space > 0 ? 'var(--good)' : 'var(--warn)'} sub={space > 0 ? 'to spend' : 'min deals only'} />
-        <Kpi k="Roster" v={`${n}/${CAP.rosterMax}`} color={n >= CAP.rosterMax ? 'var(--bad)' : undefined} sub={n >= CAP.rosterMax ? 'full' : `${CAP.rosterMax - n} open`} />
+        <Kpi k="Roster" v={`${n}/${CAP.rosterMax}`} color={n >= CAP.rosterMax ? 'var(--bad)' : undefined} sub={`${n >= CAP.rosterMax ? 'full' : `${CAP.rosterMax - n} open`} · two-way ${tw}/${TWO_WAY_MAX}`} />
         <Kpi k="Minimum" v={fmtM(cap.vetMin, 2)} sub="always allowed" />
       </div>
 
@@ -175,6 +193,9 @@ export default function FreeAgents() {
           <button className={`chip ${onlySignable ? 'on' : ''}`} onClick={() => setOnlySignable(!onlySignable)}>
             Can sign now
           </button>
+          <button className={`chip ${twoWayMode ? 'on' : ''}`} onClick={() => (setTwoWayMode(!twoWayMode), setLimit(40))}>
+            Two-way offers ({tw}/{TWO_WAY_MAX})
+          </button>
         </div>
         <Segmented
           value={sort}
@@ -199,7 +220,7 @@ export default function FreeAgents() {
               const isMin = ask.amount <= cap.vetMin + 1;
               const fits = ask.amount <= space;
               return (
-                <button key={p.pid} className="fo-prow" onClick={() => setSel(p.pid)}>
+                <button key={p.pid} className="fo-prow" onClick={() => (twoWayMode ? setTwoWaySel(p.pid) : setSel(p.pid))}>
                   <OvrPot p={p} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row" style={{ gap: 6 }}>
@@ -234,6 +255,53 @@ export default function FreeAgents() {
       )}
 
       <ContractSheet pid={sel} mode="fa" onClose={() => setSel(null)} />
+      <TwoWaySheet p={twoWaySel !== null ? league.players[twoWaySel] : undefined} onClose={() => setTwoWaySel(null)} />
     </main>
+  );
+}
+
+/** Fixed-terms two-way offer: no negotiation, he takes it if he's a minimum-level player. */
+function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => void }) {
+  const league = useLeague();
+  const open = !!p && p.tid === FREE_AGENT;
+  const s = capSeason(league);
+  const used = twoWayRoster(league, league.userTid).length;
+  const offer = () => {
+    if (!p) return;
+    let res = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      res = userTwoWayOffer(l, p.pid);
+    });
+    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
+    if (res.ok) onClose();
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Two-way offer">
+      {open && p && (
+        <div className="col" style={{ gap: 12 }}>
+          <div className="row" style={{ gap: 10 }}>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="fo-name">{playerName(p)}</div>
+              <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+            </div>
+            <OvrPot p={p} />
+          </div>
+          <div className="small dim2">
+            {fmtM(twoWaySalary(league, s), 2)} per season for {p.experience >= 3 ? 1 : 2} season{p.experience >= 3 ? '' : 's'}, starting {seasonLabel(s)}. No roster spot or cap room needed; he sits at the end of the bench unless you run short, and can be converted to a standard minimum deal later when a roster spot is open.
+          </div>
+          <div className="small">
+            Two-way slots used: <b>{used}/{TWO_WAY_MAX}</b>
+          </div>
+          <div className="row">
+            <button className="btn grow" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn primary grow" disabled={used >= TWO_WAY_MAX || !!signingClosedReason(league)} onClick={offer}>
+              Offer two-way deal
+            </button>
+          </div>
+        </div>
+      )}
+    </Sheet>
   );
 }

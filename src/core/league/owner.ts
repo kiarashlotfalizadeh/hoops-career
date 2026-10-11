@@ -1,7 +1,31 @@
 import type { League } from '../types';
 import { clamp } from '../random';
-import { addInbox, curTeamSeason, winPct } from './helpers';
+import { addInbox, contractSeason, curTeamSeason, winPct } from './helpers';
 import { profit } from './finances';
+
+/** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
+export function seasonsInCharge(league: League): number {
+  return league.season - (league.tenureStart ?? league.startSeason) + 1;
+}
+
+/**
+ * The user takes over another team (after a firing or by choice): the coaches swap jobs, the old
+ * team goes back to the AI staff, and the new owner starts a fresh evaluation with a new grace
+ * period. Taken over after the season, the job starts with next season.
+ */
+export function takeOverTeam(league: League, tid: number) {
+  const old = league.teams[league.userTid];
+  const nu = league.teams[tid];
+  const theirCoach = nu.coach.name;
+  nu.coach.name = league.coachName;
+  old.coach.name = theirCoach;
+  old.rotation.manual = false;
+  old.tactics.manual = false;
+  league.userTid = tid;
+  league.fired = false;
+  league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
+  league.tenureStart = contractSeason(league);
+}
 
 /** End-of-season owner review. Components are -1..1; total is a running average. */
 export function ownerEvaluation(league: League) {
@@ -12,7 +36,7 @@ export function ownerEvaluation(league: League) {
   const playoffs = round >= 5 ? 1 : round === 4 ? 0.7 : round === 3 ? 0.45 : round === 2 ? 0.2 : round === 1 ? 0 : -0.25;
   const money = clamp((profit(league, tid) - 15_000) / 60_000, -1, 1);
   const prev = league.ownerMood;
-  const seasonsIn = league.season - league.startSeason + 1;
+  const seasonsIn = seasonsInCharge(league);
   const w = seasonsIn <= 1 ? 1 : 0.4;
   const total = clamp((wins * 0.4 + playoffs * 0.4 + money * 0.2) * w + prev.total * (1 - w), -1, 1);
   league.ownerMood = {
