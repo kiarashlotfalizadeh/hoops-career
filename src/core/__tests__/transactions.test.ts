@@ -257,6 +257,22 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
   });
 
+  it("gives a casual player's own assets the casual discount, but not ones he just traded for", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.teams[2].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    const mine = shape(l, standardRoster(l, U)[0], 80, 27, vetMin);
+    const better = shape(l, standardRoster(l, 2)[0], 80.4, 27, vetMin);
+    const deal: TradeOffer = { a: { tid: U, pids: [mine.pid], dpids: [] }, b: { tid: 2, pids: [better.pid], dpids: [] } };
+    // a few percent short of fair value: fine on casual from his own roster...
+    expect(tradeValue(l, better) / tradeValue(l, mine)).toBeLessThan(1.1);
+    expect(evaluateTrade(l, deal).accept).toBe(true);
+    // ...but once he arrived in a trade this season, flipping him on is judged at fair value
+    mine.tradedFrom = { tid: AI, season: l.season };
+    expect(evaluateTrade(l, deal).accept).toBe(false);
+  });
+
   it('a player option is settled before he can be traded after the season; a team option is never a burden then', () => {
     const l = league();
     const p = shape(l, standardRoster(l, U)[0], 84, 27, 8_000, 2);

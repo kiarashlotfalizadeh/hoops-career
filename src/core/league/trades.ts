@@ -219,7 +219,21 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const costs = moneyCost(league, tid, sideSalary(league, other), sideSalary(league, mine)) + cutCost(league, tid, mine.pids, other.pids);
   const valueIn = players(other, true, other.pids.length > mine.pids.length) + picks(other, true) - costs;
   const valueOut = players(mine, false, mine.pids.length > other.pids.length) + picks(mine, false);
-  const delta = valueIn - valueOut - (generosity - 1) * Math.abs(valueOut);
+  let slack = (generosity - 1) * Math.abs(valueOut);
+  if (generosity < 1) {
+    // a casual GM's discount covers the other side's own assets, not ones it just traded for:
+    // passed along from team to team, it compounded 12% a trade (an 84 became a 93 in three hops)
+    const assets = [
+      ...other.pids.map((pid) => ({ a: league.players[pid], v: Math.max(0, playerValueFor(league, league.players[pid], tid, true)) })),
+      ...other.dpids.flatMap((d) => {
+        const dp = findPick(league, d);
+        return dp ? [{ a: dp, v: pickValueFor(league, dp, tid, true) }] : [];
+      }),
+    ];
+    const total = assets.reduce((s, x) => s + x.v, 0);
+    if (total > 0) slack *= assets.reduce((s, x) => s + (x.a.tradedFrom?.season === league.season ? 0 : x.v), 0) / total;
+  }
+  const delta = valueIn - valueOut - slack;
   const tooManyFirsts = mine.dpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
   return { delta, valueIn, valueOut, accept: delta >= 0 && !tooManyFirsts, tooManyFirsts };
 }
