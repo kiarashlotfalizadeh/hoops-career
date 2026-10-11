@@ -5,7 +5,7 @@ import type { InboxMessage } from '../../core/types';
 import { useLeague, useStore } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { Card, Empty, PageHeader, activateOnKey } from '../components/ui';
+import { Card, Empty, PageHeader } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
@@ -75,10 +75,10 @@ export default function Inbox() {
         }
       />
       <div className="chips">
-        <button className={`chip ${filter === 'all' ? 'on' : ''}`} onClick={() => setFilter('all')}>
+        <button className={`chip ${filter === 'all' ? 'on' : ''}`} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
           All <span className="tiny dim">{sorted.length}</span>
         </button>
-        <button className={`chip ${filter === 'unread' ? 'on' : ''}`} onClick={() => setFilter('unread')}>
+        <button className={`chip ${filter === 'unread' ? 'on' : ''}`} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>
           Unread{' '}
           {unread > 0 && (
             <span className="tiny" style={{ color: 'var(--accent-text)' }}>
@@ -112,28 +112,21 @@ export default function Inbox() {
                     {m.season !== league.season ? ` · ${seasonLabel(m.season)}` : ''}
                   </div>
                 )}
-                <div
-                  className={`lg-msg ${m.read ? '' : 'unread'} ${open ? 'open' : ''}`}
-                  style={{ ['--tone' as string]: tone }}
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={open}
-                  onClick={() => toggle(m)}
-                  onKeyDown={activateOnKey(() => toggle(m))}
-                >
-                  <div className="lg-msg-top">
+                {/* the header toggles; the open body holds its own buttons, so the card itself isn't one */}
+                <div className={`lg-msg ${m.read ? '' : 'unread'} ${open ? 'open' : ''}`} style={{ ['--tone' as string]: tone }}>
+                  <button type="button" className="lg-msg-top" aria-expanded={open} onClick={() => toggle(m)}>
                     <span className="ic">
                       <Icon size={16} />
                     </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="from">{m.from}</div>
-                      <div className="subj">{m.subject}</div>
-                      {!open && <div className="prev">{m.body.replace(/([^.!?:])\n+/g, '$1 · ').replace(/\n+/g, ' ')}</div>}
-                    </div>
-                    <span className="when">{!m.read && <span className="lg-dot" aria-label="Unread" />}</span>
-                  </div>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="from">{m.from}</span>
+                      <span className="subj">{m.subject}</span>
+                      {!open && <span className="prev">{m.body.replace(/([^.!?:])\n+/g, '$1 · ').replace(/\n+/g, ' ')}</span>}
+                    </span>
+                    <span className="when">{!m.read && <span className="lg-dot" role="img" aria-label="Unread" />}</span>
+                  </button>
                   {open && (
-                    <div className="lg-msg-body" onClick={(e) => e.stopPropagation()}>
+                    <div className="lg-msg-body">
                       {paras.map((p, i) => (
                         <p key={i}>{p}</p>
                       ))}

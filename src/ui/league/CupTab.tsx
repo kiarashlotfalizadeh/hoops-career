@@ -63,11 +63,13 @@ export function CupTab({ league }: { league: League }) {
   const groupGamesLeft = league.schedule.filter((g) => g.cup === 'group' && !g.played).length;
   const final = cup.bracket.find((t) => t.round === 'final');
   const seeds = cup.seeds ?? projected;
+  // each knockout round is drawn once the one before it is over
+  const koRound = final ? 'Championship' : cup.bracket.some((t) => t.round === 'sf') ? 'Semifinals' : 'Quarterfinals';
   const status =
     cup.champion !== undefined
       ? `${seasonLabel(cup.season)} NBA Cup complete`
       : cup.seeds
-        ? 'Knockout round'
+        ? `Knockouts · ${koRound}`
         : projected
           ? `Group stage · ${groupGamesLeft} group game${groupGamesLeft === 1 ? '' : 's'} left`
           : `Group stage starts ${fmtDate(league.season, cup.nights[0])}`;
@@ -83,6 +85,10 @@ export function CupTab({ league }: { league: League }) {
           mvp={cup.mvp}
           final={final}
         />
+      )}
+      {/* until the new groups tip off, last season's winner holds the Cup */}
+      {!projected && !cup.seeds && lastWinner?.cupWinner !== undefined && lastWinner.season < cup.season && (
+        <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
       )}
       <div className="row between" style={{ gap: 8 }}>
         <span className="small dim">{status}</span>

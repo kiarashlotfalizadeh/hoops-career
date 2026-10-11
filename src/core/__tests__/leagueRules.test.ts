@@ -245,6 +245,24 @@ describe('clinching (bug 6)', () => {
     expect(at(10).clinched).not.toBe('e');
     expect(at(13).clinched).toBe('e');
   });
+
+  it('marks every seed once the regular season is over, ties at the cuts included', () => {
+    const l = league();
+    const east = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    // 6th and 7th finish level, as do 10th and 11th: the tiebreakers decide, nothing is left to clinch
+    const wins = [60, 55, 50, 48, 46, 44, 44, 42, 40, 38, 38, 30, 25, 20, 15];
+    east.forEach((tid, i) => {
+      const ts = curTeamSeason(l, tid);
+      [ts.won, ts.lost] = [wins[i], 82 - wins[i]];
+    });
+    l.schedule = l.schedule.map((g) => ({ ...g, played: true }));
+    const st = standings(l).filter((r) => r.conf === 'E');
+    expect(st.map((r) => r.clinched)).toEqual([...'xxxxxxppppeeeee']);
+    // before opening night nobody is marked
+    l.schedule = l.schedule.map((g) => ({ ...g, played: false }));
+    for (const t of l.teams) [curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [0, 0];
+    expect(standings(l).some((r) => r.clinched)).toBe(false);
+  });
 });
 
 describe('standings tiebreaks (bug 14)', () => {

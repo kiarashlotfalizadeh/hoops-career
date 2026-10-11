@@ -81,13 +81,17 @@ export default function Start() {
                   <TeamLogo tid={tid >= 0 ? tid : 0} size={38} />
                   <div className="grow">
                     <div className="bold ellipsis">{m.name}</div>
+                    {/* two lines, so the record isn't the part a phone cuts off */}
                     <div className="small dim ellipsis">
-                      {m.teamName} · {seasonLabel(m.season)} · {PHASE_LABEL[m.phase]} · {m.record}
+                      {m.teamName} · {m.record}
+                    </div>
+                    <div className="small dim ellipsis">
+                      {seasonLabel(m.season)} · {PHASE_LABEL[m.phase]}
                     </div>
                   </div>
                   <button
                     className="iconbtn"
-                    aria-label="Delete league"
+                    aria-label={`Delete ${m.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setConfirm(m);

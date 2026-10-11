@@ -222,10 +222,13 @@ export function standings(league: League, season = league.season): StandingRow[]
     }
   }
   const maxWins = (r: StandingRow) => r.won + (left.get(r.tid) ?? 0);
+  // with every game played the tiebreakers have settled the seeds, ties at a cut included
+  const final = out.some((r) => r.won + r.lost > 0) && (season !== league.season || !league.schedule.some((g) => g.type === 'regular' && !g.played));
   for (const conf of ['E', 'W'] as const) {
     const cr = out.filter((r) => r.conf === conf);
     for (const r of cr) {
-      if (r.confRank <= 6 && cr.slice(6).every((o) => maxWins(o) < r.won)) r.clinched = 'x';
+      if (final) r.clinched = r.confRank <= 6 ? 'x' : r.confRank <= 10 ? 'p' : 'e';
+      else if (r.confRank <= 6 && cr.slice(6).every((o) => maxWins(o) < r.won)) r.clinched = 'x';
       else if (r.confRank <= 10 && cr.slice(10).every((o) => maxWins(o) < r.won)) r.clinched = 'p';
       else if (cr.filter((o) => o.tid !== r.tid && o.won > maxWins(r)).length >= 10) r.clinched = 'e';
     }

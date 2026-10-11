@@ -29,7 +29,8 @@ function candidates(league: League, season = league.season): Cand[] {
   return out;
 }
 
-function gamesThreshold(league: League) {
+/** Games a player needs for the MVP, DPOY and other votes: 65 of 82, pro-rated to the busiest team's games so far. */
+export function gamesThreshold(league: League) {
   const played = Math.max(...league.teams.map((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost));
   return Math.round(played * (65 / 82));
 }
