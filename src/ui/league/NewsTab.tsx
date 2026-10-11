@@ -50,17 +50,17 @@ export function NewsTab({ league }: { league: League }) {
   return (
     <>
       <div className="lg-hscroll">
-        <button className={`chip ${mine === '1' ? 'on' : ''}`} onClick={() => setMine(mine === '1' ? '0' : '1')}>
+        <button className={`chip ${mine === '1' ? 'on' : ''}`} aria-pressed={mine === '1'} onClick={() => setMine(mine === '1' ? '0' : '1')}>
           <TeamLogo tid={league.userTid} size={16} /> My team
         </button>
         <span className="lg-vsep" />
-        <button className={`chip ${kind === 'all' ? 'on' : ''}`} onClick={() => setKind('all')}>
+        <button className={`chip ${kind === 'all' ? 'on' : ''}`} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
           All
         </button>
         {ORDER.filter((k) => counts[k]).map((k) => {
           const M = NEWS_KIND[k];
           return (
-            <button key={k} className={`chip ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
+            <button key={k} className={`chip ${kind === k ? 'on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>
               <M.icon size={14} style={{ color: M.color }} />
               {M.label}
             </button>
