@@ -592,6 +592,22 @@ h3 {
 .seg button:disabled {
   opacity: 0.5;
 }
+/* compact 32-34px controls keep their look but take taps on the bar and gaps around them (about 40px) */
+.btn.sm,
+.seg button,
+.chip {
+  position: relative;
+}
+.btn.sm::after,
+.seg button::after,
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: -3px -1px;
+}
+.chip::after {
+  inset: -3px;
+}
 .tag {
   display: inline-flex;
   align-items: center;

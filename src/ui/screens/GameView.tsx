@@ -422,7 +422,8 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
             {rows.map((p) => (
               <tr key={p.pid}>
                 <td className="l sticky">
-                  <Link to={`/player/${p.pid}`}>
+                  {/* the whole name cell is the link, not just the 16px of text */}
+                  <Link to={`/player/${p.pid}`} style={{ display: 'block', margin: -8, padding: 8 }}>
                     <span className={p.gs ? 'bold' : ''}>{name(p.pid)}</span>
                     {p.pid === pog && (
                       <span className="tag warn" style={{ marginLeft: 4, height: 16 }}>

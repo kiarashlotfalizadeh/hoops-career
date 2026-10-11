@@ -555,6 +555,7 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
       <Segmented
         value={po ? 'po' : 'rs'}
         onChange={(v) => setPo(v === 'po')}
+        label="Season type"
         options={[
           { id: 'rs', label: 'Regular season' },
           { id: 'po', label: 'Playoffs' },

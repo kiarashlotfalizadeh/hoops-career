@@ -117,6 +117,7 @@ export default function Roster() {
       <Segmented
         value={view}
         onChange={setView}
+        label="Roster view"
         options={[
           { id: 'players', label: 'Players' },
           { id: 'ratings', label: 'Ratings' },

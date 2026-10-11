@@ -210,6 +210,7 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ['--fill' as string]: `${fill}%` }}
         aria-label={typeof label === 'string' ? label : undefined}
+        aria-valuetext={format ? format(value) : undefined}
       />
       {(left || right) && (
         <div className="slider-ends">

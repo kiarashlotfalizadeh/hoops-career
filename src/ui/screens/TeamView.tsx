@@ -200,6 +200,7 @@ function RosterTab({ league, tid }: { league: League; tid: number }) {
       <Segmented
         value={view}
         onChange={setView}
+        label="Roster view"
         options={[
           { id: 'list', label: 'Rotation' },
           { id: 'stats', label: 'Stats' },
