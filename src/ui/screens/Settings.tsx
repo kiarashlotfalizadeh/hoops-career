@@ -12,7 +12,6 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
 import { STRATEGY_META, SecTitle, fmtM } from '../office/common';
 
-const APP_VERSION = '1.0.0';
 
 const DIFFICULTY: Record<LeagueSettings['difficulty'], string> = {
   casual: 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.',
@@ -228,7 +227,7 @@ export default function Settings() {
             <span className="fo-mid" style={{ color: 'var(--text)' }}>
               Hoops Career
             </span>
-            <span className="tag">v{APP_VERSION}</span>
+            <span className="tag">v{__APP_VERSION__} · {__APP_BUILD__}</span>
           </div>
           <div className="row top" style={{ gap: 10 }}>
             <Database size={18} className="dim" style={{ flex: 'none', marginTop: 1 }} />

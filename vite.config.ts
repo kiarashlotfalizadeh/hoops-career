@@ -2,12 +2,24 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+import pkg from './package.json' with { type: 'json' };
+
+// version + commit shown in Settings → About, so bug reports name the exact build
+const commit = (() => {
+  try {
+    return (process.env.GITHUB_SHA ?? execSync('git rev-parse HEAD').toString()).trim().slice(0, 7);
+  } catch {
+    return 'dev';
+  }
+})();
 
 // BASE_PATH lets GitHub Pages serve the app from /<repo>/ while Capacitor and local dev use '/'.
 const base = process.env.BASE_PATH ?? '/';
 
 export default defineConfig({
   base,
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __APP_BUILD__: JSON.stringify(commit) },
   plugins: [
     react(),
     VitePWA({
