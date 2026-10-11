@@ -15,6 +15,7 @@ import { champion, playInDone, processPlayInResult, processPlayoffResult, schedu
 import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
+import { injuryText } from '../league/injuries';
 import { generateDraftClass, lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -690,6 +691,14 @@ describe('morale and wear (L17)', () => {
     const after = buildSimInput(l, U, 0, 'regular').perf!;
     expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
     expect(after[star.pid]).toBeCloseTo(before[star.pid]);
+  });
+
+  it('injury names read as English in messages', () => {
+    expect(injuryText('Torn ACL', true)).toBe('a torn ACL');
+    expect(injuryText('MCL Sprain', true)).toBe('an MCL sprain');
+    expect(injuryText('Back Spasms', true)).toBe('back spasms');
+    expect(injuryText('Plantar Fasciitis', true)).toBe('plantar fasciitis');
+    expect(injuryText('Ruptured Achilles')).toBe('ruptured Achilles');
   });
 
   it('worn-down players carry extra injury risk', () => {

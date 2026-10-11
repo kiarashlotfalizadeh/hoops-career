@@ -47,6 +47,20 @@ export function rollInjury(league: League, p: Player, rng: Rng): Injury {
   return { type: t.name, gamesRemaining: games, gamesTotal: games, severity: t.severity };
 }
 
+/**
+ * An injury name for running text: "Torn ACL" -> "torn ACL", "Ruptured Achilles" keeps its capital.
+ * With `article`, countable injuries get one ("a torn ACL", "an MCL sprain"), while plurals and
+ * conditions don't ("back spasms", "knee soreness", "plantar fasciitis").
+ */
+export function injuryText(type: string, article = false): string {
+  const words = type.split(' ').map((w) => (w === 'Achilles' || (w.length > 1 && w === w.toUpperCase()) ? w : w.toLowerCase()));
+  const text = words.join(' ');
+  const last = words[words.length - 1];
+  if (!article || /(ness|itis)$/.test(last) || (/s$/.test(last) && !/(ss|us|is|les)$/.test(last))) return text;
+  const an = /^[AEFHILMNORSX][A-Z]/.test(words[0]) || /^[aeiou]/.test(words[0]);
+  return `${an ? 'an' : 'a'} ${text}`;
+}
+
 export function applyInjury(league: League, p: Player, rng: Rng) {
   const inj = rollInjury(league, p, rng);
   p.injury = inj;
@@ -70,7 +84,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
       important: inj.gamesRemaining >= 15 && core.includes(p.pid),
       from: 'Medical Staff',
       subject: `${playerName(p)}: ${inj.type}`,
-      body: `${playerName(p)} suffered a ${inj.type.toLowerCase()} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${inj.severity === 'severe' ? ' This is a long-term injury and may permanently sap some of his explosiveness.' : ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
+      body: `${playerName(p)} is out with ${injuryText(inj.type, true)} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${inj.severity === 'severe' ? ' This is a long-term injury and may permanently sap some of his explosiveness.' : ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });
@@ -90,7 +104,7 @@ export function healOneGame(league: League, p: Player, rng: Rng) {
       addInbox(league, {
         from: 'Medical Staff',
         subject: `${playerName(p)} is cleared`,
-        body: `${playerName(p)} has recovered from his ${p.injury.type.toLowerCase()} and is available.`,
+        body: `${playerName(p)} has recovered from his ${injuryText(p.injury.type)} and is available.`,
         tone: 'good',
         link: `/player/${p.pid}`,
       });
