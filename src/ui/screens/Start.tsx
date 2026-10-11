@@ -17,10 +17,13 @@ export default function Start() {
   const [error, setError] = useState<string | null>(null);
   const refresh = () =>
     listLeagues()
-      .then(setLeagues)
+      .then((all) => {
+        setLeagues(all);
+        setError(null);
+      })
       .catch((e) => {
         console.error(e);
-        setError('Saved leagues could not be read from device storage (private browsing or storage blocked).');
+        setError('Saved leagues could not be read from device storage (private browsing, or site data blocked in the browser settings).');
         setLeagues([]);
       });
   useEffect(() => {
@@ -29,13 +32,23 @@ export default function Start() {
   const open = async (id: string) => {
     try {
       const l = await loadLeague(id);
-      if (!l) throw new Error('missing');
+      if (!l) throw new Error('That save is no longer on this device.');
       setLeague(l);
       nav('/');
     } catch (e) {
       console.error(e);
-      useStore.getState().toast('That save could not be opened. It may be damaged; you can delete it.', 'bad');
+      useStore.getState().toast(`That save could not be opened. ${e instanceof Error ? e.message : ''}`, 'bad');
     }
+  };
+  const remove = async (m: LeagueMeta) => {
+    setConfirm(null);
+    try {
+      await deleteLeague(m.id);
+    } catch (e) {
+      console.error(e);
+      useStore.getState().toast(`"${m.name}" could not be deleted.`, 'bad');
+    }
+    void refresh();
   };
   return (
     <main className="page standalone" style={{ paddingBottom: 40 }}>
@@ -94,14 +107,7 @@ export default function Start() {
           <button className="btn grow" onClick={() => setConfirm(null)}>
             Cancel
           </button>
-          <button
-            className="btn danger grow"
-            onClick={async () => {
-              if (confirm) await deleteLeague(confirm.id);
-              setConfirm(null);
-              void refresh();
-            }}
-          >
+          <button className="btn danger grow" onClick={() => confirm && void remove(confirm)}>
             Delete
           </button>
         </div>

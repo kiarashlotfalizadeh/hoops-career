@@ -94,7 +94,13 @@ Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir>` screenshots every 
 
 - **PWA**: deploy `dist/` to any static host and use "Add to Home Screen". It works offline after the first load, and saves stay on the device (IndexedDB, with persistent storage requested). A new version downloads in the background and applies on the next launch, never mid-game.
 - **Backups**: Settings → Export backup saves the league as a JSON file (the share sheet in the app, a download on the web). Import it from Settings or the start screen on any device.
-- **Android**: the *Android APK* workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`. The native shell adds the hardware Back button (closes sheets first), haptics, edge-to-edge insets and no service worker (the files ship in the APK).
+- **Android**: the *Android APK* workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`. The native shell adds the hardware Back button (closes sheets first, saves before leaving), haptics, edge-to-edge insets and no service worker (the files ship in the APK).
+- **Android signing**: Android only installs an update signed with the same key as the installed app. Without signing secrets, each workflow run signs with a throwaway debug key, so a new build only installs after uninstalling the old one, which deletes its saves (export a backup first). To sign every build with one key, create a keystore once and keep it safe (a lost key means users must reinstall):
+  ```bash
+  keytool -genkeypair -v -keystore release.keystore -alias hoops -keyalg RSA -keysize 2048 -validity 10000
+  base64 -w0 release.keystore   # paste the output into ANDROID_KEYSTORE_BASE64
+  ```
+  Then add four repository secrets (Settings → Secrets and variables → Actions): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`hoops` above) and `ANDROID_KEY_PASSWORD`. Debug APKs are then signed with that key, and `v*` tags also get a signed release APK (`app-release.apk`) on the release. The version code is the workflow's run number, so each build counts as newer than the last.
 - **iOS**: `npm run cap:sync && npx cap open ios` on a Mac with Xcode.
 - **GitHub Pages**: run the *Deploy PWA to Pages* workflow manually after setting Settings → Pages → Source to "GitHub Actions". Pages on a private repo needs a paid GitHub plan.
 

@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+// CI signs every APK with one fixed key from repository secrets, so a new build installs over the
+// old one (and keeps its saves). Without ANDROID_KEYSTORE_FILE, Gradle's own debug key is used.
+def keystoreFile = System.getenv('ANDROID_KEYSTORE_FILE')
+
 android {
     namespace "com.hoopscareer.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,7 +11,8 @@ android {
         applicationId "com.hoopscareer.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // Android only installs an update with a higher versionCode: CI passes its run number
+        versionCode = (project.findProperty('versionCode') ?: 1) as Integer
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -16,10 +21,24 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (keystoreFile) {
+            fixed {
+                storeFile file(keystoreFile)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (keystoreFile) signingConfig signingConfigs.fixed
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystoreFile) signingConfig signingConfigs.fixed
         }
     }
 }

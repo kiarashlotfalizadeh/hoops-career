@@ -16,7 +16,8 @@ async function main() {
     let ok = false;
     for (let attempt = 0; attempt < 4 && !ok; attempt++) {
       try {
-        const res = await fetch(f.url);
+        // archives run to tens of MB: generous, but a stalled download still fails and retries
+        const res = await fetch(f.url, { signal: AbortSignal.timeout(5 * 60_000) });
         if (res.ok) {
           const buf = Buffer.from(await res.arrayBuffer());
           writeFileSync(file, buf);

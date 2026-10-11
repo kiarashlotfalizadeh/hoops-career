@@ -40,9 +40,9 @@ export default defineConfig({
         scope: '.',
         categories: ['games', 'sports'],
         shortcuts: [
-          { name: 'Tactics', url: './#/tactics' },
-          { name: 'League', url: './#/league' },
-          { name: 'Front Office', url: './#/office' },
+          { name: 'Tactics', url: './#/tactics', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'League', url: './#/league', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'Front Office', url: './#/office', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
         ],
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },

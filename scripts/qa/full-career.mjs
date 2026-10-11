@@ -41,22 +41,21 @@ log(`created → ${await phase()}`);
 
 await play('Start regular season');
 // one live game, coached to the end
-if (await play('Sim to next game') || true) {
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await page.waitForTimeout(300);
-  const live = page.locator('.sheet').getByRole('button', { name: /^Watch & coach live/ }).first();
-  if (await live.count()) {
-    await live.click();
-    await page.waitForTimeout(5000);
-    await shot('01-live', false);
-    await page.getByRole('button', { name: 'End' }).click();
-    await page.waitForTimeout(2500);
-    await shot('02-live-final', false);
-    const rep = page.getByRole('button', { name: /Game report/ });
-    if (await rep.count()) { await rep.click(); await page.waitForTimeout(800); await shot('03-report'); }
-    log('live game finished');
-  } else await page.keyboard.press('Escape');
-}
+await play('Sim to next game');
+await page.getByRole('button', { name: 'Play', exact: true }).click();
+await page.waitForTimeout(300);
+const live = page.locator('.sheet').getByRole('button', { name: /^Watch & coach live/ }).first();
+if (await live.count()) {
+  await live.click();
+  await page.waitForTimeout(5000);
+  await shot('01-live', false);
+  await page.getByRole('button', { name: 'End' }).click();
+  await page.waitForTimeout(2500);
+  await shot('02-live-final', false);
+  const rep = page.getByRole('button', { name: /Game report/ });
+  if (await rep.count()) { await rep.click(); await page.waitForTimeout(800); await shot('03-report'); }
+  log('live game finished');
+} else await page.keyboard.press('Escape');
 await page.goto(`${base}/#/`);
 await play('Sim to trade deadline');
 await page.goto(`${base}/#/trade`); await page.waitForTimeout(800); await shot('04-trade');

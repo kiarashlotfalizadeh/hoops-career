@@ -1,0 +1,23 @@
+// Lint for bugs, not style (Prettier formats): TypeScript's recommended rules plus React's hook rules.
+import js from '@eslint/js';
+import { defineConfig, globalIgnores } from 'eslint/config';
+import reactHooks from 'eslint-plugin-react-hooks';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+export default defineConfig([
+  globalIgnores(['dist', 'dev-dist', 'android', 'ios', 'data', 'coverage']),
+  {
+    files: ['**/*.{ts,tsx,js,mjs}'],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      // screens list the league version `v` as a dependency on purpose: the league mutates in place
+      'react-hooks/exhaustive-deps': 'warn',
+      // flags `let x = fallback` ahead of branches that may overwrite it, a deliberate pattern here
+      'no-useless-assignment': 'off',
+    },
+  },
+]);

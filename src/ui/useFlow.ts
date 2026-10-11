@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../state/store';
 import type { FlowAction } from './flow';
 import type { League } from '../core/types';
@@ -7,6 +7,7 @@ import { seasonLabel } from '../core/constants';
 
 export function useFlowRunner() {
   const nav = useNavigate();
+  const { pathname } = useLocation();
   return async (a: FlowAction) => {
     const st = useStore.getState();
     if (a.to) {
@@ -31,11 +32,13 @@ export function useFlowRunner() {
         nav('/live');
         return;
       case 'quickGame': {
+        // also finishes a live game in progress (simulate picks it up from its current score)
         const before = st.league!.games.length;
         await st.simulate({ kind: 'days', n: 1 });
-        const l = useStore.getState().league!;
-        const mine = l.games.slice(before).find((g) => g.home.tid === l.userTid || g.away.tid === l.userTid);
-        if (mine) nav(`/game/${mine.gid}`);
+        const l = useStore.getState().league;
+        const mine = l?.games.slice(before).find((g) => g.home.tid === l.userTid || g.away.tid === l.userTid);
+        // from the Live screen, the box score replaces it: Back shouldn't land on a finished game
+        if (mine) nav(`/game/${mine.gid}`, { replace: pathname === '/live' });
         return;
       }
       case 'startRegular': {
@@ -46,16 +49,13 @@ export function useFlowRunner() {
         return;
       }
       case 'startDraft':
-        await task('Draft night', startDraft);
-        nav('/draft');
+        if (await task('Draft night', startDraft)) nav('/draft');
         return;
       case 'finishDraft':
-        await task('Finishing the draft', finishDraftPhase);
-        nav('/resign');
+        if (await task('Finishing the draft', finishDraftPhase)) nav('/resign');
         return;
       case 'startFA':
-        await task('Opening free agency', startFreeAgency);
-        nav('/free-agents');
+        if (await task('Opening free agency', startFreeAgency)) nav('/free-agents');
         return;
       case 'faDay':
         await task('Free agency', (l) => faAdvance(l, 1));
@@ -64,7 +64,7 @@ export function useFlowRunner() {
         await task('Free agency', (l) => faAdvance(l, 7));
         return;
       case 'newSeason':
-        await task('Training camp', newSeason);
+        if (!(await task('Training camp', newSeason))) return;
         if (done) st.toast(`Welcome to the ${seasonLabel(useStore.getState().league!.season)} season. Check the training camp report in your inbox.`, 'good');
         nav('/');
         return;
