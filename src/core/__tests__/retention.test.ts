@@ -100,6 +100,24 @@ describe('retired players (L4)', () => {
   });
 });
 
+describe('ratings history', () => {
+  it('keeps OVR for every season but full ratings only on the latest two snapshots', () => {
+    const l = league();
+    for (let i = 0; i < 2; i++) {
+      l.phase = 'freeAgency';
+      expect(newSeason(l)).toBe(true);
+    }
+    const hist = Object.values(l.players).filter((p) => p.tid >= 0 && p.ratingsHistory.length >= 3);
+    expect(hist.length).toBeGreaterThan(100);
+    for (const p of hist) {
+      const h = p.ratingsHistory;
+      expect(h.map((x) => x.ovr).every(Number.isFinite)).toBe(true);
+      expect(h.slice(0, -2).every((x) => x.r === undefined)).toBe(true);
+      expect(h.slice(-2).every((x) => x.r !== undefined)).toBe(true);
+    }
+  });
+});
+
 describe.runIf(real)('Hall of Fame (L6)', () => {
   const l = league();
   const named = (first: string, last: string) => Object.values(l.players).find((p) => p.firstName === first && p.lastName === last)!;
