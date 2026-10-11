@@ -4,8 +4,7 @@ import { Rng, clamp } from '../random';
 import { generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { composites, ratingToHeight, shiftToOvr } from '../ratings';
 import { addInbox, addNews, curTeamSeason, playerName, prospects, teamPlayers, winPct } from './helpers';
-import { rookieContract } from './contracts';
-import { valueScore } from './contracts';
+import { askingContract, rookieContract, valueScore } from './contracts';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
 
@@ -126,7 +125,8 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   }
   const lotteryOrder = [...winners, ...remaining];
   const firstRound = [...lotteryOrder.map((x) => x.tid), ...playoff.map((r) => r.tid)];
-  const secondRound = [...lottery, ...playoff].map((r) => r.tid);
+  // the second round has no lottery: straight reverse order of record across the whole league
+  const secondRound = [...recs].sort(byWorst).map((r) => r.tid);
   const assign = (round: 1 | 2, order: number[]) => {
     order.forEach((origTid, i) => {
       const dp = league.draftPicks.find((d) => d.season === season && d.round === round && d.originalTid === origTid);
@@ -225,6 +225,8 @@ export function finishDraft(league: League) {
       p.tid = FREE_AGENT;
       p.draft = { year: league.season, round: 0, pick: 0, tid: null };
       p.contract = { start: league.season + 1, salaries: [0] };
+      p.asking = askingContract(league, p);
+      p.faDays = 30;
     } else {
       p.tid = RETIRED;
       p.retiredSeason = league.season;

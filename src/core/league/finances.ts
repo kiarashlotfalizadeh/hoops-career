@@ -1,7 +1,7 @@
 import type { League, Team } from '../types';
 import { clamp } from '../random';
 import { salaryFor } from '../playerGen';
-import { CAP_FOR, curTeamSeason, teamPlayers, winPct } from './helpers';
+import { CAP_FOR, curTeamSeason, payroll, teamPlayers, winPct } from './helpers';
 
 export const ARENA_CAPACITY = 18_800;
 /** Arena, travel, front office and other fixed operating costs ($K per season). */
@@ -25,7 +25,11 @@ export function attendanceFor(league: League, team: Team, playoffs = false): num
   return Math.round(clamp(ARENA_CAPACITY * demand, 1_500, ARENA_CAPACITY));
 }
 
-/** Revenue & expenses for one game (applied to both teams; home gets gate). */
+/**
+ * Revenue & expenses for one game (applied to both teams; home gets gate). `playoffs` covers the
+ * whole postseason, play-in included: gate only, no salary or national-revenue share (those are
+ * spread over the 82 regular-season games).
+ */
 export function gameFinances(league: League, team: Team, home: boolean, playoffs: boolean) {
   const ts = curTeamSeason(league, team.tid);
   let revenue = 0;
@@ -64,7 +68,8 @@ export function assessLuxuryTax(league: League): { tid: number; tax: number }[] 
   const cap = CAP_FOR(league);
   const bills: { tid: number; tax: number }[] = [];
   for (const t of league.teams) {
-    const pay = teamPlayers(league, t.tid).reduce((a, p) => a + salaryFor(p, league.season), 0) + t.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
+    // cap payroll: two-way pay doesn't count toward the tax
+    const pay = payroll(league, t.tid);
     const ts = curTeamSeason(league, t.tid);
     ts.payroll = pay;
     if (pay > cap.luxuryTax) {

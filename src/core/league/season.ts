@@ -8,7 +8,7 @@ import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
 import { playerAge } from '../playerGen';
-import { CAP_FOR, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, teamName, teamPlayers, teamSeason, winPct, withRng } from './helpers';
+import { CAP_FOR, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { assessLuxuryTax, profit } from './finances';
@@ -18,7 +18,8 @@ import { computeRegularSeasonAwards, finalsMvp, selectAllStars } from './awards'
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { askingContract, releasePlayer, valueScore } from './contracts';
+import { askingContract, releasePlayer, resolveOptions, valueScore } from './contracts';
+import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
 
@@ -35,10 +36,14 @@ export function regularGamesLeft(league: League) {
 }
 
 export function canStartRegularSeason(league: League): string[] {
+  if (league.phase !== 'preseason') return ['The regular season starts from the preseason.'];
   const errs: string[] = [];
-  const n = teamPlayers(league, league.userTid).length;
+  // two-way players don't take one of the 15 spots or count toward the 13-man minimum
+  const n = standardRoster(league, league.userTid).length;
   if (n > CAP.rosterMax) errs.push(`Your roster has ${n} players. Release or trade down to ${CAP.rosterMax}.`);
   if (n < CAP.rosterMin) errs.push(`Your roster has ${n} players. Sign at least ${CAP.rosterMin - n} more (minimum ${CAP.rosterMin}).`);
+  const tw = twoWayRoster(league, league.userTid).length;
+  if (tw > TWO_WAY_MAX) errs.push(`You have ${tw} two-way players (max ${TWO_WAY_MAX}). Release or convert ${tw - TWO_WAY_MAX}.`);
   return errs;
 }
 
@@ -155,6 +160,20 @@ export function simDay(league: League, opts: { skipGid?: number; record?: boolea
   return report;
 }
 
+/**
+ * Injuries heal one game per team game; players with no games to miss (free agents, and teams
+ * idle in the postseason) recover by the calendar instead, about a game every other day.
+ */
+function healIdle(league: League, rng: Rng) {
+  if (league.day % 2 !== 0) return;
+  const playing = new Set<number>();
+  for (const g of league.schedule) if (g.day === league.day) playing.add(g.home).add(g.away);
+  for (const p of Object.values(league.players)) {
+    if (!p.injury) continue;
+    if (p.tid === FREE_AGENT || (p.tid >= 0 && league.phase !== 'regular' && !playing.has(p.tid))) healOneGame(league, p, rng);
+  }
+}
+
 /** Called after any game result (including live games) is committed. */
 export function postGame(league: League, g: ScheduledGame, homeWon: boolean) {
   if (g.type === 'playin') processPlayInResult(league, g, homeWon);
@@ -170,6 +189,7 @@ export function advanceDay(league: League, report?: DayReport) {
         playAllStarGame(league, rng);
       }
     }
+    healIdle(league, rng);
   });
   league.day++;
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) {
@@ -253,12 +273,18 @@ function endPlayoffs(league: League) {
 
 // ---------------------------------------------------------------- draft & offseason
 
-export function startDraft(league: League) {
+// Phase transitions no-op (returning false) outside their phase, so a double tap or a stale
+// dispatch can't skip a draft, a free agency or a whole season.
+
+export function startDraft(league: League): boolean {
+  if (league.phase !== 'draftLottery') return false;
   league.phase = 'draft';
   withRng(league, (rng) => draftUntilUser(league, rng));
+  return true;
 }
 
 export function userDraftPick(league: League, pid: number): string | null {
+  if (league.phase !== 'draft') return 'The draft is not on.';
   const dp = nextPick(league);
   if (!dp || dp.tid !== league.userTid) return 'It is not your pick.';
   draftPlayer(league, dp, pid);
@@ -268,6 +294,7 @@ export function userDraftPick(league: League, pid: number): string | null {
 
 /** Let the staff make the user's current pick, then run AI picks until the user's next turn. */
 export function autoDraftUserPick(league: League) {
+  if (league.phase !== 'draft') return;
   withRng(league, (rng) => {
     const dp = nextPick(league);
     if (!dp || dp.tid !== league.userTid) return;
@@ -277,9 +304,14 @@ export function autoDraftUserPick(league: League) {
   });
 }
 
-export function finishDraftPhase(league: League) {
-  withRng(league, (rng) => draftUntilUser(league, rng, true));
-  finishDraft(league);
+export function finishDraftPhase(league: League): boolean {
+  if (league.phase !== 'draft') return false;
+  withRng(league, (rng) => {
+    draftUntilUser(league, rng, true);
+    finishDraft(league);
+    // option years are settled before re-signing: opt-outs and declines join the expiring list
+    resolveOptions(league, rng);
+  });
   league.phase = 'resign';
   const exp = expiringPlayers(league, league.userTid);
   for (const p of exp) {
@@ -294,10 +326,14 @@ export function finishDraftPhase(league: League) {
     tone: 'neutral',
     link: '/resign',
   });
+  return true;
 }
 
-export function startFreeAgency(league: League) {
+export function startFreeAgency(league: League): boolean {
+  if (league.phase !== 'resign') return false;
   withRng(league, (rng) => {
+    // team options the user left open get the staff's default
+    resolveOptions(league, rng, true);
     aiResign(league, rng);
     releaseExpiring(league);
     league.phase = 'freeAgency';
@@ -313,9 +349,11 @@ export function startFreeAgency(league: League) {
     tone: 'neutral',
     link: '/free-agents',
   });
+  return true;
 }
 
 export function faAdvance(league: League, days = 1) {
+  if (league.phase !== 'freeAgency') return;
   withRng(league, (rng) => {
     for (let i = 0; i < days; i++) {
       faDay(league, rng);
@@ -324,7 +362,8 @@ export function faAdvance(league: League, days = 1) {
   });
 }
 
-export function newSeason(league: League) {
+export function newSeason(league: League): boolean {
+  if (league.phase !== 'freeAgency') return false;
   // finish free agency quickly
   if (league.faDay < 30) faAdvance(league, 30 - league.faDay);
   const prevSeason = league.season;
@@ -343,9 +382,10 @@ export function newSeason(league: League) {
     t.deadMoney = t.deadMoney.filter((d) => d.season >= league.season);
   }
   withRng(league, (rng) => {
-    // players age a year: development & experience
+    // players age a year: development & experience (a season counts if he played in it, wherever
+    // he is now; this summer's draftees start at 0)
     for (const p of Object.values(league.players)) {
-      if (p.tid >= 0) p.experience++;
+      if (p.stats.some((s) => s.season === prevSeason && !s.playoffs && !s.real && s.gp > 0)) p.experience++;
       p.wear = 0;
       p.restedGames = 0;
       if (p.injury) {
@@ -384,7 +424,36 @@ export function newSeason(league: League) {
   }
   // remaining unsigned prospects from older classes are cleaned up
   for (const p of prospects(league)) if (p.draft.year < league.season) delete league.players[p.pid];
+  compactRetired(league);
   for (const p of Object.values(league.players)) refreshDerived(league, p);
+  return true;
+}
+
+/**
+ * Retirees stay for history and the Hall of Fame, but after two seasons only as career records:
+ * those who never played a game go, the rest lose sim-only detail (ratings snapshots beyond peak
+ * and final, tendencies, scouting). Without this the save grows by every retiree's full record.
+ */
+function compactRetired(league: League) {
+  for (const p of Object.values(league.players)) {
+    if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
+    if (!p.awards.length && !p.stats.some((s) => s.gp > 0)) {
+      delete league.players[p.pid];
+      continue;
+    }
+    const hist = p.ratingsHistory;
+    if (hist.length > 2) {
+      const peak = hist.reduce((a, h) => (h.ovr > a.ovr ? h : a));
+      const last = hist[hist.length - 1];
+      p.ratingsHistory = peak === last ? [last] : [peak, last];
+    }
+    delete p.tend;
+    delete p.prospect;
+    delete p.asking;
+    delete p.faDays;
+    p.injury = null;
+    p.mood.notes = [];
+  }
 }
 
 export function seasonSummary(league: League, tid: number) {

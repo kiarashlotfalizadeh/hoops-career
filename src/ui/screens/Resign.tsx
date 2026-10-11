@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CalendarClock, CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, payroll, playerName, teamPlayers } from '../../core/league/helpers';
-import { askingContract } from '../../core/league/contracts';
+import { CAP_FOR, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
+import { askingContract, decideTeamOption, pendingTeamOptions, teamOptionWorth } from '../../core/league/contracts';
 import { expiringPlayers } from '../../core/league/freeAgency';
 import { startFreeAgency } from '../../core/league/season';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
@@ -65,10 +65,22 @@ function ResignPhase() {
   const resigned = teamPlayers(league, tid)
     .filter((p) => p.contract.start === next && !p.contract.rookie)
     .sort((a, b) => b.ovr - a.ovr);
-  const rosterNext = teamPlayers(league, tid).length - expiring.length;
+  const options = useMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, v, tid]);
+  // standard roster spots only: two-way deals sit outside the 15
+  const rosterNext = standardRoster(league, tid).length - expiring.filter((p) => !p.contract.twoWay).length;
 
-  const openFA = () => {
-    useStore.getState().mutate((l) => startFreeAgency(l));
+  const decide = (p: Player, exercise: boolean) => {
+    let res = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      res = decideTeamOption(l, p.pid, exercise);
+    });
+    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
+  };
+
+  const busy = useStore((s) => !!s.sim);
+  const openFA = async () => {
+    // runs behind the progress bar; a second tap (or a stale screen) is a no-op
+    if (!(await useStore.getState().task('Opening free agency', (l) => void startFreeAgency(l)))) return;
     useStore.getState().toast('Free agency is open!', 'good');
     nav('/free-agents');
   };
@@ -91,6 +103,9 @@ function ResignPhase() {
               <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
             </p>
             <p style={{ margin: 0 }}>Anyone you don't re-sign becomes an unrestricted free agent when free agency opens. Other teams may sign him.</p>
+            <p style={{ margin: 0 }}>
+              <b>Options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including rookie-scale fourth years) are your call: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided options get the staff's call when free agency opens.
+            </p>
           </Help>
         }
       />
@@ -125,6 +140,48 @@ function ResignPhase() {
           Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Cap space left after re-signing is what you can use in free agency.
         </div>
       </Card>
+
+      {options.length > 0 && (
+        <>
+          <SecTitle>Team options · {options.length}</SecTitle>
+          {options.map((p) => {
+            const sal = salaryFor(p, next);
+            const worth = teamOptionWorth(league, p);
+            return (
+              <Card key={p.pid} className="tight">
+                <div className="row" style={{ gap: 10 }}>
+                  <Avatar p={p} />
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <Link to={`/player/${p.pid}`} className="fo-name" style={{ display: 'block' }}>
+                      {playerName(p)}
+                    </Link>
+                    <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+                  </div>
+                  <OvrPot p={p} />
+                </div>
+                <div className="row" style={{ marginTop: 10, gap: 10 }}>
+                  <div className="grow">
+                    <div className="tiny dim upper bold">{seasonLabel(next)} option{p.contract.rookie ? ' · rookie scale' : ''}</div>
+                    <div className="small">
+                      <b className="num" style={{ fontSize: 16 }}>
+                        {fmtM(sal)}
+                      </b>
+                      <span className={worth ? 'good' : 'warn'}> · staff: {worth ? 'exercise' : 'decline'}</span>
+                    </div>
+                  </div>
+                  <button className="btn sm" onClick={() => decide(p, false)}>
+                    Decline
+                  </button>
+                  <button className="btn sm primary" onClick={() => decide(p, true)}>
+                    Exercise
+                  </button>
+                </div>
+              </Card>
+            );
+          })}
+          <div className="tiny dim">Declined players join the expiring list below with Bird rights. Options left open get the staff's call when free agency opens.</div>
+        </>
+      )}
 
       <SecTitle>
         Expiring contracts · {expiring.length}
@@ -209,7 +266,7 @@ function ResignPhase() {
       )}
 
       <div className="fo-dock">
-        <button className="btn primary block big" onClick={() => (expiring.length ? setConfirm(true) : openFA())}>
+        <button className="btn primary block big" disabled={busy} onClick={() => (expiring.length || options.length ? setConfirm(true) : void openFA())}>
           <DoorOpen size={20} /> Done — open free agency
         </button>
       </div>
@@ -218,23 +275,32 @@ function ResignPhase() {
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} title="Open free agency?">
         <div className="col" style={{ gap: 12 }}>
-          <div className="dim2">
-            {expiring.length} player{expiring.length > 1 ? 's' : ''} will become free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have to compete like everyone else, using cap space.
-          </div>
-          <div className="card tight col" style={{ gap: 6 }}>
-            {expiring.map((p) => (
-              <div key={p.pid} className="row small" style={{ gap: 8 }}>
-                <OvrPot p={p} showPot={false} />
-                <span className="grow ellipsis bold">{playerName(p)}</span>
-                <span className="dim num">{fmtM(asks.get(p.pid)!.amount)}</span>
-              </div>
-            ))}
-          </div>
+          {expiring.length > 0 && (
+            <div className="dim2">
+              {expiring.length} player{expiring.length > 1 ? 's' : ''} will become free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have to compete like everyone else, using cap space.
+            </div>
+          )}
+          {options.length > 0 && (
+            <div className="dim2">
+              Open team option{options.length > 1 ? 's' : ''}: the staff will {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${p.lastName}'s`).join(', ')}.
+            </div>
+          )}
+          {expiring.length > 0 && (
+            <div className="card tight col" style={{ gap: 6 }}>
+              {expiring.map((p) => (
+                <div key={p.pid} className="row small" style={{ gap: 8 }}>
+                  <OvrPot p={p} showPot={false} />
+                  <span className="grow ellipsis bold">{playerName(p)}</span>
+                  <span className="dim num">{fmtM(asks.get(p.pid)!.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="row">
             <button className="btn grow" onClick={() => setConfirm(false)}>
               Keep negotiating
             </button>
-            <button className="btn primary grow" onClick={() => (setConfirm(false), openFA())}>
+            <button className="btn primary grow" disabled={busy} onClick={() => (setConfirm(false), void openFA())}>
               Open free agency
             </button>
           </div>

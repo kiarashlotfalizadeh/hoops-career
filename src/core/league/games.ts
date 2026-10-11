@@ -1,6 +1,6 @@
 // Running scheduled games and folding results into the league.
 
-import type { GameResult, League, Player, ScheduledGame, TeamSeason, TeamTotals } from '../types';
+import type { GameResult, League, Player, Rotation, ScheduledGame, TeamSeason, TeamTotals } from '../types';
 import { GameSim, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics } from '../ai/coachAI';
@@ -17,6 +17,22 @@ export function wearPerf(p: Player) {
 
 function playedYesterday(league: League, tid: number, day: number): boolean {
   return league.schedule.some((g) => g.day === day - 1 && (g.home === tid || g.away === tid));
+}
+
+/**
+ * Two-way players are deep bench: last in the order with no planned minutes (their share goes to
+ * the standard players), unless the team is down to fewer than nine healthy standard players.
+ */
+function benchTwoWays(rot: Rotation, players: Player[]) {
+  const twoWay = new Set(players.filter((p) => p.contract.twoWay).map((p) => p.pid));
+  if (!twoWay.size || players.filter((p) => !p.contract.twoWay && !p.injury).length < 9) return;
+  rot.order = [...rot.order.filter((pid) => !twoWay.has(pid)), ...rot.order.filter((pid) => twoWay.has(pid))];
+  const freed = [...twoWay].reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
+  const kept = rot.order.filter((pid) => !twoWay.has(pid) && (rot.minutes[pid] ?? 0) > 0);
+  const base = kept.reduce((a, pid) => a + rot.minutes[pid], 0);
+  if (freed > 0 && base > 0) for (const pid of kept) rot.minutes[pid] = Math.round(rot.minutes[pid] * (1 + freed / base));
+  for (const pid of twoWay) rot.minutes[pid] = 0;
+  rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
@@ -36,6 +52,7 @@ export function ensureRotation(league: League, tid: number) {
     for (const k of Object.keys(rot.minutes)) if (!pids.has(+k)) delete rot.minutes[+k];
     rot.closers = rot.closers.filter((pid) => pids.has(pid));
   }
+  if (!isUser || !team.rotation.manual) benchTwoWays(team.rotation, players);
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
   if ((!isUser || !team.tactics.manual) && (stale || missingRoles)) {
     team.tactics = autoTactics(team, players, isUser);
@@ -208,9 +225,10 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       const p = league.players[inj.pid];
       if (p) applyInjury(league, p, rng);
     }
-    // finances & hype
-    res.att = gameFinances(league, home, true, playoffs);
-    gameFinances(league, away, false, playoffs);
+    // finances & hype: play-in games are postseason gate-only games, like the playoffs
+    const postseason = g.type !== 'regular';
+    res.att = gameFinances(league, home, true, postseason);
+    gameFinances(league, away, false, postseason);
     updateHype(home, homeWon, playoffs);
     updateHype(away, !homeWon, playoffs);
   }

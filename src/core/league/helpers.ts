@@ -22,6 +22,29 @@ export function teamPlayers(league: League, tid: number): Player[] {
   return out;
 }
 
+/** Players holding one of the 15 standard roster spots (two-way deals sit outside them). */
+export function standardRoster(league: League, tid: number): Player[] {
+  return teamPlayers(league, tid).filter((p) => !p.contract.twoWay);
+}
+
+export function twoWayRoster(league: League, tid: number): Player[] {
+  return teamPlayers(league, tid).filter((p) => p.contract.twoWay);
+}
+
+/** Two-way slots per team. */
+export const TWO_WAY_MAX = 3;
+/** Standard roster limit between seasons (camp bodies, draftees); 15 applies from opening night. */
+export const OFFSEASON_ROSTER_MAX = 21;
+
+export function inSeason(league: League): boolean {
+  return league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
+}
+
+/** Standard roster limit right now. */
+export function rosterMaxNow(league: League): number {
+  return inSeason(league) ? CAP.rosterMax : OFFSEASON_ROSTER_MAX;
+}
+
 export function activePlayers(league: League): Player[] {
   return Object.values(league.players).filter((p) => p.tid >= 0);
 }
@@ -56,9 +79,10 @@ export function curTeamSeason(league: League, tid: number): TeamSeason {
   return teamSeason(league.teams[tid], league.season);
 }
 
+/** Cap payroll: two-way deals are paid but don't count against the cap or tax. */
 export function payroll(league: League, tid: number, season = league.season): number {
   let total = 0;
-  for (const p of Object.values(league.players)) if (p.tid === tid) total += salaryFor(p, season);
+  for (const p of Object.values(league.players)) if (p.tid === tid && !p.contract.twoWay) total += salaryFor(p, season);
   for (const d of league.teams[tid].deadMoney) if (d.season === season) total += d.amount;
   return total;
 }

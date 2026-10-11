@@ -19,7 +19,8 @@
     "bench": "tsx scripts/engine-bench.ts",
     "season-test": "tsx scripts/season-test.ts",
     "real-check": "tsx scripts/real-check.ts",
-    "smoke": "node scripts/qa/smoke.mjs"
+    "smoke": "node scripts/qa/smoke.mjs",
+    "invariants": "tsx scripts/league-invariants.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

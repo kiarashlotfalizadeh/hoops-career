@@ -37,6 +37,9 @@ interface AppState {
   mutate: (fn: (l: League) => void, save?: boolean) => void;
   save: () => Promise<void>;
   simulate: (target: SimTarget) => Promise<void>;
+  /** Heavy one-shot league work (phase changes) behind the progress bar: buttons that watch `sim`
+   * are disabled meanwhile and a second call is ignored. Resolves false if it didn't run. */
+  task: (label: string, fn: (l: League) => void) => Promise<boolean>;
   stopSim: () => void;
   toast: (text: string, tone?: Toast['tone']) => void;
 }
@@ -45,6 +48,11 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let toastId = 1;
 
 const nextFrame = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/** Day "Sim to All-Star break" lands on: the day before the All-Star Game, so the user can act first. */
+export function allStarStop(l: League) {
+  return l.allStarDay - 1;
+}
 
 function targetDone(l: League, target: SimTarget, startDay: number, startPhase: string): boolean {
   if (l.phase !== startPhase) return true;
@@ -59,9 +67,11 @@ function targetDone(l: League, target: SimTarget, startDay: number, startPhase: 
       if (l.phase === 'playoffs') schedulePlayoffDay(l);
       return !!userGameOnDay(l, l.day);
     case 'allStar':
-      return l.phase !== 'regular' || l.day > l.allStarDay;
+      // stop the day before the All-Star Game (played at the end of allStarDay), mid-break
+      return l.phase !== 'regular' || l.day >= allStarStop(l);
     case 'deadline':
-      return l.phase !== 'regular' || l.day > l.tradeDeadlineDay;
+      // deadline day itself is the last day trades are allowed
+      return l.phase !== 'regular' || l.day >= l.tradeDeadlineDay;
     case 'endRegular':
       return l.phase !== 'regular' || regularGamesLeft(l) === 0;
     case 'endPostseason':
@@ -78,9 +88,9 @@ function estimateTotal(l: League, target: SimTarget): number {
     case 'untilUserGame':
       return 3;
     case 'allStar':
-      return Math.max(1, l.allStarDay - l.day + 1);
+      return Math.max(1, allStarStop(l) - l.day);
     case 'deadline':
-      return Math.max(1, l.tradeDeadlineDay - l.day + 1);
+      return Math.max(1, l.tradeDeadlineDay - l.day);
     case 'endRegular':
       return Math.max(1, l.regularSeasonDays - l.day + 1);
     case 'endPostseason':
@@ -150,6 +160,18 @@ export const useStore = create<AppState>((set, get) => ({
       set({ sim: null, stopRequested: false, v: get().v + 1 });
       await get().save();
     }
+  },
+  task: async (label, fn) => {
+    if (!get().league || get().sim) return false;
+    set({ sim: { label, done: 0, total: 1 } });
+    // let the disabled buttons and the progress bar paint before the main thread is busy
+    await new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => setTimeout(r, 0)) : setTimeout(r, 0)));
+    try {
+      get().mutate(fn);
+    } finally {
+      set({ sim: null, v: get().v + 1 });
+    }
+    return true;
   },
   stopSim: () => set({ stopRequested: true }),
   toast: (text, tone = 'neutral') => {

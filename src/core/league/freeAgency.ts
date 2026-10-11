@@ -2,9 +2,9 @@ import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
 import { Rng } from '../random';
 import { CAP } from '../constants';
-import { contractExp, playerAge } from '../playerGen';
-import { CAP_FOR, contractSeason, addInbox, addNews, freeAgents, payroll, playerName, teamPlayers } from './helpers';
-import { askingContract, marketSalary, signPlayer, valueScore, willSign } from './contracts';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
+import { CAP_FOR, TWO_WAY_MAX, contractSeason, addInbox, addNews, freeAgents, payroll, playerName, standardRoster, teamPlayers, twoWayRoster } from './helpers';
+import { askingContract, marketSalary, signPlayer, twoWayEligible, twoWaySalary, valueScore, willSign } from './contracts';
 
 export function expiringPlayers(league: League, tid: number): Player[] {
   return teamPlayers(league, tid).filter((p) => contractExp(p.contract) <= league.season);
@@ -19,7 +19,7 @@ export function aiResign(league: League, rng: Rng) {
       const ask = askingContract(league, p, t.tid);
       const v = valueScore(league, p);
       const age = playerAge(p, league.season + 1);
-      const roster = teamPlayers(league, t.tid).filter((x) => contractExp(x.contract) > league.season).length;
+      const roster = standardRoster(league, t.tid).filter((x) => contractExp(x.contract) > league.season).length;
       const cap = CAP_FOR(league, league.season + 1);
       const nextPay = payroll(league, t.tid, league.season + 1);
       const worth = v >= 70 || (v >= 66 && roster < 11);
@@ -69,7 +69,7 @@ export function faDay(league: League, rng: Rng, intensity = 1) {
   const teams = rng.shuffle(league.teams.filter((t) => t.tid !== league.userTid));
   for (const t of teams) {
     if (!rng.chance(0.55 * intensity)) continue;
-    const size = teamPlayers(league, t.tid).length;
+    const size = standardRoster(league, t.tid).length;
     if (size >= CAP.rosterMax) continue;
     const pay = payroll(league, t.tid, season);
     const space = cap.salaryCap - pay;
@@ -112,7 +112,7 @@ export function fillRosters(league: League, rng: Rng, season = league.season) {
   const cap = CAP_FOR(league, season);
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
-    let size = teamPlayers(league, t.tid).length;
+    let size = standardRoster(league, t.tid).length;
     while (size < CAP.rosterMin) {
       const pool = freeAgents(league).sort((a, b) => valueScore(league, b) - valueScore(league, a));
       const p = pool[Math.min(pool.length - 1, Math.floor(rng.uniform(0, 4)))];
@@ -123,15 +123,43 @@ export function fillRosters(league: League, rng: Rng, season = league.season) {
   }
 }
 
-/** Trim AI rosters to 15 by releasing the least valuable players. */
+/**
+ * Trim AI rosters to 15 standard players and 3 two-ways (two-ways never cost a standard spot).
+ * Cuts go by value plus guaranteed money still owed (a point per $1M): camp and minimum deals go
+ * first, and a big contract is essentially never waived while cheaper weak players remain.
+ */
 export function trimRosters(league: League, release: (p: Player) => void) {
+  const owed = (p: Player) => {
+    let total = 0;
+    for (let s = league.season; s <= contractExp(p.contract); s++) total += salaryFor(p, s);
+    return total;
+  };
+  const keep = (p: Player) => valueScore(league, p) + owed(p) / 1000;
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
-    const roster = teamPlayers(league, t.tid).sort((a, b) => valueScore(league, a) - valueScore(league, b));
-    while (roster.length > CAP.rosterMax) {
-      const p = roster.shift()!;
-      release(p);
+    for (const [roster, max] of [
+      [standardRoster(league, t.tid), CAP.rosterMax],
+      [twoWayRoster(league, t.tid), TWO_WAY_MAX],
+    ] as const) {
+      roster.sort((a, b) => keep(a) - keep(b));
+      while (roster.length > max) release(roster.shift()!);
     }
+  }
+}
+
+/** Why the user can't sign free agents right now, or null when the window is open. */
+export function signingClosedReason(league: League): string | null {
+  switch (league.phase) {
+    case 'playin':
+    case 'playoffs':
+      return 'Free agents can be signed through the end of the regular season. The market reopens in free agency.';
+    case 'draftLottery':
+    case 'draft':
+      return 'Signings are frozen until free agency opens after the draft and re-signing period.';
+    case 'resign':
+      return 'Re-signing period: you can only negotiate with your own players. Free agency opens next.';
+    default:
+      return null;
   }
 }
 
@@ -140,7 +168,9 @@ export function userOffer(league: League, pid: number, amount: number, years: nu
   if (!p || p.tid !== FREE_AGENT) return { ok: false, reason: 'Not a free agent.' };
   const season = contractSeason(league);
   const tid = league.userTid;
-  if (teamPlayers(league, tid).length >= CAP.rosterMax) return { ok: false, reason: 'Your roster is full (15).' };
+  const closed = signingClosedReason(league);
+  if (closed) return { ok: false, reason: closed };
+  if (standardRoster(league, tid).length >= CAP.rosterMax) return { ok: false, reason: 'Your roster is full (15).' };
   const cap = CAP_FOR(league, season);
   const isMin = amount <= cap.vetMin + 1;
   if (!isMin && payroll(league, tid, season) + amount > cap.salaryCap) {
@@ -153,9 +183,33 @@ export function userOffer(league: League, pid: number, amount: number, years: nu
   return { ok: true, reason: `${playerName(p)} accepts!` };
 }
 
+/**
+ * Two-way offer: young players (3 seasons or fewer) who are minimum-level on the open market take
+ * a two-way slot at the fixed two-way salary, outside the 15-man roster and the cap.
+ */
+export function userTwoWayOffer(league: League, pid: number): { ok: boolean; reason: string } {
+  const p = league.players[pid];
+  if (!p || p.tid !== FREE_AGENT) return { ok: false, reason: 'Not a free agent.' };
+  const closed = signingClosedReason(league);
+  if (closed) return { ok: false, reason: closed };
+  const tid = league.userTid;
+  if (!twoWayEligible(p)) return { ok: false, reason: `${playerName(p)} has too much experience for a two-way deal (3 seasons max).` };
+  if (twoWayRoster(league, tid).length >= TWO_WAY_MAX) return { ok: false, reason: `All ${TWO_WAY_MAX} two-way slots are taken.` };
+  const season = contractSeason(league);
+  const ask = askingContract(league, p, tid);
+  if (ask.amount > CAP_FOR(league, season).vetMin + 1) return { ok: false, reason: `${playerName(p)} wants a standard contract (asking $${(ask.amount / 1000).toFixed(1)}M).` };
+  const amount = twoWaySalary(league, season);
+  const years = p.experience >= 3 ? 1 : 2;
+  signPlayer(league, p, tid, amount, years, { start: season, twoWay: true });
+  addInbox(league, { from: 'Assistant GM', subject: `${playerName(p)} signed (two-way)`, body: `${playerName(p)} signed a ${years}-year two-way deal at $${(amount / 1000).toFixed(2)}M. He doesn't take a roster spot or count against the cap, and sits at the end of the bench unless we run short. If he earns it, he can be converted to a standard contract when a roster spot is open.`, tone: 'good', link: `/player/${p.pid}` });
+  return { ok: true, reason: `${playerName(p)} signs a two-way deal!` };
+}
+
 export function userResign(league: League, pid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.phase !== 'resign') return { ok: false, reason: 'Re-signing happens between the draft and free agency.' };
   if (!p || p.tid !== league.userTid) return { ok: false, reason: 'Not on your team.' };
+  if (contractExp(p.contract) > league.season) return { ok: false, reason: `${playerName(p)} is still under contract.` };
   const res = willSign(league, p, league.userTid, amount, years);
   if (!res.ok) return res;
   signPlayer(league, p, league.userTid, amount, years, { start: league.season + 1 });
