@@ -3,6 +3,8 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { buildSimInput, ensureRotation } from '../league/games';
 import { pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
+import { GameSim } from '../sim/engine';
+import { Rng } from '../random';
 
 const seed = seedJson as unknown as SeedData;
 
@@ -83,5 +85,22 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
     ]) {
       expect(measure(patch, []).delta).toBeLessThan(2.5);
     }
+  });
+
+  it('plays NBA-like game-to-game variance: shared conditions and score effects', () => {
+    const margins: number[] = [];
+    const hs: number[] = [];
+    const as: number[] = [];
+    for (let g = 0; g < 240; g++) {
+      const res = new GameSim(side(13, 22), side(22, 13), { rng: new Rng(500 + g), type: 'regular', injuries: false }).simToEnd();
+      margins.push(res.home.pts - res.away.pts);
+      hs.push(res.home.pts);
+      as.push(res.away.pts);
+    }
+    const mean = (x: number[]) => x.reduce((a, b) => a + b, 0) / x.length;
+    const sd = (x: number[]) => Math.sqrt(x.reduce((a, b) => a + (b - mean(x)) ** 2, 0) / (x.length - 1));
+    const corr = hs.reduce((a, h, i) => a + (h - mean(hs)) * (as[i] - mean(as)), 0) / (hs.length - 1) / sd(hs) / sd(as);
+    expect(sd(margins)).toBeLessThan(15.5);
+    expect(corr).toBeGreaterThan(0.15);
   });
 });

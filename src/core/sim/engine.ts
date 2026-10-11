@@ -83,6 +83,17 @@ export const K = {
   crashFade: 0.11,
   /** Share of offensive boards given up at full transition-D sprint back. */
   getBackOrb: 0.08,
+  /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */
+  envPace: 0.035,
+  envShoot: 0.012,
+  envFouls: 0.08,
+  /** Score effects: past this second-half margin the leader eases off and the trailer plays
+   * loose, up to this much field-goal percentage either way, reached this many points later. */
+  easeFrom: 8,
+  ease: 0.05,
+  easeSpan: 12,
+  clutchSec: 240,
+  clutchEase: 0.05,
   /** Full-court press: turnover rate against average ball handlers. */
   pressTO: 0.06,
   /** Blitz: trap turnover rate for an average trap and handler, and the 4-on-3's openness behind it. */
@@ -360,11 +371,19 @@ export class GameSim {
   private seed: number;
   /** Cosmetic draws (shot spots, play-by-play wording) never touch the simulation stream. */
   private fx: Rng;
+  /** Conditions both teams share in this game: tempo, shooting night, how tightly it's called. */
+  private env: { pace: number; shoot: number; fouls: number };
 
   constructor(home: SimTeamInput, away: SimTeamInput, opts: SimOptions) {
     this.seed = Math.floor(opts.rng.next() * 4294967296) >>> 0;
     this.rng = new Rng(mix(this.seed, 0x7fffffff));
     this.fx = new Rng(mix(this.seed, 0x7ffffffe));
+    const env = new Rng(mix(this.seed, 0x7ffffffd));
+    this.env = {
+      pace: clamp(env.normal(1, K.envPace), 0.9, 1.1),
+      shoot: clamp(env.normal(0, K.envShoot), -0.04, 0.04),
+      fouls: clamp(env.normal(1, K.envFouls), 0.7, 1.3),
+    };
     this.opts = opts;
     this.record = !!opts.record;
     this.T = [this.makeTeam(home, 0), this.makeTeam(away, 1)];
@@ -1151,7 +1170,7 @@ export class GameSim {
     }
 
     const late = this.lateMode(off, def);
-    const paceF = 1.12 - 0.24 * (off.t.offense.pace / 100);
+    const paceF = this.paceF(off);
 
     // ---- full court press
     let pressBroken = false;
@@ -1208,6 +1227,11 @@ export class GameSim {
       return;
     }
     this.halfCourt(off, def, shotClock, late, paceF);
+  }
+
+  /** Time multiplier for setups and actions: the team's pace, in this game's tempo. */
+  private paceF(off: ST) {
+    return (1.12 - 0.24 * (off.t.offense.pace / 100)) / this.env.pace;
   }
 
   private lateMode(off: ST, def: ST) {
@@ -1490,6 +1514,17 @@ export class GameSim {
       mid *= 0.5;
     }
     return { three, mid, rim: late.need3 ? rim * 0.15 : rim };
+  }
+  /**
+   * Second-half score effects: a big lead makes the leader ease off and the trailer play loose;
+   * late in a close game the leader plays not to lose and the trailer presses.
+   */
+  private scoreEffect(off: ST, def: ST) {
+    if (this.q < 3) return 0;
+    const m = off.score - def.score;
+    let x = clamp((Math.abs(m) - K.easeFrom) / K.easeSpan, 0, 1) * K.ease;
+    if (this.q >= 4 && this.clock < K.clutchSec && m !== 0 && Math.abs(m) <= 6) x += K.clutchEase;
+    return m > 0 ? -x : x;
   }
   /** Star plan "deny": when the face-guarded star does get the ball, he catches it late and further out. */
   private denyCatch(def: ST, off: ST, p: SP, from: 'pnr' | 'handoff' | 'iso' | 'post'): number {
@@ -2112,7 +2147,7 @@ export class GameSim {
   private nonShootingFoul(off: ST, def: ST, handler: SP, defender: SP, finish: FinishType): boolean {
     const phys = (def.t.defense.physicality - 50) / 50;
     const pr = this.pressure(def);
-    const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250);
+    const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250) * this.env.fouls;
     if (!this.rng.chance(p)) return false;
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
     if (this.record) {
@@ -2259,8 +2294,9 @@ export class GameSim {
     // physicality: tighter contests
     const phys = (def.t.defense.physicality - 50) / 50;
     p -= phys * K.physContest;
-    // home court
+    // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
+    p += this.env.shoot + this.scoreEffect(off, def);
     // late-game nerves for poor shooters
     if (this.q >= 4 && this.clock < 120 && Math.abs(off.score - def.score) <= 5) p -= (60 - sh.r.oiq) / 2000;
     p = clamp(p, 0.04, 0.93);
@@ -2279,7 +2315,7 @@ export class GameSim {
     const pBlk = c ? K.blockMiss[zone] * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
     // shooting foul?
     const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + 0.3 * phys) * (s.forcedFoulMult ?? 1);
-    const pFoul = K.foulRate[zone] * draw;
+    const pFoul = K.foulRate[zone] * draw * this.env.fouls;
     if (phys !== 0) {
       // net of the extra fouls (a trip to the line instead of the shot) and the tighter contest
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
@@ -2536,7 +2572,7 @@ export class GameSim {
     }
     // reset with a 14-second shot clock
     const late = this.lateMode(off, def);
-    const paceF = 1.12 - 0.24 * (off.t.offense.pace / 100);
+    const paceF = this.paceF(off);
     const setup = this.rng.uniform(1.5, 4);
     this.tick(setup);
     if (this.clock <= 0.05) {

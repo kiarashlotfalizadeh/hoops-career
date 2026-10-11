@@ -46,13 +46,17 @@ let ot = 0;
 const t0 = performance.now();
 let homeWins = 0;
 const minutes: number[] = [];
+const margins: number[] = [];
+const scores: [number, number][] = [];
 for (let g = 0; g < games; g++) {
   const h = g % 30;
   let a = rng.int(0, 29);
   if (a === h) a = (a + 1) % 30;
-  const sim = new GameSim({ team: teams[h], players: rosters[h] }, { team: teams[a], players: rosters[a] }, { rng, type: 'regular' });
+  const sim = new GameSim({ team: teams[h], players: rosters[h], adjust: true }, { team: teams[a], players: rosters[a], adjust: true }, { rng, type: 'regular' });
   const res = sim.simToEnd();
   if (res.home.pts > res.away.pts) homeWins++;
+  margins.push(res.home.pts - res.away.pts);
+  scores.push([res.home.pts, res.away.pts]);
   ot += res.ot > 0 ? 1 : 0;
   for (const tb of [res.home, res.away]) {
     add('poss', tb.poss);
@@ -89,6 +93,19 @@ const rows: [string, number, number][] = [
 ];
 console.log(`${games} games in ${ms.toFixed(0)}ms (${(ms / games).toFixed(2)} ms/game). Home win% ${(homeWins / games).toFixed(3)}, OT ${(ot / games).toFixed(3)}`);
 for (const [k, v, t] of rows) console.log(`${k.padEnd(12)} ${v.toFixed(3).padStart(8)}  target ${t.toFixed(3).padStart(8)}  ${(((v - t) / t) * 100).toFixed(1).padStart(6)}%`);
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+const sd = (xs: number[]) => Math.sqrt(xs.reduce((a, b) => a + (b - mean(xs)) ** 2, 0) / (xs.length - 1));
+const hs = scores.map((x) => x[0]);
+const as = scores.map((x) => x[1]);
+const corr = hs.reduce((a, h, i) => a + (h - mean(hs)) * (as[i] - mean(as)), 0) / (hs.length - 1) / sd(hs) / sd(as);
+console.log('\nGame shape (random matchups, so the margin includes team strength):');
+for (const [k, v, t] of [
+  ['margin sd', sd(margins), TARGETS.marginSd],
+  ['20+ games', margins.filter((m) => Math.abs(m) >= 20).length / games, TARGETS.blowout20],
+  ['overtime', ot / games, TARGETS.otRate],
+  ['score corr', corr, TARGETS.scoreCorr],
+] as const)
+  console.log(`${k.padEnd(12)} ${v.toFixed(3).padStart(8)}  target ${t.toFixed(3).padStart(8)}`);
 console.log('\nPlay types (share of poss, PPP):');
 const totalPoss = Object.values(ptTotals).reduce((a, b) => a + b.poss, 0);
 for (const [k, v] of Object.entries(ptTotals).sort((a, b) => b[1].poss - a[1].poss)) {
