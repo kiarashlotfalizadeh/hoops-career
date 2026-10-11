@@ -8,6 +8,7 @@ import { clampRatings, heightToRating } from '../../src/core/ratings';
 import { Rng, clamp, hashString } from '../../src/core/random';
 import { genRatings } from '../../src/core/playerGen';
 import type { AdvRow, PerGameRow } from './parse';
+import type { PbpAgg } from './nba/profile';
 
 export const SEASON_WEIGHT: Record<number, number> = { 2026: 1.0, 2025: 0.6, 2024: 0.3 };
 
@@ -25,6 +26,8 @@ export interface Agg {
   adv: Record<'usg' | 'ast' | 'orb' | 'drb' | 'stl' | 'blk' | 'tov' | 'obpm' | 'dbpm' | 'bpm' | 'ts' | 'ws48' | 'vorp', number>;
   lastAge: number;
   pos: string;
+  /** NBA.com play-by-play profile (shot zones, creation, defense, RAPM), when matched. */
+  pbp?: PbpAgg;
 }
 
 const STATS = ['fga', 'fg3a', 'fg3', 'fg2a', 'fg2', 'fta', 'ft', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'pf', 'pts'] as const;
@@ -121,29 +124,68 @@ export function features(a: Agg) {
     ftr: p.fga ? p.fta / p.fga : 0,
     ast36: p.ast,
     mpg: a.mpg,
+    ...pbpFeatures(a.pbp),
+  };
+}
+
+const bayes = (m: number, n: number, prior: number, k: number) => (m + prior * k) / (n + k);
+
+/** Play-by-play features; NaN when the player has no NBA.com profile (z-scores treat NaN as 0). */
+export function pbpFeatures(b?: PbpAgg) {
+  const N = NaN;
+  if (!b || b.mins < 60) {
+    return { rimPct: N, paintPct: N, midPct: N, rimShare: N, midShare: N, unast: N, pullupShare: N, driveShare: N, postShare: N, cutRate: N, dunkRate: N, transShare: N, sfdRate: N, orbTrue: N, drbTrue: N, badPassRate: N, lostBallRate: N, rimDeter: N, rimFgAllowed: N, blkRim: N, mdSaved: N, rapmO: N, rapmD: N };
+  }
+  const fga = b.fga.rim + b.fga.paint + b.fga.mid + b.fga.c3 + b.fga.ab3;
+  const fgm = b.fgm.rim + b.fgm.paint + b.fgm.mid + b.fgm.c3 + b.fgm.ab3;
+  const per36 = (x: number) => (x / Math.max(1, b.mins)) * 36;
+  // RAPM regressed by its own sample: 6000 weighted possessions count about half
+  const rel = b.rapmPoss / (b.rapmPoss + 6000);
+  return {
+    rimPct: bayes(b.fgm.rim, b.fga.rim, 0.655, 60),
+    paintPct: bayes(b.fgm.paint, b.fga.paint, 0.45, 50),
+    midPct: bayes(b.fgm.mid, b.fga.mid, 0.42, 50),
+    rimShare: fga ? b.fga.rim / fga : N,
+    midShare: fga ? b.fga.mid / fga : N,
+    unast: fgm ? 1 - b.astFgm / fgm : N,
+    pullupShare: fga ? b.pullup / fga : N,
+    driveShare: fga ? b.drive / fga : N,
+    postShare: fga ? b.post / fga : N,
+    cutRate: per36(b.cut),
+    dunkRate: b.fga.rim > 10 ? b.dunk / b.fga.rim : N,
+    transShare: fga ? b.trans / fga : N,
+    sfdRate: fga ? b.sfDrawn / fga : N,
+    orbTrue: b.orbChances > 50 ? b.orb / b.orbChances : N,
+    drbTrue: b.drbChances > 50 ? b.drb / b.drbChances : N,
+    badPassRate: b.ast + b.tovBadPass > 10 ? b.tovBadPass / (b.ast + b.tovBadPass) : N,
+    lostBallRate: per36(b.tovLostBall),
+    rimDeter: b.oppFga > 200 ? b.oppRimA / b.oppFga : N,
+    rimFgAllowed: b.oppRimA > 100 ? bayes(b.oppRimM, b.oppRimA, 0.66, 300) : N,
+    blkRim: b.oppRimA > 100 ? b.blkRim / b.oppRimA : N,
+    mdSaved: b.mdPoss > 100 ? b.mdSaved : N,
+    rapmO: b.rapmO * rel,
+    rapmD: b.rapmD * rel,
   };
 }
 
 export function popStats(aggs: Agg[]): PopStats {
   const pool = aggs.filter((a) => a.rawMin >= 500);
-  const keys = Object.keys(features(pool[0]));
+  const feats = pool.map((a) => ({ f: features(a) as Record<string, number>, w: Math.sqrt(a.wMin) }));
+  const keys = Object.keys(feats[0].f);
   const mean: Record<string, number> = {};
   const sd: Record<string, number> = {};
   for (const k of keys) {
     let sw = 0;
     let s = 0;
-    for (const a of pool) {
-      const w = Math.sqrt(a.wMin);
+    for (const { f, w } of feats) {
+      if (!Number.isFinite(f[k])) continue;
       sw += w;
-      s += (features(a) as Record<string, number>)[k] * w;
+      s += f[k] * w;
     }
-    mean[k] = s / sw;
+    mean[k] = sw ? s / sw : 0;
     let v = 0;
-    for (const a of pool) {
-      const w = Math.sqrt(a.wMin);
-      v += w * ((features(a) as Record<string, number>)[k] - mean[k]) ** 2;
-    }
-    sd[k] = Math.sqrt(v / sw) || 1;
+    for (const { f, w } of feats) if (Number.isFinite(f[k])) v += w * (f[k] - mean[k]) ** 2;
+    sd[k] = sw ? Math.sqrt(v / sw) || 1 : 1;
   }
   return { mean, sd };
 }
@@ -152,7 +194,9 @@ export function popStats(aggs: Agg[]): PopStats {
 export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string): { r: Ratings; tend: Tendencies; rel: number } {
   const f = features(a) as Record<string, number>;
   const rel = a.wMin / (a.wMin + 500);
-  const z = (k: string) => clamp(((f[k] - pop.mean[k]) / pop.sd[k]) * rel, -3.6, 3.6);
+  const z = (k: string) => (Number.isFinite(f[k]) ? clamp(((f[k] - pop.mean[k]) / pop.sd[k]) * rel, -3.6, 3.6) : 0);
+  // NBA.com play-by-play profile available: shot zones, creation, true rebound rates, defense, RAPM
+  const has = Number.isFinite(f.rimPct);
   const h = heightToRating(bio.heightIn || 79);
   const hz = (h - 50) / 15;
   const wz = ((bio.weightLb || 220) - 220) / 25;
@@ -160,33 +204,41 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
   const age = bio.age || a.lastAge || 26;
   const r: Ratings = {
     hgt: h,
-    spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
-    ath: 52 + 5 * z('blkPct') + 4 * z('orbPct') + 4 * z('ftr') - 0.05 * h - Math.max(0, age - 29) * 2 + rng.normal(0, 3),
+    spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
+    ath: 52 + (has ? 5 * z('dunkRate') + 3 * z('blkPct') + 3 * z('orbPct') + 2 * z('transShare') : 5 * z('blkPct') + 4 * z('orbPct') + 4 * z('ftr')) - 0.05 * h - Math.max(0, age - 29) * 2 + rng.normal(0, 3),
     str: 48 + 10 * wz + 3 * hz,
     end: clamp(38 + (a.mpg - 18) * 1.5, 25, 92),
-    ins: 50 + 9 * z('fg2Pct') + 4 * z('ftr') + 4 * hz,
-    mid: 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
+    ins: has ? 50 + 10 * z('rimPct') + 3 * z('ftr') + 2 * z('dunkRate') + 3 * hz : 50 + 9 * z('fg2Pct') + 4 * z('ftr') + 4 * hz,
+    mid: has ? 48 + 9 * z('midPct') + 4 * z('paintPct') + 3 * z('pullupShare') + 3 * z('ftPct') - 2 * hz : 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
     tp: 47 + 11 * z('fg3Pct') + 11 * z('tpa36'),
     ft: clamp((a.ftPct - 0.42) / 0.0052, 1, 100),
-    hnd: 50 + 8 * z('usg') + 8 * z('astPct') - 3 * z('tovPct') - 6 * hz,
-    pas: 50 + 13 * z('astPct') + 2 * z('obpm'),
-    oiq: 50 + 8 * z('obpm') + 4 * z('ts') + 3 * z('usg'),
-    drw: 48 + 11 * z('fta36') + 3 * z('ftr'),
-    post: 30 + 9 * hz + 6 * z('usg') + 5 * wz - 4 * z('tpar'),
-    perD: 50 + 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz,
-    intD: 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
+    hnd: has ? 50 + 6 * z('usg') + 6 * z('unast') + 3 * z('pullupShare') + 4 * z('astPct') - 4 * z('lostBallRate') - 5 * hz : 50 + 8 * z('usg') + 8 * z('astPct') - 3 * z('tovPct') - 6 * hz,
+    pas: has ? 50 + 12 * z('astPct') + 2 * z('obpm') - 3 * z('badPassRate') : 50 + 13 * z('astPct') + 2 * z('obpm'),
+    oiq: has ? 50 + 5 * z('obpm') + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg') : 50 + 8 * z('obpm') + 4 * z('ts') + 3 * z('usg'),
+    drw: has ? 48 + 9 * z('sfdRate') + 5 * z('fta36') : 48 + 11 * z('fta36') + 3 * z('ftr'),
+    post: has ? 30 + 8 * hz + 9 * z('postShare') + 4 * z('usg') + 4 * wz : 30 + 9 * hz + 6 * z('usg') + 5 * wz - 4 * z('tpar'),
+    perD: has ? 50 + 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 50 + 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz,
+    intD: has ? 46 + 5 * z('rapmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct') : 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
     stl: 50 + 14 * z('stlPct'),
     blk: 46 + 13 * z('blkPct') + 4 * hz,
-    diq: 50 + 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct'),
-    oreb: 48 + 14 * z('orbPct') + 3 * hz,
-    dreb: 48 + 14 * z('drbPct') + 3 * hz,
+    diq: has ? 50 + 5 * z('dbpm') + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 50 + 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct'),
+    oreb: 48 + 14 * z(has && Number.isFinite(f.orbTrue) ? 'orbTrue' : 'orbPct') + 3 * hz,
+    dreb: 48 + 14 * z(has && Number.isFinite(f.drbTrue) ? 'drbTrue' : 'drbPct') + 3 * hz,
   };
+  const b = a.pbp;
+  const pbpFga = b ? b.fga.rim + b.fga.paint + b.fga.mid + b.fga.c3 + b.fga.ab3 : 0;
   const tend: Tendencies = {
     use: clamp(Math.pow(Math.max(5, a.adv.usg || 18) / 19, 1.2), 0.35, 2.6),
     three: clamp(((a.per36.fga ? a.per36.fg3a / a.per36.fga : 0.38) + 0.03) / 0.41, 0.03, 2.6),
-    drive: 1,
+    drive: has && b ? clamp(Math.pow((b.fga.rim / pbpFga + 0.02) / 0.3, 0.8), 0.3, 3) : 1,
     pass: clamp(Math.pow(Math.max(3, a.adv.ast || 14) / 15, 0.6), 0.5, 2),
   };
+  if (has && b) {
+    tend.mid = clamp(Math.pow((b.fga.mid / pbpFga + 0.01) / 0.12, 0.8), 0.1, 4);
+    const t3 = b.fga.c3 + b.fga.ab3;
+    tend.corner = t3 > 20 ? clamp(Math.pow((b.fga.c3 / t3 + 0.02) / 0.28, 0.9), 0.2, 4) : 1;
+    tend.create = clamp(Math.pow((Number.isFinite(f.unast) ? f.unast : 0.45) / 0.45, 1.1), 0.3, 3);
+  }
   return { r: clampRatings(r), tend, rel };
 }
 

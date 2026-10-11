@@ -17,6 +17,7 @@ import { fillRosters, trimRosters } from './freeAgency';
 
 export interface SeedPlayer {
   id: string;
+  nbaId?: number;
   first: string;
   last: string;
   pos: Pos;
@@ -68,6 +69,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
   const p: Player = {
     pid,
     bbrefId: sp.id,
+    nbaId: sp.nbaId,
     firstName: sp.first,
     lastName: sp.last,
     pos: sp.pos,

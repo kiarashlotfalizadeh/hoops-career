@@ -169,6 +169,8 @@ export interface DraftInfo {
 export interface Player {
   pid: number;
   bbrefId?: string;
+  /** NBA.com person id, for refreshing real data. */
+  nbaId?: number;
   firstName: string;
   lastName: string;
   pos: Pos;
@@ -239,6 +241,11 @@ export interface Tendencies {
   tov?: number;
   /** personal fouls */
   pf?: number;
+  /** Shot-diet tendencies, fitted to NBA.com shot locations: mid-range preference, corner share of
+   * spot-up threes, and self-creation (primary-action weight vs. finishing others' set-ups). */
+  mid?: number;
+  corner?: number;
+  create?: number;
 }
 
 export interface ProspectInfo {

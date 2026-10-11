@@ -22,11 +22,16 @@ const rows = Object.values(league.players)
   .map((p) => {
     const sim = p.stats.filter((s) => s.season === season && !s.playoffs);
     const gp = sim.reduce((a, s) => a + s.gp, 0);
-    const tot = (k: 'min' | 'pts' | 'ast' | 'orb' | 'drb' | 'stl' | 'blk' | 'tov' | 'fga' | 'fgm' | 'tpa' | 'tpm' | 'fta') => sim.reduce((a, s) => a + s[k], 0) / Math.max(1, gp);
+    const tot = (k: 'min' | 'pts' | 'ast' | 'orb' | 'drb' | 'stl' | 'blk' | 'tov' | 'fga' | 'fgm' | 'tpa' | 'tpm' | 'fta' | 'rimA' | 'midA' | 'rimM') => sim.reduce((a, s) => a + s[k], 0) / Math.max(1, gp);
     const real = p.stats.filter((s) => s.real && s.season === 2026);
     const rgp = real.reduce((a, s) => a + s.gp, 0);
-    const rt = (k: 'min' | 'pts' | 'ast' | 'orb' | 'drb') => real.reduce((a, s) => a + s[k], 0) / Math.max(1, rgp);
-    return { p, gp, mpg: tot('min'), ppg: tot('pts'), apg: tot('ast'), rpg: tot('orb') + tot('drb'), fgp: tot('fgm') / Math.max(0.01, tot('fga')), rgp, rmpg: rt('min'), rppg: rt('pts'), rapg: rt('ast'), rrpg: rt('orb') + rt('drb') };
+    const rt = (k: 'min' | 'pts' | 'ast' | 'orb' | 'drb' | 'stl' | 'blk' | 'tov' | 'fga' | 'fgm' | 'tpa' | 'tpm' | 'fta' | 'rimA' | 'midA' | 'rimM') => real.reduce((a, s) => a + s[k], 0) / Math.max(1, rgp);
+    const share = (f: typeof tot, k: 'rimA' | 'midA' | 'tpa') => f(k) / Math.max(0.01, f('fga'));
+    return {
+      p, gp, mpg: tot('min'), ppg: tot('pts'), apg: tot('ast'), rpg: tot('orb') + tot('drb'), fgp: tot('fgm') / Math.max(0.01, tot('fga')), rgp, rmpg: rt('min'), rppg: rt('pts'), rapg: rt('ast'), rrpg: rt('orb') + rt('drb'),
+      rim: share(tot, 'rimA'), mid: share(tot, 'midA'), three: share(tot, 'tpa'), rrim: share(rt, 'rimA'), rmid: share(rt, 'midA'), rthree: share(rt, 'tpa'),
+      rimPct: tot('rimM') / Math.max(0.01, tot('rimA')), rrimPct: rt('rimM') / Math.max(0.01, rt('rimA')), hasZones: rt('rimA') > 0,
+    };
   })
   .filter((r) => r.gp >= 20);
 const f = (x: number) => x.toFixed(1).padStart(5);
@@ -44,6 +49,15 @@ const corr = (xs: number[], ys: number[]) => {
   return a / Math.sqrt(b * c);
 };
 console.log(`\nSim vs real correlation over ${both.length} regulars: MPG ${corr(both.map((r) => r.mpg), both.map((r) => r.rmpg)).toFixed(3)}, PPG ${corr(both.map((r) => r.ppg), both.map((r) => r.rppg)).toFixed(3)}, APG ${corr(both.map((r) => r.apg), both.map((r) => r.rapg)).toFixed(3)}, RPG ${corr(both.map((r) => r.rpg), both.map((r) => r.rrpg)).toFixed(3)}`);
+const zb = both.filter((r) => r.hasZones && r.rgp >= 40);
+const mae = (xs: number[], ys: number[]) => xs.reduce((a, x, i) => a + Math.abs(x - ys[i]), 0) / xs.length;
+if (zb.length) {
+  console.log(`Shot diet over ${zb.length} regulars (sim vs real 2025-26 NBA.com): rim share r ${corr(zb.map((r) => r.rim), zb.map((r) => r.rrim)).toFixed(3)} (MAE ${(100 * mae(zb.map((r) => r.rim), zb.map((r) => r.rrim))).toFixed(1)} pts), mid share r ${corr(zb.map((r) => r.mid), zb.map((r) => r.rmid)).toFixed(3)} (MAE ${(100 * mae(zb.map((r) => r.mid), zb.map((r) => r.rmid))).toFixed(1)}), 3PA share r ${corr(zb.map((r) => r.three), zb.map((r) => r.rthree)).toFixed(3)}, rim FG% r ${corr(zb.map((r) => r.rimPct), zb.map((r) => r.rrimPct)).toFixed(3)}`);
+  for (const n of ['Rudy Gobert', 'DeMar DeRozan', 'Stephen Curry', 'Shai Gilgeous-Alexander', 'Nikola Jokić', 'Kevin Durant']) {
+    const r = zb.find((x) => playerName(x.p) === n);
+    if (r) console.log(`  ${n.padEnd(24)} rim ${(100 * r.rim).toFixed(0)}% (${(100 * r.rrim).toFixed(0)}) mid ${(100 * r.mid).toFixed(0)}% (${(100 * r.rmid).toFixed(0)}) 3PA ${(100 * r.three).toFixed(0)}% (${(100 * r.rthree).toFixed(0)})`);
+  }
+}
 const st = standings(league);
 for (const conf of ['E', 'W'] as const)
   console.log(`${conf}: ` + st.filter((r) => r.conf === conf).map((r) => `${league.teams[r.tid].abbrev} ${r.won}-${r.lost}`).join(', '));

@@ -108,17 +108,18 @@ export function composites(r: Ratings): Composites {
 // ---------------------------------------------------------------- overall
 
 // OVR weights, fitted (non-negative, anchored to a hand-built prior) so that real players'
-// calibrated ratings predict their impact: three-season regressed BPM plus the minutes and
-// usage coaches actually gave them. Guards are judged mostly on feel, creation and size;
-// bigs on feel, passing, foul drawing, rebounding and rim protection. Box-score volume that
-// a lineup would get anyway (offensive boards, steals, put-backs) carries little weight.
+// calibrated ratings predict their impact: half three-season regressed box plus-minus, half
+// RAPM from NBA.com lineup data, plus the minutes and usage coaches gave them. Guards are
+// judged mostly on feel, creation, size and defense; bigs on feel, passing, defense, rebounding
+// and finishing. Box-score volume a lineup would get anyway (steals, offensive boards) carries
+// little weight; RAPM is what lifts real defenders.
 const OVR_GUARD: Ratings = {
-  hgt: 0.105, spd: 0.015, ath: 0.005, str: 0.05, end: 0.03, ins: 0.015, mid: 0.07, tp: 0.035, ft: 0.015, drw: 0.035, post: 0,
-  hnd: 0.09, pas: 0.08, oiq: 0.16, perD: 0.04, intD: 0.045, blk: 0.015, stl: 0.005, diq: 0.07, oreb: 0, dreb: 0.01,
+  hgt: 0.09, spd: 0.02, ath: 0.015, str: 0.04, end: 0.031, ins: 0.015, mid: 0.03, tp: 0.04, ft: 0.035, drw: 0.025, post: 0,
+  hnd: 0.09, pas: 0.055, oiq: 0.2, perD: 0.095, intD: 0.045, blk: 0, stl: 0.005, diq: 0.095, oreb: 0, dreb: 0.027,
 };
 const OVR_BIG: Ratings = {
-  hgt: 0.07, spd: 0.04, ath: 0.025, str: 0.03, end: 0.03, ins: 0.02, mid: 0.01, tp: 0.03, ft: 0.03, drw: 0.055, post: 0.03,
-  hnd: 0.035, pas: 0.1, oiq: 0.13, perD: 0.015, intD: 0.037, blk: 0.038, stl: 0, diq: 0.052, oreb: 0.005, dreb: 0.052,
+  hgt: 0.065, spd: 0.049, ath: 0.019, str: 0.043, end: 0.031, ins: 0.041, mid: 0.01, tp: 0.041, ft: 0.025, drw: 0.029, post: 0.031,
+  hnd: 0.047, pas: 0.071, oiq: 0.152, perD: 0.055, intD: 0.05, blk: 0.011, stl: 0, diq: 0.093, oreb: 0.004, dreb: 0.055,
 };
 
 /** Size-aware blend of the guard and big weightings. */
@@ -126,7 +127,7 @@ export function ovrRaw(r: Ratings): number {
   const big = clamp((r.hgt - 40) / 40, 0, 1);
   let s = 0;
   for (const k of RATING_KEYS) s += r[k] * ((1 - big) * OVR_GUARD[k] + big * OVR_BIG[k]);
-  return s / 0.86;
+  return s / 0.94;
 }
 
 export interface OvrScale {

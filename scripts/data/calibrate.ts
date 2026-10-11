@@ -29,9 +29,15 @@ interface SimAcc {
   tov: number;
   pts: number;
   pf: number;
+  rimA: number;
+  rimM: number;
+  midA: number;
+  midM: number;
+  c3A: number;
+  astM: number;
 }
 
-const blank = (): SimAcc => ({ sec: 0, fga: 0, fg3a: 0, fg3: 0, fg2a: 0, fg2: 0, fta: 0, ft: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pts: 0, pf: 0 });
+const blank = (): SimAcc => ({ sec: 0, fga: 0, fg3a: 0, fg3: 0, fg2a: 0, fg2: 0, fta: 0, ft: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pts: 0, pf: 0, rimA: 0, rimM: 0, midA: 0, midM: 0, c3A: 0, astM: 0 });
 
 export function simulateBatch(league: League, gamesPerTeam: number, seed: number): Map<number, SimAcc> {
   const rng = new Rng(seed);
@@ -69,6 +75,12 @@ export function simulateBatch(league: League, gamesPerTeam: number, seed: number
       e.tov += b.tov;
       e.pts += b.pts;
       e.pf += b.pf;
+      e.rimA += b.rimA;
+      e.rimM += b.rimM;
+      e.midA += b.midA;
+      e.midM += b.midM;
+      e.c3A += b.c3A;
+      e.astM += b.astM;
       acc.set(rb.pid, e);
     }
   }
@@ -87,7 +99,8 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
   const reports: CalibReport[] = [];
   passes.forEach((pass, iter) => {
     const acc = simulateBatch(league, pass.games, 1000 + iter);
-    const err: Record<string, number> = { use: 0, tpar: 0, fg3: 0, fg2: 0, ftr: 0, ast: 0, tov: 0, orb: 0, drb: 0, stl: 0, blk: 0, pf: 0 };
+    const err: Record<string, number> = { use: 0, tpar: 0, fg3: 0, fg2: 0, ftr: 0, ast: 0, tov: 0, orb: 0, drb: 0, stl: 0, blk: 0, pf: 0, rim: 0, mid: 0, unast: 0, rimPct: 0 };
+    const zoneCount = { n: 0 };
     let count = 0;
     for (const [pid, t] of targets) {
       const p = league.players[pid];
@@ -125,7 +138,7 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
         blk: real.blk,
         pf: real.pf,
       };
-      for (const key of Object.keys(err)) err[key] += Math.abs((sim as Record<string, number>)[key] - (tgt as Record<string, number>)[key]);
+      for (const key of Object.keys(err)) if (key in tgt) err[key] += Math.abs((sim as Record<string, number>)[key] - (tgt as Record<string, number>)[key]);
       const tend = (p.tend ??= { use: 1, three: 1, drive: 1, pass: 1 });
       // usage responds sublinearly (a star's share saturates), so step harder than for rates
       tend.use = clamp(tend.use * Math.exp(ln(tgt.use, sim.use) * 1.4 * d), 0.15, 10);
@@ -134,7 +147,34 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
       const r = p.ratings;
       r.drw += clamp(16 * ln(tgt.ftr * 10, sim.ftr * 10) * d, -8, 8);
       if (real.fg3a >= 0.8 && s.fg3a >= 25) r.tp += clamp(((tgt.fg3 - sim.fg3) / 0.002) * 0.45 * d, -8, 8);
-      if (real.fg2a >= 1.5 && s.fg2a >= 25) {
+      const b = t.agg.pbp;
+      const bFga = b ? b.fga.rim + b.fga.paint + b.fga.mid + b.fga.c3 + b.fga.ab3 : 0;
+      if (b && bFga >= 60 && s.fga >= 40) {
+        // shot diet and shot-making by zone, from NBA.com play-by-play
+        zoneCount.n++;
+        const bFgm = b.fgm.rim + b.fgm.paint + b.fgm.mid + b.fgm.c3 + b.fgm.ab3;
+        const simFgm = s.fg2 + s.fg3;
+        const zt = { rim: b.fga.rim / bFga, mid: b.fga.mid / bFga, unast: bFgm ? 1 - b.astFgm / bFgm : 0.5, rimPct: (b.fgm.rim + 0.655 * 60) / (b.fga.rim + 60) };
+        const zs = { rim: s.rimA / s.fga, mid: s.midA / s.fga, unast: simFgm ? 1 - s.astM / simFgm : 0.5, rimPct: s.rimA ? s.rimM / s.rimA : zt.rimPct };
+        for (const k of ['rim', 'mid', 'unast', 'rimPct'] as const) err[k] += Math.abs(zt[k] - zs[k]);
+        tend.drive = clamp(tend.drive * Math.exp(ln(zt.rim * 10, zs.rim * 10) * 0.9 * d), 0.15, 5);
+        tend.mid = clamp((tend.mid ?? 1) * Math.exp(ln(zt.mid * 10, zs.mid * 10) * 0.9 * d), 0.05, 6);
+        tend.create = clamp((tend.create ?? 1) * Math.exp(ln(zt.unast * 10, zs.unast * 10) * 1.2 * d), 0.15, 5);
+        const t3 = b.fga.c3 + b.fga.ab3;
+        if (t3 >= 30 && s.fg3a >= 25) tend.corner = clamp((tend.corner ?? 1) * Math.exp(ln((b.fga.c3 / t3) * 10, (s.c3A / s.fg3a) * 10) * 0.8 * d), 0.1, 6);
+        if (s.rimA >= 20) r.ins += clamp(((zt.rimPct - zs.rimPct) / 0.0028) * 0.45 * d, -8, 8);
+        const midT = (b.fgm.mid + 0.42 * 50) / (b.fga.mid + 50);
+        if (s.midA >= 15 && b.fga.mid >= 15) r.mid += clamp(((midT - s.midM / s.midA) / 0.0035) * 0.45 * d, -8, 8);
+        // floaters and short paint shots: what rim and mid leave over
+        const paintT = (b.fgm.paint + 0.45 * 50) / (b.fga.paint + 50);
+        const sPaintA = s.fg2a - s.rimA - s.midA;
+        const sPaintM = s.fg2 - s.rimM - s.midM;
+        if (sPaintA >= 20 && b.fga.paint >= 20) {
+          const step = clamp(((paintT - sPaintM / sPaintA) / 0.003) * 0.3 * d, -5, 5);
+          r.ins += step * 0.5;
+          r.mid += step * 0.5;
+        }
+      } else if (real.fg2a >= 1.5 && s.fg2a >= 25) {
         const step = clamp(((tgt.fg2 - sim.fg2) / 0.0028) * 0.45 * d, -8, 8);
         r.ins += step;
         r.mid += step * 0.35;
@@ -150,7 +190,7 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
       tend.pf = clamp((tend.pf ?? 1) * Math.exp(ln(tgt.pf, sim.pf) * 0.9 * d), 0.15, 3);
       clampRatings(r);
     }
-    for (const key of Object.keys(err)) err[key] = count ? err[key] / count : 0;
+    for (const key of Object.keys(err)) err[key] = ['rim', 'mid', 'unast', 'rimPct'].includes(key) ? (zoneCount.n ? err[key] / zoneCount.n : 0) : count ? err[key] / count : 0;
     for (const p of Object.values(league.players)) refreshPlayerDerived(p as Player, league.season, league.ovrScale);
     reports.push({ iter, players: count, err });
     log(`  pass ${iter + 1}: ${count} players · mean abs error ` + Object.entries(err).map(([k, v]) => `${k} ${v.toFixed(3)}`).join(', '));

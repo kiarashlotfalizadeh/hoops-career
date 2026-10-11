@@ -581,7 +581,6 @@ h3 {
   font-weight: 700;
   font-size: 16px;
   color: white;
-  overflow: hidden;
 }
 .avatar.lg {
   width: 72px;
@@ -590,12 +589,24 @@ h3 {
 }
 .avatar .jn {
   position: absolute;
-  bottom: -1px;
-  right: -1px;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font);
   font-size: 9px;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 0 3px;
-  border-radius: 4px;
+  font-weight: 700;
+  line-height: 12px;
+  white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  color: var(--text-dim);
+  padding: 0 4px;
+  border-radius: 6px;
+}
+.avatar.lg .jn {
+  font-size: 11px;
+  line-height: 15px;
+  bottom: -7px;
 }
 
 /* ------------------------------------------------------------------ forms */

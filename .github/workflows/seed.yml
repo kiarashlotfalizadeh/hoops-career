@@ -1,6 +1,8 @@
-# Builds src/data/seed.json from Basketball Reference on GitHub's runners (open network).
-# Fetches ~90 pages politely (1 request / 3.7 s), calibrates ratings in the engine, commits
-# the seed to main, and stores the raw pages as a tarball on the `data-raw` branch.
+# Builds src/data/seed.json on GitHub's runners (open network): Basketball Reference pages
+# (contracts, rosters, bios, box scores; ~90 pages at 1 request / 3.7 s) plus NBA.com
+# play-by-play / matchup archives and ESPN college box scores from public GitHub datasets.
+# Calibrates ratings in the engine, commits the seed to main, and stores the Basketball
+# Reference pages as a tarball on the `data-raw` branch (the GitHub datasets re-download fast).
 name: Build seed data
 on:
   workflow_dispatch:
@@ -32,8 +34,10 @@ jobs:
           fi
       - name: Fetch Basketball Reference pages
         run: npm run data:fetch
+      - name: Fetch NBA.com play-by-play and college data
+        run: npm run data:fetch-nba
       - name: Archive raw pages
-        run: tar czf /tmp/data-raw.tgz data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
+        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
       - name: Build seed (parse, derive, calibrate)
         id: build
         continue-on-error: true

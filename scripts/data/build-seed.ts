@@ -9,6 +9,10 @@ import { STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources
 import { COUNTRY_NAMES, parseAdvanced, parseContracts, parseDraft, parsePerGame, parseRoster, type AdvRow, type ContractRow, type DraftRow, type PerGameRow, type RosterRow } from './parse';
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
 import { calibrate } from './calibrate';
+import { buildNbaProfile } from './nba/build';
+import { profilesByBbref, type PbpAgg } from './nba/profile';
+import { NBA_RAW } from './nba/fetch';
+import { collegePop, collegeRatings, findCollege, loadCollege } from './nba/college';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
 import type { PlayerStats, Pos, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
@@ -25,7 +29,7 @@ const read = (key: string) => {
 };
 const COMBINED = /^(TOT|\dTM)$/;
 
-function main() {
+async function main() {
   const contractsHtml = read('contracts');
   if (!contractsHtml) {
     console.error('Missing data/raw/contracts.html. Run `npm run data:fetch` first.');
@@ -91,6 +95,20 @@ function main() {
     .slice(0, 140);
   for (const f of fa) ids.add(f.id);
 
+  // NBA.com play-by-play profiles (shot zones, creation, defense, RAPM), if downloaded
+  let pbpById = new Map<string, PbpAgg>();
+  let prof: Awaited<ReturnType<typeof buildNbaProfile>> | null = null;
+  if (existsSync(join(NBA_RAW, `cdnnba_${STAT_SEASONS[STAT_SEASONS.length - 1] - 1}.tar.xz`))) {
+    console.log('NBA.com play-by-play:');
+    prof = await buildNbaProfile();
+    pbpById = profilesByBbref(prof, perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })));
+  } else console.log('NBA.com play-by-play not found (npm run data:fetch-nba); using box scores only');
+
+  // college production for rookies and recent draftees
+  const college = await loadCollege(NBA_RAW);
+  const cpop = college.size ? collegePop(college) : null;
+  let collegeUsed = 0;
+
   // aggregate stats
   const aggs = new Map<string, Agg>();
   for (const id of ids) {
@@ -111,7 +129,10 @@ function main() {
       else advRows.push(...sr);
     }
     const a = forAgg.length ? aggregate(forAgg, advRows) : null;
-    if (a) aggs.set(id, a);
+    if (a) {
+      a.pbp = pbpById.get(id);
+      aggs.set(id, a);
+    }
   }
   const pop = popStats([...aggs.values()]);
 
@@ -141,6 +162,15 @@ function main() {
     const heightIn = ros?.heightIn || estimateHeight(pos);
     const weightLb = ros?.weightLb || 215;
     const agg = aggs.get(id);
+    // no usable NBA sample: shape from college production when we have it, else draft slot + profile
+    const prior = () => {
+      const col = cpop && age <= 24 ? findCollege(college, name, dr?.college || ros?.college) : undefined;
+      if (col && cpop) {
+        collegeUsed++;
+        return collegeRatings(col, cpop, heightIn, weightLb, age);
+      }
+      return prospectRatings({ heightIn, weightLb, age, pos }, dr?.pick ?? null, id, PROSPECT_HINTS[name]);
+    };
     let ratings: Ratings;
     let tend: Tendencies;
     let rel = 0;
@@ -148,20 +178,26 @@ function main() {
       const d = deriveRatings(agg, { heightIn, weightLb, age, pos }, pop, id);
       rel = d.rel;
       if (agg.rawMin < 400) {
-        // thin NBA sample: blend with a draft-slot prior
-        const pr = prospectRatings({ heightIn, weightLb, age, pos }, dr?.pick ?? null, id, PROSPECT_HINTS[name]);
+        // thin NBA sample: blend with a draft-slot / college prior
+        const pr = prior();
         const w = agg.rawMin / 400;
         ratings = Object.fromEntries(RATING_KEYS.map((k) => [k, d.r[k] * w + pr.r[k] * (1 - w)])) as unknown as Ratings;
       } else ratings = d.r;
       tend = d.tend;
     } else {
-      const pr = prospectRatings({ heightIn, weightLb, age, pos }, dr?.pick ?? null, id, PROSPECT_HINTS[name]);
+      const pr = prior();
       ratings = pr.r;
       tend = pr.tend;
     }
+    const nbaId = pbpById.get(id)?.nbaId;
+    const seasonFga = (s: number) => rows.filter((r) => r.season === s && !COMBINED.test(r.team)).reduce((a, r) => a + r.fga * r.g, 0);
     const stats: PlayerStats[] = rows
       .filter((r) => !COMBINED.test(r.team))
       .map((r) => {
+        // real shot locations from NBA.com, split across teams by shot volume
+        const sp = nbaId && prof ? prof.players[prof.seasons.indexOf(r.season)]?.[nbaId] : undefined;
+        const share = sp ? (r.fga * r.g) / Math.max(1, seasonFga(r.season)) : 0;
+        const zn = (x: number) => Math.round(x * share);
         const a = (advById.get(id) ?? []).find((x) => x.season === r.season && x.team === r.team);
         const g = r.g;
         const t = (v: number) => Math.round(v * g);
@@ -188,10 +224,10 @@ function main() {
           pf: t(r.pf),
           pts: t(r.pts),
           pm: 0,
-          rimM: 0,
-          rimA: 0,
-          midM: 0,
-          midA: 0,
+          rimM: sp ? zn(sp.fgm.rim) : 0,
+          rimA: sp ? zn(sp.fga.rim) : 0,
+          midM: sp ? zn(sp.fgm.mid) : 0,
+          midA: sp ? zn(sp.fga.mid) : 0,
           onPoss: 0,
           onPtsFor: 0,
           onPtsAgainst: 0,
@@ -206,6 +242,7 @@ function main() {
     const lastOpt = c?.options[c.options.length - 1];
     const sp: SeedPlayer = {
       id,
+      nbaId,
       first,
       last,
       pos,
@@ -225,7 +262,7 @@ function main() {
     if (agg && agg.rawMin >= 300) targets.push({ idx: players.length, agg, rel });
     players.push(sp);
   }
-  console.log(`players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents)`);
+  console.log(`players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`);
   const teamCounts: Record<string, number> = {};
   for (const p of players) if (p.team) teamCounts[p.team] = (teamCounts[p.team] ?? 0) + 1;
   console.log('roster sizes:', Object.entries(teamCounts).map(([t, n]) => `${t}:${n}`).join(' '));
@@ -266,7 +303,7 @@ function main() {
     if (lp.tend) {
       const t = lp.tend;
       players[idx].tend = { use: r3(t.use), three: r3(t.three), drive: r3(t.drive), pass: r3(t.pass) };
-      for (const k of ['blk', 'stl', 'orb', 'drb', 'tov', 'pf'] as const) if (t[k] !== undefined) players[idx].tend![k] = r3(t[k]!);
+      for (const k of ['blk', 'stl', 'orb', 'drb', 'tov', 'pf', 'mid', 'corner', 'create'] as const) if (t[k] !== undefined) players[idx].tend![k] = r3(t[k]!);
     }
   }
 
@@ -293,12 +330,14 @@ function main() {
     .filter((x) => x.a && x.a.rawMin >= 1500);
   const corr = pearson(rows.map((x) => x.ovr), rows.map((x) => x.a!.adv.bpm));
   console.log(`OVR vs BPM correlation (1500+ min): ${corr.toFixed(3)} over ${rows.length} players`);
+  const rr = rows.filter((x) => x.a!.pbp);
+  if (rr.length) console.log(`OVR vs RAPM correlation (1500+ min): ${pearson(rr.map((x) => x.ovr), rr.map((x) => x.a!.pbp!.rapmO + x.a!.pbp!.rapmD)).toFixed(3)} over ${rr.length} players`);
   const top = [...players].map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team })).sort((a, b) => b.ovr - a.ovr).slice(0, 30);
   console.log('Top 30:', top.map((x) => `${x.n} ${x.ovr}`).join(', '));
   if (process.env.HC_REPORT) {
     const report = players.map((p) => {
       const a = aggs.get(p.id);
-      return { id: p.id, name: `${p.first} ${p.last}`, team: p.team, age: 2027 - p.bornYear, pick: p.draft?.pick ?? null, rawMin: a?.rawMin ?? 0, wMin: a?.wMin ?? 0, mpg: a?.mpg ?? 0, adv: a?.adv ?? null, per36: a?.per36 ?? null, ratings: p.ratings, tend: p.tend };
+      return { id: p.id, name: `${p.first} ${p.last}`, team: p.team, age: 2027 - p.bornYear, pick: p.draft?.pick ?? null, rawMin: a?.rawMin ?? 0, wMin: a?.wMin ?? 0, mpg: a?.mpg ?? 0, adv: a?.adv ?? null, per36: a?.per36 ?? null, rapm: a?.pbp ? { o: a.pbp.rapmO, d: a.pbp.rapmD, poss: a.pbp.rapmPoss } : null, ratings: p.ratings, tend: p.tend };
     });
     writeFileSync(process.env.HC_REPORT, JSON.stringify({ ovrScale: finalScale, players: report }));
   }
@@ -398,4 +437,4 @@ function pearson(x: number[], y: number[]) {
   return sxy / Math.sqrt(sxx * syy || 1);
 }
 
-main();
+void main();

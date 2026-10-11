@@ -22,32 +22,39 @@ A mobile-first basketball GM **and** head-coach game, built as an installable of
 
 **Simplified CBA**: soft cap (free agents need cap space unless signed for the minimum), unlimited re-signing of your own players, luxury tax, 125% + $100K salary matching when over the cap, a 13-15 man roster, rookie scale, and dead money for releases.
 
-## Real data (Basketball Reference)
+## Real data
 
-The seed is built from Basketball Reference:
-- per-game and advanced tables for 2023-24, 2024-25 and 2025-26 (`/leagues/NBA_20xx_per_game.html`, `_advanced.html`)
-- the current contracts table (`/contracts/players.html`), which decides who plays where in 2026-27 and their salaries
-- 2026-27 and 2025-26 team roster pages (height, weight, birth date, jersey, country, college) and draft pages (draft slot)
+The seed combines three public sources, all fetched by scripts in `scripts/data/`:
+
+| Source | What it provides |
+|---|---|
+| **Basketball Reference** | The current contracts table (who plays where in 2026-27, salaries, options), roster pages (height, weight, birth date, jersey, country, college), draft pages, and per-game and advanced tables for 2023-24 to 2025-26 |
+| **NBA.com** play-by-play (cdn.nba.com) and season matchups (stats.nba.com), archived by the public [shufinskiy/nba_data](https://github.com/shufinskiy/nba_data) dataset | Every shot with its zone and type (pull-up, drive, cut, lob, putback, post move, transition), who assisted it, blocks, steals, turnover and foul types, substitutions (lineups), and who guarded whom |
+| **ESPN college box scores** via [sportsdataverse/hoopR-mbb-data](https://github.com/sportsdataverse/hoopR-mbb-data) | 2024-25 and 2025-26 college production for incoming rookies |
+
+stats.nba.com blocks cloud IPs, so the NBA.com data comes from those GitHub-hosted archives, which download from anywhere.
 
 ```bash
-npm run data:fetch   # polite crawler, ~90 pages at 1 request / 3.7 s, cached in data/raw/
-npm run data:build   # parse → derive ratings → calibrate in the engine → src/data/seed.json
+npm run data:fetch       # Basketball Reference, ~90 pages at 1 request / 3.7 s, cached in data/raw/
+npm run data:fetch-nba   # NBA.com play-by-play + matchups (3 seasons) and college box scores, ~90 MB
+npm run data:build       # parse → profile → RAPM → derive → calibrate in the engine → src/data/seed.json
 ```
 
-Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches the pages on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, and commits `src/data/seed.json` to `main`. It also keeps the raw pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing.
+Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches everything on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, and commits `src/data/seed.json` to `main`. It also keeps the Basketball Reference pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing.
 
-The current seed has 544 players: 483 under contract for 2026-27 plus the best 61 unsigned players from 2025-26.
+The current seed has 544 players: 483 under contract for 2026-27 plus the best 61 unsigned players from 2025-26. All 802 NBA.com players from the last three seasons are matched to their Basketball Reference ids.
 
-How ratings are made (`scripts/data/derive.ts`, `scripts/data/calibrate.ts`, `scripts/data/build-seed.ts`):
-1. Seasons are weighted by recency and minutes (2025-26 ×1.0, 24-25 ×0.6, 23-24 ×0.3). Shooting uses Bayesian priors, and small samples are regressed toward the mean.
-2. Stats map to 21 attributes. The event attributes (shot blocking, steals, rebounding, passing, ball handling) come straight from the rate stats (BLK%, STL%, ORB%, DRB%, AST%, USG%/TOV%), so a rating means what its name says.
-3. **Engine-in-the-loop calibration**: seasons are simulated repeatedly, and each player's simulated per-36 profile is compared with his real one. Shooting ratings and hidden per-player tendencies (usage, shot mix, passing, turnovers, share of rebounds, steals, blocks and fouls) are nudged until he reproduces his real line. The tendencies absorb role and opportunity (a help-side guard who blocks shots, a center whose teammates crash the glass), so they don't distort the visible ratings.
-4. **Small samples are leveled**: players without NBA minutes (2026 draftees, overseas returns) are set from draft slot and scouting-consensus reputation. Short NBA samples are shrunk toward the level their minutes per game suggest. Calibration then settles again around them.
-5. **OVR** is a fitted, size-aware blend of attributes. The weights are non-negative and were fitted so that real players' ratings predict their regressed three-season BPM, plus the minutes and usage coaches gave them (OVR vs BPM r ≈ 0.85).
+How ratings are made (`scripts/data/`):
+1. **Play-by-play profiles** (`nba/pbp.ts`): one pass over each season builds every player's shot diet by zone (the engine's zones: rim, paint, mid-range, corner three, above-the-break three) with make rates, how he creates (pull-ups, drives, cuts, post moves, putbacks, transition, share of makes assisted), assists by the zone they set up, turnover and foul types, fouls drawn, true rebound rates from on-court opportunities, and rim deterrence (opponents' rim attempts and rim FG% with him on the floor). It also rebuilds every lineup stint.
+2. **RAPM** (`nba/rapm.ts`): ridge-regressed adjusted plus-minus over about 200,000 stints from three seasons (recency-weighted, home court modeled), split into offense and defense. Matchup data (`nba/matchups.ts`) adds points saved per 100 possessions guarded, relative to what the same scorers did against everyone else.
+3. **Attributes** (`derive.ts`): seasons are weighted by recency and minutes (2025-26 ×1.0, 24-25 ×0.6, 23-24 ×0.3), with Bayesian priors on percentages. Finishing, floaters and mid-range come from zone make rates; handling from self-creation and lost-ball rate; passing from assist and bad-pass rates; rebounding from true rebound rates; defense from RAPM, matchup defense, rim deterrence, steals and blocks.
+4. **Engine-in-the-loop calibration** (`calibrate.ts`): seasons are simulated repeatedly and each player's simulated profile is compared with his real one. Shooting ratings and hidden per-player tendencies are nudged until he reproduces it. The tendencies cover usage, three-point rate, rim, mid-range and corner-three shares, self-creation, passing, turnovers, share of rebounds, steals, blocks and fouls. The tendencies absorb role and opportunity, so they don't distort the visible ratings.
+5. **Rookies and small samples**: 2026 draftees are shaped by their college production (shooter, passer, rim protector...) and leveled to their draft slot and reputation. Short NBA samples are shrunk toward the level their minutes suggest; calibration then settles again.
+6. **OVR** is a fitted, size-aware blend of attributes. The weights were fitted so that real players' ratings predict half regressed box plus-minus and half RAPM, plus the minutes and usage coaches gave them (OVR vs BPM r ≈ 0.88, vs RAPM r ≈ 0.76).
 
-`npm run real-check` simulates a season with the real league and compares every regular with his real 2025-26 numbers. The current seed gets sim-vs-real correlations of about 0.87 for points, 0.85 for assists and 0.92 for rebounds per game, with league averages on 2025-26 targets.
+`npm run real-check` simulates a season with the real league and compares every regular with his real 2025-26 numbers. With the current seed, sim-vs-real correlations are about 0.86 for points, 0.86 for assists and 0.93 for rebounds per game. Shot diets match too: about 0.93 for rim share, 0.88 for mid-range share and 0.92 for three-point share.
 
-The pipeline is covered by parser unit tests, an offline end-to-end fixture (`scripts/data/test/make-fixture.ts`) and seed sanity tests. New League also offers a fictional league with real franchises.
+The pipeline is covered by parser and pipeline unit tests (CSV, RAPM, name matching), an offline end-to-end fixture (`scripts/data/test/make-fixture.ts`) and seed sanity tests. New League also offers a fictional league with real franchises.
 
 ## Develop
 
@@ -80,7 +87,8 @@ src/core/          engine, ratings, tactics, league systems (pure TypeScript, no
 src/state/         zustand store, IndexedDB persistence, live-game controller, lab worker client
 src/ui/            screens, components, 2D court (live/)
 src/workers/       Tactics Lab web worker
-scripts/data/      Basketball Reference fetch/parse/derive/calibrate pipeline
+scripts/data/      seed pipeline: Basketball Reference fetch/parse, derive, calibrate
+  nba/             NBA.com play-by-play profiles, RAPM, matchups, id crosswalk, college stats
 android/, ios/     Capacitor native projects
 ```
 

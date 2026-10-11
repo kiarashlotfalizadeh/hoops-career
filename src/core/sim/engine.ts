@@ -86,6 +86,9 @@ interface Box {
   rimA: number;
   midM: number;
   midA: number;
+  c3M: number;
+  c3A: number;
+  astM: number; // assisted makes
   onPoss: number;
   onPF: number;
   onPA: number;
@@ -96,7 +99,7 @@ interface Box {
 
 const newBox = (): Box => ({
   sec: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0,
-  pts: 0, pm: 0, rimM: 0, rimA: 0, midM: 0, midA: 0, onPoss: 0, onPF: 0, onPA: 0, tFga: 0, tFta: 0, tTov: 0,
+  pts: 0, pm: 0, rimM: 0, rimA: 0, midM: 0, midA: 0, c3M: 0, c3A: 0, astM: 0, onPoss: 0, onPF: 0, onPA: 0, tFga: 0, tFta: 0, tTov: 0,
 });
 
 export interface SP {
@@ -135,6 +138,10 @@ export interface SP {
   /** usage share above which defenses load up: real players carry their own fitted usage */
   useCap: number;
   useDamp: number;
+  /** shot-diet tendencies: mid-range, corner threes, self-creation */
+  tm: number;
+  tcn: number;
+  tcr: number;
   b: Box;
   injured?: boolean;
   /** Played at least a second. */
@@ -333,6 +340,9 @@ export class GameSim {
         tpf: p.tend?.pf ?? 1,
         useCap: p.tend ? 0.38 : 0.3,
         useDamp: p.tend ? K.usageDamp : 7,
+        tm: p.tend?.mid ?? 1,
+        tcn: p.tend?.corner ?? 1,
+        tcr: p.tend?.create ?? 1,
         b: newBox(),
         played: false,
       };
@@ -837,7 +847,7 @@ export class GameSim {
       default:
         skill = (p.c.create + p.c.rim + p.c.c3) / 3;
     }
-    let w = roleU * p.freedom * p.tu * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
+    let w = roleU * p.freedom * p.tu * p.tcr * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
     // defenses load up on a high-usage player as the game goes on
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
@@ -1440,10 +1450,10 @@ export class GameSim {
     const fr = H.freedom;
     const opts = [
       handlerShoots * Math.pow(H.c.pu3 / 50, 2.4) * pf.three * 0.27 * fr * H.t3 * (1 + pullOpen), // pull-up 3
-      handlerShoots * Math.pow(H.c.midShot / 50, 2.2) * pf.mid * 0.22 * fr * (1 + pullOpen), // pull-up 2
+      handlerShoots * Math.pow(H.c.midShot / 50, 2.2) * pf.mid * 0.22 * fr * Math.sqrt(H.tm) * (1 + pullOpen), // pull-up 2
       handlerShoots * Math.pow(H.c.rim / 50, 1.6) * pf.rim * 0.32 * fr * H.td * (1 + advH * 0.4 + rimOpen * 0.5), // drive
-      Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * Math.pow(S.tu, 0.75) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
-      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(S.c.pop / 50, 2) * Math.pow(S.tu, 0.75) * 0.45 * pf.three * S.t3 * (1 + popOpen) : 0.01, // pop
+      Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
+      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * H.tp * Math.pow(S.c.pop / 50, 2) * (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) * 0.45 * pf.three * S.t3 * (1 + popOpen) : 0.01, // pop
       Math.pow(H.c.passing / 50, 1.3) * H.tp * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
@@ -1455,18 +1465,18 @@ export class GameSim {
         this.shoot(off, def, { shooter: H, zone: 'ab3', open: advOpen * 0.7 + pullOpen - 0.12 + open, contest: dH, assister: null, finish: 'pnrBH', tags: tagsPull, pullup: true });
         return 'done';
       case 1:
-        this.shoot(off, def, { shooter: H, zone: this.rng.chance(0.55) ? 'mid' : 'paint', open: advOpen + pullOpen + open, contest: dH, assister: null, finish: 'pnrBH', tags: tagsPull, pullup: true });
+        this.shoot(off, def, { shooter: H, zone: this.midOr(H, 0.55), open: advOpen + pullOpen + open, contest: dH, assister: null, finish: 'pnrBH', tags: tagsPull, pullup: true });
         return 'done';
       case 2: {
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: H.pid });
-        const zone: ShotZone = this.rng.chance(0.68) ? 'rim' : 'paint';
+        const zone: ShotZone = this.rimOr(H, 0.68);
         this.shoot(off, def, { shooter: H, zone, open: advOpen + rimOpen + open, contest: zone === 'rim' ? def.anchor : dS, assister: null, finish: 'pnrBH', tags: tagsRim });
         return 'done';
       }
       case 3: {
         this.passStep(H, S);
         const rollAdv = (S.c.roll - dS.c.intDef * this.dq(dS)) / 25;
-        this.shoot(off, def, { shooter: S, zone: this.rng.chance(0.75) ? 'rim' : 'paint', open: rollAdv * 0.4 + rollOpen - 0.32 + open, contest: cov === 'blitz' ? def.on.find((p) => p !== dH && p !== dS) ?? def.anchor : def.anchor, assister: H, finish: 'pnrRoll', tags: tagsRoll });
+        this.shoot(off, def, { shooter: S, zone: this.rimOr(S, 0.75), open: rollAdv * 0.4 + rollOpen - 0.32 + open, contest: cov === 'blitz' ? def.on.find((p) => p !== dH && p !== dS) ?? def.anchor : def.anchor, assister: H, finish: 'pnrRoll', tags: tagsRoll });
         return 'done';
       }
       case 4: {
@@ -1479,7 +1489,7 @@ export class GameSim {
         this.passStep(H, sh);
         const d = this.defOf(def, sh);
         const closeout = (d.c.perDef * this.dq(d) - 50) / 200;
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off), open: kickOpen + advOpen * 0.4 - closeout + open, contest: d, assister: H, finish: 'spotup', tags: tagsKick });
+        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: kickOpen + advOpen * 0.4 - closeout + open, contest: d, assister: H, finish: 'spotup', tags: tagsKick });
         return 'done';
       }
       default:
@@ -1488,12 +1498,26 @@ export class GameSim {
   }
 
   private kickTarget(off: ST, ...exclude: SP[]): SP {
-    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : Math.pow(p.c.c3 / 50, 3) * p.t3 * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)));
+    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : (Math.pow(p.c.c3 / 50, 3) * p.t3 * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)) / Math.sqrt(p.tcr)));
     return off.on[this.rng.weighted(ws)];
   }
 
-  private cornerOrWing(off: ST): ShotZone {
-    return this.rng.chance(0.27 + (off.t.offense.threePoint - 50) / 400) ? 'c3' : 'ab3';
+  private cornerOrWing(off: ST, sh?: SP): ShotZone {
+    const base = 0.27 + (off.t.offense.threePoint - 50) / 400;
+    const w = base * (sh?.tcn ?? 1);
+    return this.rng.chance(w / (w + 1 - base)) ? 'c3' : 'ab3';
+  }
+
+  /** Close finish: at the rim with base probability `pRim`, else a floater/hook; tilted by his drive tendency. */
+  private rimOr(p: SP, pRim: number): ShotZone {
+    const w = pRim * Math.sqrt(p.td);
+    return this.rng.chance(w / (w + 1 - pRim)) ? 'rim' : 'paint';
+  }
+
+  /** Pull-up / floater zone: mid-range with base probability `pMid`, tilted by his mid-range tendency. */
+  private midOr(p: SP, pMid: number): ShotZone {
+    const w = pMid * p.tm;
+    return this.rng.chance(w / (w + 1 - pMid)) ? 'mid' : 'paint';
   }
 
   // ISOLATION -------------------------------------------------------
@@ -1542,7 +1566,7 @@ export class GameSim {
     const sizeEdge = (A.r.hgt - D.r.hgt) / 25;
     const opts = [
       Math.pow(A.c.rim / 50, 1.7) * pf.rim * A.td * (1 + rimOpen),
-      Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.9,
+      Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.9 * Math.sqrt(A.tm),
       Math.pow(A.c.pu3 / 50, 2.5) * pf.three * 0.6 * A.t3,
       sizeEdge > 0.3 ? Math.pow(A.c.postScore / 50, 2) * sizeEdge : 0,
       Math.pow(A.c.passing / 50, 1.2) * 0.8 * A.tp * (1 + Math.max(0, help)),
@@ -1554,13 +1578,13 @@ export class GameSim {
     const tagged = (extra: [string, number][]) => extra;
     switch (c) {
       case 0: {
-        const zone: ShotZone = this.rng.chance(0.62) ? 'rim' : 'paint';
+        const zone: ShotZone = this.rimOr(A, 0.62);
         const hp = -help * 0.25;
         this.shoot(off, def, { shooter: A, zone, open: advOpen + spacing * 0.5 + hp - 0.08, contest: zone === 'rim' && this.rng.chance(0.55) ? def.anchor : D, assister: null, finish, tags: tagged([['help_paint', hp], ['spacing', spacing * 0.5]]) });
         return 'done';
       }
       case 1:
-        this.shoot(off, def, { shooter: A, zone: this.rng.chance(0.7) ? 'mid' : 'paint', open: advOpen - 0.12, contest: D, assister: null, finish, tags: tagged([]), pullup: true });
+        this.shoot(off, def, { shooter: A, zone: this.midOr(A, 0.7), open: advOpen - 0.12, contest: D, assister: null, finish, tags: tagged([]), pullup: true });
         return 'done';
       case 2:
         this.shoot(off, def, { shooter: A, zone: 'ab3', open: advOpen * 0.6 - 0.2, contest: D, assister: null, finish, tags: tagged([]), pullup: true });
@@ -1571,7 +1595,7 @@ export class GameSim {
         const sh = this.kickTarget(off, A);
         this.passStep(A, sh);
         const ko = 0.15 + Math.max(0, help) * 0.3;
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off), open: ko + advOpen * 0.3, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.3]] });
+        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: ko + advOpen * 0.3, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.3]] });
         return 'done';
       }
       default:
@@ -1598,12 +1622,12 @@ export class GameSim {
       if (this.rng.chance(0.3) && sh.c.rim > 52) {
         this.shoot(off, def, { shooter: sh, zone: 'rim', open: o * 0.6, contest: def.anchor, assister: A, finish: 'cut' });
       } else {
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off), open: o, contest: this.defOf(def, sh), assister: A, finish: 'spotup' });
+        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o, contest: this.defOf(def, sh), assister: A, finish: 'spotup' });
       }
       return 'done';
     }
     // tries to split the double anyway
-    this.shoot(off, def, { shooter: A, zone: this.rng.chance(0.5) ? 'mid' : 'paint', open: -0.55, contest: this.defOf(def, A), assister: null, finish: from === 'post' ? 'post' : 'iso', tags: [['star_double', -0.4]] });
+    this.shoot(off, def, { shooter: A, zone: this.midOr(A, 0.5), open: -0.55, contest: this.defOf(def, A), assister: null, finish: from === 'post' ? 'post' : 'iso', tags: [['star_double', -0.4]] });
     return 'done';
   }
 
@@ -1660,7 +1684,7 @@ export class GameSim {
         const tgt = cutter ? off.on.filter((p) => p !== A).sort((a, b) => b.c.cut - a.c.cut)[0] : this.kickTarget(off, A);
         this.passStep(A, tgt);
         if (cutter) this.shoot(off, def, { shooter: tgt, zone: 'rim', open: 0.25 + advOpen * 0.3, contest: def.anchor, assister: A, finish: 'cut' });
-        else this.spotUp(off, def, { shooter: tgt, zone: this.cornerOrWing(off), open: 0.2 + Math.max(0, help) * 0.25, contest: this.defOf(def, tgt), assister: A, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.25]] });
+        else this.spotUp(off, def, { shooter: tgt, zone: this.cornerOrWing(off, tgt), open: 0.2 + Math.max(0, help) * 0.25, contest: this.defOf(def, tgt), assister: A, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.25]] });
         return 'done';
       }
       default:
@@ -1717,7 +1741,7 @@ export class GameSim {
         this.shoot(off, def, { shooter: Sh, zone: this.rng.chance(0.2) ? 'c3' : 'ab3', open: advOpen - 0.02, contest: D, assister: B, finish, tags });
         return 'done';
       case 1:
-        this.shoot(off, def, { shooter: Sh, zone: this.rng.chance(0.5) ? 'mid' : 'paint', open: advOpen - 0.05, contest: D, assister: this.rng.chance(0.4) ? B : null, finish, tags });
+        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05, contest: D, assister: this.rng.chance(0.4) ? B : null, finish, tags });
         return 'done';
       case 2:
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: Sh.pid });
@@ -1754,7 +1778,7 @@ export class GameSim {
       return 'done';
     }
     const cutters = off.on.filter((p) => p !== passer);
-    const cutW = cutters.map((p) => Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1));
+    const cutW = cutters.map((p) => (Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1)) / Math.sqrt(p.tcr));
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
     // backdoor cuts punish ball pressure / denial
     const backdoor = Math.max(0, pr) * 0.3;
@@ -1777,7 +1801,7 @@ export class GameSim {
         if (zone) tags.push(['zone_paint', -0.2]);
         const cd = this.defOf(def, cutter);
         const o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -0.2 : 0);
-        this.shoot(off, def, { shooter: cutter, zone: this.rng.chance(0.8) ? 'rim' : 'paint', open: o, contest: this.rng.chance(0.5) ? def.anchor : cd, assister: passer, finish: 'cut', tags });
+        this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rng.chance(0.5) ? def.anchor : cd, assister: passer, finish: 'cut', tags });
         return 'done';
       }
       case 1: {
@@ -1795,7 +1819,7 @@ export class GameSim {
           tags.push(['help_kick', help * 0.15]);
         }
         const d = this.defOf(def, sh);
-        this.spotUp(off, def, { shooter: sh, zone: def.t.defense.scheme === 'zone23' && this.rng.chance(0.45) ? 'c3' : this.cornerOrWing(off), open: o, contest: d, assister: passer, finish: 'spotup', tags });
+        this.spotUp(off, def, { shooter: sh, zone: def.t.defense.scheme === 'zone23' && this.rng.chance(0.45) ? 'c3' : this.cornerOrWing(off, sh), open: o, contest: d, assister: passer, finish: 'spotup', tags });
         return 'done';
       }
       case 2: {
@@ -1809,15 +1833,15 @@ export class GameSim {
           const sh = this.kickTarget(off, dr);
           this.passStep(dr, sh);
           const ko = 0.12 + Math.max(0, help) * 0.3 + Math.max(0, dAdv) * 0.2;
-          this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off), open: ko, contest: this.defOf(def, sh), assister: dr, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.3]] });
+          this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: ko, contest: this.defOf(def, sh), assister: dr, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.3]] });
         } else {
-          const zoneS: ShotZone = this.rng.chance(0.6) ? 'rim' : 'paint';
+          const zoneS: ShotZone = this.rimOr(dr, 0.6);
           this.shoot(off, def, { shooter: dr, zone: zoneS, open: dAdv * 0.35 - help * 0.25 + this.spacingBonus(off) * 0.4, contest: zoneS === 'rim' ? def.anchor : d, assister: passer, finish: 'spotup', tags: [['help_paint', -help * 0.25], ['spacing', this.spacingBonus(off) * 0.4]] });
         }
         return 'done';
       }
       case 3: {
-        const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom * Math.pow(p.tu, 0.75)))];
+        const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom * Math.pow(p.tu, 0.75) * p.tm))];
         this.passStep(passer, sh);
         this.shoot(off, def, { shooter: sh, zone: 'mid', open: advOpen * 0.5, contest: this.defOf(def, sh), assister: this.rng.chance(0.5) ? passer : null, finish: 'spotup' });
         return 'done';
@@ -2014,6 +2038,7 @@ export class GameSim {
       }
       if (zone === 'rim') sh.b.rimA++;
       if (zone === 'mid') sh.b.midA++;
+      if (zone === 'c3') sh.b.c3A++;
       if (this.record || this.opts.keepShots) {
         this.shots.push({ t: off.side, pid: sh.pid, x: Math.round(xy.x * 10) / 10, y: Math.round(xy.y * 10) / 10, made, zone, q: this.q });
       }
@@ -2036,7 +2061,9 @@ export class GameSim {
       }
       if (zone === 'rim') sh.b.rimM++;
       if (zone === 'mid') sh.b.midM++;
+      if (zone === 'c3') sh.b.c3M++;
       if (ast) {
+        sh.b.astM++;
         ast.b.ast++;
         off.tot.ast++;
       }
@@ -2087,7 +2114,8 @@ export class GameSim {
     const d = s.contest ?? this.defOf(def, sh);
     const adv = (sh.c.create - d.c.perDef * this.dq(d)) / 20 + Math.max(0, s.open) * 0.6;
     const r = this.rng.next();
-    const zone: ShotZone = r < 0.55 ? 'rim' : r < 0.85 ? 'paint' : 'mid';
+    const pMid = (0.15 * sh.tm) / (0.15 * sh.tm + 0.85);
+    const zone: ShotZone = r < pMid ? 'mid' : this.rimOr(sh, 0.65);
     const help = this.help(def);
     this.shoot(off, def, {
       shooter: sh,
@@ -2212,7 +2240,7 @@ export class GameSim {
     // immediate putback for bigs near the rim
     if (rebounder && this.rng.chance(clamp(0.25 + (rebounder.r.hgt - 50) / 100 + (rebounder.c.rim - 50) / 150, 0.1, 0.65))) {
       this.tick(this.rng.uniform(0.8, 2.5));
-      this.shoot(off, def, { shooter: rebounder, zone: this.rng.chance(0.75) ? 'rim' : 'paint', open: this.rng.normal(-0.3, 0.3), contest: def.anchor, assister: null, finish: 'putback' });
+      this.shoot(off, def, { shooter: rebounder, zone: this.rimOr(rebounder, 0.75), open: this.rng.normal(-0.3, 0.3), contest: def.anchor, assister: null, finish: 'putback' });
       return;
     }
     // reset with a 14-second shot clock
