@@ -373,9 +373,13 @@ function ScrollTop() {
     window.scrollTo(0, y);
     // lazy screens may render after this; try again once they have height
     const timers = y ? [60, 200, 450].map((ms) => setTimeout(() => window.scrollY < y - 2 && window.scrollTo(0, y), ms)) : [];
+    // kept as it changes: by the time this screen is left, the next one (or its loading
+    // placeholder) is already in the page and may have pulled the scroll back to the top
+    const onScroll = () => scrollPositions.set(key, window.scrollY);
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       timers.forEach(clearTimeout);
-      scrollPositions.set(key, window.scrollY);
+      window.removeEventListener('scroll', onScroll);
     };
   }, [loc.key, type]);
   return null;
