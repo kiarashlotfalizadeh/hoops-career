@@ -1273,3 +1273,39 @@ body:has(.input:focus) .simbar {
     margin: 0 auto;
   }
 }
+
+/* touch screens: every compact control answers a 44px finger. Tab-bar options and chips grow a little
+   (the bar's own padding and the gaps around chips make up the rest); buttons only widen their hit area */
+@media (pointer: coarse) {
+  .seg button {
+    height: 38px;
+  }
+  .chip {
+    height: 36px;
+  }
+  .chip::after {
+    inset: -4px -3px;
+  }
+  .btn.sm::after {
+    inset: -5px -1px;
+  }
+  .btn.xs::after {
+    inset: -8px -2px;
+  }
+  .help-btn::after {
+    inset: -11px;
+  }
+  /* the live transport row stays one slim line: its speed options keep their size and reach out instead */
+  .live-ctl .seg button {
+    height: 34px;
+  }
+  .live-ctl .btn.sm::after,
+  .live-ctl .seg button::after {
+    inset: -5px -1px;
+  }
+  /* the league hub's season / team pickers and its player search (league.css sets 34px) */
+  select.lg-select,
+  div.lg-search input {
+    height: 40px;
+  }
+}
