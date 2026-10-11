@@ -1267,6 +1267,8 @@ export class GameSim {
       setup = Math.max(setup, this.clock - 6.5);
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
+    // the period is about to run out: push it up the floor and get a shot off before the buzzer
+    if (this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
     let shotClock = GAME.shotClock - (ctx === 'orb' ? 10 : 0);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
@@ -2773,7 +2775,7 @@ export class GameSim {
     // reset with a 14-second shot clock
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
-    const setup = this.rng.uniform(1.5, 4);
+    const setup = Math.min(this.rng.uniform(1.5, 4), Math.max(0.3, this.clock * 0.4));
     this.tick(setup);
     if (this.clock <= 0.05) {
       this.finishPoss(off, def, 'putback');

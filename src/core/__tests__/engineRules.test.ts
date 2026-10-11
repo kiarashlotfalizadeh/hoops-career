@@ -70,7 +70,7 @@ describe('engine rules', () => {
     expect(t.on.every((x) => x.out === 0)).toBe(true);
   });
 
-  it('plays exactly 48 minutes and books the opening five as starters', () => {
+  it('plays exactly 48 minutes, books the opening five as starters and gets a shot off late in a period', () => {
     for (let g = 0; g < 4; g++) {
       const sim = new GameSim(side(2), side(3), { rng: new Rng(300 + g), type: 'regular', injuries: false });
       const opening = sim.T.map((t) => t.on.map((p) => p.pid).sort((a, b) => a - b));
@@ -86,6 +86,22 @@ describe('engine rules', () => {
         ).toEqual(opening[i]);
       }
     }
+    // five seconds left before the half: the offense gets a shot (or a trip to the line) off
+    let shots = 0;
+    for (let g = 0; g < 20; g++) {
+      const sim = new GameSim(side(4), side(5), { rng: new Rng(500 + g), type: 'regular', injuries: false }) as unknown as Internals & {
+        T: { tot: { fga: number; fta: number; tov: number } }[];
+        poss: number;
+        step(): boolean;
+      };
+      sim.q = 2;
+      sim.clock = 5;
+      const off = sim.T[sim.poss].tot;
+      const before = off.fga + off.fta + off.tov;
+      sim.step();
+      if (off.fga + off.fta + off.tov > before) shots++;
+    }
+    expect(shots).toBeGreaterThanOrEqual(18);
   });
 
   it('awards free throws only in the penalty, with the two-minute rule in every period and four fouls in overtime', () => {
