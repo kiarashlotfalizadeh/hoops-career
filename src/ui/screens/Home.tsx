@@ -395,7 +395,7 @@ export default function Home() {
             .sort((a, b) => b.ovr - a.ovr)
             .slice(0, 8)
             .map((p) => (
-              <Link key={p.pid} to={`/player/${p.pid}`} className="kpi" style={{ minWidth: 112 }}>
+              <Link key={p.pid} to={`/player/${p.pid}`} className="kpi" style={{ minWidth: 112, maxWidth: 180, flex: 'none' }}>
                 <div className="row between">
                   <Ovr v={p.ovr} size="sm" />
                   <span className="tiny dim">{p.pos}</span>
