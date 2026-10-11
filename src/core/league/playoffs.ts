@@ -1,5 +1,5 @@
 import type { League, PlayInGame, PlayoffSeries, ScheduledGame } from '../types';
-import { confStandings } from './standings';
+import { confStandings, finalsHomeCourt } from './standings';
 import { addInbox, addNews, curTeamSeason, teamName } from './helpers';
 
 export function startPlayIn(league: League) {
@@ -82,6 +82,7 @@ export function startPlayoffs(league: League) {
   }
   league.phase = 'playoffs';
   league.day += 2;
+  schedulePlayoffDay(league);
   const user = league.userTid;
   const inIt = league.playoffs.some((s) => s.high === user || s.low === user);
   addInbox(league, {
@@ -95,16 +96,24 @@ export function startPlayoffs(league: League) {
 
 const HOME_PATTERN = [true, true, false, false, true, false, true]; // 2-2-1-1-1 from the higher seed's view
 
+/**
+ * Schedule each live series' next game: every other day within a series, two days off between
+ * rounds (a round starts once the whole previous round is over). Runs as soon as a result is in,
+ * so the next game is on the calendar (Home, Schedule) ahead of its day.
+ */
 export function schedulePlayoffDay(league: League) {
+  const lastDay = (pred: (g: ScheduledGame) => boolean) => league.schedule.reduce((d, g) => (g.type === 'playoffs' && pred(g) ? Math.max(d, g.day) : d), -Infinity);
   for (const s of league.playoffs) {
     if (s.winner !== undefined) continue;
     const pending = league.schedule.some((g) => g.seriesId === s.id && !g.played);
     if (pending) continue;
     const n = s.highWins + s.lowWins;
+    const prevRound = new Set(league.playoffs.filter((x) => x.round === s.round - 1).map((x) => x.id));
+    const earliest = n > 0 ? lastDay((g) => g.seriesId === s.id) + 2 : lastDay((g) => prevRound.has(g.seriesId!)) + 3;
     const highHome = HOME_PATTERN[n];
     league.schedule.push({
       gid: league.nextGid++,
-      day: league.day,
+      day: Math.max(league.day, earliest),
       home: highHome ? s.high : s.low,
       away: highHome ? s.low : s.high,
       type: 'playoffs',
@@ -131,6 +140,8 @@ export function processPlayoffResult(league: League, g: ScheduledGame, homeWon: 
     addNews(league, { kind: 'general', text: `${teamName(wt)} defeat the ${lt.name} ${res} in the ${roundName}.`, tids: [wt.tid, lt.tid], pids: [] });
     advanceRounds(league);
   }
+  // the next game (or the next round's opener) goes on the calendar as soon as it's known
+  schedulePlayoffDay(league);
 }
 
 function seedOf(s: PlayoffSeries, tid: number) {
@@ -171,9 +182,7 @@ function advanceRounds(league: League) {
       const w = rs.find((s) => s.conf === 'W')!;
       const te = e.winner!;
       const tw = w.winner!;
-      const eTs = curTeamSeason(league, te);
-      const wTs = curTeamSeason(league, tw);
-      const eHigh = eTs.won / Math.max(1, eTs.won + eTs.lost) >= wTs.won / Math.max(1, wTs.won + wTs.lost);
+      const eHigh = finalsHomeCourt(league, te, tw) === te;
       league.playoffs.push({
         id: 'F4-0',
         round: 4,

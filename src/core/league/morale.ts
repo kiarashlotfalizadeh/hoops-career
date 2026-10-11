@@ -105,3 +105,9 @@ export function updateMorale(league: League, tid: number, notify = false) {
 export function moodPerf(p: Player): number {
   return 1 + clamp(p.mood.score, -8, 6) * 0.004;
 }
+
+/** Teammates of players who have asked out play a little worse (-0.6% for each, two at most). */
+export function lockerRoomPerf(roster: Player[], p: Player): number {
+  const unhappy = roster.filter((o) => o.pid !== p.pid && o.mood.tradeRequest).length;
+  return 1 - 0.006 * Math.min(2, unhappy);
+}

@@ -1,19 +1,26 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
-// windows, draft order, two-way contracts and phase guards. Fast: no full-season sims.
+// windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar, awards,
+// the owner, morale and wear. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
+import { advanceDay, faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
-import { standings } from '../league/standings';
+import { buildSimInput, wearInjuryRisk } from '../league/games';
+import { finalsHomeCourt, standings } from '../league/standings';
+import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
+import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
+import { ownerEvaluation, takeOverTeam } from '../league/owner';
+import { inSeasonProgression } from '../league/progression';
 import { runLottery } from '../league/draft';
-import { contractExp, salaryFor } from '../playerGen';
+import { RATING_KEYS } from '../ratings';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
 import { Rng } from '../random';
-import type { League, Player } from '../types';
+import type { League, Player, PlayoffSeries } from '../types';
 import { FREE_AGENT } from '../types';
 
 const seed = seedJson as unknown as SeedData;
@@ -299,5 +306,349 @@ describe('signing window (bug 12) and two-way contracts', () => {
     const vet = freeAgents(l).find((p) => p.experience > 3)!;
     expect(userTwoWayOffer(l, vet.pid).ok).toBe(false);
     expect(vet.tid).toBe(FREE_AGENT);
+  });
+});
+
+describe('standings tiebreaks: NBA procedure (L5, L18)', () => {
+  // three East teams tied at 50-32; A leads its division, B and C trail better teams in theirs
+  function tied() {
+    const l = league();
+    const east = l.teams.filter((t) => t.conf === 'E');
+    const divs = [...new Set(east.map((t) => t.div))];
+    const inDiv = (d: number) => east.filter((t) => t.div === divs[d]).map((t) => t.tid);
+    const [A, B, C] = [inDiv(0)[0], inDiv(1)[1], inDiv(2)[1]];
+    const rec = (tid: number, w: number) => ([curTeamSeason(l, tid).won, curTeamSeason(l, tid).lost] = [w, 82 - w]);
+    for (const t of east) rec(t.tid, 30);
+    [A, B, C].forEach((tid) => rec(tid, 50));
+    rec(inDiv(1)[0], 60);
+    rec(inDiv(2)[0], 58);
+    return { l, A, B, C };
+  }
+  const game = (l: League, w: number, lo: number) => ({ type: 'regular', season: l.season, home: { tid: w, pts: 110 }, away: { tid: lo, pts: 100 } });
+  const eastOrder = (l: League) => standings(l).filter((r) => r.conf === 'E').map((r) => r.tid);
+
+  it('3+ tied teams: division leader before head-to-head; the rest restart as a two-team tie', () => {
+    const { l, A, B, C } = tied();
+    // A lost all four to B and C; C won the B-C season series
+    l.games = [game(l, B, A), game(l, B, A), game(l, C, A), game(l, C, A), game(l, C, B), game(l, C, B)] as unknown as League['games'];
+    expect(eastOrder(l).filter((tid) => [A, B, C].includes(tid))).toEqual([A, C, B]);
+  });
+
+  it('2 tied teams: head-to-head before division leader', () => {
+    const { l, A, B, C } = tied();
+    curTeamSeason(l, C).won = 49;
+    curTeamSeason(l, C).lost = 33;
+    l.games = [game(l, B, A), game(l, B, A)] as unknown as League['games'];
+    expect(eastOrder(l).filter((tid) => tid === A || tid === B)).toEqual([B, A]);
+  });
+
+  it('a tie nothing breaks goes to a fixed drawing, not the lowest team id', () => {
+    const l = league();
+    for (const t of l.teams) [curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [41, 41];
+    l.games = [];
+    const order = eastOrder(l);
+    expect(eastOrder(l)).toEqual(order);
+    expect(order).not.toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('Finals home court between equal records goes by head-to-head, not to the East', () => {
+    const l = league();
+    const e = l.teams.find((t) => t.conf === 'E')!.tid;
+    const w = l.teams.find((t) => t.conf === 'W')!.tid;
+    for (const tid of [e, w]) [curTeamSeason(l, tid).won, curTeamSeason(l, tid).lost] = [55, 27];
+    l.games = [game(l, w, e), game(l, w, e)] as unknown as League['games'];
+    expect(finalsHomeCourt(l, e, w)).toBe(w);
+    // season series split: record against the other conference
+    l.games = [game(l, e, w), game(l, w, e)] as unknown as League['games'];
+    curTeamSeason(l, e).confWon = 30;
+    curTeamSeason(l, w).confWon = 40;
+    expect(finalsHomeCourt(l, e, w)).toBe(e);
+  });
+});
+
+describe('play-in and playoff bracket (L19)', () => {
+  /** Win the next game of a series for `winner`, through the scheduled game. */
+  function win(l: League, id: string, winner: number) {
+    schedulePlayoffDay(l);
+    const g = l.schedule.find((x) => x.seriesId === id && !x.played)!;
+    g.played = true;
+    processPlayoffResult(l, g, g.home === winner);
+  }
+
+  it('seeds 1-6, plays 7v8 and 9v10, then the last spot, and pairs 1-8, 4-5, 3-6, 2-7 with higher seeds first', () => {
+    const l = league();
+    for (const conf of ['E', 'W'] as const)
+      l.teams
+        .filter((t) => t.conf === conf)
+        .forEach((t, i) => ([curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [60 - i * 2, 22 + i * 2]));
+    const east = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    l.games = [];
+    startPlayIn(l);
+    expect(east.slice(0, 6).map((tid) => curTeamSeason(l, tid).seed)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(l.playIn.filter((p) => p.conf === 'E').map((p) => [p.home, p.away])).toEqual([
+      [east[6], east[7]],
+      [east[8], east[9]],
+    ]);
+    // 8 beats 7, 10 beats 9: 7 hosts 10 for the last spot, and 10 takes it
+    const play = (id: string, homeWon: boolean) => {
+      const g = l.schedule.find((x) => x.seriesId === id && !x.played)!;
+      g.played = true;
+      processPlayInResult(l, g, homeWon);
+    };
+    for (const conf of ['E', 'W']) {
+      play(`${conf}-78`, false);
+      play(`${conf}-910`, false);
+    }
+    const last = l.playIn.find((p) => p.id === 'E-8')!;
+    expect([last.home, last.away]).toEqual([east[6], east[9]]);
+    play('E-8', false);
+    play('W-8', true);
+    expect(playInDone(l)).toBe(true);
+    expect(curTeamSeason(l, east[7]).seed).toBe(7);
+    expect(curTeamSeason(l, east[9]).seed).toBe(8);
+    expect(curTeamSeason(l, east[6]).playoffRound).toBe(-1);
+    startPlayoffs(l);
+    const r1 = l.playoffs.filter((s) => s.conf === 'E');
+    expect(r1.map((s) => [s.highSeed, s.lowSeed])).toEqual([
+      [1, 8],
+      [4, 5],
+      [3, 6],
+      [2, 7],
+    ]);
+    // upsets everywhere but 4-5: the 8 seed meets the 4 seed with home court going to the 4
+    for (const s of l.playoffs.filter((x) => x.round === 1)) for (let i = 0; i < 4; i++) win(l, s.id, s.highSeed === 4 ? s.high : s.low);
+    const r2 = l.playoffs.find((s) => s.id === 'E2-0')!;
+    expect([r2.highSeed, r2.lowSeed]).toEqual([4, 8]);
+    expect(r2.high).toBe(east[3]);
+    expect(l.playoffs.filter((s) => s.round === 2).length).toBe(4);
+    for (const round of [2, 3]) for (const s of l.playoffs.filter((x) => x.round === round)) for (let i = 0; i < 4; i++) win(l, s.id, s.high);
+    const finals = l.playoffs.find((s) => s.round === 4)!;
+    for (let i = 0; i < 4; i++) win(l, finals.id, finals.low);
+    expect(champion(l)).toBe(finals.low);
+    expect(curTeamSeason(l, finals.low).playoffRound).toBe(5);
+    expect(curTeamSeason(l, finals.high).playoffRound).toBe(4);
+  });
+});
+
+describe('playoff calendar (L10)', () => {
+  it('series play every other day with two days off between rounds', () => {
+    const l = league();
+    const [a, b, c, d] = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    l.phase = 'playoffs';
+    l.schedule = [];
+    l.day = 100;
+    const series = (id: string, round: number, high: number, low: number): PlayoffSeries => ({ id, round, conf: 'E', high, low, highSeed: 1, lowSeed: 8, highWins: 0, lowWins: 0 });
+    l.playoffs = [series('E1-0', 1, a, b), series('E1-1', 1, c, d)];
+    schedulePlayoffDay(l);
+    expect(l.schedule.map((g) => g.day)).toEqual([100, 100]);
+    for (const g of l.schedule) g.played = true;
+    l.playoffs.forEach((s) => (s.highWins = 1));
+    l.day = 101;
+    schedulePlayoffDay(l);
+    expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([102, 102]);
+    // round 1 over on day 110: round 2 tips off on day 113
+    for (const g of l.schedule) g.played = true;
+    l.schedule.push({ gid: 999, day: 110, home: a, away: b, type: 'playoffs', seriesId: 'E1-0', played: true });
+    l.playoffs.forEach((s) => ((s.highWins = 4), (s.winner = s.high)));
+    l.playoffs.push(series('E2-0', 2, a, c));
+    l.day = 111;
+    schedulePlayoffDay(l);
+    expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([113]);
+  });
+
+  it("the next game, and the next round's opener, are on the calendar as soon as a result is in", () => {
+    const l = league();
+    const east = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
+    l.phase = 'playoffs';
+    l.schedule = [];
+    l.day = 100;
+    // the East semifinals are done; one conference final is under way
+    l.playoffs = [
+      { id: 'E2-0', round: 2, conf: 'E', high: east[0], low: east[1], highSeed: 1, lowSeed: 4, highWins: 4, lowWins: 1, winner: east[0] },
+      { id: 'E2-1', round: 2, conf: 'E', high: east[2], low: east[3], highSeed: 2, lowSeed: 3, highWins: 3, lowWins: 3 },
+    ];
+    const game7 = { gid: 1, day: 100, home: east[2], away: east[3], type: 'playoffs' as const, seriesId: 'E2-1', played: true };
+    l.schedule.push(game7);
+    processPlayoffResult(l, game7, true);
+    // East finals wait for the West; with no West bracket here, the opener follows the semis
+    const opener = l.schedule.filter((g) => !g.played);
+    expect(opener.map((g) => [g.seriesId, g.day])).toEqual([['E3-0', 103]]);
+    opener[0].played = true;
+    processPlayoffResult(l, opener[0], true);
+    expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([105]);
+  });
+
+  it('wear recovers on postseason days too', () => {
+    const l = league();
+    l.phase = 'playoffs';
+    l.playoffs = [];
+    l.schedule = [];
+    const p = standardRoster(l, U)[0];
+    p.wear = 40;
+    advanceDay(l);
+    expect(p.wear).toBeCloseTo(39.25);
+  });
+});
+
+describe('awards (L13, L18)', () => {
+  /** Every rostered player gets a 70-game line (half of them starters); returns a setter for one line. */
+  function seasonOf(l: League) {
+    for (const t of l.teams) [curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [41, 41];
+    const line = (p: Player, gp: number, gs: number, ppg: number) => {
+      const s = statsLine(p, l.season, p.tid, false);
+      Object.assign(s, { gp, gs, min: 24 * gp, pts: ppg * gp, fgm: (ppg / 2.2) * gp, fga: (ppg / 1.1) * gp });
+    };
+    for (const p of Object.values(l.players)) if (p.tid >= 0) line(p, 70, (p.pid % 2) * 70, 6);
+    return line;
+  }
+
+  it('Sixth Man needs more games off the bench than as a starter (half and half is out)', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [half, bench] = standardRoster(l, U);
+    line(half, 70, 35, 30);
+    line(bench, 70, 34, 25);
+    expect(computeRegularSeasonAwards(l).smoy).toBe(bench.pid);
+  });
+
+  it('All-Rookie has a 1st and a 2nd team', () => {
+    const l = league();
+    seasonOf(l);
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.allRookie.length).toBe(10);
+    expect(new Set(aw.allRookie).size).toBe(10);
+    expect(l.players[aw.allRookie[0]].awards.some((a) => a.type === 'All-Rookie 1st Team')).toBe(true);
+    expect(l.players[aw.allRookie[9]].awards.some((a) => a.type === 'All-Rookie 2nd Team')).toBe(true);
+  });
+
+  it('an injured All-Star keeps the honor and gets a replacement from his conference', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const star = Object.values(l.players).find((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E')!;
+    line(star, 70, 70, 40);
+    for (const p of Object.values(l.players)) p.injury = null;
+    star.injury = { type: 'Sprained Ankle', gamesRemaining: 5, gamesTotal: 6, severity: 'minor' };
+    const as = selectAllStars(l);
+    expect(as.E).toContain(star.pid);
+    expect(as.E.length).toBe(13);
+    expect(as.W.length).toBe(12);
+    const sub = l.players[as.E[12]];
+    expect(sub.injury).toBeNull();
+    expect(l.teams[sub.tid].conf).toBe('E');
+    expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
+  });
+
+  it('MVP needs 65 games and 20 minutes; Rookie of the Year goes to a rookie (L19)', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [short, full] = standardRoster(l, U).filter((p) => p.draft.year !== l.season - 1);
+    line(short, 64, 64, 40);
+    line(full, 65, 65, 30);
+    const vet = standardRoster(l, aiTeam(l)).find((p) => p.draft.year !== l.season - 1)!;
+    line(vet, 70, 0, 28);
+    vet.experience = 0;
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.mvp).toBe(full.pid);
+    expect(l.players[aw.roy!].draft.year).toBe(l.season - 1);
+    expect(aw.allNba.flat()).not.toContain(short.pid);
+  });
+});
+
+describe('free agency calendar (UI2-22)', () => {
+  it('advancing past day 30 stops on day 30', () => {
+    const l = league();
+    l.phase = 'freeAgency';
+    l.faDay = 27;
+    faAdvance(l, 7);
+    expect(l.faDay).toBe(30);
+  });
+});
+
+describe('owner (L11, L19)', () => {
+  it('fires after the grace period for a bad record, never during it or with job security off', () => {
+    const l = league();
+    const ts = curTeamSeason(l, U);
+    [ts.won, ts.lost, ts.playoffRound] = [15, 67, -1];
+    const review = (tenureStart: number, jobSecurity: boolean) => {
+      l.ownerMood = { wins: -0.8, playoffs: -0.25, money: 0, total: -0.6 };
+      l.tenureStart = tenureStart;
+      l.settings.jobSecurity = jobSecurity;
+      ownerEvaluation(l);
+    };
+    review(l.season - 1, true);
+    expect(l.fired).toBeFalsy();
+    review(l.season - 3, false);
+    expect(l.fired).toBeFalsy();
+    review(l.season - 3, true);
+    expect(l.fired).toBe(true);
+    expect(l.inbox[0].subject).toBe("You're fired");
+  });
+
+  it('a fired coach is not reviewed again; taking over a team clears the old plan and board', () => {
+    const l = league();
+    l.fired = true;
+    const mood = { ...l.ownerMood };
+    const inbox = l.inbox.length;
+    ownerEvaluation(l);
+    expect(l.ownerMood).toEqual(mood);
+    expect(l.inbox.length).toBe(inbox);
+    l.gamePlan = { oppTid: 3, items: [] };
+    l.draftBoard = [1, 2, 3];
+    takeOverTeam(l, aiTeam(l));
+    expect(l.fired).toBe(false);
+    expect(l.gamePlan).toBeNull();
+    expect(l.draftBoard).toBeUndefined();
+  });
+});
+
+describe('development (L14)', () => {
+  it("in-season development counts this season's minutes, not last season's", () => {
+    const base = league();
+    base.phase = 'regular';
+    const young = standardRoster(base, U).find((p) => playerAge(p, base.season) <= 23)!;
+    const grow = (mpg: number) => {
+      const l = structuredClone(base);
+      const p = l.players[young.pid];
+      Object.assign(statsLine(p, l.season, U, false), { gp: 20, min: 20 * mpg });
+      inSeasonProgression(l, new Rng(5));
+      return RATING_KEYS.reduce((a, k) => a + p.ratings[k], 0);
+    };
+    expect(grow(32)).toBeGreaterThan(grow(3));
+  });
+});
+
+describe('morale and wear (L17)', () => {
+  it('a player who asked out weighs on his teammates', () => {
+    const l = league();
+    const [star, mate] = standardRoster(l, U);
+    for (const p of teamPlayers(l, U)) p.mood = { ...p.mood, score: 0, tradeRequest: false };
+    const before = buildSimInput(l, U, 0, 'regular').perf!;
+    star.mood.tradeRequest = true;
+    const after = buildSimInput(l, U, 0, 'regular').perf!;
+    expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
+    expect(after[star.pid]).toBeCloseTo(before[star.pid]);
+  });
+
+  it('worn-down players carry extra injury risk', () => {
+    const p = standardRoster(league(), U)[0];
+    p.wear = 30;
+    expect(wearInjuryRisk(p)).toBe(0);
+    p.wear = 70;
+    expect(wearInjuryRisk(p)).toBeCloseTo(0.3);
+    p.wear = 100;
+    expect(wearInjuryRisk(p)).toBeCloseTo(0.6);
+  });
+
+  it('trade requests that still apply survive the summer', () => {
+    const l = league();
+    const [angry, calmer] = standardRoster(l, U);
+    const fa = freeAgents(l)[0];
+    for (const [p, score] of [[angry, -8], [calmer, -3], [fa, -8]] as const) p.mood = { ...p.mood, score, tradeRequest: true };
+    l.phase = 'freeAgency';
+    l.faDay = 30;
+    expect(newSeason(l)).toBe(true);
+    expect(angry.mood.tradeRequest).toBe(angry.tid === U);
+    expect(calmer.mood.tradeRequest).toBe(false);
+    expect(fa.mood.tradeRequest).toBe(false);
   });
 });

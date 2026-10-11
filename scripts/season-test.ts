@@ -59,6 +59,8 @@ for (let s = 0; s < seasons; s++) {
   lead((s) => s.min / s.gp, 'MPG');
   const user = curTeamSeason(league, league.userTid);
   console.log(`User team ${league.teams[league.userTid].abbrev}: ${user.won}-${user.lost}, playoffRound ${user.playoffRound}, revenue ${(user.revenue / 1000).toFixed(0)}M, expenses ${(user.expenses / 1000).toFixed(0)}M, payroll ${(payroll(league, league.userTid) / 1000).toFixed(0)}M`);
+  const profits = league.teams.map((t) => curTeamSeason(league, t.tid)).map((ts) => ts.revenue - ts.expenses).sort((a, b) => a - b);
+  console.log(`League money: median profit ${(profits[15] / 1000).toFixed(0)}M (range ${(profits[0] / 1000).toFixed(0)} to ${(profits[29] / 1000).toFixed(0)}M), cash ${(Math.min(...league.teams.map((t) => t.cash)) / 1000).toFixed(0)} to ${(Math.max(...league.teams.map((t) => t.cash)) / 1000).toFixed(0)}M`);
   const injured = Object.values(league.players).filter((p) => p.injuryCount > 0).length;
   console.log(`Players injured at least once (cumulative): ${injured}; news items ${league.news.length}; games stored ${league.games.length}`);
 

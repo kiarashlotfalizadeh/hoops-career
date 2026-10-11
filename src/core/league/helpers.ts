@@ -96,10 +96,17 @@ export function capSpace(league: League, tid: number, season = league.season): n
   return CAP_FOR(league, season).salaryCap - payroll(league, tid, season);
 }
 
+/**
+ * League money grows with the cap: revenues, ticket prices, costs and the owner's expectations
+ * are quoted in first-season dollars and multiplied by this (1 in the league's first season).
+ */
+export function revenueScale(league: League, season = league.season) {
+  return Math.pow(1 + CAP.growth, Math.max(0, season - league.startSeason));
+}
+
 /** Cap figures grow each season from the 2026-27 baseline. */
 export function CAP_FOR(league: League, season = league.season) {
-  const years = Math.max(0, season - league.startSeason);
-  const g = Math.pow(1 + CAP.growth, years);
+  const g = revenueScale(league, season);
   return {
     salaryCap: Math.round(CAP.salaryCap * g),
     luxuryTax: Math.round(CAP.luxuryTax * g),

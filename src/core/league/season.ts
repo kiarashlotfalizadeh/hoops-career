@@ -1,21 +1,21 @@
 // The season loop and phase machine.
 
-import type { League, ScheduledGame } from '../types';
+import type { League, Player, ScheduledGame } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
 import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
-import { playerAge } from '../playerGen';
+import { blankMood, playerAge } from '../playerGen';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { assessLuxuryTax, profit } from './finances';
+import { aiTicketPrice, assessLuxuryTax, profit } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
-import { computeRegularSeasonAwards, finalsMvp, selectAllStars } from './awards';
+import { computeRegularSeasonAwards, finalsMvp, gameScore, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
@@ -57,6 +57,7 @@ export function startRegularSeason(league: League): string[] {
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
   for (const t of league.teams) updateMorale(league, t.tid);
+  for (const t of league.teams) if (t.tid !== league.userTid) t.budget.ticketPrice = aiTicketPrice(league, t);
   league.phase = 'regular';
   league.day = 0;
   addInbox(league, {
@@ -71,8 +72,6 @@ export function startRegularSeason(league: League): string[] {
 
 function periodic(league: League, rng: Rng) {
   const d = league.day;
-  // wear recovery
-  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   if (d % 7 === 0) {
     for (const t of league.teams) {
       updateMorale(league, t.tid, true);
@@ -163,12 +162,13 @@ export function simDay(league: League, opts: { skipGid?: number; record?: boolea
 
 /**
  * Injuries heal one game per team game; players with no games to miss (free agents, and teams
- * idle in the postseason) recover by the calendar instead, about a game every other day.
+ * idle in the postseason) recover by the calendar instead, about a game every other day. A team
+ * mid-series (a game today or yesterday) heals through its games.
  */
 function healIdle(league: League, rng: Rng) {
   if (league.day % 2 !== 0) return;
   const playing = new Set<number>();
-  for (const g of league.schedule) if (g.day === league.day) playing.add(g.home).add(g.away);
+  for (const g of league.schedule) if (g.day === league.day || g.day === league.day - 1) playing.add(g.home).add(g.away);
   for (const p of Object.values(league.players)) {
     if (!p.injury) continue;
     if (p.tid === FREE_AGENT || (p.tid >= 0 && league.phase !== 'regular' && !playing.has(p.tid))) healOneGame(league, p, rng);
@@ -193,6 +193,8 @@ export function advanceDay(league: League, report?: DayReport) {
     }
     healIdle(league, rng);
   });
+  // wear recovery, every day of the season and postseason
+  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   league.day++;
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) {
     endRegularSeason(league);
@@ -210,8 +212,38 @@ function endRegularSeason(league: League) {
   computeRegularSeasonAwards(league);
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
-  if (mine) addInbox(league, { from: 'Owner', subject: 'Luxury tax bill', body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`, tone: 'bad', link: '/finances' });
+  if (mine?.tax) addInbox(league, { from: 'Owner', subject: 'Luxury tax bill', body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`, tone: 'bad', link: '/finances' });
+  if (mine?.shortfall) addInbox(league, { from: 'Owner', subject: 'Under the salary floor', body: `Our payroll finished $${(mine.shortfall / 1000).toFixed(1)}M under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`, tone: 'bad', link: '/finances' });
   startPlayIn(league);
+}
+
+/** Hall of Fame points per award won in this league; 22 gets a player in. */
+const HOF_POINTS: Record<string, number> = { MVP: 12, 'Finals MVP': 6, 'Defensive Player of the Year': 4, 'All-Star': 2, Champion: 1.5 };
+const HOF_LINE = 22;
+
+/**
+ * Credit for a real player's career before the league began, which his awards here don't cover:
+ * his production in the real seasons the seed carries (game score per game, raised with age since
+ * a 37-year-old's numbers understate his prime, less a replacement-level 6) squared, times the
+ * seasons he had played. LeBron James is worth almost three Hall of Fame lines; Durant, Curry,
+ * Harden, Giannis, Kawhi and Davis one or more; a long-serving role player next to nothing.
+ */
+export function preLeagueLegacy(league: League, p: Player): number {
+  const real = p.stats.filter((s) => s.real && !s.playoffs);
+  const gp = real.reduce((a, s) => a + s.gp, 0);
+  if (!gp) return 0;
+  const age = playerAge(p, league.startSeason);
+  const seasons = p.draft.year > 0 ? league.startSeason - 1 - p.draft.year : Math.max(0, age - 21);
+  const gmsc = real.reduce((a, s) => a + gameScore(s), 0) / gp;
+  // a short sample (injuries, a late arrival) counts for less
+  const q = Math.max(0, gmsc * (1 + 0.05 * Math.max(0, age - 29)) - 6) * Math.min(1, gp / 100);
+  return (seasons * q * q) / 260;
+}
+
+/** Hall of Fame score: awards won in the league plus a real player's earlier career. */
+export function hallOfFameScore(league: League, p: Player): number {
+  const awards = p.awards.reduce((s, a) => s + (HOF_POINTS[a.type] ?? (a.type.startsWith('All-NBA') ? 4 : 0)), 0);
+  return awards + preLeagueLegacy(league, p);
 }
 
 function retirements(league: League, rng: Rng) {
@@ -240,13 +272,13 @@ function retirements(league: League, rng: Rng) {
       p.tid = RETIRED;
       p.retiredSeason = league.season;
       p.contract = { start: league.season + 1, salaries: [0] };
-      // Hall of Fame: accolades-driven
-      const score = p.awards.reduce((s, a) => s + (a.type === 'MVP' ? 12 : a.type.startsWith('All-NBA') ? 4 : a.type === 'All-Star' ? 2 : a.type === 'Champion' ? 1.5 : a.type === 'Finals MVP' ? 6 : a.type === 'Defensive Player of the Year' ? 4 : 0), 0);
-      if (score >= 22) {
+      const score = hallOfFameScore(league, p);
+      if (score >= HOF_LINE) {
         p.hof = true;
         p.awards.push({ season: league.season, type: 'Hall of Fame' });
       }
-      if (p.ovr >= 76 || p.hof || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
+      // news: still a good player, or a decorated career (a few All-Star or All-NBA nods)
+      if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
   }
   if (retiredNow.length) addNews(league, { kind: 'retire', text: `Retirements: ${retiredNow.slice(0, 12).join(', ')}${retiredNow.length > 12 ? '…' : ''}.`, tids: [], pids: [] });
@@ -358,8 +390,10 @@ export function startFreeAgency(league: League): boolean {
 
 export function faAdvance(league: League, days = 1) {
   if (league.phase !== 'freeAgency') return;
+  // free agency lasts 30 days: "advance a week" near the end stops on the last day
+  const n = Math.min(days, 30 - league.faDay);
   withRng(league, (rng) => {
-    for (let i = 0; i < days; i++) {
+    for (let i = 0; i < n; i++) {
       faDay(league, rng);
       league.faDay++;
     }
@@ -381,6 +415,8 @@ export function newSeason(league: League): boolean {
   for (const t of league.teams) {
     const prev = t.seasons.find((s) => s.season === prevSeason);
     t.hype = clamp(t.hype * 0.85 + 0.075, 0.05, 1);
+    // ticket prices keep pace with league revenue (AI teams reprice at opening night)
+    t.budget.ticketPrice = Math.round(t.budget.ticketPrice * (1 + CAP.growth));
     teamSeason(t, league.season);
     void prev;
     t.deadMoney = t.deadMoney.filter((d) => d.season >= league.season);
@@ -397,7 +433,8 @@ export function newSeason(league: League): boolean {
         if (p.injury.gamesRemaining <= 0) p.injury = null;
       }
       p.mood.score *= 0.5;
-      p.mood.tradeRequest = false;
+      // a request stands while he's still unhappy on a roster (opening night re-evaluates it)
+      p.mood.tradeRequest &&= p.tid >= 0 && p.mood.score <= -2;
     }
     const prog = annualProgression(league, rng);
     const mine = prog.filter((x) => league.players[x.pid]?.tid === league.userTid).sort((a, b) => b.delta - a.delta);
@@ -437,12 +474,15 @@ export function newSeason(league: League): boolean {
 /**
  * Retirees stay for history and the Hall of Fame, but after two seasons only as career records:
  * those who never played a game go, the rest lose sim-only detail (ratings snapshots beyond peak
- * and final, tendencies, scouting). Without this the save grows by every retiree's full record.
+ * and final, tendencies, scouting, mood, on-court and shot-zone context in their stat lines).
+ * Five seasons on, fringe careers without an award (under 100 games) leave too. Without this the
+ * save grows by every retiree's full record.
  */
 function compactRetired(league: League) {
   for (const p of Object.values(league.players)) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
-    if (!p.awards.length && !p.stats.some((s) => s.gp > 0)) {
+    const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
+    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5))) {
       delete league.players[p.pid];
       continue;
     }
@@ -452,12 +492,18 @@ function compactRetired(league: League) {
       const last = hist[hist.length - 1];
       p.ratingsHistory = peak === last ? [last] : [peak, last];
     }
+    // career tables still need team usage (USG) and plus-minus; on/off and shot zones only feed live seasons
+    for (const s of p.stats) {
+      s.onPoss = s.onPtsFor = s.onPtsAgainst = 0;
+      s.rimM = s.rimA = s.midM = s.midA = 0;
+      s.min = Math.round(s.min * 10) / 10;
+    }
     delete p.tend;
     delete p.prospect;
     delete p.asking;
     delete p.faDays;
     p.injury = null;
-    p.mood.notes = [];
+    p.mood = blankMood();
   }
 }
 

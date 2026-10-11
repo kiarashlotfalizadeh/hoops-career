@@ -1,18 +1,28 @@
 // Running scheduled games and folding results into the league.
 
-import type { GameResult, League, Player, Rotation, ScheduledGame, TeamSeason, TeamTotals } from '../types';
-import { GameSim, type SimTeamInput } from '../sim/engine';
+import type { GameResult, League, Player, Rotation, ScheduledGame, Team, TeamSeason, TeamTotals } from '../types';
+import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { addInbox, addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
-import { moodPerf } from './morale';
+import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
 import { applyPatch } from '../ai/lab';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
+}
+
+/** Extra injury risk from worn-down legs, on top of the engine's in-game risk: up to +60% at full wear. */
+export function wearInjuryRisk(p: Player) {
+  return (clamp(p.wear - 40, 0, 60) / 60) * 0.6;
+}
+
+/** Practice intensity and the medical budget scale a team's injury risk. */
+export function teamInjuryMult(team: Team) {
+  return (team.practice === 'intense' ? 1.18 : team.practice === 'light' ? 0.88 : 1) * (1.1 - 0.2 * (team.budget.health / 100));
 }
 
 function playedYesterday(league: League, tid: number, day: number): boolean {
@@ -92,9 +102,9 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
     }
   }
   const perf: Record<number, number> = {};
-  for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p);
+  for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
   // practice intensity: intense camps build skills but add wear and injury risk
-  const injuryMult = (team.practice === 'intense' ? 1.18 : team.practice === 'light' ? 0.88 : 1) * (1.1 - 0.2 * (team.budget.health / 100));
+  const injuryMult = teamInjuryMult(team);
   // opponent-specific game plan for the user's team
   const plan = league.gamePlan;
   if (tid === league.userTid && plan && opp !== undefined && plan.oppTid === opp && plan.items.length) {
@@ -195,7 +205,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       const s = statsLine(p, league.season, rb.tid, playoffs || g.type === 'playin');
       s.gp++;
       if (rb.starter) s.gs++;
-      s.min += b.sec / 60;
+      s.min = Math.round((s.min + b.sec / 60) * 10) / 10;
       s.fgm += b.fgm;
       s.fga += b.fga;
       s.tpm += b.tpm;
@@ -237,6 +247,16 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       const p = league.players[inj.pid];
       if (p) applyInjury(league, p, rng);
     }
+    // worn-down legs: a heavy load can end in a knock after the final buzzer (the engine's
+    // in-game risk is per player on the floor, about two checks per offensive possession)
+    if (league.settings.injuries) {
+      for (const rb of sim.rawBoxes()) {
+        const p = league.players[rb.pid];
+        const team = league.teams[rb.tid];
+        if (!p || !team || p.injury || !rb.played || !wearInjuryRisk(p)) continue;
+        if (rng.chance(K.injuryRate * 2 * rb.b.onPoss * teamInjuryMult(team) * wearInjuryRisk(p))) applyInjury(league, p, rng);
+      }
+    }
     // finances & hype: play-in games are postseason gate-only games, like the playoffs; the Cup
     // championship is the league's event on a neutral floor
     const postseason = g.type !== 'regular';
@@ -247,7 +267,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     updateHype(home, homeWon, playoffs);
     updateHype(away, !homeWon, playoffs);
   }
-  // storage policy: keep detail only for the user's games
+  // storage policy: keep detail only for the user's games; a season of other games keeps only
+  // the players who got on the floor (DNP lines were a fifth of the save mid-season)
   const userGame = g.home === league.userTid || g.away === league.userTid;
   if (!userGame) {
     delete res.shots;
@@ -255,6 +276,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.lineups;
     delete res.flow;
     delete res.pbp;
+    for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   }
   league.games.push(res);
   // trim play-by-play from older user games
