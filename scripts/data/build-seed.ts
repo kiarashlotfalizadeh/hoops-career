@@ -20,6 +20,8 @@ import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { BBREF_TO_TID } from '../../src/core/teams';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
 import { clamp } from '../../src/core/random';
+import { inferPosition, statsPosition } from './positions';
+import { applyExtras } from './extra/index';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const OUT = process.env.HC_SEED_OUT ?? join(process.cwd(), 'src', 'data', 'seed.json');
@@ -84,6 +86,11 @@ async function main() {
     rosterById.set(r.id, prev && !r.jersey && prev.jersey ? { ...r, jersey: prev.jersey } : r);
   }
   const draftById = new Map(drafts.map((d) => [d.id, d]));
+  // five-position labels from roster pages (last season's pages have them; current ones say G/F/C)
+  const rosterFive = new Map<string, string>();
+  for (const r of rosters) if (['PG', 'SG', 'SF', 'PF', 'C'].includes(r.posRaw)) rosterFive.set(r.id, r.posRaw);
+  /** Players whose position is inferred from G/F/C + ratings (re-inferred after calibration). */
+  const inferredPos = new Map<number, string>();
   const contractById = new Map<string, ContractRow>(contracts.map((c) => [c.id, c]));
 
   // universe: everyone under contract + recent rotation players who are unsigned
@@ -157,8 +164,11 @@ async function main() {
     } else if (lastStat) bornYear = lastStat.season - lastStat.age;
     else bornYear = 2027 - 21;
     const age = 2027 - bornYear;
-    const posRaw = (ros?.pos || lastStat?.pos || 'SF').toUpperCase();
-    const pos = (['PG', 'SG', 'SF', 'PF', 'C'].includes(posRaw) ? posRaw : posRaw === 'G' ? 'SG' : posRaw === 'F' ? 'PF' : 'SF') as Pos;
+    // box-score position (latest season, main team), else last season's roster page, else
+    // inferred from the G/F/C label, size and skills once ratings exist
+    const fivePos = (statsPosition(rows) ?? rosterFive.get(id) ?? null) as Pos | null;
+    const label = (ros?.posRaw || ros?.pos || '').toUpperCase();
+    const pos: Pos = fivePos ?? ({ G: 'SG', F: 'SF', C: 'C' } as Record<string, Pos>)[label[0]] ?? 'SF';
     const heightIn = ros?.heightIn || estimateHeight(pos);
     const weightLb = ros?.weightLb || 215;
     const agg = aggs.get(id);
@@ -240,12 +250,13 @@ async function main() {
         };
       });
     const lastOpt = c?.options[c.options.length - 1];
+    if (!fivePos) inferredPos.set(players.length, label);
     const sp: SeedPlayer = {
       id,
       nbaId,
       first,
       last,
-      pos,
+      pos: fivePos ?? inferPosition(label, heightIn, ratings),
       heightIn,
       weightLb,
       bornYear,
@@ -323,6 +334,15 @@ async function main() {
     if (lp.tend) players[idx].tend = Object.fromEntries(Object.entries(lp.tend).map(([k, v]) => [k, r3(v as number)])) as unknown as Tendencies;
   }
 
+  // positions inferred from ratings follow the calibrated ratings
+  for (const [idx, label] of inferredPos) players[idx].pos = inferPosition(label, players[idx].heightIn, players[idx].ratings);
+  const posCount: Record<string, number> = {};
+  const rostered = players.filter((p) => p.team);
+  for (const p of rostered) posCount[p.pos] = (posCount[p.pos] ?? 0) + 1;
+  console.log(`positions (under contract): ${['PG', 'SG', 'SF', 'PF', 'C'].map((k) => `${k} ${posCount[k] ?? 0} (${Math.round(((posCount[k] ?? 0) / rostered.length) * 100)}%)`).join(', ')}; ${inferredPos.size} inferred from G/F/C + ratings`);
+  const spot = ['gilgesh01', 'willija06', 'willike04', 'carusal01', 'topicni01', 'brunsja01', 'jokicni01', 'jamesle01', 'tatumja01'];
+  console.log(`  e.g. ${spot.map((id) => players.find((p) => p.id === id)).filter((p) => p).map((p) => `${p!.first} ${p!.last} ${p!.pos}`).join(', ')}`);
+
   // sanity report: OVR vs real impact
   const finalScale = buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
   const rows = players
@@ -341,6 +361,7 @@ async function main() {
     });
     writeFileSync(process.env.HC_REPORT, JSON.stringify({ ovrScale: finalScale, players: report }));
   }
+  await applyExtras(seed);
   writeFileSync(OUT, JSON.stringify(seed));
   console.log(`wrote ${OUT} (${(JSON.stringify(seed).length / 1e6).toFixed(2)} MB)`);
 }

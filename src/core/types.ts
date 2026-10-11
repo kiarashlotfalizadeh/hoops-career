@@ -469,6 +469,8 @@ export interface DraftPick {
   tid: number;
   /** Assigned once lottery/order known. */
   pick?: number;
+  /** Top-N protected: if it lands in the first N picks of its round, it stays with originalTid (obligation ends). */
+  protection?: number;
 }
 
 // ---------------------------------------------------------------- games

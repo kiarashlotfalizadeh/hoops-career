@@ -1,8 +1,10 @@
 # Builds src/data/seed.json on GitHub's runners (open network): Basketball Reference pages
 # (contracts, rosters, bios, box scores; ~90 pages at 1 request / 3.7 s) plus NBA.com
-# play-by-play / matchup archives and ESPN college box scores from public GitHub datasets.
-# Calibrates ratings in the engine, commits the seed to main, and stores the Basketball
-# Reference pages as a tarball on the `data-raw` branch (the GitHub datasets re-download fast).
+# play-by-play / matchup archives and ESPN college box scores from public GitHub datasets, and
+# the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries, two-way
+# contracts). Calibrates ratings in the engine, commits the seed to main, and stores the
+# Basketball Reference pages as a tarball on the `data-raw` branch (the GitHub datasets
+# re-download fast). With `extras_only`, it just refreshes the extras in the current seed.
 name: Build seed data
 on:
   workflow_dispatch:
@@ -11,6 +13,10 @@ on:
         description: Commit the generated seed.json to main
         type: boolean
         default: true
+      extras_only:
+        description: Only refresh schedule, pick ownership, injuries and two-way contracts (no stats re-fetch or recalibration)
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
@@ -27,21 +33,34 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Reuse previously fetched pages
+        if: ${{ !inputs.extras_only }}
         run: |
           if git ls-remote --exit-code origin data-raw >/dev/null 2>&1; then
             git fetch origin data-raw
             git show origin/data-raw:data-raw.tgz > /tmp/prev.tgz && tar xzf /tmp/prev.tgz || true
           fi
       - name: Fetch Basketball Reference pages
+        if: ${{ !inputs.extras_only }}
         run: npm run data:fetch
       - name: Fetch NBA.com play-by-play and college data
+        if: ${{ !inputs.extras_only }}
         run: npm run data:fetch-nba
+      # always fresh: the injury report changes hourly and pick ownership with every trade
+      - name: Fetch schedule, pick ownership, injuries and two-way contracts
+        run: npm run data:fetch-extra -- --force
       - name: Archive raw pages
-        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
+        if: ${{ !inputs.extras_only }}
+        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba --exclude=data/raw/extra data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
       - name: Build seed (parse, derive, calibrate)
         id: build
         continue-on-error: true
-        run: set -o pipefail && npm run data:build 2>&1 | tee /tmp/build.log
+        run: |
+          set -o pipefail
+          if [ "${{ inputs.extras_only }}" = "true" ]; then
+            npm run data:extras 2>&1 | tee /tmp/build.log
+          else
+            npm run data:build 2>&1 | tee /tmp/build.log
+          fi
       - name: Verify app still builds and tests pass with the seed
         if: steps.build.outcome == 'success'
         run: npm run typecheck && npm test && npm run build
@@ -51,10 +70,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/data/seed.json
-          git commit -m "Update Basketball Reference seed data" || echo "seed unchanged"
+          git commit -m "Update seed data" || echo "seed unchanged"
           git push origin HEAD:main
       - name: Push raw pages to data-raw branch
-        if: always()
+        if: ${{ always() && !inputs.extras_only }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -21,11 +21,11 @@ describe.skipIf(!real)('real-player seed', () => {
     // efficient bench bigs no longer outrank stars
     const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
     if (kessler) expect(kessler.ovr).toBeLessThan(88);
-    // AI teams make preseason cuts; every roster can field a team
+    // AI teams make preseason cuts (two-way contracts don't count); every roster can field a team
     for (const t of league.teams) {
-      const n = teamPlayers(league, t.tid).length;
-      expect(n).toBeGreaterThanOrEqual(CAP.rosterMin);
-      if (t.tid !== league.userTid) expect(n).toBeLessThanOrEqual(CAP.rosterMax);
+      const roster = teamPlayers(league, t.tid);
+      expect(roster.length).toBeGreaterThanOrEqual(CAP.rosterMin);
+      if (t.tid !== league.userTid) expect(roster.filter((p) => !p.contract.twoWay).length).toBeLessThanOrEqual(CAP.rosterMax);
     }
   });
 

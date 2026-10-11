@@ -1,4 +1,4 @@
-import type { League, Player, PlayerStats, Pos, Ratings, Settings, Tendencies } from '../types';
+import type { Injury, League, Player, PlayerStats, Pos, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
@@ -6,7 +6,7 @@ import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
 import { DEFAULT_SCALE, blankMood, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { archetype, buildOvrScale, ovrRaw } from '../ratings';
-import { generateSchedule } from './schedule';
+import { generateSchedule, realSchedule } from './schedule';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { updateMorale } from './morale';
@@ -30,13 +30,45 @@ export interface SeedPlayer {
   jersey: string;
   /** Basketball Reference team abbreviation from the contracts page, or null for free agents. */
   team: string | null;
-  contract: { salaries: number[]; option?: 'player' | 'team' } | null;
+  contract: { salaries: number[]; option?: 'player' | 'team'; twoWay?: boolean } | null;
   draft: { year: number; round: number; pick: number; team?: string } | null;
   ratings: Ratings;
   tend?: Tendencies;
   growth?: number;
   injuryProne?: number;
   stats: PlayerStats[];
+  /** Out on opening night (real league with injuries on). */
+  injury?: SeedInjury;
+}
+
+export interface SeedInjury {
+  type: string;
+  severity: Injury['severity'];
+  /** Expected return as a season day (day 0 = opening night), if known. */
+  returnDay: number | null;
+  /** Team games he misses, estimated from the real schedule. */
+  games: number;
+  /** Source description, e.g. "Knee: expected to miss the season". */
+  detail?: string;
+}
+
+/** A future draft pick that doesn't simply belong to its original team (traded and/or protected). */
+export interface SeedPick {
+  season: number;
+  round: 1 | 2;
+  /** BBRef codes. */
+  original: string;
+  owner: string;
+  /** Top-N protection: stays with the original team if it lands in the first N of its round. */
+  protection?: number;
+}
+
+export interface SeedSchedule {
+  season: number;
+  /** Calendar date of day 0. */
+  start: string;
+  /** "day:AWY@HOM" with NBA tricodes, regular season only. */
+  games: string[];
 }
 
 export interface SeedData {
@@ -46,6 +78,14 @@ export interface SeedData {
   season: number;
   players: SeedPlayer[];
   realAvgs?: Record<string, number>;
+  /** The real regular-season schedule (completed to 82 games at league creation). */
+  schedule?: SeedSchedule;
+  /** Real future pick ownership: picks not listed belong to their original team. */
+  picks?: SeedPick[];
+  /** Last draft covered by `picks`. */
+  picksThrough?: number;
+  /** When the schedule, picks, injuries and two-way contracts were fetched. */
+  extrasAsOf?: string;
 }
 
 export interface CreateOpts {
@@ -91,7 +131,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
     growth: sp.growth ?? clamp(rng.normal(0, 0.4), -1, 1),
     injuryProne: sp.injuryProne ?? 0.3,
     ratingsHistory: [],
-    contract: { start: season, salaries, option: sp.contract?.option },
+    contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}) },
     stats: sp.stats.map((s) => ({ ...s, tid: BBREF_TO_TID[String(s.tid)] ?? s.tid })),
     injury: null,
     injuryCount: 0,
@@ -223,17 +263,20 @@ export function createLeague(opts: CreateOpts): League {
     }
   }
   league.ratingAnchors = ratingMeans(league);
-  ensureFuturePicks(league, season + 3);
+  const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;
+  ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? realSeed.picksThrough ?? 0 : 0));
+  if (realSeed?.picks) applySeedPicks(league, realSeed.picks);
   generateDraftClass(league, season, rng);
-  // preseason cuts: real contract lists include two-way and camp deals, so AI teams trim to 15
+  // preseason cuts: real contract lists include camp deals, so AI teams trim to 15 standard contracts
   if (opts.preseasonCuts !== false) trimRosters(league, (p) => releasePlayer(league, p, { news: false }));
   fillRosters(league, rng);
-  const sched = generateSchedule(league.teams, season, rng, league.nextGid);
+  const sched = (realSeed?.schedule && realSchedule(league.teams, realSeed.schedule, season, rng, league.nextGid)) || generateSchedule(league.teams, season, rng, league.nextGid);
   league.schedule = sched.games;
   league.nextGid += sched.games.length;
   league.regularSeasonDays = sched.lastDay;
   league.allStarDay = sched.allStarDay;
   league.tradeDeadlineDay = sched.tradeDeadlineDay;
+  if (realSeed && opts.settings.injuries) applySeedInjuries(league, realSeed);
   league.rng = rng.state;
   teamStrategyUpdate(league);
   for (const t of league.teams) ensureRotation(league, t.tid);
@@ -247,16 +290,55 @@ export function createLeague(opts: CreateOpts): League {
     tone: 'good',
     link: '/tactics',
   });
-  const over = roster.length - CAP.rosterMax;
+  // two-way contracts don't count toward the 15-man roster
+  const standard = roster.filter((p) => !p.contract.twoWay);
+  const twoWays = roster.length - standard.length;
+  const over = standard.length - CAP.rosterMax;
   if (over > 0) {
-    const cuts = [...roster].sort((a, b) => valueScore(league, a) - valueScore(league, b)).slice(0, over);
+    const cuts = [...standard].sort((a, b) => valueScore(league, a) - valueScore(league, b)).slice(0, over);
     addInbox(league, {
       from: 'Assistant GM',
-      subject: `Preseason cuts: ${roster.length} players, room for ${CAP.rosterMax}`,
-      body: `We carry ${roster.length} players into camp, including two-way and camp contracts. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Releasing a player keeps any guaranteed salary on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
+      subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
+      body: `We carry ${standard.length} players on standard contracts into camp, including camp invites${twoWays ? ` (plus ${twoWays} on two-way deals, who don't count)` : ''}. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Releasing a player keeps any guaranteed salary on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
       tone: 'alert',
       link: '/office',
     });
   }
   return league;
+}
+
+/** Real pick ownership: every listed pick moves to its owner (picks start with their original team). */
+function applySeedPicks(league: League, picks: SeedPick[]) {
+  for (const sp of picks) {
+    const orig = BBREF_TO_TID[sp.original];
+    const owner = BBREF_TO_TID[sp.owner];
+    if (orig === undefined || owner === undefined) continue;
+    const dp = league.draftPicks.find((d) => d.season === sp.season && d.round === sp.round && d.originalTid === orig);
+    if (!dp) continue;
+    dp.tid = owner;
+    if (sp.protection && sp.protection > 0) dp.protection = sp.protection;
+  }
+}
+
+/**
+ * Opening-night injuries. The time out is counted in the team's games on the actual schedule
+ * (with a share of the playoffs when the return date is after the regular season).
+ */
+function applySeedInjuries(league: League, seed: SeedData) {
+  const byId = new Map(seed.players.filter((sp) => sp.injury).map((sp) => [sp.id, sp.injury!]));
+  if (!byId.size) return;
+  const last = league.regularSeasonDays;
+  for (const p of Object.values(league.players)) {
+    const inj = p.bbrefId ? byId.get(p.bbrefId) : undefined;
+    if (!inj || p.tid < 0) continue;
+    let games = inj.games;
+    if (inj.returnDay !== null) {
+      games = league.schedule.filter((g) => g.type === 'regular' && g.day < inj.returnDay! && (g.home === p.tid || g.away === p.tid)).length;
+      // back after the regular season: part or all of the playoffs too (~2.5 days per playoff game)
+      if (inj.returnDay > last) games += Math.min(28, Math.round((inj.returnDay - last) / 2.5));
+    }
+    if (games <= 0) continue;
+    p.injury = { type: inj.type, gamesRemaining: games, gamesTotal: games, severity: inj.severity };
+    p.injuryCount++;
+  }
 }

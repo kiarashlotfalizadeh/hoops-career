@@ -24,25 +24,38 @@ A mobile-first basketball GM **and** head-coach game, built as an installable of
 
 ## Real data
 
-The seed combines three public sources, all fetched by scripts in `scripts/data/`:
+The seed combines several public sources, all fetched by scripts in `scripts/data/`:
 
 | Source | What it provides |
 |---|---|
 | **Basketball Reference** | The current contracts table (who plays where in 2026-27, salaries, options), roster pages (height, weight, birth date, jersey, country, college), draft pages, and per-game and advanced tables for 2023-24 to 2025-26 |
 | **NBA.com** play-by-play (cdn.nba.com) and season matchups (stats.nba.com), archived by the public [shufinskiy/nba_data](https://github.com/shufinskiy/nba_data) dataset | Every shot with its zone and type (pull-up, drive, cut, lob, putback, post move, transition), who assisted it, blocks, steals, turnover and foul types, substitutions (lineups), and who guarded whom |
 | **ESPN college box scores** via [sportsdataverse/hoopR-mbb-data](https://github.com/sportsdataverse/hoopR-mbb-data) | 2024-25 and 2025-26 college production for incoming rookies |
+| **NBA.com league schedule** (`scheduleLeagueV2_1.json` on NBA.com's public S3 bucket) | The real 2026-27 regular season: every published game with its date and home team |
+| **RealGM future draft picks** via [calebcpratt-git/nba-roster-builder](https://github.com/calebcpratt-git/nba-roster-builder) (daily scrape, pinned to a commit in `scripts/data/extra/sources.ts`) | Who owns every 2027-2033 first- and second-round pick, with protections, swaps and pick pools. [LD Sport's table](https://github.com/tobeyhirsch/nba-draft-pick-grader) is used as a cross-check |
+| **ESPN injury report** via [BenoParadise/nba-injuries](https://github.com/BenoParadise/nba-injuries) (hourly mirror; [sportsdataverse](https://github.com/sportsdataverse/sportsdataverse-data) injury history as a backup) | Who is out on opening night, and until when |
+| **SalarySwish contracts** via nba-roster-builder | Two-way contracts |
 
-stats.nba.com blocks cloud IPs, so the NBA.com data comes from those GitHub-hosted archives, which download from anywhere.
+stats.nba.com, ESPN and Basketball Reference block many cloud IPs, so everything except the Basketball Reference pages comes from GitHub-hosted mirrors or NBA.com's S3 bucket, which download from anywhere.
 
 ```bash
 npm run data:fetch       # Basketball Reference, ~90 pages at 1 request / 3.7 s, cached in data/raw/
 npm run data:fetch-nba   # NBA.com play-by-play + matchups (3 seasons) and college box scores, ~90 MB
-npm run data:build       # parse → profile → RAPM → derive → calibrate in the engine → src/data/seed.json
+npm run data:fetch-extra # schedule, pick ownership, injuries, two-way contracts → data/raw/extra/ (--force to refresh)
+npm run data:build       # parse → profile → RAPM → derive → calibrate in the engine → extras → src/data/seed.json
+npm run data:extras      # refresh only the schedule / picks / injuries / two-way part of the current seed
 ```
 
-Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches everything on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, and commits `src/data/seed.json` to `main`. It also keeps the Basketball Reference pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing.
+Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches everything on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, and commits `src/data/seed.json` to `main`. It also keeps the Basketball Reference pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing. Tick **extras_only** to just refresh the injuries, pick ownership, two-way contracts and schedule in the current seed (no recalibration). Any extra source that can't be downloaded is skipped with a warning, and the game falls back to its generated version of that part.
 
-The current seed has 544 players: 483 under contract for 2026-27 plus the best 61 unsigned players from 2025-26. All 802 NBA.com players from the last three seasons are matched to their Basketball Reference ids.
+The current seed has 544 players: 483 under contract for 2026-27 plus the best 61 unsigned players from 2025-26. 26 players are on two-way deals (23 of them were unsigned in the contracts table, so they join their two-way teams). All 802 NBA.com players from the last three seasons are matched to their Basketball Reference ids.
+
+What's real on opening night, besides the rosters and ratings:
+- **Schedule**: the NBA's 2026-27 calendar, from opening night (Oct 20: BOS@DET, PHI@NYK, OKC@SAS) to Apr 11, with the real All-Star break (the trade deadline is set 10 days before it, as in generated seasons). The NBA hasn't published the Cup knockout games yet, or the two extra games for the teams that don't reach them, so each team's two missing games (one home, one away, against a conference rival) go on open dates in the Cup window in early December, never as a third game in three days. Later seasons, and fictional leagues, use the generated schedule.
+- **Draft picks**: RealGM's ownership rows for 2027-2033 (`scripts/data/extra/picks.ts`). Each pick gets exactly one owner. Pools ("less favorable of MIL and NOP") and swap rights are resolved on a projected draft order (team strength from the seed's ratings, regressed toward the middle for later years), and conditions that depend on other picks ("if DAL conveys its 2027 first", "if not already settled") are checked against picks already resolved. A pick that conveys only outside the top N ("3-30 to Charlotte") is stored as a top-N protected pick. Where several outcomes are possible, the most likely owner gets the pick. The build prints every team's first-rounders and compares them with LD Sport's table.
+- **Injuries**: players listed out on opening night start injured. The time out is counted in their team's real games before the expected return date, and a return after the regular season costs playoff games too. ESPN's description is mapped to the game's injury types where one fits (Torn ACL, Hamstring Strain...), otherwise kept descriptive (Torn Labrum). Injuries are off when the league's injury setting is off.
+- **Two-way contracts** are marked and don't count toward the 15-man roster.
+- **Positions** come from each player's box-score position in his latest season (Basketball Reference's current roster pages only say G / F / C). Rookies without one get theirs from the G/F/C label, size and skills: a guard who handles and passes like a lead guard for his size is a PG, a forward who handles more and rebounds less is an SF.
 
 How ratings are made (`scripts/data/`):
 1. **Play-by-play profiles** (`nba/pbp.ts`): one pass over each season builds every player's shot diet by zone (the engine's zones: rim, paint, mid-range, corner three, above-the-break three) with make rates, how he creates (pull-ups, drives, cuts, post moves, putbacks, transition, share of makes assisted), assists by the zone they set up, turnover and foul types, fouls drawn, true rebound rates from on-court opportunities, and rim deterrence (opponents' rim attempts and rim FG% with him on the floor). It also rebuilds every lineup stint.
@@ -93,13 +106,15 @@ src/ui/            screens, components, 2D court (live/)
 src/workers/       Tactics Lab web worker
 scripts/data/      seed pipeline: Basketball Reference fetch/parse, derive, calibrate
   nba/             NBA.com play-by-play profiles, RAPM, matchups, id crosswalk, college stats
+  extra/           opening-night extras: real schedule, pick ownership, injuries, two-way contracts
 android/, ios/     Capacitor native projects
 ```
 
 ## Design decisions
 
 - Ratings are shown on a 2K-style 40-99 scale, fully visible. OVR is anchored to the league's distribution, so a 90+ is MVP-level and 75 is a quality starter. Attributes use the same 40-99 scale (league median ≈ 68).
-- The contracts table includes two-way and camp deals, so some teams start with 16-20 players. AI teams make preseason cuts down to 15 at league creation. If your team is over, the Assistant GM suggests who to release before opening night.
+- The contracts table includes camp deals, so some teams start with 16-20 players. AI teams make preseason cuts down to 15 standard contracts at league creation (two-way contracts don't count). If your team is over, the Assistant GM suggests who to release before opening night.
 - Free agents and AI trades are tuned for casual play by default (difficulty can be changed in Settings).
-- Future draft-pick ownership starts with every team owning its own picks, because Basketball Reference's contracts table doesn't include pick trades.
+- Future picks start with their real owners (2027-2033). The game's pick model is one owner per pick plus an optional top-N protection, so RealGM's conditions are simplified: swaps and "more/less favorable of" pools go to the projected outcome, protections that send the pick to a third team, or roll over to a later year, are approximated as "stays with the original team that year, obligation ends", and picks the NBA has forfeited stay with their original team.
+- The real schedule is used for 2026-27 only. Games the NBA hasn't published yet are filled on open December dates.
 - Team logos are original monograms in each franchise's colors (no trademarked artwork).
