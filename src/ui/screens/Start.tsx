@@ -7,6 +7,7 @@ import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
 import { Card, Empty, Sheet, activateOnKey } from '../components/ui';
+import { ImportButton } from '../components/ImportButton';
 
 export default function Start() {
   const nav = useNavigate();
@@ -52,6 +53,7 @@ export default function Start() {
       <button className="btn primary big block" onClick={() => nav('/new')}>
         <Plus size={20} /> New League
       </button>
+      <ImportButton block />
       <Card title="Saved leagues">
         {leagues === null ? (
           <Empty>Loading…</Empty>

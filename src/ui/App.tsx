@@ -15,6 +15,7 @@ import { useFlowRunner } from './useFlow';
 import { lazyRetry } from './lazyRetry';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { applyAccent } from './teamColors';
+import { haptic } from '../native';
 
 const Start = lazyRetry(() => import('./screens/Start'));
 const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
@@ -82,7 +83,7 @@ function statusLine(league: League): string {
       return `Preseason · ${seasonLabel(league.season)}`;
     case 'regular': {
       const ts = curTeamSeason(league, league.userTid);
-      if (ts.won + ts.lost === 0) return `${date} · Opening week`;
+      if (ts.won + ts.lost === 0) return `${date} · Week 1`;
       const rank = confStandings(league, t.conf).findIndex((r) => r.tid === t.tid) + 1;
       return `${date} · ${ordinal(rank)} ${t.conf === 'E' ? 'East' : 'West'}`;
     }
@@ -151,6 +152,7 @@ function TopBar() {
               disabled={!!a.disabled}
               onClick={() => {
                 setOpen(false);
+                haptic();
                 void run(a);
               }}
             >

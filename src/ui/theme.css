@@ -382,6 +382,9 @@ h3 {
   padding: 0;
   overflow: hidden;
 }
+.card.flush > .card-h {
+  padding: 12px 14px 0;
+}
 .card-h {
   display: flex;
   align-items: center;

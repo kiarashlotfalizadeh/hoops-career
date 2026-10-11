@@ -15,6 +15,22 @@ import { f1, playerSeason, signed, teamRatings } from '../stats';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
 
+/** The phase card's heading: offseason events are named by the year they happen in. */
+function phaseTitle(league: League): string {
+  switch (league.phase) {
+    case 'draftLottery':
+      return `${league.season} Draft lottery`;
+    case 'draft':
+      return `${league.season} NBA Draft`;
+    case 'resign':
+      return `${league.season} Re-sign period`;
+    case 'freeAgency':
+      return `${league.season} Free agency`;
+    default:
+      return `${PHASE_LABEL[league.phase]} · ${seasonLabel(league.season)}`;
+  }
+}
+
 function nextUserGame(league: League) {
   const today = userGameOnDay(league, league.day);
   if (today) return today;
@@ -153,7 +169,7 @@ export default function Home() {
           </div>
         </Card>
       ) : (
-        <Card accent title={<h3>{PHASE_LABEL[league.phase]} · {seasonLabel(league.season)}</h3>}>
+        <Card accent title={<h3>{phaseTitle(league)}</h3>}>
           {primary && (
             <>
               {primary.sub && <div className="small dim2" style={{ marginBottom: 10 }}>{primary.disabled ?? primary.sub}</div>}

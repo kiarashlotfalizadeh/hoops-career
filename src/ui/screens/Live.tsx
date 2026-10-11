@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { haptic } from '../../native';
 import { useNavigate } from 'react-router-dom';
 import { Activity, ChevronsRight, Hand, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
@@ -92,6 +93,9 @@ export default function Live() {
     });
     clearLive();
     setCommittedGid(gid);
+    const me = lg.sim.T[lg.userSide].score;
+    const them = lg.sim.T[1 - lg.userSide].score;
+    haptic(me > them ? 'success' : 'warning');
   }, []);
 
   const nextPossession = useCallback(() => {

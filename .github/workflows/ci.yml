@@ -16,3 +16,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke test (phone + tablet, backup round trip)
+        run: npm run smoke

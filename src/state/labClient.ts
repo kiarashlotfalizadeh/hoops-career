@@ -23,6 +23,9 @@ function ensure(): Lab {
   return remote;
 }
 
+/** Wrap a progress callback so the worker can call it across the thread boundary. */
+export const progressCallback = (fn: (games: number) => void) => Comlink.proxy(fn);
+
 /** Stop any running lab sims (navigating away, a crash or a timeout) and start fresh next time. */
 export function resetLab() {
   worker?.terminate();

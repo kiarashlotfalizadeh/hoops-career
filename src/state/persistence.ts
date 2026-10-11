@@ -52,9 +52,32 @@ export async function saveLeague(league: League) {
   await tx.done;
 }
 
+/** Cheap structural check so a damaged or foreign file never becomes the active league. */
+export function isLeague(x: unknown): x is League {
+  const l = x as Partial<League> | null;
+  return (
+    !!l &&
+    typeof l === 'object' &&
+    typeof l.id === 'string' &&
+    typeof l.season === 'number' &&
+    typeof l.phase === 'string' &&
+    typeof l.userTid === 'number' &&
+    Array.isArray(l.teams) &&
+    l.teams.length >= 2 &&
+    !!l.teams[l.userTid] &&
+    !!l.players &&
+    typeof l.players === 'object' &&
+    Array.isArray(l.schedule) &&
+    !!l.settings
+  );
+}
+
 export async function loadLeague(id: string): Promise<League | undefined> {
   const d = await db();
-  return d.get('leagues', id);
+  const l: unknown = await d.get('leagues', id);
+  if (l === undefined) return undefined;
+  if (!isLeague(l)) throw new Error('This save is damaged or from an incompatible version.');
+  return l;
 }
 
 export async function listLeagues(): Promise<LeagueMeta[]> {

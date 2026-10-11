@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Beaker, Check, Play } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
-import { resetLab, withLab } from '../../state/labClient';
+import { progressCallback, resetLab, withLab } from '../../state/labClient';
 import type { CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
 import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
@@ -38,6 +38,8 @@ export default function TacticsLab() {
   const [opp, setOpp] = useState<number>(() => Number(params.get('opp') ?? defaultOpponent(league)));
   const [games, setGames] = useState(40);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [total, setTotal] = useState(1);
   const [result, setResult] = useState<LabSummary | null>(null);
   const [baseResult, setBaseResult] = useState<LabSummary | null>(null);
   const [cands, setCands] = useState<CandidateResult[] | null>(null);
@@ -68,17 +70,28 @@ export default function TacticsLab() {
       ensureRotation(league, opp);
       const b = sideFor(league, opp);
       const seed = (league.rng ^ (opp * 7919)) >>> 0;
+      // progress across parallel runs: each run reports its own count, the bar shows the sum
+      const done: number[] = [];
+      const track = (slot: number) => progressCallback((n) => {
+        done[slot] = n;
+        if (mounted.current) setProgress(done.reduce((a, x) => a + (x ?? 0), 0));
+      });
+      setProgress(0);
       await withLab(async (w) => {
         if (mode === 'project') {
-          setResult(await w.runLab({ a: sideFor(league, user), b, games, seed }));
+          setTotal(games);
+          setResult(await w.runLab({ a: sideFor(league, user), b, games, seed }, track(0)));
         } else if (mode === 'compare') {
+          setTotal(games * 2);
           const base = baseline ?? league.teams[user].tactics;
-          const [r0, r1] = await Promise.all([w.runLab({ a: sideFor(league, user, base), b, games, seed }), w.runLab({ a: sideFor(league, user), b, games, seed })]);
+          const [r0, r1] = await Promise.all([w.runLab({ a: sideFor(league, user, base), b, games, seed }, track(0)), w.runLab({ a: sideFor(league, user), b, games, seed }, track(1))]);
           setBaseResult(r0);
           setResult(r1);
         } else {
           const candidates = counterCandidates(league, user, opp);
-          const out = await w.evaluate(sideFor(league, user), b, candidates, Math.max(20, Math.round(games * 0.75)), seed);
+          const n = Math.max(20, Math.round(games * 0.75));
+          setTotal(n * (candidates.length + 1));
+          const out = await w.evaluate(sideFor(league, user), b, candidates, n, seed, track(0));
           setBaseResult(out.base);
           setCands(out.results);
         }
@@ -155,7 +168,11 @@ export default function TacticsLab() {
         <Card>
           <div className="row">
             <Spinner />
-            <span className="small dim2">Simulating {mode === 'counters' ? 'several game plans' : `${games} games`} in the background…</span>
+            <span className="small dim2 grow">Simulating {mode === 'counters' ? 'several game plans' : `${games} games`}…</span>
+            <span className="small num dim">{Math.min(progress, total)}/{total}</span>
+          </div>
+          <div className="bar" style={{ marginTop: 10 }} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(progress, total)}>
+            <div style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%`, transition: 'width 0.2s' }} />
           </div>
         </Card>
       )}

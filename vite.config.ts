@@ -39,7 +39,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // woff2 only: every browser that supports service workers reads it, so the .woff fallbacks just waste the precache
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}'],
+        globIgnores: ['**/*.woff'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
     }),

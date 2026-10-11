@@ -91,7 +91,8 @@ function profile(t: TeamBox, o: TeamBox, rimA: number, midA: number): ShotProfil
   };
 }
 
-export function runLab(req: LabRequest): LabSummary {
+/** onGame is called after every simulated game (progress reporting). */
+export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   const teamA: Team = { ...req.a.team, tactics: applyPatch(req.a.team.tactics, req.patch) };
   const teamB: Team = req.b.team;
   const margins: number[] = [];
@@ -162,6 +163,7 @@ export function runLab(req: LabRequest): LabSummary {
       const sign = im.t === aSide ? 1 : -1;
       impacts[im.key] = (impacts[im.key] ?? 0) + sign * im.pts;
     }
+    onGame?.();
   }
   const n = req.games;
   const mean = margins.reduce((x, y) => x + y, 0) / n;
@@ -229,10 +231,10 @@ export interface CandidateResult {
 }
 
 /** Evaluate candidate patches against a baseline using common random numbers. */
-export function evaluateCandidates(a: LabSide, b: LabSide, candidates: Candidate[], games: number, seed: number): { base: LabSummary; results: CandidateResult[] } {
-  const base = runLab({ a, b, games, seed });
+export function evaluateCandidates(a: LabSide, b: LabSide, candidates: Candidate[], games: number, seed: number, onGame?: () => void): { base: LabSummary; results: CandidateResult[] } {
+  const base = runLab({ a, b, games, seed }, onGame);
   const results = candidates.map((c) => {
-    const r = runLab({ a, b, games, seed, patch: c.patch });
+    const r = runLab({ a, b, games, seed, patch: c.patch }, onGame);
     const { delta, se } = pairedDelta(base, r);
     return { id: c.id, label: c.label, why: c.why, patch: c.patch, net: r.net, delta, se, winPct: r.winPct };
   });

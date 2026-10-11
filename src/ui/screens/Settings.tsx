@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, HardDrive, LogOut, Save, Shuffle, Trash2, TriangleAlert } from 'lucide-react';
+import { Database, Download, HardDrive, LogOut, Save, Shuffle, Trash2, TriangleAlert } from 'lucide-react';
+import { exportLeague } from '../../state/backup';
+import { ImportButton } from '../components/ImportButton';
 import type { League, Settings as LeagueSettings } from '../../core/types';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, teamPlayers } from '../../core/league/helpers';
@@ -186,7 +188,22 @@ export default function Settings() {
       <SecTitle>League file</SecTitle>
       <Card>
         <div className="col" style={{ gap: 8 }}>
-          <div className="small dim2">Your league autosaves after every change and when you leave the app.</div>
+          <div className="small dim2">Your league autosaves on this device after every change and when you leave the app. Export a backup to keep it safe or move it to another device.</div>
+          <div className="grid2">
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() =>
+                void exportLeague(league).catch((e) => {
+                  console.error(e);
+                  useStore.getState().toast('Export failed.', 'bad');
+                })
+              }
+            >
+              <Download size={17} /> Export backup
+            </button>
+            <ImportButton />
+          </div>
           <div className="grid2">
             <button className="btn" disabled={busy} onClick={() => void saveNow()}>
               <Save size={17} /> Save now

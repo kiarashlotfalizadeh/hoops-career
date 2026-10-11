@@ -22,3 +22,13 @@ export async function initNative() {
     else window.history.back();
   });
 }
+
+/** A short haptic cue on phones (native app only; no-op on the web). */
+export function haptic(kind: 'tap' | 'success' | 'warning' = 'tap') {
+  if (!Capacitor.isNativePlatform()) return;
+  void import('@capacitor/haptics')
+    .then(({ Haptics, ImpactStyle, NotificationType }) =>
+      kind === 'tap' ? Haptics.impact({ style: ImpactStyle.Light }) : Haptics.notification({ type: kind === 'success' ? NotificationType.Success : NotificationType.Warning }),
+    )
+    .catch(() => {});
+}
