@@ -8,7 +8,7 @@ import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
 import { playerAge } from '../playerGen';
-import { CAP_FOR, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
 import { generateSchedule } from './schedule';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { assessLuxuryTax, profit } from './finances';
@@ -336,6 +336,8 @@ export function startFreeAgency(league: League): boolean {
     resolveOptions(league, rng, true);
     aiResign(league, rng);
     releaseExpiring(league);
+    // pick-rich teams can come out of the draft above the offseason limit
+    trimRosters(league, (p) => releasePlayer(league, p, { news: false }), OFFSEASON_ROSTER_MAX);
     league.phase = 'freeAgency';
     league.faDay = 0;
     faDay(league, rng, 1.2);

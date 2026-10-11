@@ -44,7 +44,9 @@ function check() {
     const who = `${t.abbrev}${t.tid === L.userTid ? '*' : ''}`;
     // standard roster: 13-15 in season; two-way deals sit outside it (max 3)
     if (H.inSeason(L) && (n < CAP.rosterMin || n > CAP.rosterMax)) bad('roster size in season', `${who} ${n}`);
-    if (n > H.OFFSEASON_ROSTER_MAX) bad('roster above offseason limit', `${who} ${n}`);
+    // during the re-sign window expiring deals still sit on the roster; count next season's contracts
+    const signed = ph === 'resign' ? H.standardRoster(L, t.tid).filter((p) => contractExp(p.contract) > L.season).length : n;
+    if (signed > H.OFFSEASON_ROSTER_MAX) bad('roster above offseason limit', `${who} ${signed}`);
     if (tw > H.TWO_WAY_MAX) bad('too many two-way players', `${who} ${tw}`);
     if (ph === 'preseason' && t.tid !== L.userTid && n < CAP.rosterMin) bad('AI roster <13 in preseason', `${who} ${n}`);
     if (new Set(t.rotation.order).size !== t.rotation.order.length) bad('dup pid in rotation', who);

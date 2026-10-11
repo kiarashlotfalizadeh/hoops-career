@@ -128,7 +128,7 @@ export function fillRosters(league: League, rng: Rng, season = league.season) {
  * Cuts go by value plus guaranteed money still owed (a point per $1M): camp and minimum deals go
  * first, and a big contract is essentially never waived while cheaper weak players remain.
  */
-export function trimRosters(league: League, release: (p: Player) => void) {
+export function trimRosters(league: League, release: (p: Player) => void, standardMax: number = CAP.rosterMax) {
   const owed = (p: Player) => {
     let total = 0;
     for (let s = league.season; s <= contractExp(p.contract); s++) total += salaryFor(p, s);
@@ -138,7 +138,7 @@ export function trimRosters(league: League, release: (p: Player) => void) {
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     for (const [roster, max] of [
-      [standardRoster(league, t.tid), CAP.rosterMax],
+      [standardRoster(league, t.tid), standardMax],
       [twoWayRoster(league, t.tid), TWO_WAY_MAX],
     ] as const) {
       roster.sort((a, b) => keep(a) - keep(b));
