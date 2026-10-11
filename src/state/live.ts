@@ -111,6 +111,8 @@ export function playedElsewhere(lg: LiveGame, league: League): number | null {
 
 /** Prepare today's user game: simulate the rest of the day's games first. Resumes an in-progress game. */
 export function prepareLive(league: League): LiveGame | null {
+  // games are only played in season: in preseason, opening night waits for "Start regular season"
+  if (league.phase !== 'regular' && league.phase !== 'playin' && league.phase !== 'playoffs') return null;
   if (league.phase === 'playoffs') schedulePlayoffDay(league);
   const g = userGameOnDay(league, league.day);
   if (!g) return null;

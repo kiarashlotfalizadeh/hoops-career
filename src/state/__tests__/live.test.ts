@@ -25,6 +25,15 @@ const once = (l: League, gid: number) => l.games.filter((g) => g.gid === gid).le
 beforeEach(() => useStore.getState().setLeague(null));
 
 describe('live game', () => {
+  it('plays nothing outside the season: opening night waits for the regular season to start', () => {
+    const l = testLeague('pre');
+    toGameDay(l);
+    l.phase = 'preseason';
+    const [day, played] = [l.day, l.games.length];
+    expect(prepareLive(l)).toBeNull();
+    expect([l.day, l.games.length]).toEqual([day, played]);
+  });
+
   it('reopening the league never resumes the old controller, so the season can end (I1)', () => {
     const a = testLeague('reopen');
     toGameDay(a);
