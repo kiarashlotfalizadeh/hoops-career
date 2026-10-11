@@ -1,6 +1,6 @@
 // The season loop and phase machine.
 
-import type { League, ScheduledGame } from '../types';
+import type { League, Player, ScheduledGame } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
@@ -15,7 +15,7 @@ import { ensureRotation, gamesOnDay, playGame } from './games';
 import { assessLuxuryTax, profit } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
-import { computeRegularSeasonAwards, finalsMvp, selectAllStars } from './awards';
+import { computeRegularSeasonAwards, finalsMvp, gameScore, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
@@ -215,6 +215,35 @@ function endRegularSeason(league: League) {
   startPlayIn(league);
 }
 
+/** Hall of Fame points per award won in this league; 22 gets a player in. */
+const HOF_POINTS: Record<string, number> = { MVP: 12, 'Finals MVP': 6, 'Defensive Player of the Year': 4, 'All-Star': 2, Champion: 1.5 };
+const HOF_LINE = 22;
+
+/**
+ * Credit for a real player's career before the league began, which his awards here don't cover:
+ * his production in the real seasons the seed carries (game score per game, raised with age since
+ * a 37-year-old's numbers understate his prime, less a replacement-level 6) squared, times the
+ * seasons he had played. LeBron James is worth almost three Hall of Fame lines; Durant, Curry,
+ * Harden, Giannis, Kawhi and Davis one or more; a long-serving role player next to nothing.
+ */
+export function preLeagueLegacy(league: League, p: Player): number {
+  const real = p.stats.filter((s) => s.real && !s.playoffs);
+  const gp = real.reduce((a, s) => a + s.gp, 0);
+  if (!gp) return 0;
+  const age = playerAge(p, league.startSeason);
+  const seasons = p.draft.year > 0 ? league.startSeason - 1 - p.draft.year : Math.max(0, age - 21);
+  const gmsc = real.reduce((a, s) => a + gameScore(s), 0) / gp;
+  // a short sample (injuries, a late arrival) counts for less
+  const q = Math.max(0, gmsc * (1 + 0.05 * Math.max(0, age - 29)) - 6) * Math.min(1, gp / 100);
+  return (seasons * q * q) / 260;
+}
+
+/** Hall of Fame score: awards won in the league plus a real player's earlier career. */
+export function hallOfFameScore(league: League, p: Player): number {
+  const awards = p.awards.reduce((s, a) => s + (HOF_POINTS[a.type] ?? (a.type.startsWith('All-NBA') ? 4 : 0)), 0);
+  return awards + preLeagueLegacy(league, p);
+}
+
 function retirements(league: League, rng: Rng) {
   const retiredNow: string[] = [];
   for (const p of Object.values(league.players)) {
@@ -241,13 +270,13 @@ function retirements(league: League, rng: Rng) {
       p.tid = RETIRED;
       p.retiredSeason = league.season;
       p.contract = { start: league.season + 1, salaries: [0] };
-      // Hall of Fame: accolades-driven
-      const score = p.awards.reduce((s, a) => s + (a.type === 'MVP' ? 12 : a.type.startsWith('All-NBA') ? 4 : a.type === 'All-Star' ? 2 : a.type === 'Champion' ? 1.5 : a.type === 'Finals MVP' ? 6 : a.type === 'Defensive Player of the Year' ? 4 : 0), 0);
-      if (score >= 22) {
+      const score = hallOfFameScore(league, p);
+      if (score >= HOF_LINE) {
         p.hof = true;
         p.awards.push({ season: league.season, type: 'Hall of Fame' });
       }
-      if (p.ovr >= 76 || p.hof || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
+      // news: still a good player, or a decorated career (a few All-Star or All-NBA nods)
+      if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
   }
   if (retiredNow.length) addNews(league, { kind: 'retire', text: `Retirements: ${retiredNow.slice(0, 12).join(', ')}${retiredNow.length > 12 ? '…' : ''}.`, tids: [], pids: [] });

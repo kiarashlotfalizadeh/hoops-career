@@ -1,8 +1,8 @@
-// What the save keeps: box scores of other teams' games and retired players' records.
+// What the save keeps: box scores of other teams' games, retired players' records, the Hall of Fame.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { newSeason, simDay, startRegularSeason } from '../league/season';
+import { hallOfFameScore, newSeason, simDay, startRegularSeason } from '../league/season';
 import { standardRoster, statsLine, teamPlayers } from '../league/helpers';
 import { releasePlayer, valueScore } from '../league/contracts';
 import { CAP } from '../constants';
@@ -68,5 +68,34 @@ describe('retired players (L4)', () => {
     expect(s.min).toBe(Math.round(500 * 21.123456 * 10) / 10);
     expect(vet.mood.notes).toEqual([]);
     expect(vet.mood.score).toBe(0);
+  });
+});
+
+describe.runIf(real)('Hall of Fame (L6)', () => {
+  const l = league();
+  const named = (first: string, last: string) => Object.values(l.players).find((p) => p.firstName === first && p.lastName === last)!;
+
+  it('real legends carry their careers before the league began', () => {
+    for (const [f, n] of [
+      ['LeBron', 'James'],
+      ['Stephen', 'Curry'],
+      ['Kevin', 'Durant'],
+      ['James', 'Harden'],
+      ['Giannis', 'Antetokounmpo'],
+      ['Anthony', 'Davis'],
+      ['Kawhi', 'Leonard'],
+    ])
+      expect(hallOfFameScore(l, named(f, n))).toBeGreaterThanOrEqual(22);
+  });
+
+  it('long-serving role players get next to nothing', () => {
+    for (const [f, n] of [
+      ['Taj', 'Gibson'],
+      ['Nicolas', 'Batum'],
+      ['DeAndre', 'Jordan'],
+    ])
+      expect(hallOfFameScore(l, named(f, n))).toBeLessThan(2);
+    const credited = Object.values(l.players).filter((p) => hallOfFameScore(l, p) >= 22);
+    expect(credited.length).toBeLessThanOrEqual(12);
   });
 });
