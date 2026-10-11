@@ -13,25 +13,27 @@ interface InjuryType {
 /** Injuries shorter than this skip the inbox (they still show on the roster and in rotations). */
 const MAIL_MIN_GAMES = 4;
 
+// Weights and lengths tuned so a team loses about four to six players a season to 10+ game
+// absences and the league sees a handful of season-ending tears, as in recent NBA seasons.
 export const INJURY_TYPES: InjuryType[] = [
-  { name: 'Sprained Ankle', weight: 22, min: 1, max: 8, severity: 'minor' },
-  { name: 'Knee Soreness', weight: 12, min: 1, max: 5, severity: 'minor' },
-  { name: 'Back Spasms', weight: 8, min: 1, max: 6, severity: 'minor' },
+  { name: 'Sprained Ankle', weight: 24, min: 1, max: 7, severity: 'minor' },
+  { name: 'Knee Soreness', weight: 13, min: 1, max: 5, severity: 'minor' },
+  { name: 'Back Spasms', weight: 8, min: 1, max: 5, severity: 'minor' },
   { name: 'Hip Contusion', weight: 5, min: 1, max: 4, severity: 'minor' },
-  { name: 'Sprained Finger', weight: 6, min: 1, max: 5, severity: 'minor' },
-  { name: 'Concussion', weight: 4, min: 2, max: 9, severity: 'minor' },
-  { name: 'Illness', weight: 6, min: 1, max: 3, severity: 'minor' },
-  { name: 'Hamstring Strain', weight: 10, min: 3, max: 14, severity: 'moderate' },
-  { name: 'Calf Strain', weight: 7, min: 3, max: 16, severity: 'moderate' },
-  { name: 'Groin Strain', weight: 5, min: 3, max: 12, severity: 'moderate' },
-  { name: 'Sprained Shoulder', weight: 4, min: 3, max: 12, severity: 'moderate' },
-  { name: 'Plantar Fasciitis', weight: 3, min: 6, max: 20, severity: 'moderate' },
-  { name: 'Broken Hand', weight: 3, min: 15, max: 30, severity: 'moderate' },
-  { name: 'MCL Sprain', weight: 3, min: 10, max: 30, severity: 'moderate' },
-  { name: 'Torn Meniscus', weight: 1.8, min: 20, max: 45, severity: 'major' },
-  { name: 'Foot Stress Fracture', weight: 1.4, min: 25, max: 60, severity: 'major' },
-  { name: 'Torn ACL', weight: 0.7, min: 70, max: 110, severity: 'severe' },
-  { name: 'Ruptured Achilles', weight: 0.5, min: 80, max: 125, severity: 'severe' },
+  { name: 'Sprained Finger', weight: 6, min: 1, max: 4, severity: 'minor' },
+  { name: 'Concussion', weight: 4, min: 2, max: 8, severity: 'minor' },
+  { name: 'Illness', weight: 7, min: 1, max: 3, severity: 'minor' },
+  { name: 'Hamstring Strain', weight: 9, min: 3, max: 12, severity: 'moderate' },
+  { name: 'Calf Strain', weight: 6, min: 3, max: 14, severity: 'moderate' },
+  { name: 'Groin Strain', weight: 4.5, min: 3, max: 11, severity: 'moderate' },
+  { name: 'Sprained Shoulder', weight: 3.5, min: 3, max: 10, severity: 'moderate' },
+  { name: 'Plantar Fasciitis', weight: 2.5, min: 5, max: 18, severity: 'moderate' },
+  { name: 'Broken Hand', weight: 2.2, min: 14, max: 28, severity: 'moderate' },
+  { name: 'MCL Sprain', weight: 2.4, min: 8, max: 26, severity: 'moderate' },
+  { name: 'Torn Meniscus', weight: 1.3, min: 18, max: 40, severity: 'major' },
+  { name: 'Foot Stress Fracture', weight: 1, min: 22, max: 55, severity: 'major' },
+  { name: 'Torn ACL', weight: 0.35, min: 70, max: 110, severity: 'severe' },
+  { name: 'Ruptured Achilles', weight: 0.3, min: 80, max: 125, severity: 'severe' },
 ];
 
 export function rollInjury(league: League, p: Player, rng: Rng): Injury {
