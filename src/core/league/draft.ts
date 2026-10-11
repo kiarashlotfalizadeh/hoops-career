@@ -120,13 +120,26 @@ export function draftStandings(league: League): { tid: number; playoff: boolean 
     .map(({ tid, playoff }) => ({ tid, playoff }));
 }
 
+/**
+ * Lottery chances per team (per thousand), in pre-lottery order. Teams on the same record split the
+ * chances of the places they share, as in the NBA; the drawing only orders them for the picks the
+ * lottery doesn't move.
+ */
+export function lotteryOdds(league: League): { tid: number; w: number; pre: number }[] {
+  const lottery = draftStandings(league).filter((r) => !r.playoff);
+  const pct = (tid: number) => winPct(curTeamSeason(league, tid));
+  return lottery.map((r, i) => {
+    const shared = lottery.flatMap((x, j) => (Math.abs(pct(x.tid) - pct(r.tid)) < 1e-9 ? [LOTTERY_ODDS[j] ?? 0] : []));
+    return { tid: r.tid, w: shared.reduce((a, w) => a + w, 0) / shared.length, pre: i + 1 };
+  });
+}
+
 /** Run the lottery for this season's draft and assign pick numbers. */
 export function runLottery(league: League, rng: Rng): LotteryResult {
   const season = league.season;
   const recs = draftStandings(league);
-  const lottery = recs.filter((r) => !r.playoff);
   const playoff = recs.filter((r) => r.playoff);
-  const pool = lottery.map((r, i) => ({ tid: r.tid, w: LOTTERY_ODDS[i] ?? 0, pre: i + 1 }));
+  const pool = lotteryOdds(league);
   const winners: typeof pool = [];
   const remaining = [...pool];
   for (let k = 0; k < 4 && remaining.length; k++) {

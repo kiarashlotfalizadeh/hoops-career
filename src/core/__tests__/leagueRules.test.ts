@@ -15,7 +15,7 @@ import { champion, playInDone, processPlayInResult, processPlayoffResult, schedu
 import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
-import { runLottery } from '../league/draft';
+import { lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
@@ -154,6 +154,24 @@ describe('offseason', () => {
     expect(r2.length).toBe(30);
     const pct = r2.map((d) => winPct(curTeamSeason(l, d.originalTid)));
     for (let i = 1; i < pct.length; i++) expect(pct[i]).toBeGreaterThanOrEqual(pct[i - 1]);
+  });
+
+  it('teams tied for lottery places split their chances', () => {
+    const l = league();
+    // two worst teams level at 15 wins, three more level at 20, the rest apart; the top 16 in the playoffs
+    const wins = [15, 15, 20, 20, 20, ...Array.from({ length: 25 }, (_, i) => 22 + i)];
+    l.teams.forEach((t, i) => {
+      const ts = curTeamSeason(l, t.tid);
+      ts.won = wins[i];
+      ts.lost = 82 - wins[i];
+      ts.playoffRound = i >= 14 ? 1 : -1;
+    });
+    const odds = new Map(lotteryOdds(l).map((x) => [x.tid, x.w]));
+    expect(odds.get(0)).toBe(140);
+    expect(odds.get(1)).toBe(140);
+    for (const tid of [2, 3, 4]) expect(odds.get(tid)).toBeCloseTo((140 + 125 + 105) / 3);
+    expect(odds.get(5)).toBe(90);
+    expect([...odds.values()].reduce((a, b) => a + b, 0)).toBeCloseTo(1000);
   });
 
   it('contract options: opt-outs, AI and user team options (bug 10)', () => {
