@@ -561,7 +561,7 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
           { id: 'po', label: 'Playoffs' },
         ]}
       />
-      {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>No stats.</Empty>}
+      {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
       <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those.</div>
     </>
   );
