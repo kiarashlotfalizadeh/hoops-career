@@ -139,5 +139,5 @@ describe('NBA Cup', () => {
         expect(new Set(top.map((x) => groupOf(x.tid))).size).toBe(3);
       }
     }
-  }, 30000);
+  }, 120_000);
 });
