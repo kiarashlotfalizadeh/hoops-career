@@ -25,11 +25,17 @@ export function AwardsTab({ league }: { league: League }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, v],
   );
-  const [seasonStr, setSeasonStr] = useQueryParam<string>('aseason', String(league.season));
+  // before opening night there is no race yet: open on the last season's winners
+  const started = league.games.some((g) => g.season === league.season && g.type === 'regular');
+  const last = league.awards.filter((a) => a.season < league.season && a.mvp !== undefined).sort((a, b) => b.season - a.season)[0];
+  const [seasonStr, setSeasonStr] = useQueryParam<string>('aseason', String(!started && last ? last.season : league.season));
   const season = seasons.includes(Number(seasonStr)) ? Number(seasonStr) : league.season;
   const aw = league.awards.find((a) => a.season === season);
   const decided = aw?.mvp !== undefined;
   const isCurrent = season === league.season;
+  let status = '';
+  if (decided) status = isCurrent && (league.phase === 'playin' || league.phase === 'playoffs') ? 'Finals MVP to come' : 'Final results';
+  else if (isCurrent) status = started ? 'Season in progress' : 'Season not started';
 
   return (
     <>
@@ -41,7 +47,7 @@ export function AwardsTab({ league }: { league: League }) {
             </option>
           ))}
         </select>
-        <span className="small dim">{decided ? 'Final results' : isCurrent ? 'Season in progress' : ''}</span>
+        <span className="small dim">{status}</span>
       </div>
 
       {aw?.champion !== undefined && (
