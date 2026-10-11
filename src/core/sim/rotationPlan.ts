@@ -210,7 +210,8 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
       }
       const bigs = chosen.filter((i) => players[i].big);
       if (bigs.length > 3) {
-        const alt = scores.slice(5).find((x) => !players[x.i].big);
+        // never the guard just swapped in: a player listed twice would leave the floor with four
+        const alt = scores.slice(5).find((x) => !players[x.i].big && !chosen.includes(x.i));
         if (alt) {
           const drop = bigs[bigs.length - 1];
           chosen = chosen.map((i) => (i === drop ? alt.i : i));

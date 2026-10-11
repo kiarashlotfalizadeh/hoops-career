@@ -31,6 +31,11 @@ describe('rotation plan', () => {
     expect([...plan[0]].sort()).toEqual([0, 1, 2, 3, 4]);
     expect([...plan[47]].sort()).toEqual([0, 1, 2, 3, 4]);
   });
+  it('never lists a player twice when one swap fixes both a missing guard and too many bigs', () => {
+    // five bigs and no ball handler start: the guard swapped in must not be picked again as the "small"
+    const bigs = players.map((p, i) => ({ ...p, guard: i >= 5, big: i < 5 }));
+    for (const slot of buildMinutePlan(bigs)) expect(new Set(slot).size).toBe(5);
+  });
 });
 
 describe('plan inputs', () => {
