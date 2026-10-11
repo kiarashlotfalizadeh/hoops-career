@@ -1,15 +1,15 @@
-import type { Injury, League, Player, PlayerStats, Pos, Ratings, Settings, Tendencies } from '../types';
+import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
 import { DEFAULT_SCALE, blankMood, generatePlayer, refreshPlayerDerived } from '../playerGen';
-import { archetype, buildOvrScale, ovrRaw } from '../ratings';
+import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
-import { ensureRotation } from './games';
+import { JERSEYS, ensureRotation } from './games';
 import { updateMorale } from './morale';
 import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
@@ -106,18 +106,30 @@ export function defaultSettings(): Settings {
   return { difficulty: 'casual', injuries: true, jobSecurity: true, complexity: 'advanced', liveSpeed: 1 };
 }
 
-function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Player {
+/**
+ * NBA seasons before `season` and draft details for a seed player. Without draft data he went
+ * undrafted (or, like LeBron, was drafted before the seed's draft pages begin): with no season on
+ * record he is a rookie, one who debuted within the record has its seasons, and one already playing
+ * when it begins (`firstRecord`) counts the years since a typical undrafted debut at 22 (VanVleet 10,
+ * not the 2 on record), which sets his max, his minimum and two-way eligibility. Second-round picks
+ * are numbered within the round, as the game does.
+ */
+function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { experience: number; draft: DraftInfo } {
+  if (sp.draft) {
+    const { year, round, team } = sp.draft;
+    const pick = round === 2 && sp.draft.pick > 30 ? sp.draft.pick - 30 : sp.draft.pick;
+    return { experience: Math.max(0, season - 1 - year), draft: { year, round, pick, tid: team ? (BBREF_TO_TID[team] ?? null) : null, teamAbbrev: team } };
+  }
+  const seasons = new Set(sp.stats.filter((s) => s.real).map((s) => s.season));
+  const experience = seasons.has(firstRecord) ? Math.max(seasons.size, season - sp.bornYear - 22) : seasons.size;
+  // a 15-year veteran was almost surely drafted: his draft stays unknown rather than "undrafted"
+  return { experience, draft: { year: experience >= 15 ? 0 : season - 1 - experience, round: 0, pick: 0, tid: null } };
+}
+
+function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, firstRecord: number): Player {
   const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
   const salaries = sp.contract?.salaries?.length ? sp.contract.salaries : [0];
-  const experience = sp.draft
-    ? Math.max(0, season - 1 - sp.draft.year)
-    : Math.max(
-        0,
-        sp.stats
-          .filter((s) => s.real)
-          .map((s) => s.season)
-          .filter((v, i, a) => a.indexOf(v) === i).length,
-      );
+  const { experience, draft } = seedCareer(sp, season, firstRecord);
   const p: Player = {
     pid,
     bbrefId: sp.id,
@@ -131,9 +143,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
     country: sp.country,
     college: sp.college,
     jersey: sp.jersey,
-    draft: sp.draft
-      ? { year: sp.draft.year, round: sp.draft.round, pick: sp.draft.pick, tid: sp.draft.team ? (BBREF_TO_TID[sp.draft.team] ?? null) : null, teamAbbrev: sp.draft.team }
-      : { year: 0, round: 0, pick: 0, tid: null },
+    draft,
     tid,
     ratings: { ...sp.ratings },
     tend: sp.tend ? { ...sp.tend } : undefined,
@@ -158,40 +168,6 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
   };
   return p;
 }
-
-const JERSEYS = [
-  '0',
-  '1',
-  '2',
-  '3',
-  '4',
-  '5',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12',
-  '13',
-  '14',
-  '15',
-  '17',
-  '20',
-  '21',
-  '22',
-  '23',
-  '24',
-  '25',
-  '30',
-  '31',
-  '32',
-  '33',
-  '34',
-  '35',
-  '41',
-  '44',
-  '55',
-];
 
 /** Rookies and new signings without a listed number pick a free one on their team. */
 function assignJerseys(league: League, rng: Rng) {
@@ -254,8 +230,10 @@ export function createLeague(opts: CreateOpts): League {
   teams[opts.userTid].coach.name = opts.coachName;
 
   if (opts.seed && opts.seed.players.length) {
+    // the first season the seed's stats cover
+    const firstRecord = Math.min(season - 1, ...opts.seed.players.flatMap((sp) => sp.stats.filter((s) => s.real).map((s) => s.season)));
     for (const sp of opts.seed.players) {
-      const p = seedToPlayer(sp, league.nextPid++, season, rng);
+      const p = seedToPlayer(sp, league.nextPid++, season, rng, firstRecord);
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
@@ -263,17 +241,20 @@ export function createLeague(opts: CreateOpts): League {
     assignJerseys(league, rng);
   } else {
     // fictional league
+    const taken = new Set<string>();
     for (let tid = 0; tid < 30; tid++) {
       const roster: Player[] = [];
+      // contenders and rebuilding teams: the whole roster is a little better or worse
+      const quality = rng.normal(0, 0.4);
       for (let i = 0; i < 14; i++) {
-        const talent = rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
+        const talent = quality + rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
         // the last three spots go to young players (some of them on rookie deals)
         const age = i >= 11 ? Math.round(clamp(rng.normal(21, 1.2), 19, 23)) : Math.round(clamp(rng.normal(26.5, 4), 19, 37));
         // the last spot goes to a center if the roster has none yet
         const big = i === 13 && !roster.some((p) => p.pos === 'C');
-        let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: big ? rng.int(83, 85) : undefined });
+        let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: big ? rng.int(83, 85) : undefined, taken });
         for (let tries = 0; big && p.pos !== 'C' && tries < 10; tries++)
-          p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86) });
+          p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86), taken });
         league.nextPid++;
         p.experience = Math.max(0, age - 20);
         p.draft = { year: season - 1 - p.experience, round: rng.chance(0.7) ? 1 : 2, pick: rng.int(1, 30), tid: null };
@@ -283,7 +264,7 @@ export function createLeague(opts: CreateOpts): League {
       // two-way prospects outside the 15
       for (let i = 0; i < 2; i++) {
         const age = rng.int(20, 23);
-        const p = generatePlayer(rng, { pid: league.nextPid++, season, tid, age, talent: rng.normal(-1.3, 0.4), scale: DEFAULT_SCALE });
+        const p = generatePlayer(rng, { pid: league.nextPid++, season, tid, age, talent: rng.normal(-1.3, 0.4), scale: DEFAULT_SCALE, taken });
         p.experience = rng.int(0, Math.min(2, age - 20));
         p.draft = { year: season - 1 - p.experience, round: 2, pick: rng.int(1, 30), tid: null };
         p.contract = { start: season, salaries: [0], twoWay: true };
@@ -292,11 +273,12 @@ export function createLeague(opts: CreateOpts): League {
     }
     for (let i = 0; i < 40; i++) {
       const age = rng.int(22, 34);
-      const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age, talent: rng.normal(-1, 0.5), scale: DEFAULT_SCALE });
+      const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age, talent: rng.normal(-1, 0.5), scale: DEFAULT_SCALE, taken });
       p.experience = Math.max(0, age - 21);
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
+    matchRealSpread(rostered, Object.values(league.players));
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
     for (const p of Object.values(league.players)) refreshPlayerDerived(p, season, league.ovrScale);
     fictionalContracts(league, rng);
@@ -356,6 +338,59 @@ export function createLeague(opts: CreateOpts): League {
     });
   }
   return league;
+}
+
+/** Raw OVR (ovrRaw) of the real 2026-27 rosters at each OVR_ANCHORS quantile, as the seed rates them. */
+const REAL_RAW_QUANTILES = [41.76, 44.38, 44.97, 46.24, 47.98, 50.01, 52.81, 56.58, 58.83, 61.72, 66.09];
+
+/**
+ * Generated talent moves every skill together, so a generated league spread overall ability more
+ * than real rosters do (raw OVR SD about 9 against 4). Development and aging move attributes by the
+ * same amounts in any league, so a fictional player's OVR barely moved: rookies gained a point a
+ * year, veterans hardly declined into their late 30s and POT overshot by four. Each player's level
+ * is moved along his skills (his profile kept) to the same place in the real league's distribution,
+ * by his quantile among `rostered`; `all` gets the same mapping.
+ */
+function matchRealSpread(rostered: Player[], all: Player[]) {
+  // the shape only: the average stays where it was generated (skill levels set the scoring level)
+  const avg = () => rostered.reduce((a, p) => a + ovrRaw(p.ratings), 0) / rostered.length;
+  const avg0 = avg();
+  const median = OVR_ANCHORS.findIndex(([q]) => q === 0.5);
+  const centre = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings))).raw[median];
+  const to = REAL_RAW_QUANTILES.map((x) => x - REAL_RAW_QUANTILES[median] + centre);
+  const shift = (p: Player, raw: number) => {
+    const w = ovrWeights(p.ratings);
+    const d = raw / SKILL_KEYS.reduce((t, key) => t + w[key], 0);
+    for (const key of SKILL_KEYS) p.ratings[key] = clamp(p.ratings[key] + d, 1, 100);
+  };
+  const stats = (k: RatingKey) => {
+    const m = rostered.reduce((a, p) => a + p.ratings[k], 0) / rostered.length;
+    return { m, sd: Math.sqrt(rostered.reduce((a, p) => a + (p.ratings[k] - m) ** 2, 0) / rostered.length) };
+  };
+  const skill0 = new Map(SKILL_KEYS.map((k) => [k, stats(k)]));
+  // alternate: level onto the real quantiles, then give each skill back its spread (players come out
+  // more specialised, like real ones, rather than uniformly worse or better)
+  for (let pass = 0; pass < 4; pass++) {
+    if (pass) {
+      for (const k of SKILL_KEYS) {
+        const { m, sd } = stats(k);
+        if (sd > 0) for (const p of all) p.ratings[k] = clamp(skill0.get(k)!.m + ((p.ratings[k] - m) * skill0.get(k)!.sd) / sd, 1, 100);
+      }
+    }
+    const from = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings))).raw;
+    // piecewise linear between matching quantiles, extended with the end segments' slopes
+    const map = (raw: number) => {
+      let i = 1;
+      while (i < from.length - 1 && raw > from[i]) i++;
+      return to[i - 1] + ((raw - from[i - 1]) * (to[i] - to[i - 1])) / (from[i] - from[i - 1]);
+    };
+    for (const p of all) shift(p, map(ovrRaw(p.ratings)) - ovrRaw(p.ratings));
+  }
+  const off = avg0 - avg();
+  for (const p of all) {
+    shift(p, off);
+    for (const key of SKILL_KEYS) p.ratings[key] = Math.round(p.ratings[key] * 10) / 10;
+  }
 }
 
 /**

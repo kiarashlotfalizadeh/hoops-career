@@ -5,17 +5,19 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { advanceDay, faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
-import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { validateTrade } from '../league/trades';
-import { buildSimInput, wearInjuryRisk } from '../league/games';
+import { buildSimInput, ensureRotation, wearInjuryRisk } from '../league/games';
+import { rankedPresets } from '../ai/coachAI';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
-import { computeRegularSeasonAwards, selectAllStars } from '../league/awards';
+import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
-import { runLottery } from '../league/draft';
+import { injuryText } from '../league/injuries';
+import { generateDraftClass, lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
@@ -154,6 +156,42 @@ describe('offseason', () => {
     expect(r2.length).toBe(30);
     const pct = r2.map((d) => winPct(curTeamSeason(l, d.originalTid)));
     for (let i = 1; i < pct.length; i++) expect(pct[i]).toBeGreaterThanOrEqual(pct[i - 1]);
+  });
+
+  it('teams tied for lottery places split their chances', () => {
+    const l = league();
+    // two worst teams level at 15 wins, three more level at 20, the rest apart; the top 16 in the playoffs
+    const wins = [15, 15, 20, 20, 20, ...Array.from({ length: 25 }, (_, i) => 22 + i)];
+    l.teams.forEach((t, i) => {
+      const ts = curTeamSeason(l, t.tid);
+      ts.won = wins[i];
+      ts.lost = 82 - wins[i];
+      ts.playoffRound = i >= 14 ? 1 : -1;
+    });
+    const odds = new Map(lotteryOdds(l).map((x) => [x.tid, x.w]));
+    expect(odds.get(0)).toBe(140);
+    expect(odds.get(1)).toBe(140);
+    for (const tid of [2, 3, 4]) expect(odds.get(tid)).toBeCloseTo((140 + 125 + 105) / 3);
+    expect(odds.get(5)).toBe(90);
+    expect([...odds.values()].reduce((a, b) => a + b, 0)).toBeCloseTo(1000);
+  });
+
+  it('a new arrival whose number is taken picks a free one; nobody joins sharing a name', () => {
+    const l = league();
+    const tid = aiTeam(l);
+    const [vet] = teamPlayers(l, tid);
+    const newcomer = teamPlayers(l, tid === 5 ? 6 : 5)[0];
+    const number = vet.jersey;
+    newcomer.jersey = number;
+    newcomer.tid = tid;
+    ensureRotation(l, tid);
+    const numbers = teamPlayers(l, tid).map((p) => p.jersey);
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(vet.jersey).toBe(number);
+    expect(newcomer.jersey).not.toBe(number);
+    withRng(l, (rng) => generateDraftClass(l, l.season + 1, rng));
+    const names = Object.values(l.players).map((p) => `${p.firstName} ${p.lastName}`);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it('contract options: opt-outs, AI and user team options (bug 10)', () => {
@@ -543,6 +581,38 @@ describe('awards (L13, L18)', () => {
     expect(computeRegularSeasonAwards(l).smoy).toBe(bench.pid);
   });
 
+  it("Sixth Man isn't held to the 65-game rule (50 games do), and the race shows what the vote will do", () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [sixth, short] = standardRoster(l, U);
+    line(sixth, 55, 0, 25);
+    line(short, 45, 0, 30);
+    const race = awardRaces(l);
+    expect(race.smoy[0].c.p.pid).toBe(sixth.pid);
+    expect(race.mvp.some((x) => x.c.p.pid === sixth.pid)).toBe(false);
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.smoy).toBe(sixth.pid);
+    expect(aw.mvp).toBe(race.mvp[0].c.p.pid);
+    // the Coach of the Year is remembered by name, whoever coaches that team later
+    const coach = aw.coy === U ? l.coachName : l.teams[aw.coy!].coach.name;
+    l.teams[aw.coy!].coach.name = 'Someone Else';
+    expect(l.awards.find((a) => a.season === l.season)!.coyCoach).toBe(coach);
+  });
+
+  it('All-Stars come four guards and six frontcourt players at least, plus two wild cards', () => {
+    const l = league();
+    const line = seasonOf(l);
+    for (const p of Object.values(l.players)) p.injury = null;
+    // the East's guards have the best seasons by far
+    const east = Object.values(l.players).filter((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E');
+    for (const p of east) if (p.pos === 'PG' || p.pos === 'SG') line(p, 70, 70, 35);
+    const as = selectAllStars(l);
+    const guards = as.E.filter((pid) => ['PG', 'SG'].includes(l.players[pid].pos)).length;
+    expect(as.E.length).toBe(12);
+    expect(guards).toBeGreaterThanOrEqual(4);
+    expect(guards).toBeLessThanOrEqual(6);
+  });
+
   it('All-Rookie has a 1st and a 2nd team', () => {
     const l = league();
     seasonOf(l);
@@ -593,6 +663,23 @@ describe('free agency calendar (UI2-22)', () => {
     l.faDay = 27;
     faAdvance(l, 7);
     expect(l.faDay).toBe(30);
+  });
+
+  it('the summer has dates: draft night in late June, free agency from June 30, a day per free-agency day', () => {
+    const l = league();
+    l.phase = 'draftLottery';
+    l.day = 238; // Finals night, mid-June
+    runLottery(l, new Rng(2));
+    expect(startDraft(l)).toBe(true);
+    const md = () => [dayToDate(l.season, l.day).getUTCMonth(), dayToDate(l.season, l.day).getUTCDate()];
+    expect(md()).toEqual([5, 25]);
+    expect(l.news[l.news.length - 1].day).toBe(l.day);
+    expect(finishDraftPhase(l)).toBe(true);
+    expect(startFreeAgency(l)).toBe(true);
+    expect(md()).toEqual([5, 30]);
+    faAdvance(l, 3);
+    expect(md()).toEqual([6, 3]);
+    expect(l.inbox[0].day).toBeLessThanOrEqual(l.day);
   });
 });
 
@@ -659,6 +746,34 @@ describe('morale and wear (L17)', () => {
     const after = buildSimInput(l, U, 0, 'regular').perf!;
     expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
     expect(after[star.pid]).toBeCloseTo(before[star.pid]);
+  });
+
+  it('injury names read as English in messages', () => {
+    expect(injuryText('Torn ACL', true)).toBe('a torn ACL');
+    expect(injuryText('MCL Sprain', true)).toBe('an MCL sprain');
+    expect(injuryText('Back Spasms', true)).toBe('back spasms');
+    expect(injuryText('Plantar Fasciitis', true)).toBe('plantar fasciitis');
+    expect(injuryText('Ruptured Achilles')).toBe('ruptured Achilles');
+  });
+
+  it("an assistant-run playbook follows long injuries; the user's own tactics stay put", () => {
+    const l = league();
+    l.teams[U].tactics.manual = true;
+    const mine = structuredClone(l.teams[U].tactics);
+    const before = l.teams.map((t) => t.tactics.offPreset + t.tactics.defPreset);
+    // every team loses its two best players for a month
+    for (const t of l.teams)
+      for (const p of teamPlayers(l, t.tid)
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 2))
+        p.injury = { type: 'Calf Strain', gamesRemaining: 30, gamesTotal: 30, severity: 'moderate' };
+    for (const t of l.teams) ensureRotation(l, t.tid);
+    for (const t of l.teams.filter((x) => x.tid !== U)) {
+      const best = rankedPresets(t, teamPlayers(l, t.tid));
+      expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([best.off[0], best.def[0]]);
+    }
+    expect(l.teams.some((t, i) => t.tid !== U && t.tactics.offPreset + t.tactics.defPreset !== before[i])).toBe(true);
+    expect(l.teams[U].tactics).toEqual(mine);
   });
 
   it('worn-down players carry extra injury risk', () => {

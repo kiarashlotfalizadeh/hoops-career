@@ -3,6 +3,7 @@ import { generateSchedule } from '../league/schedule';
 import { FRANCHISES } from '../teams';
 import { makeTeam } from '../teamFactory';
 import { Rng } from '../random';
+import { dayToDate } from '../league/helpers';
 
 describe('schedule', () => {
   const rng = new Rng(1);
@@ -33,6 +34,29 @@ describe('schedule', () => {
         .map((g) => g.day)
         .sort((a, b) => a - b);
       for (let i = 2; i < days.length; i++) expect(days[i] - days[i - 2]).toBeGreaterThan(2);
+    }
+  });
+  it('never has a team play four games in five nights', () => {
+    for (const t of teams) {
+      const days = games
+        .filter((g) => g.home === t.tid || g.away === t.tid)
+        .map((g) => g.day)
+        .sort((a, b) => a - b);
+      for (let i = 3; i < days.length; i++) expect(days[i] - days[i - 3]).toBeGreaterThan(4);
+    }
+  });
+  it('follows the NBA calendar: the All-Star Game on a Sunday, the deadline the Thursday ten days before, dark on Thanksgiving and Christmas Eve', () => {
+    for (const season of [2027, 2028, 2031]) {
+      const s = generateSchedule(teams, season, new Rng(season), 1);
+      expect(dayToDate(season, s.allStarDay).getUTCDay()).toBe(0);
+      expect(dayToDate(season, s.allStarDay).getUTCMonth()).toBe(1);
+      expect(dayToDate(season, s.tradeDeadlineDay).getUTCDay()).toBe(4);
+      expect(s.allStarDay - s.tradeDeadlineDay).toBe(10);
+      for (const g of s.games) {
+        const d = dayToDate(season, g.day);
+        expect(d.getUTCMonth() === 11 && d.getUTCDate() === 24).toBe(false);
+        expect(d.getUTCMonth() === 10 && d.getUTCDay() === 4 && d.getUTCDate() >= 22).toBe(false);
+      }
     }
   });
   it('never schedules a team twice on one day and leaves the All-Star break empty', () => {

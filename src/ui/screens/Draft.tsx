@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucid
 import type { CombineResults, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, withRng, winPct } from '../../core/league/helpers';
-import { LOTTERY_ODDS, aiChoose, draftOrder, draftStandings, draftUntilUser, nextPick } from '../../core/league/draft';
+import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
 import { pickLabel } from '../../core/league/trades';
 import { finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
 import { fmtHeight } from '../../core/ratings';
@@ -434,12 +434,8 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
 function LotteryView({ league }: { league: League }) {
   const order = draftOrder(league).filter((d) => d.round === 1 && (d.pick ?? 99) <= 14);
   if (!order.length) return <Empty>Lottery results will appear here after the playoffs.</Empty>;
-  // the same pre-lottery order the lottery used (ties broken by a seeded draw)
-  const pre = new Map(
-    draftStandings(league)
-      .filter((x) => !x.playoff)
-      .map((x, i) => [x.tid, i + 1]),
-  );
+  // the same pre-lottery order and chances the lottery used (tied teams split theirs)
+  const pre = new Map(lotteryOdds(league).map((x) => [x.tid, x]));
   return (
     <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
@@ -448,10 +444,10 @@ function LotteryView({ league }: { league: League }) {
       </div>
       <div className="list">
         {order.map((d) => {
-          const p0 = pre.get(d.originalTid) ?? d.pick!;
+          const p0 = pre.get(d.originalTid)?.pre ?? d.pick!;
           const move = p0 - d.pick!;
           const ts = curTeamSeason(league, d.originalTid);
-          const odds = (LOTTERY_ODDS[p0 - 1] ?? 0) / 10;
+          const odds = (pre.get(d.originalTid)?.w ?? 0) / 10;
           const mine = d.tid === league.userTid;
           return (
             <div key={d.dpid} className="listrow" style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}>

@@ -1,11 +1,11 @@
 // NBA-format 82-game schedule: 4 vs division, 3-4 vs conference, 2 vs other conference,
-// spread over ~5.5 months with an All-Star break, limited back-to-backs and no 3-in-3s. With the
+// spread over ~5.5 months with an All-Star break, limited back-to-backs and no 3-in-3s or 4-in-5s. With the
 // NBA Cup, 80 games are scheduled up front (group games on Cup nights) and the last two per team
 // are added in the December knockout window once the groups are decided (cup.ts).
 
 import type { CupGroup, ScheduledGame, Team } from '../types';
 import { Rng } from '../random';
-import { cupCalendar, drawCupGroups, groupRounds, type CupSetup } from './cup';
+import { cupCalendar, drawCupGroups, fourInFive, groupRounds, type CupSetup } from './cup';
 
 interface Matchup {
   home: number;
@@ -158,10 +158,17 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
     remaining[m.home]++;
     remaining[m.away]++;
   }
-  const allStarStart = 118; // mid-February
+  // mid-February break from Friday to Wednesday, the All-Star Game on its Sunday
+  let allStarStart = 116;
+  while (dateOf(season, allStarStart).getUTCDay() !== 5) allStarStart++;
   const allStarLen = 6;
   const lastTarget = 168;
-  const blocked = (d: number) => (d >= allStarStart && d < allStarStart + allStarLen) || (!!cup && d >= cup.setup.qfDays[0] && d <= cup.setup.finalDay);
+  // the NBA's dark days: Thanksgiving and Christmas Eve
+  const holiday = (d: number) => {
+    const date = dateOf(season, d);
+    return (date.getUTCMonth() === 10 && date.getUTCDay() === 4 && date.getUTCDate() >= 22) || (date.getUTCMonth() === 11 && date.getUTCDate() === 24);
+  };
+  const blocked = (d: number) => (d >= allStarStart && d < allStarStart + allStarLen) || (!!cup && d >= cup.setup.qfDays[0] && d <= cup.setup.finalDay) || holiday(d);
   // every day each team plays, including the Cup nights fixed in advance
   const plays = teams.map(() => new Set<number>());
   for (const [d, ms] of cup?.fixed ?? []) {
@@ -175,6 +182,7 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   if (cup) for (const p of plays) p.add(cup.setup.qfDays[0]).add(cup.setup.finalDay);
   const on = (t: number, d: number) => plays[t].has(d);
   const threeInThree = (t: number, d: number) => (on(t, d - 1) && on(t, d - 2)) || (on(t, d - 1) && on(t, d + 1)) || (on(t, d + 1) && on(t, d + 2));
+  const crowded = (t: number, d: number) => threeInThree(t, d) || fourInFive(plays[t], d);
   const games: ScheduledGame[] = [];
   let pool = matchups;
   let day = 0;
@@ -193,11 +201,11 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
     let daysLeft = 0;
     for (let d = day; d < lastTarget; d++) if (!blocked(d)) daysLeft++;
     const target = Math.min(n / 2, Math.max(2, Math.round(pool.length / Math.max(1, daysLeft) + rng.normal(0, 1.6)))) - today.length;
-    // prioritize teams with many games left; avoid 3-in-3; discourage back-to-backs
+    // prioritize teams with many games left; no 3-in-3 or 4-in-5; discourage back-to-backs
     const scored = pool.map((m, idx) => {
       let s = remaining[m.home] + remaining[m.away] + rng.uniform(0, 8);
       for (const t of [m.home, m.away]) if (on(t, day - 1) || on(t, day + 1)) s -= 9;
-      if (threeInThree(m.home, day) || threeInThree(m.away, day)) s = -Infinity;
+      if (crowded(m.home, day) || crowded(m.away, day)) s = -Infinity;
       return { idx, s };
     });
     scored.sort((a, b) => b.s - a.s);
@@ -224,7 +232,8 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
     day++;
   }
   const lastDay = games.reduce((a, g) => Math.max(a, g.day), 0);
-  return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 10, cup: cup?.setup };
+  // the deadline is the Thursday ten days before the All-Star Game
+  return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 8, cup: cup?.setup };
 }
 
 /** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = opening night). */
@@ -381,7 +390,8 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
       if (inBreak(d) || (december && date.getUTCDate() === 24) || busy[g.home].has(d) || busy[g.away].has(d)) continue;
       if (three(g.home, d) || three(g.away, d)) continue;
       const b2b = [g.home, g.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length;
-      const s = (december ? 0 : 30) + perDay[d] * 0.6 + b2b * 4 + rng.uniform(0, 0.5);
+      const crowded = fourInFive(busy[g.home], d) || fourInFive(busy[g.away], d) ? 20 : 0;
+      const s = (december ? 0 : 30) + perDay[d] * 0.6 + b2b * 4 + crowded + rng.uniform(0, 0.5);
       if (s < bestScore) {
         bestScore = s;
         best = d;
@@ -421,5 +431,6 @@ function allStarBreak(real: { day: number }[]): { allStarDay: number; tradeDeadl
     breakStart = 118;
     breakLen = 0;
   }
-  return { allStarDay: breakStart + 2, tradeDeadlineDay: breakStart - 10, breakLen };
+  // the deadline is the Thursday ten days before the All-Star Game, as in generated seasons
+  return { allStarDay: breakStart + 2, tradeDeadlineDay: breakStart - 8, breakLen };
 }

@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { anchorRatings, develop } from '../league/progression';
-import { RATING_KEYS, ovrRaw } from '../ratings';
+import { OVR_ANCHORS, RATING_KEYS, ovrRaw } from '../ratings';
 import { Rng } from '../random';
-import type { TrainingFocus } from '../types';
+import type { League, TrainingFocus } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 const league = () => createLeague({ name: 'p', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: seed.players.length ? seed : null, rngSeed: 7 });
@@ -73,5 +73,35 @@ describe('league anchor (L9)', () => {
     expect(widened).toBeGreaterThan(before * 1.2);
     anchorRatings(l);
     expect(spread()).toBeLessThan(widened - (widened - before) * 0.4);
+  });
+});
+
+describe('fictional leagues', () => {
+  it('are spread like the real league, so development and aging move OVR as much there', () => {
+    const real = league();
+    const fict = createLeague({ name: 'f', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 7 });
+    // raw OVR from the 15th to the 85th percentile
+    const at = (q: number) => OVR_ANCHORS.findIndex(([x]) => x === q);
+    const span = (l: League) => l.ovrScale.raw[at(0.85)] - l.ovrScale.raw[at(0.15)];
+    expect(span(fict) / span(real)).toBeGreaterThan(0.9);
+    expect(span(fict) / span(real)).toBeLessThan(1.1);
+    // a season at 21 and at 35, the same players in each league
+    const ctx = { coachDev: 50, coachingBudget: 50, practice: 'normal' as const, mpg: 25 };
+    const year = (l: League, age: number) => {
+      const ps = Object.values(l.players).filter((p) => p.tid >= 0);
+      return (
+        ps.reduce((sum, p) => {
+          const c = structuredClone(p);
+          c.bornYear = l.season - age;
+          return sum + develop(c, l.season, ctx, new Rng(900 + p.pid), 1, l.ovrScale);
+        }, 0) / ps.length
+      );
+    };
+    expect(year(fict, 21)).toBeGreaterThan(year(real, 21) * 0.75);
+    expect(year(fict, 35)).toBeLessThan(year(real, 35) * 0.75);
+    // players specialise rather than all flattening toward average
+    const ps = Object.values(fict.players).filter((p) => p.tid >= 0);
+    const m = ps.reduce((a, p) => a + p.ratings.tp, 0) / ps.length;
+    expect(Math.sqrt(ps.reduce((a, p) => a + (p.ratings.tp - m) ** 2, 0) / ps.length)).toBeGreaterThan(12);
   });
 });

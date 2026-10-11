@@ -2,7 +2,17 @@
 // and the owner's grading.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
-import { aiTicketPrice, assessLuxuryTax, attendanceFor, gameFinances, referencePrice, TAX_SHARE_TO_NON_TAXPAYERS } from '../league/finances';
+import {
+  aiTicketPrice,
+  assessLuxuryTax,
+  attendanceFor,
+  gameFinances,
+  NATIONAL_REVENUE,
+  referencePrice,
+  REVENUE_SHARING,
+  shareRevenue,
+  TAX_SHARE_TO_NON_TAXPAYERS,
+} from '../league/finances';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, standardRoster, teamPlayers } from '../league/helpers';
 import { salaryFor } from '../playerGen';
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../league/owner';
@@ -83,6 +93,33 @@ describe('finances (L1, L15)', () => {
     const share = (10_000 * CAP.taxRate * TAX_SHARE_TO_NON_TAXPAYERS) / 29;
     expect(l.teams[2].cash).toBeCloseTo(cash[2] - 4_000 + share);
     expect(l.teams[5].cash).toBeCloseTo(cash[5] + share);
+  });
+
+  it('revenue sharing moves part of each local-revenue gap to the league average and nets to zero', () => {
+    const l = league();
+    for (const t of l.teams) {
+      for (let i = 0; i < 41; i++) {
+        gameFinances(l, t, true, false);
+        gameFinances(l, t, false, false);
+      }
+      Object.assign(curTeamSeason(l, t.tid), { won: 41, lost: 41 });
+    }
+    const national = NATIONAL_REVENUE * revenueScale(l);
+    const local = l.teams.map((t) => curTeamSeason(l, t.tid).revenue - national);
+    const mean = local.reduce((a, v) => a + v, 0) / local.length;
+    const cash = l.teams.map((t) => t.cash);
+    const got = shareRevenue(l);
+    expect(Math.abs([...got.values()].reduce((a, v) => a + v, 0))).toBeLessThanOrEqual(l.teams.length);
+    const byPop = [...l.teams].sort((a, b) => a.pop - b.pop);
+    const [small, big] = [byPop[0].tid, byPop[byPop.length - 1].tid];
+    expect(got.get(small)!).toBeGreaterThan(0);
+    expect(got.get(big)!).toBeLessThan(0);
+    for (const tid of [small, big]) {
+      expect(got.get(tid)).toBe(Math.round((mean - local[tid]) * REVENUE_SHARING));
+      expect(l.teams[tid].cash).toBeCloseTo(cash[tid] + got.get(tid)!);
+    }
+    // the payer books it as an expense, the receiver as revenue
+    expect(curTeamSeason(l, big).revenue - national).toBeCloseTo(local[big]);
   });
 
   it("the owner's profit target grows with league revenue", () => {

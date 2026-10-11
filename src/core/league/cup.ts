@@ -270,7 +270,17 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
   return out;
 }
 
-/** Put each game on the best open day: both teams free, never three days running, few back-to-backs. */
+/** Would a game on day `d` make four in five nights? (The NBA hasn't scheduled one since 2018.) */
+export function fourInFive(days: Set<number>, d: number): boolean {
+  for (let w = d - 4; w <= d; w++) {
+    let n = 1;
+    for (let x = w; x <= w + 4; x++) if (x !== d && days.has(x)) n++;
+    if (n >= 4) return true;
+  }
+  return false;
+}
+
+/** Put each game on the best open day: both teams free, never three days running or four in five nights, few back-to-backs. */
 function placeGames(league: League, pairs: { home: number; away: number }[], days: number[], rng: Rng) {
   const busy = teamDays(league);
   const perDay = new Map<number, number>();
@@ -286,6 +296,7 @@ function placeGames(league: League, pairs: { home: number; away: number }[], day
       if (busy[p.home].has(d) || busy[p.away].has(d)) continue;
       const s =
         (three(p.home, d) || three(p.away, d) ? 100 : 0) +
+        (fourInFive(busy[p.home], d) || fourInFive(busy[p.away], d) ? 50 : 0) +
         [p.home, p.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length * 4 +
         (perDay.get(d) ?? 0) * 0.6 +
         rng.uniform(0, 0.5);

@@ -87,6 +87,35 @@ export function updateHype(team: Team, won: boolean, playoffs: boolean) {
   team.hype = clamp(team.hype + (won ? d : -d * 0.9) + fac, 0.05, 1);
 }
 
+/** Share of the gap to the league's average local revenue that revenue sharing evens out. */
+export const REVENUE_SHARING = 0.4;
+
+/**
+ * Revenue sharing, at the end of the regular season: each team pays REVENUE_SHARING of whatever its
+ * local revenue (gate, merchandise and local TV) beat the league average by, and the teams below the
+ * average get the same share of their gap. Without it the biggest markets out-earned the smallest by
+ * about 80M a season on the same payroll, and over a long career small markets ran a billion into the red.
+ * Returns what each team received (negative: paid).
+ */
+export function shareRevenue(league: League): Map<number, number> {
+  const national = (NATIONAL_REVENUE * revenueScale(league)) / 82;
+  const local = league.teams.map((t) => {
+    const ts = curTeamSeason(league, t.tid);
+    return ts.revenue - national * (ts.won + ts.lost);
+  });
+  const mean = local.reduce((a, v) => a + v, 0) / Math.max(1, local.length);
+  const out = new Map<number, number>();
+  for (const t of league.teams) {
+    const ts = curTeamSeason(league, t.tid);
+    const x = Math.round((mean - local[t.tid]) * REVENUE_SHARING);
+    if (x >= 0) ts.revenue += x;
+    else ts.expenses -= x;
+    t.cash += x;
+    out.set(t.tid, x);
+  }
+  return out;
+}
+
 /** Share of the luxury-tax pot paid out to teams under the tax line; the league keeps the rest. */
 export const TAX_SHARE_TO_NON_TAXPAYERS = 0.5;
 

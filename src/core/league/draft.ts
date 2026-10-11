@@ -49,6 +49,8 @@ function prospectLevel(i: number): number {
 /** Generate a class of prospects for the draft held at the end of `year`'s season. */
 export function generateDraftClass(league: League, year: number, rng: Rng, size = 72) {
   const created: Player[] = [];
+  // nobody arrives sharing a name with a player still in the league
+  const taken = new Set(Object.values(league.players).flatMap((p) => (p.tid === RETIRED ? [] : [playerName(p)])));
   for (let i = 0; i < size; i++) {
     const t = i / size;
     const talent = 0.85 - 2.4 * Math.pow(t, 0.75) + rng.normal(0, 0.45);
@@ -62,6 +64,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
       scale: league.ovrScale,
       intlBias: 1.6,
       draftYear: year,
+      taken,
     });
     p.bornYear = year - age;
     p.growth = clamp(rng.normal(0.15, 0.45), -1, 1);
@@ -120,13 +123,26 @@ export function draftStandings(league: League): { tid: number; playoff: boolean 
     .map(({ tid, playoff }) => ({ tid, playoff }));
 }
 
+/**
+ * Lottery chances per team (per thousand), in pre-lottery order. Teams on the same record split the
+ * chances of the places they share, as in the NBA; the drawing only orders them for the picks the
+ * lottery doesn't move.
+ */
+export function lotteryOdds(league: League): { tid: number; w: number; pre: number }[] {
+  const lottery = draftStandings(league).filter((r) => !r.playoff);
+  const pct = (tid: number) => winPct(curTeamSeason(league, tid));
+  return lottery.map((r, i) => {
+    const shared = lottery.flatMap((x, j) => (Math.abs(pct(x.tid) - pct(r.tid)) < 1e-9 ? [LOTTERY_ODDS[j] ?? 0] : []));
+    return { tid: r.tid, w: shared.reduce((a, w) => a + w, 0) / shared.length, pre: i + 1 };
+  });
+}
+
 /** Run the lottery for this season's draft and assign pick numbers. */
 export function runLottery(league: League, rng: Rng): LotteryResult {
   const season = league.season;
   const recs = draftStandings(league);
-  const lottery = recs.filter((r) => !r.playoff);
   const playoff = recs.filter((r) => r.playoff);
-  const pool = lottery.map((r, i) => ({ tid: r.tid, w: LOTTERY_ODDS[i] ?? 0, pre: i + 1 }));
+  const pool = lotteryOdds(league);
   const winners: typeof pool = [];
   const remaining = [...pool];
   for (let k = 0; k < 4 && remaining.length; k++) {

@@ -182,11 +182,15 @@ export interface NewPlayerOpts {
   scale: OvrScale;
   intlBias?: number;
   draftYear?: number;
+  /** Full names already in use: a new player draws again (a few times) rather than share one. */
+  taken?: Set<string>;
 }
 
 export function generatePlayer(rng: Rng, o: NewPlayerOpts): Player {
   const { r, heightIn } = genRatings(rng, { talent: o.talent, age: o.age, heightIn: o.heightIn });
-  const nm = pickName(rng, o.intlBias ?? 1);
+  let nm = pickName(rng, o.intlBias ?? 1);
+  for (let i = 0; i < 8 && o.taken?.has(`${nm.first} ${nm.last}`); i++) nm = pickName(rng, o.intlBias ?? 1);
+  o.taken?.add(`${nm.first} ${nm.last}`);
   const pos: Pos = inferPos(r);
   const weight = Math.round(105 + heightIn * 1.45 + (r.str - 50) * 0.6 + rng.normal(0, 8));
   const p: Player = {

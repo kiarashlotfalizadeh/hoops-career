@@ -7,7 +7,7 @@ export function gameScore(s: PlayerStats): number {
   return s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
 }
 
-interface Cand {
+export interface Cand {
   p: Player;
   s: PlayerStats;
   gp: number;
@@ -33,6 +33,22 @@ function candidates(league: League, season = league.season): Cand[] {
 export function gamesThreshold(league: League) {
   const played = Math.max(...league.teams.map((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost));
   return Math.round(played * (65 / 82));
+}
+
+/**
+ * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games (pro
+ * rata during the season, with real minutes); Rookie and Sixth Man of the Year don't, so they ask
+ * for a voter's 50 games. A sixth man came off the bench in more games than he started.
+ */
+function awardPools(league: League, season = league.season) {
+  const minG = gamesThreshold(league);
+  const all = candidates(league, season);
+  const regular = (c: Cand) => c.gp >= Math.min(minG, 50);
+  return {
+    eligible: all.filter((c) => c.gp >= minG && c.mpg >= 20),
+    rookies: all.filter((c) => c.p.draft.year === season - 1 && regular(c)),
+    bench: all.filter((c) => c.s.gs < c.gp - c.s.gs && regular(c) && c.mpg >= 20),
+  };
 }
 
 /** MVP: production first; winning and on-court impact break ties (teammates share those, so they can't carry a sidekick). */
@@ -84,32 +100,35 @@ export function defContext(league: League, season = league.season): DefContext {
   return { lgDRtg: poss ? (pa / poss) * 100 : 0, teamDRtg };
 }
 
+export const royScore = (c: Cand) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05;
+export const smoyScore = (c: Cand) => c.gmsc + c.pmPerGame * 0.2;
+
+/** This season's award races so far, each with the award's own eligibility, best first. */
+export function awardRaces(league: League, n = 5) {
+  const { eligible, rookies, bench } = awardPools(league);
+  const dctx = defContext(league, league.season);
+  const rank = (arr: Cand[], f: (c: Cand) => number) =>
+    arr
+      .map((c) => ({ c, score: f(c) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, n);
+  return { mvp: rank(eligible, mvpScore), dpoy: rank(eligible, (c) => dpoyScore(c, dctx)), roy: rank(rookies, royScore), smoy: rank(bench, smoyScore) };
+}
+
 /** Top of the MVP / DPOY ladders with the award's own eligibility and context. */
 export function awardLadder(league: League, award: 'mvp' | 'dpoy', n = 5): { pid: number; score: number }[] {
-  const minG = gamesThreshold(league);
-  const eligible = candidates(league).filter((c) => c.gp >= minG && c.mpg >= 20);
-  const dctx = defContext(league, league.season);
-  const f = award === 'mvp' ? mvpScore : (c: Cand) => dpoyScore(c, dctx);
-  return eligible
-    .map((c) => ({ pid: c.p.pid, score: f(c) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, n);
+  return awardRaces(league, n)[award].map(({ c, score }) => ({ pid: c.p.pid, score }));
 }
 
 export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const season = league.season;
-  const minG = gamesThreshold(league);
-  const all = candidates(league);
-  const eligible = all.filter((c) => c.gp >= minG && c.mpg >= 20);
+  const { eligible, rookies, bench } = awardPools(league, season);
   const rank = <T>(arr: T[], f: (x: T) => number) => [...arr].sort((a, b) => f(b) - f(a));
   const mvp = rank(eligible, mvpScore);
   const dctx = defContext(league, season);
   const dpoy = rank(eligible, (c) => dpoyScore(c, dctx));
-  const rookies = all.filter((c) => c.p.draft.year === season - 1 && c.gp >= Math.min(minG, 50));
-  const roy = rank(rookies, (c) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05);
-  // NBA rule: more games off the bench than as a starter
-  const bench = eligible.filter((c) => c.s.gs < c.gp - c.s.gs);
-  const smoy = rank(bench, (c) => c.gmsc + c.pmPerGame * 0.2);
+  const roy = rank(rookies, royScore);
+  const smoy = rank(bench, smoyScore);
   const mip = rank(
     eligible.filter((c) => c.p.draft.year !== season - 1),
     (c) => {
@@ -144,6 +163,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
     smoy: smoy[0]?.p.pid,
     mip: mip[0]?.p.pid,
     coy: coy?.tid,
+    coyCoach: coy ? (coy.tid === league.userTid ? league.coachName : coy.coach.name) : undefined,
     allNba,
     allDefense: allDef,
     allRookie,
@@ -189,13 +209,25 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
   for (const conf of ['E', 'W'] as const) {
     const pool = all.filter((c) => league.teams[c.p.tid]?.conf === conf);
     const ranked = [...pool].sort((a, b) => b.gmsc + b.winPct * 6 + b.p.ovr * 0.1 - (a.gmsc + a.winPct * 6 + a.p.ovr * 0.1));
-    const picks = ranked.slice(0, 12);
+    // the NBA's format: two guards and three frontcourt players start, and the reserves are two
+    // more guards, three more frontcourt players and two wild cards
+    const chosen = new Set<Cand>();
+    const take = (n: number, fits: (c: Cand) => boolean) => {
+      for (const c of ranked) {
+        if (n === 0 || chosen.size === 12) return;
+        if (chosen.has(c) || !fits(c)) continue;
+        chosen.add(c);
+        n--;
+      }
+    };
+    const guard = (c: Cand) => c.p.pos === 'PG' || c.p.pos === 'SG';
+    take(4, guard);
+    take(6, (c) => !guard(c));
+    take(12, () => true);
+    const picks = ranked.filter((c) => chosen.has(c));
     // injured selections keep the honor; the next healthy players in the conference take their spots
     const hurt = picks.filter((c) => c.p.injury);
-    const subs = ranked
-      .slice(12)
-      .filter((c) => !c.p.injury)
-      .slice(0, hurt.length);
+    const subs = ranked.filter((c) => !chosen.has(c) && !c.p.injury).slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
     out[conf] = [...picks, ...subs].map((c) => c.p.pid);
   }

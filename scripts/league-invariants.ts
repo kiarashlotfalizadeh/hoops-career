@@ -116,8 +116,9 @@ function checkClinch() {
 function checkSeasonEnd() {
   const aw = L.awards.find((a) => a.season === L.season)!;
   const gp = (pid: number) => H.seasonTotals(L.players[pid], L.season)?.gp ?? 0;
+  // 65 games for the MVP, DPOY and MIP; Rookie and Sixth Man of the Year aren't covered by the rule
   for (const k of ['mvp', 'dpoy', 'smoy', 'mip'] as const)
-    if (aw[k] === undefined || gp(aw[k]!) < 65) bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);
+    if (aw[k] === undefined || gp(aw[k]!) < (k === 'smoy' ? 50 : 65)) bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);
   if (aw.roy !== undefined && L.players[aw.roy].draft.year !== L.season - 1) bad('ROY not a rookie', nm(aw.roy));
   if (new Set(aw.allNba.flat()).size !== 15 || aw.champion === undefined) bad('All-NBA/champion', '');
   if (L.playoffs.length !== 15 || L.playoffs.some((s) => Math.max(s.highWins, s.lowWins) !== 4)) bad('playoff bracket', `${L.playoffs.length} series`);
@@ -161,6 +162,23 @@ function checkOptions(user: boolean) {
   for (const p of Object.values(L.players)) if (C.pendingOption(L, p) && (user || p.tid !== L.userTid)) bad('undecided contract option', `${nm(p.pid)} ${p.contract.option}`);
 }
 
+/** Opening night: everyone wears his own number, nobody active shares a name, no four games in five nights. */
+function checkOpeningNight() {
+  for (const t of L.teams) {
+    const numbers = H.teamPlayers(L, t.tid).map((p) => p.jersey);
+    if (new Set(numbers).size !== numbers.length) bad('teammates share a number', `${t.abbrev} ${numbers.sort().join(',')}`);
+    const days = L.schedule
+      .filter((g) => g.home === t.tid || g.away === t.tid)
+      .map((g) => g.day)
+      .sort((a, b) => a - b);
+    if (days.some((d, i) => i >= 3 && d - days[i - 3] <= 4)) bad('four games in five nights', t.abbrev);
+  }
+  const names = Object.values(L.players)
+    .filter((p) => p.tid !== -3)
+    .map((p) => H.playerName(p));
+  if (new Set(names).size !== names.length) bad('active players share a name', `${names.length - new Set(names).size}`);
+}
+
 function fixUserRoster() {
   while (std(userTid).length > CAP.rosterMax) C.releasePlayer(L, std(userTid).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
   for (let g = 0; std(userTid).length < CAP.rosterMin && g < 40; g++)
@@ -173,6 +191,7 @@ for (let s = 0; s < seasons; s++) {
   const errs = S.startRegularSeason(L);
   if (errs.length) throw new Error(errs.join('; '));
   check();
+  checkOpeningNight();
   // news is capped, so count trades by id as they appear
   let trades = 0;
   let lastId = L.nextMsgId;

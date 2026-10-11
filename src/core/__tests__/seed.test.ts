@@ -24,6 +24,25 @@ describe.skipIf(!real)('real-player seed', () => {
     // efficient bench bigs no longer outrank stars
     const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
     if (kessler) expect(kessler.ovr).toBeLessThan(88);
+    // careers: experience never contradicts the seasons on record; an undrafted veteran already playing when the
+    // record begins isn't a third-year player; undrafted rookies are rookies; LeBron's draft is unknown
+    const firstRecord = Math.min(...players.flatMap((p) => p.stats.filter((s) => s.real).map((s) => s.season)));
+    for (const p of players) {
+      const seasons = [...new Set(p.stats.filter((s) => s.real && s.gp > 0).map((s) => s.season))];
+      expect(p.experience).toBeGreaterThanOrEqual(seasons.length);
+      if (!p.draft.round && p.tid >= 0 && league.season - p.bornYear >= 27 && p.experience <= 3) expect(Math.min(...seasons)).toBeGreaterThan(firstRecord);
+      if (p.draft.round === 2) expect(p.draft.pick).toBeLessThanOrEqual(30);
+    }
+    const vanVleet = players.find((p) => p.bbrefId === 'vanvlfr01');
+    if (vanVleet) expect(vanVleet.experience).toBeGreaterThanOrEqual(8);
+    const lebron = players.find((p) => p.bbrefId === 'jamesle01');
+    if (lebron && !lebron.draft.round) {
+      expect(lebron.experience).toBeGreaterThanOrEqual(15);
+      expect(lebron.draft.year).toBe(0);
+    }
+    const undraftedRookies = players.filter((p) => !p.draft.round && !p.stats.some((s) => s.real && s.gp > 0) && league.season - p.bornYear <= 25);
+    expect(undraftedRookies.length).toBeGreaterThan(0);
+    for (const p of undraftedRookies) expect([p.experience, p.draft.year]).toEqual([0, league.season - 1]);
     // AI teams make preseason cuts (two-way contracts don't count); every roster can field a team
     for (const t of league.teams) {
       const roster = teamPlayers(league, t.tid);
