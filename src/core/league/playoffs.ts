@@ -88,7 +88,9 @@ export function startPlayoffs(league: League) {
   addInbox(league, {
     from: 'League Office',
     subject: inIt ? 'Playoffs: you are in!' : 'Playoffs begin',
-    body: inIt ? 'Your team has qualified for the playoffs. Tactics matter more than ever: the assistant coach will scout each opponent before the series.' : 'The playoffs are underway. Your season is over. Use the time to plan the draft and free agency.',
+    body: inIt
+      ? 'Your team has qualified for the playoffs. Tactics matter more than ever: the assistant coach will scout each opponent before the series.'
+      : 'The playoffs are underway. Your season is over. Use the time to plan the draft and free agency.',
     tone: inIt ? 'good' : 'neutral',
     link: '/league?tab=playoffs',
   });
@@ -203,5 +205,11 @@ export function champion(league: League): number | undefined {
 }
 
 export function seriesLabel(s: PlayoffSeries) {
-  return s.round === 4 ? 'NBA Finals' : s.round === 3 ? `${s.conf === 'E' ? 'East' : 'West'} Finals` : s.round === 2 ? `${s.conf === 'E' ? 'East' : 'West'} Semifinals` : `${s.conf === 'E' ? 'East' : 'West'} First Round`;
+  return s.round === 4
+    ? 'NBA Finals'
+    : s.round === 3
+      ? `${s.conf === 'E' ? 'East' : 'West'} Finals`
+      : s.round === 2
+        ? `${s.conf === 'E' ? 'East' : 'West'} Semifinals`
+        : `${s.conf === 'E' ? 'East' : 'West'} First Round`;
 }

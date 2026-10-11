@@ -71,7 +71,9 @@ export default function NewLeague() {
 
   const rank = useMemo(() => {
     if (!teamInfo) return null;
-    const ids = Object.keys(teamInfo).map(Number).sort((a, b) => teamInfo[b].strength - teamInfo[a].strength);
+    const ids = Object.keys(teamInfo)
+      .map(Number)
+      .sort((a, b) => teamInfo[b].strength - teamInfo[a].strength);
     return Object.fromEntries(ids.map((id, i) => [id, i + 1])) as Record<number, number>;
   }, [teamInfo]);
 
@@ -116,11 +118,24 @@ export default function NewLeague() {
               <div className="grow">
                 <h3>Real 2026-27 NBA</h3>
                 <div className="dim2 small" style={{ marginTop: 4 }}>
-                  Opening-night rosters and contracts. Ratings come from three seasons of box scores, NBA.com play-by-play and impact data, then are calibrated so every player reproduces his real numbers in the engine.
+                  Opening-night rosters and contracts. Ratings come from three seasons of box scores, NBA.com play-by-play and impact data, then are calibrated so every player
+                  reproduces his real numbers in the engine.
                 </div>
-                {!seedLoaded && <div className="row small dim" style={{ marginTop: 8 }}><Spinner /> Loading rosters…</div>}
-                {seedLoaded && !seed && <div className="small warn" style={{ marginTop: 8 }}>Seed data is not bundled in this build yet. Use a fictional league for now.</div>}
-                {seed && <div className="small dim" style={{ marginTop: 8 }}>{seed.players.length} players · 30 teams · stats through 2025-26</div>}
+                {!seedLoaded && (
+                  <div className="row small dim" style={{ marginTop: 8 }}>
+                    <Spinner /> Loading rosters…
+                  </div>
+                )}
+                {seedLoaded && !seed && (
+                  <div className="small warn" style={{ marginTop: 8 }}>
+                    Seed data is not bundled in this build yet. Use a fictional league for now.
+                  </div>
+                )}
+                {seed && (
+                  <div className="small dim" style={{ marginTop: 8 }}>
+                    {seed.players.length} players · 30 teams · stats through 2025-26
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -143,7 +158,14 @@ export default function NewLeague() {
 
       {step === 'team' && (
         <>
-          <Segmented value={conf} onChange={setConf} options={[{ id: 'E', label: 'East' }, { id: 'W', label: 'West' }]} />
+          <Segmented
+            value={conf}
+            onChange={setConf}
+            options={[
+              { id: 'E', label: 'East' },
+              { id: 'W', label: 'West' },
+            ]}
+          />
           <div className="grid3">
             {FRANCHISES.map((fr, i) => ({ fr, i }))
               .filter(({ fr }) => fr.conf === conf)
@@ -151,7 +173,14 @@ export default function NewLeague() {
                 <button
                   key={fr.abbrev}
                   className="card tight"
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderColor: tid === i ? 'var(--accent)' : undefined, background: tid === i ? `linear-gradient(160deg, ${fr.colors[0]}55, var(--surface))` : undefined }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    borderColor: tid === i ? 'var(--accent)' : undefined,
+                    background: tid === i ? `linear-gradient(160deg, ${fr.colors[0]}55, var(--surface))` : undefined,
+                  }}
                   onClick={() => setTid(i)}
                 >
                   <TeamLogo tid={i} size={44} />
@@ -164,7 +193,11 @@ export default function NewLeague() {
             <div className="small dim2">
               {f.arena} · Market: {market(f.pop)} ({f.pop}M) · {f.div} Division
             </div>
-            {kind === 'fictional' && <div className="small dim" style={{ marginTop: 8 }}>Rosters are generated when the league is created, so every player here will be new.</div>}
+            {kind === 'fictional' && (
+              <div className="small dim" style={{ marginTop: 8 }}>
+                Rosters are generated when the league is created, so every player here will be new.
+              </div>
+            )}
             {teamInfo?.[tid] && (
               <div className="col" style={{ marginTop: 10, gap: 6 }}>
                 {teamInfo[tid].top.map((p) => (
@@ -207,7 +240,11 @@ export default function NewLeague() {
               ]}
             />
             <div className="small dim" style={{ marginTop: 8 }}>
-              {settings.difficulty === 'casual' ? 'AI GMs are forgiving in trades and free agents ask for a bit less.' : settings.difficulty === 'hard' ? 'AI GMs want a premium and players ask for more money.' : 'Fair trades, market-rate contracts.'}
+              {settings.difficulty === 'casual'
+                ? 'AI GMs are forgiving in trades and free agents ask for a bit less.'
+                : settings.difficulty === 'hard'
+                  ? 'AI GMs want a premium and players ask for more money.'
+                  : 'Fair trades, market-rate contracts.'}
             </div>
           </Card>
           <Card title="Coaching depth">
@@ -231,8 +268,18 @@ export default function NewLeague() {
           </Card>
           <Card>
             <div className="col" style={{ gap: 14 }}>
-              <Toggle on={settings.injuries} onChange={(v) => setSettings({ ...settings, injuries: v })} label="Injuries" help="Players can get hurt; fatigue and age raise the risk." />
-              <Toggle on={settings.jobSecurity} onChange={(v) => setSettings({ ...settings, jobSecurity: v })} label="Job security" help="The owner can fire you after repeated bad seasons." />
+              <Toggle
+                on={settings.injuries}
+                onChange={(v) => setSettings({ ...settings, injuries: v })}
+                label="Injuries"
+                help="Players can get hurt; fatigue and age raise the risk."
+              />
+              <Toggle
+                on={settings.jobSecurity}
+                onChange={(v) => setSettings({ ...settings, jobSecurity: v })}
+                label="Job security"
+                help="The owner can fire you after repeated bad seasons."
+              />
             </div>
           </Card>
           <button className="btn primary big block" disabled={busy} onClick={() => void create()}>

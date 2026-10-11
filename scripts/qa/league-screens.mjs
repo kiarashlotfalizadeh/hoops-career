@@ -14,7 +14,9 @@ const stage = process.argv[4] ?? 'mid';
 const wide = process.env.WIDE === '1';
 mkdirSync(out, { recursive: true });
 
-const ctxOpts = wide ? { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 1 } : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+const ctxOpts = wide
+  ? { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 1 }
+  : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const executablePath = process.env.CHROMIUM || undefined;
 let ctx;
 if (process.env.PROFILE) {

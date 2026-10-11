@@ -147,7 +147,12 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
       if (dp.protection && dp.pick <= dp.protection && dp.tid !== dp.originalTid) {
         const holder = league.teams[dp.tid];
         const orig = league.teams[dp.originalTid];
-        addNews(league, { kind: 'draft', text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${dp.pick}, top-${dp.protection} protected); the ${holder.name} come away empty.`, tids: [dp.tid, dp.originalTid], pids: [] });
+        addNews(league, {
+          kind: 'draft',
+          text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${dp.pick}, top-${dp.protection} protected); the ${holder.name} come away empty.`,
+          tids: [dp.tid, dp.originalTid],
+          pids: [],
+        });
         dp.tid = dp.originalTid;
       }
       delete dp.protection;
@@ -159,7 +164,12 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
     order: lotteryOrder.map((x, i) => ({ tid: x.tid, odds: x.w / 10, pick: i + 1, pre: x.pre })),
   };
   const top = result.order[0];
-  addNews(league, { kind: 'draft', text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick (pre-lottery position ${top.pre}).`, tids: [top.tid], pids: [] });
+  addNews(league, {
+    kind: 'draft',
+    text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick (pre-lottery position ${top.pre}).`,
+    tids: [top.tid],
+    pids: [],
+  });
   const mine = league.draftPicks.filter((d) => d.season === season && d.tid === league.userTid && d.pick);
   if (mine.length) {
     addInbox(league, {
@@ -174,9 +184,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
 }
 
 export function draftOrder(league: League): DraftPick[] {
-  return league.draftPicks
-    .filter((d) => d.season === league.season && d.pick !== undefined)
-    .sort((a, b) => a.round - b.round || a.pick! - b.pick!);
+  return league.draftPicks.filter((d) => d.season === league.season && d.pick !== undefined).sort((a, b) => a.round - b.round || a.pick! - b.pick!);
 }
 
 export function nextPick(league: League): DraftPick | undefined {

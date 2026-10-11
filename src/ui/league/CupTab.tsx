@@ -14,7 +14,9 @@ import { confName, useQueryParam } from './shared';
 function dateRange(league: League, a: number, b: number) {
   if (a === b) return fmtDate(league.season, a);
   const end = dayToDate(league.season, b);
-  return dayToDate(league.season, a).getUTCMonth() === end.getUTCMonth() ? `${fmtDate(league.season, a)}–${end.getUTCDate()}` : `${fmtDate(league.season, a)} – ${fmtDate(league.season, b)}`;
+  return dayToDate(league.season, a).getUTCMonth() === end.getUTCMonth()
+    ? `${fmtDate(league.season, a)}–${end.getUTCDate()}`
+    : `${fmtDate(league.season, a)} – ${fmtDate(league.season, b)}`;
 }
 
 type Seeds = { E: number[]; W: number[] };
@@ -51,7 +53,9 @@ export function CupTab({ league }: { league: League }) {
             </div>
           </div>
         </Card>
-        {lastWinner?.cupWinner !== undefined && <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />}
+        {lastWinner?.cupWinner !== undefined && (
+          <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
+        )}
       </>
     );
   }
@@ -70,7 +74,16 @@ export function CupTab({ league }: { league: League }) {
 
   return (
     <>
-      {cup.champion !== undefined && <CupBanner league={league} season={cup.season} tid={cup.champion} runnerUp={final ? (final.winner === final.high ? final.low : final.high) : undefined} mvp={cup.mvp} final={final} />}
+      {cup.champion !== undefined && (
+        <CupBanner
+          league={league}
+          season={cup.season}
+          tid={cup.champion}
+          runnerUp={final ? (final.winner === final.high ? final.low : final.high) : undefined}
+          mvp={cup.mvp}
+          final={final}
+        />
+      )}
       <div className="row between" style={{ gap: 8 }}>
         <span className="small dim">{status}</span>
         <span className="tiny dim">Knockouts {dateRange(league, cup.qfDays[0], cup.finalDay)}</span>
@@ -95,7 +108,9 @@ export function CupTab({ league }: { league: League }) {
       ) : (
         <Card title="How the knockouts work">
           <div className="small dim2" style={{ lineHeight: 1.5 }}>
-            The three group winners and the best runner-up in each conference advance. Quarterfinals ({dateRange(league, cup.qfDays[0], cup.qfDays[1])}) and semifinals ({fmtDate(league.season, cup.sfDay)}) are hosted by the better seed and count in the standings. The championship ({fmtDate(league.season, cup.finalDay)}) is on a neutral floor and doesn&apos;t. Teams that don&apos;t advance play their last two regular-season games in the knockout window.
+            The three group winners and the best runner-up in each conference advance. Quarterfinals ({dateRange(league, cup.qfDays[0], cup.qfDays[1])}) and semifinals (
+            {fmtDate(league.season, cup.sfDay)}) are hosted by the better seed and count in the standings. The championship ({fmtDate(league.season, cup.finalDay)}) is on a neutral
+            floor and doesn&apos;t. Teams that don&apos;t advance play their last two regular-season games in the knockout window.
           </div>
         </Card>
       )}
@@ -112,8 +127,12 @@ export function CupTab({ league }: { league: League }) {
         ))}
       </div>
       <div className="lg-note">
-        {seeds && (cup.seeds ? 'Group winners (seeds 1-3) and the best runner-up in each conference (WC) went through. ' : 'Tags mark who would go through if the group stage ended today: the group winners (seeds 1-3) and the best runner-up in each conference (WC). ')}
-        Cup nights: {cup.nights.map((d) => fmtDate(league.season, d)).join(', ')}. Group ties break on head-to-head, then point differential and points scored in group games, then last season&apos;s record.
+        {seeds &&
+          (cup.seeds
+            ? 'Group winners (seeds 1-3) and the best runner-up in each conference (WC) went through. '
+            : 'Tags mark who would go through if the group stage ended today: the group winners (seeds 1-3) and the best runner-up in each conference (WC). ')}
+        Cup nights: {cup.nights.map((d) => fmtDate(league.season, d)).join(', ')}. Group ties break on head-to-head, then point differential and points scored in group games, then
+        last season&apos;s record.
       </div>
     </>
   );

@@ -213,4 +213,3 @@ export function Callout({ tone, icon, children }: { tone?: 'good' | 'bad' | 'war
     </div>
   );
 }
-

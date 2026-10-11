@@ -1,17 +1,6 @@
 import type { ActionType, PnrCoverage, ShotZone } from '../types';
 
-export type FinishType =
-  | 'pnrBH'
-  | 'pnrRoll'
-  | 'iso'
-  | 'post'
-  | 'spotup'
-  | 'offscreen'
-  | 'handoff'
-  | 'cut'
-  | 'transition'
-  | 'putback'
-  | 'misc';
+export type FinishType = 'pnrBH' | 'pnrRoll' | 'iso' | 'post' | 'spotup' | 'offscreen' | 'handoff' | 'cut' | 'transition' | 'putback' | 'misc';
 
 export const FINISH_LABEL: Record<FinishType, string> = {
   pnrBH: 'P&R Ball Handler',

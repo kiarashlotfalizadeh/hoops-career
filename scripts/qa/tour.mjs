@@ -13,30 +13,58 @@ const phone = await ctx.newPage();
 const tablet = await ctx.newPage();
 await tablet.setViewportSize({ width: 820, height: 1180 });
 const errors = [];
-for (const [n, pg] of [['phone', phone], ['tablet', tablet]]) {
+for (const [n, pg] of [
+  ['phone', phone],
+  ['tablet', tablet],
+]) {
   pg.on('pageerror', (e) => errors.push(`${n}: ${e}`));
-  pg.on('console', (m) => { if (m.type() === 'error') errors.push(`${n}: ${m.text()}`); });
+  pg.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`${n}: ${m.text()}`);
+  });
 }
 const t0 = Date.now();
 const log = (s) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${s}`);
-const waitSim = async (pg) => { await pg.waitForTimeout(300); await pg.waitForSelector('.simbar', { state: 'detached', timeout: 600000 }).catch(() => {}); await pg.waitForTimeout(300); };
+const waitSim = async (pg) => {
+  await pg.waitForTimeout(300);
+  await pg.waitForSelector('.simbar', { state: 'detached', timeout: 600000 }).catch(() => {});
+  await pg.waitForTimeout(300);
+};
 const phase = async () => `${await phone.locator('.topbar').first().getAttribute('data-phase')} · ${(await phone.locator('.topbar .sub').first().textContent())?.trim()}`;
 const play = async (label) => {
   await phone.getByRole('button', { name: 'Play', exact: true }).click();
   await phone.waitForTimeout(300);
-  const b = phone.locator('.sheet').getByRole('button', { name: new RegExp('^' + label) }).first();
-  if (!(await b.count()) || (await b.isDisabled())) { await phone.keyboard.press('Escape'); await phone.locator('.sheet-backdrop').click({ position: { x: 5, y: 5 } }).catch(() => {}); return false; }
+  const b = phone
+    .locator('.sheet')
+    .getByRole('button', { name: new RegExp('^' + label) })
+    .first();
+  if (!(await b.count()) || (await b.isDisabled())) {
+    await phone.keyboard.press('Escape');
+    await phone
+      .locator('.sheet-backdrop')
+      .click({ position: { x: 5, y: 5 } })
+      .catch(() => {});
+    return false;
+  }
   await b.click();
   await waitSim(phone);
   log(`${label} → ${await phase()}`);
   return true;
 };
-const league = () => phone.evaluate(() => {
-  const l = window.__hc.store.getState().league;
-  const mine = Object.values(l.players).filter((p) => p.tid === l.userTid).sort((a, b) => b.ovr - a.ovr);
-  const g = [...l.games].reverse().find((x) => x.home.tid === l.userTid || x.away.tid === l.userTid);
-  return { star: mine[0]?.pid, rookie: Object.values(l.players).find((p) => p.tid === l.userTid && p.draft?.year === l.season)?.pid, gid: g?.gid, other: (l.userTid + 7) % 30, phase: l.phase };
-});
+const league = () =>
+  phone.evaluate(() => {
+    const l = window.__hc.store.getState().league;
+    const mine = Object.values(l.players)
+      .filter((p) => p.tid === l.userTid)
+      .sort((a, b) => b.ovr - a.ovr);
+    const g = [...l.games].reverse().find((x) => x.home.tid === l.userTid || x.away.tid === l.userTid);
+    return {
+      star: mine[0]?.pid,
+      rookie: Object.values(l.players).find((p) => p.tid === l.userTid && p.draft?.year === l.season)?.pid,
+      gid: g?.gid,
+      other: (l.userTid + 7) % 30,
+      phase: l.phase,
+    };
+  });
 const save = () => phone.evaluate(() => window.__hc.store.getState().save());
 
 async function snap(pg, dir, name, route) {
@@ -48,7 +76,10 @@ async function snap(pg, dir, name, route) {
   const n = Math.min(await tabs.count(), 9);
   for (let i = 1; i < n; i++) {
     const t = tabs.nth(i);
-    const label = ((await t.textContent()) ?? `t${i}`).trim().replace(/[^a-z0-9]+/gi, '_').slice(0, 20);
+    const label = ((await t.textContent()) ?? `t${i}`)
+      .trim()
+      .replace(/[^a-z0-9]+/gi, '_')
+      .slice(0, 20);
     await t.click().catch(() => {});
     await pg.waitForTimeout(500);
     await pg.screenshot({ path: `${dir}/${name}-${label}.png`, fullPage: true });
@@ -59,17 +90,37 @@ async function tour(stage) {
   await save();
   const ids = await league();
   const routes = [
-    ['home', '/'], ['roster', '/roster'], ['player', `/player/${ids.star}`], ['rotation', '/rotation'], ['tactics', '/tactics'],
-    ['lab', '/lab'], ['league', '/league'], ['team', `/team/${ids.other}`], ['office', '/office'], ['trade', '/trade'],
-    ['fa', '/free-agents'], ['resign', '/resign'], ['draft', '/draft'], ['finances', '/finances'], ['inbox', '/inbox'],
-    ['settings', '/settings'], ['history', '/history'],
+    ['home', '/'],
+    ['roster', '/roster'],
+    ['player', `/player/${ids.star}`],
+    ['rotation', '/rotation'],
+    ['tactics', '/tactics'],
+    ['lab', '/lab'],
+    ['league', '/league'],
+    ['team', `/team/${ids.other}`],
+    ['office', '/office'],
+    ['trade', '/trade'],
+    ['fa', '/free-agents'],
+    ['resign', '/resign'],
+    ['draft', '/draft'],
+    ['finances', '/finances'],
+    ['inbox', '/inbox'],
+    ['settings', '/settings'],
+    ['history', '/history'],
   ];
   if (ids.gid) routes.push(['game', `/game/${ids.gid}`]);
   if (ids.rookie) routes.push(['rookie', `/player/${ids.rookie}`]);
-  for (const [dev, pg] of [['phone', phone], ['tablet', tablet]]) {
+  for (const [dev, pg] of [
+    ['phone', phone],
+    ['tablet', tablet],
+  ]) {
     const dir = `${out}/${stage}/${dev}`;
     mkdirSync(dir, { recursive: true });
-    if (dev === 'tablet') { await tablet.goto(`${base}/#/`); await tablet.reload(); await tablet.waitForTimeout(1500); }
+    if (dev === 'tablet') {
+      await tablet.goto(`${base}/#/`);
+      await tablet.reload();
+      await tablet.waitForTimeout(1500);
+    }
     for (const [name, route] of routes) await snap(pg, dir, name, route).catch((e) => log(`  ${dev} ${name}: ${e.message.split('\n')[0]}`));
   }
   await phone.goto(`${base}/#/`);
@@ -105,7 +156,10 @@ if (stages.includes('mid')) {
   // a live game for the game view and live screens
   await phone.getByRole('button', { name: 'Play', exact: true }).click();
   await phone.waitForTimeout(300);
-  const live = phone.locator('.sheet').getByRole('button', { name: /^Watch & coach live/ }).first();
+  const live = phone
+    .locator('.sheet')
+    .getByRole('button', { name: /^Watch & coach live/ })
+    .first();
   if (await live.count()) {
     await live.click();
     await phone.waitForTimeout(4000);
@@ -122,8 +176,15 @@ if (stages.includes('mid')) {
         await phone.waitForTimeout(200);
       }
     }
-    await phone.getByRole('button', { name: 'Sim to final', exact: true }).click().catch(() => {});
-    await phone.locator('.sheet').getByRole('button', { name: /Sim to final/ }).click().catch(() => {});
+    await phone
+      .getByRole('button', { name: 'Sim to final', exact: true })
+      .click()
+      .catch(() => {});
+    await phone
+      .locator('.sheet')
+      .getByRole('button', { name: /Sim to final/ })
+      .click()
+      .catch(() => {});
     await phone.waitForTimeout(2500);
     await phone.screenshot({ path: `${out}/live/phone-final.png`, fullPage: true });
   } else await phone.keyboard.press('Escape');

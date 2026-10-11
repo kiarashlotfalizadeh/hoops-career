@@ -6,7 +6,22 @@ import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
-import { CAP_FOR, TWO_WAY_MAX, contractSeason, addInbox, addNews, curTeamSeason, inSeason, playerName, prospects, rosterMaxNow, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
+import {
+  CAP_FOR,
+  TWO_WAY_MAX,
+  contractSeason,
+  addInbox,
+  addNews,
+  curTeamSeason,
+  inSeason,
+  playerName,
+  prospects,
+  rosterMaxNow,
+  standardRoster,
+  teamPlayers,
+  twoWayRoster,
+  winPct,
+} from './helpers';
 import { type Strategy, marketSalary, rookieContract, tradeValue, valueScore } from './contracts';
 import { capPayroll } from './freeAgency';
 
@@ -250,7 +265,7 @@ function stepienError(league: League, offer: TradeOffer, side: TradeSide): strin
   const moves = new Map<number, number>([...offer.a.dpids.map((d) => [d, offer.b.tid] as const), ...offer.b.dpids.map((d) => [d, offer.a.tid] as const)]);
   const firsts = league.draftPicks.filter((d) => d.round === 1 && !(d.season === league.season && league.phase === 'draft'));
   const years = new Set(firsts.map((d) => d.season));
-  const owns = (y: number, after: boolean) => firsts.some((d) => d.season === y && (after ? moves.get(d.dpid) ?? d.tid : d.tid) === side.tid);
+  const owns = (y: number, after: boolean) => firsts.some((d) => d.season === y && (after ? (moves.get(d.dpid) ?? d.tid) : d.tid) === side.tid);
   for (const y of [...years].sort((a, b) => a - b)) {
     if (!years.has(y + 1)) continue;
     if (!owns(y, true) && !owns(y + 1, true) && (owns(y, false) || owns(y + 1, false))) {
@@ -352,8 +367,14 @@ export function executeTrade(league: League, offer: TradeOffer) {
   movePicks(offer.b.dpids, offer.a.tid);
   const ta = league.teams[offer.a.tid];
   const tb = league.teams[offer.b.tid];
-  const desc = (side: TradeSide) => [...side.pids.map((pid) => playerName(league.players[pid])), ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!))].join(', ') || 'nothing';
-  addNews(league, { kind: 'trade', text: `Trade: ${ta.abbrev} send ${desc(offer.a)} to ${tb.abbrev} for ${desc(offer.b)}.`, tids: [ta.tid, tb.tid], pids: [...offer.a.pids, ...offer.b.pids] });
+  const desc = (side: TradeSide) =>
+    [...side.pids.map((pid) => playerName(league.players[pid])), ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!))].join(', ') || 'nothing';
+  addNews(league, {
+    kind: 'trade',
+    text: `Trade: ${ta.abbrev} send ${desc(offer.a)} to ${tb.abbrev} for ${desc(offer.b)}.`,
+    tids: [ta.tid, tb.tid],
+    pids: [...offer.a.pids, ...offer.b.pids],
+  });
 }
 
 /** "2027 1st", "2027 2nd #59" once the order is set (overall number), "(BOS)" if acquired, and any protection. */
@@ -367,7 +388,10 @@ export function pickLabel(league: League, dp: DraftPick) {
 
 // ---------------------------------------------------------------- "what would make this work?"
 
-const withA = (offer: TradeOffer, pids: number[], dpids: number[] = []): TradeOffer => ({ a: { ...offer.a, pids: [...offer.a.pids, ...pids], dpids: [...offer.a.dpids, ...dpids] }, b: offer.b });
+const withA = (offer: TradeOffer, pids: number[], dpids: number[] = []): TradeOffer => ({
+  a: { ...offer.a, pids: [...offer.a.pids, ...pids], dpids: [...offer.a.dpids, ...dpids] },
+  b: offer.b,
+});
 
 /**
  * Ask the AI what it would need from side A to accept. When A is over the cap and takes back too
@@ -525,7 +549,10 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   if (maxPkg < 1) return null;
   const pkg: Player[] = [];
   const dps: DraftPick[] = [];
-  const offer = (p?: Player): TradeOffer => ({ a: { tid: buyer, pids: [...pkg, ...(p ? [p] : [])].map((x) => x.pid), dpids: dps.map((d) => d.dpid) }, b: { tid: seller, pids: [vet.pid], dpids: [] } });
+  const offer = (p?: Player): TradeOffer => ({
+    a: { tid: buyer, pids: [...pkg, ...(p ? [p] : [])].map((x) => x.pid), dpids: dps.map((d) => d.dpid) },
+    b: { tid: seller, pids: [vet.pid], dpids: [] },
+  });
   // an over-the-cap seller can only take back so much salary
   const sellerFits = (p: Player) => salaryMatchGap(league, offer(p), 'b') === 0;
   // an over-the-cap buyer must send back salary first (125% rule): the smallest contract that
@@ -538,7 +565,9 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
     pkg.push(p);
   }
   // then value, until the seller says yes: young players first, then picks from the cheapest up
-  const youth = avail.filter((p) => !pkg.includes(p) && league.season - p.bornYear <= 25).sort((x, y) => playerValueFor(league, y, seller, true) - playerValueFor(league, x, seller, true));
+  const youth = avail
+    .filter((p) => !pkg.includes(p) && league.season - p.bornYear <= 25)
+    .sort((x, y) => playerValueFor(league, y, seller, true) - playerValueFor(league, x, seller, true));
   const picks = league.draftPicks.filter((d) => d.tid === buyer).sort((x, y) => pickValueFor(league, x, seller, true) - pickValueFor(league, y, seller, true));
   for (const x of [...youth.slice(0, 2), ...picks]) {
     if (teamAccepts(league, offer(), seller)) break;
@@ -549,4 +578,3 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   const deal = offer();
   return !validateTrade(league, deal).length && teamAccepts(league, deal, seller) && teamAccepts(league, deal, buyer) ? deal : null;
 }
-

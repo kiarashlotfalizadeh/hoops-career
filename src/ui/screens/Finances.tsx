@@ -5,7 +5,17 @@ import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, 
 import type { Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, winPct } from '../../core/league/helpers';
-import { ARENA_CAPACITY, NATIONAL_REVENUE, OPERATIONS_PER_SEASON, PLAYOFF_PRICE_MULT, TAX_SHARE_TO_NON_TAXPAYERS, attendanceFor, budgetCostPerSeason, profit, referencePrice } from '../../core/league/finances';
+import {
+  ARENA_CAPACITY,
+  NATIONAL_REVENUE,
+  OPERATIONS_PER_SEASON,
+  PLAYOFF_PRICE_MULT,
+  TAX_SHARE_TO_NON_TAXPAYERS,
+  attendanceFor,
+  budgetCostPerSeason,
+  profit,
+  referencePrice,
+} from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
 import { CenterBar, Gauge, PLAYOFF_LABEL, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
@@ -73,7 +83,12 @@ function Overview({ team }: { team: Team }) {
     <>
       <div className="grid2">
         <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub="Bank balance" />
-        <Kpi k={`Profit ${seasonLabel(league.season).slice(-5)}`} v={games || pr ? fmtMs(pr) : '—'} color={pr >= 0 ? 'var(--good)' : 'var(--bad)'} sub={games ? `after ${games} games` : 'season not started'} />
+        <Kpi
+          k={`Profit ${seasonLabel(league.season).slice(-5)}`}
+          v={games || pr ? fmtMs(pr) : '—'}
+          color={pr >= 0 ? 'var(--good)' : 'var(--bad)'}
+          sub={games ? `after ${games} games` : 'season not started'}
+        />
         <Kpi k="Revenue" v={games || ts.revenue ? fmtM(ts.revenue) : '—'} sub="Gate, merch, media" />
         <Kpi k="Expenses" v={games || ts.expenses ? fmtM(ts.expenses) : '—'} sub="Payroll, staff, arena" />
       </div>
@@ -102,7 +117,8 @@ function Overview({ team }: { team: Team }) {
           <div style={{ width: `${team.hype * 100}%`, background: 'var(--accent-2)' }} />
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          Winning, hype, market size, facilities and ticket price drive crowds. Hype rises with wins (playoff wins count double), falls with losses and drifts back toward average every offseason.
+          Winning, hype, market size, facilities and ticket price drive crowds. Hype rises with wins (playoff wins count double), falls with losses and drifts back toward average
+          every offseason.
         </div>
       </Card>
 
@@ -127,7 +143,9 @@ function Overview({ team }: { team: Team }) {
           </div>
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay {CAP.taxRate}× on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among teams under the line), and teams under the {fmtM(cap.minPayroll)} salary floor pay the shortfall to their players.
+          National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay {CAP.taxRate}
+          × on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among teams under the line), and teams under the {fmtM(cap.minPayroll)}{' '}
+          salary floor pay the shortfall to their players.
         </div>
       </Card>
     </>
@@ -220,7 +238,14 @@ function BudgetTab({ team }: { team: Team }) {
               {(() => {
                 const a = avg(it.k);
                 const tied = league.teams.filter((t) => t.budget[it.k] === lvl).length;
-                return Math.abs(lvl - a) < 1 && tied > 1 ? <span className="tag">League average</span> : <span className={`tag ${lvl > a ? 'good' : 'warn'}`}>{tied > 1 ? 'T-' : ''}{ordinal(rank(it.k))} of 30</span>;
+                return Math.abs(lvl - a) < 1 && tied > 1 ? (
+                  <span className="tag">League average</span>
+                ) : (
+                  <span className={`tag ${lvl > a ? 'good' : 'warn'}`}>
+                    {tied > 1 ? 'T-' : ''}
+                    {ordinal(rank(it.k))} of 30
+                  </span>
+                );
               })()}
             </div>
             <Slider
@@ -244,7 +269,13 @@ function BudgetTab({ team }: { team: Team }) {
         <span className="bold num">{fmtM(totalBudget)} / season</span>
       </div>
 
-      <Card title={<h3><Ticket size={14} style={{ verticalAlign: -2 }} /> Ticket price</h3>}>
+      <Card
+        title={
+          <h3>
+            <Ticket size={14} style={{ verticalAlign: -2 }} /> Ticket price
+          </h3>
+        }
+      >
         <Slider
           label={<span className="dim2">Average ticket</span>}
           value={price}
@@ -257,16 +288,28 @@ function BudgetTab({ team }: { team: Team }) {
           right={`$${maxPrice}`}
         />
         <div className="grid3" style={{ marginTop: 10 }}>
-          <Kpi k="Est. crowd" v={att >= ARENA_CAPACITY ? 'Sellout' : att.toLocaleString()} sub={`${Math.round((att / ARENA_CAPACITY) * 100)}% full`} color={att >= ARENA_CAPACITY ? 'var(--good)' : undefined} />
+          <Kpi
+            k="Est. crowd"
+            v={att >= ARENA_CAPACITY ? 'Sellout' : att.toLocaleString()}
+            sub={`${Math.round((att / ARENA_CAPACITY) * 100)}% full`}
+            color={att >= ARENA_CAPACITY ? 'var(--good)' : undefined}
+          />
           <Kpi k="Gate / game" v={fmtM(gate, 2)} sub="ticket revenue" />
           <Kpi k="Season gate" v={fmtM(gate * 41)} sub="41 home games" />
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          Higher prices earn more per fan but thin the crowd. At today's demand, gate revenue peaks around <b className="dim2">${sweet.p}</b> ({fmtM(sweet.g * 41)} a season). Playoff games sell at a {Math.round((PLAYOFF_PRICE_MULT - 1) * 100)}% premium. Prices rise with league revenue each summer.
+          Higher prices earn more per fan but thin the crowd. At today's demand, gate revenue peaks around <b className="dim2">${sweet.p}</b> ({fmtM(sweet.g * 41)} a season).
+          Playoff games sell at a {Math.round((PLAYOFF_PRICE_MULT - 1) * 100)}% premium. Prices rise with league revenue each summer.
         </div>
       </Card>
 
-      <Card title={<h3><Dumbbell size={14} style={{ verticalAlign: -2 }} /> Practice intensity</h3>}>
+      <Card
+        title={
+          <h3>
+            <Dumbbell size={14} style={{ verticalAlign: -2 }} /> Practice intensity
+          </h3>
+        }
+      >
         <div className="seg">
           {PRACTICE.map((p) => (
             <button key={p.id} className={team.practice === p.id ? 'on' : ''} onClick={() => set((t) => (t.practice = p.id))}>
@@ -305,9 +348,19 @@ function OwnerTab() {
   const scale = revenueScale(league);
   const [target, range] = [OWNER_PROFIT_TARGET * scale, OWNER_PROFIT_RANGE * scale];
   const rows: { k: string; w: string; v: number; how: string }[] = [
-    { k: 'Wins', w: '40%', v: om.wins, how: 'Regular-season win % against .500: each win above 41 adds about +3, each win below costs about 3. It maxes out around a 74-win pace.' },
+    {
+      k: 'Wins',
+      w: '40%',
+      v: om.wins,
+      how: 'Regular-season win % against .500: each win above 41 adds about +3, each win below costs about 3. It maxes out around a 74-win pace.',
+    },
     { k: 'Playoffs', w: '40%', v: om.playoffs, how: 'Missing the playoffs −25 · first round 0 · second round +20 · conference finals +45 · Finals +70 · title +100.' },
-    { k: 'Finances', w: '20%', v: om.money, how: `Season profit against his ${fmtM(target)} target: every ${fmtM(range / 10)} above it is +10 and every ${fmtM(range / 10)} short costs 10, maxing out at ${fmtMs(target + range)} (or ${fmtMs(target - range)}). The target rises with league revenue.` },
+    {
+      k: 'Finances',
+      w: '20%',
+      v: om.money,
+      how: `Season profit against his ${fmtM(target)} target: every ${fmtM(range / 10)} above it is +10 and every ${fmtM(range / 10)} short costs 10, maxing out at ${fmtMs(target + range)} (or ${fmtMs(target - range)}). The target rises with league revenue.`,
+    },
   ];
   return (
     <>
@@ -353,7 +406,8 @@ function OwnerTab() {
       <Card title="Review schedule">
         <div className="col small dim2" style={{ gap: 8 }}>
           <div>
-            The owner reviews your work <b>after every season's playoffs</b>. Your first season sets the baseline; after that each new season counts for 40% and your track record for 60%, so one bad year won't sink you, but a pattern will.
+            The owner reviews your work <b>after every season's playoffs</b>. Your first season sets the baseline; after that each new season counts for 40% and your track record
+            for 60%, so one bad year won't sink you, but a pattern will.
           </div>
           <div>
             This is season {seasonsIn} of your tenure.{' '}
@@ -361,7 +415,8 @@ function OwnerTab() {
           </div>
           {games > 0 && (
             <div>
-              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit{ts.playoffRound >= 0 ? `, ${PLAYOFF_LABEL(ts.playoffRound)}` : ''}.
+              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit
+              {ts.playoffRound >= 0 ? `, ${PLAYOFF_LABEL(ts.playoffRound)}` : ''}.
             </div>
           )}
         </div>
@@ -387,11 +442,27 @@ function HistoryTab({ team }: { team: Team }) {
   const cols: Col<(typeof rows)[number]>[] = [
     { key: 'season', label: 'Season', left: true, sticky: true, get: (r) => r.season, fmt: (v) => <span className="bold">{seasonLabel(Number(v))}</span> },
     { key: 'rec', label: 'W-L', get: (r) => r.won - r.lost, fmt: (_v, r) => `${r.won}-${r.lost}` },
-    { key: 'po', label: 'Playoffs', left: true, get: (r) => r.playoffRound, fmt: (_v, r) => (r.season === league.season && (league.phase === 'regular' || league.phase === 'preseason') ? '—' : PLAYOFF_LABEL(r.playoffRound)) },
+    {
+      key: 'po',
+      label: 'Playoffs',
+      left: true,
+      get: (r) => r.playoffRound,
+      fmt: (_v, r) => (r.season === league.season && (league.phase === 'regular' || league.phase === 'preseason') ? '—' : PLAYOFF_LABEL(r.playoffRound)),
+    },
     { key: 'rev', label: 'Revenue', get: (r) => r.revenue, fmt: (v) => fmtM(Number(v)) },
     { key: 'exp', label: 'Expenses', get: (r) => r.expenses, fmt: (v) => fmtM(Number(v)) },
-    { key: 'pro', label: 'Profit', get: (r) => r.revenue - r.expenses, fmt: (v) => <span style={{ color: Number(v) >= 0 ? 'var(--good)' : 'var(--bad)' }}>{fmtMs(Number(v))}</span> },
-    { key: 'att', label: 'Att/G', get: (r) => (r.homeWon + r.homeLost ? r.attendance / (r.homeWon + r.homeLost) : 0), fmt: (v) => (Number(v) ? Math.round(Number(v)).toLocaleString() : '—') },
+    {
+      key: 'pro',
+      label: 'Profit',
+      get: (r) => r.revenue - r.expenses,
+      fmt: (v) => <span style={{ color: Number(v) >= 0 ? 'var(--good)' : 'var(--bad)' }}>{fmtMs(Number(v))}</span>,
+    },
+    {
+      key: 'att',
+      label: 'Att/G',
+      get: (r) => (r.homeWon + r.homeLost ? r.attendance / (r.homeWon + r.homeLost) : 0),
+      fmt: (v) => (Number(v) ? Math.round(Number(v)).toLocaleString() : '—'),
+    },
     { key: 'pay', label: 'Payroll', get: (r) => r.payroll, fmt: (v) => (Number(v) ? fmtM(Number(v)) : '—') },
   ];
   const chart = [...rows].reverse().slice(-10);
@@ -410,7 +481,14 @@ function HistoryTab({ team }: { team: Team }) {
                   <span className="tiny num" style={{ color: pr >= 0 ? 'var(--good)' : 'var(--bad)' }}>
                     {fmtMs(pr, 0)}
                   </span>
-                  <div className="b" style={{ height: `${Math.max(4, (Math.abs(pr) / maxAbs) * 52)}px`, background: pr >= 0 ? 'var(--good)' : 'var(--bad)', opacity: r.season === league.season ? 0.55 : 0.9 }} />
+                  <div
+                    className="b"
+                    style={{
+                      height: `${Math.max(4, (Math.abs(pr) / maxAbs) * 52)}px`,
+                      background: pr >= 0 ? 'var(--good)' : 'var(--bad)',
+                      opacity: r.season === league.season ? 0.55 : 0.9,
+                    }}
+                  />
                   <span className="tiny dim">{seasonLabel(r.season).slice(-5)}</span>
                 </div>
               );
@@ -421,7 +499,10 @@ function HistoryTab({ team }: { team: Team }) {
       <SecTitle>Season by season</SecTitle>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.season} highlight={(r) => r.season === league.season} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
-        {league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs' ? 'The highlighted season is still in progress. ' : ''}Payroll is recorded at the end of each regular season.
+        {league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs'
+          ? 'The highlighted season is still in progress. '
+          : ''}
+        Payroll is recorded at the end of each regular season.
       </div>
     </>
   );

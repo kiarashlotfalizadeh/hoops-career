@@ -79,7 +79,12 @@ export default function Inbox() {
           All <span className="tiny dim">{sorted.length}</span>
         </button>
         <button className={`chip ${filter === 'unread' ? 'on' : ''}`} onClick={() => setFilter('unread')}>
-          Unread {unread > 0 && <span className="tiny" style={{ color: 'var(--accent-text)' }}>{unread}</span>}
+          Unread{' '}
+          {unread > 0 && (
+            <span className="tiny" style={{ color: 'var(--accent-text)' }}>
+              {unread}
+            </span>
+          )}
         </button>
       </div>
       {list.length === 0 ? (
@@ -125,9 +130,7 @@ export default function Inbox() {
                       <div className="subj">{m.subject}</div>
                       {!open && <div className="prev">{m.body.replace(/([^.!?:])\n+/g, '$1 · ').replace(/\n+/g, ' ')}</div>}
                     </div>
-                    <span className="when">
-                      {!m.read && <span className="lg-dot" aria-label="Unread" />}
-                    </span>
+                    <span className="when">{!m.read && <span className="lg-dot" aria-label="Unread" />}</span>
                   </div>
                   {open && (
                     <div className="lg-msg-body" onClick={(e) => e.stopPropagation()}>

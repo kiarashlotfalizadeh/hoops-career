@@ -97,14 +97,21 @@ export default function Rotation() {
             <div className="small dim">Targets are scaled to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
           </div>
           <Help title="How rotations work">
-            <p>The first five players start. The coaching staff turns your minute targets into a stint plan (shown below) and follows it at dead balls, pulling players early for foul trouble or fatigue.</p>
-            <p>Closers finish the 4th quarter and overtime when healthy. Players on "rest on back-to-backs" sit the second night of back-to-backs, which lowers wear and injury risk.</p>
+            <p>
+              The first five players start. The coaching staff turns your minute targets into a stint plan (shown below) and follows it at dead balls, pulling players early for
+              foul trouble or fatigue.
+            </p>
+            <p>
+              Closers finish the 4th quarter and overtime when healthy. Players on "rest on back-to-backs" sit the second night of back-to-backs, which lowers wear and injury risk.
+            </p>
           </Help>
         </div>
         {startEval && startEval.notes.length > 0 && (
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             {startEval.notes.map((n) => (
-              <Tag key={n} tone="warn">{n}</Tag>
+              <Tag key={n} tone="warn">
+                {n}
+              </Tag>
             ))}
           </div>
         )}
@@ -118,36 +125,49 @@ export default function Rotation() {
             const pg = playerSeason(p, league.season);
             return (
               <Fragment key={pid}>
-              {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
-              <div className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: startSet.has(pid) ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
-                <div className="move-arrows">
-                  <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0}>
-                    <ArrowUp size={16} />
-                  </button>
-                  <button className="iconbtn" onClick={() => move(pid, 1)} aria-label={`Move ${p.firstName} ${p.lastName} down`} disabled={i === order.length - 1}>
-                    <ArrowDown size={16} />
-                  </button>
-                </div>
-                <Avatar p={p} />
-                <div className="grow" role="button" tabIndex={0} aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`} onClick={() => setEdit(pid)} onKeyDown={activateOnKey(() => setEdit(pid))} style={{ cursor: 'pointer', minWidth: 0 }}>
-                  <div className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <span className="bold ellipsis" style={{ minWidth: 0 }}>{fullNameOf(pid)}</span>
-                    {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
-                    {closers.includes(pid) && <Tag>Closer</Tag>}
-                    {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
+                <div className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: startSet.has(pid) ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
+                  <div className="move-arrows">
+                    <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0}>
+                      <ArrowUp size={16} />
+                    </button>
+                    <button className="iconbtn" onClick={() => move(pid, 1)} aria-label={`Move ${p.firstName} ${p.lastName} down`} disabled={i === order.length - 1}>
+                      <ArrowDown size={16} />
+                    </button>
                   </div>
-                  <div className="tiny dim">
-                    {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina {attrDisplay(p.ratings.end)}{p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
+                  <Avatar p={p} />
+                  <div
+                    className="grow"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`}
+                    onClick={() => setEdit(pid)}
+                    onKeyDown={activateOnKey(() => setEdit(pid))}
+                    style={{ cursor: 'pointer', minWidth: 0 }}
+                  >
+                    <div className="row" style={{ gap: 6, minWidth: 0 }}>
+                      <span className="bold ellipsis" style={{ minWidth: 0 }}>
+                        {fullNameOf(pid)}
+                      </span>
+                      {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
+                      {closers.includes(pid) && <Tag>Closer</Tag>}
+                      {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                    </div>
+                    <div className="tiny dim">
+                      {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina {attrDisplay(p.ratings.end)}
+                      {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
+                    </div>
+                    <div className="bar" style={{ marginTop: 5, height: 5 }}>
+                      <div style={{ width: `${(m / 44) * 100}%` }} />
+                    </div>
                   </div>
-                  <div className="bar" style={{ marginTop: 5, height: 5 }}>
-                    <div style={{ width: `${(m / 44) * 100}%` }} />
+                  <div className="col" style={{ alignItems: 'flex-end', gap: 2, cursor: 'pointer' }} onClick={() => setEdit(pid)}>
+                    <span className="display num" style={{ fontSize: 22 }}>
+                      {m}
+                    </span>
+                    <Ovr v={p.ovr} size="sm" />
                   </div>
                 </div>
-                <div className="col" style={{ alignItems: 'flex-end', gap: 2, cursor: 'pointer' }} onClick={() => setEdit(pid)}>
-                  <span className="display num" style={{ fontSize: 22 }}>{m}</span>
-                  <Ovr v={p.ovr} size="sm" />
-                </div>
-              </div>
               </Fragment>
             );
           })}
@@ -161,13 +181,20 @@ export default function Rotation() {
             .map((pid) => {
               return (
                 <div key={pid} className="row" style={{ gap: 6 }}>
-                  <span className="tiny ellipsis" style={{ width: 70 }}>{nameOf(pid)}</span>
+                  <span className="tiny ellipsis" style={{ width: 70 }}>
+                    {nameOf(pid)}
+                  </span>
                   <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(48, 1fr)', gap: 1 }}>
                     {plan.slots.map((slot, s) => (
-                      <div key={s} style={{ height: 12, borderRadius: 2, background: slot.includes(pid) ? 'var(--accent)' : 'var(--surface-3)', marginLeft: s % 12 === 0 && s ? 3 : 0 }} />
+                      <div
+                        key={s}
+                        style={{ height: 12, borderRadius: 2, background: slot.includes(pid) ? 'var(--accent)' : 'var(--surface-3)', marginLeft: s % 12 === 0 && s ? 3 : 0 }}
+                      />
                     ))}
                   </div>
-                  <span className="tiny num dim" style={{ width: 20, textAlign: 'right' }}>{plan.norm[pid]}</span>
+                  <span className="tiny num dim" style={{ width: 20, textAlign: 'right' }}>
+                    {plan.norm[pid]}
+                  </span>
                 </div>
               );
             })}
@@ -210,15 +237,31 @@ export default function Rotation() {
 function LineupsCard() {
   const league = useLeague();
   const v = useStore((s) => s.v);
-  const lineups = useMemo(() => seasonLineups(league).filter((l) => l.min >= 8).slice(0, 10), [league, v]);
+  const lineups = useMemo(
+    () =>
+      seasonLineups(league)
+        .filter((l) => l.min >= 8)
+        .slice(0, 10),
+    [league, v],
+  );
   const names = rosterNames(Object.values(league.players).filter((p) => p.tid === league.userTid));
   if (!lineups.length) return null;
   return (
-    <Card title="Lineups this season" right={<Help title="Lineup net rating">Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes.</Help>}>
+    <Card
+      title="Lineups this season"
+      right={
+        <Help title="Lineup net rating">
+          Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes.
+        </Help>
+      }
+    >
       <div className="col" style={{ gap: 8 }}>
         {lineups.map((l) => (
           <div key={l.key} className="row small top">
-            <span className={`num bold ${l.net >= 0 ? 'good' : 'bad'}`} style={{ width: 46 }}>{l.net >= 0 ? '+' : ''}{l.net.toFixed(1)}</span>
+            <span className={`num bold ${l.net >= 0 ? 'good' : 'bad'}`} style={{ width: 46 }}>
+              {l.net >= 0 ? '+' : ''}
+              {l.net.toFixed(1)}
+            </span>
             <span className="grow dim2">{l.pids.map((pid) => names(pid) || '?').join(', ')}</span>
             <span className="tiny dim num">{Math.round(l.min)}m</span>
           </div>
@@ -228,7 +271,21 @@ function LineupsCard() {
   );
 }
 
-function EditPlayer({ p, rot, update, close, order, names }: { p: Player; rot: RotationT; update: (fn: (r: RotationT) => void) => void; close: () => void; order: number[]; names: (pid: number) => string }) {
+function EditPlayer({
+  p,
+  rot,
+  update,
+  close,
+  order,
+  names,
+}: {
+  p: Player;
+  rot: RotationT;
+  update: (fn: (r: RotationT) => void) => void;
+  close: () => void;
+  order: number[];
+  names: (pid: number) => string;
+}) {
   const m = rot.minutes[p.pid] ?? 0;
   const cap = rot.caps[p.pid] ?? 0;
   const at = order.indexOf(p.pid);
@@ -248,9 +305,7 @@ function EditPlayer({ p, rot, update, close, order, names }: { p: Player; rot: R
   return (
     <div className="col" style={{ gap: 16 }}>
       <div className="col" style={{ gap: 6 }}>
-        <div className="small bold">
-          {at < 5 ? `Starter (spot ${at + 1})` : `Bench, ${at + 1}th on the depth chart`} · swap spot and minutes with
-        </div>
+        <div className="small bold">{at < 5 ? `Starter (spot ${at + 1})` : `Bench, ${at + 1}th on the depth chart`} · swap spot and minutes with</div>
         <div className="chips">
           {order
             .filter((pid) => pid !== p.pid)
@@ -258,14 +313,42 @@ function EditPlayer({ p, rot, update, close, order, names }: { p: Player; rot: R
               const j = order.indexOf(pid);
               return (
                 <button key={pid} className="chip" onClick={() => swap(pid)}>
-                  {j < 5 ? <span className="tag info" style={{ height: 16, padding: '0 4px' }}>S</span> : <span className="dim tiny">{j + 1}</span>} {names(pid)}
+                  {j < 5 ? (
+                    <span className="tag info" style={{ height: 16, padding: '0 4px' }}>
+                      S
+                    </span>
+                  ) : (
+                    <span className="dim tiny">{j + 1}</span>
+                  )}{' '}
+                  {names(pid)}
                 </button>
               );
             })}
         </div>
       </div>
-      <Slider label="Target minutes" value={m} min={0} max={44} onChange={(x) => update((r) => void (r.minutes[p.pid] = x))} format={(x) => `${x} min`} help={p.mood.expectedMin ? `He expects about ${p.mood.expectedMin} minutes. Big gaps hurt his mood.` : undefined} />
-      <Slider label="Hard minute cap" value={cap} min={0} max={44} onChange={(x) => update((r) => { if (x === 0) delete r.caps[p.pid]; else r.caps[p.pid] = x; })} format={(x) => (x ? `${x} min` : 'None')} help="Load management: never exceed this, even in close games." />
+      <Slider
+        label="Target minutes"
+        value={m}
+        min={0}
+        max={44}
+        onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
+        format={(x) => `${x} min`}
+        help={p.mood.expectedMin ? `He expects about ${p.mood.expectedMin} minutes. Big gaps hurt his mood.` : undefined}
+      />
+      <Slider
+        label="Hard minute cap"
+        value={cap}
+        min={0}
+        max={44}
+        onChange={(x) =>
+          update((r) => {
+            if (x === 0) delete r.caps[p.pid];
+            else r.caps[p.pid] = x;
+          })
+        }
+        format={(x) => (x ? `${x} min` : 'None')}
+        help="Load management: never exceed this, even in close games."
+      />
       <Toggle
         on={rot.closers.includes(p.pid)}
         onChange={(on) =>
@@ -276,7 +359,12 @@ function EditPlayer({ p, rot, update, close, order, names }: { p: Player; rot: R
         label="Closing lineup"
         help="Closers play the end of the 4th quarter and overtime (up to five)."
       />
-      <Toggle on={rot.restB2B.includes(p.pid)} onChange={(on) => update((r) => void (r.restB2B = on ? [...r.restB2B, p.pid] : r.restB2B.filter((x) => x !== p.pid)))} label="Rest on back-to-backs" help={`Season wear: ${Math.round(p.wear)}. Resting lowers wear and injury risk at the cost of a weaker lineup that night.`} />
+      <Toggle
+        on={rot.restB2B.includes(p.pid)}
+        onChange={(on) => update((r) => void (r.restB2B = on ? [...r.restB2B, p.pid] : r.restB2B.filter((x) => x !== p.pid)))}
+        label="Rest on back-to-backs"
+        help={`Season wear: ${Math.round(p.wear)}. Resting lowers wear and injury risk at the cost of a weaker lineup that night.`}
+      />
       <button className="btn block" onClick={close}>
         Done
       </button>

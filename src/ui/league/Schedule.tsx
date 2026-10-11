@@ -54,7 +54,19 @@ interface Row {
  * `h2hTid` highlights games against that team (e.g. the user's team on another club's page);
  * `cupOnly` keeps just its NBA Cup games.
  */
-export function TeamScheduleList({ league, tid, h2hTid, collapse = true, cupOnly = false }: { league: League; tid: number; h2hTid?: number; collapse?: boolean; cupOnly?: boolean }) {
+export function TeamScheduleList({
+  league,
+  tid,
+  h2hTid,
+  collapse = true,
+  cupOnly = false,
+}: {
+  league: League;
+  tid: number;
+  h2hTid?: number;
+  collapse?: boolean;
+  cupOnly?: boolean;
+}) {
   const v = useStore((s) => s.v);
   const byGid = useGamesByGid(league);
   const [expanded, setExpanded] = useState(!collapse);
@@ -115,7 +127,11 @@ export function TeamScheduleList({ league, tid, h2hTid, collapse = true, cupOnly
             {showMonth && (
               <div className="lg-month">
                 <span>{month}</span>
-                {monthRec && <span className="num small dim" style={{ fontFamily: 'var(--font)', letterSpacing: 0 }}>{monthRec}</span>}
+                {monthRec && (
+                  <span className="num small dim" style={{ fontFamily: 'var(--font)', letterSpacing: 0 }}>
+                    {monthRec}
+                  </span>
+                )}
               </div>
             )}
             <Link to={to} className={`lg-g-row ${today ? 'today' : ''} ${h2hTid !== undefined && r.opp === h2hTid ? 'h2h' : ''}`}>
@@ -202,7 +218,7 @@ export function DayScoreboard({ league }: { league: League }) {
   );
   const [dayStr, setDayStr] = useQueryParam<string>('day', '');
   if (!days.length) return <Empty>No games scheduled.</Empty>;
-  const fallback = days.includes(league.day) ? league.day : days.find((d) => d >= league.day) ?? days[days.length - 1];
+  const fallback = days.includes(league.day) ? league.day : (days.find((d) => d >= league.day) ?? days[days.length - 1]);
   const day = dayStr !== '' && days.includes(Number(dayStr)) ? Number(dayStr) : fallback;
   const idx = days.indexOf(day);
   const prev = idx > 0 ? days[idx - 1] : undefined;
@@ -285,9 +301,7 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
           <TeamLogo tid={t.tid} size={22} />
           <span className="ab">
             {league.teams[t.tid].abbrev}
-            <span className="rec">
-              {series ? `${series.high === t.tid ? series.highWins : series.lowWins}W` : record(league, t.tid)}
-            </span>
+            <span className="rec">{series ? `${series.high === t.tid ? series.highWins : series.lowWins}W` : record(league, t.tid)}</span>
           </span>
           <span className="sc">{t.pts ?? ''}</span>
         </div>

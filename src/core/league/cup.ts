@@ -42,7 +42,10 @@ export function drawCupGroups(teams: Team[], season: number, rng: Rng): CupGroup
       const s = t.seasons.find((x) => x.season === season - 1);
       return s && s.won + s.lost > 0 ? winPct(s) : 0.5;
     };
-    const ranked = confTeams.map((t) => ({ t, k: prev(t) + rng.next() * 1e-3 })).sort((a, b) => b.k - a.k).map((x) => x.t.tid);
+    const ranked = confTeams
+      .map((t) => ({ t, k: prev(t) + rng.next() * 1e-3 }))
+      .sort((a, b) => b.k - a.k)
+      .map((x) => x.t.tid);
     const ids = ['A', 'B', 'C'];
     const tids: number[][] = [[], [], []];
     for (let pot = 0; pot < 5; pot++) {
@@ -281,7 +284,11 @@ function placeGames(league: League, pairs: { home: number; away: number }[], day
     let bestScore = Infinity;
     for (const d of days) {
       if (busy[p.home].has(d) || busy[p.away].has(d)) continue;
-      const s = (three(p.home, d) || three(p.away, d) ? 100 : 0) + [p.home, p.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length * 4 + (perDay.get(d) ?? 0) * 0.6 + rng.uniform(0, 0.5);
+      const s =
+        (three(p.home, d) || three(p.away, d) ? 100 : 0) +
+        [p.home, p.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length * 4 +
+        (perDay.get(d) ?? 0) * 0.6 +
+        rng.uniform(0, 0.5);
       if (s < bestScore) {
         bestScore = s;
         best = d;
@@ -417,9 +424,21 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
     pids: cup.mvp !== undefined ? [cup.mvp] : [],
   });
   if (champ === league.userTid) {
-    addInbox(league, { from: 'Owner', subject: 'NBA Cup champions!', body: `First trophy of the season. ${mvpName} was named Cup MVP. The fans loved it; now let's carry it into the spring.`, tone: 'good', link: '/league?tab=cup' });
+    addInbox(league, {
+      from: 'Owner',
+      subject: 'NBA Cup champions!',
+      body: `First trophy of the season. ${mvpName} was named Cup MVP. The fans loved it; now let's carry it into the spring.`,
+      tone: 'good',
+      link: '/league?tab=cup',
+    });
   } else if (runnerUp === league.userTid) {
-    addInbox(league, { from: 'Owner', subject: 'NBA Cup final', body: `We fell ${score} to the ${teamName(t)} in the championship. A good run, and the final doesn't count against our record.`, tone: 'neutral', link: '/league?tab=cup' });
+    addInbox(league, {
+      from: 'Owner',
+      subject: 'NBA Cup final',
+      body: `We fell ${score} to the ${teamName(t)} in the championship. A good run, and the final doesn't count against our record.`,
+      tone: 'neutral',
+      link: '/league?tab=cup',
+    });
   }
 }
 

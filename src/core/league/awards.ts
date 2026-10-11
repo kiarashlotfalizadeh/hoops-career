@@ -49,7 +49,7 @@ export function dpoyScore(c: Cand, ctx: DefContext = { lgDRtg: 0, teamDRtg: new 
   const per = (x: number) => x / c.gp;
   const dRat = 0.25 * cm.perDef + 0.25 * cm.intDef + 0.3 * cm.rimProt + 0.2 * c.p.ratings.diq;
   // without league context (live ladders) the team terms drop out
-  const teamD = ctx.lgDRtg > 0 ? ctx.teamDRtg.get(c.s.tid) ?? ctx.lgDRtg : 0;
+  const teamD = ctx.lgDRtg > 0 ? (ctx.teamDRtg.get(c.s.tid) ?? ctx.lgDRtg) : 0;
   // on/off: points allowed per 100 with him on the floor vs his team's season
   const onD = ctx.lgDRtg > 0 && c.s.onPoss >= 400 ? (c.s.onPtsAgainst / c.s.onPoss) * 100 : teamD;
   return (
@@ -109,14 +109,17 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   // NBA rule: more games off the bench than as a starter
   const bench = eligible.filter((c) => c.s.gs < c.gp - c.s.gs);
   const smoy = rank(bench, (c) => c.gmsc + c.pmPerGame * 0.2);
-  const mip = rank(eligible.filter((c) => c.p.draft.year !== season - 1), (c) => {
-    const prev = seasonTotals(c.p, season - 1, false);
-    if (!prev || prev.gp < 20) return -99;
-    const before = gameScore(prev) / prev.gp;
-    // voters reward a breakout, not an established star bouncing back
-    if (before >= 15) return -99;
-    return c.gmsc - before;
-  });
+  const mip = rank(
+    eligible.filter((c) => c.p.draft.year !== season - 1),
+    (c) => {
+      const prev = seasonTotals(c.p, season - 1, false);
+      if (!prev || prev.gp < 20) return -99;
+      const before = gameScore(prev) / prev.gp;
+      // voters reward a breakout, not an established star bouncing back
+      if (before >= 15) return -99;
+      return c.gmsc - before;
+    },
+  );
   const coy = [...league.teams].sort((a, b) => {
     const imp = (tid: number) => {
       const t = league.teams[tid];
@@ -188,7 +191,10 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     const picks = ranked.slice(0, 12);
     // injured selections keep the honor; the next healthy players in the conference take their spots
     const hurt = picks.filter((c) => c.p.injury);
-    const subs = ranked.slice(12).filter((c) => !c.p.injury).slice(0, hurt.length);
+    const subs = ranked
+      .slice(12)
+      .filter((c) => !c.p.injury)
+      .slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
     out[conf] = [...picks, ...subs].map((c) => c.p.pid);
   }
@@ -199,10 +205,26 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
   } else aw.allStars = out;
   for (const pid of [...out.E, ...out.W]) league.players[pid].awards.push({ season: league.season, type: 'All-Star' });
   const mine = [...out.E, ...out.W].filter((pid) => league.players[pid].tid === league.userTid);
-  addNews(league, { kind: 'award', text: `All-Stars announced. East: ${out.E.slice(0, 5).map((pid) => league.players[pid].lastName).join(', ')}... West: ${out.W.slice(0, 5).map((pid) => league.players[pid].lastName).join(', ')}...`, tids: [], pids: [...out.E, ...out.W] });
-  if (replacements.length) addNews(league, { kind: 'award', text: `All-Star replacements: ${replacements.map((r) => r.text).join('; ')}.`, tids: [], pids: replacements.map((r) => r.pid) });
+  addNews(league, {
+    kind: 'award',
+    text: `All-Stars announced. East: ${out.E.slice(0, 5)
+      .map((pid) => league.players[pid].lastName)
+      .join(', ')}... West: ${out.W.slice(0, 5)
+      .map((pid) => league.players[pid].lastName)
+      .join(', ')}...`,
+    tids: [],
+    pids: [...out.E, ...out.W],
+  });
+  if (replacements.length)
+    addNews(league, { kind: 'award', text: `All-Star replacements: ${replacements.map((r) => r.text).join('; ')}.`, tids: [], pids: replacements.map((r) => r.pid) });
   if (mine.length) {
-    addInbox(league, { from: 'League Office', subject: 'All-Star selections', body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`, tone: 'good', link: '/league?tab=awards' });
+    addInbox(league, {
+      from: 'League Office',
+      subject: 'All-Star selections',
+      body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`,
+      tone: 'good',
+      link: '/league?tab=awards',
+    });
   }
   return out;
 }

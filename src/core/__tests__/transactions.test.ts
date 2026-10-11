@@ -32,7 +32,10 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   return p;
 }
 
-const offer = (give: number[], get: number[], giveDp: number[] = [], getDp: number[] = []): TradeOffer => ({ a: { tid: U, pids: give, dpids: giveDp }, b: { tid: AI, pids: get, dpids: getDp } });
+const offer = (give: number[], get: number[], giveDp: number[] = [], getDp: number[] = []): TradeOffer => ({
+  a: { tid: U, pids: give, dpids: giveDp },
+  b: { tid: AI, pids: get, dpids: getDp },
+});
 
 describe('AI trade valuation', () => {
   it('rejects bundles of good players for a star, but takes a fair one-for-one (T3)', () => {
@@ -45,12 +48,20 @@ describe('AI trade valuation', () => {
     const sum = four.reduce((a, p) => a + tradeValue(l, p), 0);
     // more raw value than the star, but depth counts for less than talent
     expect(sum).toBeGreaterThan(tradeValue(l, star));
-    expect(evaluateTrade(l, offer(four.map((p) => p.pid), [star.pid])).accept).toBe(false);
+    expect(
+      evaluateTrade(
+        l,
+        offer(
+          four.map((p) => p.pid),
+          [star.pid],
+        ),
+      ).accept,
+    ).toBe(false);
     const equal = shape(l, standardRoster(l, U)[4], 90, 27);
     expect(evaluateTrade(l, offer([equal.pid], [star.pid])).accept).toBe(true);
   });
 
-  it('keeps every team within 15% of neutral value, so stars can\'t be bought low and sold high (T4)', () => {
+  it("keeps every team within 15% of neutral value, so stars can't be bought low and sold high (T4)", () => {
     const l = league();
     const vet = shape(l, standardRoster(l, AI)[0], 86, 33);
     l.teams[AI].strategy = 'rebuild';
@@ -106,13 +117,21 @@ describe('AI trade valuation', () => {
     const vetMin = CAP_FOR(l).vetMin;
     const star = shape(l, standardRoster(l, U)[0], 95, 25, vetMin);
     const filler = shape(l, standardRoster(l, AI)[0], 60, 30, vetMin);
-    const ev = evaluateTrade(l, offer([star.pid], [filler.pid], [], firsts.map((d) => d.dpid)));
+    const ev = evaluateTrade(
+      l,
+      offer(
+        [star.pid],
+        [filler.pid],
+        [],
+        firsts.map((d) => d.dpid),
+      ),
+    );
     expect(ev.ok).toBe(true);
     expect(ev.accept).toBe(false);
     expect(ev.message).toMatch(/first-round picks/);
   });
 
-  it('won\'t leave a team without firsts in back-to-back drafts (Stepien rule)', () => {
+  it("won't leave a team without firsts in back-to-back drafts (Stepien rule)", () => {
     const l = league();
     l.phase = 'regular';
     const own = l.draftPicks.filter((d) => d.tid === U && d.round === 1 && d.season >= l.season + 1).sort((a, b) => a.season - b.season);
@@ -120,7 +139,7 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, offer([], [], [own[0].dpid, own[2].dpid])).some((e) => /back-to-back/.test(e))).toBe(false);
   });
 
-  it('prices this year\'s picks like the prospect they become, protections included (T5)', () => {
+  it("prices this year's picks like the prospect they become, protections included (T5)", () => {
     const l = league();
     l.phase = 'draftLottery';
     runLottery(l, new Rng(3));
@@ -193,7 +212,7 @@ describe('cap holds (T7)', () => {
     expect(validateTrade(l, offer([], [target.pid])).filter((e) => e.includes('125%'))).toEqual([]);
   });
 
-  it('holds an AI team\'s room for the players it would re-sign', () => {
+  it("holds an AI team's room for the players it would re-sign", () => {
     const l = league();
     l.phase = 'draft';
     const keep = shape(l, standardRoster(l, AI)[0], 84, 26, 20_000, 1);
@@ -270,7 +289,8 @@ describe('free agency', () => {
     l.phase = 'freeAgency';
     for (const t of l.teams) {
       overCap(l, t.tid);
-      while (standardRoster(l, t.tid).length < CAP.rosterMax) signPlayer(l, freeAgents(l).sort((a, b) => a.ovr - b.ovr)[0], t.tid, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
+      while (standardRoster(l, t.tid).length < CAP.rosterMax)
+        signPlayer(l, freeAgents(l).sort((a, b) => a.ovr - b.ovr)[0], t.tid, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
     }
     const fa = shape(l, freeAgents(l)[0], 82, 27);
     fa.contract = { start: l.season, salaries: [0] };
@@ -319,7 +339,10 @@ describe('league creation and the draft', () => {
     const rows = l.teams.map((t) => {
       const r = standardRoster(l, t.tid);
       return {
-        talent: [...r].sort((a, b) => b.ovr - a.ovr).slice(0, 8).reduce((a, p) => a + p.ovr, 0),
+        talent: [...r]
+          .sort((a, b) => b.ovr - a.ovr)
+          .slice(0, 8)
+          .reduce((a, p) => a + p.ovr, 0),
         pay: payroll(l, t.tid),
         hasC: r.some((p) => p.pos === 'C'),
         rookies: r.filter((p) => p.contract.rookie).length,
@@ -337,7 +360,12 @@ describe('league creation and the draft', () => {
       return n / Math.sqrt(dx * dy);
     };
     expect(rows.every((r) => r.hasC && r.rookies >= 2 && r.rookies <= 3 && r.twoWays === 2 && r.overMax === 0)).toBe(true);
-    expect(corr(rows.map((r) => r.talent), rows.map((r) => r.pay))).toBeGreaterThan(0.4);
+    expect(
+      corr(
+        rows.map((r) => r.talent),
+        rows.map((r) => r.pay),
+      ),
+    ).toBeGreaterThan(0.4);
     expect(Object.values(l.players).some((p) => p.contract.option && !p.contract.rookie)).toBe(true);
   });
 

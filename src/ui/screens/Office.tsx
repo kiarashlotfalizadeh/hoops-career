@@ -69,7 +69,10 @@ export default function Office() {
       to: '/free-agents',
       icon: UserPlus,
       title: 'Free Agents',
-      sub: league.phase === 'freeAgency' ? `Day ${Math.min(30, league.faDay + 1)} of 30 · ${faCount} left` : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : mle > 0 ? `${fmtM(mle)} mid-level` : 'min deals only'}`,
+      sub:
+        league.phase === 'freeAgency'
+          ? `Day ${Math.min(30, league.faDay + 1)} of 30 · ${faCount} left`
+          : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : mle > 0 ? `${fmtM(mle)} mid-level` : 'min deals only'}`,
       color: 'var(--good)',
       hot: league.phase === 'freeAgency',
     },
@@ -86,7 +89,9 @@ export default function Office() {
       to: '/draft',
       icon: ListOrdered,
       title: 'Draft',
-      sub: thisDraftPicks.length ? `You pick ${thisDraftPicks.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}` : `${myPicks.length} pick${myPicks.length === 1 ? '' : 's'} owned`,
+      sub: thisDraftPicks.length
+        ? `You pick ${thisDraftPicks.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}`
+        : `${myPicks.length} pick${myPicks.length === 1 ? '' : 's'} owned`,
       color: 'var(--tier-star)',
       hot: league.phase === 'draft' || league.phase === 'draftLottery',
     },
@@ -112,19 +117,23 @@ export default function Office() {
               <b>Soft cap ({fmtM(cap.salaryCap)}).</b> You can sign free agents with cap space, or for the minimum (up to {fmtM(cap.vetMin, 2)}) when you're over it.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Mid-level exception.</b> Once a season, a team that stays under the tax line can sign one free agent for up to {fmtM(cap.salaryCap * MLE_PCT)} ({Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap.
+              <b>Mid-level exception.</b> Once a season, a team that stays under the tax line can sign one free agent for up to {fmtM(cap.salaryCap * MLE_PCT)} (
+              {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign phase, even over the cap. Until free agency opens (or you renounce them), each one holds cap room at about his asking price.
+              <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign phase, even over the cap. Until free agency opens (or you renounce
+              them), each one holds cap room at about his asking price.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Luxury tax ({fmtM(cap.luxuryTax)}).</b> Every dollar of payroll above the tax line costs {CAP.taxRate}× in tax at the end of the regular season. The pot is shared by non-taxpaying teams.
+              <b>Luxury tax ({fmtM(cap.luxuryTax)}).</b> Every dollar of payroll above the tax line costs {CAP.taxRate}× in tax at the end of the regular season. The pot is shared
+              by non-taxpaying teams.
             </p>
             <p style={{ margin: 0 }}>
               <b>Trades.</b> A team that is over the cap after a trade can take back at most 125% of the salary it sends out, plus $0.1M.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Rosters.</b> {CAP.rosterMin} to {CAP.rosterMax} players in season, up to 21 in the offseason. Minimum deals signed for the coming season aren't guaranteed until opening night: cutting one before then leaves no dead money. First-round picks sign rookie-scale deals (4 years, team option on the last).
+              <b>Rosters.</b> {CAP.rosterMin} to {CAP.rosterMax} players in season, up to 21 in the offseason. Minimum deals signed for the coming season aren't guaranteed until
+              opening night: cutting one before then leaves no dead money. First-round picks sign rookie-scale deals (4 years, team option on the last).
             </p>
             <p style={{ margin: 0 }}>The cap, tax line and minimums grow 6% every season.</p>
           </Help>
@@ -135,18 +144,32 @@ export default function Office() {
             <div className="tiny dim upper bold">Payroll</div>
             <div className="fo-big">{fmtM(pay)}</div>
           </div>
-          <span className={`tag ${pay > cap.luxuryTax ? 'bad' : pay > cap.salaryCap ? 'warn' : 'good'}`}>{pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}</span>
+          <span className={`tag ${pay > cap.luxuryTax ? 'bad' : pay > cap.salaryCap ? 'warn' : 'good'}`}>
+            {pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
+          </span>
         </div>
         <div style={{ marginTop: 6 }}>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
         </div>
-        {holds > 0 && <div className="tiny dim" style={{ marginTop: 4 }}>Striped: {fmtM(holds)} in cap holds for your expiring players.</div>}
+        {holds > 0 && (
+          <div className="tiny dim" style={{ marginTop: 4 }}>
+            Striped: {fmtM(holds)} in cap holds for your expiring players.
+          </div>
+        )}
         <div className="grid2" style={{ marginTop: 12 }}>
           <Kpi
             k="Cap space"
             v={fmtM(space)}
             color={space >= 0 ? 'var(--good)' : 'var(--warn)'}
-            sub={holds > 0 ? `After ${fmtM(holds)} in cap holds` : space > 0 ? 'Room to sign free agents' : mle > 0 ? `Min deals or the ${fmtM(mle)} mid-level` : `Min deals only (${fmtM(cap.vetMin, 2)})`}
+            sub={
+              holds > 0
+                ? `After ${fmtM(holds)} in cap holds`
+                : space > 0
+                  ? 'Room to sign free agents'
+                  : mle > 0
+                    ? `Min deals or the ${fmtM(mle)} mid-level`
+                    : `Min deals only (${fmtM(cap.vetMin, 2)})`
+            }
           />
           <Kpi
             k={isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster'}
@@ -164,7 +187,12 @@ export default function Office() {
                     : `${CAP.rosterMax - signedN} open spot${CAP.rosterMax - signedN === 1 ? '' : 's'}`) + (twoWays ? ` · ${twoWays} two-way` : '')
             }
           />
-          <Kpi k={pay > cap.luxuryTax ? 'Tax bill (est.)' : 'Room under tax'} v={pay > cap.luxuryTax ? fmtM(tax) : fmtM(cap.luxuryTax - pay)} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} sub={`Tax line ${fmtM(cap.luxuryTax)}`} />
+          <Kpi
+            k={pay > cap.luxuryTax ? 'Tax bill (est.)' : 'Room under tax'}
+            v={pay > cap.luxuryTax ? fmtM(tax) : fmtM(cap.luxuryTax - pay)}
+            color={pay > cap.luxuryTax ? 'var(--bad)' : undefined}
+            sub={`Tax line ${fmtM(cap.luxuryTax)}`}
+          />
           <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub={`${ts.won}-${ts.lost} · ${seasonLabel(league.season)}`} />
         </div>
       </Card>
@@ -256,9 +284,17 @@ function Spotlight({ league }: { league: League }) {
             {np && league.phase === 'draft' ? <TeamLogo tid={np.tid} size={46} /> : <ListOrdered size={34} />}
             <div className="grow">
               <div className="fo-mid">
-                {league.phase === 'draft' && np ? (onClock ? `Pick #${(np.round - 1) * 30 + np.pick!} is yours` : `${league.teams[np.tid].abbrev} pick #${(np.round - 1) * 30 + np.pick!}`) : league.phase === 'draft' ? 'Draft complete' : `${league.season} NBA Draft`}
+                {league.phase === 'draft' && np
+                  ? onClock
+                    ? `Pick #${(np.round - 1) * 30 + np.pick!} is yours`
+                    : `${league.teams[np.tid].abbrev} pick #${(np.round - 1) * 30 + np.pick!}`
+                  : league.phase === 'draft'
+                    ? 'Draft complete'
+                    : `${league.season} NBA Draft`}
               </div>
-              <div className="small dim2">{mine.length ? `Your picks: ${mine.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}` : 'You have no picks left this year.'}</div>
+              <div className="small dim2">
+                {mine.length ? `Your picks: ${mine.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}` : 'You have no picks left this year.'}
+              </div>
             </div>
           </div>
           <button className={`btn block ${onClock ? 'good' : 'primary'}`} style={{ marginTop: 12 }} onClick={() => nav('/draft')}>
@@ -306,15 +342,25 @@ function Spotlight({ league }: { league: League }) {
           {!fa && (
             <div className="small dim2" style={{ marginTop: 6 }}>
               {roster < CAP.rosterMin ? (
-                <span className="bad">You need at least {CAP.rosterMin} players to start the season ({roster} now).</span>
+                <span className="bad">
+                  You need at least {CAP.rosterMin} players to start the season ({roster} now).
+                </span>
               ) : roster > CAP.rosterMax ? (
-                <span className="bad">Cut down to {CAP.rosterMax} players before opening night ({roster} now).</span>
+                <span className="bad">
+                  Cut down to {CAP.rosterMax} players before opening night ({roster} now).
+                </span>
               ) : (
                 `Roster set at ${roster}. Best players you can still afford:`
               )}
             </div>
           )}
-          {fa && space <= 0 && <div className="small dim2" style={{ marginTop: 6 }}>{mle > 0 ? 'Over the cap: the best players you can sign for the minimum or with your mid-level exception.' : 'Over the cap: the best players who would sign for the minimum.'}</div>}
+          {fa && space <= 0 && (
+            <div className="small dim2" style={{ marginTop: 6 }}>
+              {mle > 0
+                ? 'Over the cap: the best players you can sign for the minimum or with your mid-level exception.'
+                : 'Over the cap: the best players who would sign for the minimum.'}
+            </div>
+          )}
           {topFAs.length > 0 && (
             <div className="list" style={{ margin: '10px -14px 0' }}>
               {topFAs.map((p) => {
@@ -328,7 +374,9 @@ function Spotlight({ league }: { league: League }) {
                     right={
                       <div className="fo-money">
                         <div className="a">{fmtM(ask.amount)}</div>
-                        <div className="b">{ask.years} yr{ask.years > 1 ? 's' : ''}</div>
+                        <div className="b">
+                          {ask.years} yr{ask.years > 1 ? 's' : ''}
+                        </div>
                       </div>
                     }
                   />
@@ -430,7 +478,8 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
           <Help title="Contracts">
             <p style={{ margin: 0 }}>Salaries for the next four seasons. Contracts rise 5% per year.</p>
             <p style={{ margin: 0 }}>
-              <span className="fo-opt">PO</span> player option and <span className="fo-opt team">TO</span> team option apply to the final season. <span className="tag info">R</span> marks a rookie-scale deal.
+              <span className="fo-opt">PO</span> player option and <span className="fo-opt team">TO</span> team option apply to the final season.{' '}
+              <span className="tag info">R</span> marks a rookie-scale deal.
             </p>
             <p style={{ margin: 0 }}>
               <span className="tag">2W</span> two-way deals are paid outside the cap and the tax, so they're left out of the totals.
@@ -463,9 +512,21 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                       <span className="fo-name small" style={{ maxWidth: 96 }}>
                         {nameOf(p.pid)}
                       </span>
-                      {p.contract.rookie && <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>R</span>}
-                      {p.contract.twoWay && <span className="tag" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>2W</span>}
-                      {p.injury && <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>INJ</span>}
+                      {p.contract.rookie && (
+                        <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                          R
+                        </span>
+                      )}
+                      {p.contract.twoWay && (
+                        <span className="tag" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                          2W
+                        </span>
+                      )}
+                      {p.injury && (
+                        <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                          INJ
+                        </span>
+                      )}
                     </div>
                     <div className="tiny dim">
                       {p.pos} · {league.season - p.bornYear}
@@ -484,7 +545,9 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                       return (
                         <td key={s} className={amt && !p.contract.twoWay ? '' : 'dim'}>
                           {amt ? m1(amt) : '—'}
-                          {amt > 0 && s === exp && p.contract.option && <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span>}
+                          {amt > 0 && s === exp && p.contract.option && (
+                            <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span>
+                          )}
                         </td>
                       );
                     })
@@ -638,7 +701,11 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
       <div className="row wrap" style={{ gap: 6 }}>
         <span className="tag">{contractYearsLabel(p, s0)}</span>
         {p.contract.rookie && <span className="tag info">Rookie scale</span>}
-        {p.contract.option && <span className={`tag ${p.contract.option === 'team' ? 'warn' : 'info'}`}>{p.contract.option === 'team' ? 'Team' : 'Player'} option {seasonLabel(exp)}</span>}
+        {p.contract.option && (
+          <span className={`tag ${p.contract.option === 'team' ? 'warn' : 'info'}`}>
+            {p.contract.option === 'team' ? 'Team' : 'Player'} option {seasonLabel(exp)}
+          </span>
+        )}
         {p.mood.tradeRequest && <span className="tag bad">Wants a trade</span>}
       </div>
       <div className="card tight">
@@ -648,7 +715,9 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
             <div key={s} className="row between small" style={{ padding: '3px 0', opacity: s < league.season ? 0.5 : 1 }}>
               <span className="dim2">
                 {seasonLabel(s)}
-                {s === exp && p.contract.option ? <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span> : null}
+                {s === exp && p.contract.option ? (
+                  <span className={`fo-opt ${p.contract.option === 'team' ? 'team' : ''}`}>{p.contract.option === 'team' ? 'TO' : 'PO'}</span>
+                ) : null}
               </span>
               <span className="num bold">{fmtM(amt, 2)}</span>
             </div>

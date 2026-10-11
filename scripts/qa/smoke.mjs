@@ -60,21 +60,50 @@ try {
   step('created the real league');
 
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await page.locator('.sheet').getByRole('button', { name: /^Start regular season/ }).click();
+  await page
+    .locator('.sheet')
+    .getByRole('button', { name: /^Start regular season/ })
+    .click();
   await page.waitForTimeout(800);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  const quick = page.locator('.sheet').getByRole('button', { name: /^Quick sim this game|^Sim 1 week/ }).first();
+  const quick = page
+    .locator('.sheet')
+    .getByRole('button', { name: /^Quick sim this game|^Sim 1 week/ })
+    .first();
   await quick.click();
   await waitSim();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await page.locator('.sheet').getByRole('button', { name: /^Sim 1 week/ }).click();
+  await page
+    .locator('.sheet')
+    .getByRole('button', { name: /^Sim 1 week/ })
+    .click();
   await waitSim();
   const phase = await page.locator('.topbar').getAttribute('data-phase');
   if (phase !== 'Regular Season') fail.push(`expected regular season, got ${phase}`);
   step(`played into the season (${await page.locator('.topbar .sub').textContent()})`);
 
-  const routes = ['/', '/roster', '/rotation', '/tactics', '/lab', '/league', '/league?tab=stats', '/team/5', '/office', '/trade', '/free-agents', '/draft', '/finances', '/inbox', '/settings', '/history'];
-  for (const [w, h] of [[390, 844], [820, 1180]]) {
+  const routes = [
+    '/',
+    '/roster',
+    '/rotation',
+    '/tactics',
+    '/lab',
+    '/league',
+    '/league?tab=stats',
+    '/team/5',
+    '/office',
+    '/trade',
+    '/free-agents',
+    '/draft',
+    '/finances',
+    '/inbox',
+    '/settings',
+    '/history',
+  ];
+  for (const [w, h] of [
+    [390, 844],
+    [820, 1180],
+  ]) {
     await page.setViewportSize({ width: w, height: h });
     for (const r of routes) {
       await page.goto(`${base}/#${r}`);

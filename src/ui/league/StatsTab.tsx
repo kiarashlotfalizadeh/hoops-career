@@ -131,7 +131,15 @@ const CATS: Cat[] = [
   { key: 'stl', label: 'Steals', unit: 'SPG', get: (r) => r.pg.stl, fmt: f1 },
   { key: 'blk', label: 'Blocks', unit: 'BPG', get: (r) => r.pg.blk, fmt: f1 },
   { key: 'tpm', label: '3-Pointers made', unit: '3PM', get: (r) => r.pg.tpm, fmt: f1 },
-  { key: 'ts', label: 'True shooting', unit: 'TS%', get: (r) => r.pg.tsPct, fmt: (v) => (v * 100).toFixed(1), min: (r) => r.pg.fga + 0.44 * r.pg.fta >= 9, minNote: 'Min. 9 shot attempts per game' },
+  {
+    key: 'ts',
+    label: 'True shooting',
+    unit: 'TS%',
+    get: (r) => r.pg.tsPct,
+    fmt: (v) => (v * 100).toFixed(1),
+    min: (r) => r.pg.fga + 0.44 * r.pg.fta >= 9,
+    minNote: 'Min. 9 shot attempts per game',
+  },
 ];
 
 function Leaders({ league, rows, season, playoffs }: { league: League; rows: StatRow[]; season: number; playoffs: boolean }) {
@@ -246,17 +254,79 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
       },
       { key: 'tm', label: 'Team', left: true, get: (r) => teamAbbrev(league, r.tid), fmt: (v) => <span className="dim2">{v}</span> },
       { key: 'gp', label: 'GP', get: (r) => r.s.gp },
-      { key: 'min', label: 'MIN', get: count((r) => r.pg.min, (r) => r.s.min), fmt: fmtCount },
-      { key: 'pts', label: 'PTS', get: count((r) => r.pg.pts, (r) => r.s.pts), fmt: (v) => <b>{fmtCount(v)}</b> },
-      { key: 'reb', label: 'REB', get: count((r) => r.pg.reb, (r) => r.s.orb + r.s.drb), fmt: fmtCount },
-      { key: 'ast', label: 'AST', get: count((r) => r.pg.ast, (r) => r.s.ast), fmt: fmtCount },
-      { key: 'stl', label: 'STL', get: count((r) => r.pg.stl, (r) => r.s.stl), fmt: fmtCount },
-      { key: 'blk', label: 'BLK', get: count((r) => r.pg.blk, (r) => r.s.blk), fmt: fmtCount },
-      { key: 'tov', label: 'TOV', get: count((r) => r.pg.tov, (r) => r.s.tov), fmt: fmtCount },
+      {
+        key: 'min',
+        label: 'MIN',
+        get: count(
+          (r) => r.pg.min,
+          (r) => r.s.min,
+        ),
+        fmt: fmtCount,
+      },
+      {
+        key: 'pts',
+        label: 'PTS',
+        get: count(
+          (r) => r.pg.pts,
+          (r) => r.s.pts,
+        ),
+        fmt: (v) => <b>{fmtCount(v)}</b>,
+      },
+      {
+        key: 'reb',
+        label: 'REB',
+        get: count(
+          (r) => r.pg.reb,
+          (r) => r.s.orb + r.s.drb,
+        ),
+        fmt: fmtCount,
+      },
+      {
+        key: 'ast',
+        label: 'AST',
+        get: count(
+          (r) => r.pg.ast,
+          (r) => r.s.ast,
+        ),
+        fmt: fmtCount,
+      },
+      {
+        key: 'stl',
+        label: 'STL',
+        get: count(
+          (r) => r.pg.stl,
+          (r) => r.s.stl,
+        ),
+        fmt: fmtCount,
+      },
+      {
+        key: 'blk',
+        label: 'BLK',
+        get: count(
+          (r) => r.pg.blk,
+          (r) => r.s.blk,
+        ),
+        fmt: fmtCount,
+      },
+      {
+        key: 'tov',
+        label: 'TOV',
+        get: count(
+          (r) => r.pg.tov,
+          (r) => r.s.tov,
+        ),
+        fmt: fmtCount,
+      },
       { key: 'fg', label: 'FG%', get: (r) => (r.s.fga ? r.pg.fgPct : -1), fmt: pctCell },
       { key: 'tp', label: '3P%', get: (r) => (r.s.tpa ? r.pg.tpPct : -1), fmt: pctCell },
       { key: 'ft', label: 'FT%', get: (r) => (r.s.fta ? r.pg.ftPct : -1), fmt: pctCell },
-      { key: 'ts', label: 'TS%', get: (r) => (r.s.fga || r.s.fta ? r.pg.tsPct : -1), fmt: pctCell, help: 'True shooting: points per shot attempt, counting threes and free throws.' },
+      {
+        key: 'ts',
+        label: 'TS%',
+        get: (r) => (r.s.fga || r.s.fta ? r.pg.tsPct : -1),
+        fmt: pctCell,
+        help: 'True shooting: points per shot attempt, counting threes and free throws.',
+      },
       { key: 'usg', label: 'USG%', get: (r) => r.pg.usg, fmt: pctCell, help: 'Usage: share of team possessions he finishes while on the floor.' },
       {
         key: 'pm',
@@ -276,7 +346,18 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
   }, [league, hasAdv, tot]);
   // the same element between renders lets React skip the table while the search box updates
   const table = useMemo(
-    () => <StatTable rows={filtered} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} highlight={(r) => r.tid === league.userTid} maxHeight={560} limit={limit} />,
+    () => (
+      <StatTable
+        rows={filtered}
+        cols={cols}
+        initialSort="pts"
+        rowKey={(r) => r.p.pid}
+        onRow={(r) => nav(`/player/${r.p.pid}`)}
+        highlight={(r) => r.tid === league.userTid}
+        maxHeight={560}
+        limit={limit}
+      />
+    ),
     [filtered, cols, nav, league.userTid, limit],
   );
 
@@ -319,7 +400,8 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
             </button>
           )}
           <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length}` : filtered.length} players · {tot ? 'season totals' : 'per-game averages'} · tap a column to sort{real ? ' · imported real-life season' : ''}
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length}` : filtered.length} players · {tot ? 'season totals' : 'per-game averages'} · tap a column to sort
+            {real ? ' · imported real-life season' : ''}
           </div>
         </>
       )}

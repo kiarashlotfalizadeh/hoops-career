@@ -44,15 +44,7 @@ export type OffRole =
 
 export type ShotFreedom = -1 | 0 | 1; // limited / normal / green light
 
-export type TrainingFocus =
-  | 'balanced'
-  | 'shooting'
-  | 'finishing'
-  | 'playmaking'
-  | 'perimeterD'
-  | 'interiorD'
-  | 'rebounding'
-  | 'conditioning';
+export type TrainingFocus = 'balanced' | 'shooting' | 'finishing' | 'playmaking' | 'perimeterD' | 'interiorD' | 'rebounding' | 'conditioning';
 
 export interface Contract {
   /** Season (end year, e.g. 2027 = 2026-27) of first salary entry. */
@@ -611,15 +603,7 @@ export interface PbpEntry {
 
 // ---------------------------------------------------------------- league
 
-export type Phase =
-  | 'preseason'
-  | 'regular'
-  | 'playin'
-  | 'playoffs'
-  | 'draftLottery'
-  | 'draft'
-  | 'resign'
-  | 'freeAgency';
+export type Phase = 'preseason' | 'regular' | 'playin' | 'playoffs' | 'draftLottery' | 'draft' | 'resign' | 'freeAgency';
 
 export interface PlayoffSeries {
   id: string;

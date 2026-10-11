@@ -105,20 +105,25 @@ function ResignPhase() {
         right={
           <Help title="Re-signing your players">
             <p style={{ margin: 0 }}>
-              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. This is the only time you can exceed the cap for anything other than minimum deals.
+              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. This is the only time you can exceed the cap for anything
+              other than minimum deals.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs on the spot.
+              <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs
+              on the spot.
             </p>
             <p style={{ margin: 0 }}>
               <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
             </p>
             <p style={{ margin: 0 }}>Anyone you don't re-sign becomes an unrestricted free agent when free agency opens. Other teams may sign him.</p>
             <p style={{ margin: 0 }}>
-              <b>Cap holds.</b> Until then, each expiring player counts against next season's cap at about his asking price, so you can't spend the same room twice (say, on salary taken back in a trade). Renounce a player to clear his hold: he leaves for free agency.
+              <b>Cap holds.</b> Until then, each expiring player counts against next season's cap at about his asking price, so you can't spend the same room twice (say, on salary
+              taken back in a trade). Renounce a player to clear his hold: he leaves for free agency.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including rookie-scale fourth years) are your call: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided options get the staff's call when free agency opens.
+              <b>Options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including rookie-scale
+              fourth years) are your call: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided options get the staff's call when free agency
+              opens.
             </p>
           </Help>
         }
@@ -141,18 +146,30 @@ function ResignPhase() {
           <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} />
         </div>
         <div className="grid2" style={{ marginTop: 12 }}>
-          <Kpi k="Cap space" v={fmtM(cap.salaryCap - committed - holds)} color={cap.salaryCap - committed - holds > 0 ? 'var(--good)' : 'var(--warn)'} sub={holds > 0 ? 'after cap holds' : undefined} />
+          <Kpi
+            k="Cap space"
+            v={fmtM(cap.salaryCap - committed - holds)}
+            color={cap.salaryCap - committed - holds > 0 ? 'var(--good)' : 'var(--warn)'}
+            sub={holds > 0 ? 'after cap holds' : undefined}
+          />
           <Kpi k="Cap holds" v={fmtM(holds)} sub={holds > 0 ? 'renounce to clear' : 'none'} />
           <Kpi k="Under tax" v={fmtM(cap.luxuryTax - committed)} color={cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined} sub="committed only" />
-          <Kpi k="Roster" v={`${rosterNext}/${CAP.rosterMax}`} sub={rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut by opening night` : 'under contract'} color={rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined} />
+          <Kpi
+            k="Roster"
+            v={`${rosterNext}/${CAP.rosterMax}`}
+            sub={rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut by opening night` : 'under contract'}
+            color={rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined}
+          />
         </div>
         {rosterNext > CAP.rosterMax && (
           <div className="small warn" style={{ marginTop: 8 }}>
-            You already have {rosterNext} players under contract for {seasonLabel(next)}. The offseason allows {OFFSEASON_ROSTER_MAX}, but only {CAP.rosterMax} make opening night: trade or release before then.
+            You already have {rosterNext} players under contract for {seasonLabel(next)}. The offseason allows {OFFSEASON_ROSTER_MAX}, but only {CAP.rosterMax} make opening night:
+            trade or release before then.
           </div>
         )}
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Until free agency opens they hold that cap room unless you renounce them; what's left after re-signing is yours to use in free agency.
+          Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Until free agency opens they hold that cap room
+          unless you renounce them; what's left after re-signing is yours to use in free agency.
         </div>
       </Card>
 
@@ -176,7 +193,9 @@ function ResignPhase() {
                 </div>
                 <div className="row" style={{ marginTop: 10, gap: 10 }}>
                   <div className="grow">
-                    <div className="tiny dim upper bold">{seasonLabel(next)} option{p.contract.rookie ? ' · rookie scale' : ''}</div>
+                    <div className="tiny dim upper bold">
+                      {seasonLabel(next)} option{p.contract.rookie ? ' · rookie scale' : ''}
+                    </div>
                     <div className="small">
                       <b className="num" style={{ fontSize: 16 }}>
                         {fmtM(sal)}
@@ -198,9 +217,7 @@ function ResignPhase() {
         </>
       )}
 
-      <SecTitle>
-        Expiring contracts · {expiring.length}
-      </SecTitle>
+      <SecTitle>Expiring contracts · {expiring.length}</SecTitle>
       {expiring.length === 0 ? (
         <Card>
           <div className="row" style={{ gap: 10 }}>
@@ -270,7 +287,9 @@ function ResignPhase() {
                   <OvrPot p={p} showPot={false} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="fo-name small">{playerName(p)}</div>
-                    <div className="fo-meta tiny">{p.pos} · {playerAge(p, next)} next season</div>
+                    <div className="fo-meta tiny">
+                      {p.pos} · {playerAge(p, next)} next season
+                    </div>
                   </div>
                   <div className="fo-money">
                     <div className="a">{fmtM(salaryFor(p, next))}</div>
@@ -295,7 +314,9 @@ function ResignPhase() {
         {renounce && (
           <div className="col" style={{ gap: 12 }}>
             <div className="dim2">
-              You give up {playerName(renounce)}'s Bird rights: he becomes a free agent when the market opens{renounce.mood.tradeRequest ? '' : `, and his ${fmtM(asks.get(renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring him back you'd have to outbid other teams with cap space.
+              You give up {playerName(renounce)}'s Bird rights: he becomes a free agent when the market opens
+              {renounce.mood.tradeRequest ? '' : `, and his ${fmtM(asks.get(renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring him back you'd have to outbid
+              other teams with cap space.
             </div>
             <div className="row">
               <button className="btn grow" onClick={() => setRenounce(null)}>
@@ -313,12 +334,14 @@ function ResignPhase() {
         <div className="col" style={{ gap: 12 }}>
           {expiring.length > 0 && (
             <div className="dim2">
-              {expiring.length} player{expiring.length > 1 ? 's' : ''} will become free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have to compete like everyone else, using cap space.
+              {expiring.length} player{expiring.length > 1 ? 's' : ''} will become free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have to
+              compete like everyone else, using cap space.
             </div>
           )}
           {options.length > 0 && (
             <div className="dim2">
-              Open team option{options.length > 1 ? 's' : ''}: the staff will {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${p.lastName}'s`).join(', ')}.
+              Open team option{options.length > 1 ? 's' : ''}: the staff will{' '}
+              {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${p.lastName}'s`).join(', ')}.
             </div>
           )}
           {expiring.length > 0 && (
@@ -383,7 +406,12 @@ function OffPhase({ league }: { league: League }) {
 
       <div className="grid2">
         <Kpi k={`Expiring ${seasonLabel(s).slice(-5)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
-        <Kpi k={`${seasonLabel(s + 1)} committed`} v={fmtM(after)} sub={after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`} color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'} />
+        <Kpi
+          k={`${seasonLabel(s + 1)} committed`}
+          v={fmtM(after)}
+          sub={after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`}
+          color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'}
+        />
       </div>
 
       <SecTitle>Contracts up after {seasonLabel(s)}</SecTitle>

@@ -67,7 +67,9 @@ export function gameFinances(league: League, team: Team, home: boolean, playoffs
   if (!playoffs) revenue += (NATIONAL_REVENUE * scale) / 82;
   let expenses = 0;
   if (!playoffs) {
-    const pay = teamPlayers(league, team.tid).reduce((a, p) => a + salaryFor(p, league.season), 0) + team.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
+    const pay =
+      teamPlayers(league, team.tid).reduce((a, p) => a + salaryFor(p, league.season), 0) +
+      team.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
     expenses += pay / 82;
     expenses += (budgetCostPerSeason(league, team.budget.coaching) + budgetCostPerSeason(league, team.budget.health) + budgetCostPerSeason(league, team.budget.facilities)) / 82;
     expenses += (OPERATIONS_PER_SEASON * scale) / 82;

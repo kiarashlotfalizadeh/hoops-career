@@ -11,7 +11,13 @@ export interface RatingMeta {
 
 export const RATING_META: RatingMeta[] = [
   { key: 'hgt', label: 'Size', short: 'SIZ', group: 'Physical', help: 'Height and length. Drives finishing over defenders, contesting, rebounding and rim protection.' },
-  { key: 'spd', label: 'Speed', short: 'SPD', group: 'Physical', help: 'Quickness with and without the ball. Beating a defender off the bounce, staying in front, running the floor.' },
+  {
+    key: 'spd',
+    label: 'Speed',
+    short: 'SPD',
+    group: 'Physical',
+    help: 'Quickness with and without the ball. Beating a defender off the bounce, staying in front, running the floor.',
+  },
   { key: 'ath', label: 'Explosiveness', short: 'EXP', group: 'Physical', help: 'Vertical pop. Finishing above the rim, lobs, blocks and offensive boards.' },
   { key: 'str', label: 'Strength', short: 'STR', group: 'Physical', help: 'Holding position in the post, finishing through contact, screening.' },
   { key: 'end', label: 'Stamina', short: 'STA', group: 'Physical', help: 'How long he can play before fatigue erodes his performance. Fatigue also raises injury risk.' },
@@ -114,12 +120,50 @@ export function composites(r: Ratings): Composites {
 // and finishing. Box-score volume a lineup would get anyway (steals, offensive boards) carries
 // little weight; RAPM is what lifts real defenders.
 const OVR_GUARD: Ratings = {
-  hgt: 0.09, spd: 0.02, ath: 0.015, str: 0.04, end: 0.031, ins: 0.015, mid: 0.03, tp: 0.04, ft: 0.035, drw: 0.025, post: 0,
-  hnd: 0.09, pas: 0.055, oiq: 0.2, perD: 0.095, intD: 0.045, blk: 0, stl: 0.005, diq: 0.095, oreb: 0, dreb: 0.027,
+  hgt: 0.09,
+  spd: 0.02,
+  ath: 0.015,
+  str: 0.04,
+  end: 0.031,
+  ins: 0.015,
+  mid: 0.03,
+  tp: 0.04,
+  ft: 0.035,
+  drw: 0.025,
+  post: 0,
+  hnd: 0.09,
+  pas: 0.055,
+  oiq: 0.2,
+  perD: 0.095,
+  intD: 0.045,
+  blk: 0,
+  stl: 0.005,
+  diq: 0.095,
+  oreb: 0,
+  dreb: 0.027,
 };
 const OVR_BIG: Ratings = {
-  hgt: 0.065, spd: 0.049, ath: 0.019, str: 0.043, end: 0.031, ins: 0.041, mid: 0.01, tp: 0.041, ft: 0.025, drw: 0.029, post: 0.031,
-  hnd: 0.047, pas: 0.071, oiq: 0.152, perD: 0.055, intD: 0.05, blk: 0.011, stl: 0, diq: 0.093, oreb: 0.004, dreb: 0.055,
+  hgt: 0.065,
+  spd: 0.049,
+  ath: 0.019,
+  str: 0.043,
+  end: 0.031,
+  ins: 0.041,
+  mid: 0.01,
+  tp: 0.041,
+  ft: 0.025,
+  drw: 0.029,
+  post: 0.031,
+  hnd: 0.047,
+  pas: 0.071,
+  oiq: 0.152,
+  perD: 0.055,
+  intD: 0.05,
+  blk: 0.011,
+  stl: 0,
+  diq: 0.093,
+  oreb: 0.004,
+  dreb: 0.055,
 };
 
 /** Per-attribute OVR weights for this body type (the guard/big blend ovrRaw uses). */
@@ -342,8 +386,27 @@ export function inferPos(r: Ratings): Pos {
 
 export function emptyRatings(): Ratings {
   return {
-    hgt: 50, spd: 50, ath: 50, str: 50, end: 50, ins: 50, mid: 50, tp: 50, ft: 50, hnd: 50, pas: 50,
-    oiq: 50, drw: 50, post: 50, perD: 50, intD: 50, stl: 50, blk: 50, diq: 50, oreb: 50, dreb: 50,
+    hgt: 50,
+    spd: 50,
+    ath: 50,
+    str: 50,
+    end: 50,
+    ins: 50,
+    mid: 50,
+    tp: 50,
+    ft: 50,
+    hnd: 50,
+    pas: 50,
+    oiq: 50,
+    drw: 50,
+    post: 50,
+    perD: 50,
+    intD: 50,
+    stl: 50,
+    blk: 50,
+    diq: 50,
+    oreb: 50,
+    dreb: 50,
   };
 }
 

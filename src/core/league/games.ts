@@ -119,7 +119,19 @@ function addTotals(a: TeamTotals, b: TeamTotals) {
   for (const k of Object.keys(a) as (keyof TeamTotals)[]) a[k] += b[k];
 }
 
-function recordTeamGame(ts: TeamSeason, won: boolean, home: boolean, sameConf: boolean, sameDiv: boolean, pf: number, pa: number, poss: number, oppPoss: number, t: TeamTotals, o: TeamTotals) {
+function recordTeamGame(
+  ts: TeamSeason,
+  won: boolean,
+  home: boolean,
+  sameConf: boolean,
+  sameDiv: boolean,
+  pf: number,
+  pa: number,
+  poss: number,
+  oppPoss: number,
+  t: TeamTotals,
+  o: TeamTotals,
+) {
   if (won) ts.won++;
   else ts.lost++;
   if (home) {
@@ -180,7 +192,8 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
 function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameResult, rng: Rng) {
   g.played = true;
   // a game plan is used up once the user plays that opponent
-  if (league.gamePlan && (g.home === league.userTid || g.away === league.userTid) && (g.home === league.gamePlan.oppTid || g.away === league.gamePlan.oppTid)) league.gamePlan = null;
+  if (league.gamePlan && (g.home === league.userTid || g.away === league.userTid) && (g.home === league.gamePlan.oppTid || g.away === league.gamePlan.oppTid))
+    league.gamePlan = null;
   const playoffs = g.type === 'playoffs';
   const home = league.teams[g.home];
   const away = league.teams[g.away];
@@ -295,7 +308,7 @@ function notableNews(league: League, res: GameResult) {
       const p = league.players[bl.pid];
       if (!p) continue;
       const tdbl = [bl.pts, bl.orb + bl.drb, bl.ast, bl.stl, bl.blk].filter((x) => x >= 10).length >= 3;
-      if (bl.pts >= 50 || tdbl && bl.pts >= 20 && (bl.orb + bl.drb >= 12 || bl.ast >= 12) || bl.pts >= 45) {
+      if (bl.pts >= 50 || (tdbl && bl.pts >= 20 && (bl.orb + bl.drb >= 12 || bl.ast >= 12)) || bl.pts >= 45) {
         const team = league.teams[side.tid];
         const opp = league.teams[side === res.home ? res.away.tid : res.home.tid];
         const line = `${bl.pts} pts, ${bl.orb + bl.drb} reb, ${bl.ast} ast`;

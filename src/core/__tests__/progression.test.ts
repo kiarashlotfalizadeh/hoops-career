@@ -28,7 +28,8 @@ describe('training focus (L12)', () => {
       return { ovr: ovr / ps.length, tp: tp / ps.length };
     };
     const balanced = run('balanced');
-    for (const f of ['shooting', 'finishing', 'playmaking', 'perimeterD', 'interiorD', 'rebounding', 'conditioning'] as const) expect(Math.abs(run(f).ovr - balanced.ovr)).toBeLessThan(0.1);
+    for (const f of ['shooting', 'finishing', 'playmaking', 'perimeterD', 'interiorD', 'rebounding', 'conditioning'] as const)
+      expect(Math.abs(run(f).ovr - balanced.ovr)).toBeLessThan(0.1);
     expect(run('shooting').tp).toBeGreaterThan(balanced.tp + 1);
   });
 });
@@ -56,7 +57,9 @@ describe('league anchor (L9)', () => {
     const l = league();
     const rostered = () => Object.values(l.players).filter((p) => p.tid >= 0);
     const spread = () => {
-      const raws = rostered().map((p) => ovrRaw(p.ratings)).sort((a, b) => a - b);
+      const raws = rostered()
+        .map((p) => ovrRaw(p.ratings))
+        .sort((a, b) => a - b);
       return raws[Math.round(0.85 * (raws.length - 1))] - raws[Math.round(0.15 * (raws.length - 1))];
     };
     const before = spread();

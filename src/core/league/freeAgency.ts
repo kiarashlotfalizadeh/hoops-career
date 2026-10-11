@@ -331,11 +331,18 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
   if (!twoWayEligible(p)) return { ok: false, reason: `${playerName(p)} has too much experience for a two-way deal (3 seasons max).` };
   if (twoWayRoster(league, tid).length >= TWO_WAY_MAX) return { ok: false, reason: `All ${TWO_WAY_MAX} two-way slots are taken.` };
   const season = contractSeason(league);
-  if (!wantsTwoWay(league, p, tid)) return { ok: false, reason: `${playerName(p)} wants a standard contract (asking $${(askingContract(league, p, tid).amount / 1000).toFixed(1)}M).` };
+  if (!wantsTwoWay(league, p, tid))
+    return { ok: false, reason: `${playerName(p)} wants a standard contract (asking $${(askingContract(league, p, tid).amount / 1000).toFixed(1)}M).` };
   const amount = twoWaySalary(league, season);
   const years = twoWayYears(p);
   signPlayer(league, p, tid, amount, years, { start: season, twoWay: true });
-  addInbox(league, { from: 'Assistant GM', subject: `${playerName(p)} signed (two-way)`, body: `${playerName(p)} signed a ${years}-year two-way deal at $${(amount / 1000).toFixed(2)}M. He doesn't take a roster spot or count against the cap, and sits at the end of the bench unless we run short. If he earns it, he can be converted to a standard contract when a roster spot is open.`, tone: 'good', link: `/player/${p.pid}` });
+  addInbox(league, {
+    from: 'Assistant GM',
+    subject: `${playerName(p)} signed (two-way)`,
+    body: `${playerName(p)} signed a ${years}-year two-way deal at $${(amount / 1000).toFixed(2)}M. He doesn't take a roster spot or count against the cap, and sits at the end of the bench unless we run short. If he earns it, he can be converted to a standard contract when a roster spot is open.`,
+    tone: 'good',
+    link: `/player/${p.pid}`,
+  });
   return { ok: true, reason: `${playerName(p)} signs a two-way deal!` };
 }
 

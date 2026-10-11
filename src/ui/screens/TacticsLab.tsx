@@ -34,7 +34,9 @@ function sideFor(league: League, tid: number, opp: number, tactics?: Tactics): L
 }
 
 function defaultOpponent(league: League): number {
-  const g = userGameOnDay(league, league.day) ?? league.schedule.filter((x) => !x.played && x.day >= league.day && (x.home === league.userTid || x.away === league.userTid)).sort((a, b) => a.day - b.day)[0];
+  const g =
+    userGameOnDay(league, league.day) ??
+    league.schedule.filter((x) => !x.played && x.day >= league.day && (x.home === league.userTid || x.away === league.userTid)).sort((a, b) => a.day - b.day)[0];
   if (g) return g.home === league.userTid ? g.away : g.home;
   return league.userTid === 0 ? 1 : 0;
 }
@@ -93,10 +95,11 @@ export default function TacticsLab() {
       const seed = (league.rng ^ (opp * 7919)) >>> 0;
       // progress across parallel runs: each run reports its own count, the bar shows the sum
       const done: number[] = [];
-      const track = (slot: number) => progressCallback((n) => {
-        done[slot] = n;
-        if (mounted.current) setProgress(done.reduce((a, x) => a + (x ?? 0), 0));
-      });
+      const track = (slot: number) =>
+        progressCallback((n) => {
+          done[slot] = n;
+          if (mounted.current) setProgress(done.reduce((a, x) => a + (x ?? 0), 0));
+        });
       setProgress(0);
       await withLab(async (w) => {
         if (mode === 'project') {
@@ -104,7 +107,10 @@ export default function TacticsLab() {
           job.result = await w.runLab({ a: sideFor(league, user, opp), b, games, seed }, track(0));
         } else if (mode === 'compare' && baseline) {
           setTotal(games * 2);
-          [job.base, job.result] = await Promise.all([w.runLab({ a: sideFor(league, user, opp, baseline), b, games, seed }, track(0)), w.runLab({ a: sideFor(league, user, opp), b, games, seed }, track(1))]);
+          [job.base, job.result] = await Promise.all([
+            w.runLab({ a: sideFor(league, user, opp, baseline), b, games, seed }, track(0)),
+            w.runLab({ a: sideFor(league, user, opp), b, games, seed }, track(1)),
+          ]);
         } else if (mode === 'counters') {
           const candidates = counterCandidates(league, user, opp);
           const n = Math.max(20, Math.round(games * 0.75));
@@ -146,27 +152,51 @@ export default function TacticsLab() {
   return (
     <main className="page">
       <PageHeader title="Tactics Lab" back backTo="/tactics" sub="Simulate before you commit: every number below comes from real engine games." />
-      <Card title="Opponent" right={<span className="small dim num">{ts.won}-{ts.lost}</span>}>
+      <Card
+        title="Opponent"
+        right={
+          <span className="small dim num">
+            {ts.won}-{ts.lost}
+          </span>
+        }
+      >
         <div className="hscroll">
           {league.teams
             .filter((t) => t.tid !== user)
             .sort((a, b) => (a.tid === opp ? -1 : b.tid === opp ? 1 : a.abbrev.localeCompare(b.abbrev)))
             .map((t) => (
-              <button key={t.tid} onClick={() => setOpp(t.tid)} disabled={busy} aria-pressed={t.tid === opp} aria-label={`${t.region} ${t.name}`} className="col" style={{ alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}>
+              <button
+                key={t.tid}
+                onClick={() => setOpp(t.tid)}
+                disabled={busy}
+                aria-pressed={t.tid === opp}
+                aria-label={`${t.region} ${t.name}`}
+                className="col"
+                style={{ alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}
+              >
                 <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} />
                 <span className="tiny bold">{t.abbrev}</span>
               </button>
             ))}
         </div>
         <div className="small dim2" style={{ marginTop: 8 }}>
-          <b>{oppTeam.region} {oppTeam.name}:</b> {scout.offense[0]} {scout.defense[0]}
+          <b>
+            {oppTeam.region} {oppTeam.name}:
+          </b>{' '}
+          {scout.offense[0]} {scout.defense[0]}
         </div>
-        {scout.weaknesses.length > 0 && <div className="small" style={{ marginTop: 4 }}><span className="good">Weakness:</span> {scout.weaknesses[0]}</div>}
+        {scout.weaknesses.length > 0 && (
+          <div className="small" style={{ marginTop: 4 }}>
+            <span className="good">Weakness:</span> {scout.weaknesses[0]}
+          </div>
+        )}
         {plan && (
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <span className="small dim2">Your game plan for {oppTeam.abbrev} is included:</span>
             {plan.items.map((it) => (
-              <Tag key={it.id} tone="info">{it.label}</Tag>
+              <Tag key={it.id} tone="info">
+                {it.label}
+              </Tag>
             ))}
           </div>
         )}
@@ -185,11 +215,23 @@ export default function TacticsLab() {
       />
       <div className="small dim">
         {mode === 'project' && 'Your current game plan against this opponent: expected result, shot profile, play types and who gets the ball.'}
-        {mode === 'compare' && (baseline ? 'Your tactics before vs after your latest edits, same opponent, same random draws.' : 'Compare plays your tactics from before and after an edit against the same games.')}
+        {mode === 'compare' &&
+          (baseline
+            ? 'Your tactics before vs after your latest edits, same opponent, same random draws.'
+            : 'Compare plays your tactics from before and after an edit against the same games.')}
         {mode === 'counters' && 'The assistant drafts counters for this opponent and tests each one. Apply the ones that move the needle.'}
       </div>
       <div className="row">
-        <Chips value={games} onChange={setGames} disabled={busy} options={[{ id: 20, label: '20 games' }, { id: 40, label: '40' }, { id: 100, label: '100' }]} />
+        <Chips
+          value={games}
+          onChange={setGames}
+          disabled={busy}
+          options={[
+            { id: 20, label: '20 games' },
+            { id: 40, label: '40' },
+            { id: 100, label: '100' },
+          ]}
+        />
         <div className="grow" />
         <button className="btn primary" onClick={() => void start()} disabled={busy || noBaseline}>
           {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run
@@ -201,7 +243,9 @@ export default function TacticsLab() {
           <div className="row">
             <Spinner />
             <span className="small dim2 grow">Simulating {mode === 'counters' ? 'several game plans' : `${games} games`}…</span>
-            <span className="small num dim">{Math.min(progress, total)}/{total}</span>
+            <span className="small num dim">
+              {Math.min(progress, total)}/{total}
+            </span>
           </div>
           <div className="bar" style={{ marginTop: 10 }} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(progress, total)}>
             <div style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%`, transition: 'width 0.2s' }} />
@@ -214,7 +258,10 @@ export default function TacticsLab() {
           <Beaker size={28} style={{ opacity: 0.6 }} />
           <div style={{ marginTop: 8 }}>
             {mode === 'project' && 'Tap Run to simulate this matchup with your current plan.'}
-            {mode === 'compare' && (baseline ? 'Tap Run to play both versions of your tactics against this opponent.' : 'Nothing to compare yet. Change something in Tactics, then tap Compare in the bar that appears.')}
+            {mode === 'compare' &&
+              (baseline
+                ? 'Tap Run to play both versions of your tactics against this opponent.'
+                : 'Nothing to compare yet. Change something in Tactics, then tap Compare in the bar that appears.')}
             {mode === 'counters' && 'Tap Run and the assistant drafts counters for this opponent, then tests each one.'}
           </div>
           {noBaseline && (
@@ -236,7 +283,15 @@ export default function TacticsLab() {
               <Kpi k="Margin" v={signed(shown.base.ptsFor - shown.base.ptsAgainst)} />
             </div>
           </Card>
-          <Card title="Counters, ranked" right={<Help title="Reading these numbers">Each candidate is simulated against the same opponent. The change is in net rating (points per 100 possessions) versus your current plan. The ± range is a 95% interval (two standard errors): a counter is only marked as better or worse when its change clears it. More games mean tighter estimates.</Help>}>
+          <Card
+            title="Counters, ranked"
+            right={
+              <Help title="Reading these numbers">
+                Each candidate is simulated against the same opponent. The change is in net rating (points per 100 possessions) versus your current plan. The ± range is a 95%
+                interval (two standard errors): a counter is only marked as better or worse when its change clears it. More games mean tighter estimates.
+              </Help>
+            }
+          >
             <div className="col" style={{ gap: 8 }}>
               {shown.cands.map((c) => {
                 const good = c.delta > SIGMAS * c.se;
@@ -251,9 +306,13 @@ export default function TacticsLab() {
                     </div>
                     <div className="small dim2">{c.why}</div>
                     <div className="row between" style={{ marginTop: 6 }}>
-                      <span className="tiny dim">95% range ± {f1(SIGMAS * c.se)} · win {p0(c.winPct)}</span>
+                      <span className="tiny dim">
+                        95% range ± {f1(SIGMAS * c.se)} · win {p0(c.winPct)}
+                      </span>
                       {applied.includes(c.id) ? (
-                        <Tag tone="good"><Check size={12} /> Applied</Tag>
+                        <Tag tone="good">
+                          <Check size={12} /> Applied
+                        </Tag>
                       ) : (
                         <div className="row" style={{ gap: 6 }}>
                           <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => (planOther ? setReplace(c) : applyCand(c, 'game', shown.opp))}>
@@ -277,7 +336,8 @@ export default function TacticsLab() {
         {replace && planOther && shown && (
           <>
             <p className="dim2">
-              You have a game plan for {league.teams[planOther.oppTid].abbrev} ({planOther.items.map((it) => it.label).join(', ')}). Only one plan is kept: this replaces it with {replace.label} vs {league.teams[shown.opp].abbrev}.
+              You have a game plan for {league.teams[planOther.oppTid].abbrev} ({planOther.items.map((it) => it.label).join(', ')}). Only one plan is kept: this replaces it with{' '}
+              {replace.label} vs {league.teams[shown.opp].abbrev}.
             </p>
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn grow" onClick={() => setReplace(null)}>
@@ -303,7 +363,12 @@ export default function TacticsLab() {
 function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid: number }) {
   const me = league.teams[league.userTid];
   const them = league.teams[oppTid];
-  const names = rosterNames(Object.keys(r.players).map((pid) => league.players[+pid]).filter(Boolean), { initial: true });
+  const names = rosterNames(
+    Object.keys(r.players)
+      .map((pid) => league.players[+pid])
+      .filter(Boolean),
+    { initial: true },
+  );
   const users = Object.entries(r.players)
     .map(([pid, v]) => ({ p: league.players[+pid], ...v }))
     .filter((x) => x.p)
@@ -322,7 +387,14 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
           <Kpi k="Score" v={`${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)}`} sub={`Pace ${f1(r.pace)}`} />
         </div>
       </Card>
-      <Card title="Shot profile" right={<span className="tiny dim">{me.abbrev} vs {them.abbrev}</span>}>
+      <Card
+        title="Shot profile"
+        right={
+          <span className="tiny dim">
+            {me.abbrev} vs {them.abbrev}
+          </span>
+        }
+      >
         <div className="col" style={{ gap: 10 }}>
           <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} />
           <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} />
@@ -337,8 +409,12 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
           {pts.map(([k, v]) => (
             <div key={k} className="row small">
               <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-              <span className="dim num" style={{ width: 48, textAlign: 'right' }}>{p0(v.freq)}</span>
-              <span className="num bold" style={{ width: 52, textAlign: 'right', color: v.ppp >= 1.1 ? 'var(--good)' : v.ppp < 0.9 ? 'var(--bad)' : undefined }}>{v.ppp.toFixed(2)}</span>
+              <span className="dim num" style={{ width: 48, textAlign: 'right' }}>
+                {p0(v.freq)}
+              </span>
+              <span className="num bold" style={{ width: 52, textAlign: 'right', color: v.ppp >= 1.1 ? 'var(--good)' : v.ppp < 0.9 ? 'var(--bad)' : undefined }}>
+                {v.ppp.toFixed(2)}
+              </span>
             </div>
           ))}
           <div className="tiny dim">Share of possessions · points per possession (league average ≈ 1.13).</div>
@@ -349,10 +425,18 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
           {users.slice(0, 10).map((u) => (
             <div key={u.p.pid} className="row small">
               <span className="grow ellipsis">{names(u.p.pid)}</span>
-              <span className="dim num" style={{ width: 44, textAlign: 'right' }}>{f1(u.min)}m</span>
-              <span className="num" style={{ width: 44, textAlign: 'right' }}>{f1(u.pts)}</span>
-              <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>{p1(u.usg)}</span>
-              <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>{p1(u.ts)}</span>
+              <span className="dim num" style={{ width: 44, textAlign: 'right' }}>
+                {f1(u.min)}m
+              </span>
+              <span className="num" style={{ width: 44, textAlign: 'right' }}>
+                {f1(u.pts)}
+              </span>
+              <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>
+                {p1(u.usg)}
+              </span>
+              <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>
+                {p1(u.ts)}
+              </span>
             </div>
           ))}
           <div className="tiny dim">Minutes, points, usage rate, true shooting per game.</div>
@@ -367,7 +451,9 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
               const Y = v >= 0 ? them.name : me.name;
               return (
                 <div key={k} className="row top small">
-                  <span className={`num bold ${v >= 0 ? 'good' : 'bad'}`} style={{ width: 44 }}>{signed(v)}</span>
+                  <span className={`num bold ${v >= 0 ? 'good' : 'bad'}`} style={{ width: 44 }}>
+                    {signed(v)}
+                  </span>
                   <div className="grow">
                     <div>{tpl.text(X, Y, '')}</div>
                     {v < 0 && tpl.advice && <div className="tiny dim">{adviceFor(tpl.advice, league.settings.complexity)}</div>}
@@ -387,7 +473,11 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
   const { delta: d, se } = pairedDelta(before, after);
   const margin = SIGMAS * se;
   const verdict = d > margin ? 'An improvement' : d < -margin ? 'A step back' : 'Too close to call';
-  const names = rosterNames(Object.keys(after.players).map((pid) => league.players[+pid]).filter(Boolean));
+  const names = rosterNames(
+    Object.keys(after.players)
+      .map((pid) => league.players[+pid])
+      .filter(Boolean),
+  );
   const keys = Array.from(new Set([...Object.keys(before.playTypes), ...Object.keys(after.playTypes)]));
   const players = Object.keys(after.players)
     .map(Number)
@@ -401,9 +491,13 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
         <div className="row between">
           <div>
             <div className="small dim upper bold">Verdict</div>
-            <div className="bold" style={{ fontSize: 20 }}>{verdict}</div>
+            <div className="bold" style={{ fontSize: 20 }}>
+              {verdict}
+            </div>
           </div>
-          <span className={`display num ${d > margin ? 'good' : d < -margin ? 'bad' : 'dim2'}`} style={{ fontSize: 34 }}>{signed(d)}</span>
+          <span className={`display num ${d > margin ? 'good' : d < -margin ? 'bad' : 'dim2'}`} style={{ fontSize: 34 }}>
+            {signed(d)}
+          </span>
         </div>
         <div className="small dim">Net rating change per 100 possessions. 95% range ± {f1(margin)}: only a change bigger than that is called.</div>
         <div className="grid3" style={{ marginTop: 10 }}>
@@ -429,8 +523,12 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
             return (
               <div key={k} className="row small">
                 <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-                <span className="dim num" style={{ width: 92, textAlign: 'right' }}>{p0(b.freq)} → {p0(a.freq)}</span>
-                <span className="num" style={{ width: 92, textAlign: 'right' }}>{b.ppp.toFixed(2)} → {a.ppp.toFixed(2)}</span>
+                <span className="dim num" style={{ width: 92, textAlign: 'right' }}>
+                  {p0(b.freq)} → {p0(a.freq)}
+                </span>
+                <span className="num" style={{ width: 92, textAlign: 'right' }}>
+                  {b.ppp.toFixed(2)} → {a.ppp.toFixed(2)}
+                </span>
               </div>
             );
           })}
@@ -441,8 +539,12 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
           {players.map(({ p, a, b }) => (
             <div key={p.pid} className="row small">
               <span className="grow ellipsis">{names(p.pid)}</span>
-              <span className="num dim nowrap" style={{ width: 120, textAlign: 'right' }}>{b ? p1(b.usg) : '-'} → {p1(a.usg)}</span>
-              <span className="num" style={{ width: 70, textAlign: 'right' }}>{f1(a.pts)} pts</span>
+              <span className="num dim nowrap" style={{ width: 120, textAlign: 'right' }}>
+                {b ? p1(b.usg) : '-'} → {p1(a.usg)}
+              </span>
+              <span className="num" style={{ width: 70, textAlign: 'right' }}>
+                {f1(a.pts)} pts
+              </span>
             </div>
           ))}
         </div>

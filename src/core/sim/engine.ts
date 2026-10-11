@@ -176,8 +176,38 @@ interface Box {
 }
 
 const newBox = (): Box => ({
-  sec: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0,
-  pts: 0, pm: 0, rimM: 0, rimA: 0, midM: 0, midA: 0, c3M: 0, c3A: 0, astM: 0, onPoss: 0, onPF: 0, onPA: 0, tFga: 0, tFta: 0, tTov: 0, acts: 0, tActs: 0, tFgm: 0,
+  sec: 0,
+  fgm: 0,
+  fga: 0,
+  tpm: 0,
+  tpa: 0,
+  ftm: 0,
+  fta: 0,
+  orb: 0,
+  drb: 0,
+  ast: 0,
+  stl: 0,
+  blk: 0,
+  tov: 0,
+  pf: 0,
+  pts: 0,
+  pm: 0,
+  rimM: 0,
+  rimA: 0,
+  midM: 0,
+  midA: 0,
+  c3M: 0,
+  c3A: 0,
+  astM: 0,
+  onPoss: 0,
+  onPF: 0,
+  onPA: 0,
+  tFga: 0,
+  tFta: 0,
+  tTov: 0,
+  acts: 0,
+  tActs: 0,
+  tFgm: 0,
 });
 
 export interface SP {
@@ -576,13 +606,16 @@ export class GameSim {
     const on = t.on;
     t.spacing = on.reduce((a, p) => a + p.c.spacing, 0) / on.length;
     const passes = on.map((p) => p.c.passing).sort((a, b) => b - a);
-    t.passQ = (passes[0] * 0.45 + passes[1] * 0.35 + passes[2] * 0.2) || 50;
+    t.passQ = passes[0] * 0.45 + passes[1] * 0.35 + passes[2] * 0.2 || 50;
     t.helpQ = on.reduce((a, p) => a + p.c.helpD, 0) / on.length;
     t.pressQ = on.reduce((a, p) => a + (p.c.steal + p.c.perDef) / 2, 0) / on.length;
     t.feelQ = on.reduce((a, p) => a + 0.6 * p.r.oiq + 0.25 * p.r.pas + 0.15 * p.r.hnd, 0) / on.length;
     t.defQ = on.reduce((a, p) => a + 0.5 * p.r.diq + 0.3 * p.r.perD + 0.2 * p.r.intD, 0) / on.length;
     t.speed = on.reduce((a, p) => a + p.r.spd, 0) / on.length;
-    t.lineupKey = on.map((p) => p.pid).sort((a, b) => a - b).join('-');
+    t.lineupKey = on
+      .map((p) => p.pid)
+      .sort((a, b) => a - b)
+      .join('-');
     t.ls = null;
     for (const a of ACTION_LIST) t.cap[a] = this.capability(t, a);
   }
@@ -823,8 +856,7 @@ export class GameSim {
     const avail = (p: SP) => p.out === 0 && !this.capped(p);
     let desired: SP[];
     const margin = Math.abs(this.T[0].score - this.T[1].score);
-    const garbage =
-      t.t.manage.garbageTime && this.q >= 4 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16));
+    const garbage = t.t.manage.garbageTime && this.q >= 4 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16));
     const ordered = t.players.filter(avail);
     if (garbage && ordered.length >= 8) {
       // deep bench finishes blowouts
@@ -858,9 +890,7 @@ export class GameSim {
     const bench = ordered.filter((p) => !desired.includes(p) && (crunch || p.fouls < limit));
     desired = desired.map((p) => {
       if (p.energy >= fatigueLine || crunch) return p;
-      const alt = bench
-        .filter((b) => b.energy > 0.82 && b.big === p.big && (!playoffs || b.planMin > 0))
-        .sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
+      const alt = bench.filter((b) => b.energy > 0.82 && b.big === p.big && (!playoffs || b.planMin > 0)).sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
       if (alt) {
         bench.splice(bench.indexOf(alt), 1);
         return alt;
@@ -906,9 +936,7 @@ export class GameSim {
     const locked = (p: SP) => (t.subLock.get(p.pid) ?? -1) > this.elapsed;
     if (t.manualSubs || t.subLock.size) {
       const keep = t.on.filter((p) => p.out === 0 && (t.manualSubs || locked(p)));
-      const lockedOut = new Set(
-        t.players.filter((p) => !p.on && locked(p)).map((p) => p.pid),
-      );
+      const lockedOut = new Set(t.players.filter((p) => !p.on && locked(p)).map((p) => p.pid));
       const rest = desired.filter((p) => !keep.includes(p) && !lockedOut.has(p.pid));
       desired = [...keep, ...rest].slice(0, 5);
       if (desired.length < 5) {
@@ -1191,8 +1219,7 @@ export class GameSim {
 
     // ---- full court press
     let pressBroken = false;
-    const pressOn =
-      def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'));
+    const pressOn = def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'));
     if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'start') && !late.hold) {
       const res = this.press(off, def);
       if (res === 'to') return;
@@ -1289,9 +1316,7 @@ export class GameSim {
     }
     const hack = def.t.manage.hackThreshold;
     if (!fouled && hack > 0 && !(final && clock < 120)) {
-      const target = off.on
-        .filter((p) => p.ftPct * 100 < hack)
-        .sort((a, b) => a.ftPct - b.ftPct)[0];
+      const target = off.on.filter((p) => p.ftPct * 100 < hack).sort((a, b) => a.ftPct - b.ftPct)[0];
       if (target && this.rng.chance(0.8)) {
         fouled = target;
         tag = 'hack';
@@ -1397,14 +1422,28 @@ export class GameSim {
       this.shoot(off, def, { shooter: h, zone: 'rim', open: -0.08 + adv * 0.3, contest: this.rimContester(def, d, 0.8), assister: null, finish: 'transition' });
     } else if (c === 1) {
       this.passStep(h, trailer);
-      this.shoot(off, def, { shooter: trailer, zone: this.rng.chance(0.4) ? 'c3' : 'ab3', open: 0.08 + adv * 0.25, contest: this.defOf(def, trailer), assister: h, finish: 'transition' });
+      this.shoot(off, def, {
+        shooter: trailer,
+        zone: this.rng.chance(0.4) ? 'c3' : 'ab3',
+        open: 0.08 + adv * 0.25,
+        contest: this.defOf(def, trailer),
+        assister: h,
+        finish: 'transition',
+      });
     } else if (c === 2) {
       this.shoot(off, def, { shooter: h, zone: 'ab3', open: 0.1 + adv * 0.2, contest: d, assister: null, finish: 'transition', pullup: true });
     } else {
       const runners = off.on.filter((p) => p !== h);
       const runner = runners[this.rng.weighted(runners.map((p) => p.c.rim + p.r.spd))];
       this.passStep(h, runner);
-      this.shoot(off, def, { shooter: runner, zone: 'rim', open: 0.06 + adv * 0.3, contest: this.rimContester(def, this.defOf(def, runner), 0.8), assister: h, finish: 'transition' });
+      this.shoot(off, def, {
+        shooter: runner,
+        zone: 'rim',
+        open: 0.06 + adv * 0.3,
+        contest: this.rimContester(def, this.defOf(def, runner), 0.8),
+        assister: h,
+        finish: 'transition',
+      });
     }
   }
 
@@ -1479,7 +1518,7 @@ export class GameSim {
         return Math.pow((s[0] + s[1]) / 2 / 55, 2);
       }
       case 'motion':
-        return 1.5 * Math.pow(((t.passQ + t.spacing) / 2) / 50, 1.5);
+        return 1.5 * Math.pow((t.passQ + t.spacing) / 2 / 50, 1.5);
     }
   }
 
@@ -1572,7 +1611,7 @@ export class GameSim {
   private blowBy(def: ST, h: SP, from: 'pnr' | 'handoff' | 'iso'): number {
     const pr = this.pressure(def);
     const edge = K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2;
-    if (edge !== 0) this.impact('pressure_blowby', 1 - def.side as 0 | 1, edge * K.advPts[from], h.pid);
+    if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, edge * K.advPts[from], h.pid);
     return edge;
   }
   /** Live-ball steal by `d` with base chance `base`, scaled by his steal tendency; else a dead-ball turnover. */
@@ -1736,8 +1775,16 @@ export class GameSim {
       handlerShoots * Math.pow(H.c.pu3 / 50, 2.4) * pf.three * 0.27 * fr * H.t3 * (1 + pullOpen), // pull-up 3
       handlerShoots * Math.pow(H.c.midShot / 50, 2.2) * pf.mid * 0.22 * fr * Math.sqrt(H.tm) * (1 + pullOpen), // pull-up 2
       handlerShoots * Math.pow(H.c.rim / 50, 1.6) * pf.rim * 0.32 * fr * H.td * (1 + advH * 0.4 + rimOpen * 0.5), // drive
-      Math.pow(H.c.passing / 50, 1.2) * this.passT(H) * Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) * (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) * 0.85 * (1 + rollOpen) * (S.c.pop > S.c.roll ? 0.4 : 1), // roll
-      S.c.pop > 50 ? Math.pow(H.c.passing / 50, 1.2) * this.passT(H) * Math.pow(S.c.pop / 50, 2) * (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) * 0.45 * pf.three * S.t3 * (1 + popOpen) : 0.01, // pop
+      Math.pow(H.c.passing / 50, 1.2) *
+        this.passT(H) *
+        Math.pow(Math.max(S.c.roll, 5) / 50, 1.5) *
+        (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) *
+        0.85 *
+        (1 + rollOpen) *
+        (S.c.pop > S.c.roll ? 0.4 : 1), // roll
+      S.c.pop > 50
+        ? Math.pow(H.c.passing / 50, 1.2) * this.passT(H) * Math.pow(S.c.pop / 50, 2) * (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) * 0.45 * pf.three * S.t3 * (1 + popOpen)
+        : 0.01, // pop
       Math.pow(H.c.passing / 50, 1.3) * this.passT(H) * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
@@ -1749,12 +1796,29 @@ export class GameSim {
         this.shoot(off, def, { shooter: H, zone: 'ab3', open: advOpen * 0.7 + pullOpen - 0.12 + open, contest: dH, assister: null, finish: 'pnrBH', tags: tagsPull, pullup: true });
         return 'done';
       case 1:
-        this.shoot(off, def, { shooter: H, zone: this.midOr(H, 0.55), open: advOpen + pullOpen + open, contest: dH, assister: null, finish: 'pnrBH', tags: tagsPull, pullup: true });
+        this.shoot(off, def, {
+          shooter: H,
+          zone: this.midOr(H, 0.55),
+          open: advOpen + pullOpen + open,
+          contest: dH,
+          assister: null,
+          finish: 'pnrBH',
+          tags: tagsPull,
+          pullup: true,
+        });
         return 'done';
       case 2: {
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: H.pid });
         const zone: ShotZone = this.rimOr(H, 0.68);
-        this.shoot(off, def, { shooter: H, zone, open: advOpen + rimOpen + open, contest: zone === 'rim' ? this.rimContester(def, dH, cov === 'drop' ? 1.5 : 1) : dS, assister: null, finish: 'pnrBH', tags: tagsRim });
+        this.shoot(off, def, {
+          shooter: H,
+          zone,
+          open: advOpen + rimOpen + open,
+          contest: zone === 'rim' ? this.rimContester(def, dH, cov === 'drop' ? 1.5 : 1) : dS,
+          assister: null,
+          finish: 'pnrBH',
+          tags: tagsRim,
+        });
         return 'done';
       }
       case 3: {
@@ -1764,11 +1828,27 @@ export class GameSim {
           const sh = this.kickTarget(off, H, S);
           this.passStep(S, sh);
           const d = this.defOf(def, sh);
-          this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: 0.12 + Math.max(0, rollOpen) * 0.5 + open, contest: d, assister: S, finish: 'spotup', tags: tagsRoll });
+          this.spotUp(off, def, {
+            shooter: sh,
+            zone: this.cornerOrWing(off, sh),
+            open: 0.12 + Math.max(0, rollOpen) * 0.5 + open,
+            contest: d,
+            assister: S,
+            finish: 'spotup',
+            tags: tagsRoll,
+          });
           return 'done';
         }
         const rollAdv = (S.c.roll - dS.c.intDef * this.dq(dS)) / 25;
-        this.shoot(off, def, { shooter: S, zone: this.rimOr(S, 0.75), open: rollAdv * 0.4 + rollOpen - 0.32 + open, contest: cov === 'blitz' ? this.rimContester(def, null, 1) : this.rimContester(def, dS, cov === 'drop' ? 1.3 : 1), assister: H, finish: 'pnrRoll', tags: tagsRoll });
+        this.shoot(off, def, {
+          shooter: S,
+          zone: this.rimOr(S, 0.75),
+          open: rollAdv * 0.4 + rollOpen - 0.32 + open,
+          contest: cov === 'blitz' ? this.rimContester(def, null, 1) : this.rimContester(def, dS, cov === 'drop' ? 1.3 : 1),
+          assister: H,
+          finish: 'pnrRoll',
+          tags: tagsRoll,
+        });
         return 'done';
       }
       case 4: {
@@ -1781,7 +1861,15 @@ export class GameSim {
         this.passStep(H, sh);
         const d = this.defOf(def, sh);
         const closeout = (d.c.perDef * this.dq(d) - 50) / 200;
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: kickOpen + advOpen * 0.4 - closeout + open, contest: d, assister: H, finish: 'spotup', tags: tagsKick });
+        this.spotUp(off, def, {
+          shooter: sh,
+          zone: this.cornerOrWing(off, sh),
+          open: kickOpen + advOpen * 0.4 - closeout + open,
+          contest: d,
+          assister: H,
+          finish: 'spotup',
+          tags: tagsKick,
+        });
         return 'done';
       }
       default:
@@ -1790,7 +1878,12 @@ export class GameSim {
   }
 
   private kickTarget(off: ST, ...exclude: SP[]): SP {
-    const ws = off.on.map((p) => (exclude.includes(p) ? 0 : (Math.pow(Math.max(5, p.c.c3) / 50, 2) * Math.sqrt(p.t3) * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)) / Math.sqrt(p.tcr)));
+    const ws = off.on.map((p) =>
+      exclude.includes(p)
+        ? 0
+        : (Math.pow(Math.max(5, p.c.c3) / 50, 2) * Math.sqrt(p.t3) * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)) /
+          Math.sqrt(p.tcr),
+    );
     return off.on[this.rng.weighted(ws)];
   }
 
@@ -1876,7 +1969,18 @@ export class GameSim {
       case 0: {
         const zone: ShotZone = this.rimOr(A, 0.62);
         const hp = -help * 0.25;
-        this.shoot(off, def, { shooter: A, zone, open: advOpen + spacing * 0.5 + hp - 0.08, contest: zone === 'rim' ? this.rimContester(def, D) : D, assister: null, finish, tags: tagged([['help_paint', hp], ['spacing', spacing * 0.5]]) });
+        this.shoot(off, def, {
+          shooter: A,
+          zone,
+          open: advOpen + spacing * 0.5 + hp - 0.08,
+          contest: zone === 'rim' ? this.rimContester(def, D) : D,
+          assister: null,
+          finish,
+          tags: tagged([
+            ['help_paint', hp],
+            ['spacing', spacing * 0.5],
+          ]),
+        });
         return 'done';
       }
       case 1:
@@ -1891,7 +1995,15 @@ export class GameSim {
         const sh = this.kickTarget(off, A);
         this.passStep(A, sh);
         const ko = 0.15 + Math.max(0, help) * 0.3;
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: ko + advOpen * 0.3, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.3]] });
+        this.spotUp(off, def, {
+          shooter: sh,
+          zone: this.cornerOrWing(off, sh),
+          open: ko + advOpen * 0.3,
+          contest: this.defOf(def, sh),
+          assister: A,
+          finish: 'spotup',
+          tags: [['help_kick', Math.max(0, help) * 0.3]],
+        });
         return 'done';
       }
       default:
@@ -1923,7 +2035,15 @@ export class GameSim {
       return 'done';
     }
     // tries to split the double anyway
-    this.shoot(off, def, { shooter: A, zone: this.midOr(A, 0.5), open: -0.55, contest: this.defOf(def, A), assister: null, finish: from === 'post' ? 'post' : 'iso', tags: [['star_double', -0.4]] });
+    this.shoot(off, def, {
+      shooter: A,
+      zone: this.midOr(A, 0.5),
+      open: -0.55,
+      contest: this.defOf(def, A),
+      assister: null,
+      finish: from === 'post' ? 'post' : 'iso',
+      tags: [['star_double', -0.4]],
+    });
     return 'done';
   }
 
@@ -1988,8 +2108,18 @@ export class GameSim {
         const cutter = this.rng.chance(0.3);
         const tgt = cutter ? off.on.filter((p) => p !== A).sort((a, b) => b.c.cut - a.c.cut)[0] : this.kickTarget(off, A);
         this.passStep(A, tgt);
-        if (cutter) this.shoot(off, def, { shooter: tgt, zone: 'rim', open: 0.25 + advOpen * 0.3, contest: this.rimContester(def, this.defOf(def, tgt), 1.2), assister: A, finish: 'cut' });
-        else this.spotUp(off, def, { shooter: tgt, zone: this.cornerOrWing(off, tgt), open: 0.2 + Math.max(0, help) * 0.25, contest: this.defOf(def, tgt), assister: A, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.25]] });
+        if (cutter)
+          this.shoot(off, def, { shooter: tgt, zone: 'rim', open: 0.25 + advOpen * 0.3, contest: this.rimContester(def, this.defOf(def, tgt), 1.2), assister: A, finish: 'cut' });
+        else
+          this.spotUp(off, def, {
+            shooter: tgt,
+            zone: this.cornerOrWing(off, tgt),
+            open: 0.2 + Math.max(0, help) * 0.25,
+            contest: this.defOf(def, tgt),
+            assister: A,
+            finish: 'spotup',
+            tags: [['help_kick', Math.max(0, help) * 0.25]],
+          });
         return 'done';
       }
       default:
@@ -2051,7 +2181,15 @@ export class GameSim {
         return 'done';
       case 2:
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: Sh.pid });
-        this.shoot(off, def, { shooter: Sh, zone: 'rim', open: advOpen * 0.6 - this.help(def) * 0.2, contest: this.rimContester(def, D), assister: B, finish, tags: [['help_paint', -this.help(def) * 0.2]] });
+        this.shoot(off, def, {
+          shooter: Sh,
+          zone: 'rim',
+          open: advOpen * 0.6 - this.help(def) * 0.2,
+          contest: this.rimContester(def, D),
+          assister: B,
+          finish,
+          tags: [['help_paint', -this.help(def) * 0.2]],
+        });
         return 'done';
       case 3:
         this.passStep(Sh, B);
@@ -2091,7 +2229,7 @@ export class GameSim {
     const backdoor = Math.max(0, pr) * 0.3;
     const zoneCut = zone ? -0.25 : 0;
     const opts = [
-      cutW.reduce((a, b) => a + b, 0) / 4 * 0.55 * (1 + backdoor + zoneCut) * pf.rim, // cut
+      (cutW.reduce((a, b) => a + b, 0) / 4) * 0.55 * (1 + backdoor + zoneCut) * pf.rim, // cut
       Math.pow(off.spacing / 50, 1.2) * 0.9 * pf.three * (zone ? 1.35 : 1), // swing for spot-up 3
       0.55 * pf.rim * (1 + this.spacingBonus(off)), // drive & kick
       Math.pow(Math.max(...off.on.map((p) => p.c.midShot)) / 50, 2) * 0.25 * pf.mid, // flare/mid
@@ -2126,7 +2264,15 @@ export class GameSim {
           tags.push(['help_kick', help * 0.15]);
         }
         const d = this.defOf(def, sh);
-        this.spotUp(off, def, { shooter: sh, zone: def.t.defense.scheme === 'zone23' && this.rng.chance(0.45) ? 'c3' : this.cornerOrWing(off, sh), open: o, contest: d, assister: passer, finish: 'spotup', tags });
+        this.spotUp(off, def, {
+          shooter: sh,
+          zone: def.t.defense.scheme === 'zone23' && this.rng.chance(0.45) ? 'c3' : this.cornerOrWing(off, sh),
+          open: o,
+          contest: d,
+          assister: passer,
+          finish: 'spotup',
+          tags,
+        });
         return 'done';
       }
       case 2: {
@@ -2140,10 +2286,29 @@ export class GameSim {
           const sh = this.kickTarget(off, dr);
           this.passStep(dr, sh);
           const ko = 0.12 + Math.max(0, help) * 0.3 + Math.max(0, dAdv) * 0.2;
-          this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: ko, contest: this.defOf(def, sh), assister: dr, finish: 'spotup', tags: [['help_kick', Math.max(0, help) * 0.3]] });
+          this.spotUp(off, def, {
+            shooter: sh,
+            zone: this.cornerOrWing(off, sh),
+            open: ko,
+            contest: this.defOf(def, sh),
+            assister: dr,
+            finish: 'spotup',
+            tags: [['help_kick', Math.max(0, help) * 0.3]],
+          });
         } else {
           const zoneS: ShotZone = this.rimOr(dr, 0.6);
-          this.shoot(off, def, { shooter: dr, zone: zoneS, open: dAdv * 0.35 - help * 0.25 + this.spacingBonus(off) * 0.4, contest: zoneS === 'rim' ? this.rimContester(def, d) : d, assister: passer, finish: 'spotup', tags: [['help_paint', -help * 0.25], ['spacing', this.spacingBonus(off) * 0.4]] });
+          this.shoot(off, def, {
+            shooter: dr,
+            zone: zoneS,
+            open: dAdv * 0.35 - help * 0.25 + this.spacingBonus(off) * 0.4,
+            contest: zoneS === 'rim' ? this.rimContester(def, d) : d,
+            assister: passer,
+            finish: 'spotup',
+            tags: [
+              ['help_paint', -help * 0.25],
+              ['spacing', this.spacingBonus(off) * 0.4],
+            ],
+          });
         }
         return 'done';
       }
@@ -2216,7 +2381,10 @@ export class GameSim {
     if (!bench.length) return;
     const score = (x: SP) => (this.capped(x) ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
-    this.applySub(t, t.on.map((x) => (x === p ? rep : x)));
+    this.applySub(
+      t,
+      t.on.map((x) => (x === p ? rep : x)),
+    );
   }
 
   private turnover(off: ST, def: ST, handler: SP, stealer: SP | null, finish: FinishType | 'press' | 'transition' | 'shotclock') {
@@ -2242,8 +2410,7 @@ export class GameSim {
       this.cur!.steps.push({ k: stealer ? 'steal' : 'to', pid: handler.pid, pid2: stealer?.pid });
     }
     if (charge) this.chargeFoul(off, handler);
-    const ft: FinishType =
-      finish === 'press' || finish === 'shotclock' ? 'misc' : finish === 'transition' ? 'transition' : finish;
+    const ft: FinishType = finish === 'press' || finish === 'shotclock' ? 'misc' : finish === 'transition' ? 'transition' : finish;
     this.ctx = live ? 'steal' : 'deadTO';
     this.finishPoss(off, def, ft, true);
   }
@@ -2587,7 +2754,14 @@ export class GameSim {
     // immediate putback for bigs near the rim
     if (rebounder && this.rng.chance(clamp(0.25 + (rebounder.r.hgt - 50) / 100 + (rebounder.c.rim - 50) / 150, 0.1, 0.65))) {
       this.tick(this.rng.uniform(0.8, 2.5));
-      this.shoot(off, def, { shooter: rebounder, zone: this.rimOr(rebounder, 0.75), open: this.rng.normal(-0.3, 0.3), contest: this.rimContester(def, this.defOf(def, rebounder), 1.2), assister: null, finish: 'putback' });
+      this.shoot(off, def, {
+        shooter: rebounder,
+        zone: this.rimOr(rebounder, 0.75),
+        open: this.rng.normal(-0.3, 0.3),
+        contest: this.rimContester(def, this.defOf(def, rebounder), 1.2),
+        assister: null,
+        finish: 'putback',
+      });
       return;
     }
     // reset with a 14-second shot clock
@@ -2699,7 +2873,7 @@ export class GameSim {
         pts: p.b.pts,
         pm: p.b.pm,
         energy: Math.round(p.energy * 100) / 100,
-        dnp: p.played ? undefined : p.dnp ?? "Coach's decision",
+        dnp: p.played ? undefined : (p.dnp ?? "Coach's decision"),
       }));
       return {
         tid: t.tid,
@@ -2719,7 +2893,19 @@ export class GameSim {
     for (const t of this.T) {
       for (const p of t.players) {
         const b = p.b;
-        const gmsc = b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.orb + 0.3 * b.drb + b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov + (t.score > this.T[1 - t.side].score ? 2 : 0);
+        const gmsc =
+          b.pts +
+          0.4 * b.fgm -
+          0.7 * b.fga -
+          0.4 * (b.fta - b.ftm) +
+          0.7 * b.orb +
+          0.3 * b.drb +
+          b.stl +
+          0.7 * b.ast +
+          0.7 * b.blk -
+          0.4 * b.pf -
+          b.tov +
+          (t.score > this.T[1 - t.side].score ? 2 : 0);
         if (gmsc > best) {
           best = gmsc;
           pog = p.pid;

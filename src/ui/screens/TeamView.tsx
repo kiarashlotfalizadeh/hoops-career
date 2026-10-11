@@ -74,7 +74,10 @@ function Hero({ league, tid }: { league: League; tid: number }) {
   const outcome = seasonOutcome(league, tid, ts);
   return (
     <>
-      <div className="lg-team-hero" style={{ background: `radial-gradient(500px 220px at 100% 0%, ${c1}66, transparent 70%), linear-gradient(160deg, ${shade(c1, -0.55)}, var(--surface) 75%)` }}>
+      <div
+        className="lg-team-hero"
+        style={{ background: `radial-gradient(500px 220px at 100% 0%, ${c1}66, transparent 70%), linear-gradient(160deg, ${shade(c1, -0.55)}, var(--surface) 75%)` }}
+      >
         <div className="wm">
           <TeamLogo tid={tid} size={170} />
         </div>
@@ -231,7 +234,11 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
       {groups.map((g) =>
         g.list.length ? (
           <div key={g.label} className="col" style={{ gap: 6 }}>
-            <SectionLabel right={g.label === 'Starters' ? <span className="tiny dim">{anyCur ? `${seasonLabel(league.season)} per game` : 'Last season per game'}</span> : undefined}>{g.label}</SectionLabel>
+            <SectionLabel
+              right={g.label === 'Starters' ? <span className="tiny dim">{anyCur ? `${seasonLabel(league.season)} per game` : 'Last season per game'}</span> : undefined}
+            >
+              {g.label}
+            </SectionLabel>
             <Card className="flush lg-flat">
               {g.list.map((p) => (
                 <PlayerRow key={p.pid} league={league} p={p} name={nameOf(p.pid)} min={team.rotation.minutes[p.pid]} />
@@ -246,7 +253,7 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
 
 function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: string; min?: number }) {
   const cur = playerSeason(p, league.season);
-  const line: PerGame | null = cur && cur.gp > 0 ? cur : latestLine(league, p)?.pg ?? null;
+  const line: PerGame | null = cur && cur.gp > 0 ? cur : (latestLine(league, p)?.pg ?? null);
   const age = league.season - p.bornYear;
   return (
     <Link to={`/player/${p.pid}`} className="lg-prow">
@@ -290,10 +297,25 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
     [league, tid, v],
   );
   const cols = useMemo<Col<{ p: Player; pg: PerGame }>[]>(() => {
-    const nameOf = rosterNames(rows.map((r) => r.p), { initial: true });
+    const nameOf = rosterNames(
+      rows.map((r) => r.p),
+      { initial: true },
+    );
     const pc = (x: number | string) => (typeof x === 'number' && x >= 0 ? (x * 100).toFixed(1) : '-');
     return [
-      { key: 'n', label: 'Player', left: true, sticky: true, get: (r) => r.p.lastName, fmt: (_x, r) => <span className="lg-pcell"><span className="n">{nameOf(r.p.pid)}</span><span className="tiny dim">{r.p.pos}</span></span> },
+      {
+        key: 'n',
+        label: 'Player',
+        left: true,
+        sticky: true,
+        get: (r) => r.p.lastName,
+        fmt: (_x, r) => (
+          <span className="lg-pcell">
+            <span className="n">{nameOf(r.p.pid)}</span>
+            <span className="tiny dim">{r.p.pos}</span>
+          </span>
+        ),
+      },
       { key: 'gp', label: 'GP', get: (r) => r.pg.gp },
       { key: 'min', label: 'MIN', get: (r) => r.pg.min, fmt: (x) => f1(x as number) },
       { key: 'pts', label: 'PTS', get: (r) => r.pg.pts, fmt: (x) => <b>{f1(x as number)}</b> },
@@ -310,7 +332,12 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
       { key: 'pm', label: '+/-', get: (r) => r.pg.pm, fmt: (x) => <span className={(x as number) > 0 ? 'good' : (x as number) < 0 ? 'bad' : ''}>{signed(x as number)}</span> },
     ];
   }, [rows]);
-  if (!rows.length) return <Card><Empty>No games played this season yet.</Empty></Card>;
+  if (!rows.length)
+    return (
+      <Card>
+        <Empty>No games played this season yet.</Empty>
+      </Card>
+    );
   return <StatTable rows={rows} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} />;
 }
 
@@ -343,24 +370,22 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
       },
       { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (x) => <Ovr v={x as number} size="sm" /> },
       { key: 'age', label: 'Age', get: (p) => league.season - p.bornYear },
-      ...seasons.map(
-        (s, i): Col<Player> => ({
-          key: `s${i}`,
-          label: seasonLabel(s).slice(2),
-          get: (p) => salaryFor(p, s),
-          fmt: (x, p) => {
-            const amt = x as number;
-            if (!amt) return <span className="dim">–</span>;
-            const opt = p.contract.option && contractExp(p.contract) === s ? (p.contract.option === 'player' ? ' PO' : ' TO') : '';
-            return (
-              <span className={p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
-                {moneyM(amt)}
-                {opt && <span className="tiny warn">{opt}</span>}
-              </span>
-            );
-          },
-        }),
-      ),
+      ...seasons.map((s, i): Col<Player> => ({
+        key: `s${i}`,
+        label: seasonLabel(s).slice(2),
+        get: (p) => salaryFor(p, s),
+        fmt: (x, p) => {
+          const amt = x as number;
+          if (!amt) return <span className="dim">–</span>;
+          const opt = p.contract.option && contractExp(p.contract) === s ? (p.contract.option === 'player' ? ' PO' : ' TO') : '';
+          return (
+            <span className={p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
+              {moneyM(amt)}
+              {opt && <span className="tiny warn">{opt}</span>}
+            </span>
+          );
+        },
+      })),
       { key: 'exp', label: 'Exp', get: (p) => contractExp(p.contract) },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -373,12 +398,20 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
       <div className="grid4">
         {seasons.map((s) => {
           const pay = payroll(league, tid, s);
-          return <Kpi key={s} k={seasonLabel(s)} v={<span style={{ fontSize: 18 }}>{moneyM(pay, 0)}</span>} sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'} />;
+          return (
+            <Kpi
+              key={s}
+              k={seasonLabel(s)}
+              v={<span style={{ fontSize: 18 }}>{moneyM(pay, 0)}</span>}
+              sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'}
+            />
+          );
         })}
       </div>
       <StatTable rows={rows} cols={cols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
       <div className="lg-note">
-        PO = player option, TO = team option on the final year.{twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from released players counts toward payroll.
+        PO = player option, TO = team option on the final year.{twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from
+        released players counts toward payroll.
       </div>
     </>
   );
@@ -409,9 +442,22 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
   const star = t.defense.starTarget !== null ? league.players[t.defense.starTarget] : undefined;
   return (
     <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
-      <Card title={<h3><Swords size={14} style={{ verticalAlign: -2 }} /> Offense</h3>} right={t.manual ? <span className="tag">Custom</span> : undefined}>
-        <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase' }}>{off?.name ?? 'Custom'}</div>
-        {off && <div className="small dim2" style={{ marginTop: 2 }}>{off.tagline}. {off.description}</div>}
+      <Card
+        title={
+          <h3>
+            <Swords size={14} style={{ verticalAlign: -2 }} /> Offense
+          </h3>
+        }
+        right={t.manual ? <span className="tag">Custom</span> : undefined}
+      >
+        <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase' }}>
+          {off?.name ?? 'Custom'}
+        </div>
+        {off && (
+          <div className="small dim2" style={{ marginTop: 2 }}>
+            {off.tagline}. {off.description}
+          </div>
+        )}
         <div className="col" style={{ gap: 2, marginTop: 12 }}>
           <Meter label="Pace" value={t.offense.pace} />
           <Meter label="Transition" value={t.offense.transition} />
@@ -433,13 +479,34 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
           </div>
         )}
       </Card>
-      <Card title={<h3><ShieldAlert size={14} style={{ verticalAlign: -2 }} /> Defense</h3>}>
-        <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase' }}>{def?.name ?? 'Custom'}</div>
-        {def && <div className="small dim2" style={{ marginTop: 2 }}>{def.tagline}. {def.description}</div>}
+      <Card
+        title={
+          <h3>
+            <ShieldAlert size={14} style={{ verticalAlign: -2 }} /> Defense
+          </h3>
+        }
+      >
+        <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase' }}>
+          {def?.name ?? 'Custom'}
+        </div>
+        {def && (
+          <div className="small dim2" style={{ marginTop: 2 }}>
+            {def.tagline}. {def.description}
+          </div>
+        )}
         <div className="col" style={{ gap: 0, marginTop: 10 }}>
-          <div className="lg-kv"><span className="k">Scheme</span><span className="bold">{SCHEME_META[t.defense.scheme].label}</span></div>
-          <div className="lg-kv"><span className="k">Ball screens</span><span className="bold">{COVERAGE_META[t.defense.pnr].label}</span></div>
-          <div className="lg-kv"><span className="k">Press</span><span className="bold">{PRESS_META[t.defense.press].label}</span></div>
+          <div className="lg-kv">
+            <span className="k">Scheme</span>
+            <span className="bold">{SCHEME_META[t.defense.scheme].label}</span>
+          </div>
+          <div className="lg-kv">
+            <span className="k">Ball screens</span>
+            <span className="bold">{COVERAGE_META[t.defense.pnr].label}</span>
+          </div>
+          <div className="lg-kv">
+            <span className="k">Press</span>
+            <span className="bold">{PRESS_META[t.defense.press].label}</span>
+          </div>
           <div className="lg-kv">
             <span className="k">Star plan</span>
             <span className="bold ellipsis">
@@ -454,18 +521,36 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
           <Meter label="Get back" value={t.defense.getBack} color="var(--warn)" />
           <Meter label="Physicality" value={t.defense.physicality} color="var(--warn)" />
         </div>
-        {t.defense.switchOffBall && <div style={{ marginTop: 10 }}><span className="tag warn">Switches off the ball</span></div>}
+        {t.defense.switchOffBall && (
+          <div style={{ marginTop: 10 }}>
+            <span className="tag warn">Switches off the ball</span>
+          </div>
+        )}
       </Card>
-      <Card title={<h3><ClipboardList size={14} style={{ verticalAlign: -2 }} /> Coaching staff</h3>}>
+      <Card
+        title={
+          <h3>
+            <ClipboardList size={14} style={{ verticalAlign: -2 }} /> Coaching staff
+          </h3>
+        }
+      >
         <div className="row" style={{ gap: 12 }}>
           <div className="grow">
-            <div className="bold" style={{ fontSize: 16 }}>{tid === league.userTid ? league.coachName : team.coach.name}</div>
+            <div className="bold" style={{ fontSize: 16 }}>
+              {tid === league.userTid ? league.coachName : team.coach.name}
+            </div>
             <div className="small dim">Head coach{tid === league.userTid ? ' (you)' : ''}</div>
           </div>
         </div>
         <div className="col" style={{ gap: 0, marginTop: 10 }}>
-          <div className="lg-kv"><span className="k">Offensive roots</span><span>{coachOff?.name ?? '—'}</span></div>
-          <div className="lg-kv"><span className="k">Defensive roots</span><span>{coachDef?.name ?? '—'}</span></div>
+          <div className="lg-kv">
+            <span className="k">Offensive roots</span>
+            <span>{coachOff?.name ?? '—'}</span>
+          </div>
+          <div className="lg-kv">
+            <span className="k">Defensive roots</span>
+            <span>{coachDef?.name ?? '—'}</span>
+          </div>
         </div>
         <div className="col" style={{ gap: 2, marginTop: 8 }}>
           <Meter label="Development" value={team.coach.development} color="var(--good)" />
@@ -520,14 +605,26 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
         )}
       </Card>
       <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
-        <Card title={<h3><Swords size={14} style={{ verticalAlign: -2 }} /> Offense</h3>}>
+        <Card
+          title={
+            <h3>
+              <Swords size={14} style={{ verticalAlign: -2 }} /> Offense
+            </h3>
+          }
+        >
           <ul className="lg-bullets" style={{ ['--bul' as string]: 'var(--info)' }}>
             {rep.offense.map((x, i) => (
               <li key={i}>{x}</li>
             ))}
           </ul>
         </Card>
-        <Card title={<h3><ShieldAlert size={14} style={{ verticalAlign: -2 }} /> Defense</h3>}>
+        <Card
+          title={
+            <h3>
+              <ShieldAlert size={14} style={{ verticalAlign: -2 }} /> Defense
+            </h3>
+          }
+        >
           <ul className="lg-bullets" style={{ ['--bul' as string]: 'var(--warn)' }}>
             {rep.defense.map((x, i) => (
               <li key={i}>{x}</li>
@@ -559,7 +656,13 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           </div>
         )}
       </Card>
-      <Card title={<h3><Target size={14} style={{ verticalAlign: -2 }} /> {isUser ? 'Weak spots to fix' : 'How to attack them'}</h3>}>
+      <Card
+        title={
+          <h3>
+            <Target size={14} style={{ verticalAlign: -2 }} /> {isUser ? 'Weak spots to fix' : 'How to attack them'}
+          </h3>
+        }
+      >
         {rep.weaknesses.length === 0 ? (
           <div className="small dim">No obvious weaknesses. Win the possession battle and execute.</div>
         ) : (
@@ -591,7 +694,9 @@ function ScheduleTab({ league, tid }: { league: League; tid: number }) {
       if (usWon) w++;
       else l++;
     }
-    const next = league.schedule.filter((g) => !g.played && ((g.home === tid && g.away === league.userTid) || (g.away === tid && g.home === league.userTid))).sort((a, b) => a.day - b.day);
+    const next = league.schedule
+      .filter((g) => !g.played && ((g.home === tid && g.away === league.userTid) || (g.away === tid && g.home === league.userTid)))
+      .sort((a, b) => a.day - b.day);
     return { w, l, next };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [league, tid, v, isUser]);
@@ -608,7 +713,12 @@ function ScheduleTab({ league, tid }: { league: League; tid: number }) {
               </div>
               <div className="bold">
                 {h2h.w + h2h.l ? `You are ${h2h.w}-${h2h.l}` : 'No meetings yet'}
-                {h2h.next.length ? <span className="dim" style={{ fontWeight: 500 }}> · {h2h.next.length} left</span> : null}
+                {h2h.next.length ? (
+                  <span className="dim" style={{ fontWeight: 500 }}>
+                    {' '}
+                    · {h2h.next.length} left
+                  </span>
+                ) : null}
               </div>
             </div>
             <span className="tag" style={{ background: 'color-mix(in srgb, var(--accent-2) 20%, transparent)', color: 'var(--accent-2)' }}>
@@ -660,7 +770,9 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
         <Kpi k="1st rounders" v={firsts} />
         <Kpi k="Traded away" v={away.length} color={away.length ? 'var(--warn)' : undefined} />
       </div>
-      {started && owned.some((d) => d.season === league.season && !d.pick) && <div className="lg-note">Projected slots follow the current standings (worst record picks first). The lottery reshuffles the top 14.</div>}
+      {started && owned.some((d) => d.season === league.season && !d.pick) && (
+        <div className="lg-note">Projected slots follow the current standings (worst record picks first). The lottery reshuffles the top 14.</div>
+      )}
       <Card className="flush lg-flat">
         {owned.length === 0 ? (
           <Empty>No draft picks owned.</Empty>
@@ -695,7 +807,9 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
                     {pickName(d)}
                     {d.pick ? ` · #${overallPick(league, d)} overall` : ''}
                   </div>
-                  <div className="tiny dim">Owned by the {league.teams[d.tid].region} {league.teams[d.tid].name}</div>
+                  <div className="tiny dim">
+                    Owned by the {league.teams[d.tid].region} {league.teams[d.tid].name}
+                  </div>
                 </div>
                 <ChevronRight size={16} className="dim" />
               </Link>

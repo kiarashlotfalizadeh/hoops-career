@@ -783,7 +783,8 @@ a.bk-s:hover {
   border-radius: var(--radius);
   padding: 16px;
   border: 1px solid color-mix(in srgb, var(--tier-elite) 45%, var(--line));
-  background: radial-gradient(420px 160px at 85% 0%, color-mix(in srgb, var(--tier-elite) 22%, transparent), transparent 70%), linear-gradient(160deg, var(--surface-2), var(--surface));
+  background:
+    radial-gradient(420px 160px at 85% 0%, color-mix(in srgb, var(--tier-elite) 22%, transparent), transparent 70%), linear-gradient(160deg, var(--surface-2), var(--surface));
 }
 .lg-champ .kicker {
   font-size: 10.5px;

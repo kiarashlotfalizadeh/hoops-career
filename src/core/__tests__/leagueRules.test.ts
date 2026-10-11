@@ -77,7 +77,9 @@ describe('trades', () => {
     expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: ai, pids: [theirs[0].pid], dpids: [] } }).some((e) => e.includes('max 15'))).toBe(true);
     // ...and a 2-for-1 can't take a 13-man roster to 12
     while (standardRoster(l, U).length > CAP.rosterMin) releasePlayer(l, standardRoster(l, U).sort((a, b) => a.ovr - b.ovr)[0], { news: false });
-    const two = standardRoster(l, U).slice(0, 2).map((p) => p.pid);
+    const two = standardRoster(l, U)
+      .slice(0, 2)
+      .map((p) => p.pid);
     expect(validateTrade(l, { a: { tid: U, pids: two, dpids: [] }, b: { tid: ai, pids: [theirs[1].pid], dpids: [] } }).some((e) => e.includes('minimum 13'))).toBe(true);
   });
 
@@ -210,11 +212,21 @@ describe('clinching (bug 6)', () => {
     const west = l.teams.filter((t) => t.conf === 'W').map((t) => t.tid);
     // [won, lost, games left] in rank order
     const recs: [number, number, number][] = [
-      [60, 14, 8], [58, 16, 8], [56, 18, 8], [54, 20, 8], [52, 22, 8],
+      [60, 14, 8],
+      [58, 16, 8],
+      [56, 18, 8],
+      [54, 20, 8],
+      [52, 22, 8],
       [44, 30, 8], // 6th: the 7th place team can't catch him, but the 9th can
-      [42, 40, 0], [38, 40, 4], [30, 32, 20], [20, 60, 2],
-      [19, 61, 2], [14, 46, 22], // 12th can still reach the 9th's 30 wins
-      [13, 67, 2], [12, 68, 2], [11, 69, 2],
+      [42, 40, 0],
+      [38, 40, 4],
+      [30, 32, 20],
+      [20, 60, 2],
+      [19, 61, 2],
+      [14, 46, 22], // 12th can still reach the 9th's 30 wins
+      [13, 67, 2],
+      [12, 68, 2],
+      [11, 69, 2],
     ];
     l.schedule = [];
     let gid = 1;
@@ -325,7 +337,10 @@ describe('standings tiebreaks: NBA procedure (L5, L18)', () => {
     return { l, A, B, C };
   }
   const game = (l: League, w: number, lo: number) => ({ type: 'regular', season: l.season, home: { tid: w, pts: 110 }, away: { tid: lo, pts: 100 } });
-  const eastOrder = (l: League) => standings(l).filter((r) => r.conf === 'E').map((r) => r.tid);
+  const eastOrder = (l: League) =>
+    standings(l)
+      .filter((r) => r.conf === 'E')
+      .map((r) => r.tid);
 
   it('3+ tied teams: division leader before head-to-head; the rest restart as a two-team tie', () => {
     const { l, A, B, C } = tied();
@@ -378,9 +393,7 @@ describe('play-in and playoff bracket (L19)', () => {
   it('seeds 1-6, plays 7v8 and 9v10, then the last spot, and pairs 1-8, 4-5, 3-6, 2-7 with higher seeds first', () => {
     const l = league();
     for (const conf of ['E', 'W'] as const)
-      l.teams
-        .filter((t) => t.conf === conf)
-        .forEach((t, i) => ([curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [60 - i * 2, 22 + i * 2]));
+      l.teams.filter((t) => t.conf === conf).forEach((t, i) => ([curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [60 - i * 2, 22 + i * 2]));
     const east = l.teams.filter((t) => t.conf === 'E').map((t) => t.tid);
     l.games = [];
     startPlayIn(l);
@@ -643,7 +656,12 @@ describe('morale and wear (L17)', () => {
     const l = league();
     const [angry, calmer] = standardRoster(l, U);
     const fa = freeAgents(l)[0];
-    for (const [p, score] of [[angry, -8], [calmer, -3], [fa, -8]] as const) p.mood = { ...p.mood, score, tradeRequest: true };
+    for (const [p, score] of [
+      [angry, -8],
+      [calmer, -3],
+      [fa, -8],
+    ] as const)
+      p.mood = { ...p.mood, score, tradeRequest: true };
     l.phase = 'freeAgency';
     l.faDay = 30;
     expect(newSeason(l)).toBe(true);

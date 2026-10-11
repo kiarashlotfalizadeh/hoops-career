@@ -24,7 +24,13 @@ export function contrast(a: string, b: string): number {
 function mix(hex: string, toward: string, t: number): string {
   const a = rgb(hex);
   const b = rgb(toward);
-  return `#${a.map((v, i) => Math.round((v + (b[i] - v) * t) * 255).toString(16).padStart(2, '0')).join('')}`;
+  return `#${a
+    .map((v, i) =>
+      Math.round((v + (b[i] - v) * t) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
 }
 
 /** The most saturated team colour that is neither near-black nor near-white. */

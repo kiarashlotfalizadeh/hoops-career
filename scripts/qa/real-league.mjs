@@ -9,8 +9,14 @@ const ctx = await browser.newContext({ viewport: wide ? { width: 820, height: 11
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const shot = async (name, full = false) => { await page.waitForTimeout(500); await page.screenshot({ path: `${out}/${name}.png`, fullPage: full }); console.log('shot', name); };
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(m.text());
+});
+const shot = async (name, full = false) => {
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${out}/${name}.png`, fullPage: full });
+  console.log('shot', name);
+};
 await page.goto(`${base}/#/start`);
 await page.waitForTimeout(800);
 await page.getByText('New League').click();
@@ -26,20 +32,44 @@ await page.fill('input[placeholder="Your name"]', 'QA Coach');
 await page.getByText('Start career').click();
 await page.waitForTimeout(2500);
 await shot('r03-home', true);
-await page.goto(`${base}/#/inbox`); await page.waitForTimeout(400);
-await page.getByText(/Preseason cuts/).first().click().catch(() => console.log('no preseason cuts message'));
+await page.goto(`${base}/#/inbox`);
+await page.waitForTimeout(400);
+await page
+  .getByText(/Preseason cuts/)
+  .first()
+  .click()
+  .catch(() => console.log('no preseason cuts message'));
 await shot('r04-inbox', true);
-await page.goto(`${base}/#/roster`); await page.waitForTimeout(400); await shot('r05-roster', true);
-await page.getByText('Ratings', { exact: true }).first().click().catch(() => {});
+await page.goto(`${base}/#/roster`);
+await page.waitForTimeout(400);
+await shot('r05-roster', true);
+await page
+  .getByText('Ratings', { exact: true })
+  .first()
+  .click()
+  .catch(() => {});
 await shot('r06-roster-ratings');
 await page.getByText('Players', { exact: true }).first().click();
-await page.locator('.listrow.clickable').nth(1).click(); await page.waitForTimeout(500);
+await page.locator('.listrow.clickable').nth(1).click();
+await page.waitForTimeout(500);
 await shot('r07-player', true);
-await page.getByText('Ratings', { exact: true }).first().click().catch(() => {});
+await page
+  .getByText('Ratings', { exact: true })
+  .first()
+  .click()
+  .catch(() => {});
 await shot('r08-player-ratings', true);
-await page.getByText('Stats', { exact: true }).first().click().catch(() => {});
+await page
+  .getByText('Stats', { exact: true })
+  .first()
+  .click()
+  .catch(() => {});
 await shot('r09-player-stats', true);
-await page.goto(`${base}/#/league?tab=stats`); await page.waitForTimeout(600); await shot('r10-league-stats', true);
-await page.goto(`${base}/#/league?tab=standings`); await page.waitForTimeout(600); await shot('r11-power', true);
+await page.goto(`${base}/#/league?tab=stats`);
+await page.waitForTimeout(600);
+await shot('r10-league-stats', true);
+await page.goto(`${base}/#/league?tab=standings`);
+await page.waitForTimeout(600);
+await shot('r11-power', true);
 console.log('errors:', errors.length ? errors.slice(0, 10) : 'none');
 await browser.close();

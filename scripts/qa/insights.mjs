@@ -7,8 +7,14 @@ async function run(viewport, prefix) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, isMobile: viewport.width < 600, hasTouch: true });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  const shot = async (name, full = true) => { await page.waitForTimeout(500); await page.screenshot({ path: `${out}/${prefix}-${name}.png`, fullPage: full }); console.log('shot', prefix, name); };
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  const shot = async (name, full = true) => {
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${out}/${prefix}-${name}.png`, fullPage: full });
+    console.log('shot', prefix, name);
+  };
   await page.goto(`${base}/#/start`);
   await page.waitForTimeout(600);
   await page.getByText('New League').click();
@@ -25,12 +31,18 @@ async function run(viewport, prefix) {
     await page.waitForTimeout(400);
     const quick = page.getByRole('button', { name: /Quick sim/ });
     if (await quick.count()) await quick.first().click();
-    else await page.getByRole('button', { name: /Sim to game day/ }).first().click();
+    else
+      await page
+        .getByRole('button', { name: /Sim to game day/ })
+        .first()
+        .click();
     await page.waitForTimeout(400);
     await page.waitForSelector('.simbar', { state: 'detached', timeout: 120000 }).catch(() => {});
   }
-  await page.goto(`${base}/#/tactics?tab=insights`); await shot('insights');
-  await page.goto(`${base}/#/rotation`); await shot('rotation');
+  await page.goto(`${base}/#/tactics?tab=insights`);
+  await shot('insights');
+  await page.goto(`${base}/#/rotation`);
+  await shot('rotation');
   await page.goto(`${base}/#/tactics?tab=defense`);
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Blitz' }).first().click();
@@ -40,7 +52,8 @@ async function run(viewport, prefix) {
   await page.getByRole('button', { name: /Run/ }).click();
   await page.waitForSelector('text=Verdict', { timeout: 180000 });
   await shot('compare');
-  await page.goto(`${base}/#/`); await shot('home');
+  await page.goto(`${base}/#/`);
+  await shot('home');
   await ctx.close();
 }
 await run({ width: 390, height: 844 }, 'phone');

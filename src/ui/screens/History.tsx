@@ -74,9 +74,7 @@ function Franchise({ league }: { league: League }) {
           <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase', lineHeight: 1.05 }}>
             {team.region} {team.name}
           </div>
-          <div className="small dim ellipsis">
-            {tid === league.userTid ? `Your franchise · Coach ${league.coachName}` : `Coach ${team.coach.name}`}
-          </div>
+          <div className="small dim ellipsis">{tid === league.userTid ? `Your franchise · Coach ${league.coachName}` : `Coach ${team.coach.name}`}</div>
         </div>
         <select className="lg-select" value={tid} onChange={(e) => setTidStr(e.target.value)} aria-label="Team" style={{ maxWidth: 96 }}>
           {[...league.teams]
@@ -206,7 +204,11 @@ function LeagueHistory({ league }: { league: League }) {
                   <div className="bold" style={{ fontSize: 16 }}>
                     {league.teams[a.champion].region} {league.teams[a.champion].name}
                   </div>
-                  {a.runnerUp !== undefined && <div className="tiny dim">def. {league.teams[a.runnerUp].region} {league.teams[a.runnerUp].name}</div>}
+                  {a.runnerUp !== undefined && (
+                    <div className="tiny dim">
+                      def. {league.teams[a.runnerUp].region} {league.teams[a.runnerUp].name}
+                    </div>
+                  )}
                 </div>
               </Link>
             ) : (
@@ -340,7 +342,8 @@ function LegendCard({ league, p, hof }: { league: League; p: Player; hof?: boole
             {hof && <Crown size={14} style={{ color: 'var(--tier-elite)', flex: 'none' }} />}
           </div>
           <div className="tiny dim ellipsis">
-            {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp} games{tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
+            {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp} games
+            {tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
           </div>
         </div>
         {mainTid !== undefined && <TeamLogo tid={mainTid} size={26} />}

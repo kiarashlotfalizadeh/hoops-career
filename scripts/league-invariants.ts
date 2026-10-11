@@ -66,8 +66,10 @@ function check() {
       if (H.inSeason(L) && !L.teams[p.tid].rotation.order.includes(p.pid)) bad('rostered but not in rotation', nm(p.pid));
       const cap = H.CAP_FOR(L, p.contract.start);
       const first = p.contract.salaries[0];
-      if (!p.contract.twoWay && p.contract.start > L.startSeason && (first > cap.maxContract(p.experience) + 10 || first < cap.minContract - 1 || p.contract.salaries.length > 5)) bad('contract outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
-      if ((ph === 'preseason' || ph === 'regular') && p.draft.round > 0 && p.draft.year === season - 1 && p.experience !== 0) bad('rookie experience != 0', `${nm(p.pid)} exp ${p.experience}`);
+      if (!p.contract.twoWay && p.contract.start > L.startSeason && (first > cap.maxContract(p.experience) + 10 || first < cap.minContract - 1 || p.contract.salaries.length > 5))
+        bad('contract outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
+      if ((ph === 'preseason' || ph === 'regular') && p.draft.round > 0 && p.draft.year === season - 1 && p.experience !== 0)
+        bad('rookie experience != 0', `${nm(p.pid)} exp ${p.experience}`);
     }
     if (p.tid === -1 && !(p.asking && p.asking.amount > 0)) bad('FA without asking price', nm(p.pid));
     if (p.tid === -3 && p.contract.salaries.some((x) => x > 0)) bad('retired with salary', nm(p.pid));
@@ -86,7 +88,8 @@ function check() {
   }
   for (let s = first; s <= season + 3; s++)
     for (const r of [1, 2])
-      for (let t = 0; t < 30; t++) if ((cnt.get(`${s}-${r}-${t}`) ?? 0) !== 1 && !(ph === 'draft' && s === season)) bad('pick count != 1', `${s} r${r} orig ${t}: ${cnt.get(`${s}-${r}-${t}`) ?? 0}`);
+      for (let t = 0; t < 30; t++)
+        if ((cnt.get(`${s}-${r}-${t}`) ?? 0) !== 1 && !(ph === 'draft' && s === season)) bad('pick count != 1', `${s} r${r} orig ${t}: ${cnt.get(`${s}-${r}-${t}`) ?? 0}`);
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
   } catch (e) {
@@ -100,7 +103,11 @@ function checkClinch() {
   for (const conf of ['E', 'W']) {
     const cr = st.filter((r) => r.conf === conf);
     for (const r of cr) {
-      for (const [mark, from] of [['x', 6], ['p', 10]] as const) if (r.clinched === mark && cr.slice(from).some((o) => o.won + rem(o.tid) >= r.won)) bad(`clinch '${mark}' wrong`, `${L.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
+      for (const [mark, from] of [
+        ['x', 6],
+        ['p', 10],
+      ] as const)
+        if (r.clinched === mark && cr.slice(from).some((o) => o.won + rem(o.tid) >= r.won)) bad(`clinch '${mark}' wrong`, `${L.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
       if (r.clinched === 'e' && cr.filter((o) => o.tid !== r.tid && o.won > r.won + rem(r.tid)).length < 10) bad("clinch 'e' wrong", `${L.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
     }
   }
@@ -109,7 +116,8 @@ function checkClinch() {
 function checkSeasonEnd() {
   const aw = L.awards.find((a) => a.season === L.season)!;
   const gp = (pid: number) => H.seasonTotals(L.players[pid], L.season)?.gp ?? 0;
-  for (const k of ['mvp', 'dpoy', 'smoy', 'mip'] as const) if (aw[k] === undefined || gp(aw[k]!) < 65) bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);
+  for (const k of ['mvp', 'dpoy', 'smoy', 'mip'] as const)
+    if (aw[k] === undefined || gp(aw[k]!) < 65) bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);
   if (aw.roy !== undefined && L.players[aw.roy].draft.year !== L.season - 1) bad('ROY not a rookie', nm(aw.roy));
   if (new Set(aw.allNba.flat()).size !== 15 || aw.champion === undefined) bad('All-NBA/champion', '');
   if (L.playoffs.length !== 15 || L.playoffs.some((s) => Math.max(s.highWins, s.lowWins) !== 4)) bad('playoff bracket', `${L.playoffs.length} series`);
@@ -134,7 +142,10 @@ function checkSeasonEnd() {
   }
   // playoff series: every other day at most
   for (const s of L.playoffs) {
-    const days = L.schedule.filter((g) => g.seriesId === s.id).map((g) => g.day).sort((a, b) => a - b);
+    const days = L.schedule
+      .filter((g) => g.seriesId === s.id)
+      .map((g) => g.day)
+      .sort((a, b) => a - b);
     if (days.some((d, i) => i > 0 && d - days[i - 1] < 2)) bad('playoff games on consecutive days', `${s.id} ${days.join(',')}`);
   }
 }
@@ -152,7 +163,8 @@ function checkOptions(user: boolean) {
 
 function fixUserRoster() {
   while (std(userTid).length > CAP.rosterMax) C.releasePlayer(L, std(userTid).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
-  for (let g = 0; std(userTid).length < CAP.rosterMin && g < 40; g++) for (const p of H.freeAgents(L).sort((a, b) => b.ovr - a.ovr)) if (FA.userOffer(L, p.pid, C.askingContract(L, p, userTid).amount, 1).ok) break;
+  for (let g = 0; std(userTid).length < CAP.rosterMin && g < 40; g++)
+    for (const p of H.freeAgents(L).sort((a, b) => b.ovr - a.ovr)) if (FA.userOffer(L, p.pid, C.askingContract(L, p, userTid).amount, 1).ok) break;
 }
 
 for (let s = 0; s < seasons; s++) {

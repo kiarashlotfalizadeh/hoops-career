@@ -114,7 +114,7 @@ export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '-'
 export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '-');
 /** Q1..Q4, then OT, 2OT, 3OT. */
 export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
-export const moneyM =(k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;
+export const moneyM = (k: number, d = 1) => `${k < 0 ? '-' : ''}$${(Math.abs(k) / 1000).toFixed(d)}M`;
 
 /**
  * Last names for a roster, with as much of the first name as it takes to tell teammates apart:

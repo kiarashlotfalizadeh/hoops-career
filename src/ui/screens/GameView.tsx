@@ -58,10 +58,17 @@ export default function GameView() {
     { label: 'Bench pts', a: g.away.extra.bench, b: g.home.extra.bench },
   ];
   const flowColors = matchupColors(home.colors, away.colors);
-  const typeLabel = cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season');
+  const typeLabel =
+    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ??
+    (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season');
   return (
     <main className="page">
-      <PageHeader title="Game report" back backTo="/" sub={`${typeLabel} · ${fmtDate(g.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}${g.att ? ` · Att ${g.att.toLocaleString()}` : ''}`} />
+      <PageHeader
+        title="Game report"
+        back
+        backTo="/"
+        sub={`${typeLabel} · ${fmtDate(g.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}${g.att ? ` · Att ${g.att.toLocaleString()}` : ''}`}
+      />
       <Card accent>
         <div className="scorebug">
           <Link to={`/team/${away.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
@@ -69,9 +76,13 @@ export default function GameView() {
             <span className="bold">{away.abbrev}</span>
           </Link>
           <div className="row" style={{ gap: 14 }}>
-            <span className="score" style={{ opacity: g.away.pts > g.home.pts ? 1 : 0.55 }}>{g.away.pts}</span>
+            <span className="score" style={{ opacity: g.away.pts > g.home.pts ? 1 : 0.55 }}>
+              {g.away.pts}
+            </span>
             <span className="dim small">{g.ot ? `F/${g.ot > 1 ? `${g.ot}OT` : 'OT'}` : 'FINAL'}</span>
-            <span className="score" style={{ opacity: g.home.pts > g.away.pts ? 1 : 0.55 }}>{g.home.pts}</span>
+            <span className="score" style={{ opacity: g.home.pts > g.away.pts ? 1 : 0.55 }}>
+              {g.home.pts}
+            </span>
           </div>
           <Link to={`/team/${home.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
             <TeamLogo tid={home.tid} size={48} />
@@ -85,7 +96,9 @@ export default function GameView() {
       {tab === 'report' && report && (
         <>
           <Card>
-            <div className="bold" style={{ fontSize: 16 }}>{report.headline}</div>
+            <div className="bold" style={{ fontSize: 16 }}>
+              {report.headline}
+            </div>
           </Card>
           <Card title="What decided it">
             <div className="col" style={{ gap: 12 }}>
@@ -145,8 +158,19 @@ export default function GameView() {
               <div className="col" style={{ gap: 6 }}>
                 {report.grades.map((gr) => (
                   <Link key={gr.pid} to={`/player/${gr.pid}`} className="row small">
-                    <span className={`display bold`} style={{ width: 30, fontSize: 18, color: gr.grade.startsWith('A') ? 'var(--good)' : gr.grade.startsWith('B') ? 'var(--info)' : gr.grade.startsWith('C') ? 'var(--warn)' : 'var(--bad)' }}>{gr.grade}</span>
-                    <span className="bold ellipsis" style={{ width: 96, flex: 'none' }}>{userNames?.(gr.pid) || league.players[gr.pid]?.lastName}</span>
+                    <span
+                      className={`display bold`}
+                      style={{
+                        width: 30,
+                        fontSize: 18,
+                        color: gr.grade.startsWith('A') ? 'var(--good)' : gr.grade.startsWith('B') ? 'var(--info)' : gr.grade.startsWith('C') ? 'var(--warn)' : 'var(--bad)',
+                      }}
+                    >
+                      {gr.grade}
+                    </span>
+                    <span className="bold ellipsis" style={{ width: 96, flex: 'none' }}>
+                      {userNames?.(gr.pid) || league.players[gr.pid]?.lastName}
+                    </span>
                     <span className="dim grow ellipsis">{gr.note}</span>
                   </Link>
                 ))}
@@ -159,7 +183,9 @@ export default function GameView() {
                 <div className="col" style={{ gap: 8 }}>
                   {report.lineups.map((l, i) => (
                     <div key={i} className="row small top">
-                      <span className={`num bold ${l.pm >= 0 ? 'good' : 'bad'}`} style={{ width: 36 }}>{signed(l.pm, 0)}</span>
+                      <span className={`num bold ${l.pm >= 0 ? 'good' : 'bad'}`} style={{ width: 36 }}>
+                        {signed(l.pm, 0)}
+                      </span>
                       <span className="grow dim2">{l.pids.map((pid) => userNames?.(pid) || '?').join(', ')}</span>
                       <span className="dim tiny num">{l.min.toFixed(0)}m</span>
                     </div>
@@ -172,7 +198,9 @@ export default function GameView() {
             <Card title="Momentum swings">
               <div className="col" style={{ gap: 4 }}>
                 {report.runs.map((r, i) => (
-                  <div key={i} className={`small ${r.side === 'user' ? 'good' : 'bad'}`}>{r.text}</div>
+                  <div key={i} className={`small ${r.side === 'user' ? 'good' : 'bad'}`}>
+                    {r.text}
+                  </div>
                 ))}
               </div>
             </Card>
@@ -184,10 +212,26 @@ export default function GameView() {
         <>
           <BoxTable box={g.away} title={`${away.region} ${away.name}`} pog={g.pog} league={league} />
           <BoxTable box={g.home} title={`${home.region} ${home.name}`} pog={g.pog} league={league} />
-          <Card title="Team comparison" right={<span className="tiny dim">{away.abbrev} · {home.abbrev}</span>}>
+          <Card
+            title="Team comparison"
+            right={
+              <span className="tiny dim">
+                {away.abbrev} · {home.abbrev}
+              </span>
+            }
+          >
             <div className="col" style={{ gap: 10 }}>
               {comparison.map((c) => (
-                <CompareBar key={c.label} label={c.label} a={c.a} b={c.b} fmt={c.pct ? undefined : (v) => String(v)} higherBetter={c.label !== 'Turnovers'} colorA={awayColor} colorB={homeColor} />
+                <CompareBar
+                  key={c.label}
+                  label={c.label}
+                  a={c.a}
+                  b={c.b}
+                  fmt={c.pct ? undefined : (v) => String(v)}
+                  higherBetter={c.label !== 'Turnovers'}
+                  colorA={awayColor}
+                  colorB={homeColor}
+                />
               ))}
             </div>
           </Card>
@@ -210,7 +254,9 @@ export default function GameView() {
                     return (
                       <div key={z} className="kpi">
                         <span className="k">{z === 'rim' ? 'At rim' : z === 'mid' ? 'Paint/Mid' : 'Three'}</span>
-                        <span className="v" style={{ fontSize: 18 }}>{m}/{zs.length}</span>
+                        <span className="v" style={{ fontSize: 18 }}>
+                          {m}/{zs.length}
+                        </span>
                         <span className="tiny dim">{zs.length ? p1(m / zs.length) : '-'}</span>
                       </div>
                     );
@@ -223,8 +269,22 @@ export default function GameView() {
       )}
 
       {tab === 'flow' && g.flow && (
-        <Card title="Score margin" right={<span className="tiny dim">{home.abbrev} above · {away.abbrev} below</span>}>
-          <FlowChart flow={g.flow} colorA={flowColors[0]} colorB={flowColors[1]} periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]} periodStarts={g.flowPeriods} height={150} />
+        <Card
+          title="Score margin"
+          right={
+            <span className="tiny dim">
+              {home.abbrev} above · {away.abbrev} below
+            </span>
+          }
+        >
+          <FlowChart
+            flow={g.flow}
+            colorA={flowColors[0]}
+            colorB={flowColors[1]}
+            periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]}
+            periodStarts={g.flowPeriods}
+            height={150}
+          />
           <div className="small dim" style={{ marginTop: 8 }}>
             Largest leads: {home.abbrev} {g.home.extra.biggestLead}, {away.abbrev} {g.away.extra.biggestLead}.
           </div>
@@ -236,9 +296,15 @@ export default function GameView() {
           <div className="col" style={{ gap: 6 }}>
             {g.pbp.map((e, i) => (
               <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
-                <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>{periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}</span>
-                <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>{e.text}</span>
-                <span className="tiny num dim">{e.as}-{e.hs}</span>
+                <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>
+                  {periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}
+                </span>
+                <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>
+                  {e.text}
+                </span>
+                <span className="tiny num dim">
+                  {e.as}-{e.hs}
+                </span>
               </div>
             ))}
           </div>
@@ -330,7 +396,11 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
                 <td className="l sticky">
                   <Link to={`/player/${p.pid}`}>
                     <span className={p.gs ? 'bold' : ''}>{name(p.pid)}</span>
-                    {p.pid === pog && <span className="tag warn" style={{ marginLeft: 4, height: 16 }}>POG</span>}
+                    {p.pid === pog && (
+                      <span className="tag warn" style={{ marginLeft: 4, height: 16 }}>
+                        POG
+                      </span>
+                    )}
                   </Link>
                 </td>
                 <td>{Math.round(p.min)}</td>
@@ -340,9 +410,15 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
                 <td>{p.stl}</td>
                 <td>{p.blk}</td>
                 <td>{p.tov}</td>
-                <td>{p.fgm}-{p.fga}</td>
-                <td>{p.tpm}-{p.tpa}</td>
-                <td>{p.ftm}-{p.fta}</td>
+                <td>
+                  {p.fgm}-{p.fga}
+                </td>
+                <td>
+                  {p.tpm}-{p.tpa}
+                </td>
+                <td>
+                  {p.ftm}-{p.fta}
+                </td>
                 <td>{p.pf}</td>
                 <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{p.pm > 0 ? `+${p.pm}` : p.pm}</td>
               </tr>
@@ -356,16 +432,26 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
               <td>{box.t.stl}</td>
               <td>{box.t.blk}</td>
               <td>{box.t.tov}</td>
-              <td>{box.t.fgm}-{box.t.fga}</td>
-              <td>{box.t.tpm}-{box.t.tpa}</td>
-              <td>{box.t.ftm}-{box.t.fta}</td>
+              <td>
+                {box.t.fgm}-{box.t.fga}
+              </td>
+              <td>
+                {box.t.tpm}-{box.t.tpa}
+              </td>
+              <td>
+                {box.t.ftm}-{box.t.fta}
+              </td>
               <td>{box.t.pf}</td>
               <td />
             </tr>
           </tbody>
         </table>
       </div>
-      {dnp.length > 0 && <div className="tiny dim" style={{ padding: '8px 12px' }}>DNP: {dnp.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}</div>}
+      {dnp.length > 0 && (
+        <div className="tiny dim" style={{ padding: '8px 12px' }}>
+          DNP: {dnp.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}
+        </div>
+      )}
     </Card>
   );
 }

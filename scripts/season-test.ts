@@ -43,12 +43,20 @@ for (let s = 0; s < seasons; s++) {
   const aw = league.awards.find((a) => a.season === league.season)!;
   const nm = (pid?: number) => (pid !== undefined && league.players[pid] ? `${playerName(league.players[pid])} (${league.players[pid].ovr})` : '-');
   console.log(`\n=== Season ${league.season} simulated in ${(simMs / 1000).toFixed(1)}s, phase now ${league.phase}`);
-  const best = [...st].sort((a, b) => b.pct - a.pct).slice(0, 4).map((r) => `${league.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
-  const worst = [...st].sort((a, b) => a.pct - b.pct).slice(0, 3).map((r) => `${league.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
+  const best = [...st]
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 4)
+    .map((r) => `${league.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
+  const worst = [...st]
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 3)
+    .map((r) => `${league.teams[r.tid].abbrev} ${r.won}-${r.lost}`);
   console.log('Best:', best.join(', '), '| Worst:', worst.join(', '));
   console.log(`Champion: ${league.teams[aw.champion!].abbrev}; Finals MVP ${nm(aw.finalsMvp)}; MVP ${nm(aw.mvp)}; DPOY ${nm(aw.dpoy)}; ROY ${nm(aw.roy)}`);
   // league scoring leaders
-  const ps = Object.values(league.players).map((p) => ({ p, s: p.stats.find((x) => x.season === league.season && !x.playoffs) })).filter((x) => x.s && x.s.gp >= 50);
+  const ps = Object.values(league.players)
+    .map((p) => ({ p, s: p.stats.find((x) => x.season === league.season && !x.playoffs) }))
+    .filter((x) => x.s && x.s.gp >= 50);
   const lead = (f: (s: NonNullable<(typeof ps)[0]['s']>) => number, label: string) => {
     const top = [...ps].sort((a, b) => f(b.s!) - f(a.s!)).slice(0, 3);
     console.log(`${label}: ${top.map((x) => `${playerName(x.p)} ${f(x.s!).toFixed(1)}`).join(', ')}`);
@@ -58,9 +66,16 @@ for (let s = 0; s < seasons; s++) {
   lead((s) => s.ast / s.gp, 'APG');
   lead((s) => s.min / s.gp, 'MPG');
   const user = curTeamSeason(league, league.userTid);
-  console.log(`User team ${league.teams[league.userTid].abbrev}: ${user.won}-${user.lost}, playoffRound ${user.playoffRound}, revenue ${(user.revenue / 1000).toFixed(0)}M, expenses ${(user.expenses / 1000).toFixed(0)}M, payroll ${(payroll(league, league.userTid) / 1000).toFixed(0)}M`);
-  const profits = league.teams.map((t) => curTeamSeason(league, t.tid)).map((ts) => ts.revenue - ts.expenses).sort((a, b) => a - b);
-  console.log(`League money: median profit ${(profits[15] / 1000).toFixed(0)}M (range ${(profits[0] / 1000).toFixed(0)} to ${(profits[29] / 1000).toFixed(0)}M), cash ${(Math.min(...league.teams.map((t) => t.cash)) / 1000).toFixed(0)} to ${(Math.max(...league.teams.map((t) => t.cash)) / 1000).toFixed(0)}M`);
+  console.log(
+    `User team ${league.teams[league.userTid].abbrev}: ${user.won}-${user.lost}, playoffRound ${user.playoffRound}, revenue ${(user.revenue / 1000).toFixed(0)}M, expenses ${(user.expenses / 1000).toFixed(0)}M, payroll ${(payroll(league, league.userTid) / 1000).toFixed(0)}M`,
+  );
+  const profits = league.teams
+    .map((t) => curTeamSeason(league, t.tid))
+    .map((ts) => ts.revenue - ts.expenses)
+    .sort((a, b) => a - b);
+  console.log(
+    `League money: median profit ${(profits[15] / 1000).toFixed(0)}M (range ${(profits[0] / 1000).toFixed(0)} to ${(profits[29] / 1000).toFixed(0)}M), cash ${(Math.min(...league.teams.map((t) => t.cash)) / 1000).toFixed(0)} to ${(Math.max(...league.teams.map((t) => t.cash)) / 1000).toFixed(0)}M`,
+  );
   const injured = Object.values(league.players).filter((p) => p.injuryCount > 0).length;
   console.log(`Players injured at least once (cumulative): ${injured}; news items ${league.news.length}; games stored ${league.games.length}`);
 
@@ -77,7 +92,9 @@ for (let s = 0; s < seasons; s++) {
   newSeason(league);
   const sizes = league.teams.map((t) => teamPlayers(league, t.tid).length);
   const pays = league.teams.map((t) => payroll(league, t.tid) / 1000);
-  console.log(`New season ${league.season}: roster sizes ${Math.min(...sizes)}-${Math.max(...sizes)}, payroll ${Math.min(...pays).toFixed(0)}-${Math.max(...pays).toFixed(0)}M (cap ${(CAP_FOR(league).salaryCap / 1000).toFixed(0)}M); players ${Object.keys(league.players).length}; FAs ${Object.values(league.players).filter((p) => p.tid === -1).length}`);
+  console.log(
+    `New season ${league.season}: roster sizes ${Math.min(...sizes)}-${Math.max(...sizes)}, payroll ${Math.min(...pays).toFixed(0)}-${Math.max(...pays).toFixed(0)}M (cap ${(CAP_FOR(league).salaryCap / 1000).toFixed(0)}M); players ${Object.keys(league.players).length}; FAs ${Object.values(league.players).filter((p) => p.tid === -1).length}`,
+  );
   const json = JSON.stringify(league);
   console.log(`League JSON size: ${(json.length / 1e6).toFixed(2)} MB`);
   // long-run health: rating distribution, raw skill level, economy, scoring
@@ -90,7 +107,14 @@ for (let s = 0; s < seasons; s++) {
   const capNow = CAP_FOR(league).salaryCap;
   const maxDeals = sal.filter((x) => x >= capNow * 0.25).length;
   const capX = league.teams.map((t) => ({ t: t.abbrev, x: payroll(league, t.tid) / capNow, user: t.tid === league.userTid })).sort((a, b) => b.x - a.x);
-  console.log(`  payroll / cap: ${capX.slice(0, 5).map((r) => `${r.t}${r.user ? '*' : ''} ${r.x.toFixed(2)}`).join(', ')} … median ${capX[15].x.toFixed(2)}, min ${capX[29].x.toFixed(2)}`);
-  console.log(`  health: rostered ${rostered.length}, OVR mean ${(ovrs.reduce((a, b) => a + b, 0) / ovrs.length).toFixed(1)}, ≥90: ${ovrs.filter((o) => o >= 90).length}, ≥85: ${ovrs.filter((o) => o >= 85).length}, raw mean ${rawMean.toFixed(1)} | salaries ≥25% cap: ${maxDeals}, top-15 avg ${(sal.slice(0, 15).reduce((a, b) => a + b, 0) / 15 / 1000).toFixed(0)}M | last season ppg ${ppg.toFixed(1)} | retired ${Object.values(league.players).filter((p) => p.tid === -3).length}`);
+  console.log(
+    `  payroll / cap: ${capX
+      .slice(0, 5)
+      .map((r) => `${r.t}${r.user ? '*' : ''} ${r.x.toFixed(2)}`)
+      .join(', ')} … median ${capX[15].x.toFixed(2)}, min ${capX[29].x.toFixed(2)}`,
+  );
+  console.log(
+    `  health: rostered ${rostered.length}, OVR mean ${(ovrs.reduce((a, b) => a + b, 0) / ovrs.length).toFixed(1)}, ≥90: ${ovrs.filter((o) => o >= 90).length}, ≥85: ${ovrs.filter((o) => o >= 85).length}, raw mean ${rawMean.toFixed(1)} | salaries ≥25% cap: ${maxDeals}, top-15 avg ${(sal.slice(0, 15).reduce((a, b) => a + b, 0) / 15 / 1000).toFixed(0)}M | last season ppg ${ppg.toFixed(1)} | retired ${Object.values(league.players).filter((p) => p.tid === -3).length}`,
+  );
 }
 console.log(`\nTotal ${(performance.now() - t0) / 1000}s`);

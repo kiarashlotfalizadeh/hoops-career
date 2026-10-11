@@ -123,10 +123,12 @@ export default function Draft() {
         right={
           <Help title="How the draft works">
             <p style={{ margin: 0 }}>
-              <b>Lottery.</b> The 14 non-playoff teams are entered in a lottery for the top 4 picks. The worst three records have the best odds (14% each). Everyone else picks in reverse order of record.
+              <b>Lottery.</b> The 14 non-playoff teams are entered in a lottery for the top 4 picks. The worst three records have the best odds (14% each). Everyone else picks in
+              reverse order of record.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals (team option on year 4), cheaper the later the pick. Second-rounders get 2-year minimum deals, not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
+              <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals (team option on year 4), cheaper the later the pick. Second-rounders get 2-year minimum deals,
+              not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p style={{ margin: 0 }}>
               <b>Big Board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
@@ -136,9 +138,7 @@ export default function Draft() {
         }
       />
 
-      {league.phase === 'draft' && (
-        <OnTheClock league={league} onAuto={autoPick} onSimToMine={simToMine} onFinish={() => (myRemaining.length ? setConfirmSim(true) : finish())} />
-      )}
+      {league.phase === 'draft' && <OnTheClock league={league} onAuto={autoPick} onSimToMine={simToMine} onFinish={() => (myRemaining.length ? setConfirmSim(true) : finish())} />}
 
       {league.phase === 'draftLottery' && (
         <Card accent className="fo-hero">
@@ -196,7 +196,8 @@ export default function Draft() {
       <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Sim to the end?">
         <div className="col" style={{ gap: 12 }}>
           <div className="dim2">
-            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overall(d.round, d.pick!)}`).join(', ')}). Your scouts will make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
+            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overall(d.round, d.pick!)}`).join(', ')}). Your scouts will
+            make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
           </div>
           <div className="row">
             <button className="btn grow" onClick={() => setConfirmSim(false)}>
@@ -357,7 +358,15 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
     <Card className="flush">
       <div className="list wide2">
         {list.slice(0, limit).map((p) => (
-          <div key={p.pid} className="fo-prow" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => onOpen(p.pid)} onKeyDown={activateOnKey(() => onOpen(p.pid))}>
+          <div
+            key={p.pid}
+            className="fo-prow"
+            role="button"
+            tabIndex={0}
+            style={{ cursor: 'pointer' }}
+            onClick={() => onOpen(p.pid)}
+            onKeyDown={activateOnKey(() => onOpen(p.pid))}
+          >
             <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
             <OvrPot p={p} />
             <div className="grow" style={{ minWidth: 0 }}>
@@ -412,9 +421,7 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
   if (!list.length) return <Empty>No combine results for this class.</Empty>;
   return (
     <>
-      <div className="tiny dim">
-        Tap a column to sort; tap a row for the full scouting report. Lane agility and sprint: lower is better.
-      </div>
+      <div className="tiny dim">Tap a column to sort; tap a row for the full scouting report. Lane agility and sprint: lower is better.</div>
       <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} highlight={() => false} maxHeight={560} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
         {league.season} draft combine · {list.length} invitees
@@ -509,7 +516,8 @@ function MyPicks({ league }: { league: League }) {
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="bold ellipsis">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
-                    {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · drafted after {seasonLabel(d.season)}
+                    {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · drafted after{' '}
+                    {seasonLabel(d.season)}
                   </div>
                 </div>
                 {/* the label carries the overall number once the order is set */}
@@ -535,7 +543,9 @@ function MyPicks({ league }: { league: League }) {
                   <TeamLogo tid={d.tid} size={30} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">{pickLabel(league, d)}</div>
-                    <div className="tiny dim">Owned by {league.teams[d.tid].region} {league.teams[d.tid].name}</div>
+                    <div className="tiny dim">
+                      Owned by {league.teams[d.tid].region} {league.teams[d.tid].name}
+                    </div>
                   </div>
                   <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
                 </div>
@@ -614,9 +624,17 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
           </div>
           <div className="row wrap" style={{ gap: 6 }}>
             <span className="tag info">{p.archetype}</span>
-            {p.tid >= 0 && <span className="tag good">Drafted #{overall(p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}</span>}
+            {p.tid >= 0 && (
+              <span className="tag good">
+                Drafted #{overall(p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}
+              </span>
+            )}
           </div>
-          {p.prospect?.blurb && <div className="dim2" style={{ lineHeight: 1.45 }}>{p.prospect.blurb}</div>}
+          {p.prospect?.blurb && (
+            <div className="dim2" style={{ lineHeight: 1.45 }}>
+              {p.prospect.blurb}
+            </div>
+          )}
           {c && (
             <>
               <div className="fo-sec">Combine</div>

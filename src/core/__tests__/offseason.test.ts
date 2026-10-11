@@ -34,9 +34,11 @@ describe('offseason regressions', () => {
     if (fa.tid === -1 && before > CAP_FOR(league).minContract) expect(askingContract(league, fa).amount).toBeLessThan(before);
   });
 
-  it('offseason contracts are priced against next season\'s cap', () => {
+  it("offseason contracts are priced against next season's cap", () => {
     const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 8 });
-    const p = Object.values(league.players).filter((x) => x.tid >= 0).sort((a, b) => b.ovr - a.ovr)[0];
+    const p = Object.values(league.players)
+      .filter((x) => x.tid >= 0)
+      .sort((a, b) => b.ovr - a.ovr)[0];
     const inSeason = marketSalary(league, p);
     league.phase = 'freeAgency';
     expect(contractSeason(league)).toBe(league.season + 1);

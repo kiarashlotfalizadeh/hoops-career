@@ -73,7 +73,10 @@ export default function Home() {
     }
     return { k, best };
   });
-  const recent = league.games.filter((g) => g.season === league.season && (g.home.tid === league.userTid || g.away.tid === league.userTid)).slice(-5).reverse();
+  const recent = league.games
+    .filter((g) => g.season === league.season && (g.home.tid === league.userTid || g.away.tid === league.userTid))
+    .slice(-5)
+    .reverse();
   const tr = teamRatings(ts);
   const played = ts.won + ts.lost > 0;
   const primary = actions.find((a) => a.primary);
@@ -101,34 +104,54 @@ export default function Home() {
       {next && oppTid !== undefined ? (
         <Card accent>
           <div className="row between">
-            <span className="tag info">{next.type === 'playoffs' ? 'Playoffs' : next.type === 'playin' ? 'Play-In' : next.cup === 'final' ? 'NBA Cup Championship' : `Game ${ts.won + ts.lost + 1}${next.cup === 'group' ? ' · NBA Cup' : next.cup === 'qf' ? ' · Cup quarterfinal' : next.cup === 'sf' ? ' · Cup semifinal' : ''}`}</span>
-            <span className="small dim">{fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}{next.day === league.day ? ' · Today' : ''}</span>
+            <span className="tag info">
+              {next.type === 'playoffs'
+                ? 'Playoffs'
+                : next.type === 'playin'
+                  ? 'Play-In'
+                  : next.cup === 'final'
+                    ? 'NBA Cup Championship'
+                    : `Game ${ts.won + ts.lost + 1}${next.cup === 'group' ? ' · NBA Cup' : next.cup === 'qf' ? ' · Cup quarterfinal' : next.cup === 'sf' ? ' · Cup semifinal' : ''}`}
+            </span>
+            <span className="small dim">
+              {fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+              {next.day === league.day ? ' · Today' : ''}
+            </span>
           </div>
           <div className="scorebug" style={{ marginTop: 12 }}>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
               <TeamLogo tid={next.away} size={54} />
               <div className="bold">{league.teams[next.away].abbrev}</div>
-              <div className="tiny dim num">{curTeamSeason(league, next.away).won}-{curTeamSeason(league, next.away).lost}</div>
+              <div className="tiny dim num">
+                {curTeamSeason(league, next.away).won}-{curTeamSeason(league, next.away).lost}
+              </div>
             </div>
-            <div className="display dim" style={{ fontSize: 22 }}>@</div>
+            <div className="display dim" style={{ fontSize: 22 }}>
+              @
+            </div>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
               <TeamLogo tid={next.home} size={54} />
               <div className="bold">{league.teams[next.home].abbrev}</div>
-              <div className="tiny dim num">{curTeamSeason(league, next.home).won}-{curTeamSeason(league, next.home).lost}</div>
+              <div className="tiny dim num">
+                {curTeamSeason(league, next.home).won}-{curTeamSeason(league, next.home).lost}
+              </div>
             </div>
           </div>
-          {next.seriesId && (() => {
-            const s = league.playoffs.find((x) => x.id === next.seriesId);
-            return s ? (
-              <div className="center small dim2" style={{ marginTop: 8 }}>
-                Series: {league.teams[s.high].abbrev} {s.highWins} - {s.lowWins} {league.teams[s.low].abbrev}
-              </div>
-            ) : null;
-          })()}
+          {next.seriesId &&
+            (() => {
+              const s = league.playoffs.find((x) => x.id === next.seriesId);
+              return s ? (
+                <div className="center small dim2" style={{ marginTop: 8 }}>
+                  Series: {league.teams[s.high].abbrev} {s.highWins} - {s.lowWins} {league.teams[s.low].abbrev}
+                </div>
+              ) : null;
+            })()}
           {scout && (
             <div className="col" style={{ marginTop: 12, gap: 6 }}>
               <div className="small upper dim bold">Scouting report</div>
-              <div className="small dim2">{scout.offense[0]} {scout.defense[0]}</div>
+              <div className="small dim2">
+                {scout.offense[0]} {scout.defense[0]}
+              </div>
               {scout.threats[0] && (
                 <div className="small">
                   <span className="bad">Threat:</span> {scout.threats[0].name}. {scout.threats[0].why}
@@ -149,7 +172,9 @@ export default function Home() {
                   </div>
                   <div className="chips" style={{ marginTop: 6 }}>
                     {league.gamePlan.items.map((it) => (
-                      <span key={it.id} className="tag info">{it.label}</span>
+                      <span key={it.id} className="tag info">
+                        {it.label}
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -180,7 +205,11 @@ export default function Home() {
         <Card accent title={<h3>{phaseTitle(league)}</h3>}>
           {primary && (
             <>
-              {primary.sub && <div className="small dim2" style={{ marginBottom: 10 }}>{primary.disabled ?? primary.sub}</div>}
+              {primary.sub && (
+                <div className="small dim2" style={{ marginBottom: 10 }}>
+                  {primary.disabled ?? primary.sub}
+                </div>
+              )}
               <button className="btn primary block big" disabled={!!primary.disabled || !!sim} onClick={() => void run(primary)}>
                 {primary.label}
               </button>
@@ -208,7 +237,13 @@ export default function Home() {
       )}
 
       {alerts.length > 0 && (
-        <Card title={<h3><Zap size={14} style={{ verticalAlign: -2 }} /> Assistant coach</h3>}>
+        <Card
+          title={
+            <h3>
+              <Zap size={14} style={{ verticalAlign: -2 }} /> Assistant coach
+            </h3>
+          }
+        >
           <div className="col" style={{ gap: 10 }}>
             {alerts.slice(0, 4).map((a) => (
               <Link key={a.id} to={a.link ?? '/'} className="row top" style={{ gap: 10 }}>
@@ -225,35 +260,79 @@ export default function Home() {
       )}
 
       <div className="md-grid2">
-        <Card title={<h3><Mail size={14} style={{ verticalAlign: -2 }} /> Inbox</h3>} right={<Link className="card-link" to="/inbox">All</Link>}>
+        <Card
+          title={
+            <h3>
+              <Mail size={14} style={{ verticalAlign: -2 }} /> Inbox
+            </h3>
+          }
+          right={
+            <Link className="card-link" to="/inbox">
+              All
+            </Link>
+          }
+        >
           {unread.length === 0 ? (
             <div className="small dim">No new messages.</div>
           ) : (
             <div className="col" style={{ gap: 10 }}>
               {unread.map((m) => (
-                <Link key={m.id} to={inAppLink(m.link, '/inbox')} onClick={() => useStore.getState().mutate((l) => { const x = l.inbox.find((y) => y.id === m.id); if (x) x.read = true; })}>
+                <Link
+                  key={m.id}
+                  to={inAppLink(m.link, '/inbox')}
+                  onClick={() =>
+                    useStore.getState().mutate((l) => {
+                      const x = l.inbox.find((y) => y.id === m.id);
+                      if (x) x.read = true;
+                    })
+                  }
+                >
                   <div className="small dim">{m.from}</div>
                   <div className="bold small">{m.subject}</div>
-                  <div className="small dim2" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.body}</div>
+                  <div className="small dim2" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {m.body}
+                  </div>
                 </Link>
               ))}
             </div>
           )}
         </Card>
 
-        <Card title={`${team.conf === 'E' ? 'East' : 'West'} standings`} right={<Link className="card-link" to="/league">Full</Link>}>
+        <Card
+          title={`${team.conf === 'E' ? 'East' : 'West'} standings`}
+          right={
+            <Link className="card-link" to="/league">
+              Full
+            </Link>
+          }
+        >
           <div className="col" style={{ gap: 4 }}>
             {window.map((r) => (
-              <Link key={r.tid} to={`/team/${r.tid}`} className="row" style={{ padding: '4px 0', fontWeight: r.tid === league.userTid ? 750 : 500, color: r.tid === league.userTid ? 'var(--text)' : 'var(--text-2)' }}>
-                <span className="num dim" style={{ width: 18 }}>{r.confRank}</span>
+              <Link
+                key={r.tid}
+                to={`/team/${r.tid}`}
+                className="row"
+                style={{ padding: '4px 0', fontWeight: r.tid === league.userTid ? 750 : 500, color: r.tid === league.userTid ? 'var(--text)' : 'var(--text-2)' }}
+              >
+                <span className="num dim" style={{ width: 18 }}>
+                  {r.confRank}
+                </span>
                 <TeamLogo tid={r.tid} size={22} />
                 <span className="grow">{league.teams[r.tid].name}</span>
-                <span className="num">{r.won}-{r.lost}</span>
-                <span className="num dim small" style={{ width: 34, textAlign: 'right' }}>{r.gb === 0 ? '-' : r.gb.toFixed(1)}</span>
+                <span className="num">
+                  {r.won}-{r.lost}
+                </span>
+                <span className="num dim small" style={{ width: 34, textAlign: 'right' }}>
+                  {r.gb === 0 ? '-' : r.gb.toFixed(1)}
+                </span>
               </Link>
             ))}
           </div>
-          {inSeason && <div className="tiny dim" style={{ marginTop: 6 }}>Top 6 qualify for the playoffs; 7-10 go to the play-in.</div>}
+          {inSeason && (
+            <div className="tiny dim" style={{ marginTop: 6 }}>
+              Top 6 qualify for the playoffs; 7-10 go to the play-in.
+            </div>
+          )}
         </Card>
       </div>
 
@@ -286,10 +365,14 @@ export default function Home() {
                 return (
                   <Link key={g.gid} to={`/game/${g.gid}`} className="row">
                     <span className={`tag ${won ? 'good' : 'bad'}`}>{won ? 'W' : 'L'}</span>
-                    <span className="small dim" style={{ width: 22 }}>{home ? 'vs' : '@'}</span>
+                    <span className="small dim" style={{ width: 22 }}>
+                      {home ? 'vs' : '@'}
+                    </span>
                     <TeamLogo tid={them.tid} size={22} />
                     <span className="grow">{league.teams[them.tid].name}</span>
-                    <span className="num bold">{us.pts}-{them.pts}</span>
+                    <span className="num bold">
+                      {us.pts}-{them.pts}
+                    </span>
                     <ChevronRight size={16} className="dim" />
                   </Link>
                 );
@@ -299,7 +382,14 @@ export default function Home() {
         </div>
       )}
 
-      <Card title="Top of the roster" right={<Link className="card-link" to="/roster">Roster</Link>}>
+      <Card
+        title="Top of the roster"
+        right={
+          <Link className="card-link" to="/roster">
+            Roster
+          </Link>
+        }
+      >
         <div className="hscroll">
           {[...roster]
             .sort((a, b) => b.ovr - a.ovr)
@@ -310,7 +400,9 @@ export default function Home() {
                   <Ovr v={p.ovr} size="sm" />
                   <span className="tiny dim">{p.pos}</span>
                 </div>
-                <span className="bold small ellipsis" style={{ marginTop: 4 }}>{nameOf(p.pid)}</span>
+                <span className="bold small ellipsis" style={{ marginTop: 4 }}>
+                  {nameOf(p.pid)}
+                </span>
                 <span className="tiny dim ellipsis">{p.archetype}</span>
               </Link>
             ))}
@@ -324,7 +416,10 @@ export default function Home() {
 function SeasonOutlook({ league }: { league: League }) {
   const team = league.teams[league.userTid];
   const talent = (tid: number) => {
-    const top8 = teamPlayers(league, tid).map((p) => p.ovr).sort((a, b) => b - a).slice(0, 8);
+    const top8 = teamPlayers(league, tid)
+      .map((p) => p.ovr)
+      .sort((a, b) => b - a)
+      .slice(0, 8);
     return top8.reduce((a, x) => a + x, 0) / Math.max(1, top8.length);
   };
   const ranked = league.teams.map((t) => ({ tid: t.tid, conf: t.conf, v: talent(t.tid) })).sort((a, b) => b.v - a.v);
@@ -334,32 +429,67 @@ function SeasonOutlook({ league }: { league: League }) {
   const avgAge = roster.reduce((a, p) => a + age(league, p), 0) / Math.max(1, roster.length);
   const pay = payroll(league, team.tid);
   const cap = CAP_FOR(league);
-  const outlook = confRank <= 4 ? 'Contender: the talent to host a playoff series.' : confRank <= 6 ? 'Playoff team on paper, with little margin.' : confRank <= 10 ? 'Play-in range: coaching and health decide it.' : 'Long shot: development and the draft matter most.';
+  const outlook =
+    confRank <= 4
+      ? 'Contender: the talent to host a playoff series.'
+      : confRank <= 6
+        ? 'Playoff team on paper, with little margin.'
+        : confRank <= 10
+          ? 'Play-in range: coaching and health decide it.'
+          : 'Long shot: development and the draft matter most.';
   return (
-    <Card title="Season outlook" right={<Link className="card-link" to="/league?tab=standings&view=power">Power</Link>}>
+    <Card
+      title="Season outlook"
+      right={
+        <Link className="card-link" to="/league?tab=standings&view=power">
+          Power
+        </Link>
+      }
+    >
       <div className="grid3">
         <Kpi k="Talent" v={`#${leagueRank}`} sub={`${ordinal(confRank)} in ${team.conf === 'E' ? 'East' : 'West'}`} />
-        <Kpi k="Payroll" v={`$${(pay / 1000).toFixed(0)}M`} sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} />
+        <Kpi
+          k="Payroll"
+          v={`$${(pay / 1000).toFixed(0)}M`}
+          sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
+          color={pay > cap.luxuryTax ? 'var(--bad)' : undefined}
+        />
         <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length} players`} />
       </div>
-      <div className="small dim2" style={{ marginTop: 10 }}>{outlook}</div>
+      <div className="small dim2" style={{ marginTop: 10 }}>
+        {outlook}
+      </div>
     </Card>
   );
 }
 
 function Onboarding() {
   const steps = [
-    { to: '/tactics', title: 'Pick a game plan', body: 'Choose an offensive playbook and defensive identity. Fit scores show what suits your roster; every control explains itself.' },
+    {
+      to: '/tactics',
+      title: 'Pick a game plan',
+      body: 'Choose an offensive playbook and defensive identity. Fit scores show what suits your roster; every control explains itself.',
+    },
     { to: '/rotation', title: 'Set the rotation', body: 'Order your depth chart and minute targets. The stint plan shows exactly when each player will be on the floor.' },
     { to: '/lab', title: 'Test it in the Lab', body: 'Simulate dozens of games against any opponent before you commit, and let the assistant find counters.' },
     { to: '/', title: 'Coach games live', body: 'Watch on the court, call timeouts, sub and adjust coverages. After each game, "Why" breaks down what decided it.' },
   ];
   return (
-    <Card accent title={<h3>Welcome, coach</h3>} right={<button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.settings.onboarded = true))}>Got it</button>}>
+    <Card
+      accent
+      title={<h3>Welcome, coach</h3>}
+      right={
+        <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.settings.onboarded = true))}>
+          Got it
+        </button>
+      }
+    >
       <div className="col" style={{ gap: 10 }}>
         {steps.map((s, i) => (
           <Link key={s.title} to={s.to} className="row top" style={{ gap: 10 }}>
-            <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent-text)' }}>{i + 1}</span>
+            <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent-text)' }}>
+              {i + 1}
+            </span>
             <div className="grow">
               <div className="bold small">{s.title}</div>
               <div className="small dim">{s.body}</div>

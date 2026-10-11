@@ -14,7 +14,14 @@ describe('engine rules', () => {
     players: teamPlayers(league, tid),
   });
   // private engine internals, for rule-level checks
-  type Internals = { T: { fouls: number; foulsLast2: number; on: { out: number; pid: number }[]; players: { out: number; pid: number; fouls: number; on: boolean }[] }[]; q: number; clock: number; bonus(t: unknown): boolean; chargeFoul(t: unknown, p: unknown): void; lateMode(off: unknown, def: unknown): { hurry: boolean }; };
+  type Internals = {
+    T: { fouls: number; foulsLast2: number; on: { out: number; pid: number }[]; players: { out: number; pid: number; fouls: number; on: boolean }[] }[];
+    q: number;
+    clock: number;
+    bonus(t: unknown): boolean;
+    chargeFoul(t: unknown, p: unknown): void;
+    lateMode(off: unknown, def: unknown): { hurry: boolean };
+  };
 
   it('honors hard minute caps, crunch time included', () => {
     const team = league.teams[2];
@@ -22,7 +29,11 @@ describe('engine rules', () => {
     let over = 0;
     let total = 0;
     for (let g = 0; g < 20; g++) {
-      const res = new GameSim(side(2, undefined, { rotation: { ...team.rotation, caps: { [star]: 20 } } }), side(3), { rng: new Rng(40 + g), type: 'regular', injuries: false }).simToEnd();
+      const res = new GameSim(side(2, undefined, { rotation: { ...team.rotation, caps: { [star]: 20 } } }), side(3), {
+        rng: new Rng(40 + g),
+        type: 'regular',
+        injuries: false,
+      }).simToEnd();
       const min = res.home.players.find((p) => p.pid === star)!.min;
       total += min;
       if (min > 21) over++;
@@ -34,7 +45,12 @@ describe('engine rules', () => {
   it('plays the coverage that was chosen, switching off the ball only off the ball', () => {
     const cov: Record<string, number> = {};
     for (let g = 0; g < 4; g++) {
-      const sim = new GameSim(side(4, { defense: { scheme: 'man', pnr: 'drop', switchOffBall: true, starPlan: 'none' } }), side(5), { rng: new Rng(g), type: 'regular', record: true, injuries: false });
+      const sim = new GameSim(side(4, { defense: { scheme: 'man', pnr: 'drop', switchOffBall: true, starPlan: 'none' } }), side(5), {
+        rng: new Rng(g),
+        type: 'regular',
+        record: true,
+        injuries: false,
+      });
       sim.simToEnd();
       for (const l of sim.drainLogs()) if (l.off === 1 && l.coverage) cov[l.coverage] = (cov[l.coverage] ?? 0) + 1;
     }
@@ -80,7 +96,10 @@ describe('engine rules', () => {
         if (l.steps.some((s) => s.k === 'ft') && !l.steps.some((s) => s.k === 'shot')) expect(['pnrBH', 'iso', 'misc']).toContain(l.finish);
       }
       for (const tb of [res.home, res.away]) {
-        const onCourtFta = sim.rawBoxes().filter((r) => r.tid === tb.tid).reduce((a, r) => a + r.b.tFta, 0);
+        const onCourtFta = sim
+          .rawBoxes()
+          .filter((r) => r.tid === tb.tid)
+          .reduce((a, r) => a + r.b.tFta, 0);
         expect(onCourtFta).toBe(5 * tb.t.fta);
       }
     }
@@ -160,7 +179,8 @@ describe('engine rules', () => {
 
   it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {
     type Sim = { T: { guardOf: Map<number, { pid: number }> }[]; starTarget(def: unknown, off: unknown): { pid: number } };
-    const sim = (plan: 'none' | 'deny') => new GameSim(side(16), side(17, { defense: { starPlan: plan, starTarget: null } }), { rng: new Rng(2), type: 'regular' }) as unknown as Sim;
+    const sim = (plan: 'none' | 'deny') =>
+      new GameSim(side(16), side(17, { defense: { starPlan: plan, starTarget: null } }), { rng: new Rng(2), type: 'regular' }) as unknown as Sim;
     const denied = sim('deny');
     const star = denied.starTarget(denied.T[1], denied.T[0]).pid;
     expect(denied.T[1].guardOf.get(star)!.pid).toBe(sim('none').T[1].guardOf.get(star)!.pid);

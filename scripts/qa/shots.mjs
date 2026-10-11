@@ -8,8 +8,14 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const shot = async (name) => { await page.waitForTimeout(400); await page.screenshot({ path: `${out}/${name}.png`, fullPage: false }); console.log('shot', name); };
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(m.text());
+});
+const shot = async (name) => {
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${out}/${name}.png`, fullPage: false });
+  console.log('shot', name);
+};
 await page.goto(`${base}/#/start`);
 await page.waitForTimeout(800);
 await shot('01-start');

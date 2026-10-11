@@ -107,9 +107,17 @@ export function defaultSettings(): Settings {
 }
 
 function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Player {
-  const tid = sp.team ? BBREF_TO_TID[sp.team] ?? FREE_AGENT : FREE_AGENT;
+  const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
   const salaries = sp.contract?.salaries?.length ? sp.contract.salaries : [0];
-  const experience = sp.draft ? Math.max(0, season - 1 - sp.draft.year) : Math.max(0, sp.stats.filter((s) => s.real).map((s) => s.season).filter((v, i, a) => a.indexOf(v) === i).length);
+  const experience = sp.draft
+    ? Math.max(0, season - 1 - sp.draft.year)
+    : Math.max(
+        0,
+        sp.stats
+          .filter((s) => s.real)
+          .map((s) => s.season)
+          .filter((v, i, a) => a.indexOf(v) === i).length,
+      );
   const p: Player = {
     pid,
     bbrefId: sp.id,
@@ -124,7 +132,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
     college: sp.college,
     jersey: sp.jersey,
     draft: sp.draft
-      ? { year: sp.draft.year, round: sp.draft.round, pick: sp.draft.pick, tid: sp.draft.team ? BBREF_TO_TID[sp.draft.team] ?? null : null, teamAbbrev: sp.draft.team }
+      ? { year: sp.draft.year, round: sp.draft.round, pick: sp.draft.pick, tid: sp.draft.team ? (BBREF_TO_TID[sp.draft.team] ?? null) : null, teamAbbrev: sp.draft.team }
       : { year: 0, round: 0, pick: 0, tid: null },
     tid,
     ratings: { ...sp.ratings },
@@ -151,7 +159,39 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
   return p;
 }
 
-const JERSEYS = ['0', '1', '2', '3', '4', '5', '7', '8', '9', '10', '11', '12', '13', '14', '15', '17', '20', '21', '22', '23', '24', '25', '30', '31', '32', '33', '34', '35', '41', '44', '55'];
+const JERSEYS = [
+  '0',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '17',
+  '20',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '30',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '41',
+  '44',
+  '55',
+];
 
 /** Rookies and new signings without a listed number pick a free one on their team. */
 function assignJerseys(league: League, rng: Rng) {
@@ -172,7 +212,7 @@ function assignJerseys(league: League, rng: Rng) {
 }
 
 export function createLeague(opts: CreateOpts): League {
-  const rngSeed = opts.rngSeed ?? (hashString(opts.name + Date.now()) >>> 0);
+  const rngSeed = opts.rngSeed ?? hashString(opts.name + Date.now()) >>> 0;
   const rng = new Rng(rngSeed);
   const season = START_SEASON;
   const teams = FRANCHISES.map((_, tid) => makeTeam(tid, season, rng));
@@ -232,7 +272,8 @@ export function createLeague(opts: CreateOpts): League {
         // the last spot goes to a center if the roster has none yet
         const big = i === 13 && !roster.some((p) => p.pos === 'C');
         let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: big ? rng.int(83, 85) : undefined });
-        for (let tries = 0; big && p.pos !== 'C' && tries < 10; tries++) p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86) });
+        for (let tries = 0; big && p.pos !== 'C' && tries < 10; tries++)
+          p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86) });
         league.nextPid++;
         p.experience = Math.max(0, age - 20);
         p.draft = { year: season - 1 - p.experience, round: rng.chance(0.7) ? 1 : 2, pick: rng.int(1, 30), tid: null };
@@ -271,7 +312,7 @@ export function createLeague(opts: CreateOpts): League {
   league.ratingAnchors = ratingMeans(league);
   league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;
-  ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? realSeed.picksThrough ?? 0 : 0));
+  ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? (realSeed.picksThrough ?? 0) : 0));
   if (realSeed?.picks) applySeedPicks(league, realSeed.picks);
   generateDraftClass(league, season, rng);
   const sched = (realSeed?.schedule && realSchedule(league.teams, realSeed.schedule, season, rng, league.nextGid)) || generateSchedule(league.teams, season, rng, league.nextGid);

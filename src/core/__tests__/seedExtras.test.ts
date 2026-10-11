@@ -15,7 +15,10 @@ function checkSchedule(league: ReturnType<typeof make>) {
   const perTeam = league.cup ? 80 : 82;
   expect(games.length).toBe(15 * perTeam);
   for (const t of league.teams) {
-    const days = games.filter((g) => g.home === t.tid || g.away === t.tid).map((g) => g.day).sort((a, b) => a - b);
+    const days = games
+      .filter((g) => g.home === t.tid || g.away === t.tid)
+      .map((g) => g.day)
+      .sort((a, b) => a - b);
     expect(days.length).toBe(perTeam);
     expect(games.filter((g) => g.home === t.tid).length).toBe(perTeam / 2);
     for (let i = 1; i < days.length; i++) expect(days[i]).toBeGreaterThan(days[i - 1]);
@@ -80,7 +83,13 @@ describe.skipIf(!seed.picks)('real future pick ownership', () => {
       }
     }
     for (const sp of seed.picks!) {
-      const orig = league.teams.findIndex((t) => t.abbrev === sp.original || (sp.original === 'BRK' && t.abbrev === 'BKN') || (sp.original === 'CHO' && t.abbrev === 'CHA') || (sp.original === 'PHO' && t.abbrev === 'PHX'));
+      const orig = league.teams.findIndex(
+        (t) =>
+          t.abbrev === sp.original ||
+          (sp.original === 'BRK' && t.abbrev === 'BKN') ||
+          (sp.original === 'CHO' && t.abbrev === 'CHA') ||
+          (sp.original === 'PHO' && t.abbrev === 'PHX'),
+      );
       const dp = league.draftPicks.find((d) => d.season === sp.season && d.round === sp.round && d.originalTid === orig)!;
       expect(dp.tid).not.toBe(-1);
       expect(dp.protection).toBe(sp.protection);

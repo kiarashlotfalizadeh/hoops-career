@@ -246,7 +246,11 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
         ball = { ...BASKET };
         const made = !!st.made;
         if (made) score[off] += st.v ?? 2;
-        snap(st.zone === 'rim' ? 380 : 620, { ballZ: 1, flash: made ? { text: `+${st.v ?? 2}`, kind: 'make', x: 0, y: 9 } : { text: 'MISS', kind: 'miss', x: 0, y: 9 }, score: [...score] as [number, number] });
+        snap(st.zone === 'rim' ? 380 : 620, {
+          ballZ: 1,
+          flash: made ? { text: `+${st.v ?? 2}`, kind: 'make', x: 0, y: 9 } : { text: 'MISS', kind: 'miss', x: 0, y: 9 },
+          score: [...score] as [number, number],
+        });
         break;
       }
       case 'block': {

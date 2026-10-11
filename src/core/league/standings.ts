@@ -73,26 +73,39 @@ function ranker(league: League, season: number, all: Entry[]) {
   };
   let leaders: Set<number> | null = null;
   const divLeader: Criterion = (e) => {
-    leaders ??= new Set([...new Set(all.map((x) => div(x.tid)))].map((d) => order(all.filter((x) => div(x.tid) === d), true)[0].tid));
+    leaders ??= new Set(
+      [...new Set(all.map((x) => div(x.tid)))].map(
+        (d) =>
+          order(
+            all.filter((x) => div(x.tid) === d),
+            true,
+          )[0].tid,
+      ),
+    );
     return leaders.has(e.tid) ? 1 : 0;
   };
   // playoff teams: the top ten of each conference by record (play-in included), ties at the cut too
   const playoffTeams = new Set<number>();
   for (const c of new Set(all.map((x) => conf(x.tid)))) {
-    const pcts = all.filter((x) => conf(x.tid) === c).map((x) => winPct(x.ts)).sort((a, b) => b - a);
+    const pcts = all
+      .filter((x) => conf(x.tid) === c)
+      .map((x) => winPct(x.ts))
+      .sort((a, b) => b - a);
     const cut = pcts[Math.min(9, pcts.length - 1)];
     for (const x of all) if (conf(x.tid) === c && winPct(x.ts) >= cut - EPS) playoffTeams.add(x.tid);
   }
-  const vsPlayoff = (own: boolean): Criterion => (e) => {
-    let w = 0;
-    let l = 0;
-    for (const o of playoffTeams) {
-      if (o === e.tid || (conf(o) === conf(e.tid)) !== own) continue;
-      w += wins(e.tid, o);
-      l += wins(o, e.tid);
-    }
-    return frac(w, l);
-  };
+  const vsPlayoff =
+    (own: boolean): Criterion =>
+    (e) => {
+      let w = 0;
+      let l = 0;
+      for (const o of playoffTeams) {
+        if (o === e.tid || (conf(o) === conf(e.tid)) !== own) continue;
+        w += wins(e.tid, o);
+        l += wins(o, e.tid);
+      }
+      return frac(w, l);
+    };
   const divRecord: Criterion = (e, group) => (group.every((o) => div(o.tid) === div(e.tid)) ? frac(e.ts.divWon, e.ts.divLost) : 0);
   const confRecord: Criterion = (e) => frac(e.ts.confWon, e.ts.confLost);
   const pointDiff: Criterion = (e) => e.ts.ptsFor - e.ts.ptsAgainst;
@@ -103,7 +116,7 @@ function ranker(league: League, season: number, all: Entry[]) {
   /** Split a sorted list into runs of equal score, ordering inside each run with `inner`. */
   function runs<T>(sorted: T[], score: (x: T) => number, inner: (run: T[]) => Entry[]): Entry[] {
     const out: Entry[] = [];
-    for (let i = 0; i < sorted.length; ) {
+    for (let i = 0; i < sorted.length;) {
       let j = i + 1;
       while (j < sorted.length && Math.abs(score(sorted[i]) - score(sorted[j])) < EPS) j++;
       out.push(...inner(sorted.slice(i, j)));
@@ -119,14 +132,26 @@ function ranker(league: League, season: number, all: Entry[]) {
       if (inDivision && crit === divLeader) continue;
       const scored = group.map((e) => ({ e, v: crit(e, group) })).sort((a, b) => b.v - a.v);
       if (scored[0].v - scored[scored.length - 1].v < EPS) continue;
-      return runs(scored, (x) => x.v, (run) => breakTie(run.map((x) => x.e), inDivision));
+      return runs(
+        scored,
+        (x) => x.v,
+        (run) =>
+          breakTie(
+            run.map((x) => x.e),
+            inDivision,
+          ),
+      );
     }
     return [...group].sort((a, b) => drawLot(season, a.tid) - drawLot(season, b.tid));
   }
 
   function order(list: Entry[], inDivision = false): Entry[] {
     const sorted = [...list].sort((a, b) => winPct(b.ts) - winPct(a.ts));
-    return runs(sorted, (e) => winPct(e.ts), (run) => breakTie(run, inDivision));
+    return runs(
+      sorted,
+      (e) => winPct(e.ts),
+      (run) => breakTie(run, inDivision),
+    );
   }
 
   return order;
@@ -154,7 +179,9 @@ export function finalsHomeCourt(league: League, a: number, b: number, season = l
 }
 
 export function standings(league: League, season = league.season): StandingRow[] {
-  const rows = league.teams.map((t) => ({ tid: t.tid, ts: season === league.season ? curTeamSeason(league, t.tid) : t.seasons.find((s) => s.season === season)! })).filter((r) => r.ts);
+  const rows = league.teams
+    .map((t) => ({ tid: t.tid, ts: season === league.season ? curTeamSeason(league, t.tid) : t.seasons.find((s) => s.season === season)! }))
+    .filter((r) => r.ts);
   const order = ranker(league, season, rows);
   const out: StandingRow[] = [];
   for (const conf of ['E', 'W'] as const) {

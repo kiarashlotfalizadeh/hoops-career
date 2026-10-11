@@ -5,7 +5,19 @@ import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
 import { capPayroll } from '../../core/league/freeAgency';
-import { MAX_FIRSTS_OUT, capSalary, evaluateTrade, executeTrade, makeItWork, pickLabel, salaryMatchGap, untradeableReason, validateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import {
+  MAX_FIRSTS_OUT,
+  capSalary,
+  evaluateTrade,
+  executeTrade,
+  makeItWork,
+  pickLabel,
+  salaryMatchGap,
+  untradeableReason,
+  validateTrade,
+  type TradeEval,
+  type TradeOffer,
+} from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -19,7 +31,13 @@ interface Sel {
   dpids: number[];
 }
 const EMPTY: Sel = { pids: [], dpids: [] };
-const ids = (s: string | null) => (s ? s.split(',').map((x) => Number(x)).filter((n) => Number.isFinite(n)) : []);
+const ids = (s: string | null) =>
+  s
+    ? s
+        .split(',')
+        .map((x) => Number(x))
+        .filter((n) => Number.isFinite(n))
+    : [];
 const toggle = (arr: number[], id: number) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
 
 function readParams(league: League, params: URLSearchParams) {
@@ -119,12 +137,27 @@ export default function Trade() {
     if (!r) {
       const gap = salaryMatchGap(league, offer, 'a');
       const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-      useStore.getState().toast(gap > 0 ? `You need to send at least ${fmtM(out + gap)} in salary, and no player of yours makes that work.` : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`, 'bad');
+      useStore
+        .getState()
+        .toast(
+          gap > 0
+            ? `You need to send at least ${fmtM(out + gap)} in salary, and no player of yours makes that work.`
+            : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
+          'bad',
+        );
       return;
     }
     const addP = r.a.pids.filter((x) => !offer.a.pids.includes(x));
     const addD = r.a.dpids.filter((x) => !offer.a.dpids.includes(x));
-    const names = [...addP.map((pid) => playerName(league.players[pid])), ...addD.map((d) => pickLabel(league, league.draftPicks.find((x) => x.dpid === d)!))];
+    const names = [
+      ...addP.map((pid) => playerName(league.players[pid])),
+      ...addD.map((d) =>
+        pickLabel(
+          league,
+          league.draftPicks.find((x) => x.dpid === d)!,
+        ),
+      ),
+    ];
     setGive({ pids: r.a.pids, dpids: r.a.dpids });
     useStore.getState().toast(names.length ? `${pt.abbrev} would do it if you add ${names.join(' + ')}.` : `${pt.abbrev} would accept this as is.`, 'good');
   };
@@ -138,13 +171,16 @@ export default function Trade() {
         right={
           <Help title="Trade rules">
             <p style={{ margin: 0 }}>
-              <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out, plus $0.1M. Teams under the cap can absorb salary freely.
+              <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out,
+              plus $0.1M. Teams under the cap can absorb salary freely.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season no team can drop below {CAP.rosterMin}. Two-way players don't count, but each team has only {TWO_WAY_MAX} two-way slots.
+              <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season
+              no team can drop below {CAP.rosterMin}. Two-way players don't count, but each team has only {TWO_WAY_MAX} two-way slots.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded. Until free agency opens, each team's own expiring players it plans to keep count against its cap at about their asking price (cap holds).
+              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded. Until free agency opens, each team's own
+              expiring players it plans to keep count against its cap at about their asking price (cap holds).
             </p>
             <p style={{ margin: 0 }}>
               <b>Draft picks.</b> No team can be left without a first-round pick in two drafts in a row, and no AI team gives up more than {MAX_FIRSTS_OUT} firsts in one deal.
@@ -153,7 +189,9 @@ export default function Trade() {
               <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens after the playoffs, with the draft lottery.
             </p>
             <p style={{ margin: 0 }}>
-              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract: a bad contract counts against a package, and taking on salary over the tax costs them. Contenders want help now; rebuilders pay more for youth and picks and less for veterans. A star is worth more than several lesser players, and players they'd have to waive to fit the roster count for nothing.
+              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract: a bad contract counts against a package, and taking on salary over the tax costs them.
+              Contenders want help now; rebuilders pay more for youth and picks and less for veterans. A star is worth more than several lesser players, and players they'd have to
+              waive to fit the roster count for nothing.
             </p>
           </Help>
         }
@@ -267,7 +305,9 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
           </div>
         </div>
         <div className="fo-money">
-          <div className="a" style={{ color: pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>{pay > cap.salaryCap ? `${fmtM(pay - cap.salaryCap)} over` : `${fmtM(cap.salaryCap - pay)} space`}</div>
+          <div className="a" style={{ color: pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+            {pay > cap.salaryCap ? `${fmtM(pay - cap.salaryCap)} over` : `${fmtM(cap.salaryCap - pay)} space`}
+          </div>
           <div className="b">payroll {fmtM(pay)}</div>
         </div>
       </div>
@@ -282,7 +322,23 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
 
 // ------------------------------------------------------------------ deal summary (selected assets)
 
-function DealCard({ league, partner, give, get, onGive, onGet, onReset }: { league: League; partner: number; give: Sel; get: Sel; onGive: (s: Sel) => void; onGet: (s: Sel) => void; onReset: () => void }) {
+function DealCard({
+  league,
+  partner,
+  give,
+  get,
+  onGive,
+  onGet,
+  onReset,
+}: {
+  league: League;
+  partner: number;
+  give: Sel;
+  get: Sel;
+  onGive: (s: Sel) => void;
+  onGet: (s: Sel) => void;
+  onReset: () => void;
+}) {
   const any = give.pids.length + give.dpids.length + get.pids.length + get.dpids.length > 0;
   const col = (title: string, tid: number, sel: Sel, set: (s: Sel) => void) => (
     <div className="col" style={{ gap: 6, minWidth: 0 }}>
@@ -356,7 +412,15 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
       </div>
       <div className="list">
         {players.map((p) => (
-          <PlayerAsset key={p.pid} league={league} p={p} name={nameOf(p.pid)} season={season} on={sel.pids.includes(p.pid)} onToggle={() => onChange({ ...sel, pids: toggle(sel.pids, p.pid) })} />
+          <PlayerAsset
+            key={p.pid}
+            league={league}
+            p={p}
+            name={nameOf(p.pid)}
+            season={season}
+            on={sel.pids.includes(p.pid)}
+            onToggle={() => onChange({ ...sel, pids: toggle(sel.pids, p.pid) })}
+          />
         ))}
       </div>
       <div className="fo-sec" style={{ margin: '10px 12px 4px' }}>
@@ -387,10 +451,26 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       <div className="grow" style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 5 }}>
           <span className="fo-name small">{name}</span>
-          {p.injury && <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>INJ</span>}
-          {p.mood.tradeRequest && <span className="tag warn" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>REQ</span>}
-          {p.contract.twoWay && <span className="tag" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>2-WAY</span>}
-          {untradeableReason(league, p) && <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>EXPIRING</span>}
+          {p.injury && (
+            <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
+              INJ
+            </span>
+          )}
+          {p.mood.tradeRequest && (
+            <span className="tag warn" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
+              REQ
+            </span>
+          )}
+          {p.contract.twoWay && (
+            <span className="tag" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
+              2-WAY
+            </span>
+          )}
+          {untradeableReason(league, p) && (
+            <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
+              EXPIRING
+            </span>
+          )}
         </div>
         <div className="fo-meta tiny">
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
@@ -438,7 +518,23 @@ function reaction(ev: TradeEval): { pct: number; label: string; color: string } 
   return { pct, label: 'Close — add a little more', color: 'var(--tier-elite)' };
 }
 
-function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league: League; offer: TradeOffer; ev: TradeEval | null; empty: boolean; season: number; onPropose: () => void; onWork: () => void }) {
+function Dock({
+  league,
+  offer,
+  ev,
+  empty,
+  season,
+  onPropose,
+  onWork,
+}: {
+  league: League;
+  offer: TradeOffer;
+  ev: TradeEval | null;
+  empty: boolean;
+  season: number;
+  onPropose: () => void;
+  onWork: () => void;
+}) {
   const user = league.userTid;
   const cap = CAP_FOR(league, season);
   // two-way pay sits outside the cap: it neither counts nor matches
@@ -533,7 +629,19 @@ function Dock({ league, offer, ev, empty, season, onPropose, onWork }: { league:
 
 // ------------------------------------------------------------------ trading block
 
-function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: League; shop: number | null; setShop: (pid: number) => void; closed: boolean; onLoad: (o: TradeOffer) => void }) {
+function TradingBlock({
+  league,
+  shop,
+  setShop,
+  closed,
+  onLoad,
+}: {
+  league: League;
+  shop: number | null;
+  setShop: (pid: number) => void;
+  closed: boolean;
+  onLoad: (o: TradeOffer) => void;
+}) {
   const v = useVersion();
   const [showAll, setShowAll] = useState(false);
   const mine = teamPlayers(league, league.userTid).sort((a, b) => b.ovr - a.ovr);
@@ -569,7 +677,14 @@ function TradingBlock({ league, shop, setShop, closed, onLoad }: { league: Leagu
           {(showAll ? offers : offers.slice(0, 8)).map((o) => {
             const t = league.teams[o.tid];
             const ratio = o.myValue / Math.max(0.01, o.targetValue);
-            const tone = ratio >= 1.1 ? { l: 'Overpay', c: 'var(--good)' } : ratio >= 0.9 ? { l: 'Fair value', c: 'var(--info)' } : ratio >= 0.7 ? { l: 'Below value', c: 'var(--warn)' } : { l: 'Lowball', c: 'var(--bad)' };
+            const tone =
+              ratio >= 1.1
+                ? { l: 'Overpay', c: 'var(--good)' }
+                : ratio >= 0.9
+                  ? { l: 'Fair value', c: 'var(--info)' }
+                  : ratio >= 0.7
+                    ? { l: 'Below value', c: 'var(--warn)' }
+                    : { l: 'Lowball', c: 'var(--bad)' };
             const inSal = o.offer.b.pids.reduce((a, x) => a + capSalary(league, x), 0);
             return (
               <Card key={o.tid} className="tight">

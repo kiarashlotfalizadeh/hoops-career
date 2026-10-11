@@ -118,16 +118,19 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
               {mode === 'fa' ? (
                 <>
                   <p style={{ margin: 0 }}>
-                    Free agents weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and how much <b>playing time</b> they'd get on your roster. Interested players give you a discount;
-                    lukewarm ones want a premium.
+                    Free agents weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and how much <b>playing time</b> they'd get on your roster. Interested players give
+                    you a discount; lukewarm ones want a premium.
                   </p>
                   <p style={{ margin: 0 }}>
-                    Right now his price for you is {appeal >= 1 ? `${Math.round((1 - 1 / appeal) * 100)}% below` : `${Math.round((1 / appeal - 1) * 100)}% above`} what he'd ask a neutral team.
+                    Right now his price for you is {appeal >= 1 ? `${Math.round((1 - 1 / appeal) * 100)}% below` : `${Math.round((1 / appeal - 1) * 100)}% above`} what he'd ask a
+                    neutral team.
                   </p>
                 </>
               ) : (
                 <>
-                  <p style={{ margin: 0 }}>Mood reflects playing time vs. expectations, winning, his role and whether he feels fairly paid. Happy players give a hometown discount; unhappy ones want more.</p>
+                  <p style={{ margin: 0 }}>
+                    Mood reflects playing time vs. expectations, winning, his role and whether he feels fairly paid. Happy players give a hometown discount; unhappy ones want more.
+                  </p>
                   <p style={{ margin: 0 }}>A player who has requested a trade will not re-sign.</p>
                 </>
               )}
@@ -142,7 +145,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
               <MoodTag p={p} />
             </span>
           )}
-          <span className="tiny dim">{mode === 'fa' ? `Appeal ×${appeal.toFixed(2)}` : p.mood.notes[0] ?? 'No complaints'}</span>
+          <span className="tiny dim">{mode === 'fa' ? `Appeal ×${appeal.toFixed(2)}` : (p.mood.notes[0] ?? 'No complaints')}</span>
         </div>
       </div>
 
@@ -217,20 +220,24 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             <b>Not enough cap space.</b>
             <Help title="Why can't I sign him?">
               <p style={{ margin: 0 }}>
-                The league uses a <b>soft cap</b> of {fmtM(cap.salaryCap)}. You can sign a free agent to any contract that fits under the cap: you have <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(season)}.
+                The league uses a <b>soft cap</b> of {fmtM(cap.salaryCap)}. You can sign a free agent to any contract that fits under the cap: you have{' '}
+                <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(season)}.
               </p>
               <p style={{ margin: 0 }}>
                 Once you're over the cap you can still add players on <b>minimum contracts</b> (up to {fmtM(cap.vetMin, 2)} per season), as long as you have a roster spot.
               </p>
               <p style={{ margin: 0 }}>
-                Once a season you can also use the <b>mid-level exception</b>: one signing over the cap, up to {MLE_YEARS} years, as long as it keeps you under the tax line ({fmtM(cap.luxuryTax)}).{' '}
-                {mle > 0 ? `You can offer up to ${fmtM(mle, 2)} with it now.` : "It isn't available to you right now."}
+                Once a season you can also use the <b>mid-level exception</b>: one signing over the cap, up to {MLE_YEARS} years, as long as it keeps you under the tax line (
+                {fmtM(cap.luxuryTax)}). {mle > 0 ? `You can offer up to ${fmtM(mle, 2)} with it now.` : "It isn't available to you right now."}
               </p>
-              <p style={{ margin: 0 }}>To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).</p>
+              <p style={{ margin: 0 }}>
+                To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).
+              </p>
             </Help>
           </div>
           <div className="small dim2" style={{ marginTop: 2 }}>
-            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can offer the minimum ({fmtM(cap.vetMin, 2)}){mle > 0 ? ` or up to ${fmtM(mle, 2)} with your mid-level exception` : ''}.
+            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can offer the minimum ({fmtM(cap.vetMin, 2)})
+            {mle > 0 ? ` or up to ${fmtM(mle, 2)} with your mid-level exception` : ''}.
           </div>
           <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
             {mle > cap.vetMin && (
@@ -242,7 +249,11 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
               Offer the minimum instead
             </button>
           </div>
-          {ask.amount > cap.vetMin && <div className="tiny dim" style={{ marginTop: 6 }}>He's asking {fmtM(ask.amount, 2)}, so he's unlikely to take a minimum deal.</div>}
+          {ask.amount > cap.vetMin && (
+            <div className="tiny dim" style={{ marginTop: 6 }}>
+              He's asking {fmtM(ask.amount, 2)}, so he's unlikely to take a minimum deal.
+            </div>
+          )}
         </Callout>
       )}
 
@@ -306,7 +317,10 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
           <div className="tiny dim">
             You can go over the cap to keep your own players.
             {taxBill > 0 ? (
-              <span className="bad"> This puts you {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in luxury tax.</span>
+              <span className="bad">
+                {' '}
+                This puts you {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in luxury tax.
+              </span>
             ) : after > cap.salaryCap ? (
               <> You'd be over the cap, so you'd only be able to add free agents on minimum deals.</>
             ) : (

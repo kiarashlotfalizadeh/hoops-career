@@ -6,10 +6,19 @@ import { join } from 'node:path';
 const svg = readFileSync('public/icon.svg', 'utf8');
 const ballOnly = svg.replace(/<rect[^>]*fill="url\(#bg\)"\/>/, '');
 const files = [];
-const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.png')) files.push(p); } };
+const walk = (d) => {
+  for (const f of readdirSync(d)) {
+    const p = join(d, f);
+    if (statSync(p).isDirectory()) walk(p);
+    else if (p.endsWith('.png')) files.push(p);
+  }
+};
 walk('android/app/src/main/res');
 walk('ios/App/App/Assets.xcassets');
-const dims = (p) => { const b = readFileSync(p); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }; };
+const dims = (p) => {
+  const b = readFileSync(p);
+  return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+};
 const browser = await chromium.launch();
 for (const f of files) {
   const { w, h } = dims(f);

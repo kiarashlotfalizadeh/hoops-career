@@ -229,7 +229,14 @@ export interface CandidateResult {
 }
 
 /** Evaluate candidate patches against a baseline using common random numbers. */
-export function evaluateCandidates(a: LabSide, b: LabSide, candidates: Candidate[], games: number, seed: number, onGame?: () => void): { base: LabSummary; results: CandidateResult[] } {
+export function evaluateCandidates(
+  a: LabSide,
+  b: LabSide,
+  candidates: Candidate[],
+  games: number,
+  seed: number,
+  onGame?: () => void,
+): { base: LabSummary; results: CandidateResult[] } {
   const base = runLab({ a, b, games, seed }, onGame);
   const results = candidates.map((c) => {
     const r = runLab({ a, b, games, seed, patch: c.patch }, onGame);

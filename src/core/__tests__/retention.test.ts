@@ -56,7 +56,22 @@ describe('retired players (L4)', () => {
     p.awards = award ? [{ season: l.season - yearsAgo, type: 'Sixth Man of the Year' }] : [];
     p.stats = [];
     const s = statsLine(p, l.season - yearsAgo, 1, false);
-    Object.assign(s, { gp: games, min: games * 21.123456, pts: games * 9, pm: 37, onPoss: 4321, onPtsFor: 4800, onPtsAgainst: 4700, rimM: 120, rimA: 200, midM: 50, midA: 120, teamFga: 5000, teamFta: 1500, teamTov: 900 });
+    Object.assign(s, {
+      gp: games,
+      min: games * 21.123456,
+      pts: games * 9,
+      pm: 37,
+      onPoss: 4321,
+      onPtsFor: 4800,
+      onPtsAgainst: 4700,
+      rimM: 120,
+      rimA: 200,
+      midM: 50,
+      midA: 120,
+      teamFga: 5000,
+      teamFta: 1500,
+      teamTov: 900,
+    });
     p.mood.score = -4;
     p.mood.notes = ['Wants more minutes'];
     return p;

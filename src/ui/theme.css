@@ -470,7 +470,9 @@ h3 {
   font-weight: 650;
   font-size: 14.5px;
   white-space: nowrap;
-  transition: transform 0.06s ease, background 0.15s ease;
+  transition:
+    transform 0.06s ease,
+    background 0.15s ease;
 }
 .btn:active {
   transform: scale(0.97);
@@ -793,7 +795,9 @@ input[type='range']::-moz-range-thumb {
   height: 20px;
   border-radius: 50%;
   background: var(--text-2);
-  transition: transform 0.15s, background 0.15s;
+  transition:
+    transform 0.15s,
+    background 0.15s;
 }
 .toggle.on {
   background: var(--accent);

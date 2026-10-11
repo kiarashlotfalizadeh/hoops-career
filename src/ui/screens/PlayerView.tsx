@@ -105,7 +105,13 @@ function seasonsOf(p: Player) {
       }
       // advanced numbers from real seasons: keep the total row's (first) values
     }
-    rows.push({ key: k, season: list[0].season, playoffs: list[0].playoffs, teams: list.map((s) => (typeof s.tid === 'number' ? s.tid : BBREF_TO_TID[String(s.tid)] ?? -1)), tot });
+    rows.push({
+      key: k,
+      season: list[0].season,
+      playoffs: list[0].playoffs,
+      teams: list.map((s) => (typeof s.tid === 'number' ? s.tid : (BBREF_TO_TID[String(s.tid)] ?? -1))),
+      tot,
+    });
   }
   return rows.sort((a, b) => b.season - a.season || Number(a.playoffs) - Number(b.playoffs));
 }
@@ -133,15 +139,25 @@ export default function PlayerView() {
   const mine = p.tid === league.userTid;
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
-  const role = team ? team.tactics.offense.roles[p.pid] ?? arch.role : arch.role;
+  const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
   const mood = MOOD_META[moodLevel(p.mood.score)];
-  const seasonLine = (season: number) => perGame(p.stats.filter((s) => s.season === season && !s.playoffs).reduce<PlayerStats | null>((a, s) => (a ? { ...a, ...sumStats(a, s) } : s), null));
+  const seasonLine = (season: number) =>
+    perGame(p.stats.filter((s) => s.season === season && !s.playoffs).reduce<PlayerStats | null>((a, s) => (a ? { ...a, ...sumStats(a, s) } : s), null));
   const cur = seasonLine(league.season);
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
   const line = cur ?? (lastSeason ? seasonLine(lastSeason) : null);
   const sal = salaryFor(p, league.season) || salaryFor(p, league.season + 1);
-  const status = p.tid === FREE_AGENT ? 'Free agent' : p.tid === DRAFT_PROSPECT ? `${p.draft.year} draft prospect` : p.tid === RETIRED ? `Retired ${p.retiredSeason ?? ''}` : team ? `${team.region} ${team.name}` : '';
+  const status =
+    p.tid === FREE_AGENT
+      ? 'Free agent'
+      : p.tid === DRAFT_PROSPECT
+        ? `${p.draft.year} draft prospect`
+        : p.tid === RETIRED
+          ? `Retired ${p.retiredSeason ?? ''}`
+          : team
+            ? `${team.region} ${team.name}`
+            : '';
   const contribs = ovrContributions(league, p);
 
   return (
@@ -166,7 +182,11 @@ export default function PlayerView() {
               <Tag tone="info">{p.archetype}</Tag>
               <Tag>{tierLabel(p.ovr)}</Tag>
               {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
-              {p.injury && <Tag tone="bad">{p.injury.type} · {p.injury.gamesRemaining}g</Tag>}
+              {p.injury && (
+                <Tag tone="bad">
+                  {p.injury.type} · {p.injury.gamesRemaining}g
+                </Tag>
+              )}
               {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
             </div>
           </div>
@@ -182,7 +202,11 @@ export default function PlayerView() {
           <Kpi k="AST" v={line ? f1(line.ast) : '-'} />
           <Kpi k="TS%" v={line ? p1(line.tsPct).replace('%', '') : '-'} />
         </div>
-        {!cur && line && lastSeason ? <div className="tiny dim" style={{ marginTop: 6 }}>{seasonLabel(lastSeason)} per game{p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}</div> : null}
+        {!cur && line && lastSeason ? (
+          <div className="tiny dim" style={{ marginTop: 6 }}>
+            {seasonLabel(lastSeason)} per game{p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
+          </div>
+        ) : null}
       </Card>
 
       <Segmented
@@ -200,7 +224,14 @@ export default function PlayerView() {
 
       {tab === 'overview' && (
         <>
-          <Card title="Scouting profile" right={<Help title="How skills are measured">Each skill is a blend of underlying ratings, the same blend the game engine uses. Percentiles compare him with every rostered NBA player.</Help>}>
+          <Card
+            title="Scouting profile"
+            right={
+              <Help title="How skills are measured">
+                Each skill is a blend of underlying ratings, the same blend the game engine uses. Percentiles compare him with every rostered NBA player.
+              </Help>
+            }
+          >
             <div className="col" style={{ gap: 9 }}>
               {SKILLS.map((s) => {
                 const val = s.get(c, p);
@@ -209,7 +240,10 @@ export default function PlayerView() {
                   <div key={s.key} className="ratingrow" style={{ gridTemplateColumns: '128px 1fr 44px' }}>
                     <span className="dim2">{s.label}</span>
                     <Bar value={pc} color={pc >= 85 ? 'var(--tier-elite)' : pc >= 65 ? 'var(--good)' : pc >= 35 ? 'var(--info)' : 'var(--bad)'} />
-                    <span className="num right small">{pc}<span className="dim tiny">th</span></span>
+                    <span className="num right small">
+                      {pc}
+                      <span className="dim tiny">th</span>
+                    </span>
                   </div>
                 );
               })}
@@ -221,12 +255,15 @@ export default function PlayerView() {
                 {contribs.gap >= 0 ? `${contribs.gap} points above` : `${-contribs.gap} points below`} an average NBA player ({AVERAGE_OVR}). Biggest reasons, in OVR points:
               </div>
               <div className="col" style={{ gap: 6 }}>
-                {contribs.parts.filter((x) => x.delta > 0).slice(0, 4).map((x) => (
-                  <div key={x.key} className="row between small">
-                    <span>{x.label}</span>
-                    <span className="good num">+{x.delta}</span>
-                  </div>
-                ))}
+                {contribs.parts
+                  .filter((x) => x.delta > 0)
+                  .slice(0, 4)
+                  .map((x) => (
+                    <div key={x.key} className="row between small">
+                      <span>{x.label}</span>
+                      <span className="good num">+{x.delta}</span>
+                    </div>
+                  ))}
                 <div className="divider" />
                 {contribs.parts
                   .filter((x) => x.delta < 0)
@@ -246,14 +283,11 @@ export default function PlayerView() {
                   <div className="bold">{ROLE_META[role].label}</div>
                   <div className="small dim">{ROLE_META[role].help}</div>
                 </div>
-                {arch.role !== role && (
-                  <div className="small warn">
-                    His natural role is {ROLE_META[arch.role].label}.
-                  </div>
-                )}
+                {arch.role !== role && <div className="small warn">His natural role is {ROLE_META[arch.role].label}.</div>}
                 {team && (
                   <div className="small dim2">
-                    Shot freedom: {['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1]} · Planned minutes: {p.injury ? 'out (injured)' : team.rotation.minutes[p.pid] ?? 0}
+                    Shot freedom: {['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1]} · Planned minutes:{' '}
+                    {p.injury ? 'out (injured)' : (team.rotation.minutes[p.pid] ?? 0)}
                   </div>
                 )}
                 {cur && (
@@ -295,7 +329,11 @@ export default function PlayerView() {
                   </div>
                   <div className="row between">
                     <span className="dim2 small">Expires</span>
-                    <span className="num">{seasonLabel(contractExp(p.contract))}{p.contract.option ? ` (${p.contract.option} option)` : ''}{p.contract.rookie ? ' · rookie scale' : ''}</span>
+                    <span className="num">
+                      {seasonLabel(contractExp(p.contract))}
+                      {p.contract.option ? ` (${p.contract.option} option)` : ''}
+                      {p.contract.rookie ? ' · rookie scale' : ''}
+                    </span>
                   </div>
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
                   <div className="row between">
@@ -305,7 +343,9 @@ export default function PlayerView() {
                 </div>
               ) : p.tid === FREE_AGENT ? (
                 <div className="col" style={{ gap: 8 }}>
-                  <div className="small dim2">Asking {moneyM(askingContract(league, p, league.userTid).amount)} × {askingContract(league, p, league.userTid).years} yrs from you.</div>
+                  <div className="small dim2">
+                    Asking {moneyM(askingContract(league, p, league.userTid).amount)} × {askingContract(league, p, league.userTid).years} yrs from you.
+                  </div>
                   <Link className="btn sm primary" to="/free-agents">
                     Make an offer
                   </Link>
@@ -356,7 +396,9 @@ export default function PlayerView() {
             <Card title="Honors">
               <div className="chips">
                 {summarizeAwards(p).map((a) => (
-                  <span key={a} className="tag warn">{a}</span>
+                  <span key={a} className="tag warn">
+                    {a}
+                  </span>
                 ))}
               </div>
             </Card>
@@ -366,7 +408,9 @@ export default function PlayerView() {
 
       {tab === 'ratings' && (
         <>
-          <div className="tiny dim" style={{ margin: '0 2px 8px' }}>Tap a rating to see what it does in the engine.</div>
+          <div className="tiny dim" style={{ margin: '0 2px 8px' }}>
+            Tap a rating to see what it does in the engine.
+          </div>
           {(['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const).map((g) => (
             <Card key={g} title={g}>
               <div className="col" style={{ gap: 6 }}>
@@ -376,15 +420,30 @@ export default function PlayerView() {
                   const open = openRating === m.key;
                   return (
                     <div key={m.key}>
-                      <button className="ratingrow block" style={{ gridTemplateColumns: '108px 1fr 54px', width: '100%', textAlign: 'left' }} onClick={() => setOpenRating(open ? null : m.key)} aria-expanded={open}>
+                      <button
+                        className="ratingrow block"
+                        style={{ gridTemplateColumns: '108px 1fr 54px', width: '100%', textAlign: 'left' }}
+                        onClick={() => setOpenRating(open ? null : m.key)}
+                        aria-expanded={open}
+                      >
                         <span className="dim2">{m.label}</span>
                         <Bar value={((val - 40) / 59) * 100} color={val >= 85 ? 'var(--tier-elite)' : val >= 75 ? 'var(--good)' : val >= 64 ? 'var(--info)' : 'var(--text-dim)'} />
                         <span className="num right bold">
                           {val}
-                          {prev !== null && val !== prev && <span className={`tiny ${val > prev ? 'good' : 'bad'}`}> {val > prev ? '+' : ''}{val - prev}</span>}
+                          {prev !== null && val !== prev && (
+                            <span className={`tiny ${val > prev ? 'good' : 'bad'}`}>
+                              {' '}
+                              {val > prev ? '+' : ''}
+                              {val - prev}
+                            </span>
+                          )}
                         </span>
                       </button>
-                      {open && <div className="tiny dim fade-in" style={{ padding: '2px 0 6px' }}>{m.help}</div>}
+                      {open && (
+                        <div className="tiny dim fade-in" style={{ padding: '2px 0 6px' }}>
+                          {m.help}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -452,7 +511,19 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
   type R = (typeof rows)[number];
   const pg = (r: R) => perGame(r.tot)!;
   const cols: Col<R>[] = [
-    { key: 'season', label: 'Season', left: true, sticky: true, get: (r) => r.season, fmt: (_, r) => <span className="bold">{seasonLabel(r.season)}{r.tot.real ? <span className="tiny dim"> real</span> : ''}</span> },
+    {
+      key: 'season',
+      label: 'Season',
+      left: true,
+      sticky: true,
+      get: (r) => r.season,
+      fmt: (_, r) => (
+        <span className="bold">
+          {seasonLabel(r.season)}
+          {r.tot.real ? <span className="tiny dim"> real</span> : ''}
+        </span>
+      ),
+    },
     { key: 'tm', label: 'Team', left: true, get: (r) => r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/') },
     { key: 'gp', label: 'GP', get: (r) => r.tot.gp },
     { key: 'min', label: 'MIN', get: (r) => pg(r).min, fmt: (v) => f1(v as number) },
@@ -475,7 +546,14 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
   ];
   return (
     <>
-      <Segmented value={po ? 'po' : 'rs'} onChange={(v) => setPo(v === 'po')} options={[{ id: 'rs', label: 'Regular season' }, { id: 'po', label: 'Playoffs' }]} />
+      <Segmented
+        value={po ? 'po' : 'rs'}
+        onChange={(v) => setPo(v === 'po')}
+        options={[
+          { id: 'rs', label: 'Regular season' },
+          { id: 'po', label: 'Playoffs' },
+        ]}
+      />
       {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>No stats.</Empty>}
       <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those.</div>
     </>
@@ -499,7 +577,18 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
   if (!rows.length) return <Empty>No games this season.</Empty>;
   type R = (typeof rows)[number];
   const cols: Col<R>[] = [
-    { key: 'opp', label: 'Opp', left: true, sticky: true, get: (r) => r.g.gid, fmt: (_, r) => <span className="row" style={{ gap: 4 }}><span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}</span> },
+    {
+      key: 'opp',
+      label: 'Opp',
+      left: true,
+      sticky: true,
+      get: (r) => r.g.gid,
+      fmt: (_, r) => (
+        <span className="row" style={{ gap: 4 }}>
+          <span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
+        </span>
+      ),
+    },
     { key: 'min', label: 'MIN', get: (r) => r.box.min, fmt: (v) => f1(v as number) },
     { key: 'pts', label: 'PTS', get: (r) => r.box.pts },
     { key: 'reb', label: 'REB', get: (r) => r.box.orb + r.box.drb },
@@ -524,10 +613,21 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
         {hist.length > 1 ? (
           <LineChart points={hist.map((h) => h.ovr)} labels={hist.map((h) => `'${String(h.season).slice(2)}`)} />
         ) : (
-          <div className="small dim">History builds as seasons pass. Current: {p.ovr} OVR, potential {p.pot}.</div>
+          <div className="small dim">
+            History builds as seasons pass. Current: {p.ovr} OVR, potential {p.pot}.
+          </div>
         )}
       </Card>
-      <Card title="Outlook" right={<Help title="How development works">Players follow age curves: skills and IQ improve into the late 20s, while speed and explosiveness peak around 24-27 and then decline. On top of that come a hidden personal growth tendency, coaching quality (coach + coaching budget), practice intensity, playing time for young players (25+ minutes helps), and each player's training focus.</Help>}>
+      <Card
+        title="Outlook"
+        right={
+          <Help title="How development works">
+            Players follow age curves: skills and IQ improve into the late 20s, while speed and explosiveness peak around 24-27 and then decline. On top of that come a hidden
+            personal growth tendency, coaching quality (coach + coaching budget), practice intensity, playing time for young players (25+ minutes helps), and each player's training
+            focus.
+          </Help>
+        }
+      >
         <div className="small dim2">
           {age <= 22
             ? 'Young and raw. Expect big jumps with minutes and good coaching.'

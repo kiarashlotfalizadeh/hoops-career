@@ -86,7 +86,19 @@ function userSetup(league: League, lg: LiveGame): Setup {
 }
 
 /** Per-type points per possession across this season's stored games (both teams), with engine-typical fallbacks. */
-const DEFAULT_PPP: Record<string, number> = { pnrBH: 0.85, pnrRoll: 1.3, iso: 0.95, post: 1.0, spotup: 1.05, offscreen: 1.05, handoff: 1.0, cut: 1.35, transition: 1.3, putback: 1.4, misc: 0.2 };
+const DEFAULT_PPP: Record<string, number> = {
+  pnrBH: 0.85,
+  pnrRoll: 1.3,
+  iso: 0.95,
+  post: 1.0,
+  spotup: 1.05,
+  offscreen: 1.05,
+  handoff: 1.0,
+  cut: 1.35,
+  transition: 1.3,
+  putback: 1.4,
+  misc: 0.2,
+};
 function playTypeBaselines(league: League): Record<string, number> {
   const sum: Record<string, { poss: number; pts: number }> = {};
   for (const g of league.games) {
@@ -142,7 +154,10 @@ export default function Live() {
     if (!lg) return;
     const pbp = lg.sim.pbp;
     if (pbp.length <= pbpRead.current) return;
-    const fresh = pbp.slice(pbpRead.current).map((e, j) => ({ i: pbpRead.current + j, e })).reverse();
+    const fresh = pbp
+      .slice(pbpRead.current)
+      .map((e, j) => ({ i: pbpRead.current + j, e }))
+      .reverse();
     pbpRead.current = pbp.length;
     setFeed((f) => [...fresh, ...f].slice(0, FEED_MAX));
   }, []);
@@ -163,7 +178,12 @@ export default function Live() {
     }
     const pbp = lg.sim.pbp;
     pbpRead.current = pbp.length;
-    setFeed(pbp.slice(-FEED_MAX).map((e, j) => ({ i: pbp.length - Math.min(FEED_MAX, pbp.length) + j, e })).reverse());
+    setFeed(
+      pbp
+        .slice(-FEED_MAX)
+        .map((e, j) => ({ i: pbp.length - Math.min(FEED_MAX, pbp.length) + j, e }))
+        .reverse(),
+    );
     const score: [number, number] = [lg.sim.T[0].score, lg.sim.T[1].score];
     announced.current = score.join('-');
     setTicker(createTicker(lg.sim.clock, score));
@@ -363,11 +383,16 @@ export default function Live() {
     const me = lg.sim.T[userSide];
     const them = lg.sim.T[1 - userSide];
     const out: Suggestion[] = [];
-    if (them.run >= 8 && me.timeouts > 0) out.push({ id: `run-${them.score}`, text: `${them.team.name} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
+    if (them.run >= 8 && me.timeouts > 0)
+      out.push({ id: `run-${them.score}`, text: `${them.team.name} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
     for (const p of me.on) {
       if (p.energy < 0.55) {
         const bench = me.players.filter((b) => !b.on && b.out === 0 && b.energy > 0.8).sort((a, b) => b.c.create + b.c.helpD - (a.c.create + a.c.helpD))[0];
-        out.push({ id: `tired-${p.pid}-${Math.round(p.energy * 10)}`, text: `${nameOf(p.pid)} is gassed (${Math.round(p.energy * 100)}% energy).`, action: bench ? { label: `Sub ${nameOf(bench.pid)}`, run: () => (lg.sim.substitute(userSide, p.pid, bench.pid), setTick((x) => x + 1)) } : undefined });
+        out.push({
+          id: `tired-${p.pid}-${Math.round(p.energy * 10)}`,
+          text: `${nameOf(p.pid)} is gassed (${Math.round(p.energy * 100)}% energy).`,
+          action: bench ? { label: `Sub ${nameOf(bench.pid)}`, run: () => (lg.sim.substitute(userSide, p.pid, bench.pid), setTick((x) => x + 1)) } : undefined,
+        });
       }
       if (p.fouls >= Math.min(lg.sim.q + 1, 5) && lg.sim.q < 4) out.push({ id: `fouls-${p.pid}-${p.fouls}`, text: `${nameOf(p.pid)} has ${p.fouls} fouls.` });
     }
@@ -396,12 +421,19 @@ export default function Live() {
     }
     for (const [k, v] of Object.entries(me.pt)) {
       const base = baselines[k];
-      if (base !== undefined && v.poss >= 12 && zScore(v, base) < -2) out.push({ id: `mypt-${k}`, text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP, league ${base.toFixed(2)}). Consider running other actions.` });
+      if (base !== undefined && v.poss >= 12 && zScore(v, base) < -2)
+        out.push({
+          id: `mypt-${k}`,
+          text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP, league ${base.toFixed(2)}). Consider running other actions.`,
+        });
     }
     // biggest tactical edge against us so far
     const worst = [...lg.sim.impacts.values()].filter((im) => im.t !== userSide && im.pts >= 2.5 && IMPACT_TEXT[im.key]?.advice).sort((a, b) => b.pts - a.pts)[0];
     if (worst) {
-      out.push({ id: `imp-${worst.key}`, text: `${IMPACT_TEXT[worst.key].text(them.team.name, me.team.name, '')} ${adviceFor(IMPACT_TEXT[worst.key].advice!, league.settings.complexity)}` });
+      out.push({
+        id: `imp-${worst.key}`,
+        text: `${IMPACT_TEXT[worst.key].text(them.team.name, me.team.name, '')} ${adviceFor(IMPACT_TEXT[worst.key].advice!, league.settings.complexity)}`,
+      });
     }
     return out.filter((s) => !dismissed.includes(s.id)).slice(0, 2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -426,157 +458,168 @@ export default function Live() {
       </main>
     );
   }
-  if (!game || !home || !away || !colors) return <main className="page"><Empty>Preparing the arena…</Empty></main>;
+  if (!game || !home || !away || !colors)
+    return (
+      <main className="page">
+        <Empty>Preparing the arena…</Empty>
+      </main>
+    );
 
   const sim = game.sim;
   const me = sim.T[userSide];
   const quarter = script?.q ?? sim.q;
-  const won = resultGid !== null && (() => {
-    const res = league.games.find((g) => g.gid === resultGid);
-    return !!res && (userSide === 0 ? res.home.pts > res.away.pts : res.away.pts > res.home.pts);
-  })();
+  const won =
+    resultGid !== null &&
+    (() => {
+      const res = league.games.find((g) => g.gid === resultGid);
+      return !!res && (userSide === 0 ? res.home.pts > res.away.pts : res.away.pts > res.home.pts);
+    })();
 
   return (
     <main className="page full" style={{ gap: 10 }}>
       <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} />
-      <div className="sr-only" aria-live="polite">{announce}</div>
+      <div className="sr-only" aria-live="polite">
+        {announce}
+      </div>
 
       <div className="live-grid">
-      <div className="col live-left" style={{ gap: 10 }}>
-      {/* court */}
-      <div className="live-court" style={{ position: 'relative' }}>
-        <Court
-          script={script}
-          speed={speed}
-          paused={paused || over}
-          colors={colors}
-          jersey={(pid) => league.players[pid]?.jersey || '0'}
-          onDone={nextPossession}
-          onTick={(c, s) => ticker.set(c, s)}
-          label={over ? 'Court: the game is over.' : `Court: ${script?.label ?? 'tip-off'}.`}
-          banner={banner}
-        />
-        {script && !over && (
-          <div className="pill" aria-hidden="true" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', maxWidth: '85%' }}>
-            <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
-            <span className="ellipsis small">{script.label}</span>
+        <div className="col live-left" style={{ gap: 10 }}>
+          {/* court */}
+          <div className="live-court" style={{ position: 'relative' }}>
+            <Court
+              script={script}
+              speed={speed}
+              paused={paused || over}
+              colors={colors}
+              jersey={(pid) => league.players[pid]?.jersey || '0'}
+              onDone={nextPossession}
+              onTick={(c, s) => ticker.set(c, s)}
+              label={over ? 'Court: the game is over.' : `Court: ${script?.label ?? 'tip-off'}.`}
+              banner={banner}
+            />
+            {script && !over && (
+              <div className="pill" aria-hidden="true" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', maxWidth: '85%' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
+                <span className="ellipsis small">{script.label}</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* controls */}
-      {status === 'live' ? (
-        <div className="row live-ctl" style={{ gap: 6, flexWrap: 'wrap' }}>
-          <button className="btn sm" onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}>
-            {paused ? <Play size={16} /> : <Pause size={16} />}
-          </button>
-          <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
-            {SPEEDS.map((s) => (
-              <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => setSpeed(s.id)} style={{ padding: '0 10px' }}>
-                {s.label}
+          {/* controls */}
+          {status === 'live' ? (
+            <div className="row live-ctl" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <button className="btn sm" onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}>
+                {paused ? <Play size={16} /> : <Pause size={16} />}
               </button>
-            ))}
-          </div>
-          <div className="grow" />
-          <button className="btn sm" onClick={() => skip('quarter')} disabled={atBreak} aria-label="Qtr: sim to the end of the quarter">
-            <ChevronsRight size={16} /> Qtr
-          </button>
-          <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPanel('end')}>
-            Sim to final
-          </button>
-        </div>
-      ) : (
-        <Card accent>
-          {status === 'final' ? (
-            <>
-              <div className="bold" style={{ fontSize: 18 }}>
-                Final: {away.abbrev} {ticker.get().score[1]}, {home.abbrev} {ticker.get().score[0]}
+              <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
+                {SPEEDS.map((s) => (
+                  <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => setSpeed(s.id)} style={{ padding: '0 10px' }}>
+                    {s.label}
+                  </button>
+                ))}
               </div>
-              <div className="small dim" style={{ marginBottom: 10 }}>
-                {won ? 'Win! ' : 'Loss. '}The full breakdown shows exactly why.
-              </div>
-            </>
+              <div className="grow" />
+              <button className="btn sm" onClick={() => skip('quarter')} disabled={atBreak} aria-label="Qtr: sim to the end of the quarter">
+                <ChevronsRight size={16} /> Qtr
+              </button>
+              <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPanel('end')}>
+                Sim to final
+              </button>
+            </div>
           ) : (
+            <Card accent>
+              {status === 'final' ? (
+                <>
+                  <div className="bold" style={{ fontSize: 18 }}>
+                    Final: {away.abbrev} {ticker.get().score[1]}, {home.abbrev} {ticker.get().score[0]}
+                  </div>
+                  <div className="small dim" style={{ marginBottom: 10 }}>
+                    {won ? 'Win! ' : 'Loss. '}The full breakdown shows exactly why.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bold" style={{ fontSize: 18 }}>
+                    This game was simulated
+                  </div>
+                  <div className="small dim" style={{ marginBottom: 10 }}>
+                    It was played out from the Play menu, so the result stands.
+                  </div>
+                </>
+              )}
+              <button className="btn primary block" disabled={resultGid === null} onClick={() => resultGid !== null && nav(`/game/${resultGid}`, { replace: true })}>
+                <Activity size={16} /> {status === 'final' ? 'Game report' : 'Box score'}
+              </button>
+              <div className="row" style={{ marginTop: 8 }}>
+                <button className="btn grow" onClick={() => nav('/', { replace: true })}>
+                  <HomeIcon size={16} /> Home
+                </button>
+                {nextAction && (
+                  <button className="btn grow" disabled={simBusy} onClick={() => void nextGame()}>
+                    Next game <ChevronsRight size={16} />
+                  </button>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+        <div className="col live-right" style={{ gap: 10 }}>
+          {suggestions.map((s) => (
+            <div key={s.id} className="card tight fade-in" style={{ borderColor: 'color-mix(in srgb, var(--warn) 40%, transparent)' }}>
+              <div className="row top">
+                <Zap size={16} style={{ color: 'var(--warn)', flex: 'none', marginTop: 2 }} />
+                <div className="grow small">{s.text}</div>
+              </div>
+              <div className="row" style={{ justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+                <button className="btn xs ghost" onClick={() => setDismissed((d) => [...d, s.id])}>
+                  Dismiss
+                </button>
+                {s.action && (
+                  <button
+                    className="btn xs primary"
+                    onClick={() => {
+                      s.action!.run();
+                      setDismissed((d) => [...d, s.id]);
+                    }}
+                  >
+                    {s.action.label}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {!over && (
+            <div className="grid4 live-ctl">
+              <button className="btn sm" disabled={me.timeouts <= 0} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
+                <Timer size={16} /> TO
+              </button>
+              <button className="btn sm" onClick={() => setPanel('subs')}>
+                <Users size={16} /> Subs
+              </button>
+              <button className="btn sm" onClick={() => setPanel('tactics')}>
+                <SlidersHorizontal size={16} /> Plan
+              </button>
+              <button className="btn sm" onClick={() => setPanel('stats')}>
+                <ListOrdered size={16} /> Box
+              </button>
+            </div>
+          )}
+
+          {/* a game simulated elsewhere: the coached version never happened, so don't show its floor or plays */}
+          {status !== 'simmed' && (
             <>
-              <div className="bold" style={{ fontSize: 18 }}>This game was simulated</div>
-              <div className="small dim" style={{ marginBottom: 10 }}>It was played out from the Play menu, so the result stands.</div>
+              <Card title="On the floor" right={<span className="tiny dim">energy · fouls</span>}>
+                <div className="col" style={{ gap: 6 }}>
+                  {me.on.map((p) => (
+                    <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} />
+                  ))}
+                </div>
+              </Card>
+              <Feed feed={feed} colors={colors} />
             </>
           )}
-          <button className="btn primary block" disabled={resultGid === null} onClick={() => resultGid !== null && nav(`/game/${resultGid}`, { replace: true })}>
-            <Activity size={16} /> {status === 'final' ? 'Game report' : 'Box score'}
-          </button>
-          <div className="row" style={{ marginTop: 8 }}>
-            <button className="btn grow" onClick={() => nav('/', { replace: true })}>
-              <HomeIcon size={16} /> Home
-            </button>
-            {nextAction && (
-              <button className="btn grow" disabled={simBusy} onClick={() => void nextGame()}>
-                Next game <ChevronsRight size={16} />
-              </button>
-            )}
-          </div>
-        </Card>
-      )}
-
-      </div>
-      <div className="col live-right" style={{ gap: 10 }}>
-      {suggestions.map((s) => (
-        <div key={s.id} className="card tight fade-in" style={{ borderColor: 'color-mix(in srgb, var(--warn) 40%, transparent)' }}>
-          <div className="row top">
-            <Zap size={16} style={{ color: 'var(--warn)', flex: 'none', marginTop: 2 }} />
-            <div className="grow small">{s.text}</div>
-          </div>
-          <div className="row" style={{ justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
-            <button className="btn xs ghost" onClick={() => setDismissed((d) => [...d, s.id])}>
-              Dismiss
-            </button>
-            {s.action && (
-              <button
-                className="btn xs primary"
-                onClick={() => {
-                  s.action!.run();
-                  setDismissed((d) => [...d, s.id]);
-                }}
-              >
-                {s.action.label}
-              </button>
-            )}
-          </div>
         </div>
-      ))}
-
-      {!over && (
-        <div className="grid4 live-ctl">
-          <button className="btn sm" disabled={me.timeouts <= 0} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
-            <Timer size={16} /> TO
-          </button>
-          <button className="btn sm" onClick={() => setPanel('subs')}>
-            <Users size={16} /> Subs
-          </button>
-          <button className="btn sm" onClick={() => setPanel('tactics')}>
-            <SlidersHorizontal size={16} /> Plan
-          </button>
-          <button className="btn sm" onClick={() => setPanel('stats')}>
-            <ListOrdered size={16} /> Box
-          </button>
-        </div>
-      )}
-
-      {/* a game simulated elsewhere: the coached version never happened, so don't show its floor or plays */}
-      {status !== 'simmed' && (
-        <>
-          <Card title="On the floor" right={<span className="tiny dim">energy · fouls</span>}>
-            <div className="col" style={{ gap: 6 }}>
-              {me.on.map((p) => (
-                <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} />
-              ))}
-            </div>
-          </Card>
-          <Feed feed={feed} colors={colors} />
-        </>
-      )}
-
-      </div>
       </div>
 
       <Sheet open={panel === 'subs'} onClose={() => setPanel('none')} title="Substitutions">
@@ -613,7 +656,10 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
   return (
-    <div className="card tight" style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}>
+    <div
+      className="card tight"
+      style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}
+    >
       <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? 'final' : `${qLabel} ${fmtClock(clock)}`}`}>
         <div className="row" style={{ gap: 6, minWidth: 0 }}>
           <TeamLogo tid={away.tid} size={28} />
@@ -621,25 +667,42 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
             <div className="bold">{away.abbrev}</div>
             <div className="tiny dim nowrap">
               TO {sim.T[1].timeouts}
-              {sim.bonus(sim.T[0]) && <span className="warn" title="In the bonus"> ●</span>}
+              {sim.bonus(sim.T[0]) && (
+                <span className="warn" title="In the bonus">
+                  {' '}
+                  ●
+                </span>
+              )}
             </div>
           </div>
-          <span className="score" style={{ marginLeft: 'auto' }}>{score[1]}</span>
+          <span className="score" style={{ marginLeft: 'auto' }}>
+            {score[1]}
+          </span>
         </div>
         <div className="col center" style={{ gap: 0, minWidth: 56 }}>
-          <span className="display bold" style={{ fontSize: 15 }}>{over ? 'FINAL' : qLabel}</span>
-          <span className="display num" style={{ fontSize: 20 }}>{over ? '' : fmtClock(clock)}</span>
+          <span className="display bold" style={{ fontSize: 15 }}>
+            {over ? 'FINAL' : qLabel}
+          </span>
+          <span className="display num" style={{ fontSize: 20 }}>
+            {over ? '' : fmtClock(clock)}
+          </span>
         </div>
         <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
           <TeamLogo tid={home.tid} size={28} />
           <div className="right" style={{ minWidth: 0 }}>
             <div className="bold">{home.abbrev}</div>
             <div className="tiny dim nowrap">
-              {sim.bonus(sim.T[1]) && <span className="warn" title="In the bonus">● </span>}
+              {sim.bonus(sim.T[1]) && (
+                <span className="warn" title="In the bonus">
+                  ●{' '}
+                </span>
+              )}
               TO {sim.T[0].timeouts}
             </div>
           </div>
-          <span className="score" style={{ marginRight: 'auto' }}>{score[0]}</span>
+          <span className="score" style={{ marginRight: 'auto' }}>
+            {score[0]}
+          </span>
         </div>
       </div>
     </div>
@@ -653,9 +716,13 @@ const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEnt
       <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
         {feed.map(({ i, e }) => (
           <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
-            <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>{periodLabel(e.q)} {fmtClock(e.clock)}</span>
+            <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
+              {periodLabel(e.q)} {fmtClock(e.clock)}
+            </span>
             <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, background: e.t === -1 ? 'transparent' : colors[e.t][0], flex: 'none' }} />
-            <span className="grow dim2" style={{ fontWeight: e.kind === 'period' || e.kind === 'timeout' ? 700 : undefined }}>{e.text}</span>
+            <span className="grow dim2" style={{ fontWeight: e.kind === 'period' || e.kind === 'timeout' ? 700 : undefined }}>
+              {e.text}
+            </span>
           </div>
         ))}
       </div>
@@ -667,15 +734,23 @@ function PlayerStrip({ p, name }: { p: SP; name: string }) {
   const e = Math.round(p.energy * 100);
   return (
     <div className="row small" style={{ gap: 8 }}>
-      <span className="bold ellipsis" style={{ width: 92 }}>{name}</span>
+      <span className="bold ellipsis" style={{ width: 92 }}>
+        {name}
+      </span>
       <div className="grow">
         <div className="bar" style={{ height: 6 }}>
           <div style={{ width: `${e}%`, background: e < 55 ? 'var(--bad)' : e < 72 ? 'var(--warn)' : 'var(--good)' }} />
         </div>
       </div>
-      <span className="num tiny" style={{ width: 30, textAlign: 'right' }}>{e}%</span>
-      <span className={`num tiny ${p.fouls >= 4 ? 'bad' : 'dim'}`} style={{ width: 24, textAlign: 'right' }}>{p.fouls}F</span>
-      <span className="num tiny dim2" style={{ width: 36, textAlign: 'right' }}>{p.b.pts}p</span>
+      <span className="num tiny" style={{ width: 30, textAlign: 'right' }}>
+        {e}%
+      </span>
+      <span className={`num tiny ${p.fouls >= 4 ? 'bad' : 'dim'}`} style={{ width: 24, textAlign: 'right' }}>
+        {p.fouls}F
+      </span>
+      <span className="num tiny dim2" style={{ width: 36, textAlign: 'right' }}>
+        {p.b.pts}p
+      </span>
     </div>
   );
 }
@@ -702,9 +777,13 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
         {t.on.map((p) => (
           <button key={p.pid} className={`card tight row ${outPid === p.pid ? 'accent' : ''}`} style={{ gap: 8 }} aria-pressed={outPid === p.pid} onClick={() => setOut(p.pid)}>
             <Tag tone="info">ON</Tag>
-            <span className="bold grow" style={{ textAlign: 'left' }}>{nameOf(p.pid)}</span>
+            <span className="bold grow" style={{ textAlign: 'left' }}>
+              {nameOf(p.pid)}
+            </span>
             <span className="small num">{Math.round(p.energy * 100)}%</span>
-            <span className="small dim num">{p.fouls}F · {p.b.pts}p · {(p.b.sec / 60).toFixed(0)}m</span>
+            <span className="small dim num">
+              {p.fouls}F · {p.b.pts}p · {(p.b.sec / 60).toFixed(0)}m
+            </span>
           </button>
         ))}
       </div>
@@ -723,9 +802,13 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
             }}
           >
             <Tag>{p.out === 1 ? 'FOULED OUT' : p.out === 2 ? (p.dnp === 'Rest' ? 'REST' : 'OUT') : 'BENCH'}</Tag>
-            <span className="grow" style={{ textAlign: 'left' }}>{nameOf(p.pid)}</span>
+            <span className="grow" style={{ textAlign: 'left' }}>
+              {nameOf(p.pid)}
+            </span>
             <span className="small num">{Math.round(p.energy * 100)}%</span>
-            <span className="small dim num">{p.fouls}F · {(p.b.sec / 60).toFixed(0)}m</span>
+            <span className="small dim num">
+              {p.fouls}F · {(p.b.sec / 60).toFixed(0)}m
+            </span>
           </button>
         ))}
       </div>
@@ -733,7 +816,17 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
   );
 }
 
-function TacticsPanel({ live, side, nameOf, apply }: { live: LiveGame; side: 0 | 1; nameOf: (pid: number) => string; apply: (fn: (t: Tactics) => void, persist: boolean) => void }) {
+function TacticsPanel({
+  live,
+  side,
+  nameOf,
+  apply,
+}: {
+  live: LiveGame;
+  side: 0 | 1;
+  nameOf: (pid: number) => string;
+  apply: (fn: (t: Tactics) => void, persist: boolean) => void;
+}) {
   const [persist, setPersist] = useState(false);
   const [, force] = useState(0);
   const t = live.sim.T[side].t;
@@ -746,26 +839,62 @@ function TacticsPanel({ live, side, nameOf, apply }: { live: LiveGame; side: 0 |
     <div className="col" style={{ gap: 16 }}>
       <Toggle on={persist} onChange={setPersist} label="Keep changes after this game" help="Off: adjustments only apply to this game." />
       <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>Pick & roll coverage</div>
-        <Chips value={t.defense.pnr} onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))} options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))} />
+        <div className="small bold" style={{ marginBottom: 6 }}>
+          Pick & roll coverage
+        </div>
+        <Chips
+          value={t.defense.pnr}
+          onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
+          options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
+        />
       </div>
-      <Segmented value={t.defense.scheme} onChange={(x) => set((tt) => void (tt.defense.scheme = x))} label="Defensive scheme" options={[{ id: 'man', label: 'Man' }, { id: 'zone23', label: '2-3 Zone' }, { id: 'zone32', label: '3-2 Zone' }]} />
+      <Segmented
+        value={t.defense.scheme}
+        onChange={(x) => set((tt) => void (tt.defense.scheme = x))}
+        label="Defensive scheme"
+        options={[
+          { id: 'man', label: 'Man' },
+          { id: 'zone23', label: '2-3 Zone' },
+          { id: 'zone32', label: '3-2 Zone' },
+        ]}
+      />
       <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack paint" />
       <Slider label="Ball pressure" value={t.defense.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} left="Contain" right="Swarm" />
       <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>Press</div>
-        <Chips value={t.defense.press} onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))} options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))} />
+        <div className="small bold" style={{ marginBottom: 6 }}>
+          Press
+        </div>
+        <Chips
+          value={t.defense.press}
+          onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
+          options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
+        />
       </div>
       <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>Star plan</div>
-        <Chips value={t.defense.starPlan} onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))} options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))} />
+        <div className="small bold" style={{ marginBottom: 6 }}>
+          Star plan
+        </div>
+        <Chips
+          value={t.defense.starPlan}
+          onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))}
+          options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
+        />
         {t.defense.starPlan !== 'none' && (
           <div className="chips" style={{ marginTop: 8 }}>
-            <button className={`chip ${t.defense.starTarget === null ? 'on' : ''}`} aria-pressed={t.defense.starTarget === null} onClick={() => set((tt) => void (tt.defense.starTarget = null))}>
+            <button
+              className={`chip ${t.defense.starTarget === null ? 'on' : ''}`}
+              aria-pressed={t.defense.starTarget === null}
+              onClick={() => set((tt) => void (tt.defense.starTarget = null))}
+            >
               Auto
             </button>
             {opp.on.map((p) => (
-              <button key={p.pid} className={`chip ${t.defense.starTarget === p.pid ? 'on' : ''}`} aria-pressed={t.defense.starTarget === p.pid} onClick={() => set((tt) => void (tt.defense.starTarget = p.pid))}>
+              <button
+                key={p.pid}
+                className={`chip ${t.defense.starTarget === p.pid ? 'on' : ''}`}
+                aria-pressed={t.defense.starTarget === p.pid}
+                onClick={() => set((tt) => void (tt.defense.starTarget = p.pid))}
+              >
                 {nameOf(p.pid)}
               </button>
             ))}
@@ -773,13 +902,21 @@ function TacticsPanel({ live, side, nameOf, apply }: { live: LiveGame; side: 0 |
         )}
       </div>
       <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>Matchups</div>
+        <div className="small bold" style={{ marginBottom: 6 }}>
+          Matchups
+        </div>
         <div className="col" style={{ gap: 8 }}>
           {opp.on.map((o) => {
             const cur = live.sim.T[side].guardOf.get(o.pid);
             return (
               <div key={o.pid} className="col" style={{ gap: 4 }}>
-                <div className="small"><b>{nameOf(o.pid)}</b> <span className="dim">guarded by {cur ? nameOf(cur.pid) : '—'}{t.defense.matchups[o.pid] !== undefined ? ' (assigned)' : ''}</span></div>
+                <div className="small">
+                  <b>{nameOf(o.pid)}</b>{' '}
+                  <span className="dim">
+                    guarded by {cur ? nameOf(cur.pid) : '—'}
+                    {t.defense.matchups[o.pid] !== undefined ? ' (assigned)' : ''}
+                  </span>
+                </div>
                 <div className="chips">
                   {live.sim.T[side].on.map((d) => (
                     <button
@@ -827,7 +964,15 @@ function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side
   const pt = Object.entries(tb.playTypes).sort((a, b) => b[1].poss - a[1].poss);
   return (
     <div className="col" style={{ gap: 12 }}>
-      <Segmented value={String(team)} onChange={(v) => setTeam(Number(v) as 0 | 1)} label="Team" options={[{ id: '1', label: league.teams[res.away.tid].abbrev }, { id: '0', label: league.teams[res.home.tid].abbrev }]} />
+      <Segmented
+        value={String(team)}
+        onChange={(v) => setTeam(Number(v) as 0 | 1)}
+        label="Team"
+        options={[
+          { id: '1', label: league.teams[res.away.tid].abbrev },
+          { id: '0', label: league.teams[res.home.tid].abbrev },
+        ]}
+      />
       <div className="tablewrap">
         <table className="stats">
           <thead>
@@ -853,9 +998,15 @@ function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side
                   <td className="bold">{p.pts}</td>
                   <td>{p.orb + p.drb}</td>
                   <td>{p.ast}</td>
-                  <td>{p.fgm}-{p.fga}</td>
-                  <td>{p.tpm}-{p.tpa}</td>
-                  <td>{p.ftm}-{p.fta}</td>
+                  <td>
+                    {p.fgm}-{p.fga}
+                  </td>
+                  <td>
+                    {p.tpm}-{p.tpa}
+                  </td>
+                  <td>
+                    {p.ftm}-{p.fta}
+                  </td>
                   <td>{p.pm > 0 ? `+${p.pm}` : p.pm}</td>
                 </tr>
               ))}
@@ -868,7 +1019,9 @@ function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side
             <div key={k} className="row small">
               <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
               <span className="dim num">{v.poss} poss</span>
-              <span className="num bold" style={{ width: 48, textAlign: 'right' }}>{(v.pts / Math.max(1, v.poss)).toFixed(2)}</span>
+              <span className="num bold" style={{ width: 48, textAlign: 'right' }}>
+                {(v.pts / Math.max(1, v.poss)).toFixed(2)}
+              </span>
             </div>
           ))}
         </div>

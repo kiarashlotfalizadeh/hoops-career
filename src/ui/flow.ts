@@ -31,7 +31,14 @@ export function flowActions(league: League, { onLive = false } = {}): FlowAction
   switch (league.phase) {
     case 'preseason': {
       const errs = canStartRegularSeason(league);
-      a.push({ id: 'start', label: 'Start regular season', sub: errs[0] ?? 'Opening night is set. Rotations and tactics can be changed any time.', primary: true, cmd: 'startRegular', disabled: errs[0] });
+      a.push({
+        id: 'start',
+        label: 'Start regular season',
+        sub: errs[0] ?? 'Opening night is set. Rotations and tactics can be changed any time.',
+        primary: true,
+        cmd: 'startRegular',
+        disabled: errs[0],
+      });
       a.push({ id: 'tactics', label: 'Review tactics', to: '/tactics' });
       a.push({ id: 'fa', label: 'Sign free agents', to: '/free-agents' });
       break;
@@ -88,7 +95,12 @@ export function flowActions(league: League, { onLive = false } = {}): FlowAction
       a.push({ id: 'fas', label: 'Free agents', sub: `Day ${league.faDay + 1} of 30`, primary: true, to: '/free-agents' });
       a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });
       a.push({ id: 'faweek', label: 'Advance 1 week', cmd: 'faWeek' });
-      a.push({ id: 'new', label: `Start ${league.season}-${String((league.season + 1) % 100).padStart(2, '0')} season`, sub: 'Training camp: players develop and age.', cmd: 'newSeason' });
+      a.push({
+        id: 'new',
+        label: `Start ${league.season}-${String((league.season + 1) % 100).padStart(2, '0')} season`,
+        sub: 'Training camp: players develop and age.',
+        cmd: 'newSeason',
+      });
       break;
   }
   return a;

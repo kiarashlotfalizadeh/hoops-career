@@ -64,7 +64,13 @@ describe('DPOY score', () => {
     s.onPtsAgainst = (o.onPA ?? 110) * 20;
     return { p, s, gp: 75, mpg: o.mpg, gmsc: 12, winPct: 0.55, pmPerGame: 0 };
   };
-  const ctx = { lgDRtg: 114, teamDRtg: new Map([[1, 108], [2, 118]]) };
+  const ctx = {
+    lgDRtg: 114,
+    teamDRtg: new Map([
+      [1, 108],
+      [2, 118],
+    ]),
+  };
 
   it('caps event stats and weighs team defense', () => {
     const anchor = mk(1, 1, { stl: 0.9, blk: 2.4, mpg: 32, onPA: 106 });

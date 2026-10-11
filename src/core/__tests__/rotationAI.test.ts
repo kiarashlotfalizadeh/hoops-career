@@ -59,7 +59,10 @@ describe('rotation AI: role memory', () => {
     const ps = roster(3, (_, i) => [34, 33, 31, 30, 29, 25, 22, 18, 14, 11, 9, 6, 4, 3][i]);
     // player 10 was a 9-mpg backup; he has since jumped to the team's best OVR
     const before = autoRotation(ps).minutes[10];
-    ps[10].ratingsHistory = [{ season: SEASON - 1, ovr: 70, pot: 80, r: { ...ps[10].ratings } }, { season: SEASON, ovr: 70, pot: 80, r: { ...ps[10].ratings } }];
+    ps[10].ratingsHistory = [
+      { season: SEASON - 1, ovr: 70, pot: 80, r: { ...ps[10].ratings } },
+      { season: SEASON, ovr: 70, pot: 80, r: { ...ps[10].ratings } },
+    ];
     ps[10].ovr = 86;
     const after = autoRotation(ps).minutes[10];
     expect(roleMemory(ps[10], SEASON)!.w).toBeLessThan(0.25);

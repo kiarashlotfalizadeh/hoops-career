@@ -197,7 +197,10 @@ function TopBar() {
           <TeamLogo tid={t.tid} size={34} />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
-              {t.abbrev} <span className="num">{ts.won}-{ts.lost}</span>
+              {t.abbrev}{' '}
+              <span className="num">
+                {ts.won}-{ts.lost}
+              </span>
             </div>
             <div className="sub ellipsis">{status}</div>
           </div>
@@ -229,7 +232,11 @@ function TopBar() {
               }}
             >
               <span>{a.label}</span>
-              {(a.disabled || a.sub) && <span className="small" style={{ opacity: 0.75, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>{a.disabled ?? a.sub}</span>}
+              {(a.disabled || a.sub) && (
+                <span className="small" style={{ opacity: 0.75, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>
+                  {a.disabled ?? a.sub}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -362,7 +369,7 @@ function ScrollTop() {
   const type = useNavigationType();
   useLayoutEffect(() => {
     const key = loc.key;
-    const y = type === 'POP' ? scrollPositions.get(key) ?? 0 : 0;
+    const y = type === 'POP' ? (scrollPositions.get(key) ?? 0) : 0;
     window.scrollTo(0, y);
     // lazy screens may render after this; try again once they have height
     const timers = y ? [60, 200, 450].map((ms) => setTimeout(() => window.scrollY < y - 2 && window.scrollTo(0, y), ms)) : [];
@@ -388,33 +395,33 @@ function GameShell() {
       <TopBar />
       <SaveBanner />
       <ErrorBoundary scope="screen" key={loc.pathname}>
-      <Suspense fallback={<div className="empty">Loading…</div>}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/roster" element={<Roster />} />
-          <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
-          <Route path="/rotation" element={<Rotation />} />
-          <Route path="/tactics" element={<Tactics />} />
-          <Route path="/lab" element={<TacticsLab />} />
-          {/* each visit sets up its own game: "Watch & coach live" from a finished game's card mounts a fresh one */}
-          <Route path="/live" element={<Live key={loc.key} />} />
-          <Route path="/game/:gid" element={<GameView />} />
-          <Route path="/league" element={<LeagueHub />} />
-          <Route path="/league/:tab" element={<LeagueTabRedirect />} />
-          <Route path="/team/:tid" element={<TeamView />} />
-          <Route path="/office" element={<Office />} />
-          <Route path="/trade" element={<Trade />} />
-          <Route path="/free-agents" element={<FreeAgents />} />
-          <Route path="/resign" element={<Resign />} />
-          <Route path="/draft" element={<Draft />} />
-          <Route path="/finances" element={<Finances />} />
-          <Route path="/owner" element={<Finances />} />
-          <Route path="/inbox" element={<Inbox />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/history" element={<History />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+        <Suspense fallback={<div className="empty">Loading…</div>}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/roster" element={<Roster />} />
+            <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
+            <Route path="/rotation" element={<Rotation />} />
+            <Route path="/tactics" element={<Tactics />} />
+            <Route path="/lab" element={<TacticsLab />} />
+            {/* each visit sets up its own game: "Watch & coach live" from a finished game's card mounts a fresh one */}
+            <Route path="/live" element={<Live key={loc.key} />} />
+            <Route path="/game/:gid" element={<GameView />} />
+            <Route path="/league" element={<LeagueHub />} />
+            <Route path="/league/:tab" element={<LeagueTabRedirect />} />
+            <Route path="/team/:tid" element={<TeamView />} />
+            <Route path="/office" element={<Office />} />
+            <Route path="/trade" element={<Trade />} />
+            <Route path="/free-agents" element={<FreeAgents />} />
+            <Route path="/resign" element={<Resign />} />
+            <Route path="/draft" element={<Draft />} />
+            <Route path="/finances" element={<Finances />} />
+            <Route path="/owner" element={<Finances />} />
+            <Route path="/inbox" element={<Inbox />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/history" element={<History />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
       <SimBar />
       <BottomNav />
@@ -426,17 +433,17 @@ export function App() {
   return (
     <HashRouter>
       <ErrorBoundary>
-      <ScrollTop />
-      <Boot>
-        <Suspense fallback={<div className="empty">Loading…</div>}>
-          <Routes>
-            <Route path="/start" element={<Start />} />
-            <Route path="/new" element={<NewLeague />} />
-            <Route path="/*" element={<GameShell />} />
-          </Routes>
-        </Suspense>
-        <Toasts />
-      </Boot>
+        <ScrollTop />
+        <Boot>
+          <Suspense fallback={<div className="empty">Loading…</div>}>
+            <Routes>
+              <Route path="/start" element={<Start />} />
+              <Route path="/new" element={<NewLeague />} />
+              <Route path="/*" element={<GameShell />} />
+            </Routes>
+          </Suspense>
+          <Toasts />
+        </Boot>
       </ErrorBoundary>
     </HashRouter>
   );

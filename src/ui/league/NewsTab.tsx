@@ -41,7 +41,9 @@ export function NewsTab({ league }: { league: League }) {
     for (const n of sorted) c[n.kind] = (c[n.kind] ?? 0) + 1;
     return c;
   }, [sorted]);
-  const filtered = sorted.filter((n) => (kind === 'all' || n.kind === kind) && (mine === '0' || n.tids.includes(league.userTid) || n.pids.some((pid) => league.players[pid]?.tid === league.userTid)));
+  const filtered = sorted.filter(
+    (n) => (kind === 'all' || n.kind === kind) && (mine === '0' || n.tids.includes(league.userTid) || n.pids.some((pid) => league.players[pid]?.tid === league.userTid)),
+  );
   const shown = filtered.slice(0, limit);
 
   let lastKey = '';

@@ -112,7 +112,11 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
       teamPlayers(league, t.tid).reduce((a, p) => {
         let v = 0;
         let m = 0;
-        for (const s of p.stats) if (s.real && !s.playoffs && W[s.season] && s.adv) { v += s.adv.bpm * s.min * W[s.season]; m += s.min * W[s.season]; }
+        for (const s of p.stats)
+          if (s.real && !s.playoffs && W[s.season] && s.adv) {
+            v += s.adv.bpm * s.min * W[s.season];
+            m += s.min * W[s.season];
+          }
         return a + ((m >= 300 ? v / m : -2) * (t.rotation.minutes[p.pid] ?? 0)) / 48;
       }, 0),
     );
@@ -122,7 +126,10 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
       for (let a = 0; a < 30; a++) {
         if (a === h) continue;
         const res = new GameSim(side(h, a), side(a, h), { rng: new Rng(++n), type: 'regular', injuries: false }).simToEnd();
-        for (const [t, o] of [[res.home, res.away], [res.away, res.home]]) {
+        for (const [t, o] of [
+          [res.home, res.away],
+          [res.away, res.home],
+        ]) {
           pts[t.tid].diff += t.pts - o.pts;
           pts[t.tid].poss += t.poss;
         }

@@ -13,7 +13,6 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
 import { STRATEGY_META, SecTitle, fmtM } from '../office/common';
 
-
 const DIFFICULTY: Record<LeagueSettings['difficulty'], string> = {
   casual: 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.',
   normal: 'Fair trades and market-rate contracts.',
@@ -132,11 +131,25 @@ export default function Settings() {
         <div className="col" style={{ gap: 10, marginTop: 14 }}>
           <label className="col" style={{ gap: 4 }}>
             <span className="tiny dim upper bold">Coach / GM name</span>
-            <input className="input" value={coach} maxLength={40} onChange={(e) => setCoach(e.target.value)} onBlur={commitCoach} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+            <input
+              className="input"
+              value={coach}
+              maxLength={40}
+              onChange={(e) => setCoach(e.target.value)}
+              onBlur={commitCoach}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            />
           </label>
           <label className="col" style={{ gap: 4 }}>
             <span className="tiny dim upper bold">League name</span>
-            <input className="input" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} onBlur={commitName} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+            <input
+              className="input"
+              value={name}
+              maxLength={50}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            />
           </label>
           <div className="row wrap tiny dim" style={{ gap: 12 }}>
             <span>Started {seasonLabel(league.startSeason)}</span>
@@ -191,7 +204,12 @@ export default function Settings() {
             <div className="small dim">Default playback speed when you watch and coach a game live.</div>
           </div>
           <div className="divider" />
-          <Toggle on={st.injuries} onChange={(v) => mutate((l) => (l.settings.injuries = v))} label="Injuries" help="Players can get hurt; fatigue, age and injury history raise the risk." />
+          <Toggle
+            on={st.injuries}
+            onChange={(v) => mutate((l) => (l.settings.injuries = v))}
+            label="Injuries"
+            help="Players can get hurt; fatigue, age and injury history raise the risk."
+          />
           <Toggle
             on={st.jobSecurity}
             onChange={(v) => mutate((l) => (l.settings.jobSecurity = v))}
@@ -210,7 +228,9 @@ export default function Settings() {
       <SecTitle>League file</SecTitle>
       <Card>
         <div className="col" style={{ gap: 8 }}>
-          <div className="small dim2">Your league autosaves on this device after every change and when you leave the app. Export a backup to keep it safe or move it to another device.</div>
+          <div className="small dim2">
+            Your league autosaves on this device after every change and when you leave the app. Export a backup to keep it safe or move it to another device.
+          </div>
           <div className="grid2">
             <button className="btn" disabled={busy} onClick={backup}>
               <Download size={17} /> Export backup
@@ -241,18 +261,23 @@ export default function Settings() {
             <span className="fo-mid" style={{ color: 'var(--text)' }}>
               Hoops Career
             </span>
-            <span className="tag">v{__APP_VERSION__} · {__APP_BUILD__}</span>
+            <span className="tag">
+              v{__APP_VERSION__} · {__APP_BUILD__}
+            </span>
           </div>
           <div className="row top" style={{ gap: 10 }}>
             <Database size={18} className="dim" style={{ flex: 'none', marginTop: 1 }} />
             <div>
-              <b className="dim2">Data sources.</b> Rosters and salaries come from Basketball Reference's contracts page. Ratings are built from 2023-24 to 2025-26 per-game and advanced stats (Basketball Reference), NBA.com play-by-play, lineup and matchup data (shot zones, shot creation, adjusted plus-minus), and college box scores for rookies, then calibrated in the engine. Fictional leagues use generated players.
+              <b className="dim2">Data sources.</b> Rosters and salaries come from Basketball Reference's contracts page. Ratings are built from 2023-24 to 2025-26 per-game and
+              advanced stats (Basketball Reference), NBA.com play-by-play, lineup and matchup data (shot zones, shot creation, adjusted plus-minus), and college box scores for
+              rookies, then calibrated in the engine. Fictional leagues use generated players.
             </div>
           </div>
           <div className="row top" style={{ gap: 10 }}>
             <HardDrive size={18} className="dim" style={{ flex: 'none', marginTop: 1 }} />
             <div>
-              <b className="dim2">Your saves.</b> Leagues are stored only on this device, in your browser's storage. Nothing is uploaded. Clearing site data or uninstalling the app deletes them.
+              <b className="dim2">Your saves.</b> Leagues are stored only on this device, in your browser's storage. Nothing is uploaded. Clearing site data or uninstalling the app
+              deletes them.
             </div>
           </div>
           <div className="tiny dim">Team marks are original monograms generated from public team colors. Not affiliated with the NBA or its teams.</div>
@@ -358,33 +383,44 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
               );
             })}
         </div>
-        <div className="col" style={{ gap: 10, position: 'sticky', bottom: 'calc(-20px - var(--safe-b))', background: 'var(--bg-2)', padding: '10px 0 calc(16px + var(--safe-b))', margin: '0 0 calc(-20px - var(--safe-b))', borderTop: '1px solid var(--line)' }}>
-        {t && (
-          <div className="card tight">
-            <div className="row" style={{ gap: 10 }}>
-              <TeamLogo tid={t.tid} size={36} />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <div className="bold ellipsis">
-                  {t.region} {t.name}
-                </div>
-                <div className="row" style={{ gap: 6 }}>
-                  <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
-                  <span className="tiny dim">
-                    {teamPlayers(league, t.tid).length} players · payroll {fmtM(payroll(league, t.tid))} / cap {fmtM(CAP_FOR(league).salaryCap)}
-                  </span>
+        <div
+          className="col"
+          style={{
+            gap: 10,
+            position: 'sticky',
+            bottom: 'calc(-20px - var(--safe-b))',
+            background: 'var(--bg-2)',
+            padding: '10px 0 calc(16px + var(--safe-b))',
+            margin: '0 0 calc(-20px - var(--safe-b))',
+            borderTop: '1px solid var(--line)',
+          }}
+        >
+          {t && (
+            <div className="card tight">
+              <div className="row" style={{ gap: 10 }}>
+                <TeamLogo tid={t.tid} size={36} />
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div className="bold ellipsis">
+                    {t.region} {t.name}
+                  </div>
+                  <div className="row" style={{ gap: 6 }}>
+                    <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
+                    <span className="tiny dim">
+                      {teamPlayers(league, t.tid).length} players · payroll {fmtM(payroll(league, t.tid))} / cap {fmtM(CAP_FOR(league).salaryCap)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
+          )}
+          <div className="row">
+            <button className="btn grow" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn primary grow" disabled={pick === null} onClick={take}>
+              {t ? `Take over ${t.abbrev}` : 'Pick a team'}
+            </button>
           </div>
-        )}
-        <div className="row">
-          <button className="btn grow" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary grow" disabled={pick === null} onClick={take}>
-            {t ? `Take over ${t.abbrev}` : 'Pick a team'}
-          </button>
-        </div>
         </div>
       </div>
     </Sheet>

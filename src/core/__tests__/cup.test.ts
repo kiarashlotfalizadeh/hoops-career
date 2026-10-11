@@ -30,7 +30,10 @@ function checkFinalSchedule(league: League) {
     const homes = mine.filter((g) => g.home === t.tid).length;
     expect(homes).toBeGreaterThanOrEqual(40);
     expect(homes).toBeLessThanOrEqual(42);
-    const days = league.schedule.filter((g) => g.home === t.tid || g.away === t.tid).map((g) => g.day).sort((a, b) => a - b);
+    const days = league.schedule
+      .filter((g) => g.home === t.tid || g.away === t.tid)
+      .map((g) => g.day)
+      .sort((a, b) => a - b);
     for (let i = 1; i < days.length; i++) expect(days[i]).toBeGreaterThan(days[i - 1]);
     for (let i = 2; i < days.length; i++) expect(days[i] - days[i - 2]).toBeGreaterThan(2);
   }

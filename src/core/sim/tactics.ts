@@ -1,14 +1,4 @@
-import type {
-  ActionType,
-  DefScheme,
-  DefenseTactics,
-  GameManagement,
-  OffenseTactics,
-  PnrCoverage,
-  PressMode,
-  StarPlan,
-  Tactics,
-} from '../types';
+import type { ActionType, DefScheme, DefenseTactics, GameManagement, OffenseTactics, PnrCoverage, PressMode, StarPlan, Tactics } from '../types';
 
 export interface OffPreset {
   id: string;

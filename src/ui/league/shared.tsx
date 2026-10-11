@@ -132,7 +132,8 @@ export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outc
     if (league.phase === 'preseason' || league.phase === 'regular') return { label: 'In progress', short: 'Ongoing' };
     if (r === 5) return { label: 'Champion', short: 'Champion', tone: 'good', gold: true };
     const alive = league.playoffs.some((s) => (s.high === tid || s.low === tid) && s.winner === undefined);
-    if (alive) return { label: `Playing in the ${r === 4 ? 'Finals' : ROUND_NAME[r] ?? 'playoffs'}`, short: r === 4 ? 'In Finals' : `In ${ROUND_NAME[r] ?? 'Playoffs'}`, tone: 'info' };
+    if (alive)
+      return { label: `Playing in the ${r === 4 ? 'Finals' : (ROUND_NAME[r] ?? 'playoffs')}`, short: r === 4 ? 'In Finals' : `In ${ROUND_NAME[r] ?? 'Playoffs'}`, tone: 'info' };
     if (league.phase === 'playin') {
       if (r >= 1) return { label: 'Qualified for the playoffs', short: 'Qualified', tone: 'good' };
       if (r === 0) return { label: 'In the play-in', short: 'Play-In', tone: 'info' };
@@ -229,7 +230,28 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
 }
 
 export function accoladeScore(p: Player) {
-  return p.awards.reduce((s, a) => s + (a.type === 'MVP' ? 12 : a.type === 'Finals MVP' ? 6 : a.type.startsWith('All-NBA') ? 4 : a.type === 'Defensive Player of the Year' ? 4 : a.type === 'All-Star' ? 2 : a.type === 'Champion' ? 1.5 : a.type === 'NBA Cup MVP' ? 1 : a.type === 'Hall of Fame' ? 0 : 0.5), 0);
+  return p.awards.reduce(
+    (s, a) =>
+      s +
+      (a.type === 'MVP'
+        ? 12
+        : a.type === 'Finals MVP'
+          ? 6
+          : a.type.startsWith('All-NBA')
+            ? 4
+            : a.type === 'Defensive Player of the Year'
+              ? 4
+              : a.type === 'All-Star'
+                ? 2
+                : a.type === 'Champion'
+                  ? 1.5
+                  : a.type === 'NBA Cup MVP'
+                    ? 1
+                    : a.type === 'Hall of Fame'
+                      ? 0
+                      : 0.5),
+    0,
+  );
 }
 
 export function AccoladeChips({ p, max = 6 }: { p: Player; max?: number }) {

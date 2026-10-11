@@ -16,7 +16,10 @@ describe.skipIf(!real)('real-player seed', () => {
     const players = Object.values(league.players).filter((p) => p.real);
     expect(players.length).toBeGreaterThan(400);
     for (const p of players) for (const k of RATING_KEYS) expect(p.ratings[k]).toBeGreaterThanOrEqual(1);
-    const top = [...players].sort((a, b) => b.ovr - a.ovr).slice(0, 10).map((p) => p.bbrefId);
+    const top = [...players]
+      .sort((a, b) => b.ovr - a.ovr)
+      .slice(0, 10)
+      .map((p) => p.bbrefId);
     for (const id of ['jokicni01', 'gilgesh01', 'doncilu01', 'wembavi01']) expect(top).toContain(id);
     // efficient bench bigs no longer outrank stars
     const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
@@ -31,7 +34,10 @@ describe.skipIf(!real)('real-player seed', () => {
 
   it('plays real-player games with sane box scores', () => {
     const league = createLeague({ name: 's', userTid: 0, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 6 });
-    for (const p of teamPlayers(league, 0).sort((a, b) => a.ovr - b.ovr).slice(0, Math.max(0, teamPlayers(league, 0).length - CAP.rosterMax))) p.tid = FREE_AGENT;
+    for (const p of teamPlayers(league, 0)
+      .sort((a, b) => a.ovr - b.ovr)
+      .slice(0, Math.max(0, teamPlayers(league, 0).length - CAP.rosterMax)))
+      p.tid = FREE_AGENT;
     expect(startRegularSeason(league)).toEqual([]);
     for (let d = 0; d < 20; d++) simDay(league);
     const games = league.games.filter((g) => g.type === 'regular');

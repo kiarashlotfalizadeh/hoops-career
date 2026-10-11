@@ -55,13 +55,26 @@ export function AwardsTab({ league }: { league: League }) {
               <div className="display bold" style={{ fontSize: 24, textTransform: 'uppercase', lineHeight: 1.05 }}>
                 {league.teams[aw.champion].region} {league.teams[aw.champion].name}
               </div>
-              {aw.runnerUp !== undefined && <div className="small dim2">def. {league.teams[aw.runnerUp].region} {league.teams[aw.runnerUp].name}</div>}
+              {aw.runnerUp !== undefined && (
+                <div className="small dim2">
+                  def. {league.teams[aw.runnerUp].region} {league.teams[aw.runnerUp].name}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {aw?.cupWinner !== undefined && <CupBanner league={league} season={season} tid={aw.cupWinner} runnerUp={aw.cupRunnerUp} mvp={aw.cupMvp} final={league.cup?.season === season ? league.cup.bracket.find((t) => t.round === 'final') : undefined} />}
+      {aw?.cupWinner !== undefined && (
+        <CupBanner
+          league={league}
+          season={season}
+          tid={aw.cupWinner}
+          runnerUp={aw.cupRunnerUp}
+          mvp={aw.cupMvp}
+          final={league.cup?.season === season ? league.cup.bracket.find((t) => t.round === 'final') : undefined}
+        />
+      )}
 
       {!decided && isCurrent && <AwardRace league={league} />}
       {!decided && !isCurrent && !aw?.allStars.E.length && (
@@ -95,7 +108,23 @@ function AwardRow({ icon, children, to }: { icon: ReactNode; children: ReactNode
   );
 }
 
-function PlayerAward({ league, pid, season, icon, label, kind = 'off', playoffs = false }: { league: League; pid?: number; season: number; icon: ReactNode; label: string; kind?: 'off' | 'def'; playoffs?: boolean }) {
+function PlayerAward({
+  league,
+  pid,
+  season,
+  icon,
+  label,
+  kind = 'off',
+  playoffs = false,
+}: {
+  league: League;
+  pid?: number;
+  season: number;
+  icon: ReactNode;
+  label: string;
+  kind?: 'off' | 'def';
+  playoffs?: boolean;
+}) {
   const p = pid !== undefined ? league.players[pid] : undefined;
   if (!p) return null;
   const tid = seasonTeam(league, p, season);
@@ -208,7 +237,11 @@ function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
                   {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
                   <span className="ellipsis">
                     <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
-                    {pid === aw.allStarMvp && <span className="tag lg-gold" style={{ marginLeft: 6 }}>MVP</span>}
+                    {pid === aw.allStarMvp && (
+                      <span className="tag lg-gold" style={{ marginLeft: 6 }}>
+                        MVP
+                      </span>
+                    )}
                   </span>
                   <span className="tiny dim num">{statLine(p, aw.season)}</span>
                 </Link>
@@ -279,7 +312,9 @@ function AwardRace({ league }: { league: League }) {
   }
   return (
     <>
-      <div className="lg-note">Ladders update daily and use the same formulas as the voters: production, availability and team success. Winners are announced at the end of the regular season.</div>
+      <div className="lg-note">
+        Ladders update daily and use the same formulas as the voters: production, availability and team success. Winners are announced at the end of the regular season.
+      </div>
       <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
         <RaceCard league={league} title="MVP ladder" icon={<Crown size={15} />} list={race.mvp} />
         <RaceCard league={league} title="Defensive Player" icon={<Shield size={15} />} list={race.dpoy} kind="def" />

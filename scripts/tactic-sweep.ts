@@ -12,7 +12,12 @@ import { pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../src/
 const L = createLeague({ name: 'Sweep', userTid: 0, coachName: 'C', settings: defaultSettings(), seed: JSON.parse(readFileSync('src/data/seed.json', 'utf8')), rngSeed: 7 });
 for (const t of L.teams) ensureRotation(L, t.tid);
 const side = (tid: number) => ({ team: { ...L.teams[tid], seasons: [] }, players: teamPlayers(L, tid).filter((p) => !p.injury) });
-const pairs = [[5, 9], [13, 22], [0, 1], [27, 3]];
+const pairs = [
+  [5, 9],
+  [13, 22],
+  [0, 1],
+  [27, 3],
+];
 const games = Number(process.argv[2] ?? 300);
 const which = (process.argv[3] ?? '').split(',').filter(Boolean);
 const all: [string, TacticsPatch, string[]][] = [
@@ -65,5 +70,7 @@ for (const [name, patch, prefixes] of cfgs) {
   const se = Math.sqrt(d.reduce((s, x) => s + x.se ** 2, 0)) / d.length;
   const perGame = rs.map((r, i) => (delta * (r.pace + base[i].pace)) / 200).reduce((s, x) => s + x, 0) / rs.length;
   const tagDelta = prefixes.length ? rs.reduce((s, r, i) => s + tags(r, prefixes) - tags(base[i], prefixes), 0) / rs.length : NaN;
-  console.log(`${name.padEnd(20)} net ${delta >= 0 ? '+' : ''}${delta.toFixed(2).padStart(5)} ± ${se.toFixed(2)} /100 (${perGame.toFixed(1)} pts/g, tags ${Number.isNaN(tagDelta) ? '   -' : tagDelta.toFixed(1)}) | ${stats(rs)}`);
+  console.log(
+    `${name.padEnd(20)} net ${delta >= 0 ? '+' : ''}${delta.toFixed(2).padStart(5)} ± ${se.toFixed(2)} /100 (${perGame.toFixed(1)} pts/g, tags ${Number.isNaN(tagDelta) ? '   -' : tagDelta.toFixed(1)}) | ${stats(rs)}`,
+  );
 }

@@ -1,10 +1,11 @@
 # Hoops Career
 
-A mobile-first basketball GM **and** head-coach game, built as an installable offline PWA with Capacitor shells for Android and iOS. It starts in the 2026-27 season with real rosters, and its main feature is a tactics layer that tells you *why* things happen.
+A mobile-first basketball GM **and** head-coach game, built as an installable offline PWA with Capacitor shells for Android and iOS. It starts in the 2026-27 season with real rosters, and its main feature is a tactics layer that tells you _why_ things happen.
 
 ## What's in the box
 
 **Possession-by-possession engine** (`src/core/sim/engine.ts`)
+
 - Every half-court trip runs a concrete action: pick & roll, isolation, post-up, handoffs/off-ball screens, or motion/cuts/drive-and-kick. Transition, putbacks, presses and end-of-game situations are modeled too.
 - Defense chooses its PnR coverage (drop, switch, hedge, blitz, ice), base scheme (man, 2-3, 3-2), help level, ball pressure, physicality, transition defense, press and a star plan (deny or double).
 - Each tactical effect is tagged with its expected-points value (e.g. "drop coverage conceded pull-ups: +3.4"). That is what drives the post-game report, live assistant tips and the Tactics Lab.
@@ -12,8 +13,9 @@ A mobile-first basketball GM **and** head-coach game, built as an installable of
 - Calibrated to 2025-26 league averages: pace ≈ 100, ORtg ≈ 114, ~41% of shots from three, about 27 assists per team game with NBA-like assisted shares, and turnover, rebounding, foul and block rates within 5%. A full season sims in about 8 s on a laptop.
 
 **Coaching & understanding**
+
 - **Tactics**: playbooks with live "fit" scores for your roster, every slider explained in place, and Simple/Advanced/Expert depth. Expert mode adds roles, shot freedom, screeners and late-game rules.
-- **Tactics Lab**: runs real engine games in a Web Worker. *Project* your plan against any opponent, *Compare* before vs after your edits (paired seeds, honest error bars), or let the assistant generate *Counters* and test each one.
+- **Tactics Lab**: runs real engine games in a Web Worker. _Project_ your plan against any opponent, _Compare_ before vs after your edits (paired seeds, honest error bars), or let the assistant generate _Counters_ and test each one.
 - **Live game**: an animated 2D court driven by the engine's possession logs, plus timeouts, subs, in-game tactic changes, and assistant alerts ("their PnR handler is scoring 1.35 PPP against your drop: switch to hedge?").
 - **Post-game "Why"**: the ranked factors that decided the game, with point values and advice. Also four factors, play-type PPP, lineups, player grades, shot charts, score flow and play-by-play.
 - **Rotation**: reorderable depth chart, minute targets, caps, closers, rest on back-to-backs, and a 48-minute stint-plan visual.
@@ -30,15 +32,15 @@ AI front offices pick a strategy by where their roster ranks (about ten contende
 
 The seed combines several public sources, all fetched by scripts in `scripts/data/`:
 
-| Source | What it provides |
-|---|---|
-| **Basketball Reference** | The current contracts table (who plays where in 2026-27, salaries, options), roster pages (height, weight, birth date, jersey, country, college), draft pages, and per-game and advanced tables for 2023-24 to 2025-26 |
-| **NBA.com** play-by-play (cdn.nba.com) and season matchups (stats.nba.com), archived by the public [shufinskiy/nba_data](https://github.com/shufinskiy/nba_data) dataset | Every shot with its zone and type (pull-up, drive, cut, lob, putback, post move, transition), who assisted it, blocks, steals, turnover and foul types, substitutions (lineups), and who guarded whom |
-| **ESPN college box scores** via [sportsdataverse/hoopR-mbb-data](https://github.com/sportsdataverse/hoopR-mbb-data) | 2024-25 and 2025-26 college production for incoming rookies |
-| **NBA.com league schedule** (`scheduleLeagueV2_1.json` on NBA.com's public S3 bucket) | The real 2026-27 regular season: every published game with its date and home team |
-| **RealGM future draft picks** via [calebcpratt-git/nba-roster-builder](https://github.com/calebcpratt-git/nba-roster-builder) (daily scrape, pinned to a commit in `scripts/data/extra/sources.ts`) | Who owns every 2027-2033 first- and second-round pick, with protections, swaps and pick pools. [LD Sport's table](https://github.com/tobeyhirsch/nba-draft-pick-grader) is used as a cross-check |
-| **ESPN injury report** via [BenoParadise/nba-injuries](https://github.com/BenoParadise/nba-injuries) (hourly mirror; [sportsdataverse](https://github.com/sportsdataverse/sportsdataverse-data) injury history as a backup) | Who is out on opening night, and until when |
-| **SalarySwish contracts** via nba-roster-builder | Two-way contracts |
+| Source                                                                                                                                                                                                                      | What it provides                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Basketball Reference**                                                                                                                                                                                                    | The current contracts table (who plays where in 2026-27, salaries, options), roster pages (height, weight, birth date, jersey, country, college), draft pages, and per-game and advanced tables for 2023-24 to 2025-26 |
+| **NBA.com** play-by-play (cdn.nba.com) and season matchups (stats.nba.com), archived by the public [shufinskiy/nba_data](https://github.com/shufinskiy/nba_data) dataset                                                    | Every shot with its zone and type (pull-up, drive, cut, lob, putback, post move, transition), who assisted it, blocks, steals, turnover and foul types, substitutions (lineups), and who guarded whom                  |
+| **ESPN college box scores** via [sportsdataverse/hoopR-mbb-data](https://github.com/sportsdataverse/hoopR-mbb-data)                                                                                                         | 2024-25 and 2025-26 college production for incoming rookies                                                                                                                                                            |
+| **NBA.com league schedule** (`scheduleLeagueV2_1.json` on NBA.com's public S3 bucket)                                                                                                                                       | The real 2026-27 regular season: every published game with its date and home team                                                                                                                                      |
+| **RealGM future draft picks** via [calebcpratt-git/nba-roster-builder](https://github.com/calebcpratt-git/nba-roster-builder) (daily scrape, pinned to a commit in `scripts/data/extra/sources.ts`)                         | Who owns every 2027-2033 first- and second-round pick, with protections, swaps and pick pools. [LD Sport's table](https://github.com/tobeyhirsch/nba-draft-pick-grader) is used as a cross-check                       |
+| **ESPN injury report** via [BenoParadise/nba-injuries](https://github.com/BenoParadise/nba-injuries) (hourly mirror; [sportsdataverse](https://github.com/sportsdataverse/sportsdataverse-data) injury history as a backup) | Who is out on opening night, and until when                                                                                                                                                                            |
+| **SalarySwish contracts** via nba-roster-builder                                                                                                                                                                            | Two-way contracts                                                                                                                                                                                                      |
 
 stats.nba.com, ESPN and Basketball Reference block many cloud IPs, so everything except the Basketball Reference pages comes from GitHub-hosted mirrors or NBA.com's S3 bucket, which download from anywhere.
 
@@ -55,6 +57,7 @@ Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run w
 The current seed has 544 players: 483 under contract for 2026-27 plus the best 61 unsigned players from 2025-26. 26 players are on two-way deals (23 of them were unsigned in the contracts table, so they join their two-way teams). All 802 NBA.com players from the last three seasons are matched to their Basketball Reference ids.
 
 What's real on opening night, besides the rosters and ratings:
+
 - **Schedule**: the NBA's 2026-27 calendar, from opening night (Oct 20: BOS@DET, PHI@NYK, OKC@SAS) to Apr 11, with the real All-Star break (the trade deadline is set 10 days before it, as in generated seasons). Later seasons, and fictional leagues, use the generated schedule.
 - **NBA Cup**: the real groups (East A: BKN, DET, MIL, ORL, TOR …) and their 60 group games on the real Cup nights (Oct 30 to Nov 27), with quarterfinals Dec 4-5, semifinals Dec 8 and the championship Dec 11. The knockout matchups and the two games for each team that doesn't reach them are decided by the simulated group stage, as the NBA will do. If a seed has no Cup data, the missing games go on open December dates instead and there is no Cup that season.
 - **Draft picks**: RealGM's ownership rows for 2027-2033 (`scripts/data/extra/picks.ts`). Each pick gets exactly one owner. Pools ("less favorable of MIL and NOP") and swap rights are resolved on a projected draft order (team strength from the seed's ratings, regressed toward the middle for later years), and conditions that depend on other picks ("if DAL conveys its 2027 first", "if not already settled") are checked against picks already resolved. A pick that conveys only outside the top N ("3-30 to Charlotte") is stored as a top-N protected pick. Where several outcomes are possible, the most likely owner gets the pick. The build prints every team's first-rounders and compares them with LD Sport's table.
@@ -63,6 +66,7 @@ What's real on opening night, besides the rosters and ratings:
 - **Positions** come from each player's box-score position in his latest season (Basketball Reference's current roster pages only say G / F / C). Rookies without one get theirs from the G/F/C label, size and skills: a guard who handles and passes like a lead guard for his size is a PG, a forward who handles more and rebounds less is an SF.
 
 How ratings are made (`scripts/data/`):
+
 1. **Play-by-play profiles** (`nba/pbp.ts`): one pass over each season builds every player's shot diet by zone (the engine's zones: rim, paint, mid-range, corner three, above-the-break three) with make rates, how he creates (pull-ups, drives, cuts, post moves, putbacks, transition, share of makes assisted), assists by the zone they set up, turnover and foul types, fouls drawn, true rebound rates from on-court opportunities, and rim deterrence (opponents' rim attempts and rim FG% with him on the floor). It also rebuilds every lineup stint.
 2. **RAPM** (`nba/rapm.ts`): ridge-regressed adjusted plus-minus over about 200,000 stints from three seasons (recency-weighted, home court modeled), split into offense and defense. Matchup data (`nba/matchups.ts`) adds points saved per 100 possessions guarded, relative to what the same scorers did against everyone else.
 3. **Attributes** (`derive.ts`): seasons are weighted by recency and minutes (2025-26 ×1.0, 24-25 ×0.6, 23-24 ×0.3), with Bayesian priors on percentages. Finishing, floaters and mid-range come from zone make rates; handling from self-creation and lost-ball rate; passing from assist and bad-pass rates; rebounding from true rebound rates; defense from RAPM, matchup defense, rim deterrence, steals and blocks.
@@ -98,7 +102,7 @@ Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir>` screenshots every 
 
 - **PWA**: deploy `dist/` to any static host and use "Add to Home Screen". It works offline after the first load, and saves stay on the device (IndexedDB, with persistent storage requested). Saves are incremental (game results live in their own store and only new ones are written), a failed save says so and offers a backup, and a league open in two windows can't overwrite itself. A new version downloads in the background and applies on the next launch, never mid-game.
 - **Backups**: Settings → Export backup saves the league as a JSON file (the share sheet in the app, a download on the web). Import it from Settings or the start screen on any device.
-- **Android**: the *Android APK* workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`. The native shell adds the hardware Back button (closes sheets first, saves before leaving), haptics, edge-to-edge insets and no service worker (the files ship in the APK).
+- **Android**: the _Android APK_ workflow builds a debug APK on every push to `main` (download it from the run's artifacts). Pushing a `v*` tag attaches the APK to a release. Locally: `npm run cap:sync && npx cap open android`. The native shell adds the hardware Back button (closes sheets first, saves before leaving), haptics, edge-to-edge insets and no service worker (the files ship in the APK).
 - **Android signing**: Android only installs an update signed with the same key as the installed app. Without signing secrets, each workflow run signs with a throwaway debug key, so a new build only installs after uninstalling the old one, which deletes its saves (export a backup first). To sign every build with one key, create a keystore once and keep it safe (a lost key means users must reinstall):
   ```bash
   keytool -genkeypair -v -keystore release.keystore -alias hoops -keyalg RSA -keysize 2048 -validity 10000
@@ -106,7 +110,7 @@ Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir>` screenshots every 
   ```
   Then add four repository secrets (Settings → Secrets and variables → Actions): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`hoops` above) and `ANDROID_KEY_PASSWORD`. Debug APKs are then signed with that key, and `v*` tags also get a signed release APK (`app-release.apk`) on the release. The version code is the workflow's run number, so each build counts as newer than the last.
 - **iOS**: `npm run cap:sync && npx cap open ios` on a Mac with Xcode.
-- **GitHub Pages**: run the *Deploy PWA to Pages* workflow manually after setting Settings → Pages → Source to "GitHub Actions". Pages on a private repo needs a paid GitHub plan.
+- **GitHub Pages**: run the _Deploy PWA to Pages_ workflow manually after setting Settings → Pages → Source to "GitHub Actions". Pages on a private repo needs a paid GitHub plan.
 
 ## Layout
 

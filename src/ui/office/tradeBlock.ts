@@ -52,7 +52,13 @@ export function blockOffers(league: League, pid: number): BlockOffer[] {
     // and so must we
     const maxPlayersIn = Math.min(3, max - userCount + 1);
     if (maxPlayersIn < minPlayersOut) continue;
-    const player = (pid: number): Asset => ({ kind: 'p', id: pid, ai: playerValueFor(league, league.players[pid], t.tid, false), mine: tradeValue(league, league.players[pid], me.strategy), sal: capSalary(league, pid) });
+    const player = (pid: number): Asset => ({
+      kind: 'p',
+      id: pid,
+      ai: playerValueFor(league, league.players[pid], t.tid, false),
+      mine: tradeValue(league, league.players[pid], me.strategy),
+      sal: capSalary(league, pid),
+    });
     const assets: Asset[] = [
       ...roster.map((p) => player(p.pid)),
       ...league.draftPicks

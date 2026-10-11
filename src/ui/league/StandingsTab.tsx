@@ -41,7 +41,9 @@ export function StandingsTab({ league }: { league: League }) {
       ) : (
         <>
           <div className="row between">
-            <span className="small dim">{!started ? 'Season has not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}</span>
+            <span className="small dim">
+              {!started ? 'Season has not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}
+            </span>
             <div className="chips lg-only-narrow">
               <button className={`chip lg-chip-xs ${cols === 'basic' ? 'on' : ''}`} aria-pressed={cols === 'basic'} onClick={() => setCols('basic')}>
                 Standings
@@ -56,7 +58,9 @@ export function StandingsTab({ league }: { league: League }) {
             <div className="lg-note">Teams are ranked by win %, then point differential. Playoff seeding uses the conference standings and their tiebreakers.</div>
           ) : (
             <div className="lg-note">
-              Seeds 1-6 make the playoffs; 7-10 go to the play-in. <span className="lg-clinch x">x</span> clinched playoffs · <span className="lg-clinch p">p</span> clinched play-in · <span className="lg-clinch e">e</span> eliminated. Two-team ties break on head-to-head, division leader, division record (same division only), conference record, record against playoff teams in the conference, then in the other conference, then point differential. In ties of three or more, division leaders go first.
+              Seeds 1-6 make the playoffs; 7-10 go to the play-in. <span className="lg-clinch x">x</span> clinched playoffs · <span className="lg-clinch p">p</span> clinched
+              play-in · <span className="lg-clinch e">e</span> eliminated. Two-team ties break on head-to-head, division leader, division record (same division only), conference
+              record, record against playoff teams in the conference, then in the other conference, then point differential. In ties of three or more, division leaders go first.
             </div>
           )}
         </>
@@ -104,7 +108,11 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
                   <span className="nm-ab">{t.abbrev}</span>
                 </span>
                 {r.clinched && <span className={`lg-clinch ${r.clinched}`}>{r.clinched}</span>}
-                {!conf && <span className="tiny dim" style={{ fontWeight: 600 }}>{r.conf}</span>}
+                {!conf && (
+                  <span className="tiny dim" style={{ fontWeight: 600 }}>
+                    {r.conf}
+                  </span>
+                )}
               </span>
               <span className="wl">
                 {r.won}-{r.lost}
@@ -165,11 +173,18 @@ function PowerRankings({ league }: { league: League }) {
     <>
       <div className="row between">
         <span className="small dim">
-          {list.every((x) => x.gp === 0) ? 'Ranked by roster strength (TAL) until games are played' : list.some((x) => x.gp < 10) ? 'Net rating, blended with roster strength early on' : 'Ranked by net rating (points per 100 possessions)'}
+          {list.every((x) => x.gp === 0)
+            ? 'Ranked by roster strength (TAL) until games are played'
+            : list.some((x) => x.gp < 10)
+              ? 'Net rating, blended with roster strength early on'
+              : 'Ranked by net rating (points per 100 possessions)'}
         </span>
         <Help title="Power rankings">
           <p style={{ margin: 0 }}>Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
-          <p style={{ margin: 0 }}>Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until about ten games are played.</p>
+          <p style={{ margin: 0 }}>
+            Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until
+            about ten games are played.
+          </p>
         </Help>
       </div>
       <Card className="flush lg-flat lg-st mode-power">

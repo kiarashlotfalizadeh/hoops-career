@@ -18,7 +18,23 @@ function useWidth(fallback = 320) {
   return [ref, w] as const;
 }
 
-export function LineChart({ points, height = 120, color = 'var(--accent)', yMin, yMax, labels, refLine }: { points: number[]; height?: number; color?: string; yMin?: number; yMax?: number; labels?: string[]; refLine?: number }) {
+export function LineChart({
+  points,
+  height = 120,
+  color = 'var(--accent)',
+  yMin,
+  yMax,
+  labels,
+  refLine,
+}: {
+  points: number[];
+  height?: number;
+  color?: string;
+  yMin?: number;
+  yMax?: number;
+  labels?: string[];
+  refLine?: number;
+}) {
   const [ref, w] = useWidth();
   const h = height;
   if (points.length === 0) return null;
@@ -29,29 +45,29 @@ export function LineChart({ points, height = 120, color = 'var(--accent)', yMin,
   const d = points.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   return (
     <div ref={ref}>
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => Math.round(v)).join(', ')}`}>
-      {refLine !== undefined && <line x1={0} x2={w} y1={y(refLine)} y2={y(refLine)} stroke="var(--line-2)" strokeDasharray="4 4" />}
-      <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.12} />
-      <path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
-      {points.map((v, i) => (
-        <g key={i}>
-          <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
-          {points.length <= 12 && (
-            <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Barlow Condensed">
-              {Math.round(v)}
-            </text>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => Math.round(v)).join(', ')}`}>
+        {refLine !== undefined && <line x1={0} x2={w} y1={y(refLine)} y2={y(refLine)} stroke="var(--line-2)" strokeDasharray="4 4" />}
+        <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.12} />
+        <path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
+        {points.map((v, i) => (
+          <g key={i}>
+            <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
+            {points.length <= 12 && (
+              <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Barlow Condensed">
+                {Math.round(v)}
+              </text>
+            )}
+          </g>
+        ))}
+        {labels &&
+          labels.map((l, i) =>
+            labels.length <= 12 || i % Math.ceil(labels.length / 8) === 0 ? (
+              <text key={i} x={x(i)} y={h - 4} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+                {l}
+              </text>
+            ) : null,
           )}
-        </g>
-      ))}
-      {labels &&
-        labels.map((l, i) =>
-          labels.length <= 12 || i % Math.ceil(labels.length / 8) === 0 ? (
-            <text key={i} x={x(i)} y={h - 4} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
-              {l}
-            </text>
-          ) : null,
-        )}
-    </svg>
+      </svg>
     </div>
   );
 }
@@ -61,7 +77,21 @@ export function LineChart({ points, height = 120, color = 'var(--accent)', yMin,
  * (four quarters, then any overtimes): dividers and Q1..OT labels sit where each one starts.
  */
 /** `periods` are period lengths (labels and fallback spacing); `periodStarts` are the flow indices where each began, when recorded. */
-export function FlowChart({ flow, colorA, colorB, periods, periodStarts, height = 110 }: { flow: number[]; colorA: string; colorB: string; periods: number[]; periodStarts?: number[]; height?: number }) {
+export function FlowChart({
+  flow,
+  colorA,
+  colorB,
+  periods,
+  periodStarts,
+  height = 110,
+}: {
+  flow: number[];
+  colorA: string;
+  colorB: string;
+  periods: number[];
+  periodStarts?: number[];
+  height?: number;
+}) {
   const [ref, w] = useWidth();
   const clip = useId().replace(/:/g, '');
   const h = height;
@@ -77,30 +107,34 @@ export function FlowChart({ flow, colorA, colorB, periods, periodStarts, height 
       : periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
   return (
     <div ref={ref}>
-    <svg viewBox={`0 0 ${w} ${h + 16}`} width="100%" height={h + 16} role="img" aria-label="Score margin over the game">
-      <defs>
-        <clipPath id={`${clip}-top`}>
-          <rect x="0" y="0" width={w} height={h / 2} />
-        </clipPath>
-        <clipPath id={`${clip}-bot`}>
-          <rect x="0" y={h / 2} width={w} height={h / 2} />
-        </clipPath>
-      </defs>
-      {starts.map((sx, i) => (
-        <g key={i}>
-          {i > 0 && <line x1={sx} x2={sx} y1={0} y2={h} stroke="var(--line)" />}
-          <text x={(sx + (starts[i + 1] ?? w)) / 2} y={h + 12} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
-            {periodLabel(i + 1)}
-          </text>
-        </g>
-      ))}
-      <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="var(--line-2)" />
-      <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.35} clipPath={`url(#${clip}-top)`} />
-      <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorB} opacity={0.35} clipPath={`url(#${clip}-bot)`} />
-      <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={1.5} />
-      <text x={4} y={12} fontSize="10" fill="var(--text-dim)">+{max}</text>
-      <text x={4} y={h - 4} fontSize="10" fill="var(--text-dim)">-{max}</text>
-    </svg>
+      <svg viewBox={`0 0 ${w} ${h + 16}`} width="100%" height={h + 16} role="img" aria-label="Score margin over the game">
+        <defs>
+          <clipPath id={`${clip}-top`}>
+            <rect x="0" y="0" width={w} height={h / 2} />
+          </clipPath>
+          <clipPath id={`${clip}-bot`}>
+            <rect x="0" y={h / 2} width={w} height={h / 2} />
+          </clipPath>
+        </defs>
+        {starts.map((sx, i) => (
+          <g key={i}>
+            {i > 0 && <line x1={sx} x2={sx} y1={0} y2={h} stroke="var(--line)" />}
+            <text x={(sx + (starts[i + 1] ?? w)) / 2} y={h + 12} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+              {periodLabel(i + 1)}
+            </text>
+          </g>
+        ))}
+        <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="var(--line-2)" />
+        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.35} clipPath={`url(#${clip}-top)`} />
+        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorB} opacity={0.35} clipPath={`url(#${clip}-bot)`} />
+        <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={1.5} />
+        <text x={4} y={12} fontSize="10" fill="var(--text-dim)">
+          +{max}
+        </text>
+        <text x={4} y={h - 4} fontSize="10" fill="var(--text-dim)">
+          -{max}
+        </text>
+      </svg>
     </div>
   );
 }
@@ -143,7 +177,23 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shot
 }
 
 /** Two-sided bar for comparing a value between two teams. */
-export function CompareBar({ label, a, b, fmt = (v: number) => v.toFixed(1), colorA = 'var(--accent)', colorB = 'var(--text-dim)', higherBetter = true }: { label: string; a: number; b: number; fmt?: (v: number) => string; colorA?: string; colorB?: string; higherBetter?: boolean }) {
+export function CompareBar({
+  label,
+  a,
+  b,
+  fmt = (v: number) => v.toFixed(1),
+  colorA = 'var(--accent)',
+  colorB = 'var(--text-dim)',
+  higherBetter = true,
+}: {
+  label: string;
+  a: number;
+  b: number;
+  fmt?: (v: number) => string;
+  colorA?: string;
+  colorB?: string;
+  higherBetter?: boolean;
+}) {
   const total = Math.abs(a) + Math.abs(b) || 1;
   const aWins = higherBetter ? a > b : a < b;
   return (

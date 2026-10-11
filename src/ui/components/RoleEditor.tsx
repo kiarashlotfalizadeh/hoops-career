@@ -16,12 +16,20 @@ export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
     });
   return (
     <div className="col" style={{ gap: 14 }}>
-      <div className="small dim2">Natural fit: {ROLE_META[natural].label} ({p.archetype}).</div>
+      <div className="small dim2">
+        Natural fit: {ROLE_META[natural].label} ({p.archetype}).
+      </div>
       <div className="col" style={{ gap: 6 }}>
         {(Object.keys(ROLE_META) as OffRole[]).map((r) => {
           const on = (t.offense.roles[p.pid] ?? natural) === r;
           return (
-            <button key={r} className="card tight" aria-pressed={on} style={{ textAlign: 'left', borderColor: on ? 'var(--accent)' : undefined }} onClick={() => edit((tt) => void (tt.offense.roles[p.pid] = r))}>
+            <button
+              key={r}
+              className="card tight"
+              aria-pressed={on}
+              style={{ textAlign: 'left', borderColor: on ? 'var(--accent)' : undefined }}
+              onClick={() => edit((tt) => void (tt.offense.roles[p.pid] = r))}
+            >
               <div className="bold small">{ROLE_META[r].label}</div>
               <div className="tiny dim">{ROLE_META[r].help}</div>
             </button>
@@ -29,7 +37,9 @@ export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
         })}
       </div>
       <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>Shot freedom</div>
+        <div className="small bold" style={{ marginBottom: 6 }}>
+          Shot freedom
+        </div>
         <Segmented
           value={String(t.offense.freedom[p.pid] ?? 0)}
           onChange={(x) => edit((tt) => void (tt.offense.freedom[p.pid] = Number(x) as ShotFreedom))}

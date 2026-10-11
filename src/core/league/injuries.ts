@@ -87,7 +87,13 @@ export function healOneGame(league: League, p: Player, rng: Rng) {
   p.injury.gamesRemaining -= 1 + extra;
   if (p.injury.gamesRemaining <= 0) {
     if (p.tid === league.userTid && p.injury.gamesTotal >= MAIL_MIN_GAMES) {
-      addInbox(league, { from: 'Medical Staff', subject: `${playerName(p)} is cleared`, body: `${playerName(p)} has recovered from his ${p.injury.type.toLowerCase()} and is available.`, tone: 'good', link: `/player/${p.pid}` });
+      addInbox(league, {
+        from: 'Medical Staff',
+        subject: `${playerName(p)} is cleared`,
+        body: `${playerName(p)} has recovered from his ${p.injury.type.toLowerCase()} and is available.`,
+        tone: 'good',
+        link: `/player/${p.pid}`,
+      });
     }
     p.injury = null;
   }

@@ -6,7 +6,21 @@ import { ovrColor } from '../../core/ratings';
 import { FRANCHISES } from '../../core/teams';
 import { useBack } from '../nav';
 
-export function Card({ title, right, children, className = '', onClick, accent }: { title?: ReactNode; right?: ReactNode; children?: ReactNode; className?: string; onClick?: () => void; accent?: boolean }) {
+export function Card({
+  title,
+  right,
+  children,
+  className = '',
+  onClick,
+  accent,
+}: {
+  title?: ReactNode;
+  right?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+  onClick?: () => void;
+  accent?: boolean;
+}) {
   return (
     <section
       className={`card ${accent ? 'accent' : ''} ${onClick ? 'clickable' : ''} ${className}`}
@@ -65,7 +79,19 @@ export function shade(hex: string, amt: number) {
 }
 
 /** One-of-several switch: a radio group, so arrow keys move the choice and Tab leaves it. */
-export function Segmented<T extends string>({ value, options, onChange, label, disabled }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; label?: string; disabled?: boolean }) {
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  disabled,
+}: {
+  value: T;
+  options: { id: T; label: ReactNode }[];
+  onChange: (v: T) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   // when the options overflow a narrow phone, keep the selected one in view
   useEffect(() => {
@@ -74,7 +100,10 @@ export function Segmented<T extends string>({ value, options, onChange, label, d
     if (!seg || !btn || seg.scrollWidth <= seg.clientWidth) return;
     seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: 'smooth' });
   }, [value]);
-  const current = Math.max(0, options.findIndex((o) => o.id === value));
+  const current = Math.max(
+    0,
+    options.findIndex((o) => o.id === value),
+  );
   const onKey = (e: ReactKeyboardEvent, i: number) => {
     const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     const j = e.key === 'Home' ? 0 : e.key === 'End' ? options.length - 1 : step ? (i + step + options.length) % options.length : -1;
@@ -86,7 +115,16 @@ export function Segmented<T extends string>({ value, options, onChange, label, d
   return (
     <div className="seg" role="radiogroup" aria-label={label} ref={ref}>
       {options.map((o, i) => (
-        <button key={o.id} role="radio" aria-checked={value === o.id} tabIndex={i === current ? 0 : -1} disabled={disabled} className={value === o.id ? 'on' : ''} onClick={() => onChange(o.id)} onKeyDown={(e) => onKey(e, i)}>
+        <button
+          key={o.id}
+          role="radio"
+          aria-checked={value === o.id}
+          tabIndex={i === current ? 0 : -1}
+          disabled={disabled}
+          className={value === o.id ? 'on' : ''}
+          onClick={() => onChange(o.id)}
+          onKeyDown={(e) => onKey(e, i)}
+        >
           {o.label}
         </button>
       ))}
@@ -94,7 +132,17 @@ export function Segmented<T extends string>({ value, options, onChange, label, d
   );
 }
 
-export function Chips<T extends string | number>({ value, options, onChange, disabled }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; disabled?: boolean }) {
+export function Chips<T extends string | number>({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: T;
+  options: { id: T; label: ReactNode }[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="chips">
       {options.map((o) => (
@@ -118,7 +166,31 @@ export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (
   );
 }
 
-export function Slider({ label, value, onChange, min = 0, max = 100, step = 1, left, right, help, format, disabled }: { label: ReactNode; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; left?: string; right?: string; help?: ReactNode; format?: (v: number) => string; disabled?: boolean }) {
+export function Slider({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  left,
+  right,
+  help,
+  format,
+  disabled,
+}: {
+  label: ReactNode;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  left?: string;
+  right?: string;
+  help?: ReactNode;
+  format?: (v: number) => string;
+  disabled?: boolean;
+}) {
   const fill = ((value - min) / (max - min)) * 100;
   return (
     <div className="slider" style={{ opacity: disabled ? 0.5 : 1 }}>
@@ -126,7 +198,17 @@ export function Slider({ label, value, onChange, min = 0, max = 100, step = 1, l
         <span className="slider-label">{label}</span>
         <span className="slider-val num">{format ? format(value) : value}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} style={{ ['--fill' as string]: `${fill}%` }} aria-label={typeof label === 'string' ? label : undefined} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ ['--fill' as string]: `${fill}%` }}
+        aria-label={typeof label === 'string' ? label : undefined}
+      />
       {(left || right) && (
         <div className="slider-ends">
           <span>{left}</span>
@@ -328,7 +410,25 @@ export interface Col<T> {
 }
 
 /** Sortable table. `limit` renders only the first rows of the sorted list, for long tables that page with "Show more". */
-export function StatTable<T>({ rows, cols, initialSort, rowKey, onRow, highlight, maxHeight, limit }: { rows: T[]; cols: Col<T>[]; initialSort?: string; rowKey: (r: T) => string | number; onRow?: (r: T) => void; highlight?: (r: T) => boolean; maxHeight?: number; limit?: number }) {
+export function StatTable<T>({
+  rows,
+  cols,
+  initialSort,
+  rowKey,
+  onRow,
+  highlight,
+  maxHeight,
+  limit,
+}: {
+  rows: T[];
+  cols: Col<T>[];
+  initialSort?: string;
+  rowKey: (r: T) => string | number;
+  onRow?: (r: T) => void;
+  highlight?: (r: T) => boolean;
+  maxHeight?: number;
+  limit?: number;
+}) {
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(initialSort ? { key: initialSort, dir: -1 } : null);
   const sorted = useMemo(() => {
     if (!sort) return rows;

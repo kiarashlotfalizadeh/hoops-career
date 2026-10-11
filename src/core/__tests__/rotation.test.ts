@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { buildMinutePlan, normalizeMinutes, planInputs, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
 import type { Rotation } from '../types';
 
-const players: PlanPlayer[] = [36, 34, 33, 31, 29, 24, 20, 16, 12, 5].map((m, i) => ({ pid: i, minutes: m, starter: i < 5, closer: i < 5, guard: i % 2 === 0, big: i === 4 || i === 9, endurance: 60 }));
+const players: PlanPlayer[] = [36, 34, 33, 31, 29, 24, 20, 16, 12, 5].map((m, i) => ({
+  pid: i,
+  minutes: m,
+  starter: i < 5,
+  closer: i < 5,
+  guard: i % 2 === 0,
+  big: i === 4 || i === 9,
+  endurance: 60,
+}));
 
 describe('rotation plan', () => {
   it('normalizes to exactly 240 minutes', () => {
@@ -56,7 +64,10 @@ describe('plan inputs', () => {
   });
 
   it("hands an injured starter's minutes to the bench first", () => {
-    const pp = planInputs(src.map((p) => (p.pid === 1 ? { ...p, available: false } : p)), rot());
+    const pp = planInputs(
+      src.map((p) => (p.pid === 1 ? { ...p, available: false } : p)),
+      rot(),
+    );
     expect(pp.map((p) => p.pid)).not.toContain(1);
     // the sixth man starts; the next bench players fill up to 22 before anyone else gets more
     expect(pp[4].pid).toBe(5);

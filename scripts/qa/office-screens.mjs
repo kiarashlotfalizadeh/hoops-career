@@ -31,7 +31,10 @@ const closeSheet = async () => {
   await page.waitForTimeout(250);
 };
 const scrollSheet = async () => {
-  await page.locator('.sheet').evaluate((el) => (el.scrollTop = el.scrollHeight)).catch(() => {});
+  await page
+    .locator('.sheet')
+    .evaluate((el) => (el.scrollTop = el.scrollHeight))
+    .catch(() => {});
 };
 const waitSim = async () => {
   await page.waitForTimeout(400);

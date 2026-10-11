@@ -3,19 +3,7 @@ import { Rng, clamp } from './random';
 import { NAME_POOLS } from './names';
 import { archetype, clampRatings, heightToRating, inferPos, ovrRaw, potential, toDisplay, type OvrScale } from './ratings';
 
-type Archetype =
-  | 'shooter'
-  | 'slasher'
-  | 'playmaker'
-  | 'scorer'
-  | 'athlete'
-  | 'defender'
-  | 'rimProtector'
-  | 'stretch'
-  | 'postScorer'
-  | 'rebounder'
-  | 'twoWay'
-  | 'connector';
+type Archetype = 'shooter' | 'slasher' | 'playmaker' | 'scorer' | 'athlete' | 'defender' | 'rimProtector' | 'stretch' | 'postScorer' | 'rebounder' | 'twoWay' | 'connector';
 
 const ARCH_MODS: Record<Archetype, Partial<Ratings>> = {
   shooter: { tp: 16, ft: 11, mid: 8, oiq: 3 },
@@ -81,7 +69,10 @@ export function genRatings(rng: Rng, o: GenOpts): { r: Ratings; heightIn: number
   const a1 = rng.pick(pool);
   let a2 = rng.pick(pool);
   if (a2 === a1) a2 = rng.pick(pool);
-  for (const [arch, w] of [[a1, 1], [a2, 0.55]] as [Archetype, number][]) {
+  for (const [arch, w] of [
+    [a1, 1],
+    [a2, 0.55],
+  ] as [Archetype, number][]) {
     const mods = ARCH_MODS[arch];
     for (const k in mods) {
       const key = k as keyof Ratings;
@@ -112,9 +103,37 @@ export function blankMood(): Mood {
 
 export function blankStats(season: number, tid: number, playoffs: boolean): PlayerStats {
   return {
-    season, tid, playoffs, gp: 0, gs: 0, min: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0,
-    ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0, pm: 0, rimM: 0, rimA: 0, midM: 0, midA: 0, onPoss: 0, onPtsFor: 0,
-    onPtsAgainst: 0, teamFga: 0, teamFta: 0, teamTov: 0,
+    season,
+    tid,
+    playoffs,
+    gp: 0,
+    gs: 0,
+    min: 0,
+    fgm: 0,
+    fga: 0,
+    tpm: 0,
+    tpa: 0,
+    ftm: 0,
+    fta: 0,
+    orb: 0,
+    drb: 0,
+    ast: 0,
+    stl: 0,
+    blk: 0,
+    tov: 0,
+    pf: 0,
+    pts: 0,
+    pm: 0,
+    rimM: 0,
+    rimA: 0,
+    midM: 0,
+    midA: 0,
+    onPoss: 0,
+    onPtsFor: 0,
+    onPtsAgainst: 0,
+    teamFga: 0,
+    teamFta: 0,
+    teamTov: 0,
   };
 }
 

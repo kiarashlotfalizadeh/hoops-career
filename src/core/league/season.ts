@@ -8,7 +8,24 @@ import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
 import { blankMood, playerAge } from '../playerGen';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, addInbox, addNews, curTeamSeason, payroll, playerName, prospects, standardRoster, teamName, teamPlayers, teamSeason, twoWayRoster, winPct, withRng } from './helpers';
+import {
+  CAP_FOR,
+  OFFSEASON_ROSTER_MAX,
+  TWO_WAY_MAX,
+  addInbox,
+  addNews,
+  curTeamSeason,
+  payroll,
+  playerName,
+  prospects,
+  standardRoster,
+  teamName,
+  teamPlayers,
+  teamSeason,
+  twoWayRoster,
+  winPct,
+  withRng,
+} from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
@@ -92,7 +109,13 @@ function periodic(league: League, rng: Rng) {
     }
   }
   if (d === league.tradeDeadlineDay - 3) {
-    addInbox(league, { from: 'Assistant GM', subject: 'Trade deadline in 3 days', body: 'Any deals need to be done before the deadline. After that, only free agents can be added.', tone: 'alert', link: '/trade' });
+    addInbox(league, {
+      from: 'Assistant GM',
+      subject: 'Trade deadline in 3 days',
+      body: 'Any deals need to be done before the deadline. After that, only free agents can be added.',
+      tone: 'alert',
+      link: '/trade',
+    });
   }
   if (d % 7 === 3) {
     faDay(league, rng, 0.25);
@@ -214,8 +237,22 @@ function endRegularSeason(league: League) {
   computeRegularSeasonAwards(league);
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
-  if (mine?.tax) addInbox(league, { from: 'Owner', subject: 'Luxury tax bill', body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`, tone: 'bad', link: '/finances' });
-  if (mine?.shortfall) addInbox(league, { from: 'Owner', subject: 'Under the salary floor', body: `Our payroll finished $${(mine.shortfall / 1000).toFixed(1)}M under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`, tone: 'bad', link: '/finances' });
+  if (mine?.tax)
+    addInbox(league, {
+      from: 'Owner',
+      subject: 'Luxury tax bill',
+      body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`,
+      tone: 'bad',
+      link: '/finances',
+    });
+  if (mine?.shortfall)
+    addInbox(league, {
+      from: 'Owner',
+      subject: 'Under the salary floor',
+      body: `Our payroll finished $${(mine.shortfall / 1000).toFixed(1)}M under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`,
+      tone: 'bad',
+      link: '/finances',
+    });
   startPlayIn(league);
 }
 
@@ -295,9 +332,20 @@ function endPlayoffs(league: League) {
   aw.finalsMvp = finalsMvp(league, champ);
   if (aw.finalsMvp !== undefined) league.players[aw.finalsMvp].awards.push({ season: league.season, type: 'Finals MVP' });
   for (const p of teamPlayers(league, champ)) p.awards.push({ season: league.season, type: 'Champion' });
-  addNews(league, { kind: 'award', text: `🏆 The ${teamName(league.teams[champ])} are ${league.season} NBA champions! Finals MVP: ${aw.finalsMvp !== undefined ? playerName(league.players[aw.finalsMvp]) : '—'}.`, tids: [champ], pids: aw.finalsMvp !== undefined ? [aw.finalsMvp] : [] });
+  addNews(league, {
+    kind: 'award',
+    text: `🏆 The ${teamName(league.teams[champ])} are ${league.season} NBA champions! Finals MVP: ${aw.finalsMvp !== undefined ? playerName(league.players[aw.finalsMvp]) : '—'}.`,
+    tids: [champ],
+    pids: aw.finalsMvp !== undefined ? [aw.finalsMvp] : [],
+  });
   if (champ === league.userTid) {
-    addInbox(league, { from: 'Owner', subject: 'CHAMPIONS!', body: 'You did it. The city is going to be partying for a week. Enjoy it, then let\'s do it again.', tone: 'good', link: '/history' });
+    addInbox(league, {
+      from: 'Owner',
+      subject: 'CHAMPIONS!',
+      body: "You did it. The city is going to be partying for a week. Enjoy it, then let's do it again.",
+      tone: 'good',
+      link: '/history',
+    });
   }
   ownerEvaluation(league);
   withRng(league, (rng) => {
@@ -410,7 +458,9 @@ export function newSeason(league: League): boolean {
   league.season++;
   league.phase = 'preseason';
   league.day = 0;
-  league.games = league.games.filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid)).map((g) => ({ ...g, pbp: undefined, shots: undefined, lineups: undefined, flow: undefined, flowPeriods: undefined }));
+  league.games = league.games
+    .filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid))
+    .map((g) => ({ ...g, pbp: undefined, shots: undefined, lineups: undefined, flow: undefined, flowPeriods: undefined }));
   league.playIn = [];
   league.playoffs = [];
   league.schedule = [];

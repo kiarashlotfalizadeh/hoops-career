@@ -122,7 +122,9 @@ export function teamAppeal(league: League, tid: number, p: Player): number {
   const wp = games >= 10 ? winPct(ts) : prev ? winPct(prev) : 0.5;
   let a = 1 + (wp - 0.5) * 0.35 + (team.hype - 0.5) * 0.15 + Math.min(0.06, (team.pop - 3) * 0.01);
   // playing time available: is he better than the team's current rotation?
-  const roster = teamPlayers(league, tid).filter((x) => x.pid !== p.pid).sort((x, y) => y.ovr - x.ovr);
+  const roster = teamPlayers(league, tid)
+    .filter((x) => x.pid !== p.pid)
+    .sort((x, y) => y.ovr - x.ovr);
   const rank = roster.filter((x) => x.ovr > p.ovr).length;
   if (rank <= 4) a += 0.06;
   else if (rank >= 9) a -= 0.08;
@@ -360,7 +362,10 @@ export function decideTeamOption(league: League, pid: number, exercise: boolean)
     dropOptionYear(p);
     p.asking = askingContract(league, p, league.userTid);
   }
-  return { ok: true, reason: exercise ? `Option exercised: ${playerName(p)} is signed through next season.` : `Option declined: re-sign ${playerName(p)} now or he becomes a free agent.` };
+  return {
+    ok: true,
+    reason: exercise ? `Option exercised: ${playerName(p)} is signed through next season.` : `Option declined: re-sign ${playerName(p)} now or he becomes a free agent.`,
+  };
 }
 
 /**
@@ -393,7 +398,10 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
   if (notable.length) {
     addNews(league, {
       kind: 'general',
-      text: `Player options: ${notable.slice(0, 6).map((p) => `${playerName(p)} (${league.teams[p.tid].abbrev})`).join(', ')}${notable.length > 6 ? ' and others' : ''} opt${notable.length > 1 ? '' : 's'} out.`,
+      text: `Player options: ${notable
+        .slice(0, 6)
+        .map((p) => `${playerName(p)} (${league.teams[p.tid].abbrev})`)
+        .join(', ')}${notable.length > 6 ? ' and others' : ''} opt${notable.length > 1 ? '' : 's'} out.`,
       tids: [...new Set(notable.map((p) => p.tid))],
       pids: notable.map((p) => p.pid),
     });
@@ -408,7 +416,13 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
     });
   }
   if (staffCalls.length) {
-    addInbox(league, { from: 'Assistant GM', subject: 'Team options decided', body: `You left these team options open, so the staff made the call:\n${staffCalls.join('\n')}`, tone: 'neutral', link: '/office' });
+    addInbox(league, {
+      from: 'Assistant GM',
+      subject: 'Team options decided',
+      body: `You left these team options open, so the staff made the call:\n${staffCalls.join('\n')}`,
+      tone: 'neutral',
+      link: '/office',
+    });
   }
 }
 
