@@ -752,8 +752,9 @@ const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEnt
   return (
     <Card title="Play-by-play">
       <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+        {/* substitutions fade back, but stay above 4.5:1 contrast */}
         {feed.map(({ i, e }) => (
-          <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
+          <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.7 : 1 }}>
             <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
               {periodLabel(e.q)} {fmtClock(e.clock)}
             </span>
