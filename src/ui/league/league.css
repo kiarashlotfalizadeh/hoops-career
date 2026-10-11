@@ -707,7 +707,7 @@
 .bk-t.win .w {
   color: var(--good);
 }
-/* faded, but the loser's name still reads at 4.5:1 */
+/* faded, but the loser's name keeps 4.5:1 contrast */
 .bk-t.lose {
   opacity: 0.55;
 }

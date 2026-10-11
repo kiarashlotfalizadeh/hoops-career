@@ -7,7 +7,7 @@ import { useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Help, Segmented } from '../components/ui';
 import { f0, f1, signed, teamRatings } from '../stats';
-import { streakLabel, useQueryParam } from './shared';
+import { confName, ordinal, streakLabel, useQueryParam } from './shared';
 
 type View = 'E' | 'W' | 'league' | 'power';
 type Cols = 'basic' | 'splits';
@@ -76,12 +76,34 @@ function leagueRows(rows: StandingRow[]): StandingRow[] {
   return sorted.map((r) => ({ ...r, gb: lead ? (lead.won - r.won + (r.lost - lead.lost)) / 2 : 0 }));
 }
 
+const CLINCH_TEXT: Partial<Record<NonNullable<StandingRow['clinched']>, string>> = { x: 'clinched a playoff spot', p: 'clinched a play-in spot', e: 'eliminated' };
+
+/** A row read aloud: every column spelled out, whichever ones the screen shows. */
+function rowLabel(r: StandingRow, name: string, conf: boolean) {
+  if (r.won + r.lost === 0) return `${name}, 0-0`;
+  return [
+    name,
+    conf ? `${ordinal(r.confRank)} in the ${confName(r.conf)}` : `${ordinal(r.leagueRank)} in the league`,
+    `${r.won}-${r.lost}`,
+    r.gb ? `${r.gb} game${r.gb === 1 ? '' : 's'} back` : '',
+    `${r.lastTen} in the last 10`,
+    r.streak ? `${r.streak > 0 ? 'won' : 'lost'} ${Math.abs(r.streak) === 1 ? 'the last game' : `${Math.abs(r.streak)} straight`}` : '',
+    `${r.home} at home`,
+    `${r.away} away`,
+    `${r.confRec} in the conference`,
+    `${signed(r.diff)} points a game`,
+    r.clinched ? CLINCH_TEXT[r.clinched] : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
 function StandingsTable({ league, rows, conf, cols }: { league: League; rows: StandingRow[]; conf: boolean; cols: Cols }) {
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
     <Card className={`flush lg-flat lg-st mode-${cols}`}>
-      <div className="lg-st-row lg-st-head">
+      <div className="lg-st-row lg-st-head" aria-hidden="true">
         <span style={{ textAlign: 'right' }}>#</span>
         <span />
         <span>Team</span>
@@ -99,7 +121,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
         const me = r.tid === league.userTid;
         return (
           <Fragment key={r.tid}>
-            <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
+            <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`} aria-label={rowLabel(r, `${t.region} ${t.name}`, conf)}>
               <span className="rk">{r.won + r.lost === 0 ? '–' : conf ? r.confRank : r.leagueRank}</span>
               <TeamLogo tid={r.tid} size={24} />
               <span className="nm">
