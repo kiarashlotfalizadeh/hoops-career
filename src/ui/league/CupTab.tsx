@@ -84,6 +84,10 @@ export function CupTab({ league }: { league: League }) {
           final={final}
         />
       )}
+      {/* until the new groups tip off, last season's winner holds the Cup */}
+      {!projected && !cup.seeds && lastWinner?.cupWinner !== undefined && lastWinner.season < cup.season && (
+        <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
+      )}
       <div className="row between" style={{ gap: 8 }}>
         <span className="small dim">{status}</span>
         <span className="tiny dim">Knockouts {dateRange(league, cup.qfDays[0], cup.finalDay)}</span>
