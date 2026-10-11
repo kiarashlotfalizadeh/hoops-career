@@ -98,7 +98,9 @@ export function Segmented<T extends string>({
     const seg = ref.current;
     const btn = seg?.querySelector<HTMLElement>('button.on');
     if (!seg || !btn || seg.scrollWidth <= seg.clientWidth) return;
-    seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: 'smooth' });
+    // script scrolls ignore the CSS reduced-motion rule, so check the setting here
+    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    seg.scrollTo({ left: Math.max(0, btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2), behavior: smooth ? 'smooth' : 'auto' });
   }, [value]);
   const current = Math.max(
     0,
