@@ -91,4 +91,12 @@ for (const t of league.teams) {
   );
   writeFileSync(join(out, `roster_${FRANCHISES[t.tid].bbref}_2027.html`), wrap('roster', rows));
 }
+// draft pages; every fourth player has no row, like an undrafted one (his class comes from his experience)
+const draftRows = new Map<number, string[]>();
+for (const p of Object.values(league.players)) {
+  if (p.tid < 0 || p.pid % 4 === 0 || !p.draft.round) continue;
+  const row = `<tr>${cell('pick_overall', (p.draft.round - 1) * 30 + p.draft.pick)}<td data-stat="player" data-append-csv="${id(p.pid)}"><a href="/players/f/${id(p.pid)}.html">${p.firstName} ${p.lastName}</a></td>${cell('team_id', FRANCHISES[p.tid].bbref)}${cell('college_name', p.college)}</tr>`;
+  draftRows.set(p.draft.year, [...(draftRows.get(p.draft.year) ?? []), row]);
+}
+for (const [year, rows] of draftRows) writeFileSync(join(out, `draft_${year}.html`), wrap('stats', rows));
 console.log('fixture written to', out);

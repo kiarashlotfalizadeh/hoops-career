@@ -13,6 +13,7 @@ import {
   parseDraft,
   parsePerGame,
   parseRoster,
+  seedDraft,
   type AdvRow,
   type ContractRow,
   type DraftRow,
@@ -75,11 +76,14 @@ async function main() {
       if (html) rosters.push(...parseRoster(html, t, s));
     }
   const drafts: DraftRow[] = [];
+  const noDraftPage: number[] = [];
   for (const y of DRAFT_YEARS) {
     const html = read(`draft_${y}`);
     if (html) drafts.push(...parseDraft(html, y));
+    else noDraftPage.push(y);
   }
   console.log(`rosters: ${rosters.length} rows, drafts: ${drafts.length} picks`);
+  if (noDraftPage.length) console.warn(`  no draft page for ${noDraftPage.join(', ')}: players drafted then are seeded as undrafted`);
 
   const byId = <T extends { id: string }>(rows: T[]) => {
     const m = new Map<string, T[]>();
@@ -296,7 +300,7 @@ async function main() {
       jersey: ros?.jersey ?? '',
       team: c ? c.team : null,
       contract: c && c.salaries.length ? { salaries: c.salaries, option: lastOpt === 'player' || lastOpt === 'team' ? lastOpt : undefined } : null,
-      draft: dr ? { year: dr.year, round: dr.round, pick: dr.pick, team: dr.team } : null,
+      draft: seedDraft(dr, ros),
       ratings,
       tend,
       stats,
@@ -307,6 +311,13 @@ async function main() {
   console.log(
     `players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`,
   );
+  // experience comes from the draft year, so every player needs one: undrafted players get their entry class
+  const undrafted = players.filter((p) => p.draft && !p.draft.round);
+  const early = undrafted.filter((p) => p.draft!.year < DRAFT_YEARS[0]);
+  console.log(
+    `draft: ${players.filter((p) => p.draft?.round).length} drafted, ${undrafted.length} undrafted, ${players.filter((p) => !p.draft).length} unknown (no draft or roster row)`,
+  );
+  if (early.length) console.warn(`  entered the league before ${DRAFT_YEARS[0]} (drafted then? add earlier DRAFT_YEARS): ${early.map((p) => `${p.first} ${p.last}`).join(', ')}`);
   const teamCounts: Record<string, number> = {};
   for (const p of players) if (p.team) teamCounts[p.team] = (teamCounts[p.team] ?? 0) + 1;
   console.log(
@@ -429,7 +440,7 @@ async function main() {
         name: `${p.first} ${p.last}`,
         team: p.team,
         age: 2027 - p.bornYear,
-        pick: p.draft?.pick ?? null,
+        pick: p.draft?.round ? (p.draft.round - 1) * 30 + p.draft.pick : null,
         rawMin: a?.rawMin ?? 0,
         wMin: a?.wMin ?? 0,
         mpg: a?.mpg ?? 0,
@@ -450,7 +461,8 @@ async function main() {
 /** Display OVR expected from draft slot and reputation alone (no NBA sample). */
 function priorOvr(sp: SeedPlayer): number {
   const age = 2027 - sp.bornYear;
-  const pick = sp.draft?.pick ?? null;
+  // overall pick; round 0 is undrafted
+  const pick = sp.draft?.round ? (sp.draft.round - 1) * 30 + sp.draft.pick : null;
   const bump = (PROSPECT_HINTS[`${sp.first} ${sp.last}`.trim()]?.bump ?? 0) * 8;
   const yearsSince = sp.draft ? Math.max(0, 2026 - sp.draft.year) : 0;
   if (age <= 23 && yearsSince <= 2) {

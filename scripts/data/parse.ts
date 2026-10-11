@@ -256,7 +256,8 @@ export interface RosterRow {
   weightLb: number;
   birthDate: string; // YYYYMMDD
   country: string;
-  exp: number; // 0 = rookie
+  /** NBA seasons before this one (0 = rookie), or null when the page doesn't say. */
+  exp: number | null;
   college: string;
 }
 
@@ -282,7 +283,7 @@ export function parseRoster(html: string, team: string, season: number): RosterR
       birthDate: r.birth_date__csk ?? '',
       // the cell holds a flag icon plus the code ("us us"): keep one code
       country: (r.flag ?? r.birth_country ?? '').trim().split(/\s+/)[0].toUpperCase(),
-      exp: r.years_experience === 'R' ? 0 : num(r.years_experience),
+      exp: r.years_experience === 'R' ? 0 : r.years_experience ? num(r.years_experience) : null,
       college: (r.college ?? '').trim(),
     });
   }
@@ -311,6 +312,18 @@ export function parseDraft(html: string, year: number): DraftRow[] {
     out.push({ id, name, year, pick, round: pick <= 30 ? 1 : 2, team: r.team_id ?? r.team_name_abbr ?? '', college: r.college_name ?? '' });
   }
   return out;
+}
+
+/**
+ * A seed player's draft record: his draft-page row (the game numbers picks within their round:
+ * #53 overall is round 2, pick 23), else (undrafted) the class he entered the league with, from
+ * the roster page's years of experience, as round 0 (the game's "Undrafted", which also gives him
+ * his real experience and rookie status). Null when neither page says.
+ */
+export function seedDraft(dr: DraftRow | undefined, ros: RosterRow | undefined): { year: number; round: number; pick: number; team?: string } | null {
+  if (dr) return { year: dr.year, round: dr.round, pick: dr.pick - (dr.round - 1) * 30, team: dr.team };
+  if (!ros || ros.exp === null) return null;
+  return { year: ros.season - 1 - ros.exp, round: 0, pick: 0 };
 }
 
 export const COUNTRY_NAMES: Record<string, string> = {

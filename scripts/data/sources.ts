@@ -4,7 +4,9 @@
 export const BASE = 'https://www.basketball-reference.com';
 export const STAT_SEASONS = [2024, 2025, 2026];
 export const ROSTER_SEASONS = [2027, 2026];
-export const DRAFT_YEARS = Array.from({ length: 21 }, (_, i) => 2006 + i); // 2006..2026
+// 2003..2026: back to the longest-serving player's draft (LeBron James, 2003); a player who entered
+// the league earlier would have no draft row and be seeded as undrafted
+export const DRAFT_YEARS = Array.from({ length: 24 }, (_, i) => 2003 + i);
 
 export const TEAM_CODES = [
   'ATL',
