@@ -1,8 +1,9 @@
-import { Suspense, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
-import { Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
-import { useLeague, useStore } from '../state/store';
-import { lastLeagueId, loadLeague } from '../state/persistence';
+import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
+import { problemOf, useLeague, useStore } from '../state/store';
+import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
+import { exportLeague, exportRawSave } from '../state/backup';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
@@ -39,38 +40,108 @@ const Inbox = lazyRetry(() => import('./screens/Inbox'));
 const Settings = lazyRetry(() => import('./screens/Settings'));
 const History = lazyRetry(() => import('./screens/History'));
 
+const BLOCKED = 'Close other Hoops Career tabs or windows to finish updating your saves.';
+
+/** Hand the user a file from a button; a cancelled share sheet is no failure. */
+async function offerFile(make: () => Promise<boolean>) {
+  try {
+    await make();
+  } catch (e) {
+    console.error(e);
+    useStore.getState().toast('Export failed.', 'bad');
+  }
+}
+
 function Boot({ children }: { children: ReactNode }) {
   const league = useStore((s) => s.league);
   const setLeague = useStore((s) => s.setLeague);
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    (async () => {
-      const id = lastLeagueId();
-      if (id && !league) {
-        try {
-          const l = await loadLeague(id);
-          if (l) setLeague(l);
-        } catch (e) {
-          console.error(e);
-        }
+  const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
+  const [blocked, setBlocked] = useState(false);
+  const nav = useNavigate();
+  const open = useCallback(async () => {
+    const id = lastLeagueId();
+    if (id && !useStore.getState().league) {
+      try {
+        const l = await loadLeague(id);
+        // (a second, overlapping load must not swap out the league the first one opened)
+        if (l && !useStore.getState().league) setLeague(l);
+      } catch (e) {
+        console.error(e);
+        setFailed({ id, message: e instanceof Error ? e.message : String(e) });
+        return;
       }
-      setReady(true);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    }
+    setFailed(null);
+    setReady(true);
+  }, [setLeague]);
   useEffect(() => {
+    void open();
+  }, [open]);
+  useEffect(() => {
+    // an older version of the app in another tab is holding the save database open
+    onBlocked(() => {
+      setBlocked(true);
+      useStore.getState().toast(BLOCKED, 'bad');
+    });
+    // another window saved this league: this copy is stale, so stop autosaving it
+    const off = onRemoteChange((id) => {
+      if (useStore.getState().league?.id === id) useStore.setState({ saveProblem: problemOf(new SaveConflictError()) });
+    });
     const onHide = () => {
-      if (document.visibilityState === 'hidden') void useStore.getState().save();
+      if (document.visibilityState === 'hidden') void useStore.getState().flush();
     };
     document.addEventListener('visibilitychange', onHide);
-    return () => document.removeEventListener('visibilitychange', onHide);
+    return () => {
+      onBlocked(null);
+      off();
+      document.removeEventListener('visibilitychange', onHide);
+    };
   }, []);
   const userTid = useStore((s) => s.league?.userTid);
   useEffect(() => {
     const t = league && userTid !== undefined ? league.teams[userTid] : undefined;
     applyAccent(t ? t.colors : null);
   }, [league, userTid]);
-  if (!ready) return <div className="empty" style={{ marginTop: '40vh' }}>Loading…</div>;
+  if (failed) {
+    return (
+      <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, var(--safe-t))' }}>
+        <div className="card col" style={{ gap: 10, alignItems: 'flex-start' }}>
+          <AlertTriangle className="warn" size={28} />
+          <h2>Your league could not be opened</h2>
+          <div className="small dim2">It is still on this device. Try again, or keep a copy of the save as a file.</div>
+          <div className="tiny dim" style={{ wordBreak: 'break-word' }}>
+            {failed.message}
+          </div>
+          <div className="row wrap" style={{ marginTop: 4 }}>
+            <button className="btn primary" onClick={() => void open()}>
+              Try again
+            </button>
+            <button className="btn" onClick={() => void offerFile(() => exportRawSave(failed.id))}>
+              Export save file
+            </button>
+            <button
+              className="btn"
+              onClick={() => {
+                setLastLeagueId(null);
+                setFailed(null);
+                setReady(true);
+                nav('/start', { replace: true });
+              }}
+            >
+              Main menu
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+  if (!ready)
+    return (
+      <div className="empty" style={{ marginTop: '40vh' }}>
+        Loading…{blocked && <div className="small">{BLOCKED}</div>}
+      </div>
+    );
   return <>{children}</>;
 }
 
@@ -223,6 +294,53 @@ function SimBar() {
   );
 }
 
+/** Stays up while the league isn't safely on the device, with a way to keep it anyway. */
+function SaveBanner() {
+  const problem = useStore((s) => s.saveProblem);
+  const league = useStore((s) => s.league);
+  const [busy, setBusy] = useState(false);
+  if (!problem || !league) return null;
+  const conflict = problem.kind === 'conflict';
+  const retry = async () => {
+    setBusy(true);
+    await useStore.getState().save();
+    setBusy(false);
+  };
+  return (
+    <div
+      className="card tight row"
+      role="alert"
+      style={{
+        // lined up with the page column below
+        width: 'min(792px, calc(100% - max(14px, var(--safe-l)) - max(14px, var(--safe-r))))',
+        margin: '8px auto 0',
+        gap: 10,
+        borderColor: 'var(--bad)',
+        background: 'color-mix(in srgb, var(--bad) 10%, var(--surface))',
+      }}
+    >
+      <AlertTriangle size={18} className="bad" style={{ flex: 'none' }} />
+      <div className="grow small">
+        <b>{conflict ? problem.text : 'Not saved.'}</b> {conflict ? 'Reload to pick it up from there. Changes made in this window since then are not kept.' : problem.text}
+      </div>
+      {conflict ? (
+        <button className="btn xs" onClick={() => window.location.reload()}>
+          Reload
+        </button>
+      ) : (
+        <div className="col" style={{ gap: 6 }}>
+          <button className="btn xs" disabled={busy} onClick={() => void offerFile(() => exportLeague(league))}>
+            Export backup
+          </button>
+          <button className="btn xs" disabled={busy} onClick={() => void retry()}>
+            Try again
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
   return (
@@ -268,6 +386,7 @@ function GameShell() {
   return (
     <div className="app">
       <TopBar />
+      <SaveBanner />
       <ErrorBoundary scope="screen" key={loc.pathname}>
       <Suspense fallback={<div className="empty">Loading…</div>}>
         <Routes>

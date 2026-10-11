@@ -34,8 +34,11 @@ export default function Settings() {
   const mutate = (fn: (l: League) => void) => useStore.getState().mutate(fn);
   const [name, setName] = useState(league.name);
   const [coach, setCoach] = useState(league.coachName);
-  const [sheet, setSheet] = useState<null | 'switch' | 'delete'>(null);
+  const [sheet, setSheet] = useState<null | 'switch' | 'delete' | 'unsaved'>(null);
   const [busy, setBusy] = useState(false);
+  // leaving or swapping leagues mid-sim would strand the sim on a league nobody sees
+  const simming = useStore((s) => !!s.sim);
+  const saveProblem = useStore((s) => s.saveProblem);
 
   const commitName = () => {
     const v = name.trim();
@@ -54,29 +57,48 @@ export default function Settings() {
 
   const saveNow = async () => {
     setBusy(true);
-    await useStore.getState().save();
+    const ok = await useStore.getState().save();
     setBusy(false);
-    useStore.getState().toast('Saved to this device.', 'good');
+    const problem = useStore.getState().saveProblem;
+    useStore.getState().toast(ok ? 'Saved to this device.' : `Not saved. ${problem?.text ?? ''}`, ok ? 'good' : 'bad');
+  };
+
+  const leave = () => {
+    setSheet(null);
+    nav('/start');
+    useStore.getState().setLeague(null);
   };
 
   const exit = async () => {
     setBusy(true);
-    await useStore.getState().save();
-    nav('/start');
-    useStore.getState().setLeague(null);
+    const ok = await useStore.getState().save();
+    setBusy(false);
+    // the league only lives in this window until a save works (a newer copy from another window is fine to drop)
+    if (ok || useStore.getState().saveProblem?.kind === 'conflict') leave();
+    else setSheet('unsaved');
   };
+
+  const backup = () =>
+    void exportLeague(league).catch((e) => {
+      console.error(e);
+      useStore.getState().toast('Export failed.', 'bad');
+    });
 
   const remove = async () => {
     const id = league.id;
     const nm = league.name;
-    setSheet(null);
-    nav('/start');
-    useStore.getState().setLeague(null);
-    await deleteLeague(id);
-    useStore.getState().toast(`"${nm}" deleted.`, 'neutral');
+    leave();
+    try {
+      await deleteLeague(id);
+      useStore.getState().toast(`"${nm}" deleted.`, 'neutral');
+    } catch (e) {
+      console.error(e);
+      useStore.getState().toast(`"${nm}" could not be deleted. Try again from the main menu.`, 'bad');
+    }
   };
 
   const seasonsIn = seasonsInCharge(league);
+  const seasonsPlayed = league.season - league.startSeason + 1;
 
   return (
     <main className="page">
@@ -190,16 +212,7 @@ export default function Settings() {
         <div className="col" style={{ gap: 8 }}>
           <div className="small dim2">Your league autosaves on this device after every change and when you leave the app. Export a backup to keep it safe or move it to another device.</div>
           <div className="grid2">
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() =>
-                void exportLeague(league).catch((e) => {
-                  console.error(e);
-                  useStore.getState().toast('Export failed.', 'bad');
-                })
-              }
-            >
+            <button className="btn" disabled={busy} onClick={backup}>
               <Download size={17} /> Export backup
             </button>
             <ImportButton />
@@ -208,14 +221,14 @@ export default function Settings() {
             <button className="btn" disabled={busy} onClick={() => void saveNow()}>
               <Save size={17} /> Save now
             </button>
-            <button className="btn" disabled={busy} onClick={() => void exit()}>
+            <button className="btn" disabled={busy || simming} onClick={() => void exit()}>
               <LogOut size={17} /> Main menu
             </button>
           </div>
-          <button className="btn block" onClick={() => setSheet('switch')}>
+          <button className="btn block" disabled={simming} onClick={() => setSheet('switch')}>
             <Shuffle size={17} /> Switch team
           </button>
-          <button className="btn danger block" onClick={() => setSheet('delete')}>
+          <button className="btn danger block" disabled={simming} onClick={() => setSheet('delete')}>
             <Trash2 size={17} /> Delete league
           </button>
         </div>
@@ -251,7 +264,7 @@ export default function Settings() {
       <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete league?">
         <div className="col" style={{ gap: 12 }}>
           <div className="dim2">
-            “{league.name}” and its {seasonsIn} season{seasonsIn > 1 ? 's' : ''} of history will be permanently removed from this device. This can't be undone.
+            “{league.name}” and its {seasonsPlayed} season{seasonsPlayed > 1 ? 's' : ''} of history will be permanently removed from this device. This can't be undone.
           </div>
           <div className="row">
             <button className="btn grow" onClick={() => setSheet(null)}>
@@ -259,6 +272,23 @@ export default function Settings() {
             </button>
             <button className="btn danger grow" onClick={() => void remove()}>
               <Trash2 size={16} /> Delete
+            </button>
+          </div>
+        </div>
+      </Sheet>
+
+      <Sheet open={sheet === 'unsaved'} onClose={() => setSheet(null)} title="Leave without saving?">
+        <div className="col" style={{ gap: 12 }}>
+          <div className="dim2">{saveProblem?.text} Your latest changes are only in this window: export a backup to keep them.</div>
+          <button className="btn primary block" onClick={backup}>
+            <Download size={16} /> Export backup
+          </button>
+          <div className="row">
+            <button className="btn grow" onClick={() => setSheet(null)}>
+              Stay
+            </button>
+            <button className="btn danger grow" onClick={leave}>
+              Leave anyway
             </button>
           </div>
         </div>
