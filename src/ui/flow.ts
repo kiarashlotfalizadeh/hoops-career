@@ -5,6 +5,7 @@ import { pendingLive } from '../state/live';
 import { canStartRegularSeason, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
+import { periodLabel } from './stats';
 
 export interface FlowAction {
   id: string;
@@ -56,7 +57,7 @@ export function flowActions(league: League, { onLive = false } = {}): FlowAction
       const when = (day: number) => fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' });
       const out = league.phase !== 'regular' && !stillAlive(league);
       if (live) {
-        const q = live.sim.q <= 4 ? `Q${live.sim.q}` : 'OT';
+        const q = live.sim.clock <= 0.05 ? `End of ${periodLabel(live.sim.q)}` : periodLabel(live.sim.q);
         a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${live.sim.T[live.userSide].score}-${live.sim.T[1 - live.userSide].score}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
