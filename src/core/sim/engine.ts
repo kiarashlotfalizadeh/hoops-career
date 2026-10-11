@@ -280,6 +280,8 @@ export interface ST {
   pt: Record<string, { poss: number; pts: number }>;
   ex: TeamBox['extra'];
   run: number; // unanswered points
+  /** The deep bench is finishing a blowout (stays on until the game is back within reach). */
+  garbage: boolean;
   // caches for current lineup
   spacing: number;
   passQ: number;
@@ -534,6 +536,7 @@ export class GameSim {
       pt: {},
       ex: { biggestLead: 0, fastBreak: 0, paint: 0, secondChance: 0, offTov: 0, bench: 0 },
       run: 0,
+      garbage: false,
       spacing: 50,
       passQ: 50,
       helpQ: 50,
@@ -856,7 +859,10 @@ export class GameSim {
     const avail = (p: SP) => p.out === 0 && !this.capped(p);
     let desired: SP[];
     const margin = Math.abs(this.T[0].score - this.T[1].score);
-    const garbage = t.t.manage.garbageTime && this.q >= 4 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16));
+    // once the bench is in it stays: a lead dipping to 14 with seconds left doesn't bring the starters back
+    if (this.q >= 4 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) t.garbage = true;
+    else if (margin <= 6 + this.clock / 30) t.garbage = false;
+    const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
     const ordered = t.players.filter(avail);
     if (garbage && ordered.length >= 8) {
       // deep bench finishes blowouts

@@ -87,3 +87,22 @@ describe('DPOY score', () => {
     expect(dpoyScore(starter, ctx)).toBeGreaterThan(dpoyScore(backup, ctx));
   });
 });
+
+describe('garbage time', () => {
+  it("keeps the deep bench on once a blowout is decided: starters don't come back with seconds left", () => {
+    const league = createLeague({ name: 'g', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 4 });
+    const side = (tid: number) => ({ team: league.teams[tid], players: teamPlayers(league, tid) });
+    const rng = new Rng(11);
+    let lateReturns = 0;
+    for (let g = 0; g < 200; g++) {
+      const h = g % 30;
+      const a = (h + 11) % 30;
+      const sim = new GameSim(side(h), side(a), { rng, type: 'regular', record: true });
+      sim.simToEnd();
+      const starters = [h, a].flatMap((tid) => league.teams[tid].rotation.order.slice(0, 5).map((pid) => league.players[pid].lastName));
+      // a starter subbed back in during the last 30 seconds of a game decided by 12+
+      if (sim.pbp.some((e) => e.kind === 'sub' && e.q >= 4 && e.clock < 30 && Math.abs(e.hs - e.as) >= 12 && starters.some((n) => e.text.includes(`${n} in for`)))) lateReturns++;
+    }
+    expect(lateReturns).toBeLessThanOrEqual(4);
+  });
+});
