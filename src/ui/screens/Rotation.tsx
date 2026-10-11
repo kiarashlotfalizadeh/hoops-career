@@ -365,7 +365,11 @@ function EditPlayer({
           })
         }
         label="Closing lineup"
-        help="Closers play the end of the 4th quarter and overtime (up to five)."
+        help={
+          !rot.closers.includes(p.pid) && rot.closers.length >= 5 && names(rot.closers[0])
+            ? `Closers play the end of the 4th quarter and overtime. You have five: adding him replaces ${names(rot.closers[0])}.`
+            : 'Closers play the end of the 4th quarter and overtime (up to five).'
+        }
       />
       <Toggle
         on={rot.restB2B.includes(p.pid)}
