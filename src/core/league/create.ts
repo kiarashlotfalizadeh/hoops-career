@@ -105,6 +105,26 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng): Pl
   return p;
 }
 
+const JERSEYS = ['0', '1', '2', '3', '4', '5', '7', '8', '9', '10', '11', '12', '13', '14', '15', '17', '20', '21', '22', '23', '24', '25', '30', '31', '32', '33', '34', '35', '41', '44', '55'];
+
+/** Rookies and new signings without a listed number pick a free one on their team. */
+function assignJerseys(league: League, rng: Rng) {
+  for (const t of league.teams) {
+    const roster = Object.values(league.players).filter((p) => p.tid === t.tid);
+    const used = new Set<string>();
+    const fixes: Player[] = [];
+    for (const p of roster) {
+      if (p.jersey && !used.has(p.jersey)) used.add(p.jersey);
+      else fixes.push(p);
+    }
+    for (const p of fixes) {
+      const free = JERSEYS.filter((j) => !used.has(j));
+      p.jersey = free.length ? rng.pick(free) : String(rng.int(40, 99));
+      used.add(p.jersey);
+    }
+  }
+}
+
 export function createLeague(opts: CreateOpts): League {
   const rngSeed = opts.rngSeed ?? (hashString(opts.name + Date.now()) >>> 0);
   const rng = new Rng(rngSeed);
@@ -154,6 +174,7 @@ export function createLeague(opts: CreateOpts): League {
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
+    assignJerseys(league, rng);
   } else {
     // fictional league
     for (let tid = 0; tid < 30; tid++) {

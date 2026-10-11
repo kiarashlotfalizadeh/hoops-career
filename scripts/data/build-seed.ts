@@ -74,7 +74,11 @@ function main() {
   const pgById = byId(perGame);
   const advById = byId(adv);
   const rosterById = new Map<string, RosterRow>();
-  for (const r of rosters.sort((a, b) => a.season - b.season)) rosterById.set(r.id, r); // later season wins
+  for (const r of rosters.sort((a, b) => a.season - b.season)) {
+    // later season wins, but offseason pages leave uniform numbers blank: keep the last known one
+    const prev = rosterById.get(r.id);
+    rosterById.set(r.id, prev && !r.jersey && prev.jersey ? { ...r, jersey: prev.jersey } : r);
+  }
   const draftById = new Map(drafts.map((d) => [d.id, d]));
   const contractById = new Map<string, ContractRow>(contracts.map((c) => [c.id, c]));
 

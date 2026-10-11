@@ -210,6 +210,14 @@ export default function Live() {
       <main className="page">
         <PageHeader title="Live" back />
         <Empty>No game for your team today.</Empty>
+        {(league?.phase === 'regular' || league?.phase === 'playin' || league?.phase === 'playoffs') && (
+          <button
+            className="btn primary block big"
+            onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' }).then(() => nav('/'))}
+          >
+            <ChevronsRight size={18} /> Sim to game day
+          </button>
+        )}
       </main>
     );
   }
