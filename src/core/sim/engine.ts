@@ -1309,7 +1309,7 @@ export class GameSim {
   }
 
   /** In the penalty: from the fifth team foul of a quarter (fourth in overtime), or the second in a period's last two minutes. */
-  private bonus(def: ST) {
+  bonus(def: ST) {
     return def.fouls >= GAME.bonusFouls - (this.q > 4 ? 1 : 0) || (this.clock < 120 && def.foulsLast2 >= 2);
   }
 

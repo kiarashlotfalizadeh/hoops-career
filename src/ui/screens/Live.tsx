@@ -621,7 +621,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
             <div className="bold">{away.abbrev}</div>
             <div className="tiny dim nowrap">
               TO {sim.T[1].timeouts}
-              {sim.T[0].fouls >= 5 && <span className="warn" title="In the bonus"> ●</span>}
+              {sim.bonus(sim.T[0]) && <span className="warn" title="In the bonus"> ●</span>}
             </div>
           </div>
           <span className="score" style={{ marginLeft: 'auto' }}>{score[1]}</span>
@@ -635,7 +635,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
           <div className="right" style={{ minWidth: 0 }}>
             <div className="bold">{home.abbrev}</div>
             <div className="tiny dim nowrap">
-              {sim.T[1].fouls >= 5 && <span className="warn" title="In the bonus">● </span>}
+              {sim.bonus(sim.T[1]) && <span className="warn" title="In the bonus">● </span>}
               TO {sim.T[0].timeouts}
             </div>
           </div>

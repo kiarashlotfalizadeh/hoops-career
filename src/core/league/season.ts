@@ -408,7 +408,7 @@ export function newSeason(league: League): boolean {
   league.season++;
   league.phase = 'preseason';
   league.day = 0;
-  league.games = league.games.filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid)).map((g) => ({ ...g, pbp: undefined, shots: undefined, lineups: undefined, flow: undefined }));
+  league.games = league.games.filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid)).map((g) => ({ ...g, pbp: undefined, shots: undefined, lineups: undefined, flow: undefined, flowPeriods: undefined }));
   league.playIn = [];
   league.playoffs = [];
   league.schedule = [];

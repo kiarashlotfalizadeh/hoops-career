@@ -275,6 +275,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.impacts;
     delete res.lineups;
     delete res.flow;
+    delete res.flowPeriods;
     delete res.pbp;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   }

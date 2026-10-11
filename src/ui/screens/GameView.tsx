@@ -224,7 +224,7 @@ export default function GameView() {
 
       {tab === 'flow' && g.flow && (
         <Card title="Score margin" right={<span className="tiny dim">{home.abbrev} above · {away.abbrev} below</span>}>
-          <FlowChart flow={g.flow} colorA={flowColors[0]} colorB={flowColors[1]} periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]} height={150} />
+          <FlowChart flow={g.flow} colorA={flowColors[0]} colorB={flowColors[1]} periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]} periodStarts={g.flowPeriods} height={150} />
           <div className="small dim" style={{ marginTop: 8 }}>
             Largest leads: {home.abbrev} {g.home.extra.biggestLead}, {away.abbrev} {g.away.extra.biggestLead}.
           </div>

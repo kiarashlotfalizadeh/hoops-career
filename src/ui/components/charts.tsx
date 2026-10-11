@@ -60,7 +60,8 @@ export function LineChart({ points, height = 120, color = 'var(--accent)', yMin,
  * Score margin flow (positive = team A ahead). `periods` are the periods' lengths in game seconds
  * (four quarters, then any overtimes): dividers and Q1..OT labels sit where each one starts.
  */
-export function FlowChart({ flow, colorA, colorB, periods, height = 110 }: { flow: number[]; colorA: string; colorB: string; periods: number[]; height?: number }) {
+/** `periods` are period lengths (labels and fallback spacing); `periodStarts` are the flow indices where each began, when recorded. */
+export function FlowChart({ flow, colorA, colorB, periods, periodStarts, height = 110 }: { flow: number[]; colorA: string; colorB: string; periods: number[]; periodStarts?: number[]; height?: number }) {
   const [ref, w] = useWidth();
   const clip = useId().replace(/:/g, '');
   const h = height;
@@ -70,7 +71,10 @@ export function FlowChart({ flow, colorA, colorB, periods, height = 110 }: { flo
   const y = (v: number) => h / 2 - (v / max) * (h / 2 - 6);
   const d = flow.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const total = periods.reduce((a, p) => a + p, 0);
-  const starts = periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
+  const starts =
+    periodStarts?.length === periods.length
+      ? periodStarts.map((i) => x(Math.min(i, flow.length - 1)))
+      : periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
   return (
     <div ref={ref}>
     <svg viewBox={`0 0 ${w} ${h + 16}`} width="100%" height={h + 16} role="img" aria-label="Score margin over the game">
