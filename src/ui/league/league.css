@@ -767,15 +767,14 @@ a.bk-s:hover {
   color: inherit;
   text-decoration: none;
 }
-table.cup-group th:last-child,
-table.cup-group td:last-child {
-  width: 44px;
-  padding-left: 0;
+.lg-st.mode-cup .lg-st-row {
+  grid-template-columns: 18px 22px minmax(0, 1fr) 38px 38px 36px 32px;
 }
-table.cup-group tr.cup-out td {
+.lg-st-row.cup-out > span {
   color: var(--text-dim);
 }
-table.cup-group tr.cup-out td .lg-tcell {
+.lg-st-row.cup-out .nm,
+.lg-st-row.cup-out .wl {
   font-weight: 600;
 }
 .lg-champ {
