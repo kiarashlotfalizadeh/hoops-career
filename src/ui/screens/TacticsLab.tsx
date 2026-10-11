@@ -55,7 +55,11 @@ export default function TacticsLab() {
   const [params] = useSearchParams();
   const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline() : null));
   const [mode, setMode] = useState<Mode>(baseline ? 'compare' : 'project');
-  const [opp, setOpp] = useState<number>(() => Number(params.get('opp') ?? defaultOpponent(league)));
+  // a link from before a team switch (or a hand-edited one) can name your own team or none: fall back to the next opponent
+  const [opp, setOpp] = useState<number>(() => {
+    const asked = Number(params.get('opp') ?? NaN);
+    return Number.isInteger(asked) && league.teams[asked] && asked !== league.userTid ? asked : defaultOpponent(league);
+  });
   const [games, setGames] = useState(40);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
