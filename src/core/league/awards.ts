@@ -111,7 +111,10 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const mip = rank(eligible.filter((c) => c.p.draft.year !== season - 1), (c) => {
     const prev = seasonTotals(c.p, season - 1, false);
     if (!prev || prev.gp < 20) return -99;
-    return c.gmsc - gameScore(prev) / prev.gp;
+    const before = gameScore(prev) / prev.gp;
+    // voters reward a breakout, not an established star bouncing back
+    if (before >= 15) return -99;
+    return c.gmsc - before;
   });
   const coy = [...league.teams].sort((a, b) => {
     const imp = (tid: number) => {
