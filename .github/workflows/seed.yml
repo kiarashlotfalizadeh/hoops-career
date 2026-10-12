@@ -119,6 +119,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp /tmp/data-raw.tgz /tmp/upload.tgz
+          # a seed commit whose rebase onto main conflicted leaves the checkout mid-rebase
+          git rebase --abort 2>/dev/null || true
           git checkout --orphan data-raw-tmp
           git rm -rf --cached . > /dev/null
           cp /tmp/upload.tgz data-raw.tgz
