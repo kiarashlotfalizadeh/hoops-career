@@ -1,7 +1,7 @@
 import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites } from '../ratings';
 import { clamp } from '../random';
-import { addInbox, addNews, curTeamSeason, playerName, seasonTotals, teamName, winPct } from './helpers';
+import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
 
 export function gameScore(s: PlayerStats): number {
   return s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
@@ -169,9 +169,11 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   };
   league.awards = league.awards.filter((a) => a.season !== season);
   league.awards.push(awards);
+  const won = new Map<number, string[]>();
   const give = (pid: number | undefined, type: string) => {
     if (pid === undefined) return;
     league.players[pid].awards.push({ season, type });
+    won.set(pid, [...(won.get(pid) ?? []), type]);
   };
   give(awards.mvp, 'MVP');
   give(awards.dpoy, 'Defensive Player of the Year');
@@ -184,16 +186,18 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const nm = (pid?: number) => (pid !== undefined ? playerName(league.players[pid]) : '—');
   addNews(league, {
     kind: 'award',
-    text: `Awards: MVP ${nm(awards.mvp)} · DPOY ${nm(awards.dpoy)} · ROY ${nm(awards.roy)} · 6MOY ${nm(awards.smoy)} · MIP ${nm(awards.mip)} · COY ${coy ? teamName(coy) : '—'}.`,
-    tids: [],
-    pids: [awards.mvp, awards.dpoy, awards.roy].filter((x): x is number => x !== undefined),
+    text: `Awards: MVP ${nm(awards.mvp)} · DPOY ${nm(awards.dpoy)} · ROY ${nm(awards.roy)} · 6MOY ${nm(awards.smoy)} · MIP ${nm(awards.mip)} · COY ${coy ? `${awards.coyCoach} (${coy.abbrev})` : '—'}.`,
+    tids: coy ? [coy.tid] : [],
+    pids: [awards.mvp, awards.dpoy, awards.roy, awards.smoy, awards.mip].filter((x): x is number => x !== undefined),
   });
-  const mine = [awards.mvp, awards.dpoy, awards.roy, awards.smoy, awards.mip, ...allNba.flat()].filter((pid) => pid !== undefined && league.players[pid].tid === league.userTid);
-  if (mine.length || coy?.tid === league.userTid) {
+  // "Name (MVP, All-NBA 1st Team)" for each of the user's winners
+  const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])} (${types.join(', ')})`);
+  if (coy?.tid === league.userTid) mine.push('Coach of the Year (you)');
+  if (mine.length) {
     addInbox(league, {
       from: 'League Office',
       subject: 'Season awards',
-      body: `Your team collected hardware: ${[...new Set(mine)].map((pid) => playerName(league.players[pid!])).join(', ')}${coy?.tid === league.userTid ? ' and Coach of the Year for you!' : ''}.`,
+      body: `Your team collected hardware: ${andList(mine)}.`,
       tone: 'good',
       link: '/league?tab=awards',
     });
@@ -259,7 +263,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     addInbox(league, {
       from: 'League Office',
       subject: 'All-Star selections',
-      body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`,
+      body: `${andList(mine.map((pid) => playerName(league.players[pid])))} made the All-Star team.`,
       tone: 'good',
       link: '/league?tab=awards',
     });

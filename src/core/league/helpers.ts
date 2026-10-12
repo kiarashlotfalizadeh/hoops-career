@@ -153,6 +153,11 @@ export function addInbox(league: League, m: Omit<InboxMessage, 'id' | 'season' |
   if (league.inbox.length > 150) league.inbox.length = 150;
 }
 
+/** A list for running text: "A", "A and B", "A, B and C". */
+export function andList(items: string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] ?? '');
+}
+
 export function playerName(p: Player) {
   return `${p.firstName} ${p.lastName}`.trim();
 }

@@ -642,6 +642,27 @@ describe('awards (L13, L18)', () => {
     expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
   });
 
+  it('award mail reads as one sentence: Coach of the Year alone, three All-Stars', () => {
+    const l = league();
+    const line = seasonOf(l);
+    for (const p of Object.values(l.players)) p.injury = null;
+    // the user's team wins big with nobody playing enough to win anything
+    [curTeamSeason(l, U).won, curTeamSeason(l, U).lost] = [70, 12];
+    for (const p of teamPlayers(l, U)) line(p, 10, 0, 6);
+    expect(computeRegularSeasonAwards(l).coy).toBe(U);
+    expect(l.inbox[0].body).toBe('Your team collected hardware: Coach of the Year (you).');
+    const news = l.news[l.news.length - 1];
+    expect(news.text).toContain(`COY ${l.coachName} (${l.teams[U].abbrev}).`);
+    expect(news.tids).toEqual([U]);
+    // three of the user's players have All-Star seasons
+    const stars = standardRoster(l, U).slice(0, 3);
+    for (const p of stars) line(p, 70, 70, 40);
+    const as = selectAllStars(l);
+    const names = [...as.E, ...as.W].filter((pid) => l.players[pid].tid === U).map((pid) => `${l.players[pid].firstName} ${l.players[pid].lastName}`);
+    expect(names).toHaveLength(3);
+    expect(l.inbox[0].body).toBe(`${names[0]}, ${names[1]} and ${names[2]} made the All-Star team.`);
+  });
+
   it('a knock the All-Star break heals costs nobody his place', () => {
     const l = league();
     const line = seasonOf(l);
