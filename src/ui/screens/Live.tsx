@@ -316,12 +316,17 @@ export default function Live() {
     drawnBox.current = boxSnapshot(lg.sim);
     let logs: PossLog[] = [];
     let guard = 0;
-    while (!logs.length && !lg.over && guard++ < 5) logs = lg.step();
+    // the score the drawn possession starts from (its log keeps only the one it ends on)
+    let from: [number, number] = [0, 0];
+    while (!logs.length && !lg.over && guard++ < 5) {
+      from = [lg.sim.T[0].score, lg.sim.T[1].score];
+      logs = lg.step();
+    }
     if (!logs.length) {
       flushFeed();
       return finish();
     }
-    setScript(buildScript(logs[logs.length - 1], info));
+    setScript(buildScript(logs[logs.length - 1], info, logs.length > 1 ? logs[logs.length - 2].score : from));
     setTick((t) => t + 1);
   }, [info, finish, flushFeed, fate, ticker]);
 
