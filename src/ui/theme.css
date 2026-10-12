@@ -51,7 +51,6 @@ body,
 #root {
   margin: 0;
   min-height: 100%;
-  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
@@ -60,8 +59,13 @@ body,
   overscroll-behavior-y: none;
 }
 
-body {
+/* the page colour lives on html alone: a background on body (index.html gives it one for the first
+   frame) would paint over the glow below */
+html {
   background: var(--bg);
+}
+body {
+  background: transparent;
 }
 /* the team-tinted glow stays put while content scrolls (background-attachment: fixed is ignored on iOS) */
 body::before {
