@@ -417,6 +417,23 @@ describe('engine rules', () => {
     expect(new Set(sim.injuries.map((i) => i.pid)).size).toBe(2);
   });
 
+  it('sets ball screens with the preferred screeners in the order listed', () => {
+    const order = league.teams[20].rotation.order;
+    const [first, second] = [order[4], order[3]];
+    const sim = new GameSim(side(20, { offense: { screeners: [first, second] } }), side(21), { rng: new Rng(12), type: 'regular', record: true, injuries: false });
+    sim.simToEnd();
+    let screens = 0;
+    for (const l of sim.drainLogs()) {
+      if (l.off !== 0) continue;
+      for (const st of l.steps) {
+        if (st.k !== 'screen' || st.pid2 === first || !l.on[0].includes(first)) continue;
+        screens++;
+        expect(st.pid).toBe(first);
+      }
+    }
+    expect(screens).toBeGreaterThan(5);
+  });
+
   it('credits double teams to the Star plan only when the plan sent them', () => {
     const doubles = (plan: 'none' | 'double') => {
       let n = 0;

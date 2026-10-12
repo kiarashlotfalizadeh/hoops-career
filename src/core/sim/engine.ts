@@ -1682,9 +1682,12 @@ export class GameSim {
 
   private pnr(off: ST, def: ST, open: number, late: ReturnType<GameSim['lateMode']>, forced: boolean): 'done' | { carry: number; ball: SP | null } {
     const H = this.pickActor(off, 'pnr');
-    // screener: preferred screeners, else bigs / rollers / poppers
-    const pref = off.t.offense.screeners;
-    let S: SP | undefined = pref.length ? off.on.find((p) => p !== H && pref.includes(p.pid)) : undefined;
+    // screener: the first preferred screener on the floor, else bigs / rollers / poppers
+    let S: SP | undefined;
+    for (const pid of off.t.offense.screeners) {
+      S = off.on.find((p) => p.pid === pid && p !== H);
+      if (S) break;
+    }
     if (!S) {
       const ws = off.on.map((p) => {
         if (p === H) return 0;
