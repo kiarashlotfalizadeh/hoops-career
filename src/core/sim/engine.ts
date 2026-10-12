@@ -802,6 +802,8 @@ export class GameSim {
   private endPeriod(): boolean {
     // the last fraction of a second still counts: exactly 48 minutes (plus overtime) are played
     this.tick(this.clock);
+    // and the game clock doesn't drift: the next period starts on its minute of the stint plan
+    this.elapsed = Math.min(this.q, 4) * GAME.quarterSec + Math.max(0, this.q - 4) * GAME.otSec;
     const [h, a] = this.T;
     if (this.q >= 4 && h.score !== a.score) {
       this.over = true;
@@ -858,17 +860,29 @@ export class GameSim {
     return p.cap !== undefined && p.b.sec >= p.cap * 60 - 40;
   }
 
+  /**
+   * Whether the game is a blowout the deep bench should finish: 22 points up with five minutes
+   * left or 16 with 2:30 left (nobody empties the bench for the last half minute). Once the bench
+   * is in it stays until the game is back within reach: a lead dipping to 14 with seconds left
+   * doesn't bring the starters back.
+   */
+  private wantsGarbage(t: ST): boolean {
+    const margin = Math.abs(this.T[0].score - this.T[1].score);
+    if (this.q >= 4 && this.clock >= 30 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) return true;
+    return margin <= 6 + this.clock / 30 ? false : t.garbage;
+  }
+
+  /** The deep bench is finishing a blowout (if the coach empties his bench in garbage time). */
+  private inGarbageTime(t: ST): boolean {
+    return t.t.manage.garbageTime && this.q >= 4 && t.garbage;
+  }
+
   private desiredLineup(t: ST): SP[] {
     const avail = (p: SP) => p.out === 0 && !this.capped(p);
     let desired: SP[];
-    const margin = Math.abs(this.T[0].score - this.T[1].score);
-    // once the bench is in it stays: a lead dipping to 14 with seconds left doesn't bring the starters back
-    // (and nobody empties the bench for the last half minute)
-    if (this.q >= 4 && this.clock >= 30 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) t.garbage = true;
-    else if (margin <= 6 + this.clock / 30) t.garbage = false;
-    const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
+    t.garbage = this.wantsGarbage(t);
     const ordered = t.players.filter(avail);
-    if (garbage && ordered.length >= 8) {
+    if (this.inGarbageTime(t) && ordered.length >= 8) {
       // deep bench finishes blowouts
       desired = ordered.slice(-5);
       if (!desired.some((p) => p.guard)) {
@@ -924,17 +938,23 @@ export class GameSim {
     const fl = t.t.manage.fatigueSub;
     let sig = `${this.q <= 4 ? this.planSlot() : 'ot' + this.q}|${this.foulLimit(t)}|`;
     for (const p of t.players) sig += p.out + (p.on ? (p.energy < fl ? 'f' : 'o') : p.energy > 0.82 ? 'r' : 'b') + p.fouls + (this.capped(p) ? 'k' : '');
-    const margin = Math.abs(this.T[0].score - this.T[1].score);
-    if (this.q >= 4 && this.clock < 360) sig += `c${margin >= 16 ? (this.clock < 300 ? 'g' : 'x') : ''}`;
-    // a blowout getting back within reach brings the starters back now, not at the next minute mark
-    if (t.garbage && margin <= 6 + this.clock / 30) sig += 'n';
+    if (this.q >= 4 && this.clock < 360) sig += 'c';
+    // a blowout (or one getting back within reach) changes the lineup now, not at the next minute mark
+    if (this.wantsGarbage(t)) sig += 'g';
     return sig;
   }
 
   private checkSubs(t: ST, force = false) {
+    // a manual sub sticks for four minutes; when one runs out, the staff looks at the lineup again
+    let expired = false;
+    for (const [pid, until] of t.subLock) {
+      if (until > this.elapsed) continue;
+      t.subLock.delete(pid);
+      expired = true;
+    }
     if (!force) {
       const sig = this.subSignature(t);
-      if (sig === t.subSig && !t.subLock.size) return;
+      if (sig === t.subSig && !t.subLock.size && !expired) return;
       t.subSig = sig;
     }
     if (t.manualSubs && !force) {
@@ -2415,7 +2435,7 @@ export class GameSim {
         .slice(0, 1);
     if (!bench.length) return false;
     // in garbage time the deep bench fills in for its own: a starter doesn't come back to replace one
-    const garbage = t.t.manage.garbageTime && this.q >= 4 && t.garbage;
+    const garbage = this.inGarbageTime(t);
     const score = (x: SP) => (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
     this.applySub(

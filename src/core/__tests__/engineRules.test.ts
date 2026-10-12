@@ -176,6 +176,40 @@ describe('engine rules', () => {
     expect(t.on.filter((p) => starters.includes(p.pid)).length).toBeGreaterThanOrEqual(3);
   });
 
+  it('empties the bench as soon as a game turns into a blowout, and lets manual subs expire', () => {
+    type G = {
+      q: number;
+      clock: number;
+      elapsed: number;
+      T: { score: number; garbage: boolean; subSig: string; subLock: Map<number, number>; on: { pid: number }[]; team: Team }[];
+      subSignature(t: unknown): string;
+      checkSubs(t: unknown): void;
+    };
+    const game = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false });
+    const sim = game as unknown as G;
+    const t = sim.T[0];
+    sim.q = 4;
+    sim.clock = 160;
+    t.score = 100;
+    sim.T[1].score = 82;
+    sim.checkSubs(t);
+    expect(t.garbage).toBe(false);
+    // 18 up with 2:29 left is a blowout: the bench comes in now, not at the next minute mark
+    t.subSig = sim.subSignature(t);
+    sim.clock = 149;
+    sim.checkSubs(t);
+    expect(t.garbage).toBe(true);
+    const starters = t.team.rotation.order.slice(0, 5);
+    expect(t.on.some((p) => starters.includes(p.pid))).toBe(false);
+    // a manual sub holds for four minutes, then the lock is gone
+    const bench = t.team.rotation.order.find((pid) => !t.on.some((p) => p.pid === pid))!;
+    expect(game.substitute(0, t.on[0].pid, bench)).toBe(true);
+    expect(t.subLock.size).toBe(2);
+    sim.elapsed += 241;
+    sim.checkSubs(t);
+    expect(t.subLock.size).toBe(0);
+  });
+
   it('allows only two timeouts after the 3:00 mark of the fourth quarter', () => {
     const game = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false });
     const sim = game as unknown as Internals & { T: { timeouts: number }[] };
