@@ -161,7 +161,9 @@ function Overview({ team }: { team: Team }) {
 
 function BudgetTab({ team }: { team: Team }) {
   const league = useLeague();
-  const set = (fn: (t: Team) => void) => useStore.getState().mutate((l) => fn(l.teams[l.userTid]));
+  // a fired coach's old team isn't his to run
+  const fired = !!league.fired;
+  const set = (fn: (t: Team) => void) => !fired && useStore.getState().mutate((l) => fn(l.teams[l.userTid]));
   const rank = (k: BudgetKey) => 1 + league.teams.filter((t) => t.budget[k] > team.budget[k]).length;
   const avg = (k: BudgetKey) => league.teams.reduce((a, t) => a + t.budget[k], 0) / league.teams.length;
   const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
@@ -222,6 +224,14 @@ function BudgetTab({ team }: { team: Team }) {
   const totalBudget = items.reduce((a, it) => a + cost(team.budget[it.k]), 0);
   return (
     <>
+      {fired && (
+        <div className="fo-callout bad">
+          <TriangleAlert size={18} className="bad" />
+          <div>
+            <b>You've been fired.</b> Budgets, ticket prices and practice are no longer yours to set. Take over another team from Settings to keep your career going.
+          </div>
+        </div>
+      )}
       <div className="small dim2">
         Spending comes straight out of profit, which is 20% of how the owner judges you. Budgets are charged per game across the season, so changes take effect immediately.
       </div>
@@ -262,6 +272,7 @@ function BudgetTab({ team }: { team: Team }) {
               format={(x) => `${fmtM(cost(x))}/season`}
               left="Bare bones"
               right="Best in league"
+              disabled={fired}
             />
             <div className="small" style={{ marginTop: 6, color: lvl > 50 ? 'var(--good)' : lvl < 50 ? 'var(--warn)' : 'var(--text-2)' }}>
               {it.effect(lvl)}
@@ -291,6 +302,7 @@ function BudgetTab({ team }: { team: Team }) {
           format={(x) => `$${x}`}
           left={`$${minPrice}`}
           right={`$${maxPrice}`}
+          disabled={fired}
         />
         <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi
@@ -315,13 +327,13 @@ function BudgetTab({ team }: { team: Team }) {
           </h3>
         }
       >
-        <div className="seg">
-          {PRACTICE.map((p) => (
-            <button key={p.id} className={team.practice === p.id ? 'on' : ''} onClick={() => set((t) => (t.practice = p.id))}>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          value={team.practice}
+          onChange={(v) => set((t) => (t.practice = v))}
+          label="Practice intensity"
+          disabled={fired}
+          options={PRACTICE.map((p) => ({ id: p.id, label: p.label }))}
+        />
         {(() => {
           const cur = PRACTICE.find((p) => p.id === team.practice)!;
           return (

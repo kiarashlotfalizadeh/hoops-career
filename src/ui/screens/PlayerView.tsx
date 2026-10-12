@@ -11,11 +11,13 @@ import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
-import { fmtM, openOption } from '../office/common';
+import { ReleaseConfirm, contractUpNote, fmtM, openOption } from '../office/common';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, convertTwoWay, marketSalary, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason } from '../../core/league/contracts';
+import { untradeableReason } from '../../core/league/trades';
+import { pendingLive } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 
@@ -135,7 +137,13 @@ export default function PlayerView() {
   }
   const age = league.season - p.bornYear;
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
-  const mine = p.tid === league.userTid;
+  // a fired coach's old team isn't his to run
+  const mine = p.tid === league.userTid && !league.fired;
+  // a paused live game would record a moved player's line for his old team; a contract that's up is re-signed or let go, as in the Office
+  const busyWhy = pendingLive(league) ? 'Finish your live game first.' : null;
+  const upNote = contractUpNote(league, p);
+  const tradeWhy = busyWhy ?? upNote ?? untradeableReason(league, p);
+  const releaseWhy = busyWhy ?? upNote ?? releaseBlockedReason(league, p);
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
   const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
@@ -356,42 +364,50 @@ export default function PlayerView() {
               ) : (
                 <div className="small dim">—</div>
               )}
-              {p.tid >= 0 && (
-                <div className="row" style={{ marginTop: 10, gap: 6 }}>
-                  {mine ? (
-                    <>
+              {mine ? (
+                <>
+                  <div className="row" style={{ marginTop: 10, gap: 6 }}>
+                    {tradeWhy ? (
+                      <button className="btn xs" disabled>
+                        <ArrowLeftRight size={14} /> Trade
+                      </button>
+                    ) : (
                       <Link className="btn xs" to={`/trade?give=${p.pid}`}>
                         <ArrowLeftRight size={14} /> Trade
                       </Link>
-                      {p.contract.twoWay && (
-                        <button
-                          className="btn xs"
-                          onClick={() => {
-                            let res = { ok: false, reason: '' };
-                            useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
-                            useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-                          }}
-                        >
-                          Convert to standard
-                        </button>
-                      )}
+                    )}
+                    {p.contract.twoWay && (
                       <button
-                        className="btn xs danger"
+                        className="btn xs"
+                        disabled={!!busyWhy}
                         onClick={() => {
-                          const why = releaseBlockedReason(league, p);
-                          if (why) useStore.getState().toast(why, 'bad');
-                          else setConfirmRelease(true);
+                          let res = { ok: false, reason: '' };
+                          useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
+                          useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
                         }}
                       >
-                        Release
+                        Convert to standard
                       </button>
-                    </>
-                  ) : (
+                    )}
+                    <button className="btn xs danger" disabled={!!releaseWhy} onClick={() => setConfirmRelease(true)}>
+                      Release
+                    </button>
+                  </div>
+                  {(tradeWhy || releaseWhy) && (
+                    <div className="tiny dim" style={{ marginTop: 6 }}>
+                      {[...new Set([tradeWhy, releaseWhy])].filter(Boolean).join(' ')}
+                    </div>
+                  )}
+                </>
+              ) : (
+                p.tid >= 0 &&
+                p.tid !== league.userTid && (
+                  <div className="row" style={{ marginTop: 10, gap: 6 }}>
                     <Link className="btn xs" to={`/trade?with=${p.tid}&get=${p.pid}`}>
                       <ArrowLeftRight size={14} /> Trade for him
                     </Link>
-                  )}
-                </div>
+                  </div>
+                )
               )}
             </Card>
           </div>
@@ -464,29 +480,9 @@ export default function PlayerView() {
       <Sheet open={roleOpen} onClose={() => setRoleOpen(false)} title={`${p.firstName} ${p.lastName}: role`}>
         <RoleEditor p={p} onDone={() => setRoleOpen(false)} />
       </Sheet>
-      <Sheet open={confirmRelease} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
-        <p className="dim2">
-          {p.contract.twoWay
-            ? 'Two-way pay sits outside the cap, so releasing him leaves no dead money. He becomes a free agent.'
-            : nonGuaranteed(league, p)
-              ? "His minimum deal isn't guaranteed until opening night, so releasing him now costs nothing. He becomes a free agent."
-              : `His remaining salary (${fmtM(releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0))}) stays on your books as dead money. He becomes a free agent.`}
-        </p>
-        <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn grow" onClick={() => setConfirmRelease(false)}>
-            Cancel
-          </button>
-          <button
-            className="btn danger grow"
-            onClick={() => {
-              useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
-              setConfirmRelease(false);
-              useStore.getState().toast(`${p.lastName} released.`);
-              nav('/roster');
-            }}
-          >
-            Release
-          </button>
+      <Sheet open={confirmRelease && mine && !releaseWhy} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
+        <div className="col" style={{ gap: 12 }}>
+          <ReleaseConfirm league={league} p={p} onKeep={() => setConfirmRelease(false)} onDone={() => (setConfirmRelease(false), nav('/roster'))} />
         </div>
       </Sheet>
     </main>

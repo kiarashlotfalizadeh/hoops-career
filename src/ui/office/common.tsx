@@ -2,11 +2,16 @@
 // small player-row building blocks used by Office, Trade, Free Agents, Re-sign,
 // Draft, Finances and Settings.
 import type { ReactNode } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import type { League, Phase, Player } from '../../core/types';
+import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
+import { playerName, standardRoster } from '../../core/league/helpers';
+import { nonGuaranteed, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
+import { useStore } from '../../state/store';
 import { Ovr } from '../components/ui';
 import './office.css';
 
@@ -46,6 +51,17 @@ export function playerMeta(league: League, p: Player, extra?: string): string {
 /** The option on a contract's final season while it is still to be decided (after the season before it); an option year already under way was settled. */
 export function openOption(league: League, p: Player): 'player' | 'team' | undefined {
   return contractExp(p.contract) > league.season ? p.contract.option : undefined;
+}
+
+/**
+ * A contract that's up after the season is a set of Bird rights until free agency opens: he is
+ * re-signed or let go in the re-sign period, not released or traded. Null for anyone else.
+ */
+export function contractUpNote(league: League, p: Player): string | null {
+  if (p.tid < 0 || !isOffseason(league) || contractExp(p.contract) > league.season) return null;
+  return league.phase === 'resign'
+    ? 'His contract is up. Re-sign him now or he becomes a free agent.'
+    : 'His contract is up. You hold his rights until free agency opens: re-sign him in the re-sign period after the draft.';
 }
 
 export function contractYearsLabel(league: League, p: Player, fromSeason: number): string {
@@ -213,5 +229,67 @@ export function Callout({ tone, icon, children }: { tone?: 'good' | 'bad' | 'war
       {icon}
       <div className="grow">{children}</div>
     </div>
+  );
+}
+
+/** Releasing one of your players: what it leaves on the books, and the buttons (the Office contract sheet and the player page). */
+export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; p: Player; onKeep: () => void; onDone: () => void }) {
+  const remaining = releaseDeadMoney(league, p);
+  const owed = remaining.reduce((a, r) => a + r.amount, 0);
+  const n = standardRoster(league, league.userTid).length;
+  const release = () => {
+    const name = playerName(p);
+    useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
+    useStore.getState().toast(`${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books.` : ''}`, 'neutral');
+    onDone();
+  };
+  return (
+    <>
+      <p className="dim2" style={{ margin: 0 }}>
+        {playerName(p)} becomes a free agent immediately and can sign with any team.{' '}
+        {p.contract.twoWay ? (
+          'Two-way pay sits outside the cap, so there is no dead money.'
+        ) : nonGuaranteed(league, p) ? (
+          "His minimum deal isn't guaranteed until opening night, so there is no dead money."
+        ) : owed > 0 ? (
+          <>
+            <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out.
+          </>
+        ) : (
+          'Nothing is left to pay on his contract, so there is no dead money.'
+        )}
+      </p>
+      {remaining.length > 0 && (
+        <div className="card tight">
+          {remaining.map((r) => (
+            <div key={r.season} className="row between small" style={{ padding: '3px 0' }}>
+              <span className="dim2">{seasonLabel(r.season)}</span>
+              <span className="num bold">{fmtM(r.amount)}</span>
+            </div>
+          ))}
+          <div className="divider" />
+          <div className="row between small">
+            <span className="bold">Dead money</span>
+            <span className="num bold bad">{fmtM(owed)}</span>
+          </div>
+        </div>
+      )}
+      {!p.contract.twoWay && n - 1 < CAP.rosterMin && (
+        <div className="fo-callout warn">
+          <TriangleAlert size={18} className="warn" />
+          <div>
+            You'll have {n - 1} players. Rosters need at least {CAP.rosterMin} to start the season.
+          </div>
+        </div>
+      )}
+      <div className="row">
+        <button className="btn grow" onClick={onKeep}>
+          Keep him
+        </button>
+        <button className="btn danger grow" onClick={release}>
+          Release
+        </button>
+      </div>
+    </>
   );
 }

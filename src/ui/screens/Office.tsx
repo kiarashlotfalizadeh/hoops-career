@@ -4,16 +4,31 @@ import { type LucideIcon, ArrowLeftRight, ChevronRight, History as HistoryIcon, 
 import type { League, Player } from '../../core/types';
 import { CAP, PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, rosterMaxNow, teamPlayers, standardRoster, twoWayRoster } from '../../core/league/helpers';
-import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer, signingRoute, valueScore } from '../../core/league/contracts';
+import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, signingRoute, valueScore } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { untradeableReason } from '../../core/league/trades';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet, activateOnKey } from '../components/ui';
-import { CapBar, CenterBar, Gauge, SecTitle, capSeason, contractYearsLabel, fmtM, isOffseason, openOption, ownerVerdict, playerMeta, shortSeason } from '../office/common';
+import {
+  CapBar,
+  CenterBar,
+  Gauge,
+  ReleaseConfirm,
+  SecTitle,
+  capSeason,
+  contractUpNote,
+  contractYearsLabel,
+  fmtM,
+  isOffseason,
+  openOption,
+  ownerVerdict,
+  playerMeta,
+  shortSeason,
+} from '../office/common';
 import { rosterNames } from '../stats';
 
 interface Tile {
@@ -622,20 +637,13 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const remaining = releaseDeadMoney(league, p);
   const camp = nonGuaranteed(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
-  const n = standardRoster(league, league.userTid).length;
   const blocked = releaseBlockedReason(league, p);
   const tooFew = !!blocked;
-  const expiringNow = isOffseason(league) && exp <= league.season;
+  const upNote = contractUpNote(league, p);
+  const expiringNow = !!upNote;
   const noTrade = expiringNow ? null : untradeableReason(league, p);
   const opt = openOption(league, p);
   const s0 = capSeason(league);
-
-  const release = () => {
-    const name = playerName(p);
-    useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
-    useStore.getState().toast(`${name} released. ${owed > 0 ? `${fmtM(owed)} stays on your books.` : ''}`, 'neutral');
-    onClose();
-  };
 
   if (confirm) {
     return (
@@ -644,49 +652,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
           <UserMinus className="bad" />
           <h2 className="grow">Release {p.lastName}?</h2>
         </div>
-        <p className="dim2" style={{ margin: 0 }}>
-          {playerName(p)} becomes a free agent immediately and can sign with any team.{' '}
-          {p.contract.twoWay ? (
-            'Two-way pay sits outside the cap, so there is no dead money.'
-          ) : camp ? (
-            "His minimum deal isn't guaranteed until opening night, so there is no dead money."
-          ) : (
-            <>
-              <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out.
-            </>
-          )}
-        </p>
-        {remaining.length > 0 && (
-          <div className="card tight">
-            {remaining.map((r) => (
-              <div key={r.season} className="row between small" style={{ padding: '3px 0' }}>
-                <span className="dim2">{seasonLabel(r.season)}</span>
-                <span className="num bold">{fmtM(r.amount)}</span>
-              </div>
-            ))}
-            <div className="divider" />
-            <div className="row between small">
-              <span className="bold">Dead money</span>
-              <span className="num bold bad">{fmtM(owed)}</span>
-            </div>
-          </div>
-        )}
-        {!p.contract.twoWay && n - 1 < CAP.rosterMin && !tooFew && (
-          <div className="fo-callout warn">
-            <TriangleAlert size={18} className="warn" />
-            <div>
-              You'll have {n - 1} players. Rosters need at least {CAP.rosterMin} to start the season.
-            </div>
-          </div>
-        )}
-        <div className="row">
-          <button className="btn grow" onClick={() => setConfirm(false)}>
-            Keep him
-          </button>
-          <button className="btn danger grow" onClick={release}>
-            Release
-          </button>
-        </div>
+        <ReleaseConfirm league={league} p={p} onKeep={() => setConfirm(false)} onDone={onClose} />
       </div>
     );
   }
@@ -727,15 +693,10 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
           );
         })}
       </div>
-      {expiringNow ? (
+      {upNote ? (
         <div className="fo-callout warn">
           <TriangleAlert size={18} className="warn" />
-          <div>
-            His contract is up.{' '}
-            {league.phase === 'resign'
-              ? 'Re-sign him now or he becomes a free agent.'
-              : 'You hold his rights until free agency opens: re-sign him in the re-signing period after the draft.'}
-          </div>
+          <div>{upNote}</div>
         </div>
       ) : null}
       <div className="grid3">
