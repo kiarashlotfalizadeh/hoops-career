@@ -102,7 +102,7 @@ describe('engine rules', () => {
     expect(new Set(t.on.map((x) => x.pid)).size).toBe(5);
   });
 
-  it('plays exactly 48 minutes, books the opening five as starters and gets a shot off late in a period', () => {
+  it('plays exactly 48 minutes (box score included), books the opening five as starters and gets a shot off late in a period', () => {
     for (let g = 0; g < 4; g++) {
       const sim = new GameSim(side(2), side(3), { rng: new Rng(300 + g), type: 'regular', injuries: false });
       const opening = sim.T.map((t) => t.on.map((p) => p.pid).sort((a, b) => a - b));
@@ -110,6 +110,9 @@ describe('engine rules', () => {
       const total = 5 * (48 + 5 * res.ot) * 60;
       for (const [i, tb] of [res.home, res.away].entries()) {
         expect(Math.abs(sim.T[i].players.reduce((a, p) => a + p.b.sec, 0) - total)).toBeLessThan(1e-6);
+        // the box score adds up too, to the tenth, and nobody who got on the floor shows 0 minutes
+        expect(Math.round(tb.players.reduce((a, p) => a + p.min, 0) * 10)).toBe(total / 6);
+        for (const p of sim.T[i].players) expect(tb.players.find((x) => x.pid === p.pid)!.min > 0).toBe(p.b.sec > 0);
         expect(
           tb.players
             .filter((p) => p.gs)

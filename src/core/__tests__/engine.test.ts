@@ -15,9 +15,7 @@ describe('game engine', () => {
       expect(tb.players.reduce((a, p) => a + p.pts, 0)).toBe(tb.pts);
       expect(tb.t.fgm * 2 + tb.t.tpm + tb.t.ftm).toBe(tb.pts);
       expect(tb.t.fgm).toBeLessThanOrEqual(tb.t.fga);
-      const mins = tb.players.reduce((a, p) => a + p.min, 0);
-      expect(mins).toBeGreaterThan(239);
-      expect(mins).toBeLessThan(240 + 5 * 5 * res.ot + 1);
+      expect(Math.round(tb.players.reduce((a, p) => a + p.min, 0) * 10)).toBe(10 * 5 * (48 + 5 * res.ot));
       expect(tb.players.reduce((a, p) => a + p.pm, 0)).toBe((tb.pts - (tb === res.home ? res.away.pts : res.home.pts)) * 5);
     }
     expect(res.pbp!.length).toBeGreaterThan(200);

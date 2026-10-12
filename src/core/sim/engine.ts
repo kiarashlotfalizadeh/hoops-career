@@ -2915,12 +2915,13 @@ export class GameSim {
 
   result(gid = 0, season = 0, day = 0): GameResult {
     const box = (t: ST): TeamBox => {
-      const players: BoxLine[] = t.players.map((p) => ({
+      const tenths = boxTenths(t.players.map((p) => p.b.sec));
+      const players: BoxLine[] = t.players.map((p, i) => ({
         pid: p.pid,
         name: p.full,
         pos: p.pos,
         gs: p.starter,
-        min: Math.round(p.b.sec / 6) / 10,
+        min: tenths[i] / 10,
         fgm: p.b.fgm,
         fga: p.b.fga,
         tpm: p.b.tpm,
@@ -3007,6 +3008,30 @@ export class GameSim {
     this.logs = [];
     return l;
   }
+}
+
+/**
+ * Box-score minutes in tenths from seconds played: rounded so a team's minutes add up to exactly
+ * the time it played (largest remainder), and anyone who got on the floor shows at least 0.1.
+ */
+function boxTenths(secs: number[]): number[] {
+  const raw = secs.map((s) => s / 6);
+  const out = raw.map((r, i) => (secs[i] > 0 ? Math.max(1, Math.floor(r)) : 0));
+  let left = Math.round(raw.reduce((a, b) => a + b, 0)) - out.reduce((a, b) => a + b, 0);
+  // the tenths still to hand out go to the biggest remainders; any the 0.1 floors overspent come off the smallest
+  const order = raw.map((_, i) => i).sort((a, b) => raw[b] - out[b] - (raw[a] - out[a]));
+  for (const i of order) {
+    if (left <= 0) break;
+    if (secs[i] <= 0) continue;
+    out[i]++;
+    left--;
+  }
+  for (let k = order.length - 1; k >= 0 && left < 0; k--) {
+    if (out[order[k]] <= 1) continue;
+    out[order[k]]--;
+    left++;
+  }
+  return out;
 }
 
 function ordinal(n: number) {
