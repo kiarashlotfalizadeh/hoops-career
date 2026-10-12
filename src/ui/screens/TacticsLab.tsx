@@ -9,7 +9,7 @@ import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../../core/league/games';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
-import { IMPACT_TEXT } from '../../core/analysis/gameReport';
+import { IMPACT_TEXT, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet, Spinner, Tag } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
@@ -478,15 +478,15 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
           <div className="col" style={{ gap: 8 }}>
             {impacts.map(([k, v]) => {
               const tpl = IMPACT_TEXT[k];
-              const X = v >= 0 ? me.name : them.name;
-              const Y = v >= 0 ? them.name : me.name;
+              const X = teamRef(v >= 0 ? me : them);
+              const Y = teamRef(v >= 0 ? them : me);
               return (
                 <div key={`${k}${v >= 0 ? '+' : '-'}`} className="row top small">
                   <span className={`num bold ${v >= 0 ? 'good' : 'bad'}`} style={{ width: 44 }}>
                     {signed(v)}
                   </span>
                   <div className="grow">
-                    <div>{tpl.text(X, Y, '')}</div>
+                    <div>{impactSentence(k, X, Y)}</div>
                     {v < 0 && tpl.advice && <div className="tiny dim">{adviceFor(tpl.advice, league.settings.complexity)}</div>}
                   </div>
                 </div>

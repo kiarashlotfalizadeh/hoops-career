@@ -24,7 +24,7 @@ import { RoleEditor } from '../components/RoleEditor';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
 import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
-import { IMPACT_TEXT, impactAdvice } from '../../core/analysis/gameReport';
+import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
 
@@ -482,12 +482,10 @@ function InsightsTab() {
       </Card>
     );
   const row = (x: { key: string; perGame: number; forUser: boolean }) => {
-    const tpl = IMPACT_TEXT[x.key];
     // no "go to Hedge" once you already play Hedge
     const advice = x.forUser ? undefined : impactAdvice(x.key, league.teams[league.userTid].tactics);
     const X = x.forUser ? 'your team' : 'the opposition';
     const Y = x.forUser ? 'the opposition' : 'your team';
-    const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
     return (
       <div key={`${x.key}${x.forUser}`} className="row top small" style={{ gap: 10 }}>
         <span className={`num bold ${x.forUser ? 'good' : 'bad'}`} style={{ width: 44, flex: 'none' }}>
@@ -495,7 +493,7 @@ function InsightsTab() {
           {x.perGame.toFixed(1)}
         </span>
         <div className="grow">
-          <div>{cap(tpl.text(X, Y, ''))}</div>
+          <div>{impactSentence(x.key, X, Y)}</div>
           {advice && (
             <div className="tiny" style={{ color: 'var(--warn)' }}>
               {adviceFor(advice, league.settings.complexity)}
