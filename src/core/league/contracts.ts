@@ -195,9 +195,11 @@ export function makeContract(league: League, amount: number, years: number, star
   const salaries: number[] = [];
   for (let i = 0; i < years; i++) salaries.push(Math.round((amount * Math.pow(1.05, i)) / 10) * 10);
   if (experience !== undefined) {
+    const min = (season: number) => (experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
     // clamp after rounding: a max deal rounded to $10K would otherwise exceed the max by a few $K
-    const cap = CAP_FOR(league, start);
-    salaries[0] = clamp(salaries[0], experience >= 3 ? cap.vetMin : cap.minContract, cap.maxContract(experience));
+    salaries[0] = clamp(salaries[0], min(start), CAP_FOR(league, start).maxContract(experience));
+    // and a minimum deal's raises (5%) trail the minimum's growth with the cap (6%)
+    for (let i = 1; i < years; i++) salaries[i] = Math.max(salaries[i], min(start + i));
   }
   return { start, salaries };
 }

@@ -616,6 +616,17 @@ describe('free agency', () => {
     expect(userOffer(l, b.pid, cap.vetMin * 2, 1).ok).toBe(false);
   });
 
+  it("a minimum deal pays each season's minimum, which grows faster than a 5% raise", () => {
+    const l = league();
+    const [vet, young] = freeAgents(l);
+    vet.experience = 5;
+    young.experience = 1;
+    signPlayer(l, vet, U, CAP_FOR(l).vetMin, 3, { news: false });
+    signPlayer(l, young, U, CAP_FOR(l).minContract, 2, { news: false });
+    expect(vet.contract.salaries).toEqual([0, 1, 2].map((i) => CAP_FOR(l, l.season + i).vetMin));
+    expect(young.contract.salaries).toEqual([0, 1].map((i) => CAP_FOR(l, l.season + i).minContract));
+  });
+
   it("over the cap, the minimum is the player's own: the veteran minimum only after three seasons", () => {
     const l = league();
     l.phase = 'regular';

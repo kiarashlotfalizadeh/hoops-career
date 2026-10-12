@@ -81,7 +81,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const capBlocked = mode === 'fa' && !route;
   const mleTooLong = mode === 'fa' && route === 'mle' && years > MLE_YEARS;
   const blocked = !!closed || rosterBlocked || capBlocked || mleTooLong;
-  const contract = makeContract(league, amount, years, season);
+  // as signed: each season at least his minimum
+  const contract = makeContract(league, amount, years, season, p.experience);
   const total = contract.salaries.reduce((a, b) => a + b, 0);
   const taxBill = after > cap.luxuryTax ? (after - cap.luxuryTax) * CAP.taxRate : 0;
 
