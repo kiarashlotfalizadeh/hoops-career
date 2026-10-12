@@ -310,7 +310,10 @@ export default function Live() {
   const skip = (to: 'quarter' | 'end') => {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
-    lg.simTo(to);
+    // the sim runs a possession ahead of the court: already at the buzzer, "Qtr" stops at this break, not the next one
+    if (!(to === 'quarter' && lg.sim.clock <= 0.05)) lg.simTo(to);
+    // a decided game ends at the buzzer: no break before an overtime that won't be played
+    if (to === 'quarter' && !lg.over && lg.sim.q >= 4 && lg.sim.T[0].score !== lg.sim.T[1].score) lg.step();
     flushFeed();
     ticker.set(lg.sim.clock, [lg.sim.T[0].score, lg.sim.T[1].score], true);
     if (lg.over) finish();
