@@ -48,16 +48,19 @@ export interface Source {
   key: string; // cache file name
   url: string;
   optional?: boolean;
+  /** Changes through the offseason (signings, trades): re-fetched with --refresh even when cached. */
+  volatile?: boolean;
 }
 
 export function allSources(): Source[] {
   const out: Source[] = [];
-  out.push({ key: 'contracts', url: `${BASE}/contracts/players.html` });
+  out.push({ key: 'contracts', url: `${BASE}/contracts/players.html`, volatile: true });
   for (const s of STAT_SEASONS) {
     out.push({ key: `per_game_${s}`, url: `${BASE}/leagues/NBA_${s}_per_game.html` });
     out.push({ key: `advanced_${s}`, url: `${BASE}/leagues/NBA_${s}_advanced.html` });
   }
-  for (const s of ROSTER_SEASONS) for (const t of TEAM_CODES) out.push({ key: `roster_${t}_${s}`, url: `${BASE}/teams/${t}/${s}.html`, optional: true });
+  for (const s of ROSTER_SEASONS)
+    for (const t of TEAM_CODES) out.push({ key: `roster_${t}_${s}`, url: `${BASE}/teams/${t}/${s}.html`, optional: true, volatile: s === SEED_SEASON });
   for (const y of DRAFT_YEARS) out.push({ key: `draft_${y}`, url: `${BASE}/draft/NBA_${y}.html`, optional: true });
   return out;
 }
