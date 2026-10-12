@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
-import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
+import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
 import { problemOf, useLeague, useLeagueMemo, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
@@ -106,7 +106,7 @@ function Boot({ children }: { children: ReactNode }) {
   }, [league, userTid]);
   if (failed) {
     return (
-      <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, var(--safe-t))' }}>
+      <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, calc(var(--safe-t) + 8px))' }}>
         <div className="card col" style={{ gap: 10, alignItems: 'flex-start' }}>
           <AlertTriangle className="warn" size={28} />
           <h2>Your league could not be opened</h2>
@@ -232,7 +232,7 @@ function TopBar() {
             >
               <span>{a.label}</span>
               {(a.disabled || a.sub) && (
-                <span className="small" style={{ opacity: 0.75, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>
+                <span className="small" style={{ opacity: 0.9, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>
                   {a.disabled ?? a.sub}
                 </span>
               )}
@@ -252,7 +252,7 @@ const NAV_ITEMS = [
   { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
 ];
 
-/** Bottom tabs; sub-screens light up the section they belong to. */
+/** Bottom tabs; sub-screens light up the section they belong to (and are its current page for screen readers). */
 function BottomNav() {
   const { pathname } = useLocation();
   const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : pathname.startsWith(it.to))) ?? NAV_ITEMS.find((it) => it.also.some((p) => pathname.startsWith(p)));
@@ -262,10 +262,10 @@ function BottomNav() {
         {NAV_ITEMS.map((it) => {
           const active = section === it;
           return (
-            <NavLink key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
+            <Link key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
               <it.icon size={21} />
               <span className="nav-label">{it.label}</span>
-            </NavLink>
+            </Link>
           );
         })}
       </div>
@@ -276,27 +276,36 @@ function BottomNav() {
 function SimBar() {
   const sim = useStore((s) => s.sim);
   const stop = useStore((s) => s.stopSim);
-  if (!sim) return null;
-  const pct = Math.min(100, (sim.done / Math.max(1, sim.total)) * 100);
-  const steps = sim.total > 1;
+  // screen readers hear a sim start and finish, not every simmed day: the status region stays put and its text only changes then
+  const [ran, setRan] = useState(false);
+  if (sim && !ran) setRan(true);
+  const pct = sim ? Math.min(100, (sim.done / Math.max(1, sim.total)) * 100) : 0;
+  const steps = !!sim && sim.total > 1;
   return (
-    <div className="simbar fade-in" role="status" aria-live="polite">
-      <Spinner />
-      <div className="grow">
-        <div className="small bold">
-          {sim.label}…{sim.total > 1 ? ` day ${sim.done}` : ''}
-        </div>
-        <div className="bar" style={{ marginTop: 6 }}>
-          {/* one-shot jobs (new season, free agency) can't be stopped midway: show them as busy */}
-          <div className={steps ? '' : 'pulse'} style={{ width: steps ? `${pct}%` : '100%' }} />
-        </div>
+    <>
+      <div className="sr-only" role="status">
+        {sim ? `${sim.label}…` : ran ? 'Done.' : ''}
       </div>
-      {steps && (
-        <button className="btn sm" onClick={stop}>
-          <X size={16} /> Stop
-        </button>
+      {sim && (
+        <div className="simbar fade-in">
+          <Spinner />
+          <div className="grow">
+            <div className="small bold">
+              {sim.label}…{sim.total > 1 ? ` day ${sim.done}` : ''}
+            </div>
+            <div className="bar" style={{ marginTop: 6 }}>
+              {/* one-shot jobs (new season, free agency) can't be stopped midway: show them as busy */}
+              <div className={steps ? '' : 'pulse'} style={{ width: steps ? `${pct}%` : '100%' }} />
+            </div>
+          </div>
+          {steps && (
+            <button className="btn sm" onClick={stop}>
+              <X size={16} /> Stop
+            </button>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
