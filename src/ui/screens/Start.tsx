@@ -43,7 +43,7 @@ export default function Start() {
       return;
     }
     // another league still open behind this screen saves first: if it can't, say so rather than drop its changes
-    if (!force && st.league && st.saveProblem?.kind !== 'conflict' && !(await st.flush())) {
+    if (!force && st.league && !(await st.saveBeforeLeaving())) {
       setUnsaved(id);
       return;
     }
@@ -129,7 +129,7 @@ export default function Start() {
         {openLeague && (
           <div className="col" style={{ gap: 12 }}>
             <div className="dim2">
-              {saveProblem?.text} The latest changes to “{openLeague.name}” are only in this window: export a backup to keep them.
+              Your current league, “{openLeague.name}”, could not be saved. {saveProblem?.text} Export a backup of it first: its latest changes are only in this window.
             </div>
             <button
               className="btn primary block"
