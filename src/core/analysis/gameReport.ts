@@ -9,7 +9,7 @@ export interface Factor {
   detail: string;
   /** Points swing in the user's favor (negative = hurt the user). */
   pts: number;
-  category: 'tactics' | 'shooting' | 'turnovers' | 'rebounding' | 'fouls' | 'pace' | 'fatigue' | 'variance' | 'stars';
+  category: 'tactics' | 'shooting' | 'turnovers' | 'rebounding' | 'fouls' | 'pace' | 'fatigue' | 'stars';
   advice?: string;
 }
 
@@ -282,7 +282,6 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   // four factors
   const fu = fourFactors(u, o);
   const fo = fourFactors(o, u);
-  const poss = (u.poss + o.poss) / 2;
   const efgSwing = (((fu.efg - fo.efg) * (u.t.fga + o.t.fga)) / 2) * 2;
   if (Math.abs(efgSwing) >= 3) {
     const better = efgSwing > 0 ? ut.name : ot.name;
@@ -370,7 +369,6 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       let bestJ = i;
       // greedy: extend while the run continues in one direction
       const dir = Math.sign(userMargin[i + 1] - userMargin[i]) || 1;
-      let low = userMargin[i];
       while (j < userMargin.length - 1) {
         j++;
         const swing = (userMargin[j] - userMargin[i]) * dir;
@@ -381,7 +379,6 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
         // run broken when the other side scores 5+ back from the peak
         const back = (userMargin[bestJ] - userMargin[j]) * dir;
         if (back >= 5) break;
-        low = Math.min(low, userMargin[j]);
       }
       if (best >= 10) {
         runs.push({ side: dir > 0 ? 'user' : 'opp', pts: best, startIdx: i, endIdx: bestJ, text: `${dir > 0 ? ut.abbrev : ot.abbrev} ${best}-point swing` });
@@ -416,7 +413,6 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   const topText = top?.title.replace(/\.$/, '').replace(/: (.+)$/, ' ($1)');
   const how = res.ot ? ` in ${res.ot > 1 ? `${res.ot}OT` : 'OT'}` : margin <= 3 ? ' in a nail-biter' : margin >= 20 ? ' in a rout' : '';
   const headline = `The ${ut.name} ${userWon ? 'beat' : 'fell to'} the ${ot.name} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${how}.${topText ? ` Biggest factor: ${topText}.` : ''}`;
-  void poss;
   return {
     headline,
     userWon,

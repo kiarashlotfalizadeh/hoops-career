@@ -380,19 +380,6 @@ const PHILOSOPHY_BIAS: Record<string, Record<string, number>> = {
   grind: { grind: 8 },
 };
 
-export function bestPreset(fits: Record<string, number>, bias?: Record<string, number>): string {
-  let best = 'balanced';
-  let bs = -Infinity;
-  for (const [k, v] of Object.entries(fits)) {
-    const s = v + (bias?.[k] ?? 0);
-    if (s > bs) {
-      bs = s;
-      best = k;
-    }
-  }
-  return best;
-}
-
 export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; freedom: Record<number, ShotFreedom> } {
   const roles: Record<number, OffRole> = {};
   const freedom: Record<number, ShotFreedom> = {};
