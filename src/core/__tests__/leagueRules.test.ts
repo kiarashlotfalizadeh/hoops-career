@@ -99,6 +99,17 @@ describe('trades', () => {
   });
 });
 
+describe('league creation', () => {
+  it('gives every head coach his own name, the user included', () => {
+    // these seeds drew two coaches with one name (Quin Spoelstra twice in seed 7)
+    for (const rngSeed of [2, 3, 7]) {
+      const l = createLeague({ name: 'c', userTid: U, coachName: 'Quin Kerr', settings: defaultSettings(), seed: null, rngSeed });
+      const names = l.teams.map((t) => (t.tid === U ? l.coachName : t.coach.name));
+      expect(new Set(names).size).toBe(30);
+    }
+  });
+});
+
 describe('simulation targets (bug 4)', () => {
   it('stops on deadline day (trades still open) and the day before the All-Star Game', async () => {
     const { vi } = await import('vitest');
