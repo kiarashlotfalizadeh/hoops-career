@@ -248,6 +248,20 @@ h3 {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+/* buttons side by side: a label too long for its half takes two lines instead of widening the pair */
+.grid2 > .btn {
+  white-space: normal;
+  line-height: 1.15;
+}
+.grid2 > .btn > svg {
+  flex: none;
+}
+@media (max-width: 399px) {
+  .grid2 > .btn {
+    padding: 0 10px;
+    gap: 6px;
+  }
+}
 .grid3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -257,6 +271,13 @@ h3 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+}
+/* small phones: four tiles abreast can't fit labels like "Playoffs" or "Off Rtg", so two rows of two
+   (the live controls keep their single row) */
+@media (max-width: 359px) {
+  .grid4:not(.live-ctl) {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 /* phones: one column with the page's own 14px between cards (not stacked edge to edge) */
 .md-grid2 {
@@ -1106,12 +1127,17 @@ body:has(.simbar) .page {
   background: var(--surface);
   border: 1px solid var(--line);
 }
+/* in a row of three a tile shrinks to its column, so a long name ellipsizes instead of widening the row */
+.grid3 > .kpi {
+  min-width: 0;
+}
 .kpi .k {
   font-size: 10.5px;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 700;
+  white-space: nowrap;
 }
 .kpi .v {
   font-family: var(--display);
