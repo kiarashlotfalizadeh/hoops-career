@@ -20,16 +20,10 @@ import {
 } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
-import { CenterBar, Gauge, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
+import { CenterBar, Gauge, PRACTICE, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
-
-const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string }[] = [
-  { id: 'light', label: 'Light', dev: 'Slower skill growth (about −0.35 rating points per skill each year)', risk: 'Fresher legs: least wear and injury risk' },
-  { id: 'normal', label: 'Normal', dev: 'Standard development', risk: 'Standard wear and injury risk' },
-  { id: 'intense', label: 'Intense', dev: 'Faster skill growth (about +0.45 rating points per skill each year)', risk: 'Heavier legs: more wear and injury risk' },
-];
 
 export default function Finances() {
   const league = useLeague();

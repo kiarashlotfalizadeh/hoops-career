@@ -3,7 +3,7 @@
 // Draft, Finances and Settings.
 import type { ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import type { League, Phase, Player } from '../../core/types';
+import type { League, Phase, Player, Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
@@ -38,6 +38,13 @@ export { ordinal } from '../stats';
 
 // tones match the league screens' strategy tags
 export { STRATEGY_META } from '../league/shared';
+
+/** Practice intensity levels as the Finances budget tab names and explains them. */
+export const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string }[] = [
+  { id: 'light', label: 'Light', dev: 'Slower skill growth (about −0.35 rating points per skill each year)', risk: 'Fresher legs: least wear and injury risk' },
+  { id: 'normal', label: 'Normal', dev: 'Standard development', risk: 'Standard wear and injury risk' },
+  { id: 'intense', label: 'Intense', dev: 'Faster skill growth (about +0.45 rating points per skill each year)', risk: 'Heavier legs: more wear and injury risk' },
+];
 
 export function playerMeta(league: League, p: Player, extra?: string): string {
   const bits = [p.pos, String(playerAge(p, league.season)), fmtHeight(p.heightIn)];

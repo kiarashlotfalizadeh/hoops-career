@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucide-react';
 import type { CombineResults, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { curTeamSeason, playerName, prospects, withRng, winPct } from '../../core/league/helpers';
+import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
 import { pickLabel } from '../../core/league/trades';
 import { finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
@@ -13,10 +13,9 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, activateOnKey, type Col } from '../components/ui';
 import { OvrPot, SecTitle, ordinal } from '../office/common';
+import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mine' | 'results';
-
-const overall = (round: number, pick: number) => (round - 1) * 30 + pick;
 
 function fmtIn(x: number | undefined) {
   if (x === undefined || !isFinite(x)) return '—';
@@ -66,7 +65,7 @@ export default function Draft() {
 
   const draft = (pid: number) => {
     const name = playerName(league.players[pid]);
-    const n = np ? overall(np.round, np.pick!) : 0;
+    const n = np ? overallPick(league, np.round, np.pick!) : 0;
     let err: string | null = null;
     useStore.getState().mutate((l) => {
       err = userDraftPick(l, pid);
@@ -198,7 +197,7 @@ export default function Draft() {
               </div>
             </div>
             <div className="small dim2">
-              Pick #{overall(np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie scale deal' : 'second round, 2-year minimum deal'}).
+              Pick #{overallPick(league, np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie scale deal' : 'second round, 2-year minimum deal'}).
             </div>
             <div className="row">
               <button className="btn grow" onClick={() => setConfirmPick(null)}>
@@ -215,8 +214,8 @@ export default function Draft() {
       <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Sim to the end?">
         <div className="col" style={{ gap: 12 }}>
           <div className="dim2">
-            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overall(d.round, d.pick!)}`).join(', ')}). Your scouts will
-            make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
+            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}). Your
+            scouts will make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
           </div>
           <div className="row">
             <button className="btn grow" onClick={() => setConfirmSim(false)}>
@@ -280,7 +279,7 @@ function OnTheClock({
       <div className="row" style={{ gap: 12, marginTop: 10 }}>
         <TeamLogo tid={np.tid} size={54} />
         <div className="grow" style={{ minWidth: 0 }}>
-          <div className="fo-big">#{overall(np.round, np.pick!)}</div>
+          <div className="fo-big">#{overallPick(league, np.round, np.pick!)}</div>
           <div className="bold ellipsis">
             {mine ? "You're up" : `${t.region} ${t.name}`}
             {np.originalTid !== np.tid && <span className="dim small"> · via {league.teams[np.originalTid].abbrev}</span>}
@@ -320,7 +319,7 @@ function OnTheClock({
 function draftedThisYear(league: League): Player[] {
   return Object.values(league.players)
     .filter((p) => p.draft.year === league.season && p.draft.round > 0)
-    .sort((a, b) => overall(a.draft.round, a.draft.pick) - overall(b.draft.round, b.draft.pick));
+    .sort((a, b) => overallPick(league, a.draft.round, a.draft.pick) - overallPick(league, b.draft.round, b.draft.pick));
 }
 
 function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; cls: Player[]; onClock: boolean; onOpen: (pid: number) => void; onDraft: (pid: number) => void }) {
@@ -335,7 +334,7 @@ function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; c
           <div className="hscroll">
             {order.slice(1, 13).map((d) => (
               <div key={d.dpid} className={`fo-pickchip ${d.tid === league.userTid ? 'me' : ''}`}>
-                <span className="n">#{overall(d.round, d.pick!)}</span>
+                <span className="n">#{overallPick(league, d.round, d.pick!)}</span>
                 <TeamLogo tid={d.tid} size={26} />
                 <span className="tiny bold">{league.teams[d.tid].abbrev}</span>
               </div>
@@ -371,7 +370,7 @@ function SelectionRow({ league, p }: { league: League; p: Player }) {
   return (
     <Link to={`/player/${p.pid}`} className="listrow" style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}>
       <span className="fo-rank" style={{ fontSize: 16 }}>
-        {overall(p.draft.round, p.draft.pick)}
+        {overallPick(league, p.draft.round, p.draft.pick)}
       </span>
       <TeamLogo tid={p.draft.tid ?? 0} size={28} />
       <div className="grow" style={{ minWidth: 0 }}>
@@ -518,10 +517,8 @@ function MyPicks({ league }: { league: League }) {
   const user = league.userTid;
   const owned = league.draftPicks.filter((d) => d.tid === user).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user).sort((a, b) => a.season - b.season || a.round - b.round);
-  // rough projection from the current standings for picks without a slot yet
-  const ranked = league.teams.map((t) => ({ tid: t.tid, ts: curTeamSeason(league, t.tid) })).sort((a, b) => winPct(a.ts) - winPct(b.ts));
-  const gp = curTeamSeason(league, user).won + curTeamSeason(league, user).lost;
-  const proj = (orig: number) => ranked.findIndex((x) => x.tid === orig) + 1;
+  // picks without a slot yet, projected as on the team page
+  const proj = useLeagueMemo(() => pickProjection(league), [league]);
   const drafted = draftedThisYear(league).filter((p) => p.draft.tid === user);
   return (
     <>
@@ -549,13 +546,12 @@ function MyPicks({ league }: { league: League }) {
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="bold ellipsis">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
-                    {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · drafted after{' '}
-                    {seasonLabel(d.season)}
+                    {d.originalTid === user ? 'Own pick' : `Acquired from the ${teamName(league.teams[d.originalTid])}`} · drafted after {seasonLabel(d.season)}
                   </div>
                 </div>
                 {/* the label carries the overall number once the order is set */}
-                {!d.pick && d.season === league.season && gp >= 10 ? (
-                  <span className="tag">Proj. #{overall(d.round, proj(d.originalTid))}</span>
+                {proj(d) !== undefined ? (
+                  <span className="tag">Proj. #{proj(d)}</span>
                 ) : (
                   <span className={`tag ${d.pick ? 'info' : ''}`}>
                     <Ticket size={11} /> R{d.round}
@@ -576,9 +572,7 @@ function MyPicks({ league }: { league: League }) {
                   <TeamLogo tid={d.tid} size={30} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">{pickLabel(league, d)}</div>
-                    <div className="tiny dim">
-                      Owned by {league.teams[d.tid].region} {league.teams[d.tid].name}
-                    </div>
+                    <div className="tiny dim">Owned by the {teamName(league.teams[d.tid])}</div>
                   </div>
                   <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
                 </div>
@@ -587,7 +581,7 @@ function MyPicks({ league }: { league: League }) {
           </Card>
         </>
       )}
-      <div className="tiny dim">Projections use the current standings (worst record = #1) and ignore the lottery.</div>
+      {owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>}
     </>
   );
 }
@@ -658,7 +652,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
             <span className="tag info">{p.archetype}</span>
             {p.tid >= 0 && (
               <span className="tag good">
-                Drafted #{overall(p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}
+                Drafted #{overallPick(league, p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}
               </span>
             )}
           </div>

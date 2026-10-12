@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
-import { seasonTotals } from '../../core/league/helpers';
+import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
+import { draftStandings } from '../../core/league/draft';
 import { Segmented } from '../components/ui';
 import './league.css';
 
@@ -156,15 +157,23 @@ export function StrategyTag({ team }: { team: Team }) {
   return <span className={`tag ${m.tone}`}>{m.label}</span>;
 }
 
-/** Overall slot of a pick once the draft order is set (the second round continues from 31). */
-export function overallPick(league: League, d: DraftPick): number | undefined {
-  return d.pick ? (d.round - 1) * league.teams.length + d.pick : undefined;
-}
+/** Overall number of a draft slot: the second round continues from 31. */
+export const overallPick = (league: League, round: number, pick: number) => (round - 1) * league.teams.length + pick;
 
-/** "2027 2nd round", plus "Top-4 protected" while another team holds a protected pick. */
-export function pickName(d: DraftPick): string {
-  const name = `${d.season} ${d.round === 1 ? '1st' : '2nd'} round`;
-  return d.protection && d.tid !== d.originalTid ? `${name} · Top-${d.protection} protected` : name;
+/** The note under projected picks (team pages and the Draft screen). */
+export const PROJECTION_NOTE = 'Projected slots follow the current standings, worst record first, until the lottery reshuffles the top 14.';
+
+/**
+ * Where this season's picks would land if the season ended today, until the lottery sets the
+ * order: the lottery's own pre-lottery order (worst record first, ties drawn as it draws them),
+ * playoff teams after the rest in the first round. Undefined before games are played, for a pick
+ * that has its slot, and for later drafts.
+ */
+export function pickProjection(league: League): (d: DraftPick) => number | undefined {
+  const played = league.teams.some((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost > 0);
+  const recs = draftStandings(league);
+  const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: recs };
+  return (d) => (!played || d.pick || d.season !== league.season ? undefined : overallPick(league, d.round, order[d.round].findIndex((r) => r.tid === d.originalTid) + 1));
 }
 
 /** Map legacy deep links (e.g. /league/awards) to routes that exist. */

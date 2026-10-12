@@ -43,6 +43,7 @@ import {
   playerMeta,
   shortSeason,
 } from '../office/common';
+import { overallPick } from '../league/shared';
 import { rosterNames } from '../stats';
 
 interface Tile {
@@ -122,7 +123,7 @@ export default function Office() {
       icon: ListOrdered,
       title: 'Draft',
       sub: thisDraftPicks.length
-        ? `You pick ${thisDraftPicks.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}`
+        ? `You pick ${thisDraftPicks.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}`
         : `${myPicks.length} pick${myPicks.length === 1 ? '' : 's'} owned`,
       color: 'var(--tier-star)',
       hot: league.phase === 'draft' || league.phase === 'draftLottery',
@@ -327,14 +328,14 @@ function Spotlight({ league }: { league: League }) {
               <div className="fo-mid">
                 {league.phase === 'draft' && np
                   ? onClock
-                    ? `Pick #${(np.round - 1) * 30 + np.pick!} is yours`
-                    : `${league.teams[np.tid].abbrev} pick #${(np.round - 1) * 30 + np.pick!}`
+                    ? `Pick #${overallPick(league, np.round, np.pick!)} is yours`
+                    : `${league.teams[np.tid].abbrev} pick #${overallPick(league, np.round, np.pick!)}`
                   : league.phase === 'draft'
                     ? 'Draft complete'
                     : `${league.season} NBA Draft`}
               </div>
               <div className="small dim2">
-                {mine.length ? `Your picks: ${mine.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}` : 'You have no picks left this year.'}
+                {mine.length ? `Your picks: ${mine.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}` : 'You have no picks left this year.'}
               </div>
             </div>
           </div>
