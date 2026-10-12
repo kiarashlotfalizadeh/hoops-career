@@ -74,7 +74,8 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;
-  if (inj.gamesRemaining >= 5 || p.ovr >= 80) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
+  // news for real absences: ten games, or five for a star
+  if (inj.gamesRemaining >= 10 || (p.ovr >= 80 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
   // day-to-day knocks only show on the roster; the inbox is for absences that change plans
   if (p.tid === league.userTid && inj.gamesRemaining >= MAIL_MIN_GAMES) {
     // a month-long absence for one of the six core players is worth pausing a long sim for
