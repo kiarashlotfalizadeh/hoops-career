@@ -407,6 +407,8 @@ export class GameSim {
   lineups = new Map<string, LineupStat>();
   injuries: InGameInjury[] = [];
   private cur: PossLog | null = null;
+  /** A timeout called between possessions: the court shows it as the next possession's first beat. */
+  private timeoutStep = false;
   private lastShooter: SP | null = null;
   private possPts = 0;
   private possCtxForTOPts: Ctx = 'start';
@@ -702,7 +704,7 @@ export class GameSim {
     this.T[0].run = 0;
     this.T[1].run = 0;
     this.addPbp(side, `Timeout ${t.team.abbrev}${reason ? ` (${reason})` : ''}.`, 'timeout');
-    if (this.cur) this.cur.steps.push({ k: 'timeout' });
+    this.timeoutStep = true;
     this.adjust(this.T[0]);
     this.adjust(this.T[1]);
     this.checkSubs(this.T[0], true);
@@ -1232,7 +1234,7 @@ export class GameSim {
         clockStart,
         clockEnd: clockStart,
         kind: 'half',
-        steps: [],
+        steps: this.timeoutStep ? [{ k: 'timeout' }] : [],
         pts: 0,
         score: [this.T[0].score, this.T[1].score],
         label: '',
@@ -1243,6 +1245,7 @@ export class GameSim {
         help: def.t.defense.help,
       };
     }
+    this.timeoutStep = false;
     off.poss++;
     for (const p of off.on) p.b.onPoss++;
     const ls = this.lineupStat(off);
@@ -1311,10 +1314,16 @@ export class GameSim {
     this.tick(setup);
     shotClock -= setup;
     if (this.clock <= 0.05) {
-      this.finishPoss(off, def, 'misc');
+      this.clockOut(off, def);
       return;
     }
     this.halfCourt(off, def, shotClock, late, paceF);
+  }
+
+  /** The period runs out before the offense gets a shot off: the trip counts for its last shot, if it had one. */
+  private clockOut(off: ST, def: ST) {
+    if (this.cur && !this.cur.label) this.cur.label = 'Clock runs out';
+    this.finishPoss(off, def, this.possFinish);
   }
 
   /** Time multiplier for setups and actions: the team's pace, in this game's tempo. */
@@ -1414,6 +1423,7 @@ export class GameSim {
     this.tick(this.rng.uniform(3, 6));
     if (this.cur) {
       this.cur.kind = 'press';
+      this.cur.label = 'Full-court press';
       this.cur.steps.push({ k: 'press', pid: h.pid });
     }
     // expected value accounting: TOs forced vs easy baskets given up
@@ -1501,7 +1511,7 @@ export class GameSim {
     let forced = false;
     for (let n = 0; n < 6; n++) {
       if (this.clock <= 0.05) {
-        this.finishPoss(off, def, 'misc');
+        this.clockOut(off, def);
         return;
       }
       const left = Math.min(shotClock, this.clock);
@@ -2360,7 +2370,7 @@ export class GameSim {
       }
       case 3: {
         const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom * Math.pow(p.tu, 0.75) * p.tm))];
-        this.passStep(passer, sh);
+        if (sh !== passer) this.passStep(passer, sh);
         this.shoot(off, def, { shooter: sh, zone: 'mid', open: advOpen * 0.5, contest: this.defOf(def, sh), assister: sh === passer ? null : passer, finish: 'spotup' });
         return 'done';
       }
@@ -2841,9 +2851,8 @@ export class GameSim {
 
   private continueAfterOrb(off: ST, def: ST, rebounder: SP | null) {
     this.secondChance = true;
-    // a clock that runs out on the offensive board counts against the shot before it
     if (this.clock <= 0.3) {
-      this.finishPoss(off, def, this.possFinish);
+      this.clockOut(off, def);
       return;
     }
     // immediate putback for bigs near the rim
@@ -2865,7 +2874,7 @@ export class GameSim {
     const setup = Math.min(this.rng.uniform(1.5, 4), Math.max(0.3, this.clock * 0.4));
     this.tick(setup);
     if (this.clock <= 0.05) {
-      this.finishPoss(off, def, this.possFinish);
+      this.clockOut(off, def);
       return;
     }
     this.halfCourt(off, def, 14 - setup, late, paceF);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
+import { FINISH_LABEL } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
 import type { Team } from '../types';
@@ -312,8 +313,17 @@ describe('engine rules', () => {
   });
 
   it('logs subs, timeouts and period changes, with clean punctuation and distinct names', () => {
-    const res = new GameSim(side(10), side(11), { rng: new Rng(5), type: 'regular', record: true }).simToEnd();
+    const sim = new GameSim(side(10), side(11), { rng: new Rng(5), type: 'regular', record: true });
+    const res = sim.simToEnd();
     const pbp = res.pbp!;
+    // the court shows each timeout as the next possession's first beat, and gives every possession a headline
+    const logs = sim.drainLogs();
+    expect(logs.some((l) => l.steps[0]?.k === 'timeout')).toBe(true);
+    for (const l of logs) {
+      expect(l.steps.findIndex((st) => st.k === 'timeout')).toBeLessThanOrEqual(0);
+      expect(l.label).not.toBe(FINISH_LABEL.misc);
+      for (const st of l.steps) if (st.k === 'pass') expect(st.pid2).not.toBe(st.pid);
+    }
     for (const kind of ['sub', 'timeout', 'period'] as const) expect(pbp.some((e) => e.kind === kind && e.text.length > 8)).toBe(true);
     for (const e of pbp) expect(e.text).not.toMatch(/[!.?]\.$|\.\.|\s\./);
     // a rebound line names a player only when the box score credits him (the rest are team rebounds)
