@@ -119,6 +119,28 @@ describe('tactics lab & reports', () => {
     big.ratings = r;
     team.tactics = saved;
   });
+  it("judges the five healthy starters and counts an injured player's minutes, as the engine does", () => {
+    const team = league.teams[1];
+    const [tactics, rotation] = [team.tactics, team.rotation];
+    const big = league.players[team.rotation.order[0]];
+    const r = { ...big.ratings };
+    big.ratings.hgt = 70;
+    big.ratings.spd = 30;
+    team.tactics = applyPatch(tactics, { defense: { scheme: 'man', pnr: 'switch' } });
+    // a custom rotation whose targets add up to 240, the slow big starting
+    const minutes = Object.fromEntries(rotation.order.map((pid, i) => [pid, [36, 34, 33, 31, 29, 24, 20, 16, 12, 5][i] ?? 0]));
+    team.rotation = { ...rotation, minutes, manual: true };
+    const ids = () => teamAlerts(league, 1).map((a) => a.id);
+    expect(ids()).toContain('switch-slow');
+    expect(ids()).not.toContain('min-total');
+    // out injured, he neither starts nor takes his 36 minutes away from the total
+    big.injury = { type: 'Sprained ankle', gamesRemaining: 4, gamesTotal: 4, severity: 'minor' };
+    expect(ids()).not.toContain('switch-slow');
+    expect(ids()).not.toContain('min-total');
+    big.injury = null;
+    big.ratings = r;
+    [team.tactics, team.rotation] = [tactics, rotation];
+  });
   it('only offers counters that change something', () => {
     const [mine, opp] = [league.teams[0], league.teams[1]];
     const saved = [mine.tactics, opp.tactics];

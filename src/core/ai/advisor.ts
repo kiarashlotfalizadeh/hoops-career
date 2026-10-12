@@ -249,10 +249,11 @@ export function teamAlerts(league: League, tid: number): Alert[] {
     });
   }
   const rot = team.rotation;
+  // the five who start: the first healthy ones in the depth chart, as the engine and the Rotation screen have it
   const starters = rot.order
-    .slice(0, 5)
     .map((pid) => league.players[pid])
-    .filter(Boolean);
+    .filter((p) => p && p.tid === tid && !p.injury)
+    .slice(0, 5);
   if (starters.length === 5) {
     const ev = evaluateLineup(starters);
     for (const n of ev.notes)
@@ -285,15 +286,14 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       });
     }
   }
-  const total = Object.entries(rot.minutes)
-    .filter(([pid]) => players.some((p) => p.pid === +pid && !p.injury))
-    .reduce((a, [, m]) => a + m, 0);
+  // injured players' minutes count: the plan hands them to teammates before it rescales anything
+  const total = players.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
   if (rot.manual && Math.abs(total - 240) > 6)
     alerts.push({
       id: 'min-total',
       tone: 'alert',
       title: `Minutes add up to ${Math.round(total)}`,
-      body: 'Minute targets are scaled to 240 automatically, so the actual split may differ from what you set.',
+      body: `Minute targets${healthy.length < players.length ? ", injured players' included," : ''} are scaled to 240 automatically, so the actual split may differ from what you set.`,
       link: '/rotation',
     });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
