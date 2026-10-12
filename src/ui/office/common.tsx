@@ -213,7 +213,7 @@ export function MoodTag({ p, withNotes = false }: { p: Player; withNotes?: boole
   );
 }
 
-/** Bare range input using the design-system track styling. */
+/** Bare range input for an amount of money ($K) using the design-system track styling. */
 export function Range({ value, min, max, step = 1, onChange, label }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; label: string }) {
   const fill = max > min ? clamp(((value - min) / (max - min)) * 100, 0, 100) : 0;
   return (
@@ -224,6 +224,7 @@ export function Range({ value, min, max, step = 1, onChange, label }: { value: n
       step={step}
       value={clamp(value, min, max)}
       aria-label={label}
+      aria-valuetext={fmtM(value, 2)}
       onChange={(e) => onChange(Number(e.target.value))}
       style={{ ['--fill' as string]: `${fill}%`, display: 'block' }}
     />
