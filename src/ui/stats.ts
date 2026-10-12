@@ -107,11 +107,21 @@ export function teamRatings(ts: TeamSeason) {
   };
 }
 
-export const f1 = (v: number) => (isFinite(v) ? v.toFixed(1) : '—');
-export const f0 = (v: number) => (isFinite(v) ? v.toFixed(0) : '—');
-export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—');
-export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
-export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '—');
+/** toFixed, but a value that rounds to zero reads "0.0", not "-0.0" (a -0.03 plus-minus or net rating). */
+const fixed = (v: number, d: number) => {
+  const s = v.toFixed(d);
+  return Number(s) === 0 ? (0).toFixed(d) : s;
+};
+export const f1 = (v: number) => (isFinite(v) ? fixed(v, 1) : '—');
+export const f0 = (v: number) => (isFinite(v) ? fixed(v, 0) : '—');
+export const p1 = (v: number) => (isFinite(v) ? `${fixed(v * 100, 1)}%` : '—');
+export const p0 = (v: number) => (isFinite(v) ? `${fixed(v * 100, 0)}%` : '—');
+/** "+2.4", "-1.3", and "0.0" for anything that rounds to zero (no sign: it favours neither side). */
+export const signed = (v: number, d = 1) => {
+  if (!isFinite(v)) return '—';
+  const s = fixed(v, d);
+  return Number(s) > 0 ? `+${s}` : s;
+};
 /** 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 101st, 111th. */
 export const ordinalSuffix = (n: number) => {
   const v = Math.abs(n) % 100;

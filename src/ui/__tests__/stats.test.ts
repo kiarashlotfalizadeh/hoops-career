@@ -1,7 +1,7 @@
 // Display helpers shared by the screens.
 import { describe, expect, it } from 'vitest';
 import type { League } from '../../core/types';
-import { finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, wholeMinutes } from '../stats';
+import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1, signed, wholeMinutes } from '../stats';
 
 describe('ordinal', () => {
   it('reads 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")', () => {
@@ -24,6 +24,26 @@ describe('ordinal', () => {
     ];
     for (const [n, s] of cases) expect(ordinal(n)).toBe(s);
     expect(ordinalSuffix(53)).toBe('rd');
+  });
+});
+
+describe('number formats', () => {
+  it('never print "-0.0": a value that rounds to zero reads as zero, with no sign', () => {
+    // a -1 plus-minus over 30 games, the Lab's net rating for a plan that changes nothing
+    expect(signed(-1 / 30)).toBe('0.0');
+    expect(signed(-0.04)).toBe('0.0');
+    expect(signed(0)).toBe('0.0');
+    expect(signed(-0.4, 0)).toBe('0');
+    expect(signed(0.06)).toBe('+0.1');
+    expect(signed(-0.06)).toBe('-0.1');
+    expect(signed(3)).toBe('+3.0');
+    expect(f1(-0.04)).toBe('0.0');
+    expect(f1(-2.35)).toBe('-2.4');
+    expect(f0(-0.4)).toBe('0');
+    expect(p1(-0.0002)).toBe('0.0%');
+    expect(p0(0.456)).toBe('46%');
+    expect(signed(NaN)).toBe('—');
+    expect(f1(Infinity)).toBe('—');
   });
 });
 
