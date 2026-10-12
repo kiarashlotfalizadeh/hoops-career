@@ -1,15 +1,17 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
-import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
+import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
-import { problemOf, useLeague, useLeagueMemo, useStore } from '../state/store';
+import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
+import { pendingLive } from '../state/live';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
 import { faDayNumber } from '../core/league/season';
 import type { League } from '../core/types';
 import { ordinal } from './league/shared';
+import { gamesMemo } from './stats';
 import { TeamLogo } from './components/TeamLogo';
 import { Sheet, Spinner } from './components/ui';
 import { flowActions } from './flow';
@@ -85,9 +87,9 @@ function Boot({ children }: { children: ReactNode }) {
       setBlocked(true);
       useStore.getState().toast(BLOCKED, 'bad');
     });
-    // another window saved this league: this copy is stale, so stop autosaving it
-    const off = onRemoteChange((id) => {
-      if (useStore.getState().league?.id === id) useStore.setState({ saveProblem: problemOf(new SaveConflictError()) });
+    // another window saved (or deleted) this league: this copy is stale, so stop autosaving it
+    const off = onRemoteChange((id, deleted) => {
+      if (useStore.getState().league?.id === id) useStore.setState({ saveProblem: problemOf(new SaveConflictError(deleted)) });
     });
     const onHide = () => {
       if (document.visibilityState === 'hidden') void useStore.getState().flush();
@@ -106,7 +108,7 @@ function Boot({ children }: { children: ReactNode }) {
   }, [league, userTid]);
   if (failed) {
     return (
-      <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, var(--safe-t))' }}>
+      <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, calc(var(--safe-t) + 8px))' }}>
         <div className="card col" style={{ gap: 10, alignItems: 'flex-start' }}>
           <AlertTriangle className="warn" size={28} />
           <h2>Your league could not be opened</h2>
@@ -146,6 +148,8 @@ function Boot({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+const statusLines = new WeakMap<League, { key: string; value: string }>();
+
 /** One short line under the team name: where the season stands, sized to fit a phone. */
 function statusLine(league: League): string {
   const date = fmtDate(league.season, league.day);
@@ -160,17 +164,17 @@ function statusLine(league: League): string {
       return `${date} · ${ordinal(rank)} ${t.conf === 'E' ? 'East' : 'West'}`;
     }
     case 'playin':
-      return `Play-in · ${date}`;
+      return `Play-In · ${date}`;
     case 'playoffs':
       return `Playoffs · ${date}`;
     case 'draftLottery':
-      return `Draft lottery · ${league.season}`;
+      return `Draft Lottery · ${league.season}`;
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
-      return `Re-sign period · ${league.season}`;
+      return `Re-sign Period · ${league.season}`;
     case 'freeAgency':
-      return `Free agency · day ${faDayNumber(league)}`;
+      return `Free Agency · day ${faDayNumber(league)}`;
     default:
       return PHASE_LABEL[league.phase] ?? '';
   }
@@ -182,18 +186,18 @@ function TopBar() {
   const [open, setOpen] = useState(false);
   const run = useFlowRunner();
   const { pathname } = useLocation();
-  const sim = useStore((s) => s.sim);
+  const simming = useStore((s) => !!s.sim);
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
-  // standings scans every game: recompute per league change, not per render
-  const status = useLeagueMemo(() => statusLine(league), [league]);
+  // the standings scan every game: worked out again when a game is played, not on every edit
+  const status = gamesMemo(statusLines, league, () => statusLine(league));
   const actions = open ? flowActions(league, { onLive: pathname === '/live' }) : [];
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
         <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')} aria-label={`${t.region} ${t.name}, ${ts.won}-${ts.lost}, ${status}. Home`}>
-          <TeamLogo tid={t.tid} size={34} />
+          <TeamLogo tid={t.tid} size={34} decorative />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
               {t.abbrev}{' '}
@@ -212,7 +216,7 @@ function TopBar() {
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
           <SettingsIcon size={20} />
         </button>
-        <button className="btn primary sm" onClick={() => setOpen(true)} disabled={!!sim} aria-label="Play">
+        <button className="btn primary sm" onClick={() => setOpen(true)} disabled={simming} aria-label="Play">
           <Play size={16} fill="currentColor" /> Play
         </button>
       </div>
@@ -232,7 +236,7 @@ function TopBar() {
             >
               <span>{a.label}</span>
               {(a.disabled || a.sub) && (
-                <span className="small" style={{ opacity: 0.75, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>
+                <span className="small" style={{ opacity: 0.9, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>
                   {a.disabled ?? a.sub}
                 </span>
               )}
@@ -252,7 +256,7 @@ const NAV_ITEMS = [
   { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
 ];
 
-/** Bottom tabs; sub-screens light up the section they belong to. */
+/** Bottom tabs; sub-screens light up the section they belong to (and are its current page for screen readers). */
 function BottomNav() {
   const { pathname } = useLocation();
   const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : pathname.startsWith(it.to))) ?? NAV_ITEMS.find((it) => it.also.some((p) => pathname.startsWith(p)));
@@ -262,10 +266,10 @@ function BottomNav() {
         {NAV_ITEMS.map((it) => {
           const active = section === it;
           return (
-            <NavLink key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
+            <Link key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
               <it.icon size={21} />
               <span className="nav-label">{it.label}</span>
-            </NavLink>
+            </Link>
           );
         })}
       </div>
@@ -276,27 +280,36 @@ function BottomNav() {
 function SimBar() {
   const sim = useStore((s) => s.sim);
   const stop = useStore((s) => s.stopSim);
-  if (!sim) return null;
-  const pct = Math.min(100, (sim.done / Math.max(1, sim.total)) * 100);
-  const steps = sim.total > 1;
+  // screen readers hear a sim start and finish, not every simmed day: the status region stays put and its text only changes then
+  const [ran, setRan] = useState(false);
+  if (sim && !ran) setRan(true);
+  const pct = sim ? Math.min(100, (sim.done / Math.max(1, sim.total)) * 100) : 0;
+  const steps = !!sim && sim.total > 1;
   return (
-    <div className="simbar fade-in" role="status" aria-live="polite">
-      <Spinner />
-      <div className="grow">
-        <div className="small bold">
-          {sim.label}…{sim.total > 1 ? ` day ${sim.done}` : ''}
-        </div>
-        <div className="bar" style={{ marginTop: 6 }}>
-          {/* one-shot jobs (new season, free agency) can't be stopped midway: show them as busy */}
-          <div className={steps ? '' : 'pulse'} style={{ width: steps ? `${pct}%` : '100%' }} />
-        </div>
+    <>
+      <div className="sr-only" role="status">
+        {sim ? `${sim.label}…` : ran ? 'Done.' : ''}
       </div>
-      {steps && (
-        <button className="btn sm" onClick={stop}>
-          <X size={16} /> Stop
-        </button>
+      {sim && (
+        <div className="simbar fade-in">
+          <Spinner />
+          <div className="grow">
+            <div className="small bold">
+              {sim.label}…{sim.total > 1 ? ` day ${sim.done}` : ''}
+            </div>
+            <div className="bar" style={{ marginTop: 6 }}>
+              {/* one-shot jobs (new season, free agency) can't be stopped midway: show them as busy */}
+              <div className={steps ? '' : 'pulse'} style={{ width: steps ? `${pct}%` : '100%' }} />
+            </div>
+          </div>
+          {steps && (
+            <button className="btn sm" onClick={stop}>
+              <X size={16} /> Stop
+            </button>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -327,22 +340,28 @@ function SaveBanner() {
     >
       <AlertTriangle size={18} className="bad" style={{ flex: 'none' }} />
       <div className="grow small">
-        <b>{conflict ? problem.text : 'Not saved.'}</b> {conflict ? 'Reload to pick it up from there. Changes made in this window since then are not kept.' : problem.text}
+        <b>{conflict ? problem.text : 'Not saved.'}</b>{' '}
+        {conflict
+          ? problem.deleted
+            ? 'Export a backup to keep this copy; a reload opens the main menu without it.'
+            : 'Reload to pick it up from there. Changes made in this window since then are not kept unless you export a backup.'
+          : problem.text}
       </div>
-      {conflict ? (
-        <button className="btn xs" onClick={() => window.location.reload()}>
-          Reload
+      {/* either way, this window's copy can be kept as a file */}
+      <div className="col" style={{ gap: 6 }}>
+        <button className="btn xs" disabled={busy} onClick={() => void offerFile(() => exportLeague(league))}>
+          Export backup
         </button>
-      ) : (
-        <div className="col" style={{ gap: 6 }}>
-          <button className="btn xs" disabled={busy} onClick={() => void offerFile(() => exportLeague(league))}>
-            Export backup
+        {conflict ? (
+          <button className="btn xs" onClick={() => window.location.reload()}>
+            Reload
           </button>
+        ) : (
           <button className="btn xs" disabled={busy} onClick={() => void retry()}>
             Try again
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -384,19 +403,28 @@ function ScrollTop() {
   return null;
 }
 
-/** A fired coach's old team isn't his to run: the front-office screens wait until he takes another job. */
-function FiredGate({ children }: { children: ReactNode }) {
+/**
+ * The front-office screens wait while they aren't the coach's to use: a fired coach's old team until he
+ * takes another job, and any roster move while a live game is in progress (a player moved mid-game
+ * would have his line recorded for the wrong team).
+ */
+function OfficeGate({ children }: { children: ReactNode }) {
   const fired = useStore((s) => !!s.league?.fired);
+  const live = useStore((s) => !!s.league && !!pendingLive(s.league));
   const nav = useNavigate();
-  if (!fired) return <>{children}</>;
+  if (!fired && !live) return <>{children}</>;
   return (
     <main className="page">
       <div className="card col" role="alert" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <AlertTriangle className="bad" size={24} />
-        <h2>You were fired</h2>
-        <div className="small dim2">The front office isn't yours to run anymore. Take over another team to trade, sign and draft again.</div>
-        <button className="btn primary" onClick={() => nav('/settings?sheet=switch')}>
-          Find a new job
+        <AlertTriangle className={fired ? 'bad' : 'warn'} size={24} />
+        <h2>{fired ? 'You were fired' : 'Finish your live game first'}</h2>
+        <div className="small dim2">
+          {fired
+            ? "The front office isn't yours to run anymore. Take over another team to trade, sign and draft again."
+            : 'Trades, signings and releases wait until the game in progress is over, so every player is counted for the team he played for.'}
+        </div>
+        <button className="btn primary" onClick={() => nav(fired ? '/settings?sheet=switch' : '/live')}>
+          {fired ? 'Find a new job' : 'Back to the game'}
         </button>
       </div>
     </main>
@@ -434,41 +462,41 @@ function GameShell() {
             <Route
               path="/office"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Office />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/trade"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Trade />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/free-agents"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <FreeAgents />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/resign"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Resign />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/draft"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Draft />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route path="/finances" element={<Finances />} />

@@ -486,6 +486,20 @@
   text-transform: uppercase;
   color: var(--text-dim);
   margin-bottom: 3px;
+  white-space: nowrap;
+}
+/* one line: the status ("Final/2OT") stays whole, the round tag on the right gives way if it must */
+.lg-sb-st > span + span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* phones: tighter type, so "Final/OT · Conf. Finals G4" fits from 360px (and "Final/2OT" from 375px) */
+@media (max-width: 419px) {
+  .lg-sb-st {
+    font-size: 9.5px;
+    letter-spacing: 0.03em;
+  }
 }
 .lg-sb-st .live {
   color: var(--accent-text);

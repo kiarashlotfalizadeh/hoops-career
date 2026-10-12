@@ -120,6 +120,46 @@ export const ordinalSuffix = (n: number) => {
 export const ordinal = (n: number) => `${n}${ordinalSuffix(n)}`;
 /** Q1..Q4, then OT, 2OT, 3OT. */
 export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
+/**
+ * A value worked out by scanning the games played (standings, lineups), kept until a game is played or
+ * the date, phase, season or team changes: a slider drag edits the league at every step, and these
+ * scans have nothing new to find then.
+ */
+export function gamesMemo<T>(cache: WeakMap<League, { key: string; value: T }>, league: League, compute: () => T): T {
+  const key = `${league.season}|${league.phase}|${league.day}|${league.faDay}|${league.userTid}|${league.games.length}`;
+  const hit = cache.get(league);
+  if (hit && hit.key === key) return hit.value;
+  const value = compute();
+  cache.set(league, { key, value });
+  return value;
+}
+
+/** The game clock: "11:42", then tenths in the last minute ("24.3"), cut rather than rounded as an arena clock does. */
+export function fmtClock(sec: number) {
+  // (a hair added so a stored 24.3 that reads 24.2999… still shows 24.3)
+  const s = Math.floor(Math.max(0, sec) * 10 + 1e-6) / 10;
+  return s < 60 ? s.toFixed(1) : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+/** Play-by-play lines: substitutions fade back, but stay above 5:1 contrast. */
+export const pbpOpacity = (kind?: string) => (kind === 'sub' ? 0.7 : 1);
+/**
+ * A team's box-score minutes as whole numbers that still add up to the team's total (240, plus 25
+ * per overtime): rounded down, then the leftover minutes go to the largest remainders.
+ */
+export function wholeMinutes(players: { pid: number; min: number }[]): (pid: number) => number {
+  const total = Math.round(players.reduce((a, p) => a + p.min, 0));
+  const out = new Map(players.map((p) => [p.pid, Math.floor(p.min)]));
+  let left = total - [...out.values()].reduce((a, b) => a + b, 0);
+  for (const p of [...players].sort((a, b) => (b.min % 1) - (a.min % 1))) {
+    if (left <= 0) break;
+    out.set(p.pid, out.get(p.pid)! + 1);
+    left--;
+  }
+  return (pid) => out.get(pid) ?? 0;
+}
+
+/** A finished game's scorebug: FINAL, F/OT, F/2OT. */
+export const finalLabel = (ot: number) => (ot > 0 ? `F/${periodLabel(4 + ot)}` : 'FINAL');
 
 /**
  * Last names for a roster, with as much of the first name as it takes to tell teammates apart:

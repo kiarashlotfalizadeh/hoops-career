@@ -86,12 +86,13 @@ export function seasonImpacts(league: League, tid = league.userTid): { key: stri
 
 /**
  * Advice names Tactics tabs as Expert mode lays them out: point at what the user's coaching depth
- * shows instead (roles are set from a player's page; Simple has no Offense or Defense tab).
+ * shows instead (roles are set from a player's page; Simple has no Offense or Defense tab, and only
+ * Expert has Game Mgmt).
  */
 export function adviceFor(text: string, complexity: Settings['complexity']): string {
   if (complexity === 'expert') return text;
   const out = text.replace(/\(Tactics > Roles\)/g, "(Set role, on the player's page)");
-  if (complexity !== 'simple') return out;
-  const bare = out.replace(/ \((Offense|Defense)( > [^)]*)?\)/g, '');
-  return bare === out ? out : `${bare} (Needs Advanced coaching depth, in Settings.)`;
+  const noExpert = out.replace(/ \(Game Mgmt( > [^)]*)?\)/g, '');
+  const bare = complexity === 'simple' ? noExpert.replace(/ \((Offense|Defense)( > [^)]*)?\)/g, '') : noExpert;
+  return bare === out ? out : `${bare} (Needs ${noExpert !== out ? 'Expert' : 'Advanced'} coaching depth, in Settings.)`;
 }

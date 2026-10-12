@@ -6,9 +6,9 @@ import { rosterSorted } from '../../core/league/helpers';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
-import type { Player, Rotation as RotationT } from '../../core/types';
-import { f1, ordinal, playerSeason, rosterNames } from '../stats';
-import { seasonLineups } from '../seasonAnalysis';
+import type { League, Player, Rotation as RotationT } from '../../core/types';
+import { f1, gamesMemo, ordinal, playerSeason, rosterNames } from '../stats';
+import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
 
 export default function Rotation() {
   const league = useLeague();
@@ -23,6 +23,8 @@ export default function Rotation() {
   const [edit, setEdit] = useState<number | null>(null);
   // the rotation Auto replaced, until the next edit
   const [undo, setUndo] = useState<RotationT | null>(null);
+  // a Play-menu sim's progress bar takes the same spot as the undo bar
+  const simming = useStore((s) => !!s.sim);
 
   const update = (fn: (r: RotationT) => void) => {
     setUndo(null);
@@ -71,7 +73,7 @@ export default function Rotation() {
   const ep = edit !== null ? byId.get(edit) : null;
 
   return (
-    <main className="page" style={{ paddingBottom: undo ? 'calc(var(--nav-h) + 96px)' : undefined }}>
+    <main className="page" style={{ paddingBottom: undo ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
       <PageHeader
         title="Rotation"
         back
@@ -94,8 +96,8 @@ export default function Rotation() {
       <Card>
         <div className="row between">
           <div>
-            <div className="bold">Minutes: {total} / 240</div>
-            <div className="small dim">Targets are scaled to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
+            <div className="bold">Minute targets: {total}</div>
+            <div className="small dim">The stint plan below scales them to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
             {injuredMin > 0 && <div className="small warn">Injured players' {injuredMin} minutes go to the healthy ones: the stint plan shows who gets them.</div>}
           </div>
           <Help title="How rotations work">
@@ -139,7 +141,7 @@ export default function Rotation() {
                   </div>
                   <Avatar p={p} />
                   <div
-                    className="grow"
+                    className="grow row"
                     role="button"
                     tabIndex={0}
                     aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`}
@@ -147,28 +149,31 @@ export default function Rotation() {
                     onKeyDown={activateOnKey(() => setEdit(pid))}
                     style={{ cursor: 'pointer', minWidth: 0 }}
                   >
-                    {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
-                    <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
-                      <span className="bold ellipsis" style={{ minWidth: 0 }}>
-                        {fullNameOf(pid)}
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
+                      <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
+                        <span className="bold ellipsis" style={{ minWidth: 0 }}>
+                          {fullNameOf(pid)}
+                        </span>
+                        {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
+                        {closers.includes(pid) && <Tag>Closer</Tag>}
+                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                      </div>
+                      <div className="tiny dim">
+                        {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina{' '}
+                        {attrDisplay(p.ratings.end)}
+                        {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
+                      </div>
+                      <div className="bar" style={{ marginTop: 5, height: 5 }}>
+                        <div style={{ width: `${(m / 44) * 100}%` }} />
+                      </div>
+                    </div>
+                    <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
+                      <span className="display num" style={{ fontSize: 22 }}>
+                        {m}
                       </span>
-                      {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
-                      {closers.includes(pid) && <Tag>Closer</Tag>}
-                      {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                      <Ovr v={p.ovr} size="sm" />
                     </div>
-                    <div className="tiny dim">
-                      {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina {attrDisplay(p.ratings.end)}
-                      {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
-                    </div>
-                    <div className="bar" style={{ marginTop: 5, height: 5 }}>
-                      <div style={{ width: `${(m / 44) * 100}%` }} />
-                    </div>
-                  </div>
-                  <div className="col" style={{ alignItems: 'flex-end', gap: 2, cursor: 'pointer' }} onClick={() => setEdit(pid)}>
-                    <span className="display num" style={{ fontSize: 22 }}>
-                      {m}
-                    </span>
-                    <Ovr v={p.ovr} size="sm" />
                   </div>
                 </div>
               </Fragment>
@@ -219,10 +224,10 @@ export default function Rotation() {
       <LineupsCard />
 
       <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
-        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starting={startSet.has(ep.pid)} />}
+        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starters={startSet} />}
       </Sheet>
 
-      {undo && (
+      {undo && !simming && (
         <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
           <div className="grow small">
             <div className="bold">Assistant's rotation applied</div>
@@ -259,16 +264,18 @@ function stints(slots: number[][], pid: number) {
   return out.join(', ');
 }
 
+const lineupLists = new WeakMap<League, { key: string; value: LineupAgg[] }>();
+
 function LineupsCard() {
   const league = useLeague();
-  const lineups = useLeagueMemo(
-    () =>
-      seasonLineups(league)
-        .filter((l) => l.min >= 8)
-        .slice(0, 10),
-    [league],
+  // a scan of every game's lineups: worked out again when a game is played, not at every step of a minutes slider
+  const lineups = gamesMemo(lineupLists, league, () =>
+    seasonLineups(league)
+      .filter((l) => l.min >= 8)
+      .slice(0, 10),
   );
-  const names = rosterNames(Object.values(league.players).filter((p) => p.tid === league.userTid));
+  // named from the lineups themselves: players traded or released since still read as themselves
+  const names = rosterNames([...new Set(lineups.flatMap((l) => l.pids))].map((pid) => league.players[pid]).filter(Boolean));
   if (!lineups.length) return null;
   return (
     <Card
@@ -302,7 +309,7 @@ function EditPlayer({
   close,
   order,
   names,
-  starting,
+  starters,
 }: {
   p: Player;
   rot: RotationT;
@@ -310,9 +317,10 @@ function EditPlayer({
   close: () => void;
   order: number[];
   names: (pid: number) => string;
-  /** Among the first five healthy players, the ones who start tonight. */
-  starting: boolean;
+  /** The first five healthy players: the ones who start tonight. */
+  starters: Set<number>;
 }) {
+  const starting = starters.has(p.pid);
   const m = rot.minutes[p.pid] ?? 0;
   const cap = rot.caps[p.pid] ?? 0;
   const at = order.indexOf(p.pid);
@@ -342,7 +350,7 @@ function EditPlayer({
               const j = order.indexOf(pid);
               return (
                 <button key={pid} className="chip" onClick={() => swap(pid)}>
-                  {j < 5 ? (
+                  {starters.has(pid) ? (
                     <span className="tag info" style={{ height: 16, padding: '0 4px' }}>
                       S
                     </span>

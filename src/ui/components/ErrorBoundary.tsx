@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
     const screen = this.props.scope === 'screen';
     const offline = notLoaded(error);
     return (
-      <main className="page" role="alert" style={{ paddingTop: screen ? 24 : 'max(48px, var(--safe-t))' }}>
+      <main className="page" role="alert" style={{ paddingTop: screen ? 24 : 'max(48px, calc(var(--safe-t) + 8px))' }}>
         <div className="card col" style={{ gap: 10, alignItems: 'flex-start' }}>
           <AlertTriangle className="warn" size={28} />
           <h2>{offline ? 'This screen could not be loaded' : screen ? 'This screen hit a problem' : 'Something went wrong'}</h2>

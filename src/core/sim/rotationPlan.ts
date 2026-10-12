@@ -177,34 +177,51 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
         }
         k++;
       }
-      while (firstHalf > 120) {
-        const i = need.indexOf(Math.max(...need));
-        need[i]--;
-        firstHalf--;
-      }
       firstHalfNeed = need.slice();
     } else {
       for (let i = 0; i < n; i++) need[i] = mins[i] - firstHalfNeed[i];
     }
     // The second half is planned backwards from the final buzzer so the closing lineup
-    // finishes the game; its "first" slot in planning order is minute 48.
+    // finishes the game; its "first" slot in planning order is minute 48. The starters' opening
+    // stretch of the third quarter is held back until planning reaches it, so they still have
+    // the minutes for it: about half the second-half minutes of the starter who plays fewest,
+    // leaving the closers their last four and the bench room for its own minutes.
+    let block = 0;
+    if (half === 1) {
+      block = 24;
+      let starters = 0;
+      for (let i = 0; i < n; i++) {
+        const p = players[i];
+        if (p.starter) {
+          starters++;
+          block = Math.min(block, Math.round(need[i] / 2), Math.floor(6 + (p.endurance / 100) * 6), need[i] - (p.closer ? 4 : 0));
+        } else if (need[i] > 0) block = Math.min(block, 24 - need[i] - (p.closer ? 0 : 4));
+      }
+      if (block < 2 || starters !== 5) block = 0;
+    }
     for (let step = 0; step < 24; step++) {
       const s = half === 0 ? step : 23 - step;
       const remaining = 24 - step;
       const slot = half * 24 + s;
+      const inBlock = remaining <= block;
       const scores: { i: number; sc: number }[] = [];
       for (let i = 0; i < n; i++) {
         const p = players[i];
-        const avail = need[i];
+        if (inBlock && !p.starter) continue;
+        // the minutes he still has to play, and the slots he can play them in
+        const avail = need[i] - (p.starter && !inBlock ? block : 0);
         if (avail <= 0) continue;
+        const left = inBlock ? remaining : remaining - block;
         const maxStint = 6 + (p.endurance / 100) * 6;
-        let sc = need[i] / remaining;
-        if (onPrev[i]) sc += stint[i] < maxStint ? 0.45 : -0.6;
+        let sc = avail / left;
+        // a player on the floor plays out his last minute now rather than in a one-minute stint later
+        if (onPrev[i]) sc += stint[i] < maxStint ? (avail === 1 ? 0.8 : 0.45) : -0.6;
         else if (rest[i] < 3) sc -= 0.35;
         if (half === 0 && step === 0 && p.starter) sc += 6;
         if (half === 1 && step < 4 && p.closer) sc += 6;
-        if (half === 1 && step === 23 && p.starter) sc += 0.6;
-        if (avail >= remaining) sc += 100;
+        if (avail >= left) sc += 100;
+        // one slot to spare: sitting him now would only bring him back after a one-minute rest
+        else if (onPrev[i] && avail === left - 1) sc += 3;
         scores.push({ i, sc });
       }
       scores.sort((a, b) => b.sc - a.sc);
@@ -227,7 +244,7 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
           chosen = chosen.map((i) => (i === drop ? alt.i : i));
         }
       }
-      // fill if fewer than five have minutes left (short roster): use the freshest regulars
+      // fill if fewer than five have minutes left (short roster): use the regulars with the most minutes
       if (chosen.length < 5) {
         const extra = players
           .map((_, i) => i)

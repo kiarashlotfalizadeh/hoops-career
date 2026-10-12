@@ -11,7 +11,7 @@ import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
 import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
-import { p1, periodLabel, rosterNames, signed } from '../stats';
+import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 
@@ -59,8 +59,7 @@ export default function GameView() {
   ];
   const flowColors = matchupColors(home.colors, away.colors);
   const typeLabel =
-    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ??
-    (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season');
+    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular Season');
   return (
     <main className="page">
       <PageHeader
@@ -72,20 +71,20 @@ export default function GameView() {
       <Card accent>
         <div className="scorebug">
           <Link to={`/team/${away.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
-            <TeamLogo tid={away.tid} size={48} />
+            <TeamLogo tid={away.tid} size={48} decorative />
             <span className="bold">{away.abbrev}</span>
           </Link>
           <div className="row" style={{ gap: 14 }}>
             <span className="score" style={{ opacity: g.away.pts > g.home.pts ? 1 : 0.55 }}>
               {g.away.pts}
             </span>
-            <span className="dim small">{g.ot ? `F/${g.ot > 1 ? `${g.ot}OT` : 'OT'}` : 'FINAL'}</span>
+            <span className="dim small">{finalLabel(g.ot)}</span>
             <span className="score" style={{ opacity: g.home.pts > g.away.pts ? 1 : 0.55 }}>
               {g.home.pts}
             </span>
           </div>
           <Link to={`/team/${home.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
-            <TeamLogo tid={home.tid} size={48} />
+            <TeamLogo tid={home.tid} size={48} decorative />
             <span className="bold">{home.abbrev}</span>
           </Link>
         </div>
@@ -320,13 +319,18 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
   const rows = q ? pbp.filter((e) => e.q === q) : pbp;
   return (
     <>
-      <Chips value={q} onChange={setQ} options={[{ id: 0, label: 'All' }, ...Array.from({ length: periods }, (_, i) => ({ id: i + 1, label: periodLabel(i + 1) }))]} />
+      <Chips
+        label="Period"
+        value={q}
+        onChange={setQ}
+        options={[{ id: 0, label: 'All' }, ...Array.from({ length: periods }, (_, i) => ({ id: i + 1, label: periodLabel(i + 1) }))]}
+      />
       <Card>
         <div className="col" style={{ gap: 6 }}>
           {rows.map((e, i) => (
-            <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
+            <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
               <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>
-                {periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}
+                {periodLabel(e.q)} {fmtClock(e.clock)}
               </span>
               <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>
                 {e.text}
@@ -397,6 +401,7 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
   const rows = box.players.filter((p) => p.min > 0);
   const dnp = box.players.filter((p) => p.min <= 0);
   const name = boxNames(league, box, true);
+  const min = wholeMinutes(box.players);
   return (
     <Card title={title} className="flush">
       <div className="tablewrap" style={{ border: 'none', borderRadius: 0 }}>
@@ -432,7 +437,7 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
                     )}
                   </Link>
                 </td>
-                <td>{Math.round(p.min)}</td>
+                <td>{min(p.pid)}</td>
                 <td className="bold">{p.pts}</td>
                 <td>{p.orb + p.drb}</td>
                 <td>{p.ast}</td>

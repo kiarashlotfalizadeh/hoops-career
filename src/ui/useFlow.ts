@@ -58,10 +58,10 @@ export function useFlowRunner() {
         if (await task('Opening free agency', startFreeAgency)) nav('/free-agents');
         return;
       case 'faDay':
-        await task('Free agency', (l) => faAdvance(l, 1));
+        await task('Free Agency', (l) => faAdvance(l, 1));
         return;
       case 'faWeek':
-        await task('Free agency', (l) => faAdvance(l, 7));
+        await task('Free Agency', (l) => faAdvance(l, 7));
         return;
       case 'newSeason':
         if (!(await task('Training camp', newSeason))) return;

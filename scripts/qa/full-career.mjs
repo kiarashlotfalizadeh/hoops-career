@@ -88,7 +88,8 @@ if (await live.count()) {
   log('live game finished');
 } else await page.keyboard.press('Escape');
 await page.goto(`${base}/#/`);
-await play('Sim to trade deadline');
+// big news (a long injury, a trade request) pauses the sim: keep going until the deadline is reached
+for (let i = 0; i < 10 && (await play('Sim to trade deadline')); i++);
 await page.goto(`${base}/#/trade`);
 await page.waitForTimeout(800);
 await shot('04-trade');

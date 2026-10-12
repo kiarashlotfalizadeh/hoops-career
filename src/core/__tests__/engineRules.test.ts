@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { GameSim, type SimTeamInput } from '../sim/engine';
+import { GameSim, K, type SimTeamInput } from '../sim/engine';
+import { FINISH_LABEL } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
 import type { Team } from '../types';
@@ -102,7 +103,7 @@ describe('engine rules', () => {
     expect(new Set(t.on.map((x) => x.pid)).size).toBe(5);
   });
 
-  it('plays exactly 48 minutes, books the opening five as starters and gets a shot off late in a period', () => {
+  it('plays exactly 48 minutes (box score included), books the opening five as starters and gets a shot off late in a period', () => {
     for (let g = 0; g < 4; g++) {
       const sim = new GameSim(side(2), side(3), { rng: new Rng(300 + g), type: 'regular', injuries: false });
       const opening = sim.T.map((t) => t.on.map((p) => p.pid).sort((a, b) => a - b));
@@ -110,6 +111,9 @@ describe('engine rules', () => {
       const total = 5 * (48 + 5 * res.ot) * 60;
       for (const [i, tb] of [res.home, res.away].entries()) {
         expect(Math.abs(sim.T[i].players.reduce((a, p) => a + p.b.sec, 0) - total)).toBeLessThan(1e-6);
+        // the box score adds up too, to the tenth, and nobody who got on the floor shows 0 minutes
+        expect(Math.round(tb.players.reduce((a, p) => a + p.min, 0) * 10)).toBe(total / 6);
+        for (const p of sim.T[i].players) expect(tb.players.find((x) => x.pid === p.pid)!.min > 0).toBe(p.b.sec > 0);
         expect(
           tb.players
             .filter((p) => p.gs)
@@ -173,6 +177,40 @@ describe('engine rules', () => {
     expect(t.on.filter((p) => starters.includes(p.pid)).length).toBeGreaterThanOrEqual(3);
   });
 
+  it('empties the bench as soon as a game turns into a blowout, and lets manual subs expire', () => {
+    type G = {
+      q: number;
+      clock: number;
+      elapsed: number;
+      T: { score: number; garbage: boolean; subSig: string; subLock: Map<number, number>; on: { pid: number }[]; team: Team }[];
+      subSignature(t: unknown): string;
+      checkSubs(t: unknown): void;
+    };
+    const game = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false });
+    const sim = game as unknown as G;
+    const t = sim.T[0];
+    sim.q = 4;
+    sim.clock = 160;
+    t.score = 100;
+    sim.T[1].score = 82;
+    sim.checkSubs(t);
+    expect(t.garbage).toBe(false);
+    // 18 up with 2:29 left is a blowout: the bench comes in now, not at the next minute mark
+    t.subSig = sim.subSignature(t);
+    sim.clock = 149;
+    sim.checkSubs(t);
+    expect(t.garbage).toBe(true);
+    const starters = t.team.rotation.order.slice(0, 5);
+    expect(t.on.some((p) => starters.includes(p.pid))).toBe(false);
+    // a manual sub holds for four minutes, then the lock is gone
+    const bench = t.team.rotation.order.find((pid) => !t.on.some((p) => p.pid === pid))!;
+    expect(game.substitute(0, t.on[0].pid, bench)).toBe(true);
+    expect(t.subLock.size).toBe(2);
+    sim.elapsed += 241;
+    sim.checkSubs(t);
+    expect(t.subLock.size).toBe(0);
+  });
+
   it('allows only two timeouts after the 3:00 mark of the fourth quarter', () => {
     const game = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false });
     const sim = game as unknown as Internals & { T: { timeouts: number }[] };
@@ -208,7 +246,9 @@ describe('engine rules', () => {
       const sim = new GameSim(side(6), side(7), { rng: new Rng(70 + g), type: 'regular', record: true, injuries: false });
       const res = sim.simToEnd();
       for (const l of sim.drainLogs()) {
-        if (l.steps.some((s) => s.k === 'ft') && !l.steps.some((s) => s.k === 'shot')) expect(['pnrBH', 'iso', 'misc']).toContain(l.finish);
+        // a reach-in in the penalty counts for the action, made or missed; only late intentional fouls are 'misc'
+        if (l.steps.some((s) => s.k === 'ft') && !l.steps.some((s) => s.k === 'shot')) expect(l.kind === 'ft' ? ['misc'] : ['pnrBH', 'iso']).toContain(l.finish);
+        if (!l.steps.some((s) => s.k === 'shot')) expect(l.finish).not.toBe('putback');
       }
       for (const tb of [res.home, res.away]) {
         const onCourtFta = sim
@@ -273,10 +313,29 @@ describe('engine rules', () => {
   });
 
   it('logs subs, timeouts and period changes, with clean punctuation and distinct names', () => {
-    const res = new GameSim(side(10), side(11), { rng: new Rng(5), type: 'regular', record: true }).simToEnd();
+    const sim = new GameSim(side(10), side(11), { rng: new Rng(5), type: 'regular', record: true });
+    const res = sim.simToEnd();
     const pbp = res.pbp!;
+    // the court shows each timeout as the next possession's first beat, and gives every possession a headline
+    const logs = sim.drainLogs();
+    expect(logs.some((l) => l.steps[0]?.k === 'timeout')).toBe(true);
+    for (const l of logs) {
+      expect(l.steps.findIndex((st) => st.k === 'timeout')).toBeLessThanOrEqual(0);
+      expect(l.label).not.toBe(FINISH_LABEL.misc);
+      for (const st of l.steps) if (st.k === 'pass') expect(st.pid2).not.toBe(st.pid);
+    }
     for (const kind of ['sub', 'timeout', 'period'] as const) expect(pbp.some((e) => e.kind === kind && e.text.length > 8)).toBe(true);
     for (const e of pbp) expect(e.text).not.toMatch(/[!.?]\.$|\.\.|\s\./);
+    // an and-one names the fouler, an alley-oop always has its assist, and a three is a three-pointer
+    expect(pbp.some((e) => / — good.*, and one! Foul on .+\.$/.test(e.text))).toBe(true);
+    for (const e of pbp) {
+      if (e.text.includes('and one')) expect(e.text).toMatch(/and one! Foul on .+\.$/);
+      if (e.text.includes('alley-oop — good')) expect(e.text).toMatch(/assist\)/);
+      expect(e.text).not.toMatch(/(misses|fouled on) three(\.| by)/);
+    }
+    // a rebound line names a player only when the box score credits him (the rest are team rebounds)
+    const named = pbp.filter((e) => /^(Offensive|Defensive) rebound /.test(e.text)).length;
+    expect(named).toBe(res.home.t.orb + res.home.t.drb + res.away.t.orb + res.away.t.drb);
     expect(res.flowPeriods!.slice(0, 4)).toEqual([...res.flowPeriods!.slice(0, 4)].sort((a, b) => a - b));
     expect(res.flowPeriods!.length).toBe(4 + res.ot);
     expect(res.flowPeriods![0]).toBe(0);
@@ -325,6 +384,68 @@ describe('engine rules', () => {
     const a = run();
     expect(a.changes).toBeGreaterThan(0);
     expect(run()).toEqual(a);
+  });
+
+  it('draws the overtime jump ball from its own stream, so paired games stay paired', () => {
+    type O = { q: number; clock: number; poss: number; rng: Rng; endPeriod(): boolean };
+    const winners = new Set<number>();
+    for (let k = 0; k < 8; k++) {
+      const sim = new GameSim(side(0), side(1), { rng: new Rng(3), type: 'regular', injuries: false }) as unknown as O;
+      sim.q = 4;
+      sim.clock = 0;
+      // a different last possession of regulation
+      for (let i = 0; i < k; i++) sim.rng.next();
+      expect(sim.endPeriod()).toBe(true);
+      winners.add(sim.poss);
+    }
+    expect(winners.size).toBe(1);
+  });
+
+  it('never injures a player twice when nobody is left to replace him', () => {
+    type I = { T: { on: { pid: number }[]; players: { on: boolean; out: number }[] }[]; injuries: { pid: number }[]; injuryCheck(): void };
+    const sim = new GameSim(side(0), side(1), { rng: new Rng(4), type: 'regular' }) as unknown as I;
+    for (const p of sim.T[0].players) if (!p.on) p.out = 2;
+    const rate = K.injuryRate;
+    K.injuryRate = 1;
+    try {
+      sim.injuryCheck();
+      sim.injuryCheck();
+    } finally {
+      K.injuryRate = rate;
+    }
+    expect(sim.injuries.length).toBe(2);
+    expect(new Set(sim.injuries.map((i) => i.pid)).size).toBe(2);
+  });
+
+  it('sets ball screens with the preferred screeners in the order listed', () => {
+    const order = league.teams[20].rotation.order;
+    const [first, second] = [order[4], order[3]];
+    const sim = new GameSim(side(20, { offense: { screeners: [first, second] } }), side(21), { rng: new Rng(12), type: 'regular', record: true, injuries: false });
+    sim.simToEnd();
+    let screens = 0;
+    for (const l of sim.drainLogs()) {
+      if (l.off !== 0) continue;
+      for (const st of l.steps) {
+        if (st.k !== 'screen' || st.pid2 === first || !l.on[0].includes(first)) continue;
+        screens++;
+        expect(st.pid).toBe(first);
+      }
+    }
+    expect(screens).toBeGreaterThan(5);
+  });
+
+  it('credits double teams to the Star plan only when the plan sent them', () => {
+    const doubles = (plan: 'none' | 'double') => {
+      let n = 0;
+      for (let g = 0; g < 6; g++) {
+        const d = { defense: { starPlan: plan, starTarget: null, help: 90, scheme: 'man' as const } };
+        const res = new GameSim(side(18, d), side(19, d), { rng: new Rng(30 + g), type: 'regular', injuries: false }).simToEnd();
+        n += res.impacts!.filter((i) => i.key.startsWith('star_double')).length;
+      }
+      return n;
+    };
+    expect(doubles('none')).toBe(0);
+    expect(doubles('double')).toBeGreaterThan(0);
   });
 
   it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {

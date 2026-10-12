@@ -560,13 +560,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                   <td className="l sticky">
                     <div className="fo-ct-name">
                       <div className="row" style={{ gap: 5 }}>
-                        <button
-                          type="button"
-                          className="fo-name small"
-                          style={{ maxWidth: 96, textAlign: 'left' }}
-                          aria-haspopup="dialog"
-                          onClick={(e) => (e.stopPropagation(), onPick(p.pid))}
-                        >
+                        <button type="button" className="fo-name small" style={{ textAlign: 'left' }} aria-haspopup="dialog" onClick={(e) => (e.stopPropagation(), onPick(p.pid))}>
                           {nameOf(p.pid)}
                         </button>
                         {p.contract.rookie && (
@@ -615,9 +609,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
               <tr key={`dead-${pid}`} className="dead">
                 <td className="l sticky">
                   <div className="fo-ct-name">
-                    <span className="fo-name small" style={{ maxWidth: 120, display: 'inline-block' }}>
-                      {d.name}
-                    </span>
+                    <div className="fo-name small">{d.name}</div>
                     <div className="tiny">dead money</div>
                   </div>
                 </td>
@@ -674,7 +666,7 @@ function PlayerContractSheet({ pid, onClose }: { pid: number | null; onClose: ()
   const p = pid !== null ? league.players[pid] : undefined;
   const open = !!p && p.tid === league.userTid;
   return (
-    <Sheet open={open} onClose={onClose}>
+    <Sheet open={open} onClose={onClose} label={p ? `${playerName(p)}: contract` : undefined}>
       {open && p && <PlayerContractBody key={p.pid} p={p} onClose={onClose} />}
     </Sheet>
   );

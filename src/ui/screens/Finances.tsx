@@ -259,8 +259,8 @@ function BudgetTab({ team }: { team: Team }) {
               })()}
             </div>
             <Slider
-              // a plain-text label also names the slider for screen readers
               label={`Level ${lvl}`}
+              name={`${it.label} level`}
               value={lvl}
               min={1}
               max={100}
