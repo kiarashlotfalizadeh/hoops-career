@@ -33,7 +33,7 @@ import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { BBREF_TO_TID } from '../../src/core/teams';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
 import { clamp } from '../../src/core/random';
-import { seasonLabel } from '../../src/core/constants';
+import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
 
@@ -70,10 +70,13 @@ async function main() {
     console.log(`season ${s}: ${parsed.rows.length} per-game rows`);
   }
   const rosters: RosterRow[] = [];
+  const noRoster: string[] = [];
   for (const s of ROSTER_SEASONS)
     for (const t of TEAM_CODES) {
       const html = read(`roster_${t}_${s}`);
-      if (html) rosters.push(...parseRoster(html, t, s));
+      const rows = html ? parseRoster(html, t, s) : [];
+      if (!rows.length) noRoster.push(`${t} ${s}${html ? ' (empty)' : ''}`);
+      rosters.push(...rows);
     }
   const drafts: DraftRow[] = [];
   const noDraftPage: number[] = [];
@@ -83,6 +86,7 @@ async function main() {
     else noDraftPage.push(y);
   }
   console.log(`rosters: ${rosters.length} rows, drafts: ${drafts.length} picks`);
+  if (noRoster.length) console.warn(`  no roster rows for ${noRoster.join(', ')}: their players get no bio, jersey or position from those pages`);
   if (noDraftPage.length) console.warn(`  no draft page for ${noDraftPage.join(', ')}: players drafted then are seeded as undrafted`);
 
   const byId = <T extends { id: string }>(rows: T[]) => {
@@ -108,10 +112,16 @@ async function main() {
   for (const r of rosters) if (['PG', 'SG', 'SF', 'PF', 'C'].includes(r.posRaw)) rosterFive.set(r.id, r.posRaw);
   /** Players whose position is inferred from G/F/C + ratings (re-inferred after calibration). */
   const inferredPos = new Map<number, string>();
-  const contractById = new Map<string, ContractRow>(contracts.map((c) => [c.id, c]));
+  // a waived player's dead money is listed like a contract: drop rows under the minimum salary for
+  // players on no current-season roster page (two-way and minimum deals are on one)
+  const current = new Set(rosters.filter((r) => r.season === SEED_SEASON).map((r) => r.id));
+  const deadMoney = contracts.filter((c) => current.size > 0 && (c.salaries[0] ?? 0) < CAP.minContract && !current.has(c.id));
+  if (deadMoney.length) console.log(`  dead money, not seeded as contracts: ${deadMoney.map((c) => `${c.name} (${c.team} $${c.salaries[0] ?? 0}K)`).join(', ')}`);
+  const signed = contracts.filter((c) => !deadMoney.includes(c));
+  const contractById = new Map<string, ContractRow>(signed.map((c) => [c.id, c]));
 
   // universe: everyone under contract + recent rotation players who are unsigned
-  const ids = new Set<string>(contracts.map((c) => c.id));
+  const ids = new Set<string>(signed.map((c) => c.id));
   const fa = [...pgById.entries()]
     .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === SEED_SEASON - 1 && r.g * r.mp >= 250))
     .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === SEED_SEASON - 1 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
@@ -182,6 +192,8 @@ async function main() {
       const md = Number(ros.birthDate.slice(4));
       bornYear = y + (md > 201 ? 1 : 0);
     } else if (lastStat) bornYear = lastStat.season - lastStat.age;
+    else if (dr)
+      bornYear = dr.year - 19; // drafted at about 19
     else bornYear = SEED_SEASON - 21;
     const age = SEED_SEASON - bornYear;
     // box-score position (latest season, main team), else last season's roster page, else
@@ -296,7 +308,7 @@ async function main() {
       weightLb,
       bornYear,
       country: COUNTRY_NAMES[ros?.country ?? 'US'] ?? ros?.country ?? 'USA',
-      college: ros?.college ?? dr?.college ?? '',
+      college: ros?.college || dr?.college || '',
       jersey: ros?.jersey ?? '',
       team: c ? c.team : null,
       contract: c && c.salaries.length ? { salaries: c.salaries, option: lastOpt === 'player' || lastOpt === 'team' ? lastOpt : undefined } : null,
@@ -311,6 +323,8 @@ async function main() {
   console.log(
     `players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`,
   );
+  const noBio = players.filter((p) => p.team && !rosterById.has(p.id));
+  if (noBio.length) console.warn(`  under contract but on no roster page (size, age and country estimated): ${noBio.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}`);
   // experience comes from the draft year, so every player needs one: undrafted players get their entry class
   const undrafted = players.filter((p) => p.draft && !p.draft.round);
   const early = undrafted.filter((p) => p.draft!.year < DRAFT_YEARS[0]);
