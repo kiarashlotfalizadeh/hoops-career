@@ -138,8 +138,7 @@ export function processPlayoffResult(league: League, g: ScheduledGame, homeWon: 
     curTeamSeason(league, s.winner).playoffRound = s.round + 1;
     curTeamSeason(league, loser).playoffRound = s.round;
     const res = `${Math.max(s.highWins, s.lowWins)}-${Math.min(s.highWins, s.lowWins)}`;
-    const roundName = s.round === 4 ? 'NBA Finals' : s.round === 3 ? 'Conference Finals' : s.round === 2 ? 'Conference Semifinals' : 'First Round';
-    addNews(league, { kind: 'general', text: `${teamName(wt)} defeat the ${lt.name} ${res} in the ${roundName}.`, tids: [wt.tid, lt.tid], pids: [] });
+    addNews(league, { kind: 'general', text: `The ${teamName(wt)} beat the ${teamName(lt)} ${res} in the ${seriesLabel(s)}.`, tids: [wt.tid, lt.tid], pids: [] });
     advanceRounds(league);
   }
   // the next game (or the next round's opener) goes on the calendar as soon as it's known

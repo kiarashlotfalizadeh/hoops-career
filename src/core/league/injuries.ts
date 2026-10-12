@@ -61,6 +61,12 @@ export function injuryText(type: string, article = false): string {
   return `${an ? 'an' : 'a'} ${text}`;
 }
 
+/** What the medical staff says about the lasting damage major and severe injuries do (see applyInjury). */
+const LASTING: Partial<Record<Injury['severity'], string>> = {
+  major: ' Injuries like this can take a little off his speed and athleticism for good.',
+  severe: ' This is a long-term injury and may permanently sap some of his explosiveness.',
+};
+
 export function applyInjury(league: League, p: Player, rng: Rng) {
   const inj = rollInjury(league, p, rng);
   p.injury = inj;
@@ -85,7 +91,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
       important: inj.gamesRemaining >= 15 && core.includes(p.pid),
       from: 'Medical Staff',
       subject: `${playerName(p)}: ${inj.type}`,
-      body: `${playerName(p)} is out with ${injuryText(inj.type, true)} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${inj.severity === 'severe' ? ' This is a long-term injury and may permanently sap some of his explosiveness.' : ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
+      body: `${playerName(p)} is out with ${injuryText(inj.type, true)} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${LASTING[inj.severity] ?? ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });

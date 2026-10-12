@@ -35,6 +35,7 @@ import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
+import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
 import { askingContract, releasePlayer, resolveOptions, valueScore } from './contracts';
@@ -251,14 +252,23 @@ function endRegularSeason(league: League) {
     });
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
-  if (mine?.tax)
+  if (mine?.tax) {
+    // the seeds are final: in the top six, in the play-in or out
+    const rank = confStandings(league, league.teams[league.userTid].conf).findIndex((r) => r.tid === league.userTid) + 1;
+    const bill = `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season`;
     addInbox(league, {
       from: 'Owner',
       subject: 'Luxury tax bill',
-      body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`,
+      body:
+        rank <= 6
+          ? `${bill}. Make it count in the playoffs.`
+          : rank <= 10
+            ? `${bill}, and we still have to get through the play-in. Make it count.`
+            : `${bill} for a team that missed the postseason. That can't happen again.`,
       tone: 'bad',
       link: '/finances',
     });
+  }
   if (mine?.shortfall)
     addInbox(league, {
       from: 'Owner',
@@ -334,7 +344,13 @@ function retirements(league: League, rng: Rng) {
       if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
   }
-  if (retiredNow.length) addNews(league, { kind: 'retire', text: `Retirements: ${retiredNow.slice(0, 12).join(', ')}${retiredNow.length > 12 ? '…' : ''}.`, tids: [], pids: [] });
+  if (retiredNow.length)
+    addNews(league, {
+      kind: 'retire',
+      text: `Retirements: ${retiredNow.slice(0, 12).join(', ')}${retiredNow.length > 12 ? `, and ${retiredNow.length - 12} more` : ''}.`,
+      tids: [],
+      pids: [],
+    });
 }
 
 function endPlayoffs(league: League) {
@@ -518,12 +534,18 @@ export function newSeason(league: League): boolean {
     }
     const prog = annualProgression(league, rng);
     const mine = prog.filter((x) => league.players[x.pid]?.tid === league.userTid).sort((a, b) => b.delta - a.delta);
-    if (mine.length) {
+    const up = mine.filter((x) => x.delta > 0).slice(0, 3);
+    const down = mine
+      .filter((x) => x.delta < 0)
+      .slice(-3)
+      .reverse();
+    if (up.length || down.length) {
       const fmt = (x: { pid: number; delta: number }) => `${playerName(league.players[x.pid])} ${x.delta > 0 ? '+' : ''}${x.delta} (now ${league.players[x.pid].ovr})`;
+      const line = (label: string, xs: typeof mine) => (xs.length ? `${label}${xs.length > 1 ? 's' : ''}: ${xs.map(fmt).join(', ')}.` : '');
       addInbox(league, {
         from: 'Player Development',
         subject: 'Training camp report',
-        body: `Biggest risers: ${mine.slice(0, 3).map(fmt).join(', ')}.\nBiggest drops: ${mine.slice(-3).reverse().map(fmt).join(', ')}.`,
+        body: [line('Biggest riser', up), line('Biggest drop', down)].filter(Boolean).join('\n'),
         tone: 'neutral',
         link: '/roster',
       });
