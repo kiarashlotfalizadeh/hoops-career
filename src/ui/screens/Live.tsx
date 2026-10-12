@@ -725,7 +725,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Tick
     >
       <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}`}>
         <div className="row" style={{ gap: 6, minWidth: 0 }}>
-          <TeamLogo tid={away.tid} size={28} />
+          <TeamLogo tid={away.tid} size={28} decorative />
           <div style={{ minWidth: 0 }}>
             <div className="bold">{away.abbrev}</div>
             <div className="tiny dim nowrap">
@@ -751,7 +751,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Tick
           </span>
         </div>
         <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
-          <TeamLogo tid={home.tid} size={28} />
+          <TeamLogo tid={home.tid} size={28} decorative />
           <div className="right" style={{ minWidth: 0 }}>
             <div className="bold">{home.abbrev}</div>
             <div className="tiny dim nowrap">
@@ -917,6 +917,7 @@ function TacticsPanel({
           Pick & roll coverage
         </div>
         <Chips
+          label="Pick & roll coverage"
           value={t.defense.pnr}
           onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
           options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
@@ -936,6 +937,7 @@ function TacticsPanel({
           Full-court press
         </div>
         <Chips
+          label="Full-court press"
           value={t.defense.press}
           onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
           options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
@@ -946,6 +948,7 @@ function TacticsPanel({
           Star plan
         </div>
         <Chips
+          label="Star plan"
           value={t.defense.starPlan}
           onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))}
           options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}

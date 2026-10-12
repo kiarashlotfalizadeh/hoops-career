@@ -64,7 +64,7 @@ export default function Start() {
       <div className="col" style={{ alignItems: 'center', textAlign: 'center', marginTop: 28, gap: 6 }}>
         <div className="row" style={{ gap: 6 }}>
           {[19, 13, 20, 1, 7].map((tid) => (
-            <TeamLogo key={tid} tid={tid} size={30} />
+            <TeamLogo key={tid} tid={tid} size={30} decorative />
           ))}
         </div>
         <h1 style={{ fontSize: 46, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 10 }}>Hoops Career</h1>
@@ -87,7 +87,7 @@ export default function Start() {
               const tid = FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
               return (
                 <div key={m.id} className="listrow clickable" role="button" tabIndex={0} onClick={() => void open(m.id)} onKeyDown={activateOnKey(() => void open(m.id))}>
-                  <TeamLogo tid={tid >= 0 ? tid : 0} size={38} />
+                  <TeamLogo tid={tid >= 0 ? tid : 0} size={38} decorative />
                   <div className="grow">
                     <div className="bold ellipsis">{m.name}</div>
                     {/* two lines, so the record isn't the part a phone cuts off */}

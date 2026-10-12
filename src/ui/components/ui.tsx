@@ -135,19 +135,22 @@ export function Segmented<T extends string>({
   );
 }
 
+/** One-of-several chips (toggle buttons); `label` names the group for screen readers. */
 export function Chips<T extends string | number>({
   value,
   options,
   onChange,
   disabled,
+  label,
 }: {
   value: T;
   options: { id: T; label: ReactNode }[];
   onChange: (v: T) => void;
   disabled?: boolean;
+  label?: string;
 }) {
   return (
-    <div className="chips">
+    <div className="chips" role={label ? 'group' : undefined} aria-label={label}>
       {options.map((o) => (
         <button key={String(o.id)} className={`chip ${value === o.id ? 'on' : ''}`} aria-pressed={value === o.id} disabled={disabled} onClick={() => onChange(o.id)}>
           {o.label}

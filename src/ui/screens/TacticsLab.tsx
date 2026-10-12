@@ -204,7 +204,7 @@ export default function TacticsLab() {
                 className="col"
                 style={{ alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}
               >
-                <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} />
+                <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} decorative />
                 <span className="tiny bold">{t.abbrev}</span>
               </button>
             ))}
@@ -253,6 +253,7 @@ export default function TacticsLab() {
       </div>
       <div className="row">
         <Chips
+          label="Games to simulate"
           value={games}
           onChange={setGames}
           disabled={busy}

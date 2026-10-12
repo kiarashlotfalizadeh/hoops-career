@@ -125,7 +125,7 @@ export default function Settings() {
 
       <Card className="fo-hero">
         <div className="row" style={{ gap: 12 }}>
-          <TeamLogo tid={team.tid} size={52} />
+          <TeamLogo tid={team.tid} size={52} decorative />
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="fo-eyebrow">Your career</div>
             <div className="fo-mid ellipsis">
@@ -173,6 +173,7 @@ export default function Settings() {
           <div className="col" style={{ gap: 8 }}>
             <div className="bold">Difficulty</div>
             <Chips
+              label="Difficulty"
               value={st.difficulty}
               onChange={(d) => mutate((l) => (l.settings.difficulty = d))}
               options={[
@@ -187,6 +188,7 @@ export default function Settings() {
           <div className="col" style={{ gap: 8 }}>
             <div className="bold">Coaching depth</div>
             <Chips
+              label="Coaching depth"
               value={st.complexity}
               onChange={(c) => mutate((l) => (l.settings.complexity = c))}
               options={[
@@ -201,6 +203,7 @@ export default function Settings() {
           <div className="col" style={{ gap: 8 }}>
             <div className="bold">Live game speed</div>
             <Chips
+              label="Live game speed"
               value={st.liveSpeed || 1}
               onChange={(s) => mutate((l) => (l.settings.liveSpeed = s))}
               options={[
@@ -357,6 +360,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
         <Segmented
           value={conf}
           onChange={setConf}
+          label="Conference"
           options={[
             { id: 'E', label: 'East' },
             { id: 'W', label: 'West' },
@@ -385,7 +389,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
                   }}
                   onClick={() => setPick(x.tid)}
                 >
-                  <TeamLogo tid={x.tid} size={38} />
+                  <TeamLogo tid={x.tid} size={38} decorative />
                   <span className="small bold ellipsis" style={{ maxWidth: '100%' }}>
                     {x.name}
                   </span>
@@ -409,7 +413,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
           {t && (
             <div className="card tight">
               <div className="row" style={{ gap: 10 }}>
-                <TeamLogo tid={t.tid} size={36} />
+                <TeamLogo tid={t.tid} size={36} decorative />
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="bold ellipsis">
                     {t.region} {t.name}

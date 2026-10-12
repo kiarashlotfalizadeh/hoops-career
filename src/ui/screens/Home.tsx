@@ -118,7 +118,7 @@ export default function Home() {
           </div>
           <div className="scorebug" style={{ marginTop: 12 }}>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
-              <TeamLogo tid={next.away} size={54} />
+              <TeamLogo tid={next.away} size={54} decorative />
               <div className="bold">{league.teams[next.away].abbrev}</div>
               <div className="tiny dim num">
                 {curTeamSeason(league, next.away).won}-{curTeamSeason(league, next.away).lost}
@@ -128,7 +128,7 @@ export default function Home() {
               @
             </div>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
-              <TeamLogo tid={next.home} size={54} />
+              <TeamLogo tid={next.home} size={54} decorative />
               <div className="bold">{league.teams[next.home].abbrev}</div>
               <div className="tiny dim num">
                 {curTeamSeason(league, next.home).won}-{curTeamSeason(league, next.home).lost}
@@ -320,7 +320,7 @@ export default function Home() {
                 <span className="num dim" style={{ width: 18 }}>
                   {r.confRank}
                 </span>
-                <TeamLogo tid={r.tid} size={22} />
+                <TeamLogo tid={r.tid} size={22} decorative />
                 <span className="grow">{league.teams[r.tid].name}</span>
                 <span className="num">
                   {r.won}-{r.lost}
@@ -371,7 +371,7 @@ export default function Home() {
                     <span className="small dim" style={{ width: 22 }}>
                       {home ? 'vs' : '@'}
                     </span>
-                    <TeamLogo tid={them.tid} size={22} />
+                    <TeamLogo tid={them.tid} size={22} decorative />
                     <span className="grow">{league.teams[them.tid].name}</span>
                     <span className="num bold">
                       {us.pts}-{them.pts}

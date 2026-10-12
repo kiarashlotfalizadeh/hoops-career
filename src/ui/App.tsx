@@ -194,7 +194,7 @@ function TopBar() {
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
         <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')} aria-label={`${t.region} ${t.name}, ${ts.won}-${ts.lost}, ${status}. Home`}>
-          <TeamLogo tid={t.tid} size={34} />
+          <TeamLogo tid={t.tid} size={34} decorative />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
               {t.abbrev}{' '}

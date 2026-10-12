@@ -71,7 +71,7 @@ export default function GameView() {
       <Card accent>
         <div className="scorebug">
           <Link to={`/team/${away.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
-            <TeamLogo tid={away.tid} size={48} />
+            <TeamLogo tid={away.tid} size={48} decorative />
             <span className="bold">{away.abbrev}</span>
           </Link>
           <div className="row" style={{ gap: 14 }}>
@@ -84,7 +84,7 @@ export default function GameView() {
             </span>
           </div>
           <Link to={`/team/${home.tid}`} className="col" style={{ alignItems: 'center', gap: 4 }}>
-            <TeamLogo tid={home.tid} size={48} />
+            <TeamLogo tid={home.tid} size={48} decorative />
             <span className="bold">{home.abbrev}</span>
           </Link>
         </div>
@@ -319,7 +319,12 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
   const rows = q ? pbp.filter((e) => e.q === q) : pbp;
   return (
     <>
-      <Chips value={q} onChange={setQ} options={[{ id: 0, label: 'All' }, ...Array.from({ length: periods }, (_, i) => ({ id: i + 1, label: periodLabel(i + 1) }))]} />
+      <Chips
+        label="Period"
+        value={q}
+        onChange={setQ}
+        options={[{ id: 0, label: 'All' }, ...Array.from({ length: periods }, (_, i) => ({ id: i + 1, label: periodLabel(i + 1) }))]}
+      />
       <Card>
         <div className="col" style={{ gap: 6 }}>
           {rows.map((e, i) => (

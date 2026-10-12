@@ -324,6 +324,7 @@ export default function Tactics() {
         <>
           <Card title="Base scheme">
             <Chips
+              label="Base scheme"
               value={t.defense.scheme}
               onChange={(x: DefScheme) => edit((tt) => void (tt.defense.scheme = x))}
               options={(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))}
@@ -345,6 +346,7 @@ export default function Tactics() {
             }
           >
             <Chips
+              label="Pick & roll coverage"
               value={t.defense.pnr}
               onChange={(x: PnrCoverage) => edit((tt) => void (tt.defense.pnr = x))}
               options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
@@ -414,6 +416,7 @@ export default function Tactics() {
           </Card>
           <Card title="Full-court press">
             <Chips
+              label="Full-court press"
               value={t.defense.press}
               onChange={(x: PressMode) => edit((tt) => void (tt.defense.press = x))}
               options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
@@ -427,6 +430,7 @@ export default function Tactics() {
             right={<Help title="Star plan">Applies to the opponent's primary creator each game (you can target a specific player in the Tactics Lab and during live games).</Help>}
           >
             <Chips
+              label="Star plan"
               value={t.defense.starPlan}
               onChange={(x: StarPlan) => edit((tt) => void (tt.defense.starPlan = x))}
               options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
@@ -715,6 +719,7 @@ function ManageTab({ t, edit }: { t: TacticsT; edit: (fn: (t: TacticsT) => void)
               Foul trouble
             </div>
             <Chips
+              label="Foul trouble"
               value={t.manage.foulTrouble}
               onChange={(x: TacticsT['manage']['foulTrouble']) => edit((tt) => void (tt.manage.foulTrouble = x))}
               options={[
