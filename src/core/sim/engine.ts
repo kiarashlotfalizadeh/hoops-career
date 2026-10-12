@@ -1220,6 +1220,7 @@ export class GameSim {
     this.secondChance = false;
     this.inTransition = false;
     this.possFinish = 'misc';
+    this.lastShooter = null;
     this.possCtxForTOPts = ctx;
     const clockStart = this.clock;
     if (this.record) {
@@ -2804,27 +2805,34 @@ export class GameSim {
     if (glass !== 1) this.impact('crash_orb', off.side, K.orbBase * (glass - 1) * K.orbPts);
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {
-      const ws = off.on.map((p) => Math.pow(p.c.orb, 2) * p.tor * (p === this.lastShooter ? 1.3 : 1));
+      // the shooter has a step on his own miss (not on a free throw)
+      const ws = off.on.map((p) => Math.pow(p.c.orb, 2) * p.tor * (p === this.lastShooter && !ft ? 1.3 : 1));
       const r = off.on[this.rng.weighted(ws)];
-      // a few loose balls are team rebounds (out of bounds off the defense, tie-ups): no credit
-      if (!this.rng.chance(K.teamReb.orb)) {
+      // a few loose balls are team rebounds (out of bounds off the defense, tie-ups): nobody is credited, and nobody puts it back
+      const team = this.rng.chance(K.teamReb.orb);
+      if (!team) {
         r.b.orb++;
         off.tot.orb++;
       }
-      if (this.record) this.addPbp(off.side, `Offensive rebound ${r.name}.`, 'other');
-      if (this.record) this.cur!.steps.push({ k: 'reb', pid: r.pid });
+      if (this.record) {
+        this.addPbp(off.side, team ? `${off.team.abbrev} team rebound.` : `Offensive rebound ${r.name}.`, 'other');
+        this.cur!.steps.push(team ? { k: 'reb' } : { k: 'reb', pid: r.pid });
+      }
       this.ctx = 'orb';
-      this.continueAfterOrb(off, def, r);
+      this.continueAfterOrb(off, def, team ? null : r);
       return;
     }
     const ws = def.on.map((p) => Math.pow(p.c.drb, 2.2) * p.tdr);
     const r = def.on[this.rng.weighted(ws)];
-    if (!this.rng.chance(K.teamReb.drb)) {
+    const team = this.rng.chance(K.teamReb.drb);
+    if (!team) {
       r.b.drb++;
       def.tot.drb++;
     }
-    if (this.record) this.cur!.steps.push({ k: 'reb', pid: r.pid });
-    if (this.record) this.addPbp(def.side, `Defensive rebound ${r.name}.`, 'other');
+    if (this.record) {
+      this.cur!.steps.push(team ? { k: 'reb' } : { k: 'reb', pid: r.pid });
+      this.addPbp(def.side, team ? `${def.team.abbrev} team rebound.` : `Defensive rebound ${r.name}.`, 'other');
+    }
     this.ctx = 'dreb';
     this.finishPoss(off, def, this.possFinish);
   }

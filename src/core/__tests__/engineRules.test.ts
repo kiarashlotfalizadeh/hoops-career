@@ -316,6 +316,9 @@ describe('engine rules', () => {
     const pbp = res.pbp!;
     for (const kind of ['sub', 'timeout', 'period'] as const) expect(pbp.some((e) => e.kind === kind && e.text.length > 8)).toBe(true);
     for (const e of pbp) expect(e.text).not.toMatch(/[!.?]\.$|\.\.|\s\./);
+    // a rebound line names a player only when the box score credits him (the rest are team rebounds)
+    const named = pbp.filter((e) => /^(Offensive|Defensive) rebound /.test(e.text)).length;
+    expect(named).toBe(res.home.t.orb + res.home.t.drb + res.away.t.orb + res.away.t.drb);
     expect(res.flowPeriods!.slice(0, 4)).toEqual([...res.flowPeriods!.slice(0, 4)].sort((a, b) => a - b));
     expect(res.flowPeriods!.length).toBe(4 + res.ot);
     expect(res.flowPeriods![0]).toBe(0);
