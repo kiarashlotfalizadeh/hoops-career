@@ -462,12 +462,7 @@ export function StatTable<T>({
     if (!sort) return rows;
     const col = cols.find((c) => c.key === sort.key);
     if (!col) return rows;
-    return [...rows].sort((a, b) => {
-      const va = col.get(a);
-      const vb = col.get(b);
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sort.dir;
-      return String(va).localeCompare(String(vb)) * sort.dir;
-    });
+    return [...rows].sort((a, b) => compareCells(col.get(a), col.get(b), sort.dir));
   }, [rows, cols, sort]);
   return (
     <div className="tablewrap" style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
@@ -516,6 +511,19 @@ export function StatTable<T>({
       </table>
     </div>
   );
+}
+
+/**
+ * A sorted column's order. A number that isn't there (NaN or ±Infinity: no PER outside imported
+ * seasons, no line yet) goes last either way, instead of scrambling the order around it.
+ */
+export function compareCells(va: number | string, vb: number | string, dir: 1 | -1): number {
+  if (typeof va === 'number' && typeof vb === 'number') {
+    const [ma, mb] = [!isFinite(va), !isFinite(vb)];
+    if (ma || mb) return Number(ma) - Number(mb);
+    return (va - vb) * dir;
+  }
+  return String(va).localeCompare(String(vb)) * dir;
 }
 
 export function fmtNum(v: number, d = 1) {
