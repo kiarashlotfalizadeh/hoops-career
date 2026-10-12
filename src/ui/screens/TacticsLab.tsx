@@ -9,7 +9,7 @@ import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../../core/league/games';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
-import { IMPACT_TEXT, impactSentence, teamRef } from '../../core/analysis/gameReport';
+import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet, Spinner, Tag } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
@@ -396,6 +396,8 @@ export default function TacticsLab() {
 function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid: number }) {
   const me = league.teams[league.userTid];
   const them = league.teams[oppTid];
+  // advice only for what your tactics for this opponent still do: no "go back to man-to-man" from man-to-man
+  const tactics = useLeagueMemo(() => sideFor(league, league.userTid, oppTid).team.tactics, [league, oppTid]);
   const names = rosterNames(
     Object.keys(r.players)
       .map((pid) => league.players[+pid])
@@ -492,7 +494,7 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
         <Card title="What drives the result">
           <div className="col" style={{ gap: 8 }}>
             {impacts.map(([k, v]) => {
-              const tpl = IMPACT_TEXT[k];
+              const advice = v < 0 ? impactAdvice(k, tactics) : undefined;
               const X = teamRef(v >= 0 ? me : them);
               const Y = teamRef(v >= 0 ? them : me);
               return (
@@ -502,7 +504,7 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
                   </span>
                   <div className="grow">
                     <div>{impactSentence(k, X, Y)}</div>
-                    {v < 0 && tpl.advice && <div className="tiny dim">{adviceFor(tpl.advice, league.settings.complexity)}</div>}
+                    {advice && <div className="tiny dim">{adviceFor(advice, league.settings.complexity)}</div>}
                   </div>
                 </div>
               );
