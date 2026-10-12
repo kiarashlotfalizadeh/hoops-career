@@ -1084,6 +1084,10 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   align-items: center;
   gap: 10px;
 }
+/* while it shows, the end of the page clears it (it is about 56px tall; office.css lifts its docks) */
+body:has(.simbar) .page {
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 80px);
+}
 
 /* ------------------------------------------------------------------ misc */
 .kpi {
@@ -1265,8 +1269,8 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   padding-right: var(--safe-r);
 }
 /* typing: the on-screen keyboard pushes fixed bars up, so get the nav out of the way */
-body:has(.input:focus) .bottomnav,
-body:has(.input:focus) .simbar {
+body:has(.input:focus, .lg-search input:focus) .bottomnav,
+body:has(.input:focus, .lg-search input:focus) .simbar {
   display: none;
 }
 

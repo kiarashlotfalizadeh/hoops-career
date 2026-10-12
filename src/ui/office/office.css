@@ -457,6 +457,10 @@
   padding: 10px 12px 12px;
   box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.45);
 }
+/* a running sim's bar (theme.css .simbar) sits where the dock would: the dock rides above it */
+body:has(.simbar) .fo-dock {
+  bottom: calc(var(--nav-h) + var(--safe-b) + 76px);
+}
 
 /* ------------------------------------------------------------ split layout (phone toggles, tablet side by side) */
 .fo-split {
