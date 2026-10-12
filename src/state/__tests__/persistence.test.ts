@@ -10,6 +10,7 @@ import { testLeague, userGames } from './fixtures';
 
 const put = IDBObjectStore.prototype.put;
 const del = IDBObjectStore.prototype.delete;
+const transaction = IDBDatabase.prototype.transaction;
 
 /** Count the puts and deletes each object store receives until restored. */
 function countWrites() {
@@ -144,6 +145,30 @@ describe('two windows on one league', () => {
     await vi.waitFor(() => expect(told).toHaveBeenCalledWith(l.id, true));
     off2();
     await expect(other.saveLeague(theirs)).rejects.toThrow('deleted in another window');
+    expect(await loadLeague(l.id)).toBeUndefined();
+  });
+});
+
+describe('a connection the browser dropped', () => {
+  /** Safari can lose an idle connection without a close event: the next transaction finds it closed. */
+  const dropConnection = () =>
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(function (this: IDBDatabase, ...args: Parameters<IDBDatabase['transaction']>) {
+      this.close();
+      return transaction.apply(this, args);
+    });
+
+  it('is opened again for the saved-leagues list, loading, saving and deleting', async () => {
+    const l = await saved('dropped');
+    dropConnection();
+    expect((await listLeagues()).some((m) => m.id === l.id)).toBe(true);
+    dropConnection();
+    expect((await loadLeague(l.id))!.games).toEqual(l.games);
+    simDay(l);
+    dropConnection();
+    await saveLeague(l);
+    expect((await loadLeague(l.id))!.day).toBe(l.day);
+    dropConnection();
+    await deleteLeague(l.id);
     expect(await loadLeague(l.id)).toBeUndefined();
   });
 });
