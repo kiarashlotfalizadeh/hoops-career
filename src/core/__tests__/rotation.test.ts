@@ -61,6 +61,41 @@ describe('rotation plan', () => {
     const bigs = players.map((p, i) => ({ ...p, guard: i >= 5, big: i < 5 }));
     for (const slot of buildMinutePlan(bigs)) expect(new Set(slot).size).toBe(5);
   });
+  it('keeps the starting and closing fives the coach picked, however big or small', () => {
+    // four bigs and no ball handler among the starters, who are also the closers
+    const jumbo = players.map((p, i) => ({ ...p, guard: i >= 5, big: i < 4 }));
+    const plan = buildMinutePlan(jumbo);
+    expect([...plan[0]].sort()).toEqual([0, 1, 2, 3, 4]);
+    for (const slot of plan.slice(44)) expect([...slot].sort()).toEqual([0, 1, 2, 3, 4]);
+    for (const slot of plan) expect(new Set(slot).size).toBe(5);
+  });
+  it('never sits a player for positions when he needs every minute left, so the minutes still add up', () => {
+    // a playoff eight with four bigs (a real team's): swapping out a big who had to play every
+    // remaining minute of the half left him a minute short and gave a starter two extra
+    const spec: [number, number, string, number][] = [
+      [34, 42, 'SCg', 49],
+      [39, 42, 'SCg', 61.3],
+      [30, 42, 'SC', 51.6],
+      [24, 24, 'SC', 62.3],
+      [42, 42, 'SCb', 61.8],
+      [26, 0, 'b', 50.8],
+      [23, 0, 'gb', 46.2],
+      [22, 0, 'b', 46.5],
+    ];
+    const pp: PlanPlayer[] = spec.map(([minutes, cap, f, endurance], pid) => ({
+      pid,
+      minutes,
+      cap: cap || undefined,
+      starter: f.includes('S'),
+      closer: f.includes('C'),
+      guard: f.includes('g'),
+      big: f.includes('b'),
+      endurance,
+    }));
+    const plan = buildMinutePlan(pp);
+    const norm = normalizeMinutes(pp);
+    pp.forEach((p, i) => expect(Math.abs(plan.filter((s) => s.includes(p.pid)).length - norm[i])).toBeLessThanOrEqual(1));
+  });
   it('adds up to 240 when the rotation is capped out: the deep bench, then the caps, take the rest', () => {
     // five healthy players: 48 minutes each, past the usual 46 ceiling
     expect(normalizeMinutes(players.slice(0, 5))).toEqual([48, 48, 48, 48, 48]);

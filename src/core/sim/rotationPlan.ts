@@ -201,6 +201,9 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
       const slot = half * 24 + s;
       const inBlock = remaining <= block;
       const scores: { i: number; sc: number }[] = [];
+      // who this minute can't do without: the starters at the tip, the closers at the end, and
+      // anyone with as many minutes left as slots to play them in
+      const must = new Set<number>();
       for (let i = 0; i < n; i++) {
         const p = players[i];
         if (inBlock && !p.starter) continue;
@@ -213,31 +216,35 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
         // a player on the floor plays out his last minute now rather than in a one-minute stint later
         if (onPrev[i]) sc += stint[i] < maxStint ? (avail === 1 ? 0.8 : 0.45) : -0.6;
         else if (rest[i] < 3) sc -= 0.35;
-        if (half === 0 && step === 0 && p.starter) sc += 6;
-        if (half === 1 && step < 4 && p.closer) sc += 6;
+        const pinned = (half === 0 && step === 0 && p.starter) || (half === 1 && step < 4 && p.closer);
+        if (pinned) sc += 6;
         if (avail >= left) sc += 100;
         // one slot to spare: sitting him now would only bring him back after a one-minute rest
         else if (onPrev[i] && avail === left - 1) sc += 3;
+        if (pinned || avail >= left) must.add(i);
         scores.push({ i, sc });
       }
       scores.sort((a, b) => b.sc - a.sc);
       let chosen = scores.slice(0, 5).map((x) => x.i);
-      // positional sanity: at least one ball handler, at most three bigs
-      const hasGuard = chosen.some((i) => players[i].guard);
-      if (!hasGuard) {
-        const alt = scores.slice(5).find((x) => players[x.i].guard);
-        if (alt) {
-          const worst = chosen.filter((i) => !players[i].closer || !(half === 1 && step < 4)).pop();
-          if (worst !== undefined) chosen = chosen.map((i) => (i === worst ? alt.i : i));
+      // positional sanity (at least one ball handler, at most three bigs) shapes the plan's own
+      // subs: the fives the coach picked to start and close stay, nobody who needs every minute
+      // left sits (he couldn't make it up, and someone else would play his), and a five that stays
+      // on together isn't broken up
+      if (!chosen.every((i) => onPrev[i])) {
+        const hasGuard = chosen.some((i) => players[i].guard);
+        if (!hasGuard) {
+          const alt = scores.slice(5).find((x) => players[x.i].guard);
+          if (alt) {
+            const worst = chosen.filter((i) => !must.has(i)).pop();
+            if (worst !== undefined) chosen = chosen.map((i) => (i === worst ? alt.i : i));
+          }
         }
-      }
-      const bigs = chosen.filter((i) => players[i].big);
-      if (bigs.length > 3) {
-        // never the guard just swapped in: a player listed twice would leave the floor with four
-        const alt = scores.slice(5).find((x) => !players[x.i].big && !chosen.includes(x.i));
-        if (alt) {
-          const drop = bigs[bigs.length - 1];
-          chosen = chosen.map((i) => (i === drop ? alt.i : i));
+        const bigs = chosen.filter((i) => players[i].big);
+        const drop = bigs.filter((i) => !must.has(i)).pop();
+        if (bigs.length > 3 && drop !== undefined) {
+          // never the guard just swapped in: a player listed twice would leave the floor with four
+          const alt = scores.slice(5).find((x) => !players[x.i].big && !chosen.includes(x.i));
+          if (alt) chosen = chosen.map((i) => (i === drop ? alt.i : i));
         }
       }
       // fill if fewer than five have minutes left (short roster): use the regulars with the most minutes
