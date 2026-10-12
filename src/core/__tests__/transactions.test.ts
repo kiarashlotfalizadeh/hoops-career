@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
-import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster, teamPlayers, twoWayRoster } from '../league/helpers';
+import { CAP_FOR, contractSeason, dateToDay, freeAgents, payroll, prospects, standardRoster, teamPlayers, twoWayRoster } from '../league/helpers';
 import {
   DEC_15,
   MLE_YEARS,
@@ -59,6 +59,9 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary ?? marketSalary(l, p)) };
   return p;
 }
+
+/** This season's prospects still on the board, most valuable first. */
+const prospectsBy = (l: League) => prospects(l, l.season).sort((a, b) => valueScore(l, b) - valueScore(l, a));
 
 const offer = (give: number[], get: number[], giveDp: number[] = [], getDp: number[] = []): TradeOffer => ({
   a: { tid: U, pids: give, dpids: giveDp },
@@ -209,6 +212,31 @@ describe('AI trade valuation', () => {
     future.protection = 10;
     future.tid = future.originalTid === U ? AI : U;
     expect(pickValue(l, future)).toBeLessThan(before);
+  });
+
+  it('keeps a pick worth the same from one season into the next, and on the clock worth the player it becomes', () => {
+    const l = league();
+    const firsts = (season: number) => l.draftPicks.filter((d) => d.season === season && d.round === 1).reduce((a, d) => a + pickValue(l, d), 0);
+    // this season's firsts in the preseason, priced on the class, against next season's as free
+    // agency ends, priced on the slot curve: three months closer to their draft, and a class
+    // better or worse than most, but no more the jump of 50% or more at the new season
+    const now = firsts(l.season);
+    l.phase = 'freeAgency';
+    l.day = dateToDay(l.season, 6, 25);
+    const summer = firsts(l.season + 1);
+    expect(now / summer).toBeGreaterThan(0.95);
+    expect(now / summer).toBeLessThan(1.3);
+    // draft night: the pick on the clock is worth the player taken with it
+    l.phase = 'draftLottery';
+    l.day = dateToDay(l.season, 5, 25);
+    runLottery(l, new Rng(3));
+    l.phase = 'draft';
+    for (const dp of l.draftPicks.filter((d) => d.season === l.season && d.round === 1 && d.pick! <= 3).sort((a, b) => a.pick! - b.pick!)) {
+      const value = pickValue(l, dp);
+      const best = prospectsBy(l)[0];
+      draftPlayer(l, dp, best.pid);
+      expect(tradeValue(l, best) / value).toBeCloseTo(1, 1);
+    }
   });
 
   it('only pitches deals the pitching AI would accept (T8)', () => {

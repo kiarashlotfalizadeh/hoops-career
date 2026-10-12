@@ -86,8 +86,12 @@ const SALARY_CURVE: [number, number][] = [
 
 /** Fair annual salary ($K) for a player on the open market. */
 export function marketSalary(league: League, p: Player): number {
+  return salaryForScore(league, valueScore(league, p), p.experience);
+}
+
+/** Fair annual salary ($K) for a value score, within the minimum and max for his years in the league. */
+export function salaryForScore(league: League, s: number, experience: number): number {
   const cap = CAP_FOR(league, contractSeason(league));
-  const s = valueScore(league, p);
   let pct = 0;
   if (s <= SALARY_CURVE[0][0]) pct = 0;
   else if (s >= SALARY_CURVE[SALARY_CURVE.length - 1][0]) pct = SALARY_CURVE[SALARY_CURVE.length - 1][1];
@@ -101,8 +105,8 @@ export function marketSalary(league: League, p: Player): number {
       }
     }
   }
-  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-  const max = cap.maxContract(p.experience);
+  const min = experience >= 3 ? cap.vetMin : cap.minContract;
+  const max = cap.maxContract(experience);
   return clamp(Math.round((pct * cap.salaryCap) / 50) * 50, min, max);
 }
 

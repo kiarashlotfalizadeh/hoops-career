@@ -13,6 +13,7 @@ import {
   addInbox,
   addNews,
   curTeamSeason,
+  dateToDay,
   fmtDate,
   inSeason,
   playerName,
@@ -23,7 +24,7 @@ import {
   twoWayRoster,
   winPct,
 } from './helpers';
-import { type Strategy, marketSalary, pendingOption, rookieContract, tradeValue, valueScore } from './contracts';
+import { type Strategy, marketSalary, pendingOption, rookieContract, salaryForScore, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 
 export interface TradeSide {
@@ -74,25 +75,28 @@ function classProspects(league: League): { v: number; market: number }[] {
 }
 
 /**
- * Trade value of a draft pick: in this season's class, 0.85× what the prospect ranked at its slot
- * would be worth once drafted (plus his rookie-scale surplus); in later classes, a curve by slot
- * with a 0.75 uncertainty factor and a 7% discount per further year. Unknown slots are projected
- * from the original team's record (regressed toward the middle for later years) and averaged over
- * a spread of outcomes. A top-N protected pick held by another team is worth nothing in the slots
- * where it would stay home.
+ * Trade value of a draft pick: what the player taken there would be worth once drafted, his
+ * rookie-scale surplus included (the prospect ranked at its slot in this season's class, in later
+ * classes the player a slot usually brings), discounted by the time to its draft: up to 15% over
+ * the last year (who will be there, and how he turns out) and 7% for each year before that. So a
+ * pick keeps its value from one season into the next, and on the clock is worth the player it
+ * becomes. Unknown slots are projected from the original team's record (regressed toward the
+ * middle for later years) and averaged over a spread of outcomes. A top-N protected pick held by
+ * another team is worth nothing in the slots where it would stay home.
  */
 export function pickValue(league: League, dp: DraftPick): number {
   const yearsOut = dp.season - league.season;
   const cls = yearsOut === 0 ? classProspects(league) : [];
+  const years = Math.max(0, yearsOut + (dateToDay(league.season, 5, 25) - league.day) / 365);
+  const discount = years <= 1 ? 1 - 0.15 * years : 0.85 * Math.pow(0.93, years - 1);
   const valueAt = (inRound: number, known: boolean) => {
     const overall = (dp.round - 1) * 30 + inRound;
     // during the draft the next pick gets the best prospect left
     const idx = known ? league.draftPicks.filter((d) => d.season === dp.season && d.pick !== undefined && (d.round - 1) * 30 + d.pick < overall).length : overall - 1;
-    const p = cls[idx];
-    if (!p) return Math.exp((futureSlotScore(overall) - 60) / 6) * 0.75 * Math.pow(0.93, Math.max(0, yearsOut - 1));
+    const p = cls[idx] ?? { v: Math.exp((futureSlotScore(overall) - 60) / 6), market: salaryForScore(league, futureSlotScore(overall), 0) };
     const rookie = rookieContract(league, inRound, dp.round, league.season + 1);
     const surplus = rookie.salaries.reduce((a, sal) => a + (p.market - sal) / 1000, 0);
-    return Math.max(0, p.v + surplus * 0.1) * 0.85;
+    return Math.max(0, p.v + surplus * 0.1) * discount;
   };
   const prot = dp.protection && dp.tid !== dp.originalTid ? dp.protection : 0;
   if (dp.pick !== undefined) return dp.pick <= prot ? 0 : valueAt(dp.pick, true);
