@@ -93,7 +93,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'ice_contain:d': { text: (X) => `${possessive(X)} ice coverage kept ball handlers out of the middle.` },
   'zone_paint:d': {
     text: (X) => `${possessive(X)} zone clogged driving lanes and post-ups.`,
-    advice: 'Beat zones with Motion & Cuts, shooters in the corners and a high-post passer.',
+    advice: 'Beat zones with Motion & Cuts (Offense > Actions), shooters in the corners and a high-post passer.',
   },
   'zone_3pt:o': {
     text: (X, _Y, w) => `${X} found open threes against the zone${w}.`,
@@ -107,7 +107,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'help_paint:d': {
     text: (X) => `${X} packed the paint and contested drives at the rim.`,
-    advice: 'Space the floor with more shooters, and raise your three-point emphasis to punish help.',
+    advice: 'Space the floor with more shooters, and raise Three-point emphasis (Offense) to punish help.',
   },
   'help_paint:o': {
     text: (X, Y) => `${Y} stayed home on shooters, leaving driving lanes open for ${X}.`,
@@ -127,7 +127,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'pressure_to:d': {
     text: (X) => `${possessive(X)} ball pressure forced turnovers.`,
-    advice: 'Give the ball to your most secure handlers, or run more Handoffs & Screens against pressure.',
+    advice: 'Give the ball to your most secure handlers, or run more Handoffs & Screens (Offense > Actions) against pressure.',
   },
   'pressure_to:o': {
     text: (X, Y) => `${Y} played soft on the ball, so ${X} rarely turned it over.`,
@@ -151,7 +151,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'press_to:d': { text: (X) => `${possessive(X)} full-court press created turnovers.` },
   'press_break:o': {
     text: (X) => `${X} broke the press for easy baskets.`,
-    advice: 'Your press is being broken. Turn it off against good ball-handling teams.',
+    advice: 'Your press is being broken. Turn it off against good ball-handling teams (Defense > Full-court press).',
     uses: (t) => t.defense.press !== 'none',
   },
   'crash_orb:o': {
@@ -209,13 +209,13 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'clean_defense:d': { text: (X) => `${X} defended without fouling, keeping the opponent off the line.`, cat: 'fouls' },
   'fatigue:d': {
     text: (_X, Y) => `${Y} wore down: tired legs cost them shooting accuracy.`,
-    advice: 'Shorten stints (Rotation), or sub tired players out sooner (a higher "Sub out tired players at"); heavy minutes cost shooting.',
+    advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Game Mgmt) to sub tired players out sooner; heavy minutes cost shooting.',
     cat: 'fatigue',
   },
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a strategy paid off${w}.` },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
-    advice: 'Hack-a only works against truly bad free-throw shooters.',
+    advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt).',
     uses: (t) => t.manage.hackThreshold > 0,
   },
 };
@@ -272,7 +272,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const Y = teamRef(benefitUser ? ot : ut);
     factors.push({
       title: impactSentence(im.key, X, Y, names(league, im)),
-      detail: `Worth about ${im.pts.toFixed(1)} points over ${im.count} plays.`,
+      detail: `Worth about ${im.pts.toFixed(1)} points over ${im.count} play${im.count === 1 ? '' : 's'}.`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
       advice: benefitUser ? undefined : impactAdvice(im.key, ut.tactics),
@@ -310,7 +310,11 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       detail: `Second-chance points: ${ut.abbrev} ${u.extra.secondChance}, ${ot.abbrev} ${o.extra.secondChance}.`,
       pts: orbSwing,
       category: 'rebounding',
-      advice: orbSwing < 0 ? 'Play bigger, or lower Crash Boards on the other end so your bigs stay home.' : undefined,
+      // your own crashing only changes your own offensive boards
+      advice:
+        orbSwing < 0
+          ? 'Play better defensive rebounders, and avoid a zone against strong rebounding teams; to win the glass yourself, raise Crash the offensive glass (Offense).'
+          : undefined,
     });
   }
   const ftSwing = (u.t.ftm - o.t.ftm) * 0.6;
@@ -335,7 +339,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
         detail: `The ${side.name} rode their star.`,
         pts: sign * (star.pts - 22) * 0.5,
         category: 'stars',
-        advice: sign < 0 ? `Next time try a Star Plan (Defense) on ${star.name}: deny him the ball or double him.` : undefined,
+        // (not named: a Star plan goes after their primary creator, who isn't always the scorer)
+        advice: sign < 0 && ut.tactics.defense.starPlan === 'none' ? 'Next time try a Star plan (Defense): deny him the ball or double him.' : undefined,
       });
     }
   }
@@ -405,8 +410,12 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     });
 
   const margin = Math.abs(u.pts - o.pts);
-  const top = factors[0];
-  const headline = `The ${ut.name} ${userWon ? 'beat' : 'fell to'} the ${ot.name} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${res.ot ? ` in ${res.ot > 1 ? `${res.ot}OT` : 'OT'}` : ''}${margin <= 3 ? ' in a nail-biter' : margin >= 20 ? ' in a rout' : ''}.${top ? ` Biggest factor: ${top.title.replace(/\.$/, '')}.` : ''}`;
+  // the biggest factor that went the winner's way (the biggest of all can favor the loser)
+  const top = factors.find((f) => f.pts > 0 === userWon);
+  // "Turnover battle: NYK 18, CLE 11" reads "Turnover battle (NYK 18, CLE 11)" after the headline's own colon
+  const topText = top?.title.replace(/\.$/, '').replace(/: (.+)$/, ' ($1)');
+  const how = res.ot ? ` in ${res.ot > 1 ? `${res.ot}OT` : 'OT'}` : margin <= 3 ? ' in a nail-biter' : margin >= 20 ? ' in a rout' : '';
+  const headline = `The ${ut.name} ${userWon ? 'beat' : 'fell to'} the ${ot.name} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${how}.${topText ? ` Biggest factor: ${topText}.` : ''}`;
   void poss;
   return {
     headline,
