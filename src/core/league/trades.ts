@@ -363,7 +363,8 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (inc > out && size > maxSize) errors.push(`${abbrev} would have ${size} players (max ${maxSize}${inSeason(league) ? '' : ' in the offseason'}).`);
     if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players (minimum ${CAP.rosterMin} during the season).`);
     const twIn = other.pids.filter(twoWay).length;
-    const twAfter = twoWayRoster(league, mine.tid).length - mine.pids.filter(twoWay).length + twIn;
+    // (after the season, as on the standard roster, only next season's two-way deals hold a slot)
+    const twAfter = twoWayRoster(league, mine.tid).filter((p) => contractExp(p.contract) >= s).length - mine.pids.filter(twoWay).length + twIn;
     if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players (max ${TWO_WAY_MAX}).`);
     const inSal = sideSalary(league, other);
     const outSal = sideSalary(league, mine);

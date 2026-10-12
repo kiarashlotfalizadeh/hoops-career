@@ -23,6 +23,7 @@ import {
   signingRoute,
   teamAppeal,
   tradeValue,
+  twoWaySalary,
   valueScore,
 } from '../league/contracts';
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
@@ -511,6 +512,28 @@ describe('AI trade valuation', () => {
     for (const p of standardRoster(l, U).slice(0, 3)) p.contract = { start: l.season, salaries: [CAP_FOR(l).vetMin] };
     const theirs = standardRoster(l, AI).find((p) => contractExp(p.contract) >= cs)!;
     expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /players \(max/.test(e))).toEqual([]);
+  });
+
+  it("after the season, an expiring two-way deal doesn't hold one of the three two-way slots in trades", () => {
+    const l = league();
+    l.phase = 'draft';
+    const cs = contractSeason(l);
+    // two expiring two-ways (the fictional league's) and one signed through next season
+    signPlayer(
+      l,
+      freeAgents(l).find((p) => p.experience <= 2)!,
+      U,
+      twoWaySalary(l, cs),
+      2,
+      { start: cs, twoWay: true, news: false },
+    );
+    expect(twoWayRoster(l, U).length).toBe(3);
+    const theirs = twoWayRoster(l, AI)[0];
+    theirs.contract = { start: l.season, salaries: [twoWaySalary(l), twoWaySalary(l, cs)], twoWay: true };
+    expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /two-way/.test(e))).toEqual([]);
+    // in season all three hold a slot
+    l.phase = 'regular';
+    expect(validateTrade(l, offer([], [theirs.pid])).some((e) => /4 two-way players \(max 3\)/.test(e))).toBe(true);
   });
 
   it('counts two-way pay out of trade salary (T13)', () => {
