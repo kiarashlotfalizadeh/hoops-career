@@ -486,7 +486,11 @@ table.stats.fo-contracts th {
 table.stats.fo-contracts td.sticky,
 table.stats.fo-contracts th.sticky {
   padding-left: 10px;
-  max-width: 132px;
+}
+/* the name cell's contents: a narrow column on a phone, the name ellipsized before its tags
+   (a table cell itself ignores max-width) */
+.fo-ct-name {
+  max-width: 116px;
 }
 table.stats.fo-contracts tr.dead td {
   color: var(--text-dim);
@@ -682,11 +686,12 @@ table.stats.fo-contracts tr.clickable td {
 }
 .fo-teamgrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* equal columns however long a name: it ellipsizes instead of widening the sheet */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 @media (min-width: 560px) {
   .fo-teamgrid {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }

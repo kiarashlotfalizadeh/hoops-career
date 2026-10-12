@@ -287,6 +287,25 @@
 .lg-st.mode-power .lg-st-row {
   grid-template-columns: 20px 24px minmax(0, 1fr) 46px 40px 40px 30px;
 }
+/* phones: tighter split columns leave room for an abbreviation and its clinch mark */
+@media (max-width: 389px) {
+  .lg-st.mode-splits .lg-st-row {
+    grid-template-columns: 18px 22px minmax(0, 1fr) repeat(4, 39px) 35px;
+    gap: 0 4px;
+    font-size: 12px;
+  }
+}
+/* small phones: the logo goes too (the abbreviation names the team) */
+@media (max-width: 359px) {
+  .lg-st.mode-splits .lg-st-row {
+    grid-template-columns: 16px minmax(0, 1fr) repeat(4, 39px) 35px;
+    gap: 0 3px;
+    padding: 0 10px;
+  }
+  .lg-st.mode-splits .lg-st-row > :nth-child(2) {
+    display: none;
+  }
+}
 .lg-st.mode-power .c-power {
   display: block;
 }
@@ -491,6 +510,13 @@
   color: var(--text-dim);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* small phones: no room for a record beside the abbreviation and a three-digit score */
+@media (max-width: 359px) {
+  .lg-sb-t .rec {
+    display: none;
+  }
 }
 .lg-sb-t .sc {
   font-family: var(--display);
@@ -714,6 +740,33 @@
   color: var(--text-dim);
   font-size: 11px;
   font-weight: 600;
+}
+/* phones: slimmer gaps and rows, so every round's column still shows a three-letter abbreviation */
+@media (max-width: 400px) {
+  .bk-head,
+  .bk {
+    gap: 0 8px;
+  }
+  .bk-pair::after {
+    right: -5px;
+    width: 4px;
+  }
+  .bk-col.r2 .bk-slot::before,
+  .bk-col.r3 .bk-slot::before {
+    left: -4px;
+    width: 4px;
+  }
+  .bk .bk-t {
+    grid-template-columns: 8px 18px minmax(0, 1fr) 10px;
+    gap: 3px;
+    padding: 0 3px;
+  }
+}
+@media (max-width: 359px) {
+  .bk .bk-t {
+    gap: 2px;
+    font-size: 12px;
+  }
 }
 .bk-panel-wrap {
   display: flex;
@@ -1232,6 +1285,19 @@ a.bk-s:hover {
 }
 .lg-season + .lg-season {
   border-top: 1px solid var(--line);
+}
+/* small phones: the seed gives way to the longest outcome tag ("Lost Conf. Finals") */
+@media (max-width: 359px) {
+  .lg-season {
+    grid-template-columns: 52px 50px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .lg-season > :nth-child(3) {
+    display: none;
+  }
+  .lg-season .tag {
+    justify-self: end;
+  }
 }
 .lg-season .yr {
   font-family: var(--display);
