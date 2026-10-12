@@ -13,7 +13,7 @@ import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
-import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
+import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, startingFive, teamRatings, type PerGame } from '../stats';
 import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
 import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickProjection, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
@@ -217,7 +217,8 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
   if (!roster.length) return <Empty>No players on the roster.</Empty>;
   // the avatar already shows the initials: last names alone fit a phone ("Murray-Boyles", not "C. Murray-Boyl…")
   const nameOf = rosterNames(roster);
-  const starters = new Set(team.rotation.order.slice(0, 5));
+  // the five who start the next game: an injured starter is listed with the bench until he's back
+  const starters = startingFive(roster);
   const groups = [
     { label: 'Starters', list: roster.filter((p) => starters.has(p.pid)) },
     { label: 'Bench', list: roster.filter((p) => !starters.has(p.pid) && !p.contract.twoWay) },

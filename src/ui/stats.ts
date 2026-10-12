@@ -168,6 +168,19 @@ export function wholeMinutes(players: { pid: number; min: number }[]): (pid: num
   return (pid) => out.get(pid) ?? 0;
 }
 
+/**
+ * Who starts the next game, from players in depth-chart order: the first five healthy ones, as the
+ * engine starts them (an injured starter's spot goes to the next man up), as the Rotation screen shows.
+ */
+export function startingFive(players: { pid: number; injury: unknown }[]): Set<number> {
+  return new Set(
+    players
+      .filter((p) => !p.injury)
+      .slice(0, 5)
+      .map((p) => p.pid),
+  );
+}
+
 /** A finished game's scorebug: FINAL, F/OT, F/2OT. */
 export const finalLabel = (ot: number) => (ot > 0 ? `F/${periodLabel(4 + ot)}` : 'FINAL');
 

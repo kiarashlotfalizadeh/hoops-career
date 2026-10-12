@@ -9,7 +9,7 @@ import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
-import { f1, latestLine, playerSeason, rosterNames, signed, type PerGame } from '../stats';
+import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 
@@ -32,6 +32,8 @@ export default function Roster() {
   const team = league.teams[tid];
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   const nameOf = useMemo(() => rosterNames(roster, { initial: true }), [roster]);
+  // an injured starter sits: the next healthy player up starts, as on the Rotation screen
+  const starters = startingFive(roster);
   // between seasons, count and pay next season's contracts (the same view as Office and Re-sign)
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
@@ -157,7 +159,7 @@ export default function Roster() {
                   onKeyDown={activateOnKey(() => nav(`/player/${p.pid}`))}
                 >
                   <span className="tiny dim num" style={{ width: 14 }}>
-                    {i < 5 ? 'S' : i + 1}
+                    {starters.has(p.pid) ? 'S' : i + 1}
                   </span>
                   <Avatar p={p} />
                   <div className="grow">

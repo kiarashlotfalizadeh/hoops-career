@@ -1,7 +1,7 @@
 // Display helpers shared by the screens.
 import { describe, expect, it } from 'vitest';
 import type { League } from '../../core/types';
-import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1, signed, wholeMinutes } from '../stats';
+import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1, signed, startingFive, wholeMinutes } from '../stats';
 
 describe('ordinal', () => {
   it('reads 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")', () => {
@@ -91,5 +91,15 @@ describe('wholeMinutes', () => {
     const m = wholeMinutes(box);
     expect(box.reduce((a, p) => a + m(p.pid), 0)).toBe(240);
     for (const p of box) expect(Math.abs(m(p.pid) - p.min)).toBeLessThan(1);
+  });
+});
+
+describe('startingFive', () => {
+  it('starts the first five healthy players in depth-chart order (the Roster list marked an injured starter "S")', () => {
+    const hurt = { type: 'Sprained ankle', gamesRemaining: 6 };
+    const order = [10, 11, 12, 13, 14, 15, 16, 17].map((pid) => ({ pid, injury: pid === 10 || pid === 12 ? hurt : null }));
+    expect([...startingFive(order)]).toEqual([11, 13, 14, 15, 16]);
+    // short-handed: whoever is healthy
+    expect([...startingFive(order.slice(0, 4))]).toEqual([11, 13]);
   });
 });
