@@ -81,17 +81,15 @@ export default function Home() {
 
   return (
     <main className="page">
+      {/* (the phase card's primary action is Find a new job) */}
       {league.fired && (
         <Card accent>
           <div className="row">
             <AlertTriangle className="bad" />
             <div className="grow">
-              <div className="bold">You have been fired.</div>
+              <div className="bold">You were fired.</div>
               <div className="small dim">The team is out of your hands. Take over another one to keep your career going.</div>
             </div>
-            <Link className="btn sm" to="/settings?sheet=switch">
-              Find a job
-            </Link>
           </div>
         </Card>
       )}

@@ -115,10 +115,10 @@ export default function Settings() {
         <div className="fo-callout bad">
           <TriangleAlert size={18} className="bad" />
           <div className="grow">
-            <b>You've been fired.</b> Take over another team below to keep your career going.
+            <b>You were fired.</b> Take over another team to keep your career going.
           </div>
           <button className="btn xs" onClick={() => setSheet('switch')}>
-            Switch
+            Find a new job
           </button>
         </div>
       )}
