@@ -42,9 +42,6 @@ export const GAME = {
   bonusFouls: 5,
 };
 
-/** Calendar: day 0 of the regular season. */
-export const SEASON_START = { month: 9, day: 20 }; // Oct 20 (month is 0-based)
-
 /** 2025-26 league-average targets used to calibrate the engine (per team per game). */
 export const TARGETS = {
   pace: 99.6,

@@ -197,11 +197,6 @@ export function rookieContract(league: League, pick: number, round: number, star
   return { start, salaries: [Math.round(min), Math.round(min * 1.05)], rookie: true };
 }
 
-/** Standard roster spots in use (two-way deals don't count). */
-export function rosterCount(league: League, tid: number) {
-  return standardRoster(league, tid).length;
-}
-
 // ---------------------------------------------------------------- signing exceptions
 
 /** Non-taxpayer mid-level exception, as a share of the cap. */
@@ -458,10 +453,4 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
       link: '/office',
     });
   }
-}
-
-export function luxuryTaxBill(league: League, tid: number): number {
-  const cap = CAP_FOR(league);
-  const pay = payroll(league, tid);
-  return pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
 }

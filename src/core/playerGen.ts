@@ -247,10 +247,6 @@ export function contractExp(c: Contract): number {
   return c.start + c.salaries.length - 1;
 }
 
-export function yearsLeft(c: Contract, season: number): number {
-  return Math.max(0, contractExp(c) - season + 1);
-}
-
 export function refreshPlayerDerived(p: Player, season: number, scale: OvrScale) {
   p.ovr = toDisplay(ovrRaw(p.ratings), scale);
   p.pot = potential(p.ovr, playerAge(p, season), p.growth);

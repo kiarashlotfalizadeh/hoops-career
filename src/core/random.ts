@@ -30,13 +30,6 @@ export class Rng {
     const v = this.next();
     return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
-  truncNormal(mean: number, sd: number, lo: number, hi: number): number {
-    for (let i = 0; i < 20; i++) {
-      const x = this.normal(mean, sd);
-      if (x >= lo && x <= hi) return x;
-    }
-    return Math.min(hi, Math.max(lo, mean));
-  }
   pick<T>(arr: readonly T[]): T {
     return arr[Math.floor(this.next() * arr.length)];
   }
@@ -77,4 +70,3 @@ export function hashString(s: string): number {
 
 export const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-export const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));

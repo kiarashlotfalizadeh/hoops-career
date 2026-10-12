@@ -2,7 +2,7 @@ import type { CombineResults, DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
-import { composites, ratingToHeight, shiftToOvr } from '../ratings';
+import { composites, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
 
@@ -285,5 +285,3 @@ export function finishDraft(league: League) {
   // remove any leftover current-season picks
   league.draftPicks = league.draftPicks.filter((d) => d.season > league.season);
 }
-
-export { ratingToHeight };

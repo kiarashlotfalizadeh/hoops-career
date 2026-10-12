@@ -805,4 +805,3 @@ export interface GamePlan {
 export const FREE_AGENT = -1;
 export const DRAFT_PROSPECT = -2;
 export const RETIRED = -3;
-export const UNDRAFTED = -4;

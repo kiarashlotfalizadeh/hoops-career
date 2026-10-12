@@ -242,21 +242,6 @@ export function toDisplay(raw: number, scale: OvrScale): number {
   return 99;
 }
 
-/** Inverse mapping: display rating -> raw composite (for generating players at a target level). */
-export function fromDisplay(disp: number, scale: OvrScale): number {
-  const { raw: xs, disp: ys } = scale;
-  const n = xs.length;
-  if (disp <= ys[0]) return xs[0] - (ys[0] - disp) * ((xs[1] - xs[0]) / (ys[1] - ys[0]));
-  if (disp >= ys[n - 1]) return xs[n - 1] + (disp - ys[n - 1]) * ((xs[n - 1] - xs[n - 2]) / (ys[n - 1] - ys[n - 2]));
-  for (let i = 1; i < n; i++) {
-    if (disp <= ys[i]) {
-      const t = (disp - ys[i - 1]) / (ys[i] - ys[i - 1]);
-      return xs[i - 1] + t * (xs[i] - xs[i - 1]);
-    }
-  }
-  return xs[n - 1];
-}
-
 /** Learned skills: everything but size and the physical tools. */
 export const SKILL_KEYS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
 
