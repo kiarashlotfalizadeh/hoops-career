@@ -78,10 +78,10 @@ export function shade(hex: string, amt: number) {
   return `#${[n(0), n(2), n(4)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** One-of-several switch: a radio group, so arrow keys move the choice and Tab leaves it. */
 /** Script scrolls ignore the CSS reduced-motion rule: smooth only when the device allows motion. */
 export const scrollBehavior = (): ScrollBehavior => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 
+/** One-of-several switch: a radio group, so arrow keys move the choice and Tab leaves it. */
 export function Segmented<T extends string>({
   value,
   options,
@@ -501,8 +501,6 @@ export function fmtNum(v: number, d = 1) {
   if (!isFinite(v)) return '—';
   return Number.isInteger(v) ? String(v) : v.toFixed(d);
 }
-
-export const pct = (v: number, d = 1) => (isFinite(v) ? `${(v * 100).toFixed(d)}` : '—');
 
 export function Spinner() {
   return <div className="spinner" />;

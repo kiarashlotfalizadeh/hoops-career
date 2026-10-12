@@ -74,9 +74,9 @@ export function LineChart({
 
 /**
  * Score margin flow (positive = team A ahead). `periods` are the periods' lengths in game seconds
- * (four quarters, then any overtimes): dividers and Q1..OT labels sit where each one starts.
+ * (four quarters, then any overtimes), for the Q1..OT labels and, in older games, the spacing;
+ * `periodStarts` are the flow indices where each began, when recorded: dividers sit there.
  */
-/** `periods` are period lengths (labels and fallback spacing); `periodStarts` are the flow indices where each began, when recorded. */
 export function FlowChart({
   flow,
   colorA,
