@@ -183,7 +183,7 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shot
   );
 }
 
-/** Two-sided bar for comparing a value between two teams. */
+/** Two-sided bar for comparing a value between two teams. `neutral` stats (a style, like the share of threes) favour neither side. */
 export function CompareBar({
   label,
   a,
@@ -192,6 +192,7 @@ export function CompareBar({
   colorA = 'var(--accent)',
   colorB = 'var(--text-dim)',
   higherBetter = true,
+  neutral = false,
 }: {
   label: string;
   a: number;
@@ -200,10 +201,11 @@ export function CompareBar({
   colorA?: string;
   colorB?: string;
   higherBetter?: boolean;
+  neutral?: boolean;
 }) {
   const total = Math.abs(a) + Math.abs(b) || 1;
   // a tie (as shown) favours neither side
-  const tie = fmt(a) === fmt(b);
+  const tie = neutral || fmt(a) === fmt(b);
   const aWins = !tie && (higherBetter ? a > b : a < b);
   const bWins = !tie && !aWins;
   return (

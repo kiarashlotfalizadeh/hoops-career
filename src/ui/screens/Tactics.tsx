@@ -462,7 +462,7 @@ export default function Tactics() {
           <button
             className="btn sm primary"
             onClick={() => {
-              setLabBaseline(cloneTactics(snapshot.tactics));
+              setLabBaseline(cloneTactics(snapshot.tactics), league);
               nav('/lab?compare=1');
             }}
           >
