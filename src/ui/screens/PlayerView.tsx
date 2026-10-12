@@ -10,7 +10,7 @@ import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented,
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
-import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
+import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption } from '../office/common';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
@@ -101,22 +101,13 @@ function seasonsOf(p: Player) {
   }
   const rows: { key: string; season: number; playoffs: boolean; teams: number[]; tot: PlayerStats }[] = [];
   for (const [k, list] of bySeason) {
-    const tot = { ...list[0] } as PlayerStats;
-    if (list.length > 1) {
-      for (const s of list.slice(1)) {
-        for (const f of Object.keys(tot) as (keyof PlayerStats)[]) {
-          const v = s[f];
-          if (typeof v === 'number' && f !== 'season' && f !== 'tid') (tot as unknown as Record<string, number>)[f] += v;
-        }
-      }
-      // advanced numbers from real seasons: keep the total row's (first) values
-    }
     rows.push({
       key: k,
       season: list[0].season,
       playoffs: list[0].playoffs,
       teams: list.map((s) => (typeof s.tid === 'number' ? s.tid : (BBREF_TO_TID[String(s.tid)] ?? -1))),
-      tot,
+      // a season split between teams: its totals, and its imported advanced numbers combined
+      tot: seasonLine(p, list[0].season, list[0].playoffs)!,
     });
   }
   return rows.sort((a, b) => b.season - a.season || Number(a.playoffs) - Number(b.playoffs));
@@ -153,12 +144,10 @@ export default function PlayerView() {
   const arch = archetype(p.ratings);
   const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
   const mood = MOOD_META[moodLevel(p.mood.score)];
-  const seasonLine = (season: number) =>
-    perGame(p.stats.filter((s) => s.season === season && !s.playoffs).reduce<PlayerStats | null>((a, s) => (a ? { ...a, ...sumStats(a, s) } : s), null));
-  const cur = seasonLine(league.season);
+  const cur = playerSeason(p, league.season);
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
-  const line = cur ?? (lastSeason ? seasonLine(lastSeason) : null);
+  const line = cur ?? (lastSeason ? playerSeason(p, lastSeason) : null);
   // the season contracts count against (next season in the offseason), or this one for a contract that's up
   const salSeason = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
   const sal = salaryFor(p, salSeason);
@@ -221,7 +210,8 @@ export default function PlayerView() {
           <Kpi k="PTS" v={line ? f1(line.pts) : '—'} />
           <Kpi k="REB" v={line ? f1(line.reb) : '—'} />
           <Kpi k="AST" v={line ? f1(line.ast) : '—'} />
-          <Kpi k="TS%" v={line ? pct(line.tsPct) : '—'} />
+          {/* no shots, no percentage: "—", not 0.0 */}
+          <Kpi k="TS%" v={line && (line.fga || line.fta) ? pct(line.tsPct) : '—'} />
         </div>
         {!cur && line && lastSeason ? (
           <div className="tiny dim" style={{ marginTop: 6 }}>
@@ -493,16 +483,6 @@ export default function PlayerView() {
   );
 }
 
-function sumStats(a: PlayerStats, b: PlayerStats): Partial<PlayerStats> {
-  const out: Record<string, number> = {};
-  for (const k of Object.keys(a) as (keyof PlayerStats)[]) {
-    const va = a[k];
-    const vb = b[k];
-    if (typeof va === 'number' && typeof vb === 'number' && k !== 'season' && k !== 'tid') out[k] = va + vb;
-  }
-  return out as Partial<PlayerStats>;
-}
-
 function StatsTab({ p, league }: { p: Player; league: League }) {
   const [po, setPo] = useState(false);
   const rows = seasonsOf(p).filter((r) => r.playoffs === po);
@@ -532,16 +512,18 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'blk', label: 'BLK', get: (r) => pg(r).blk, fmt: (v) => f1(v as number) },
     { key: 'tov', label: 'TOV', get: (r) => pg(r).tov, fmt: (v) => f1(v as number) },
     // the % lives in the header, as in the league stats
-    { key: 'fg', label: 'FG%', get: (r) => pg(r).fgPct, fmt: (v) => pct(v as number) },
-    { key: 'tp', label: '3P%', get: (r) => pg(r).tpPct, fmt: (v) => pct(v as number) },
+    // a season without an attempt reads "—" (and sorts last), not 0.0
+    { key: 'fg', label: 'FG%', get: (r) => (r.tot.fga ? pg(r).fgPct : NaN), fmt: (v) => pct(v as number) },
+    { key: 'tp', label: '3P%', get: (r) => (r.tot.tpa ? pg(r).tpPct : NaN), fmt: (v) => pct(v as number) },
     { key: 'tpa', label: '3PA', get: (r) => pg(r).tpa, fmt: (v) => f1(v as number) },
-    { key: 'ft', label: 'FT%', get: (r) => pg(r).ftPct, fmt: (v) => pct(v as number) },
-    { key: 'ts', label: 'TS%', get: (r) => pg(r).tsPct, fmt: (v) => pct(v as number) },
+    { key: 'ft', label: 'FT%', get: (r) => (r.tot.fta ? pg(r).ftPct : NaN), fmt: (v) => pct(v as number) },
+    { key: 'ts', label: 'TS%', get: (r) => (r.tot.fga || r.tot.fta ? pg(r).tsPct : NaN), fmt: (v) => pct(v as number) },
     { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
     { key: 'per', label: 'PER', get: (r) => r.tot.adv?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
     { key: 'ws', label: 'WS', get: (r) => r.tot.adv?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
-    { key: 'pm', label: '+/-', get: (r) => pg(r).pm, fmt: (v) => signed(v as number) },
+    // imported seasons carry no plus-minus: "—", not 0.0 (as in the league stats)
+    { key: 'pm', label: '+/-', get: (r) => (r.tot.real && !r.tot.pm ? NaN : pg(r).pm), fmt: (v) => signed(v as number) },
   ];
   return (
     <>
@@ -555,7 +537,7 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
         ]}
       />
       {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
-      <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those.</div>
+      <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those, +/- only for simulated seasons.</div>
     </>
   );
 }

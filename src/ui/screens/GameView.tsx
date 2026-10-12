@@ -42,9 +42,14 @@ export default function GameView() {
     ...(g.flow?.length ? [{ id: 'flow' as Tab, label: 'Flow' }] : []),
     ...(g.pbp?.length ? [{ id: 'pbp' as Tab, label: 'PBP' }] : []),
   ];
-  // the user's team carries the accent in two-team comparisons, wherever it played (side 0 = home)
+  // the user's team carries the accent in two-team comparisons, wherever it played (side 0 = home);
+  // between two other teams neither side does (the away side wore it, as if it were yours)
   const accentSide = userGame && g.home.tid === league.userTid ? 0 : 1;
-  const [awayColor, homeColor] = accentSide === 0 ? ['var(--text-dim)', 'var(--accent)'] : ['var(--accent)', 'var(--text-dim)'];
+  const [awayColor, homeColor] = !userGame
+    ? ['var(--text-dim)', 'var(--text-dim)']
+    : accentSide === 0
+      ? ['var(--text-dim)', 'var(--accent)']
+      : ['var(--accent)', 'var(--text-dim)'];
   const comparison: { label: string; a: number; b: number; pct?: boolean }[] = [
     { label: 'FG%', a: (g.away.t.fgm / Math.max(1, g.away.t.fga)) * 100, b: (g.home.t.fgm / Math.max(1, g.home.t.fga)) * 100, pct: true },
     { label: '3P%', a: (g.away.t.tpm / Math.max(1, g.away.t.tpa)) * 100, b: (g.home.t.tpm / Math.max(1, g.home.t.tpa)) * 100, pct: true },
@@ -250,7 +255,7 @@ export default function GameView() {
             const made = shots.filter((s) => s.made).length;
             return (
               <Card key={side} title={`${t.name} · ${made}/${shots.length}`}>
-                <ShotChart shots={shots} color={side === accentSide ? 'var(--accent)' : '#7dd3fc'} />
+                <ShotChart shots={shots} color={userGame && side === accentSide ? 'var(--accent)' : '#7dd3fc'} />
                 <div className="grid3" style={{ marginTop: 8 }}>
                   {(['rim', 'mid', 'ab3'] as const).map((z) => {
                     const zs = shots.filter((s) => (z === 'ab3' ? s.zone === 'ab3' || s.zone === 'c3' : z === 'mid' ? s.zone === 'mid' || s.zone === 'paint' : s.zone === 'rim'));

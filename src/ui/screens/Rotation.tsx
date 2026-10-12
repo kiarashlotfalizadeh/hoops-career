@@ -7,7 +7,7 @@ import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { League, Player, Rotation as RotationT } from '../../core/types';
-import { f1, gamesMemo, ordinal, playerSeason, rosterNames } from '../stats';
+import { f1, gamesMemo, ordinal, playerSeason, rosterNames, signed, startingFive } from '../stats';
 import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
 
 export default function Rotation() {
@@ -42,7 +42,7 @@ export default function Rotation() {
   const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
   const closers = rot.closers.filter((pid) => byId.has(pid));
   // the engine starts the first five healthy players: the Bench heading goes after the fifth
-  const startSet = new Set(healthyOrder.slice(0, 5));
+  const startSet = startingFive(order.map((pid) => byId.get(pid)!));
   const benchFrom = healthyOrder.length >= 5 ? order.indexOf(healthyOrder[4]) + 1 : order.length;
 
   // planned stints visual: the engine's own plan inputs (injured players' minutes handed out, caps,
@@ -293,8 +293,7 @@ function LineupsCard() {
         {lineups.map((l) => (
           <div key={l.key} className="row small top">
             <span className={`num bold ${l.net >= 0 ? 'good' : 'bad'}`} style={{ width: 46 }}>
-              {l.net >= 0 ? '+' : ''}
-              {l.net.toFixed(1)}
+              {signed(l.net)}
             </span>
             <span className="grow dim2">{l.pids.map((pid) => names(pid) || '?').join(', ')}</span>
             <span className="tiny dim num">{Math.round(l.min)}m</span>

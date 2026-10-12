@@ -9,7 +9,7 @@ import { Court } from '../live/Court';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { composites } from '../../core/ratings';
-import type { DefScheme, League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
+import type { BoxLine, DefScheme, GameResult, League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
 import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
@@ -123,6 +123,12 @@ export default function Live() {
   const simBusy = useStore((s) => !!s.sim);
   const liveRef = useRef<LiveGame | null>(null);
   const pbpRead = useRef(0);
+  /**
+   * The box score as of the last possession the court finished drawing: the sim runs a possession
+   * ahead of the court, and its stats would give away the play still being drawn. Null when the
+   * court has caught up (a break, the final buzzer).
+   */
+  const drawnBox = useRef<GameResult | null>(null);
   const announced = useRef('');
   const [game, setGame] = useState<LiveGame | null>(null);
   const [status, setStatus] = useState<Status>('loading');
@@ -168,6 +174,7 @@ export default function Live() {
 
   const attach = useCallback((lg: LiveGame | null) => {
     liveRef.current = lg;
+    drawnBox.current = null;
     setGame(lg);
     setScript(null);
     setAtBreak(false);
@@ -300,6 +307,7 @@ export default function Live() {
       const basket = lines.find((e) => e.kind === 'make' || e.kind === 'ft');
       setAnnounce(`${basket ? `${basket.text} ` : ''}${lg.sim.T[1].team.abbrev} ${shown[1]}, ${lg.sim.T[0].team.abbrev} ${shown[0]}.`);
     }
+    drawnBox.current = boxSnapshot(lg.sim);
     let logs: PossLog[] = [];
     let guard = 0;
     while (!logs.length && !lg.over && guard++ < 5) logs = lg.step();
@@ -323,6 +331,7 @@ export default function Live() {
     // a decided game ends at the buzzer: no break before an overtime that won't be played
     if (to === 'quarter' && !lg.over && lg.sim.q >= 4 && lg.sim.T[0].score !== lg.sim.T[1].score) lg.step();
     flushFeed();
+    drawnBox.current = null;
     ticker.set(lg.sim.clock, [lg.sim.T[0].score, lg.sim.T[1].score], true);
     if (lg.over) finish();
     else if (to === 'quarter') {
@@ -664,7 +673,7 @@ export default function Live() {
               <Card title="On the floor" right={<span className="tiny dim">energy · fouls · points</span>}>
                 <div className="col" style={{ gap: 6 }}>
                   {me.on.map((p) => (
-                    <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} />
+                    <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} drawn={drawnLine(drawnBox.current, userSide, p.pid)} />
                   ))}
                 </div>
               </Card>
@@ -681,7 +690,7 @@ export default function Live() {
         <TacticsPanel live={game} side={userSide} nameOf={nameOf} apply={applyTactics} persist={persist} setPersist={setPersist} />
       </Sheet>
       <Sheet open={panel === 'stats'} onClose={() => setPanel('none')} title="Live box score">
-        <StatsPanel live={game} side={userSide} league={league} nameOf={nameOf} tick={tick} />
+        <StatsPanel live={game} drawn={drawnBox.current} side={userSide} league={league} nameOf={nameOf} tick={tick} />
       </Sheet>
       <Sheet open={panel === 'end'} onClose={() => setPanel('none')} title="Sim to the final buzzer?">
         <p className="dim2">The rest of the game plays out instantly with your current plan and rotation.</p>
@@ -787,8 +796,20 @@ const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEnt
   );
 });
 
-function PlayerStrip({ p, name }: { p: SP; name: string }) {
-  const e = Math.round(p.energy * 100);
+/** A copy of the box score now: its play types are the sim's own running tallies, so they're copied too. */
+function boxSnapshot(sim: GameSim): GameResult {
+  const res = sim.result();
+  const pt = (t: GameResult['home']) => ({ ...t, playTypes: Object.fromEntries(Object.entries(t.playTypes).map(([k, v]) => [k, { ...v }])) });
+  return { ...res, home: pt(res.home), away: pt(res.away) };
+}
+
+/** A player's line in the drawn box score (side 0 = home). */
+const drawnLine = (box: GameResult | null, side: 0 | 1, pid: number) => (box ? (side === 0 ? box.home : box.away).players.find((b) => b.pid === pid) : undefined);
+
+/** `drawn`: his line as of the possession the court last finished drawing, when the sim is ahead of it. */
+function PlayerStrip({ p, name, drawn }: { p: SP; name: string; drawn?: BoxLine }) {
+  const e = Math.round((drawn?.energy ?? p.energy) * 100);
+  const fouls = drawn?.pf ?? p.fouls;
   return (
     <div className="row small" style={{ gap: 8 }}>
       <span className="bold ellipsis" style={{ width: 128 }}>
@@ -802,11 +823,11 @@ function PlayerStrip({ p, name }: { p: SP; name: string }) {
       <span className="num tiny" style={{ width: 30, textAlign: 'right' }}>
         {e}%
       </span>
-      <span className={`num tiny ${p.fouls >= 4 ? 'bad' : 'dim'}`} style={{ width: 24, textAlign: 'right' }}>
-        {p.fouls}F
+      <span className={`num tiny ${fouls >= 4 ? 'bad' : 'dim'}`} style={{ width: 24, textAlign: 'right' }}>
+        {fouls}F
       </span>
       <span className="num tiny dim2" style={{ width: 28, textAlign: 'right' }}>
-        {p.b.pts}p
+        {drawn?.pts ?? p.b.pts}p
       </span>
     </div>
   );
@@ -1024,11 +1045,26 @@ function TacticsPanel({
   );
 }
 
-function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side: 0 | 1; league: League; nameOf: (pid: number) => string; tick: number }) {
+function StatsPanel({
+  live,
+  drawn,
+  side,
+  league,
+  nameOf,
+  tick,
+}: {
+  live: LiveGame;
+  /** The box as the court has drawn it, while the sim is a possession ahead. */
+  drawn: GameResult | null;
+  side: 0 | 1;
+  league: League;
+  nameOf: (pid: number) => string;
+  tick: number;
+}) {
   const [team, setTeam] = useState<0 | 1>(side);
   // the box only changes between possessions
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const res = useMemo(() => live.sim.result(), [live, tick]);
+  const res = useMemo(() => drawn ?? live.sim.result(), [drawn, live, tick]);
   const tb = team === 0 ? res.home : res.away;
   const min = wholeMinutes(tb.players);
   const pt = Object.entries(tb.playTypes).sort((a, b) => b[1].poss - a[1].poss);
