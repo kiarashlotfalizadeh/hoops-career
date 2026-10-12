@@ -1,7 +1,7 @@
-// Importing a backup: the whole league with its results, checked and cleaned before it is stored.
+// Backups: the whole league with its results, written in the current format and checked and cleaned before an import is stored.
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { importLeague } from '../backup';
+import { exportLeague, importLeague } from '../backup';
 import { loadLeague, SAVE_VERSION } from '../persistence';
 import { useStore } from '../store';
 import { faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency } from '../../core/league/season';
@@ -133,5 +133,22 @@ describe('import', () => {
     useStore.getState().mutate((x) => (x.name = 'renamed'));
     await expect(importLeague(backup(played('other')))).rejects.toThrow('Export a backup');
     expect(useStore.getState().league).toBe(open);
+  });
+});
+
+describe('export', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('writes a league that was never saved in the current format, so an older build refuses it', async () => {
+    const l = testLeague('fresh');
+    let file: Blob | undefined;
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    vi.stubGlobal('document', { createElement: () => ({ click() {}, remove() {} }), body: { appendChild() {} } });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      file = b as Blob;
+      return 'blob:backup';
+    });
+    expect(await exportLeague(l)).toBe(true);
+    expect(JSON.parse(await file!.text())).toMatchObject({ id: l.id, version: SAVE_VERSION });
   });
 });
