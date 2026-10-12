@@ -315,6 +315,23 @@ describe('engine rules', () => {
     expect(at(4, 7)).toBeNull();
   });
 
+  it('hacks a poor free-throw shooter only before the last two minutes of a period', () => {
+    type F = Internals & { intentionalFoul(off: unknown, def: unknown): string | null };
+    const hacks = (q: number, clock: number) => {
+      let n = 0;
+      for (let g = 0; g < 10; g++) {
+        const sim = new GameSim(side(0), side(1, { manage: { hackThreshold: 99 } }), { rng: new Rng(g), type: 'regular', injuries: false }) as unknown as F;
+        sim.q = q;
+        sim.clock = clock;
+        if (sim.intentionalFoul(sim.T[0], sim.T[1])) n++;
+      }
+      return n;
+    };
+    expect(hacks(2, 300)).toBeGreaterThan(5);
+    expect(hacks(2, 100)).toBe(0);
+    expect(hacks(4, 100)).toBe(0);
+  });
+
   it('hurries when two possessions down late, but not in a lost cause', () => {
     const sim = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false }) as unknown as Internals & { T: { score: number }[] };
     const [off, def] = sim.T;

@@ -1358,8 +1358,9 @@ export class GameSim {
       fouled = off.on[this.rng.weighted(ws)];
       tag = 'foul_up3';
     }
+    // NBA: an away-from-the-play foul in the last two minutes of any period costs a free throw and the ball
     const hack = def.t.manage.hackThreshold;
-    if (!fouled && hack > 0 && !(final && clock < 120)) {
+    if (!fouled && hack > 0 && clock >= 120) {
       const target = off.on.filter((p) => p.ftPct * 100 < hack).sort((a, b) => a.ftPct - b.ftPct)[0];
       if (target && this.rng.chance(0.8)) {
         fouled = target;
