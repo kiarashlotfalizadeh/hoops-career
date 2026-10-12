@@ -5,6 +5,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { GameResult, League } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
+import { FRANCHISES } from '../core/teams';
 
 export interface LeagueMeta {
   id: string;
@@ -230,6 +231,8 @@ export function isLeague(x: unknown): x is League {
 
 /** In-app routes only: inbox links come from the save file, which may have been crafted. */
 const isRoute = (s: unknown) => typeof s === 'string' && /^\/(?![/\\])/.test(s);
+/** Team colours go into the screens' styles as they are: from a crafted save, one could pull in a remote url(). */
+const isColor = (s: unknown) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
 
 /**
  * Bring a league read from the device or a backup up to the current format. Refuses saves from a
@@ -240,6 +243,11 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Hoops Career. Update the app to open it.');
   if (!isLeague(x)) throw new Error(notALeague);
   for (const m of x.inbox) if (m.link !== undefined && !isRoute(m.link)) delete m.link;
+  for (const t of x.teams) {
+    if (t.colors.length === 3 && t.colors.every(isColor)) continue;
+    const [a, b, c] = FRANCHISES[t.tid]?.colors ?? ['#334155', '#94a3b8', '#ffffff'];
+    t.colors = [a, b, c];
+  }
   // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
   x.version = SAVE_VERSION;
   return x;
