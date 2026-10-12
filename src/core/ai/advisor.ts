@@ -1,12 +1,13 @@
 // The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
 // in a worker), and alerts about rotation/tactics issues on your own team.
 
-import type { League, Player, PnrCoverage } from '../types';
+import type { ActionType, League, Player, PnrCoverage } from '../types';
 import { composites, ROLE_META } from '../ratings';
-import { DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } from '../sim/tactics';
+import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
+import { possessive } from '../analysis/gameReport';
 
 export interface Threat {
   pid: number;
@@ -29,30 +30,38 @@ function rotationPlayers(league: League, tid: number, n = 8): Player[] {
   return healthy.sort((a, b) => (team.rotation.minutes[b.pid] ?? 0) - (team.rotation.minutes[a.pid] ?? 0)).slice(0, n);
 }
 
+/** A team's rotation as scouting and counters read it: its creators, best first, and how the five who play most space the floor and handle the ball. */
+function readRotation(league: League, tid: number) {
+  const rot = rotationPlayers(league, tid);
+  const cs = rot.map((p) => ({ p, c: composites(p.ratings) }));
+  const creators = [...cs].sort((a, b) => b.c.pnrHandle + b.c.create - (a.c.pnrHandle + a.c.create));
+  const five = cs.slice(0, 5);
+  const avg = (f: (c: (typeof cs)[number]['c']) => number) => five.reduce((a, x) => a + f(x.c), 0) / Math.max(1, five.length);
+  return { rot, cs, creators, spacing: avg((c) => c.spacing), security: avg((c) => c.ballSec) };
+}
+
+/** A big that opponents hunt on switches. */
+const slowBig = (p: Player) => p.ratings.hgt >= 60 && p.ratings.spd < 40;
+
+/** A player's complaints as sentences, or `none` when he has nothing specific. */
+const moodText = (p: Player, none: string) => (p.mood.notes.length ? `${p.mood.notes.join('. ')}.` : none);
+
 const pct = (x: number) => Math.round(x);
-/** Team nicknames are plural ("the Nuggets are"); their possessive drops the extra s ("the Nuggets' bench"). */
-const possessive = (name: string) => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 
 export function scoutTeam(league: League, tid: number): ScoutReport {
   const team = league.teams[tid];
-  const rot = rotationPlayers(league, tid);
-  const cs = rot.map((p) => ({ p, c: composites(p.ratings) }));
+  const { cs, creators, spacing, security } = readRotation(league, tid);
   const off = OFF_PRESETS.find((x) => x.id === team.tactics.offPreset);
   const def = DEF_PRESETS.find((x) => x.id === team.tactics.defPreset);
   const t = team.tactics;
-  const creators = [...cs].sort((a, b) => b.c.pnrHandle + b.c.create - (a.c.pnrHandle + a.c.create));
   const shooters = [...cs].sort((a, b) => b.c.c3 - a.c.c3);
   const protector = [...cs].sort((a, b) => b.c.rimProt - a.c.rimProt)[0];
-  const spacing = cs.slice(0, 5).reduce((a, x) => a + x.c.spacing, 0) / Math.max(1, Math.min(5, cs.length));
-  const security = cs.slice(0, 5).reduce((a, x) => a + x.c.ballSec, 0) / Math.max(1, Math.min(5, cs.length));
   const offense: string[] = [];
   const defense: string[] = [];
   const weaknesses: string[] = [];
   offense.push(`Runs ${off?.name ?? 'a balanced attack'} at a ${t.offense.pace >= 65 ? 'fast' : t.offense.pace <= 35 ? 'slow' : 'moderate'} pace.`);
-  const topAct = Object.entries(t.offense.actions).sort((a, b) => b[1] - a[1])[0][0];
-  offense.push(
-    `Favorite action: ${topAct === 'pnr' ? 'pick & roll' : topAct === 'iso' ? 'isolation' : topAct === 'post' ? 'post-ups' : topAct === 'handoff' ? 'handoffs & off-ball screens' : 'motion & cuts'}.`,
-  );
+  const topAct = (Object.entries(t.offense.actions) as [ActionType, number][]).sort((a, b) => b[1] - a[1])[0][0];
+  offense.push(`Favorite action: ${ACTION_META[topAct].label}.`);
   if (t.offense.threePoint >= 70) offense.push('Lives behind the arc.');
   if (t.offense.crashBoards >= 65) offense.push('Crashes the offensive glass hard, which leaves them open to run-outs.');
   // ball-screen coverages and off-ball switching only apply in man-to-man: a zone plays its zone
@@ -71,7 +80,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
   if (man && t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
   if (man && (t.defense.pnr === 'switch' || t.defense.switchOffBall)) {
-    const slow = cs.filter((x) => x.p.ratings.hgt >= 60 && x.p.ratings.spd < 40);
+    const slow = cs.filter((x) => slowBig(x.p));
     if (slow.length) weaknesses.push(`Switching with a slow big (${slow[0].p.lastName}): hunt that mismatch.`);
   }
   if (man && t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
@@ -96,11 +105,8 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
 export function counterCandidates(league: League, userTid: number, oppTid: number): Candidate[] {
   const opp = league.teams[oppTid];
   const mine = league.teams[userTid];
-  const rot = rotationPlayers(league, oppTid);
-  const cs = rot.map((p) => ({ p, c: composites(p.ratings) }));
-  const top = [...cs].sort((a, b) => b.c.pnrHandle + b.c.create - (a.c.pnrHandle + a.c.create))[0];
-  const spacing = cs.slice(0, 5).reduce((a, x) => a + x.c.spacing, 0) / Math.max(1, Math.min(5, cs.length));
-  const security = cs.slice(0, 5).reduce((a, x) => a + x.c.ballSec, 0) / Math.max(1, Math.min(5, cs.length));
+  const { rot, creators, spacing, security } = readRotation(league, oppTid);
+  const top = creators[0];
   const out: Candidate[] = [];
   const cur = mine.tactics;
   // coverages only apply in man-to-man, so from a zone each one is a change of scheme too
@@ -148,7 +154,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   if (spacing >= 45 && cur.defense.help > 40)
     out.push({ id: 'help-low', label: 'Stay home on shooters', why: `The ${opp.name} space the floor well; don't over-help.`, patch: { defense: { help: 32 } } });
   if (spacing < CRAMPED_SPACING && cur.defense.scheme === 'man')
-    out.push({ id: 'zone', label: '2-3 zone', why: 'Dare a poor shooting team to beat you from outside.', patch: { defense: { scheme: 'zone23' } } });
+    out.push({ id: 'zone', label: SCHEME_META.zone23.label, why: 'Dare a poor-shooting team to beat you from outside.', patch: { defense: { scheme: 'zone23' } } });
   if (security < 55 && cur.defense.pressure < 70)
     out.push({ id: 'pressure-up', label: 'Turn up the pressure', why: 'Their ball handlers are loose with it.', patch: { defense: { pressure: 82 } } });
   // offensive counters
@@ -260,7 +266,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
         link: '/tactics',
       });
-    if (man && (team.tactics.defense.pnr === 'switch' || team.tactics.defense.switchOffBall) && starters.some((p) => p.ratings.hgt >= 60 && p.ratings.spd < 38)) {
+    if (man && (team.tactics.defense.pnr === 'switch' || team.tactics.defense.switchOffBall) && starters.some(slowBig)) {
       alerts.push({
         id: 'switch-slow',
         tone: 'alert',
@@ -304,9 +310,10 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. Rest him on back-to-backs (Rotation).`,
         link: '/rotation',
       });
-    if (p.mood.tradeRequest) alerts.push({ id: `tr-${p.pid}`, tone: 'bad', title: `${p.lastName} wants a trade`, body: p.mood.notes.join('. '), link: `/player/${p.pid}` });
+    if (p.mood.tradeRequest)
+      alerts.push({ id: `tr-${p.pid}`, tone: 'bad', title: `${p.lastName} wants a trade`, body: moodText(p, 'He wants a fresh start somewhere else.'), link: `/player/${p.pid}` });
     else if (p.mood.score <= -4 && p.ovr >= 70)
-      alerts.push({ id: `mood-${p.pid}`, tone: 'bad', title: `${p.lastName} is unhappy`, body: p.mood.notes.join('. ') || 'He is frustrated.', link: `/player/${p.pid}` });
+      alerts.push({ id: `mood-${p.pid}`, tone: 'bad', title: `${p.lastName} is unhappy`, body: moodText(p, 'He is frustrated.'), link: `/player/${p.pid}` });
   }
   return alerts.slice(0, 8);
 }
