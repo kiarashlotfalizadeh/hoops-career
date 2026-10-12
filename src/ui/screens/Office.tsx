@@ -177,8 +177,9 @@ export default function Office() {
             <div className="tiny dim upper bold">Payroll</div>
             <div className="fo-big">{fmtM(pay)}</div>
           </div>
-          <span className={`tag ${pay > cap.luxuryTax ? 'bad' : pay > cap.salaryCap ? 'warn' : 'good'}`}>
-            {pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
+          {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
+          <span className={`tag ${pay > cap.luxuryTax ? 'bad' : pay + holds > cap.salaryCap ? 'warn' : 'good'}`}>
+            {pay > cap.luxuryTax ? 'Taxpayer' : pay + holds > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
           </span>
         </div>
         <div style={{ marginTop: 6 }}>
@@ -392,7 +393,7 @@ function Spotlight({ league }: { league: League }) {
                   Cut down to {CAP.rosterMax} players before opening night ({roster} now).
                 </span>
               ) : (
-                `Roster set at ${roster}. Best players you can still afford:`
+                `Roster set at ${roster}.${topFAs.length ? ' Best players you can still afford:' : ' No free agent left fits your cap space, mid-level or the minimum.'}`
               )}
             </div>
           )}
@@ -589,7 +590,11 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                   </td>
                   {!anySalary ? (
                     <td colSpan={4} className="l">
-                      <span className="tag warn">Expiring</span> <span className="tiny dim">{league.phase === 'resign' ? 'Re-sign or he walks' : 'Free agent this summer'}</span>
+                      <span className="tag warn">Expiring</span>{' '}
+                      <span className="tiny dim">
+                        {/* before the re-sign period (lottery, draft) his Bird rights are still yours */}
+                        {league.phase === 'resign' ? 'Re-sign or he walks' : 'Re-sign him after the draft'}
+                      </span>
                     </td>
                   ) : (
                     seasons.map((s) => {

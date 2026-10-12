@@ -403,7 +403,8 @@ function OffPhase({ league }: { league: League }) {
         .sort((a, b) => b.ovr - a.ovr),
     [league, tid, s],
   );
-  const freed = list.reduce((a, p) => a + salaryFor(p, s), 0);
+  // two-way pay was never on the cap books (the committed figure beside it leaves it out too)
+  const freed = list.reduce((a, p) => a + (p.contract.twoWay ? 0 : salaryFor(p, s)), 0);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
   const when =
