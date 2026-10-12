@@ -140,6 +140,8 @@ export default function Live() {
   const [atBreak, setAtBreak] = useState(false);
   const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
   const [panel, setPanel] = useState<'none' | 'subs' | 'tactics' | 'stats' | 'end'>('none');
+  // "Keep changes after this game": kept while the adjustments sheet is closed, until the next game
+  const [persist, setPersist] = useState(false);
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [resultGid, setResultGid] = useState<number | null>(null);
@@ -178,6 +180,7 @@ export default function Live() {
     setPaused(false);
     setDismissed([]);
     setPanel('none');
+    setPersist(false);
     setBanner(null);
     setResultGid(null);
     setAnnounce('');
@@ -365,6 +368,8 @@ export default function Live() {
       useStore.getState().mutate((l) => {
         const tt = l.teams[l.userTid].tactics;
         fn(tt);
+        // a star target is one of tonight's opponents: the saved plan goes after each opponent's own star
+        tt.defense.starTarget = null;
         tt.manual = true;
       });
       // this screen made the change: resuming later shouldn't treat it as an outside edit
@@ -682,7 +687,7 @@ export default function Live() {
         <SubsPanel live={game} side={userSide} nameOf={nameOf} onChange={() => setTick((x) => x + 1)} />
       </Sheet>
       <Sheet open={panel === 'tactics'} onClose={() => setPanel('none')} title="In-game adjustments">
-        <TacticsPanel live={game} side={userSide} nameOf={nameOf} apply={applyTactics} />
+        <TacticsPanel live={game} side={userSide} nameOf={nameOf} apply={applyTactics} persist={persist} setPersist={setPersist} />
       </Sheet>
       <Sheet open={panel === 'stats'} onClose={() => setPanel('none')} title="Live box score">
         <StatsPanel live={game} side={userSide} league={league} nameOf={nameOf} tick={tick} />
@@ -827,7 +832,7 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
           onChange();
         }}
         label="I'll handle substitutions"
-        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted)."
+        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted), and the staff calls no timeouts to stop runs."
       />
       <div className="small dim">{outPid === null ? 'Tap a player on the floor, then a bench player.' : 'Now pick who comes in.'}</div>
       <div className="col" style={{ gap: 6 }}>
@@ -853,7 +858,15 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
             disabled={!!p.out || outPid === null}
             onClick={() => {
               if (outPid === null) return;
-              live.sim.substitute(side, outPid, p.pid);
+              // the game plays on while this sheet is open: the staff may have made a change first
+              if (!live.sim.substitute(side, outPid, p.pid)) {
+                const why = !t.on.some((x) => x.pid === outPid)
+                  ? `${nameOf(outPid)} is already on the bench.`
+                  : p.on
+                    ? `${nameOf(p.pid)} is already on the floor.`
+                    : `${nameOf(p.pid)} can't come in right now.`;
+                useStore.getState().toast(why, 'bad');
+              }
               setOut(null);
               onChange();
             }}
@@ -878,13 +891,16 @@ function TacticsPanel({
   side,
   nameOf,
   apply,
+  persist,
+  setPersist,
 }: {
   live: LiveGame;
   side: 0 | 1;
   nameOf: (pid: number) => string;
   apply: (fn: (t: Tactics) => void, persist: boolean) => void;
+  persist: boolean;
+  setPersist: (on: boolean) => void;
 }) {
-  const [persist, setPersist] = useState(false);
   const [, force] = useState(0);
   const t = live.sim.T[side].t;
   const opp = live.sim.T[1 - side];
