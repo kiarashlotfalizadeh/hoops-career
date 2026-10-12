@@ -29,7 +29,7 @@ import { Rng, clamp } from '../random';
 import { archetype, composites, type Composites, ROLE_USAGE } from '../ratings';
 import { GAME } from '../constants';
 import { buildMinutePlan, planInputs, planRoles } from './rotationPlan';
-import { FINISH_LABEL, type FinishType, type PossLog, type PossStep } from './log';
+import { FINISH_LABEL, type FinishType, type PossLog } from './log';
 import { cloneTactics } from './tactics';
 
 // ---------------------------------------------------------------- tuning constants
@@ -3086,5 +3086,3 @@ function ordinal(n: number) {
 function periodName(q: number) {
   return q <= 4 ? `${ordinal(q)} quarter` : q === 5 ? 'OT' : `${q - 4}OT`;
 }
-
-export type { Box as SimBox, PossStep };
