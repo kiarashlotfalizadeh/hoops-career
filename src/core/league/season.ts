@@ -15,6 +15,7 @@ import {
   addInbox,
   addNews,
   curTeamSeason,
+  dateToDay,
   payroll,
   playerName,
   prospects,
@@ -371,21 +372,14 @@ function endPlayoffs(league: League) {
 // ---------------------------------------------------------------- draft & offseason
 
 // Phase transitions no-op (returning false) outside their phase, so a double tap or a stale
-// dispatch can't skip a draft, a free agency or a whole season.
-
-/**
- * Season day of a date in the summer the season ends (month 0-based), so offseason news and mail
- * carry the draft's and free agency's dates rather than Finals night.
- */
-function summerDay(league: League, month: number, date: number) {
-  return Math.round((Date.UTC(league.season, month, date) - Date.UTC(league.season - 1, 9, 20)) / 86_400_000);
-}
+// dispatch can't skip a draft, a free agency or a whole season. The summer has dates too, so
+// offseason news and mail carry the draft's and free agency's dates rather than Finals night.
 
 export function startDraft(league: League): boolean {
   if (league.phase !== 'draftLottery') return false;
   league.phase = 'draft';
   // draft night: late June, or the day after a late Finals
-  league.day = Math.max(league.day + 1, summerDay(league, 5, 25));
+  league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 25));
   withRng(league, (rng) => draftUntilUser(league, rng));
   return true;
 }
@@ -449,7 +443,7 @@ export function startFreeAgency(league: League): boolean {
     league.phase = 'freeAgency';
     league.faDay = 0;
     // the market opens on June 30
-    league.day = Math.max(league.day + 1, summerDay(league, 5, 30));
+    league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 30));
     faDay(league, rng, 1.2);
   });
   const cap = CAP_FOR(league, league.season + 1);

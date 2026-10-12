@@ -217,11 +217,10 @@ function sortSchedule(league: League) {
 function pairFillers(league: League, need: Map<number, number>, rng: Rng): { home: number; away: number }[] {
   const homeCount = new Map<number, number>();
   const meet = new Map<string, number>();
-  const mk = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   for (const g of league.schedule) {
     if (g.type !== 'regular') continue;
     homeCount.set(g.home, (homeCount.get(g.home) ?? 0) + 1);
-    meet.set(mk(g.home, g.away), (meet.get(mk(g.home, g.away)) ?? 0) + 1);
+    meet.set(pairKey(g.home, g.away), (meet.get(pairKey(g.home, g.away)) ?? 0) + 1);
   }
   const hostSlots: number[] = [];
   const awaySlots: number[] = [];
@@ -247,8 +246,8 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
     let ok = true;
     for (const host of rng.shuffle(hostSlots.slice())) {
       const opts = visitors
-        .map((v, i) => ({ v, i, s: (used.get(mk(host, v)) ?? 0) * 10 + (league.teams[v].conf !== league.teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
-        .filter((o) => o.v !== host && !out.some((g) => mk(g.home, g.away) === mk(host, o.v)))
+        .map((v, i) => ({ v, i, s: (used.get(pairKey(host, v)) ?? 0) * 10 + (league.teams[v].conf !== league.teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
+        .filter((o) => o.v !== host && !out.some((g) => pairKey(g.home, g.away) === pairKey(host, o.v)))
         .sort((a, b) => a.s - b.s);
       if (!opts.length) {
         ok = false;
@@ -256,7 +255,7 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
       }
       visitors.splice(opts[0].i, 1);
       out.push({ home: host, away: opts[0].v });
-      used.set(mk(host, opts[0].v), (used.get(mk(host, opts[0].v)) ?? 0) + 1);
+      used.set(pairKey(host, opts[0].v), (used.get(pairKey(host, opts[0].v)) ?? 0) + 1);
     }
     if (ok) return out;
   }
@@ -268,6 +267,16 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
     if (i >= 0) out.push({ home: host, away: visitors.splice(i, 1)[0] });
   }
   return out;
+}
+
+/** Key for a pair of teams, the same whichever comes first. */
+export function pairKey(a: number, b: number): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+/** Would a game on day `d` make three days running? */
+export function threeInThree(days: Set<number>, d: number): boolean {
+  return (days.has(d - 1) && days.has(d - 2)) || (days.has(d - 1) && days.has(d + 1)) || (days.has(d + 1) && days.has(d + 2));
 }
 
 /** Would a game on day `d` make four in five nights? (The NBA hasn't scheduled one since 2018.) */
@@ -285,17 +294,13 @@ function placeGames(league: League, pairs: { home: number; away: number }[], day
   const busy = teamDays(league);
   const perDay = new Map<number, number>();
   for (const g of league.schedule) perDay.set(g.day, (perDay.get(g.day) ?? 0) + 1);
-  const three = (t: number, d: number) => {
-    const b = busy[t];
-    return (b.has(d - 1) && b.has(d - 2)) || (b.has(d - 1) && b.has(d + 1)) || (b.has(d + 1) && b.has(d + 2));
-  };
   for (const p of pairs) {
     let best = -1;
     let bestScore = Infinity;
     for (const d of days) {
       if (busy[p.home].has(d) || busy[p.away].has(d)) continue;
       const s =
-        (three(p.home, d) || three(p.away, d) ? 100 : 0) +
+        (threeInThree(busy[p.home], d) || threeInThree(busy[p.away], d) ? 100 : 0) +
         (fourInFive(busy[p.home], d) || fourInFive(busy[p.away], d) ? 50 : 0) +
         [p.home, p.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length * 4 +
         (perDay.get(d) ?? 0) * 0.6 +

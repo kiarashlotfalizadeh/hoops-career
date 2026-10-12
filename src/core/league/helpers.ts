@@ -179,6 +179,11 @@ export function dayToDate(season: number, day: number): Date {
   return d;
 }
 
+/** Season day of a date (month 0-based): October to December in the season's first year, other months in its second. */
+export function dateToDay(season: number, month: number, date: number): number {
+  return Math.round((Date.UTC(month >= 9 ? season - 1 : season, month, date) - Date.UTC(season - 1, 9, 20)) / 86_400_000);
+}
+
 export function fmtDate(season: number, day: number, opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }) {
   return dayToDate(season, day).toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' });
 }
