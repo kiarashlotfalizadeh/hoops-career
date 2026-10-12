@@ -15,6 +15,8 @@ import { ARENA_CAPACITY } from '../src/core/league/finances';
 
 const [seasons, rngSeed, userTid] = [5, 42, 19].map((d, i) => Number(process.argv[i + 2] ?? d));
 const L = createLeague({ name: 'Inv', userTid, coachName: 'C', settings: defaultSettings(), seed: JSON.parse(readFileSync('src/data/seed.json', 'utf8')), rngSeed });
+// a fixed id: the lottery draws ties from it, so a run with the same seed repeats
+L.id = `inv_${rngSeed}`;
 const viol = new Map<string, string[]>();
 const bad = (kind: string, msg: string) => {
   const v = viol.get(kind) ?? [];

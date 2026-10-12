@@ -18,6 +18,8 @@ const seed: SeedData | null = existsSync(seedPath) ? JSON.parse(readFileSync(see
 console.log(seed ? `Using seed ${seedPath} (${seed.players.length} players)` : 'Fictional league');
 const t0 = performance.now();
 const league = createLeague({ name: 'Test', userTid: 19, coachName: 'Test Coach', settings: defaultSettings(), seed, rngSeed: 42 });
+// a fixed id: the lottery draws ties from it, so every run is the same
+league.id = 'season_test';
 console.log(`created in ${(performance.now() - t0).toFixed(0)}ms; players ${Object.keys(league.players).length}`);
 
 for (let s = 0; s < seasons; s++) {
