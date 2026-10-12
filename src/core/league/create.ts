@@ -322,16 +322,16 @@ export function createLeague(opts: CreateOpts): League {
   for (const t of league.teams) updateMorale(league, t.tid);
   const user = league.teams[opts.userTid];
   const roster = teamPlayers(league, opts.userTid);
-  addInbox(league, {
-    from: 'Owner',
-    subject: `Welcome to the ${user.region} ${user.name}`,
-    body: `Coach ${opts.coachName}, you're running basketball operations and the bench. Your roster has ${roster.length} players. Start with Tactics: your assistant has drafted a game plan that fits this roster, and every choice explains what it does. When you're ready, start the regular season from Home.`,
-    tone: 'good',
-    link: '/tactics',
-  });
   // two-way contracts don't count toward the 15-man roster
   const standard = roster.filter((p) => !p.contract.twoWay);
   const twoWays = roster.length - standard.length;
+  addInbox(league, {
+    from: 'Owner',
+    subject: `Welcome to the ${user.region} ${user.name}`,
+    body: `Coach ${opts.coachName}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Start with Tactics: your assistant has drafted a game plan that fits this roster, and every choice explains what it does. When you're ready, start the regular season from Home.`,
+    tone: 'good',
+    link: '/tactics',
+  });
   const over = standard.length - CAP.rosterMax;
   if (over > 0) {
     const cuts = [...standard].sort((a, b) => valueScore(league, a) - valueScore(league, b)).slice(0, over);
