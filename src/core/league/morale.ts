@@ -34,6 +34,12 @@ export function expectedMinutes(rank: number, ovr: number, sustainable = 40): nu
   return Math.min(clamp(base + (ovr - 76) * 0.4, 2, 37), sustainable);
 }
 
+/** The notes a happy player gets; everything else in mood.notes is a complaint. */
+const PRAISE = ['Happy with his role', 'Loves winning here'];
+
+/** What a player is unhappy about, from his mood notes (no praise). */
+export const complaints = (p: Player) => p.mood.notes.filter((n) => !PRAISE.includes(n));
+
 export function updateMorale(league: League, tid: number, notify = false) {
   const roster = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
   const ts = curTeamSeason(league, tid);
@@ -67,8 +73,8 @@ export function updateMorale(league: League, tid: number, notify = false) {
     if (pt < -1.5) gripes.push(`Wants more minutes (expects ~${Math.round(exp)} mpg)`);
     if (win < -1.5) gripes.push('Frustrated by losing');
     const notes = [...gripes];
-    if (pt > 1) notes.push('Happy with his role');
-    if (win > 1.5) notes.push('Loves winning here');
+    if (pt > 1) notes.push(PRAISE[0]);
+    if (win > 1.5) notes.push(PRAISE[1]);
     const score = clamp(pt + win + roleC + contract, -10, 10);
     // smooth changes over time
     p.mood.score = Math.round((prev * 0.6 + score * 0.4) * 10) / 10;
