@@ -62,8 +62,11 @@ export function seasonPlayTypes(league: League, tid = league.userTid): PlayTypeA
   return [...m.values()].sort((a, b) => b.off.poss + b.def.poss - (a.off.poss + a.def.poss));
 }
 
-/** Expected points per game from each tracked tactical effect, split by who benefited. */
-export function seasonImpacts(league: League, tid = league.userTid): { key: string; forUser: boolean; perGame: number; games: number }[] {
+/**
+ * Expected points per game from each tracked tactical effect, split by who benefited, over the
+ * games that tracked them: the user's own (a team taken over mid-season has none from before).
+ */
+export function seasonImpacts(league: League, tid = league.userTid): { games: number; effects: { key: string; forUser: boolean; perGame: number }[] } {
   const m = new Map<string, number>();
   let games = 0;
   for (const g of league.games) {
@@ -76,12 +79,13 @@ export function seasonImpacts(league: League, tid = league.userTid): { key: stri
       m.set(k, (m.get(k) ?? 0) + im.pts);
     }
   }
-  return [...m.entries()]
+  const effects = [...m.entries()]
     .map(([k, v]) => {
       const [key, f] = k.split('|');
-      return { key, forUser: f === '1', perGame: games ? v / games : 0, games };
+      return { key, forUser: f === '1', perGame: v / games };
     })
     .sort((a, b) => b.perGame - a.perGame);
+  return { games, effects };
 }
 
 /**
