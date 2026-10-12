@@ -45,7 +45,9 @@ export default function Rotation() {
   const startSet = new Set(healthyOrder.slice(0, 5));
   const benchFrom = healthyOrder.length >= 5 ? order.indexOf(healthyOrder[4]) + 1 : order.length;
 
-  // planned stints visual: the engine's own plan inputs (injured players' minutes handed out, caps)
+  // planned stints visual: the engine's own plan inputs (injured players' minutes handed out, caps,
+  // an assistant-managed rotation's shorter playoff eight)
+  const playoffs = league.phase === 'playoffs';
   const plan = useLeagueMemo(() => {
     const pp = planInputs(
       order.map((pid) => {
@@ -53,12 +55,13 @@ export default function Rotation() {
         return { pid, available: !p.injury, ...planRoles(p.ratings, p.pos), endurance: p.ratings.end };
       }),
       rot,
+      { playoffs },
     );
     const norm = normalizeMinutes(pp);
     return { slots: buildMinutePlan(pp), norm: Object.fromEntries(pp.map((x, i) => [x.pid, norm[i]])) as Record<number, number> };
     // the rotation's content stands for order, byId and rot, which are new objects every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(rot)]);
+  }, [JSON.stringify(rot), playoffs]);
 
   const move = (pid: number, dir: -1 | 1) =>
     update((r) => {
