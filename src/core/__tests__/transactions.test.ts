@@ -637,6 +637,21 @@ describe('free agency', () => {
     expect(userOffer(l, q.pid, askingContract(l, q, U).amount, askingContract(l, q, U).years).reason).toMatch(/full \(21\)/);
   });
 
+  it("a re-signing takes one of next season's 21 spots", () => {
+    const l = league();
+    l.phase = 'resign';
+    const cs = contractSeason(l);
+    const p = shape(l, standardRoster(l, U)[0], 74, 27);
+    p.contract = { start: l.season, salaries: [5_000] };
+    const signed = () => standardRoster(l, U).filter((x) => contractExp(x.contract) >= cs);
+    while (signed().length < 21) signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l, cs).vetMin, 1, { news: false, start: cs });
+    const ask = askingContract(l, p, U);
+    expect(userResign(l, p.pid, ask.amount, ask.years).reason).toMatch(/full for next season \(21\)/);
+    releasePlayer(l, signed()[0], { news: false });
+    expect(userResign(l, p.pid, ask.amount, ask.years).ok).toBe(true);
+    expect(signed().length).toBe(21);
+  });
+
   it('cuts prices every 5 days until the market can pay, and the market clears (T1)', () => {
     const l = league();
     l.phase = 'freeAgency';

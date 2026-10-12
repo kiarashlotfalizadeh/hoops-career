@@ -8,7 +8,7 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { MLE_YEARS, askingContract, makeContract, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
-import { capHolds, signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
+import { capHolds, resignRoster, signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Help, Sheet } from '../components/ui';
 import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from './common';
@@ -69,11 +69,12 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const after = pay + amount;
   // re-signing him clears his own cap hold; the other expiring players still hold their room
   const otherHolds = mode === 'resign' ? capHolds(league, tid).reduce((a, h) => a + (h.p.pid === p.pid ? 0 : h.amount), 0) : 0;
-  const rosterN = standardRoster(league, tid).length;
+  // re-signing counts next season's contracts: the other expiring deals are leaving or re-signing too
+  const rosterN = mode === 'resign' ? resignRoster(league) : standardRoster(league, tid).length;
   const rosterMax = rosterMaxNow(league);
   // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
   const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
-  const rosterBlocked = mode === 'fa' && rosterN >= rosterMax;
+  const rosterBlocked = rosterN >= rosterMax;
   const route = signingRoute(league, tid, amount, season, p);
   const mle = mleRoom(league, tid, season);
   const capBlocked = mode === 'fa' && !route;
