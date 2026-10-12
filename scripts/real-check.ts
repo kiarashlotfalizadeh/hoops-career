@@ -6,10 +6,11 @@
 import { readFileSync } from 'node:fs';
 import { createLeague, defaultSettings, type SeedData } from '../src/core/league/create';
 import { startRegularSeason, simDay } from '../src/core/league/season';
-import { teamPlayers, playerName, seasonTotals } from '../src/core/league/helpers';
+import { teamPlayers, playerName, seasonTotals, standardRoster } from '../src/core/league/helpers';
+import { releasePlayer } from '../src/core/league/contracts';
 import { standings } from '../src/core/league/standings';
 import { CAP, TARGETS } from '../src/core/constants';
-import { FREE_AGENT, type Player } from '../src/core/types';
+import type { Player } from '../src/core/types';
 import { engineDiag, resetEngineDiag } from '../src/core/sim/engine';
 import { awardLadder } from '../src/core/league/awards';
 import { SEASON_WEIGHT } from './data/derive';
@@ -19,8 +20,9 @@ const rngSeed = Number(process.argv[3] ?? process.env.RNG ?? 7);
 const seed: SeedData = JSON.parse(readFileSync(seedPath, 'utf8'));
 console.log(`seed ${seedPath} · rng ${rngSeed}`);
 const league = createLeague({ name: 'Check', userTid: 0, coachName: 'Check', settings: defaultSettings(), seed, rngSeed });
-const roster = teamPlayers(league, 0).sort((a, b) => a.ovr - b.ovr);
-while (teamPlayers(league, 0).length > CAP.rosterMax) roster.shift()!.tid = FREE_AGENT;
+// AI teams cut to 15 at creation, the user's team doesn't: release its lowest-rated standard contracts (two-way deals don't count)
+const roster = standardRoster(league, 0).sort((a, b) => a.ovr - b.ovr);
+while (standardRoster(league, 0).length > CAP.rosterMax) releasePlayer(league, roster.shift()!, { news: false });
 const errs = startRegularSeason(league);
 if (errs.length) throw new Error(errs.join('; '));
 resetEngineDiag();
