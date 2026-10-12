@@ -23,7 +23,7 @@ export const OFF_PRESETS: OffPreset[] = [
     id: 'balanced',
     name: 'Balanced Attack',
     tagline: 'A bit of everything',
-    description: 'Modern NBA default. PnR-led with ball movement and a healthy shot profile.',
+    description: 'Modern NBA default. Pick-and-roll first, with ball movement and a healthy shot profile.',
     bestFor: 'Rosters without one dominant creator.',
     values: { pace: 52, transition: 55, actions: { pnr: 62, iso: 35, post: 25, handoff: 45, motion: 55 }, threePoint: 62, rimAttack: 60, crashBoards: 40, huntMismatch: false },
   },
@@ -90,7 +90,7 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'blitz',
     name: 'Blitz the Ball',
     tagline: 'Take the ball out of his hands',
-    description: 'Trap the PnR handler and pressure passing lanes. Forces turnovers; gives up 4-on-3 chances when beaten.',
+    description: 'Trap the pick-and-roll ball handler and pressure passing lanes. Forces turnovers; gives up 4-on-3 chances when beaten.',
     bestFor: 'Long, rangy defenders with high IQ vs a ball-dominant star with weak passing.',
     values: { scheme: 'man', pnr: 'blitz', help: 55, pressure: 74, press: 'none', getBack: 55, switchOffBall: false, physicality: 58 },
   },
@@ -98,8 +98,8 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'ice',
     name: 'Ice & Contain',
     tagline: 'Force him baseline',
-    description: 'Push side pick-and-rolls toward the sideline. Takes away the middle and pull-up threes, accepts long twos.',
-    bestFor: 'Disciplined defenders vs drivers and pull-up three shooters.',
+    description: 'Push side pick-and-rolls toward the sideline. Takes away the middle: pull-up jumpers, drives and the roll man, so the ball goes to the kick-out.',
+    bestFor: 'Disciplined defenders vs drivers and pull-up shooters.',
     values: { scheme: 'man', pnr: 'ice', help: 55, pressure: 46, press: 'none', getBack: 60, switchOffBall: false, physicality: 50 },
   },
   {
@@ -114,7 +114,7 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'zone',
     name: '2-3 Zone',
     tagline: 'Pack it in',
-    description: 'Shrinks driving lanes and hides weak individual defenders, but leaves corner threes and the offensive glass vulnerable.',
+    description: 'Shrinks driving lanes and clogs the post, but leaves corner threes and the offensive glass vulnerable.',
     bestFor: 'Long lineups with a rim anchor vs poor-shooting, drive-heavy teams.',
     values: { scheme: 'zone23', pnr: 'drop', help: 70, pressure: 38, press: 'none', getBack: 62, switchOffBall: false, physicality: 48 },
   },
@@ -122,16 +122,16 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'chaos',
     name: 'Full-Court Chaos',
     tagline: 'Press, trap, run',
-    description: 'Full-court press, ball pressure everywhere. Creates turnovers and raises the pace, at a big fatigue cost.',
+    description: 'Full-court press, ball pressure everywhere. Creates turnovers, but the press eats clock, gives up run-outs when broken and costs a lot of energy.',
     bestFor: 'Deep, athletic benches with quick hands vs shaky ball handlers.',
     values: { scheme: 'man', pnr: 'hedge', help: 48, pressure: 86, press: 'always', getBack: 45, switchOffBall: false, physicality: 64 },
   },
 ];
 
 export const ACTION_META: Record<ActionType, { label: string; help: string }> = {
-  pnr: { label: 'Pick & Roll', help: 'Ball screen for a creator; the screener rolls or pops. Coverage choice decides who gets open.' },
+  pnr: { label: 'Pick-and-roll', help: 'Ball screen for a creator; the screener rolls or pops. Coverage choice decides who gets open.' },
   iso: { label: 'Isolation', help: 'Clear out for a one-on-one. Efficient only for elite creators or vs a mismatch.' },
-  post: { label: 'Post-Up', help: 'Feed a big (or a switched mismatch) on the block. Draws doubles and fouls.' },
+  post: { label: 'Post-up', help: 'Feed a big (or a switched mismatch) on the block. Draws doubles and fouls.' },
   handoff: { label: 'Handoffs & Screens', help: 'Dribble handoffs and off-ball screens to spring shooters. Strong vs drop and non-switching teams.' },
   motion: { label: 'Motion & Cuts', help: 'Ball movement, drive-and-kick and backdoor cuts. Needs passers and shooters; beats over-aggressive defenses.' },
 };
@@ -141,19 +141,22 @@ export const COVERAGE_META: Record<PnrCoverage, { label: string; help: string }>
   switch: { label: 'Switch', help: 'Defenders exchange assignments. No open roll man, but creates mismatches.' },
   hedge: { label: 'Hedge', help: 'Big shows high to slow the ball, then recovers. Balanced, but slow bigs leave the roller open.' },
   blitz: { label: 'Blitz', help: 'Double-team the handler. Forces the ball out and creates turnovers; 4-on-3 behind it.' },
-  ice: { label: 'Ice', help: 'Force the handler to the sideline. Takes away the middle and pull-up threes.' },
+  ice: { label: 'Ice', help: 'Force the handler to the sideline. Takes away the middle: pull-up jumpers, drives and the roll.' },
 };
 
 export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
   man: { label: 'Man-to-Man', help: 'Each defender has an assignment. Matchups matter.' },
-  zone23: { label: '2-3 Zone', help: 'Protects the paint and hides weak defenders; vulnerable to corner threes and offensive boards.' },
-  zone32: { label: '3-2 Zone', help: 'Extends to the perimeter to run shooters off the line; softer inside.' },
+  zone23: { label: '2-3 Zone', help: 'Protects the paint against drives, cuts and post-ups; vulnerable to open (often corner) threes and offensive boards.' },
+  zone32: {
+    label: '3-2 Zone',
+    help: 'Protects the paint like the 2-3 and runs shooters off the line, so ball movement finds fewer open threes; still weak on the offensive glass.',
+  },
 };
 
 export const PRESS_META: Record<PressMode, { label: string; help: string }> = {
   none: { label: 'No Press', help: 'Set up in the half court.' },
-  afterMade: { label: 'After Makes', help: 'Full-court pressure after made baskets.' },
-  always: { label: 'Always', help: 'Press every possession. High turnover upside, high fatigue cost.' },
+  afterMade: { label: 'After Makes', help: 'Full-court pressure after made baskets and free throws.' },
+  always: { label: 'Always', help: 'Press every time they inbound: after scores, dead balls and at period starts. High turnover upside, high fatigue cost.' },
 };
 
 export const STAR_PLAN_META: Record<StarPlan, { label: string; help: string }> = {
