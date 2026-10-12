@@ -1,5 +1,5 @@
 import type { InboxMessage, League, NewsItem, Player, PlayerStats, Team, TeamSeason } from '../types';
-import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
+import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
 import { CAP } from '../constants';
 import { blankStats, playerAge, salaryFor } from '../playerGen';
 import { Rng } from '../random';
@@ -10,10 +10,6 @@ export function withRng<T>(league: League, fn: (rng: Rng) => T): T {
   const out = fn(rng);
   league.rng = rng.state;
   return out;
-}
-
-export function allPlayers(league: League): Player[] {
-  return Object.values(league.players);
 }
 
 export function teamPlayers(league: League, tid: number): Player[] {
@@ -45,20 +41,12 @@ export function rosterMaxNow(league: League): number {
   return inSeason(league) ? CAP.rosterMax : OFFSEASON_ROSTER_MAX;
 }
 
-export function activePlayers(league: League): Player[] {
-  return Object.values(league.players).filter((p) => p.tid >= 0);
-}
-
 export function freeAgents(league: League): Player[] {
   return Object.values(league.players).filter((p) => p.tid === FREE_AGENT);
 }
 
 export function prospects(league: League, year?: number): Player[] {
   return Object.values(league.players).filter((p) => p.tid === DRAFT_PROSPECT && (year === undefined || p.draft.year === year));
-}
-
-export function retired(league: League): Player[] {
-  return Object.values(league.players).filter((p) => p.tid === RETIRED);
 }
 
 export function age(league: League, p: Player) {
@@ -92,10 +80,6 @@ export function contractSeason(league: League): number {
   return league.phase === 'draftLottery' || league.phase === 'draft' || league.phase === 'resign' || league.phase === 'freeAgency' ? league.season + 1 : league.season;
 }
 
-export function capSpace(league: League, tid: number, season = league.season): number {
-  return CAP_FOR(league, season).salaryCap - payroll(league, tid, season);
-}
-
 /**
  * League money grows with the cap: revenues, ticket prices, costs and the owner's expectations
  * are quoted in first-season dollars and multiplied by this (1 in the league's first season).
@@ -127,7 +111,7 @@ export function statsLine(p: Player, season: number, tid: number, playoffs: bool
   return s;
 }
 
-/** Combined (all teams) regular-season stats for a season. */
+/** Combined (all teams) stats for a season: the regular season, or with `playoffs` the postseason (play-in included). */
 export function seasonTotals(p: Player, season: number, playoffs = false): PlayerStats | null {
   const rows = p.stats.filter((s) => s.season === season && s.playoffs === playoffs);
   if (!rows.length) return null;
@@ -143,14 +127,35 @@ export function seasonTotals(p: Player, season: number, playoffs = false): Playe
   return t;
 }
 
+/** News items the save keeps, and how many of the latest injuries and big games always stay. */
+const NEWS_MAX = 400;
+const ROUTINE_KEEP = 100;
+const routineNews = (n: NewsItem) => n.kind === 'injury' || n.kind === 'milestone';
+
+/**
+ * Add a news item. Over the limit the oldest injury or big game goes first (there are hundreds a
+ * season), so trades, signings and the season's results stay a year; the latest of them always
+ * show too.
+ */
 export function addNews(league: League, n: Omit<NewsItem, 'id' | 'season' | 'day'>) {
   league.news.push({ id: league.nextMsgId++, season: league.season, day: league.day, ...n });
-  if (league.news.length > 400) league.news.splice(0, league.news.length - 400);
+  while (league.news.length > NEWS_MAX) {
+    const routine = league.news.filter(routineNews).length > ROUTINE_KEEP;
+    league.news.splice(
+      league.news.findIndex((x) => routineNews(x) === routine),
+      1,
+    );
+  }
 }
 
 export function addInbox(league: League, m: Omit<InboxMessage, 'id' | 'season' | 'day' | 'read'>) {
   league.inbox.unshift({ id: league.nextMsgId++, season: league.season, day: league.day, read: false, ...m });
   if (league.inbox.length > 150) league.inbox.length = 150;
+}
+
+/** A list for running text: "A", "A and B", "A, B and C". */
+export function andList(items: string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] ?? '');
 }
 
 export function playerName(p: Player) {
@@ -177,6 +182,11 @@ export function dayToDate(season: number, day: number): Date {
   const d = new Date(Date.UTC(season - 1, 9, 20));
   d.setUTCDate(d.getUTCDate() + day);
   return d;
+}
+
+/** Season day of a date (month 0-based): October to December in the season's first year, other months in its second. */
+export function dateToDay(season: number, month: number, date: number): number {
+  return Math.round((Date.UTC(month >= 9 ? season - 1 : season, month, date) - Date.UTC(season - 1, 9, 20)) / 86_400_000);
 }
 
 export function fmtDate(season: number, day: number, opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }) {

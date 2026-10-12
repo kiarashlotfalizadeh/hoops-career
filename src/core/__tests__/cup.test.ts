@@ -119,6 +119,8 @@ describe('NBA Cup', () => {
     playThroughCup(league);
     const prevChamp = league.cup!.champion;
     while (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') S.simDay(league);
+    // a season of injuries doesn't push the Cup out of the news
+    expect(league.news.some((n) => n.season === league.season && n.text.includes('win the NBA Cup'))).toBe(true);
     S.startDraft(league);
     S.finishDraftPhase(league);
     S.startFreeAgency(league);

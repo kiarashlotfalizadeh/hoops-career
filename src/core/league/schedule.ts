@@ -5,7 +5,8 @@
 
 import type { CupGroup, ScheduledGame, Team } from '../types';
 import { Rng } from '../random';
-import { cupCalendar, drawCupGroups, fourInFive, groupRounds, type CupSetup } from './cup';
+import { cupCalendar, drawCupGroups, fourInFive, groupRounds, pairKey, threeInThree, type CupSetup } from './cup';
+import { dayToDate } from './helpers';
 
 interface Matchup {
   home: number;
@@ -46,14 +47,12 @@ function balancedOrientation(edges: [number, number][], season: number): Map<str
       const e = list[i];
       used[e.id] = true;
       // traversing v -> e.to: v hosts the extra game
-      homeOf.set(key(v, e.to), v);
+      homeOf.set(pairKey(v, e.to), v);
       stack.push(e.to);
     }
   }
   return homeOf;
 }
-
-const key = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 
 export function buildMatchups(teams: Team[], season: number): Matchup[] {
   const out: Matchup[] = [];
@@ -83,7 +82,7 @@ export function buildMatchups(teams: Team[], season: number): Matchup[] {
         const shift = (divs.indexOf(a.div) + divs.indexOf(b.div) + season) % 5;
         games = (ia + ib + shift) % 5 <= 1 ? 3 : 4;
       } else games = 2;
-      pairGames.set(key(a.tid, b.tid), games);
+      pairGames.set(pairKey(a.tid, b.tid), games);
       if (games === 3) threeGame.push([a.tid, b.tid]);
     }
   }
@@ -160,13 +159,13 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   }
   // mid-February break from Friday to Wednesday, the All-Star Game on its Sunday
   let allStarStart = 116;
-  while (dateOf(season, allStarStart).getUTCDay() !== 5) allStarStart++;
+  while (dayToDate(season, allStarStart).getUTCDay() !== 5) allStarStart++;
   const allStarLen = 6;
   const lastTarget = 168;
-  // the NBA's dark days: Thanksgiving and Christmas Eve
+  // the NBA's dark days: Thanksgiving (the fourth Thursday of November) and Christmas Eve
   const holiday = (d: number) => {
-    const date = dateOf(season, d);
-    return (date.getUTCMonth() === 10 && date.getUTCDay() === 4 && date.getUTCDate() >= 22) || (date.getUTCMonth() === 11 && date.getUTCDate() === 24);
+    const date = dayToDate(season, d);
+    return (date.getUTCMonth() === 10 && date.getUTCDay() === 4 && date.getUTCDate() >= 22 && date.getUTCDate() <= 28) || (date.getUTCMonth() === 11 && date.getUTCDate() === 24);
   };
   const blocked = (d: number) => (d >= allStarStart && d < allStarStart + allStarLen) || (!!cup && d >= cup.setup.qfDays[0] && d <= cup.setup.finalDay) || holiday(d);
   // every day each team plays, including the Cup nights fixed in advance
@@ -181,8 +180,7 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   // last: no back-to-back into the window, or straight out of it
   if (cup) for (const p of plays) p.add(cup.setup.qfDays[0]).add(cup.setup.finalDay);
   const on = (t: number, d: number) => plays[t].has(d);
-  const threeInThree = (t: number, d: number) => (on(t, d - 1) && on(t, d - 2)) || (on(t, d - 1) && on(t, d + 1)) || (on(t, d + 1) && on(t, d + 2));
-  const crowded = (t: number, d: number) => threeInThree(t, d) || fourInFive(plays[t], d);
+  const crowded = (t: number, d: number) => threeInThree(plays[t], d) || fourInFive(plays[t], d);
   const games: ScheduledGame[] = [];
   let pool = matchups;
   let day = 0;
@@ -236,7 +234,7 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 8, cup: cup?.setup };
 }
 
-/** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = opening night). */
+/** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = Oct 20). */
 export interface RealScheduleData {
   season: number;
   games: string[];
@@ -267,9 +265,6 @@ function realCupGroups(teams: Team[], cup: RealCupData): CupGroup[] | null {
   }
   return seen.size === teams.length ? groups : null;
 }
-
-const MS_DAY = 86_400_000;
-const dateOf = (season: number, day: number) => new Date(Date.UTC(season - 1, 9, 20) + day * MS_DAY);
 
 /**
  * The real NBA schedule. The NBA publishes 80 games per team and adds the Cup knockouts and the
@@ -335,8 +330,7 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
 
   // pair the missing games: hosts that still need home games vs visitors that need road games
   const meet = new Map<string, number>();
-  const mk = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
-  for (const g of real) meet.set(mk(g.home, g.away), (meet.get(mk(g.home, g.away)) ?? 0) + 1);
+  for (const g of real) meet.set(pairKey(g.home, g.away), (meet.get(pairKey(g.home, g.away)) ?? 0) + 1);
   let extra: { home: number; away: number }[] | null = null;
   for (let attempt = 0; attempt < 60 && !extra; attempt++) {
     const h = needHome.slice();
@@ -352,7 +346,7 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
       const opts = teams
         .map((t) => t.tid)
         .filter((t) => t !== host && a[t] > 0)
-        .map((t) => ({ t, s: (used.get(mk(host, t)) ?? 0) * 10 + (teams[t].conf !== teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
+        .map((t) => ({ t, s: (used.get(pairKey(host, t)) ?? 0) * 10 + (teams[t].conf !== teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
         .sort((x, y) => x.s - y.s);
       if (!opts.length) {
         ok = false;
@@ -362,7 +356,7 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
       out.push({ home: host, away: vis });
       h[host]--;
       a[vis]--;
-      used.set(mk(host, vis), (used.get(mk(host, vis)) ?? 0) + 1);
+      used.set(pairKey(host, vis), (used.get(pairKey(host, vis)) ?? 0) + 1);
     }
     if (ok && a.every((x) => x === 0)) extra = out;
   }
@@ -376,19 +370,15 @@ export function realSchedule(teams: Team[], data: RealScheduleData, season: numb
   const inBreak = (d: number) => d >= breakStart && d < breakStart + breakLen;
 
   // place each extra game on the best open day: December first, the emptier the better
-  const three = (t: number, d: number) => {
-    const b = busy[t];
-    return (b.has(d - 1) && b.has(d - 2)) || (b.has(d - 1) && b.has(d + 1)) || (b.has(d + 1) && b.has(d + 2));
-  };
   const placed: { day: number; home: number; away: number }[] = [];
   for (const g of rng.shuffle(extra)) {
     let best = -1;
     let bestScore = Infinity;
     for (let d = 1; d <= lastReal; d++) {
-      const date = dateOf(season, d);
+      const date = dayToDate(season, d);
       const december = date.getUTCMonth() === 11;
       if (inBreak(d) || (december && date.getUTCDate() === 24) || busy[g.home].has(d) || busy[g.away].has(d)) continue;
-      if (three(g.home, d) || three(g.away, d)) continue;
+      if (threeInThree(busy[g.home], d) || threeInThree(busy[g.away], d)) continue;
       const b2b = [g.home, g.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length;
       const crowded = fourInFive(busy[g.home], d) || fourInFive(busy[g.away], d) ? 20 : 0;
       const s = (december ? 0 : 30) + perDay[d] * 0.6 + b2b * 4 + crowded + rng.uniform(0, 0.5);

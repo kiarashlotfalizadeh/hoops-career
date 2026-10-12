@@ -14,7 +14,7 @@ import {
   TWO_WAY_MAX,
   addInbox,
   addNews,
-  curTeamSeason,
+  dateToDay,
   payroll,
   playerName,
   prospects,
@@ -23,31 +23,23 @@ import {
   teamPlayers,
   teamSeason,
   twoWayRoster,
-  winPct,
   withRng,
 } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { aiTicketPrice, assessLuxuryTax, profit, shareRevenue } from './finances';
+import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
-import { computeRegularSeasonAwards, finalsMvp, gameScore, selectAllStars } from './awards';
+import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
-import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
+import { confStandings } from './standings';
+import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { askingContract, releasePlayer, resolveOptions, valueScore } from './contracts';
+import { askingContract, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
-
-export interface DayReport {
-  day: number;
-  games: number;
-  userGame?: number; // gid
-  phaseChanged?: boolean;
-  messages: string[];
-}
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -132,10 +124,10 @@ function playAllStarGame(league: League, rng: Rng) {
   if (!aw || !aw.allStars.E.length) return;
   const mk = (conf: 'E' | 'W', tidSlot: number) => {
     const team = makeTeam(tidSlot, league.season, rng);
-    team.region = conf === 'E' ? 'Team' : 'Team';
+    team.region = 'Team';
     team.name = conf === 'E' ? 'East' : 'West';
     team.abbrev = conf === 'E' ? 'EAST' : 'WEST';
-    const players = aw.allStars[conf].map((pid) => league.players[pid]).filter((p) => p && !p.injury);
+    const players = aw.allStars[conf].map((pid) => league.players[pid]).filter((p) => p && !missesAllStarGame(p));
     team.rotation = autoRotation(players);
     // spread minutes for an exhibition
     for (const p of players) team.rotation.minutes[p.pid] = 20;
@@ -164,25 +156,21 @@ function playAllStarGame(league: League, rng: Rng) {
 /**
  * Simulate one day. `skipGid` lets the UI play that game live and commit it separately.
  */
-export function simDay(league: League, opts: { skipGid?: number; record?: boolean } = {}): DayReport {
-  const report: DayReport = { day: league.day, games: 0, messages: [] };
+export function simDay(league: League, opts: { skipGid?: number } = {}) {
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') {
     if (league.phase === 'playoffs') schedulePlayoffDay(league);
     const games = gamesOnDay(league, league.day);
     for (const g of games) {
       if (g.gid === opts.skipGid) continue;
-      const res = playGame(league, g, { record: opts.record && (g.home === league.userTid || g.away === league.userTid) });
+      const res = playGame(league, g);
       postGame(league, g, res.home.pts > res.away.pts);
-      report.games++;
-      if (g.home === league.userTid || g.away === league.userTid) report.userGame = g.gid;
     }
     if (opts.skipGid !== undefined && games.some((g) => g.gid === opts.skipGid && !g.played)) {
       // live game still pending: do not advance the day yet
-      return report;
+      return;
     }
-    advanceDay(league, report);
+    advanceDay(league);
   }
-  return report;
 }
 
 /**
@@ -206,7 +194,7 @@ export function postGame(league: League, g: ScheduledGame, homeWon: boolean) {
   if (g.type === 'playoffs') processPlayoffResult(league, g, homeWon);
 }
 
-export function advanceDay(league: League, report?: DayReport) {
+export function advanceDay(league: League) {
   withRng(league, (rng) => {
     if (league.phase === 'regular') {
       advanceCup(league, rng);
@@ -218,19 +206,12 @@ export function advanceDay(league: League, report?: DayReport) {
     }
     healIdle(league, rng);
   });
-  // wear recovery, every day of the season and postseason
-  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
+  // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
+  for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   league.day++;
-  if (league.phase === 'regular' && regularGamesLeft(league) === 0) {
-    endRegularSeason(league);
-    if (report) report.phaseChanged = true;
-  } else if (league.phase === 'playin' && playInDone(league)) {
-    startPlayoffs(league);
-    if (report) report.phaseChanged = true;
-  } else if (league.phase === 'playoffs' && champion(league) !== undefined) {
-    endPlayoffs(league);
-    if (report) report.phaseChanged = true;
-  }
+  if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
+  else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
+  else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);
 }
 
 function endRegularSeason(league: League) {
@@ -250,14 +231,23 @@ function endRegularSeason(league: League) {
     });
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
-  if (mine?.tax)
+  if (mine?.tax) {
+    // the seeds are final: in the top six, in the play-in or out
+    const rank = confStandings(league, league.teams[league.userTid].conf).findIndex((r) => r.tid === league.userTid) + 1;
+    const bill = `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season`;
     addInbox(league, {
       from: 'Owner',
       subject: 'Luxury tax bill',
-      body: `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season. Make it count in the playoffs.`,
+      body:
+        rank <= 6
+          ? `${bill}. Make it count in the playoffs.`
+          : rank <= 10
+            ? `${bill}, and we still have to get through the play-in. Make it count.`
+            : `${bill} for a team that missed the postseason. That can't happen again.`,
       tone: 'bad',
       link: '/finances',
     });
+  }
   if (mine?.shortfall)
     addInbox(league, {
       from: 'Owner',
@@ -333,7 +323,13 @@ function retirements(league: League, rng: Rng) {
       if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
   }
-  if (retiredNow.length) addNews(league, { kind: 'retire', text: `Retirements: ${retiredNow.slice(0, 12).join(', ')}${retiredNow.length > 12 ? '…' : ''}.`, tids: [], pids: [] });
+  if (retiredNow.length)
+    addNews(league, {
+      kind: 'retire',
+      text: `Retirements: ${retiredNow.slice(0, 12).join(', ')}${retiredNow.length > 12 ? `, and ${retiredNow.length - 12} more` : ''}.`,
+      tids: [],
+      pids: [],
+    });
 }
 
 function endPlayoffs(league: League) {
@@ -371,21 +367,14 @@ function endPlayoffs(league: League) {
 // ---------------------------------------------------------------- draft & offseason
 
 // Phase transitions no-op (returning false) outside their phase, so a double tap or a stale
-// dispatch can't skip a draft, a free agency or a whole season.
-
-/**
- * Season day of a date in the summer the season ends (month 0-based), so offseason news and mail
- * carry the draft's and free agency's dates rather than Finals night.
- */
-function summerDay(league: League, month: number, date: number) {
-  return Math.round((Date.UTC(league.season, month, date) - Date.UTC(league.season - 1, 9, 20)) / 86_400_000);
-}
+// dispatch can't skip a draft, a free agency or a whole season. The summer has dates too, so
+// offseason news and mail carry the draft's and free agency's dates rather than Finals night.
 
 export function startDraft(league: League): boolean {
   if (league.phase !== 'draftLottery') return false;
   league.phase = 'draft';
   // draft night: late June, or the day after a late Finals
-  league.day = Math.max(league.day + 1, summerDay(league, 5, 25));
+  league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 25));
   withRng(league, (rng) => draftUntilUser(league, rng));
   return true;
 }
@@ -449,7 +438,7 @@ export function startFreeAgency(league: League): boolean {
     league.phase = 'freeAgency';
     league.faDay = 0;
     // the market opens on June 30
-    league.day = Math.max(league.day + 1, summerDay(league, 5, 30));
+    league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 30));
     faDay(league, rng, 1.2);
   });
   const cap = CAP_FOR(league, league.season + 1);
@@ -499,12 +488,10 @@ export function newSeason(league: League): boolean {
   league.playoffs = [];
   league.schedule = [];
   for (const t of league.teams) {
-    const prev = t.seasons.find((s) => s.season === prevSeason);
     t.hype = clamp(t.hype * 0.85 + 0.075, 0.05, 1);
     // ticket prices keep pace with league revenue (AI teams reprice at opening night)
     t.budget.ticketPrice = Math.round(t.budget.ticketPrice * (1 + CAP.growth));
     teamSeason(t, league.season);
-    void prev;
     t.deadMoney = t.deadMoney.filter((d) => d.season >= league.season);
   }
   withRng(league, (rng) => {
@@ -524,12 +511,18 @@ export function newSeason(league: League): boolean {
     }
     const prog = annualProgression(league, rng);
     const mine = prog.filter((x) => league.players[x.pid]?.tid === league.userTid).sort((a, b) => b.delta - a.delta);
-    if (mine.length) {
+    const up = mine.filter((x) => x.delta > 0).slice(0, 3);
+    const down = mine
+      .filter((x) => x.delta < 0)
+      .slice(-3)
+      .reverse();
+    if (up.length || down.length) {
       const fmt = (x: { pid: number; delta: number }) => `${playerName(league.players[x.pid])} ${x.delta > 0 ? '+' : ''}${x.delta} (now ${league.players[x.pid].ovr})`;
+      const line = (label: string, xs: typeof mine) => (xs.length ? `${label}${xs.length > 1 ? 's' : ''}: ${xs.map(fmt).join(', ')}.` : '');
       addInbox(league, {
         from: 'Player Development',
         subject: 'Training camp report',
-        body: `Biggest risers: ${mine.slice(0, 3).map(fmt).join(', ')}.\nBiggest drops: ${mine.slice(-3).reverse().map(fmt).join(', ')}.`,
+        body: [line('Biggest riser', up), line('Biggest drop', down)].filter(Boolean).join('\n'),
         tone: 'neutral',
         link: '/roster',
       });
@@ -592,10 +585,3 @@ function compactRetired(league: League) {
     p.mood = blankMood();
   }
 }
-
-export function seasonSummary(league: League, tid: number) {
-  const ts = curTeamSeason(league, tid);
-  return { won: ts.won, lost: ts.lost, pct: winPct(ts), profit: profit(league, tid), value: valueScore };
-}
-
-export { rankProspects };
