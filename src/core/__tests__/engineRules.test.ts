@@ -5,6 +5,7 @@ import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { FINISH_LABEL } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
+import { GAME } from '../constants';
 import type { Team } from '../types';
 
 // The engine's rule bookkeeping: fouls, free throws, caps, late-game modes, play-by-play.
@@ -41,6 +42,28 @@ describe('engine rules', () => {
     }
     expect(over).toBe(0);
     expect(total / 20).toBeGreaterThan(17);
+  });
+
+  it('runs the shot clock from the inbound: breaking a full-court press uses some of it', () => {
+    let trips = 0;
+    let over = 0;
+    for (let g = 0; g < 4; g++) {
+      const sim = new GameSim(side(4, { defense: { press: 'always' } }), side(5), { rng: new Rng(g), type: 'regular', record: true, injuries: false });
+      sim.simToEnd();
+      for (const l of sim.drainLogs()) {
+        // one trip up the floor: no second chance (a board, a block out of bounds) and no foul to stop the clock
+        if (
+          l.steps[0]?.k !== 'press' ||
+          l.kind === 'transition' ||
+          l.steps.some((s) => s.k === 'block' || s.k === 'foul' || (s.k === 'reb' && (s.pid === undefined || l.on[l.off].includes(s.pid))))
+        )
+          continue;
+        trips++;
+        if (l.clockStart - l.clockEnd > GAME.shotClock + 1e-6) over++;
+      }
+    }
+    expect(trips).toBeGreaterThan(100);
+    expect(over).toBe(0);
   });
 
   it('plays the coverage that was chosen, switching off the ball only off the ball', () => {

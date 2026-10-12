@@ -1297,7 +1297,8 @@ export class GameSim {
     // the period is about to run out: push it up the floor and get a shot off before the buzzer
     // (unless it's a lead to run out: then the clock dies with the ball)
     if (!late.milk && this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
-    let shotClock = GAME.shotClock;
+    // the shot clock started on the inbound: time spent breaking a press (or before a side-out foul) is gone
+    let shotClock = GAME.shotClock - (clockStart - this.clock);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
     this.tick(setup);
