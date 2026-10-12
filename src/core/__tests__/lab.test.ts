@@ -20,6 +20,16 @@ describe('tactics lab & reports', () => {
     const c = runLab({ a: side(0), b: side(1), games: 6, seed: 42, patch: { defense: { pnr: 'blitz' } } });
     expect(c.margins.length).toBe(6);
   });
+  it('plays playoff games when asked: the assistants shorten the rotation to eight, as in real playoff games', () => {
+    // the ninth man's minutes: a regular-season rotation plays ten, a playoff one leaves him garbage time
+    const ninth = (type?: 'playoffs') =>
+      Object.values(runLab({ a: side(0), b: side(1), games: 6, seed: 42, type }).players)
+        .map((p) => p.min)
+        .sort((x, y) => y - x)[8];
+    expect(league.teams[0].rotation.manual).toBeFalsy();
+    expect(ninth()).toBeGreaterThan(5);
+    expect(ninth('playoffs')).toBeLessThan(3);
+  });
   it('builds a post-game report for the user team', () => {
     const g = league.schedule.find((x) => x.home === 0 || x.away === 0)!;
     league.phase = 'regular';

@@ -16,7 +16,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { clearLabBaseline, takeLabBaseline } from './labBridge';
-import type { League, Tactics } from '../../core/types';
+import type { GameType, League, Tactics } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
 
@@ -35,6 +35,11 @@ function familySigmas(n: number): number {
   return t - (2.515517 + 0.802853 * t + 0.010328 * t * t) / (1 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t);
 }
 
+/** Lab games are the kind being played now: in the postseason, the play-in's or the playoffs' (the playoffs' shorter rotations included). */
+function labGameType(league: League): GameType {
+  return league.phase === 'playoffs' || league.phase === 'playin' ? league.phase : 'regular';
+}
+
 /**
  * A lab side is built like a real game's: the game plan for this opponent on top of the tactics,
  * injured players kept on the roster so the engine hands their minutes down the bench, morale and
@@ -42,7 +47,7 @@ function familySigmas(n: number): number {
  */
 function sideFor(league: League, tid: number, opp: number, tactics?: Tactics): LabSide {
   const view = tactics ? { ...league, teams: league.teams.map((t) => (t.tid === tid ? { ...t, tactics } : t)) } : league;
-  const input = buildSimInput(view, tid, league.day, 'regular', opp);
+  const input = buildSimInput(view, tid, league.day, labGameType(league), opp);
   // (the season history is never read by a game: it stays out of the message to the worker)
   return { ...input, team: { ...input.team, seasons: [] } };
 }
@@ -113,6 +118,7 @@ export default function TacticsLab() {
       }, false);
       const b = sideFor(league, opp, user);
       const seed = (league.rng ^ (opp * 7919)) >>> 0;
+      const type = labGameType(league);
       // progress across runs (Compare's two take turns on the worker): each reports its own count, the bar shows the sum
       const done: number[] = [];
       const track = (slot: number) =>
@@ -124,18 +130,18 @@ export default function TacticsLab() {
       await withLab(async (w) => {
         if (mode === 'project') {
           setTotal(games);
-          job.result = await w.runLab({ a: sideFor(league, user, opp), b, games, seed }, track(0));
+          job.result = await w.runLab({ a: sideFor(league, user, opp), b, games, seed, type }, track(0));
         } else if (mode === 'compare' && baseline) {
           setTotal(games * 2);
           [job.base, job.result] = await Promise.all([
-            w.runLab({ a: sideFor(league, user, opp, baseline), b, games, seed }, track(0)),
-            w.runLab({ a: sideFor(league, user, opp), b, games, seed }, track(1)),
+            w.runLab({ a: sideFor(league, user, opp, baseline), b, games, seed, type }, track(0)),
+            w.runLab({ a: sideFor(league, user, opp), b, games, seed, type }, track(1)),
           ]);
         } else if (mode === 'counters') {
           const candidates = counterCandidates(league, user, opp);
           const n = Math.max(20, Math.round(games * 0.75));
           setTotal(n * (candidates.length + 1));
-          const out = await w.evaluate(sideFor(league, user, opp), b, candidates, n, seed, track(0));
+          const out = await w.evaluate(sideFor(league, user, opp), b, candidates, n, seed, track(0), type);
           job.base = out.base;
           job.cands = out.results;
         }
