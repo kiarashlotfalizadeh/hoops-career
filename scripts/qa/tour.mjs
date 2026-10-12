@@ -200,7 +200,8 @@ if (stages.includes('mid')) {
     await phone.screenshot({ path: `${out}/live/phone-final.png`, fullPage: true });
   } else await phone.keyboard.press('Escape');
   await phone.goto(`${base}/#/`);
-  await play('Sim to trade deadline');
+  // big news (a long injury, a trade request) pauses the sim: keep going until the deadline is reached
+  for (let i = 0; i < 10 && (await play('Sim to trade deadline')); i++);
   await tour('mid');
 }
 if (want('post')) {
