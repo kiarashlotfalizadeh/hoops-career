@@ -17,6 +17,7 @@ import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../leagu
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
 import { injuryText } from '../league/injuries';
+import { updateMorale } from '../league/morale';
 import { generateDraftClass, lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -802,6 +803,18 @@ describe('morale and wear (L17)', () => {
     const after = buildSimInput(l, U, 0, 'regular').perf!;
     expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
     expect(after[star.pid]).toBeCloseTo(before[star.pid]);
+  });
+
+  it('a rookie-scale deal never leaves a player feeling underpaid; a cheap veteran deal does', () => {
+    const l = league();
+    const star = standardRoster(l, U).sort((a, b) => b.ovr - a.ovr)[0];
+    star.contract = { start: l.season, salaries: [CAP.minContract, CAP.minContract], rookie: true, option: 'team' };
+    updateMorale(l, U);
+    expect(star.mood.notes).not.toContain('Feels underpaid');
+    expect(star.mood.contractComponent).toBe(0);
+    delete star.contract.rookie;
+    updateMorale(l, U);
+    expect(star.mood.notes).toContain('Feels underpaid');
   });
 
   it('injury names read as English in messages', () => {
