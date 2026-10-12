@@ -70,21 +70,24 @@ export function planInputs(roster: PlanSource[], rot: Rotation, opts: { playoffs
   // a starter without planned minutes (new to the depth chart) gets a starter's share
   for (let i = 0; i < Math.min(5, mins.length); i++) if (!rot.minutes[ordered[i].pid]) mins[i] = Math.max(mins[i], 24);
   const caps = ordered.map((p) => rot.caps[p.pid] || undefined);
-  if (opts.playoffs && !rot.manual) {
-    // playoff rotations shorten to eight: the top five play ~10% more (42 at most), nobody past
-    // the eighth man plays, and the rescale to 240 goes to the regulars
-    const rank = mins.map((_, i) => i).sort((a, b) => mins[b] - mins[a]);
-    rank.forEach((i, r) => {
-      if (r < 5) {
-        mins[i] *= 1.1;
-        caps[i] = Math.min(caps[i] ?? 42, 42);
-      } else if (r >= 8) mins[i] = 0;
-    });
-  }
   const closerSet = new Set(rot.closers.filter((pid) => ordered.some((p) => p.pid === pid)));
   for (const p of ordered) {
     if (closerSet.size >= 5) break;
     closerSet.add(p.pid);
+  }
+  if (opts.playoffs && !rot.manual) {
+    // playoff rotations shorten to eight: the top five play ~10% more (42 at most), nobody past
+    // the eighth man plays, and the rescale to 240 goes to the regulars. The starters and closers
+    // are among the eight however few minutes they play, so they still start and finish games
+    const rank = mins.map((_, i) => i).sort((a, b) => mins[b] - mins[a]);
+    const core = rank.filter((i) => i < 5 || closerSet.has(ordered[i].pid));
+    const eight = new Set([...core, ...rank.filter((i) => !core.includes(i))].slice(0, Math.max(8, core.length)));
+    rank.forEach((i, r) => {
+      if (r < 5) {
+        mins[i] *= 1.1;
+        caps[i] = Math.min(caps[i] ?? 42, 42);
+      } else if (!eight.has(i)) mins[i] = 0;
+    });
   }
   return ordered.map((p, i) => ({
     pid: p.pid,

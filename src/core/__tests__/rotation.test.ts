@@ -175,4 +175,17 @@ describe('plan inputs', () => {
     // a user's custom rotation is left alone
     expect(mins(planInputs(src, rot(), { playoffs: true }))).toEqual(mins(planInputs(src, rot())));
   });
+
+  it('keeps a low-minute starter and a bench closer in the playoff eight, so they still start and finish', () => {
+    // a 14-minute starting center and a 12-minute closer off the bench, behind seven bigger roles
+    const minutes = Object.fromEntries([36, 34, 33, 31, 14, 30, 28, 24, 20, 12, 0, 0].map((m, i) => [i, m]));
+    const pp = planInputs(src, rot({ manual: false, minutes, closers: [0, 1, 2, 3, 9] }), { playoffs: true });
+    const m = mins(pp);
+    expect(m[4]).toBeGreaterThan(0);
+    expect(m[9]).toBeGreaterThan(0);
+    expect(Object.values(m).filter((x) => x > 0).length).toBe(8);
+    const plan = buildMinutePlan(pp);
+    expect(plan[0]).toContain(4);
+    for (const slot of plan.slice(44)) expect(slot).toContain(9);
+  });
 });
