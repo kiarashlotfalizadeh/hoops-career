@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { allSources } from './sources';
 
-const RAW = join(process.cwd(), 'data', 'raw');
+const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const force = process.argv.includes('--force');
 const refresh = process.argv.includes('--refresh');
 const onlyIdx = process.argv.indexOf('--only');
