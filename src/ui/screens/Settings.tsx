@@ -121,7 +121,8 @@ export default function Settings() {
               {team.region} {team.name}
             </div>
             <div className="small dim">
-              {seasonLabel(league.season)} · {PHASE_LABEL[league.phase]} · season {seasonsIn} in charge
+              {/* a team taken over after the season is his from the next one */}
+              {seasonLabel(league.season)} · {PHASE_LABEL[league.phase]} · {seasonsIn < 1 ? 'your tenure starts next season' : `season ${seasonsIn} in charge`}
             </div>
           </div>
         </div>
