@@ -249,6 +249,7 @@ export default function FreeAgents() {
           <div className="tiny dim">Players with three seasons or fewer who'd sign for the minimum. Two-way deals pay {fmtM(twoWaySalary(league, s), 2)} outside the cap.</div>
         )}
         <Segmented
+          label="Sort by"
           value={sort}
           onChange={setSort}
           options={[

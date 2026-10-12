@@ -64,6 +64,7 @@ function ScheduleTab() {
   return (
     <>
       <Segmented
+        label="Schedule view"
         value={mode}
         onChange={setMode}
         options={[

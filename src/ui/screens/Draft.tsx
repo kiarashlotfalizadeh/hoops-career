@@ -11,7 +11,7 @@ import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, activateOnKey, type Col } from '../components/ui';
+import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, type Col } from '../components/ui';
 import { OvrPot, SecTitle, ordinal } from '../office/common';
 import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
 
@@ -173,7 +173,7 @@ export default function Draft() {
         </Card>
       )}
 
-      {views.length > 1 && <Segmented value={view} onChange={setView} options={views} />}
+      {views.length > 1 && <Segmented value={view} onChange={setView} options={views} label="Draft sections" />}
 
       {view === 'live' && league.phase === 'draft' && <LiveView league={league} cls={cls} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} />}
       {view === 'lottery' && <LotteryView league={league} />}
@@ -393,33 +393,21 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
     <Card className="flush">
       <div className="list wide2">
         {list.slice(0, limit).map((p) => (
-          <div
-            key={p.pid}
-            className="fo-prow"
-            role="button"
-            tabIndex={0}
-            style={{ cursor: 'pointer' }}
-            onClick={() => onOpen(p.pid)}
-            onKeyDown={activateOnKey(() => onOpen(p.pid))}
-          >
-            <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
-            <OvrPot p={p} />
-            <div className="grow" style={{ minWidth: 0 }}>
-              <div className="fo-name">{playerName(p)}</div>
-              <div className="fo-meta">
-                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+          // the scouting report and the Draft button sit side by side: a button inside a button is announced as one
+          <div key={p.pid} className="row" style={{ gap: 0, paddingRight: onDraft ? 12 : 0 }}>
+            <button className="fo-prow grow" onClick={() => onOpen(p.pid)}>
+              <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
+              <OvrPot p={p} />
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="fo-name">{playerName(p)}</div>
+                <div className="fo-meta">
+                  {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+                </div>
+                <div className="fo-meta tiny">{p.archetype}</div>
               </div>
-              <div className="fo-meta tiny">{p.archetype}</div>
-            </div>
+            </button>
             {onDraft && (
-              <button
-                className="btn sm good"
-                aria-label={`Draft ${playerName(p)}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDraft(p.pid);
-                }}
-              >
+              <button className="btn sm good" aria-label={`Draft ${playerName(p)}`} onClick={() => onDraft(p.pid)}>
                 Draft
               </button>
             )}
@@ -595,6 +583,7 @@ function Results({ league }: { league: League }) {
   return (
     <>
       <Segmented
+        label="Round"
         value={String(round) as '1' | '2'}
         onChange={(x) => setRound(Number(x) as 1 | 2)}
         options={[

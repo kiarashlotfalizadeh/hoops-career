@@ -34,6 +34,7 @@ export default function Finances() {
     <main className="page">
       <PageHeader title={tab === 'owner' ? 'Owner' : 'Finances'} sub={`${team.region} ${team.name} · ${seasonLabel(league.season)}`} back />
       <Segmented
+        label="Finances sections"
         value={tab}
         onChange={setTab}
         options={[
@@ -258,7 +259,8 @@ function BudgetTab({ team }: { team: Team }) {
               })()}
             </div>
             <Slider
-              label={<span className="dim2">Level {lvl}</span>}
+              // a plain-text label also names the slider for screen readers
+              label={`Level ${lvl}`}
               value={lvl}
               min={1}
               max={100}
@@ -287,7 +289,7 @@ function BudgetTab({ team }: { team: Team }) {
         }
       >
         <Slider
-          label={<span className="dim2">Average ticket</span>}
+          label="Average ticket"
           value={price}
           min={minPrice}
           max={Math.max(maxPrice, price)}

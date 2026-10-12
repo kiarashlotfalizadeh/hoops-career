@@ -18,7 +18,7 @@ type View = 'players' | 'ratings' | 'stats' | 'contracts';
 export function MoodIcon({ p }: { p: Player }) {
   const m = MOOD_META[moodLevel(p.mood.score)];
   return (
-    <span title={m.label} style={{ color: m.color, fontSize: 12 }}>
+    <span role="img" aria-label={`Mood: ${m.label}`} title={m.label} style={{ color: m.color, fontSize: 12 }}>
       {m.emoji}
     </span>
   );
@@ -98,8 +98,16 @@ export default function Roster() {
       key: `s${s}`,
       label: shortSeason(s),
       get: (p: Player) => salaryFor(p, s),
-      fmt: (v: number | string, p: Player) =>
-        v ? <span style={{ color: openOption(league, p) && contractExp(p.contract) === s ? 'var(--warn)' : undefined }}>{fmtM(v as number)}</span> : <span className="dim">—</span>,
+      fmt: (v: number | string, p: Player) => {
+        if (!v) return <span className="dim">—</span>;
+        const opt = contractExp(p.contract) === s ? openOption(league, p) : undefined;
+        return (
+          <span style={{ color: opt ? 'var(--warn)' : undefined }}>
+            {fmtM(v as number)}
+            {opt && <span className="tiny"> {opt === 'team' ? 'TO' : 'PO'}</span>}
+          </span>
+        );
+      },
     })),
     { key: 'exp', label: 'EXP', get: (p) => contractExp(p.contract) },
   ];
@@ -200,7 +208,7 @@ export default function Roster() {
         <>
           <StatTable rows={roster} cols={contractCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
           <div className="small dim">
-            Cap {fmtM(cap.salaryCap)} · Tax line {fmtM(cap.luxuryTax)}. Orange = option year. Full cap sheet in{' '}
+            Cap {fmtM(cap.salaryCap)} · Tax line {fmtM(cap.luxuryTax)}. PO = player option, TO = team option on the final year. Full cap sheet in{' '}
             <Link to="/office" style={{ color: 'var(--accent-text)' }}>
               Front Office
             </Link>

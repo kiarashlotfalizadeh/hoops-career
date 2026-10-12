@@ -213,6 +213,7 @@ export default function Trade() {
       )}
 
       <Segmented
+        label="Trade tool"
         value={tab}
         onChange={setTab}
         options={[
@@ -228,6 +229,7 @@ export default function Trade() {
           <DealCard league={league} partner={partner} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
           <div className="fo-only-sm">
             <Segmented
+              label="Assets shown"
               value={side}
               onChange={setSide}
               options={[
@@ -277,9 +279,9 @@ function TeamPicker({ league, partner, onPick }: { league: League; partner: numb
   }, [partner]);
   const teams = league.teams.filter((t) => t.tid !== league.userTid).sort((a, b) => a.abbrev.localeCompare(b.abbrev));
   return (
-    <div className="fo-teams" ref={ref} role="tablist" aria-label="Trade partner">
+    <div className="fo-teams" ref={ref} role="group" aria-label="Trade partner">
       {teams.map((t) => (
-        <button key={t.tid} role="tab" aria-selected={t.tid === partner} className={`fo-team ${t.tid === partner ? 'on' : ''}`} onClick={() => onPick(t.tid)}>
+        <button key={t.tid} aria-pressed={t.tid === partner} className={`fo-team ${t.tid === partner ? 'on' : ''}`} onClick={() => onPick(t.tid)}>
           <TeamLogo tid={t.tid} size={32} />
           {t.abbrev}
         </button>
@@ -375,7 +377,7 @@ function DealCard({
           <span key={d} className="fo-pill">
             <Ticket size={16} style={{ marginLeft: 4 }} className="dim" />
             <span className="ellipsis grow">{pickLabel(league, dp)}</span>
-            <button className="x" aria-label="Remove pick" onClick={() => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) })}>
+            <button className="x" aria-label={`Remove ${pickLabel(league, dp)}`} onClick={() => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) })}>
               <X size={14} />
             </button>
           </span>

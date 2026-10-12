@@ -65,6 +65,7 @@ export function StatsTab({ league }: { league: League }) {
   return (
     <>
       <Segmented
+        label="Stats view"
         value={view}
         onChange={setView}
         options={[

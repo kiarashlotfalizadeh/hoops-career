@@ -131,6 +131,7 @@ export function PlayoffsTab({ league }: { league: League }) {
       </div>
       <div className="bk-only-narrow">
         <Segmented
+          label="Conference"
           value={conf}
           onChange={setConf}
           options={[

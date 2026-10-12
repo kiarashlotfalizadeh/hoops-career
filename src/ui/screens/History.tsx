@@ -18,6 +18,7 @@ export default function History() {
     <main className="page">
       <PageHeader title="History" sub={`${league.name} · since ${seasonLabel(league.startSeason)}`} back />
       <Segmented
+        label="History sections"
         value={view}
         onChange={setView}
         options={[
