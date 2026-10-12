@@ -1791,6 +1791,7 @@ export class GameSim {
       rimOpen -= 0.2;
       tagsRim.push(['ice_contain', -0.2]);
       rollOpen -= 0.1;
+      tagsRoll.push(['ice_contain', -0.1]);
       toExtra += 0.006;
     } else if (cov === 'zone') {
       advH -= 0.3;
@@ -1891,7 +1892,8 @@ export class GameSim {
             contest: d,
             assister: S,
             finish: 'spotup',
-            tags: tagsRoll,
+            // the kick-out keeps half of what the coverage left open for the roller
+            tags: tagsRoll.filter(([, x]) => x > 0).map(([k, x]): [string, number] => [k, x * 0.5]),
           });
           return 'done';
         }
@@ -1992,12 +1994,13 @@ export class GameSim {
       adv -= 0.35;
       this.impact('zone_paint', def.side, 0.035, A.pid);
     }
-    const star = this.starTarget(def, off);
+    // the Star plan doubles him; heavy help sends a second defender at anyone who beats his man
+    const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
     let doubled = false;
-    if (star === A && def.t.defense.starPlan === 'double') doubled = this.rng.chance(0.75);
+    if (starDouble) doubled = this.rng.chance(0.75);
     else if (adv > 0.7 && help > 0) doubled = this.rng.chance(0.25 * help);
     if (this.record) this.cur!.steps.push({ k: 'drive', pid: A.pid });
-    if (doubled) return this.doubleTeam(off, def, A, 'iso');
+    if (doubled) return this.doubleTeam(off, def, A, 'iso', starDouble);
 
     const pTO = this.toChance(K.toBase * 0.95, A, def);
     if (this.rng.chance(pTO)) {
@@ -2067,12 +2070,13 @@ export class GameSim {
     }
   }
 
-  private doubleTeam(off: ST, def: ST, A: SP, from: 'iso' | 'post'): 'done' {
+  /** A double team; only the Star plan's doubles are tagged as the plan's doing. */
+  private doubleTeam(off: ST, def: ST, A: SP, from: 'iso' | 'post', star: boolean): 'done' {
     if (this.cur) this.cur.label = `${A.name} gets doubled!`;
     if (this.record) this.cur!.steps.push({ k: 'trap', pid: A.pid });
     const escape = (A.c.passing - 55) / 100;
     const pTO = clamp((0.1 - escape * 0.25) * A.ttv, 0.03, 0.2);
-    this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
+    if (star) this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, A, def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))], from);
       return 'done';
@@ -2098,7 +2102,7 @@ export class GameSim {
       contest: this.defOf(def, A),
       assister: null,
       finish: from === 'post' ? 'post' : 'iso',
-      tags: [['star_double', -0.4]],
+      tags: star ? [['star_double', -0.4]] : undefined,
     });
     return 'done';
   }
@@ -2131,10 +2135,9 @@ export class GameSim {
       this.impact('zone_paint', def.side, 0.025, A.pid);
     }
     if (fixed?.tag === 'mismatch_post') this.impact(fixed.tag, off.side, Math.max(0, (A.r.hgt - D.r.hgt) / 70) * K.advPts.post, A.pid);
-    const star = this.starTarget(def, off);
-    let doubleP = 0.08 + Math.max(0, help) * 0.15 + (adv > 0.6 ? 0.15 : 0);
-    if (star === A && def.t.defense.starPlan === 'double') doubleP = 0.75;
-    if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post');
+    const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
+    const doubleP = starDouble ? 0.75 : 0.08 + Math.max(0, help) * 0.15 + (adv > 0.6 ? 0.15 : 0);
+    if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble);
     const pTO = this.toChance(K.toBase * 1.1, A, def);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, A, this.stealBy(D, 0.4), 'post');
@@ -2233,7 +2236,8 @@ export class GameSim {
         this.shoot(off, def, { shooter: Sh, zone: this.rng.chance(0.2) ? 'c3' : 'ab3', open: advOpen - 0.02, contest: D, assister: B, finish, tags });
         return 'done';
       case 1:
-        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05, contest: D, assister: B, finish, tags });
+        // the zone's open threes are for shooters who stay outside
+        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05, contest: D, assister: B, finish, tags: tags.filter(([k]) => k !== 'zone_3pt') });
         return 'done';
       case 2:
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: Sh.pid });

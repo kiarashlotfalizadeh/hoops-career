@@ -417,6 +417,20 @@ describe('engine rules', () => {
     expect(new Set(sim.injuries.map((i) => i.pid)).size).toBe(2);
   });
 
+  it('credits double teams to the Star plan only when the plan sent them', () => {
+    const doubles = (plan: 'none' | 'double') => {
+      let n = 0;
+      for (let g = 0; g < 6; g++) {
+        const d = { defense: { starPlan: plan, starTarget: null, help: 90, scheme: 'man' as const } };
+        const res = new GameSim(side(18, d), side(19, d), { rng: new Rng(30 + g), type: 'regular', injuries: false }).simToEnd();
+        n += res.impacts!.filter((i) => i.key.startsWith('star_double')).length;
+      }
+      return n;
+    };
+    expect(doubles('none')).toBe(0);
+    expect(doubles('double')).toBeGreaterThan(0);
+  });
+
   it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {
     type Sim = { T: { guardOf: Map<number, { pid: number }> }[]; starTarget(def: unknown, off: unknown): { pid: number } };
     const sim = (plan: 'none' | 'deny') =>
