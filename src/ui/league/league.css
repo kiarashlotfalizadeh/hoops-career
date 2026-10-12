@@ -5,8 +5,9 @@
   position: sticky;
   top: calc(var(--top-h) + var(--safe-t));
   z-index: 20;
-  margin: -6px -14px 0;
-  padding: 6px 14px 8px;
+  /* edge to edge across the page's padding, which grows past a landscape notch */
+  margin: -6px calc(-1 * max(14px, var(--safe-r))) 0 calc(-1 * max(14px, var(--safe-l)));
+  padding: 6px max(14px, var(--safe-r)) 8px max(14px, var(--safe-l));
   /* solid fallback first: iOS before 16.2 has no color-mix */
   background: rgba(6, 8, 12, 0.86);
   background: color-mix(in srgb, var(--bg) 86%, transparent);
@@ -30,12 +31,12 @@
   z-index: 1;
 }
 .lg-tabs::before {
-  left: 15px;
+  left: calc(max(14px, var(--safe-l)) + 1px);
   border-radius: 12px 0 0 12px;
   background: linear-gradient(90deg, var(--surface) 25%, transparent);
 }
 .lg-tabs::after {
-  right: 15px;
+  right: calc(max(14px, var(--safe-r)) + 1px);
   border-radius: 0 12px 12px 0;
   background: linear-gradient(270deg, var(--surface) 25%, transparent);
 }
@@ -992,6 +993,13 @@ a.bk-s:hover {
   color: var(--text-2);
   background: var(--surface);
   max-width: 100%;
+  position: relative;
+}
+/* compact chips that still give fingers a 40px target */
+.lg-pchip::after {
+  content: '';
+  position: absolute;
+  inset: -8px -3px;
 }
 .lg-pchip span {
   overflow: hidden;
