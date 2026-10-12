@@ -7,6 +7,7 @@ import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { Card, Empty, PageHeader } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
+import { inAppPath } from '../nav';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
   Owner: Crown,
@@ -99,6 +100,7 @@ export default function Inbox() {
             const open = openId === m.id;
             const tone = m.tone ? TONE_COLOR[m.tone] : undefined;
             const paras = m.body.split(/\n+/).filter((x) => x.trim());
+            const to = m.link ? inAppPath(normalizeLink(m.link), '') : '';
             return (
               <Fragment key={m.id}>
                 {header && (
@@ -126,8 +128,8 @@ export default function Inbox() {
                         <p key={i}>{p}</p>
                       ))}
                       <div className="row" style={{ gap: 8, marginTop: 4 }}>
-                        {m.link && (
-                          <button className="btn sm primary" onClick={() => nav(normalizeLink(m.link!))}>
+                        {to && (
+                          <button className="btn sm primary" onClick={() => nav(to)}>
                             Open <ArrowRight size={15} />
                           </button>
                         )}
