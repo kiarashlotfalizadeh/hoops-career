@@ -642,6 +642,19 @@ describe('awards (L13, L18)', () => {
     expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
   });
 
+  it('a knock the All-Star break heals costs nobody his place', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const star = Object.values(l.players).find((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E')!;
+    line(star, 70, 70, 40);
+    for (const p of Object.values(l.players)) p.injury = null;
+    star.injury = { type: 'Sprained Ankle', gamesRemaining: 1, gamesTotal: 2, severity: 'minor' };
+    const as = selectAllStars(l);
+    expect(as.E).toContain(star.pid);
+    expect(as.E.length).toBe(12);
+    expect(l.news.some((n) => n.text.startsWith('All-Star replacements'))).toBe(false);
+  });
+
   it("Most Improved needs last season's numbers: nobody wins it in a fictional league's first season", () => {
     const l = createLeague({ name: 'f', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 7 });
     const line = seasonOf(l);

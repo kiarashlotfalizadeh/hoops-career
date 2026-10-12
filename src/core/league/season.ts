@@ -33,7 +33,7 @@ import { ensureRotation, gamesOnDay, playGame } from './games';
 import { aiTicketPrice, assessLuxuryTax, profit, shareRevenue } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
-import { computeRegularSeasonAwards, finalsMvp, gameScore, selectAllStars } from './awards';
+import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
@@ -136,7 +136,7 @@ function playAllStarGame(league: League, rng: Rng) {
     team.region = conf === 'E' ? 'Team' : 'Team';
     team.name = conf === 'E' ? 'East' : 'West';
     team.abbrev = conf === 'E' ? 'EAST' : 'WEST';
-    const players = aw.allStars[conf].map((pid) => league.players[pid]).filter((p) => p && !p.injury);
+    const players = aw.allStars[conf].map((pid) => league.players[pid]).filter((p) => p && !missesAllStarGame(p));
     team.rotation = autoRotation(players);
     // spread minutes for an exhibition
     for (const p of players) team.rotation.minutes[p.pid] = 20;

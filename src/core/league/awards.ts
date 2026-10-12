@@ -201,6 +201,12 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   return awards;
 }
 
+/** A knock this short heals over the All-Star break: the player keeps his place and plays. */
+const ALL_STAR_KNOCK_GAMES = 2;
+
+/** Hurt worse than a knock the break heals: an All-Star who sits the game out and is replaced. */
+export const missesAllStarGame = (p: Player) => (p.injury?.gamesRemaining ?? 0) > ALL_STAR_KNOCK_GAMES;
+
 export function selectAllStars(league: League): SeasonAwards['allStars'] {
   const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0);
   const out: SeasonAwards['allStars'] = { E: [], W: [] };
@@ -225,8 +231,8 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     take(12, () => true);
     const picks = ranked.filter((c) => chosen.has(c));
     // injured selections keep the honor; the next healthy players in the conference take their spots
-    const hurt = picks.filter((c) => c.p.injury);
-    const subs = ranked.filter((c) => !chosen.has(c) && !c.p.injury).slice(0, hurt.length);
+    const hurt = picks.filter((c) => missesAllStarGame(c.p));
+    const subs = ranked.filter((c) => !chosen.has(c) && !missesAllStarGame(c.p)).slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
     out[conf] = [...picks, ...subs].map((c) => c.p.pid);
   }
