@@ -40,6 +40,9 @@ export function valueScore(league: League, p: Player): number {
 /** Trade value per $1M a season of salary below (or above) what a player is worth. */
 const SURPLUS_VALUE: Record<Strategy, number> = { contend: 0.1, retool: 0.1, rebuild: 0.18 };
 
+/** A team option on the contract's last season that is still to be decided: not guaranteed money. */
+const teamOptionOpen = (league: League, p: Player) => p.contract.option === 'team' && contractExp(p.contract) > league.season;
+
 /**
  * Trade value on an exponential scale (one 90 ≈ five 80s), with a premium for stars and the
  * contract's surplus or burden. A bad enough contract makes it negative: a liability.
@@ -61,11 +64,10 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
   // contract surplus/burden over the seasons still to be paid (next season's books in the offseason)
   const cs = contractSeason(league);
   const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
-  const sal = salaryFor(p, cs);
-  const fair = marketSalary(league, p);
-  const total = v + ((fair - sal) / 1000) * Math.min(yrs, 4) * SURPLUS_VALUE[strategy];
-  // after the season an undecided team option can still be declined, so it is never a burden
-  return cs > league.season && pendingOption(league, p) === 'team' ? Math.max(0, total) : total;
+  const surplus = (marketSalary(league, p) - salaryFor(p, cs)) / 1000;
+  // an undecided team option (the last year) can be declined, so it never counts as a burden
+  const optionYear = teamOptionOpen(league, p) && yrs <= 4;
+  return v + surplus * (optionYear && surplus < 0 ? yrs - 1 : Math.min(yrs, 4)) * SURPLUS_VALUE[strategy];
 }
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
@@ -273,13 +275,15 @@ export function nonGuaranteed(league: League, p: Player): boolean {
 
 /**
  * Salary a release leaves on the books, by season: everything still to be paid from the current
- * contract season (next season's books in the offseason). Two-way pay sits outside the cap and camp
- * deals aren't guaranteed, so neither leaves dead money.
+ * contract season (next season's books in the offseason). Two-way pay sits outside the cap, camp
+ * deals and an undecided team option year aren't guaranteed, so none of those leaves dead money.
  */
 export function releaseDeadMoney(league: League, p: Player): { season: number; amount: number }[] {
   if (p.contract.twoWay || nonGuaranteed(league, p)) return [];
   const out: { season: number; amount: number }[] = [];
-  for (let s = contractSeason(league); s <= contractExp(p.contract); s++) {
+  const exp = contractExp(p.contract);
+  const last = teamOptionOpen(league, p) ? exp - 1 : exp;
+  for (let s = contractSeason(league); s <= last; s++) {
     const amount = salaryFor(p, s);
     if (amount > 0) out.push({ season: s, amount });
   }

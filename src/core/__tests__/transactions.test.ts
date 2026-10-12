@@ -402,13 +402,22 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, sell).some((e) => /player option/.test(e))).toBe(true);
     p.contract.option = 'team';
     expect(validateTrade(l, sell).some((e) => /player option/.test(e))).toBe(false);
-    // an overpaid team option can be declined after the season, so it isn't a liability to dump
+    // an overpaid team option can be declined, so its year is never a liability: in season only
+    // this season's salary counts against him, after the season nothing does
     const bust = shape(l, standardRoster(l, AI)[0], 62, 30, 30_000, 2);
     bust.contract = { start: l.season, salaries: [30_000, 30_000], option: 'team' };
     l.phase = 'regular';
-    expect(tradeValue(l, bust)).toBeLessThan(0);
+    const withOption = tradeValue(l, bust);
+    expect(withOption).toBeLessThan(0);
+    delete bust.contract.option;
+    expect(tradeValue(l, bust)).toBeLessThan(withOption);
+    bust.contract.option = 'team';
     l.phase = 'draft';
-    expect(tradeValue(l, bust)).toBe(0);
+    expect(tradeValue(l, bust)).toBeGreaterThan(0);
+    // nor is it dead money: a release leaves only the season under way on the books
+    expect(releaseDeadMoney(l, bust)).toEqual([]);
+    l.phase = 'regular';
+    expect(releaseDeadMoney(l, bust).map((d) => d.season)).toEqual([l.season]);
   });
 
   it('using the mid-level caps a team at the tax line in trades that season', () => {
