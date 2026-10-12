@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
-import { teamPlayers } from '../league/helpers';
+import { teamPlayers, wholeMinutes } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab, type TacticsPatch } from '../ai/lab';
 import { counterCandidates, liveCounter, scoutTeam, teamAlerts } from '../ai/advisor';
 import { fitRoster, offPresetFit, rosterProfile } from '../ai/coachAI';
@@ -38,6 +38,22 @@ describe('tactics lab & reports', () => {
     expect(rep.headline.length).toBeGreaterThan(10);
     expect(rep.playTypes.length).toBeGreaterThan(3);
     expect(rep.grades.length).toBeGreaterThan(4);
+  });
+  it("quotes the box score's whole minutes in the player grades", () => {
+    league.phase = 'regular';
+    const res = playGame(
+      league,
+      league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!,
+    );
+    const box = res.home.tid === 0 ? res.home : res.away;
+    // 240 at the tenth; rounding each line alone gives 242 (31.5 reads 32, the box score's 31)
+    const mins = [36.5, 35.5, 33.5, 31.5, 30.5, 22.4, 18.3, 15.2, 10.6, 6.0];
+    box.players.forEach((p, i) => (p.min = mins[i] ?? 0));
+    const shown = wholeMinutes(box.players);
+    const grades = buildGameReport(league, res)!.grades;
+    expect(grades).toHaveLength(10);
+    for (const g of grades) expect(g.note).toMatch(new RegExp(` in ${shown(g.pid)} min$`));
+    expect(grades.find((g) => g.pid === box.players[3].pid)!.note).toMatch(/ in 31 min$/);
   });
   it("headlines a factor that went the winner's way, with one colon, and no nail-biter in overtime", () => {
     league.phase = 'regular';

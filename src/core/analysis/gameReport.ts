@@ -3,6 +3,7 @@
 
 import type { GameResult, League, TacticImpact, Tactics, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
+import { wholeMinutes } from '../league/helpers';
 
 export interface Factor {
   title: string;
@@ -393,7 +394,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     .map((l) => ({ pids: l.pids, min: l.sec / 60, pm: l.ptsFor - l.ptsAgainst, netRtg: l.poss ? ((l.ptsFor - l.ptsAgainst) / l.poss) * 100 : 0 }))
     .sort((a, b) => b.pm - a.pm);
 
-  // player grades
+  // player grades, quoting the box score's whole minutes (rounding each line alone can be a minute off)
+  const minutes = wholeMinutes(u.players);
   const grades = u.players
     .filter((p) => p.min >= 6)
     .map((bl) => {
@@ -402,7 +404,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       const expected = p ? ((p.ovr - 55) / 40) * 16 * (bl.min / 34) : 8;
       const score = gmsc - expected + bl.pm * 0.15;
       const grade = score >= 8 ? 'A+' : score >= 5 ? 'A' : score >= 2.5 ? 'B+' : score >= 0 ? 'B' : score >= -2.5 ? 'C+' : score >= -5 ? 'C' : score >= -8 ? 'D' : 'F';
-      const note = `${bl.pts} pts, ${bl.orb + bl.drb} reb, ${bl.ast} ast, ${bl.pm >= 0 ? '+' : ''}${bl.pm} in ${Math.round(bl.min)} min`;
+      const note = `${bl.pts} pts, ${bl.orb + bl.drb} reb, ${bl.ast} ast, ${bl.pm >= 0 ? '+' : ''}${bl.pm} in ${minutes(bl.pid)} min`;
       return { pid: bl.pid, grade, note };
     });
 
