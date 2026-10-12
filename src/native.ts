@@ -26,16 +26,16 @@ export async function initNative() {
   } catch {
     /* status bar not available */
   }
-  // a second Back after a failed save leaves anyway
-  let leaveUnsaved = false;
+  // a second Back soon after a failed save (while its warning shows) leaves anyway
+  let leaveUnsavedUntil = 0;
   const exit = async () => {
+    const pressed = Date.now();
     await idle();
-    // (a copy that another window has since saved over is fine to drop)
-    if ((await useStore.getState().flush()) || useStore.getState().saveProblem?.kind === 'conflict' || leaveUnsaved) {
+    if ((await useStore.getState().saveBeforeLeaving()) || pressed < leaveUnsavedUntil) {
       await App.exitApp();
       return;
     }
-    leaveUnsaved = true;
+    leaveUnsavedUntil = Date.now() + 4000;
     useStore.getState().toast('Your league is not saved. Export a backup from the banner, or press Back again to leave anyway.', 'bad');
   };
   // Android hardware back: close sheets/navigate back; exit from the root screen once the league is saved.
