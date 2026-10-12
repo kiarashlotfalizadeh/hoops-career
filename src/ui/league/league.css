@@ -87,10 +87,9 @@
   color: var(--text);
   appearance: none;
   -webkit-appearance: none;
-  outline: none;
 }
 .lg-select:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .lg-sub .chip:disabled {
   opacity: 0.4;
@@ -123,10 +122,9 @@
   background: var(--surface);
   padding: 0 10px 0 32px;
   font-size: 13px;
-  outline: none;
 }
 .lg-search input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .lg-search svg {
   position: absolute;
@@ -139,10 +137,6 @@
 
 .lg-flat {
   background: var(--surface);
-}
-/* rows fill these flush cards edge to edge, where an outside focus ring would be clipped */
-.lg-flat :is(a, button):focus-visible {
-  outline-offset: -2px;
 }
 .lg-section-label {
   font-size: 11px;
