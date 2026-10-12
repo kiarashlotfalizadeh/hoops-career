@@ -108,12 +108,15 @@ describe('news', () => {
     for (let i = 0; i < 600; i++) add(i % 3 ? 'injury' : 'milestone', `knock ${i}`);
     expect(l.news).toHaveLength(400);
     expect(l.news[0].text).toBe('The Cup');
-    // a long summer of signings: injuries and big games keep half the log
-    for (let i = 0; i < 600; i++) add('signing', `signing ${i}`);
+    // a summer of signings: the oldest injuries and big games still go first
+    for (let i = 0; i < 250; i++) add('signing', `signing ${i}`);
+    expect(l.news[0].text).toBe('The Cup');
+    // ...but the latest 100 always stay
+    for (let i = 250; i < 850; i++) add('signing', `signing ${i}`);
     expect(l.news).toHaveLength(400);
-    expect(l.news.filter((n) => n.kind === 'injury' || n.kind === 'milestone')).toHaveLength(200);
+    expect(l.news.filter((n) => n.kind === 'injury' || n.kind === 'milestone')).toHaveLength(100);
     expect(l.news.some((n) => n.text === 'knock 599')).toBe(true);
-    expect(l.news.some((n) => n.text === 'signing 599')).toBe(true);
+    expect(l.news.some((n) => n.text === 'signing 849')).toBe(true);
   });
 });
 

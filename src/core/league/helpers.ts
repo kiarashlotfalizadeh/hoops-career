@@ -143,19 +143,20 @@ export function seasonTotals(p: Player, season: number, playoffs = false): Playe
   return t;
 }
 
-/** News items the save keeps. */
+/** News items the save keeps, and how many of the latest injuries and big games always stay. */
 const NEWS_MAX = 400;
+const ROUTINE_KEEP = 100;
 const routineNews = (n: NewsItem) => n.kind === 'injury' || n.kind === 'milestone';
 
 /**
  * Add a news item. Over the limit the oldest injury or big game goes first (there are hundreds a
- * season), so trades, signings and the season's results stay; they keep half the log, so the
- * latest injuries always show too.
+ * season), so trades, signings and the season's results stay a year; the latest of them always
+ * show too.
  */
 export function addNews(league: League, n: Omit<NewsItem, 'id' | 'season' | 'day'>) {
   league.news.push({ id: league.nextMsgId++, season: league.season, day: league.day, ...n });
   while (league.news.length > NEWS_MAX) {
-    const routine = league.news.filter(routineNews).length > NEWS_MAX / 2;
+    const routine = league.news.filter(routineNews).length > ROUTINE_KEEP;
     league.news.splice(
       league.news.findIndex((x) => routineNews(x) === routine),
       1,
