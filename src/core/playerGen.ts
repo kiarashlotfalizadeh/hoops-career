@@ -136,19 +136,37 @@ const TEND_MODEL: Record<TendKey, { b: [number, number, number, number]; sd: num
  * the fit, and part of its rise with level, also make up for what that player's ratings miss. Drawn
  * whole on top of ratings that already make a star the first option, they compound: the real league
  * with every player's tendencies generated had a 58-point scorer, 20 players over 30 a game and 190
- * 50-point games a season (with its calibrated ones: 1 and 20), and fictional leagues the same. So
- * generated players' usage and self-creation rise with level at 0.3 of the fit's rate, and the keys
- * that choose who shoots and from where keep 0.3 of their spread: that league's 90+ players then use
- * the real ones' share of possessions, and a fictional league's top scorers average 35-40 with
- * 30-50 50-point games a season.
+ * 50-point games a season (with its calibrated ones: 1 and 20), and fictional leagues the same.
+ * Size compounds the same way: generated guards' ratings already make them the ball handlers, and
+ * with the fit's whole size term on top a fictional league's small guards used 27% of their teams'
+ * possessions (the real ones 25%) and four of them over 35%. So generated players' usage and
+ * self-creation rise with level at 0.15 of the fit's rate and with smallness at 0.3, and the keys
+ * that choose who shoots and from where keep 0.3 of their spread: a fictional league's ten top
+ * scorers then use 34% of their teams' possessions, as the real league's do (they used 36-38%), and
+ * over seven seasons its top scorer averages 34-39 with 10-31 50-point games a season (37-49 with
+ * 27-84).
  */
-const GEN_LEVEL: Partial<Record<TendKey, number>> = { use: 0.3, create: 0.3 };
+const GEN_LEVEL: Partial<Record<TendKey, number>> = { use: 0.15, create: 0.15 };
+const GEN_SIZE: Partial<Record<TendKey, number>> = { use: 0.3, create: 0.3 };
 const GEN_STYLE: Partial<Record<TendKey, number>> = { use: 0.3, create: 0.3, three: 0.3, mid: 0.3, drive: 0.3, corner: 0.3, pass: 0.3 };
+
+/**
+ * Share of a player's usage and self-creation beyond his level's and size's (the model's) that
+ * carries into the next season. Calibrated ones were fitted to his role among his 2025-26 and
+ * 2026-27 teammates, so they hold only with them: Dončić's and Reaves's are each 15 times the
+ * model's, which splits the Lakers' shots as it really went, but once Reaves and Sexton had left,
+ * Dončić used 49% of his team's possessions (37% before) and scored 42 a game (31) at the same
+ * level. Kept whole, the real league's top scorer reached 41-47 a game with 10-11 players over 30
+ * within seven seasons (31-33 and 2-3 in the first). Moving a quarter of the way to the model's each
+ * offseason, a player's role settles to what his level and size bring as his teammates change: the
+ * top scorer stays at 31-38 with at most 7 over 30.
+ */
+const OWN_ROLE_KEEP = 0.75;
 
 /** The model's log-tendency for a player of this OVR and size. */
 function tendBase(k: TendKey, ovr: number, size: number): number {
   const [c, lvl, star, hgt] = TEND_MODEL[k].b;
-  return c + (GEN_LEVEL[k] ?? 1) * ((lvl * (ovr - 75)) / 8 + (star * Math.max(0, ovr - 80)) / 8) + (hgt * (size - 50)) / 15;
+  return c + (GEN_LEVEL[k] ?? 1) * ((lvl * (ovr - 75)) / 8 + (star * Math.max(0, ovr - 80)) / 8) + ((GEN_SIZE[k] ?? 1) * hgt * (size - 50)) / 15;
 }
 
 const setTend = (t: Tendencies, k: TendKey, v: number) => (t[k] = Math.round(clamp(v, TEND_MODEL[k].lo, TEND_MODEL[k].hi) * 1000) / 1000);
@@ -167,8 +185,9 @@ export function genTendencies(p: Player, rng: Rng): Tendencies {
 /**
  * Tendencies follow his level (call after a year's development, with the OVR they were last set
  * for): his own style stays and the part that comes with quality moves, so a prospect who becomes
- * a star takes more of the shots and an aging star hands them on (his ratings do most of that). A
- * player without tendencies (from a save made before they were generated) gets a set.
+ * a star takes more of the shots and an aging star hands them on (his ratings do most of that),
+ * while his usage and self-creation settle toward his level's (OWN_ROLE_KEEP). A player without
+ * tendencies (from a save made before they were generated) gets a set.
  */
 export function followTendencies(p: Player, prevOvr: number, rng: Rng) {
   if (!p.tend) {
@@ -178,7 +197,8 @@ export function followTendencies(p: Player, prevOvr: number, rng: Rng) {
   const t = p.tend;
   for (const k of TEND_KEYS) {
     const before = tendBase(k, prevOvr, p.ratings.hgt);
-    setTend(t, k, (t[k] ?? Math.exp(before)) * Math.exp(tendBase(k, p.ovr, p.ratings.hgt) - before));
+    const own = (t[k] ?? Math.exp(before)) / Math.exp(before);
+    setTend(t, k, Math.exp(tendBase(k, p.ovr, p.ratings.hgt)) * Math.pow(own, GEN_LEVEL[k] ? OWN_ROLE_KEEP : 1));
   }
 }
 
