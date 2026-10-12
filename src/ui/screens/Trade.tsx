@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Check, Handshake, Info, RotateCcw, Ticket, X } from 'lucide-react';
+import { Ban, Check, Handshake, Info, Lock, RotateCcw, Ticket, X } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from '../../core/league/helpers';
-import { capPayroll } from '../../core/league/freeAgency';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
+import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
   canMakeWork,
@@ -120,19 +120,19 @@ export default function Trade() {
   };
 
   const propose = () => {
-    const out: { ev: TradeEval | null } = { ev: null };
-    useStore.getState().mutate((l) => {
-      out.ev = evaluateTrade(l, offer);
-      if (out.ev.accept) executeTrade(l, offer);
-    });
-    const r = out.ev;
-    if (r?.accept) {
-      const incoming = [...cleanGet.pids.map((pid) => league.players[pid].lastName), ...cleanGet.dpids.map(() => 'a pick')];
-      useStore.getState().toast(`Trade done with ${pt.abbrev}! ${incoming.length ? `Welcome ${incoming.join(', ')}.` : ''} New arrivals join the end of your rotation.`, 'good');
-      reset();
-    } else {
-      useStore.getState().toast(`${pt.abbrev}: ${r?.message ?? 'No deal.'}`, 'bad');
+    // judging a deal changes nothing: only an accepted one is saved
+    const r = evaluateTrade(league, offer);
+    if (!r.accept) {
+      useStore.getState().toast(`${pt.abbrev}: ${r.message}`, 'bad');
+      return;
     }
+    useStore.getState().mutate((l) => executeTrade(l, offer));
+    const names = cleanGet.pids.map((pid) => league.players[pid].lastName);
+    const picks = cleanGet.dpids.length;
+    const arrive = names.length ? ` Welcome ${names.join(', ')}: ${names.length === 1 ? 'he joins' : 'they join'} the end of your rotation.` : '';
+    const got = picks ? ` You${names.length ? ' also' : ''} get ${picks === 1 ? 'a draft pick' : `${picks} draft picks`}.` : '';
+    useStore.getState().toast(`Trade done with ${pt.abbrev}!${arrive}${got}`, 'good');
+    reset();
   };
 
   const whatWorks = () => {
@@ -297,8 +297,8 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   const holds = pay - payroll(league, tid, season);
   const cap = CAP_FOR(league, season);
   const st = STRATEGY_META[t.strategy];
-  // standard contracts: two-way deals sit outside the 15
-  const n = standardRoster(league, tid).length;
+  // standard contracts the deal counts, as the dock does: two-way deals sit outside the 15, and after the season expiring ones are leaving
+  const n = tradeRoster(league, tid).length;
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
@@ -551,10 +551,25 @@ function Dock({
 }) {
   const user = league.userTid;
   const cap = CAP_FOR(league, season);
+  const key = JSON.stringify(offer);
+  // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
+  const money = useLeagueMemo(
+    () =>
+      withHoldsMemo(() => ({
+        capPay: capPayroll(league, user, season),
+        theyreOver: !empty && salaryMatchGap(league, offer, 'b') > 0,
+        workable: !empty && canMakeWork(league, offer),
+      })),
+    // key stands for the offer (a new object every render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [league, user, season, empty, key],
+  );
   // two-way pay sits outside the cap: it neither counts nor matches
   const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
   const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
-  const after = capPayroll(league, user, season) - out + inc;
+  // between the season and free agency your payroll counts the cap holds of the players you'd re-sign
+  const holds = money.capPay - payroll(league, user, season);
+  const after = money.capPay - out + inc;
   // standard roster spots (two-way players don't count)
   const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
   // after the season, only next season's contracts count (expiring deals are leaving)
@@ -574,8 +589,8 @@ function Dock({
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
   // the helper can fix our side's salary matching, a full roster and the value, nothing else
-  const theyreOver = salaryMatchGap(league, offer, 'b') > 0;
-  const fixable = !ev.accept && canMakeWork(league, offer);
+  const theyreOver = money.theyreOver;
+  const fixable = !ev.accept && money.workable;
   return (
     <div className="fo-dock">
       <div className="row between" style={{ gap: 8, marginBottom: 6 }}>
@@ -609,6 +624,7 @@ function Dock({
             {fmtM(after)}
           </div>
           <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
+          {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
         </div>
         <div>
           <div className="tiny dim upper bold">Rosters</div>
@@ -659,8 +675,11 @@ function TradingBlock({
   const [showAll, setShowAll] = useState(false);
   const mine = teamPlayers(league, league.userTid).sort((a, b) => b.ovr - a.ovr);
   const pid = shop !== null && league.players[shop]?.tid === league.userTid ? shop : null;
-  const offers = useLeagueMemo(() => (pid !== null && !closed ? blockOffers(league, pid) : []), [league, pid, closed]);
   const target = pid !== null ? league.players[pid] : null;
+  // expiring, option and recently signed players can't be moved at all: say so instead of shopping them
+  const locked = target ? untradeable(league, target) : null;
+  const isLocked = !!locked;
+  const offers = useLeagueMemo(() => (pid !== null && !closed && !isLocked ? blockOffers(league, pid) : []), [league, pid, closed, isLocked]);
   return (
     <>
       <Card title={<h3>Shop a player</h3>} right={<span className="tiny dim">{mine.length} on roster</span>}>
@@ -668,18 +687,30 @@ function TradingBlock({
           Pick one of your players and see the best package every team would give you for him right now.
         </div>
         <div className="hscroll">
-          {mine.map((p) => (
-            <button key={p.pid} className={`chip ${pid === p.pid ? 'on' : ''}`} style={{ flex: 'none', paddingLeft: 4 }} onClick={() => setShop(p.pid)}>
-              <Ovr v={p.ovr} size="sm" />
-              {p.lastName}
-            </button>
-          ))}
+          {mine.map((p) => {
+            const lock = untradeable(league, p);
+            return (
+              <button
+                key={p.pid}
+                className={`chip ${pid === p.pid ? 'on' : ''}`}
+                style={{ flex: 'none', paddingLeft: 4, opacity: lock && pid !== p.pid ? 0.55 : undefined }}
+                aria-pressed={pid === p.pid}
+                onClick={() => setShop(p.pid)}
+              >
+                <Ovr v={p.ovr} size="sm" />
+                {p.lastName}
+                {lock && <Lock size={12} role="img" aria-label="can't be traded now" />}
+              </button>
+            );
+          })}
         </div>
       </Card>
       {closed ? (
         <Empty>Teams aren't taking calls until trading reopens.</Empty>
       ) : !target ? (
         <Empty>Choose a player above to see offers.</Empty>
+      ) : locked ? (
+        <Empty>{locked.why}</Empty>
       ) : offers.length === 0 ? (
         <Empty>Nobody has a package that works for {target.lastName} right now (value or salary matching).</Empty>
       ) : (
@@ -689,9 +720,12 @@ function TradingBlock({
           </div>
           {(showAll ? offers : offers.slice(0, 8)).map((o) => {
             const t = league.teams[o.tid];
-            const ratio = o.myValue / Math.max(0.01, o.targetValue);
-            const tone =
-              ratio >= 1.1
+            // a player worth less than nothing to you (a bad contract): any taker is a salary dump, not a share of his value
+            const dump = o.targetValue <= 0;
+            const ratio = dump ? 0 : o.myValue / o.targetValue;
+            const tone = dump
+              ? { l: 'Salary dump', c: 'var(--good)' }
+              : ratio >= 1.1
                 ? { l: 'Overpay', c: 'var(--good)' }
                 : ratio >= 0.9
                   ? { l: 'Fair value', c: 'var(--info)' }
@@ -716,7 +750,7 @@ function TradingBlock({
                     <div className="small bold" style={{ color: tone.c }}>
                       {tone.l}
                     </div>
-                    <div className="tiny dim num">{Math.round(ratio * 100)}% of his value</div>
+                    {!dump && <div className="tiny dim num">{Math.round(ratio * 100)}% of his value</div>}
                   </div>
                 </div>
                 <div className="col" style={{ gap: 6, marginTop: 10 }}>
