@@ -386,6 +386,16 @@ export function evaluateTrade(league: League, offer: TradeOffer): TradeEval {
   return withHoldsMemo(() => evaluate(league, offer));
 }
 
+/**
+ * How far a deal is from what the AI side wants: the share of the value it sends that is still
+ * missing (0 once it's there), and how its GM puts it.
+ */
+export function valueVerdict(ev: { delta: number; valueOut: number }): { gap: number; label: string } {
+  const missing = Math.max(0, -ev.delta);
+  const gap = ev.valueOut > 0 ? missing / ev.valueOut : missing > 0 ? 1 : 0;
+  return { gap, label: gap > 0.6 ? 'Not even close' : gap > 0.25 ? 'You need to add significant value' : 'Close — add a little more' };
+}
+
 function evaluate(league: League, offer: TradeOffer): TradeEval {
   const errors = validateTrade(league, offer);
   const diff = league.settings.difficulty;
@@ -397,10 +407,7 @@ function evaluate(league: League, offer: TradeOffer): TradeEval {
   if (errors.length) message = errors[0];
   else if (tooManyFirsts) message = `No team gives up more than ${MAX_FIRSTS_OUT} first-round picks in one deal.`;
   else if (accept) message = delta > Math.abs(valueOut) * 0.25 ? 'Deal! (They seem eager.)' : 'Deal!';
-  else {
-    const pct = valueOut > 0 ? -delta / valueOut : 1;
-    message = pct > 0.6 ? 'Not even close.' : pct > 0.25 ? 'You need to add significant value.' : 'Close — add a little more.';
-  }
+  else message = `${valueVerdict({ delta, valueOut }).label}.`;
   return { ok: errors.length === 0, errors, delta, valueIn, valueOut, accept, message };
 }
 
