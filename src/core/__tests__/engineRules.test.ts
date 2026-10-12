@@ -123,7 +123,7 @@ describe('engine rules', () => {
       }
     }
     // five seconds left before the half: the offense gets a shot (or a trip to the line) off; eight
-    // seconds left in a 12-point game, the leader lets the clock run out instead
+    // or twenty seconds left in a 12-point game (the shot clock off), the leader lets the clock run out instead
     const lastPossession = (q: number, clock: number, lead: number) => {
       let shots = 0;
       for (let g = 0; g < 20; g++) {
@@ -144,6 +144,7 @@ describe('engine rules', () => {
     };
     expect(lastPossession(2, 5, 0)).toBeGreaterThanOrEqual(18);
     expect(lastPossession(4, 8, 12)).toBeLessThanOrEqual(2);
+    expect(lastPossession(4, 20, 12)).toBeLessThanOrEqual(2);
   });
 
   it('brings the starters back as soon as a blowout gets back within reach', () => {

@@ -1497,6 +1497,8 @@ export class GameSim {
     let ballFrom: SP | null = null;
     let forced = false;
     for (let n = 0; n < 6; n++) {
+      // a late lead with the shot clock off (it can't run out before the game clock): the clock dies with the ball
+      if (late.milk && this.clock <= shotClock) this.tick(this.clock);
       if (this.clock <= 0.05) {
         this.clockOut(off);
         return;
