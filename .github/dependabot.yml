@@ -4,10 +4,25 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # a dependency joins the first group it matches
     groups:
-      # one PR a week for patch/minor bumps; majors still come one by one
+      # majors that only work together come in one PR per family
+      capacitor:
+        patterns: ['@capacitor/*']
+        update-types: [major]
+      react:
+        patterns: ['react', 'react-dom', '@types/react*']
+        update-types: [major]
+      eslint:
+        patterns: ['eslint', '@eslint/js']
+        update-types: [major]
+      # one PR a week for patch/minor bumps; other majors still come one by one
       npm-minor:
         update-types: [minor, patch]
+    ignore:
+      # the runtime is Node 22: its types follow it, not the newest Node
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:

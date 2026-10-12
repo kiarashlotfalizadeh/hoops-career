@@ -11,7 +11,8 @@ import type { Ratings, Tendencies } from '../../../src/core/types';
 import { normName } from './crosswalk';
 import { COLLEGE_SEASONS } from './sources';
 
-const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) };
+/** hyparquet codecs not built in: ZSTD via Node's zlib. */
+export const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) };
 
 export interface CollegeAgg {
   /** ESPN athlete id (the same person across seasons and transfers). */

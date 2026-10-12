@@ -14,3 +14,6 @@ ios/App/Pods
 ios/App/build
 *.log
 .claude/worktrees
+# scripts/qa screenshot folders (their default output)
+/shots
+/tour

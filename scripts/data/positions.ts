@@ -5,7 +5,8 @@
 import type { Pos, Ratings } from '../../src/core/types';
 
 const FIVE = new Set(['PG', 'SG', 'SF', 'PF', 'C']);
-const COMBINED = /^(TOT|\dTM)$/;
+/** A box-score row that totals a player's season across teams ('TOT', '2TM', '3TM'...). */
+export const COMBINED = /^(TOT|\dTM)$/;
 
 export interface PosRow {
   season: number;

@@ -2,10 +2,11 @@
 # (contracts, rosters, bios, box scores; ~90 pages at 1 request / 3.7 s) plus NBA.com
 # play-by-play / matchup archives and ESPN college box scores from public GitHub datasets, and
 # the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries, two-way
-# contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only),
-# and stores the Basketball Reference pages as a tarball on the `data-raw` branch (the GitHub
-# datasets re-download fast). With `extras_only`, it just refreshes the extras in the current
-# seed. Every run uploads the seed as an artifact.
+# contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only)
+# and then starts the CI and Android APK workflows on it, and stores the Basketball Reference
+# pages as a tarball on the `data-raw` branch (the GitHub datasets re-download fast). With
+# `extras_only`, it just refreshes the extras in the current seed. A successful build uploads the
+# seed as an artifact.
 name: Build seed data
 on:
   workflow_dispatch:
@@ -24,6 +25,7 @@ on:
         default: false
 permissions:
   contents: write
+  actions: write # starts CI and the APK build on a committed seed
 # two runs would race to push the seed to main and the pages to data-raw
 concurrency:
   group: seed
@@ -33,9 +35,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      # no token left in .git/config for npm ci and the data scripts: the two push steps authenticate themselves
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
@@ -43,20 +47,22 @@ jobs:
       - run: npm ci
       - name: Reuse previously fetched pages
         if: ${{ !inputs.extras_only && !inputs.refetch }}
+        # fetch-depth 0 already fetched every branch, data-raw included
         run: |
-          if git ls-remote --exit-code origin data-raw >/dev/null 2>&1; then
-            git fetch origin data-raw
+          if git rev-parse --verify -q origin/data-raw >/dev/null; then
             git show origin/data-raw:data-raw.tgz > /tmp/prev.tgz && tar xzf /tmp/prev.tgz || true
           fi
+      # contracts and this season's rosters change all summer: --refresh re-fetches them even when cached
       - name: Fetch Basketball Reference pages
         if: ${{ !inputs.extras_only }}
-        run: npm run data:fetch
+        run: npm run data:fetch -- --refresh
       - name: Fetch NBA.com play-by-play and college data
         if: ${{ !inputs.extras_only }}
         run: npm run data:fetch-nba
-      # always fresh: the injury report changes hourly and pick ownership with every trade
+      # always fresh: the injury report changes hourly and pick ownership with every trade; --strict
+      # fails the run when a source can't be downloaded instead of committing a seed without it
       - name: Fetch schedule, pick ownership, injuries and two-way contracts
-        run: npm run data:fetch-extra -- --force
+        run: npm run data:fetch-extra -- --force --strict
       # also after a failed fetch (rate limits): the pages that did arrive aren't fetched again next time
       - name: Archive raw pages
         id: archive
@@ -76,26 +82,39 @@ jobs:
       - name: Verify app still builds and tests pass with the seed
         if: steps.build.outcome == 'success'
         run: npm run typecheck && npm test && npm run invariants && npm run build
+      # also when the checks above fail, so the new seed can be inspected
       - name: Upload seed
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: seed
           path: src/data/seed.json
       - name: Commit seed to main
         if: steps.build.outcome == 'success' && inputs.commit_seed && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # a rebuild that only moved its timestamps isn't worth a commit
+          strip='del(.generated, .extrasAsOf)'
+          if cmp -s <(git show HEAD:src/data/seed.json | jq -c "$strip") <(jq -c "$strip" src/data/seed.json); then
+            echo "seed unchanged"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/data/seed.json
-          if git commit -m "Update seed data"; then
-            git pull --rebase origin main
-            git push origin HEAD:main
-          else
-            echo "seed unchanged"
-          fi
+          git commit -m "Update seed data"
+          # only these two commands get the token, in the header actions/checkout itself uses
+          auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "$auth" pull --rebase origin main
+          git -c "$auth" push origin HEAD:main
+          # a push made with this token starts no workflows: run CI and the APK build on the new seed
+          gh workflow run ci.yml --ref main --repo "$GITHUB_REPOSITORY"
+          gh workflow run android.yml --ref main --repo "$GITHUB_REPOSITORY"
       - name: Push raw pages to data-raw branch
         if: ${{ !cancelled() && !inputs.extras_only && steps.archive.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -105,7 +124,8 @@ jobs:
           cp /tmp/upload.tgz data-raw.tgz
           git add -f data-raw.tgz
           git commit -m "Basketball Reference raw pages $(date -u +%F)"
-          git push -f origin HEAD:data-raw
+          auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "$auth" push -f origin HEAD:data-raw
       - name: Fail the run if the seed build failed
         if: steps.build.outcome == 'failure'
         run: |

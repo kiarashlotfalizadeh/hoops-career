@@ -186,6 +186,23 @@ describe('schedule, injuries, two-way contracts, positions', () => {
     expect(res.missing).toEqual(['Not In Seed (CHO)']);
   });
 
+  it('starts a refresh from the contracts table: a player no longer on a two-way deal goes back where he was', () => {
+    const players = [player('a', 'Jalen', 'Wilson', null), player('b', 'Ernest', 'Udeh', 'CLE')];
+    const rows = [
+      { name: 'Jalen Wilson', team: 'ATL', contractType: 'two-way' },
+      { name: 'Ernest Udeh', team: 'CLE', contractType: 'two-way' },
+    ];
+    markTwoWays(players, rows, '2026-27');
+    // the seed goes through JSON between runs
+    const again = JSON.parse(JSON.stringify(players)) as SeedPlayer[];
+    markTwoWays(again, rows, '2026-27');
+    expect(again).toEqual(JSON.parse(JSON.stringify(players)));
+    markTwoWays(again, rows.slice(1), '2026-27');
+    expect(again[0]).toMatchObject({ team: null, contract: null });
+    expect(again[0]).not.toHaveProperty('twoWayFrom');
+    expect(again[1].contract).toEqual({ salaries: [5000], twoWay: true });
+  });
+
   it('takes positions from box scores, else infers them from G/F/C, size and skills', () => {
     expect(
       statsPosition([

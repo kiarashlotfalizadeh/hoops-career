@@ -101,7 +101,6 @@ export async function processMatchups(file: string, season: number, log = consol
     d.switches += r.sw;
     d.helpBlocks += r.hb;
   }
-  // a defender's own team's opponents are the offensive players he guarded; his team is the other side
   log(`  ${season}: ${rows.length} matchup rows, ${Object.keys(defenders).length} defenders`);
   return { season, defenders, names, teams };
 }

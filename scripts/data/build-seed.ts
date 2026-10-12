@@ -5,7 +5,7 @@
 // birth date, jersey, country, college); draft pages (draft slot).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
+import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
 import {
   COUNTRY_NAMES,
   parseAdvanced,
@@ -33,7 +33,8 @@ import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { BBREF_TO_TID } from '../../src/core/teams';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
 import { clamp } from '../../src/core/random';
-import { inferPosition, statsPosition } from './positions';
+import { CAP, seasonLabel } from '../../src/core/constants';
+import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
@@ -42,12 +43,11 @@ const read = (key: string) => {
   const f = join(RAW, `${key}.html`);
   return existsSync(f) ? readFileSync(f, 'utf8') : null;
 };
-const COMBINED = /^(TOT|\dTM)$/;
 
 async function main() {
   const contractsHtml = read('contracts');
   if (!contractsHtml) {
-    console.error('Missing data/raw/contracts.html. Run `npm run data:fetch` first.');
+    console.error(`Missing ${join(RAW, 'contracts.html')}. Run \`npm run data:fetch\` first.`);
     process.exit(1);
   }
   const contracts = parseContracts(contractsHtml);
@@ -55,7 +55,6 @@ async function main() {
 
   const perGame: PerGameRow[] = [];
   const adv: AdvRow[] = [];
-  const leagueAvg: Record<number, PerGameRow> = {};
   for (const s of STAT_SEASONS) {
     const pg = read(`per_game_${s}`);
     const ad = read(`advanced_${s}`);
@@ -65,15 +64,17 @@ async function main() {
     }
     const parsed = parsePerGame(pg, s);
     perGame.push(...parsed.rows);
-    if (parsed.league) leagueAvg[s] = parsed.league;
     adv.push(...parseAdvanced(ad, s));
     console.log(`season ${s}: ${parsed.rows.length} per-game rows`);
   }
   const rosters: RosterRow[] = [];
+  const noRoster: string[] = [];
   for (const s of ROSTER_SEASONS)
     for (const t of TEAM_CODES) {
       const html = read(`roster_${t}_${s}`);
-      if (html) rosters.push(...parseRoster(html, t, s));
+      const rows = html ? parseRoster(html, t, s) : [];
+      if (!rows.length) noRoster.push(`${t} ${s}${html ? ' (empty)' : ''}`);
+      rosters.push(...rows);
     }
   const drafts: DraftRow[] = [];
   const noDraftPage: number[] = [];
@@ -83,6 +84,7 @@ async function main() {
     else noDraftPage.push(y);
   }
   console.log(`rosters: ${rosters.length} rows, drafts: ${drafts.length} picks`);
+  if (noRoster.length) console.warn(`  no roster rows for ${noRoster.join(', ')}: their players get no bio, jersey or position from those pages`);
   if (noDraftPage.length) console.warn(`  no draft page for ${noDraftPage.join(', ')}: players drafted then are seeded as undrafted`);
 
   const byId = <T extends { id: string }>(rows: T[]) => {
@@ -108,13 +110,19 @@ async function main() {
   for (const r of rosters) if (['PG', 'SG', 'SF', 'PF', 'C'].includes(r.posRaw)) rosterFive.set(r.id, r.posRaw);
   /** Players whose position is inferred from G/F/C + ratings (re-inferred after calibration). */
   const inferredPos = new Map<number, string>();
-  const contractById = new Map<string, ContractRow>(contracts.map((c) => [c.id, c]));
+  // a waived player's dead money is listed like a contract: drop rows under the minimum salary for
+  // players on no current-season roster page (two-way and minimum deals are on one)
+  const current = new Set(rosters.filter((r) => r.season === SEED_SEASON).map((r) => r.id));
+  const deadMoney = contracts.filter((c) => current.size > 0 && (c.salaries[0] ?? 0) < CAP.minContract && !current.has(c.id));
+  if (deadMoney.length) console.log(`  dead money, not seeded as contracts: ${deadMoney.map((c) => `${c.name} (${c.team} $${c.salaries[0] ?? 0}K)`).join(', ')}`);
+  const signed = contracts.filter((c) => !deadMoney.includes(c));
+  const contractById = new Map<string, ContractRow>(signed.map((c) => [c.id, c]));
 
   // universe: everyone under contract + recent rotation players who are unsigned
-  const ids = new Set<string>(contracts.map((c) => c.id));
+  const ids = new Set<string>(signed.map((c) => c.id));
   const fa = [...pgById.entries()]
-    .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === 2026 && r.g * r.mp >= 250))
-    .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === 2026 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
+    .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === SEED_SEASON - 1 && r.g * r.mp >= 250))
+    .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === SEED_SEASON - 1 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
     .sort((a, b) => b.min - a.min)
     .slice(0, 140);
   for (const f of fa) ids.add(f.id);
@@ -182,8 +190,10 @@ async function main() {
       const md = Number(ros.birthDate.slice(4));
       bornYear = y + (md > 201 ? 1 : 0);
     } else if (lastStat) bornYear = lastStat.season - lastStat.age;
-    else bornYear = 2027 - 21;
-    const age = 2027 - bornYear;
+    else if (dr)
+      bornYear = dr.year - 19; // drafted at about 19
+    else bornYear = SEED_SEASON - 21;
+    const age = SEED_SEASON - bornYear;
     // box-score position (latest season, main team), else last season's roster page, else
     // inferred from the G/F/C label, size and skills once ratings exist
     const fivePos = (statsPosition(rows) ?? rosterFive.get(id) ?? null) as Pos | null;
@@ -296,7 +306,7 @@ async function main() {
       weightLb,
       bornYear,
       country: COUNTRY_NAMES[ros?.country ?? 'US'] ?? ros?.country ?? 'USA',
-      college: ros?.college ?? dr?.college ?? '',
+      college: ros?.college || dr?.college || '',
       jersey: ros?.jersey ?? '',
       team: c ? c.team : null,
       contract: c && c.salaries.length ? { salaries: c.salaries, option: lastOpt === 'player' || lastOpt === 'team' ? lastOpt : undefined } : null,
@@ -311,6 +321,8 @@ async function main() {
   console.log(
     `players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`,
   );
+  const noBio = players.filter((p) => p.team && !rosterById.has(p.id));
+  if (noBio.length) console.warn(`  under contract but on no roster page (size, age and country estimated): ${noBio.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}`);
   // experience comes from the draft year, so every player needs one: undrafted players get their entry class
   const undrafted = players.filter((p) => p.draft && !p.draft.round);
   const early = undrafted.filter((p) => p.draft!.year < DRAFT_YEARS[0]);
@@ -336,10 +348,9 @@ async function main() {
   const seed: SeedData = {
     version: 1,
     generated: new Date().toISOString(),
-    source: 'Basketball Reference: 2023-24 to 2025-26 per-game & advanced; current contracts',
-    season: 2027,
+    source: `Basketball Reference: ${seasonLabel(STAT_SEASONS[0])} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced; current contracts`,
+    season: SEED_SEASON,
     players,
-    realAvgs: realAvgs(leagueAvg[2026]),
   };
   const league = createLeague({ name: 'calib', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed, rngSeed: 99, preseasonCuts: false });
   const pidByIdx = new Map<number, number>();
@@ -439,7 +450,7 @@ async function main() {
         id: p.id,
         name: `${p.first} ${p.last}`,
         team: p.team,
-        age: 2027 - p.bornYear,
+        age: SEED_SEASON - p.bornYear,
         pick: p.draft?.round ? (p.draft.round - 1) * 30 + p.draft.pick : null,
         rawMin: a?.rawMin ?? 0,
         wMin: a?.wMin ?? 0,
@@ -460,11 +471,11 @@ async function main() {
 
 /** Display OVR expected from draft slot and reputation alone (no NBA sample). */
 function priorOvr(sp: SeedPlayer): number {
-  const age = 2027 - sp.bornYear;
+  const age = SEED_SEASON - sp.bornYear;
   // overall pick; round 0 is undrafted
   const pick = sp.draft?.round ? (sp.draft.round - 1) * 30 + sp.draft.pick : null;
   const bump = (PROSPECT_HINTS[`${sp.first} ${sp.last}`.trim()]?.bump ?? 0) * 8;
-  const yearsSince = sp.draft ? Math.max(0, 2026 - sp.draft.year) : 0;
+  const yearsSince = sp.draft ? Math.max(0, SEED_SEASON - 1 - sp.draft.year) : 0;
   if (age <= 23 && yearsSince <= 2) {
     const base = pick === null ? 61 : pick <= 30 ? 78 - 9 * Math.pow((pick - 1) / 29, 0.8) : 65.5 - (4 * (pick - 31)) / 29;
     return base + bump + yearsSince * 1.5;
@@ -527,11 +538,6 @@ function r3(x: number) {
 
 function estimateHeight(pos: Pos) {
   return { PG: 75, SG: 77, SF: 79, PF: 81, C: 83 }[pos];
-}
-
-function realAvgs(r?: PerGameRow): Record<string, number> | undefined {
-  if (!r) return undefined;
-  return { fga: r.fga, fg3a: r.fg3a, fta: r.fta, orb: r.orb, drb: r.drb, ast: r.ast, stl: r.stl, blk: r.blk, tov: r.tov, pf: r.pf, pts: r.pts };
 }
 
 function pearson(x: number[], y: number[]) {
