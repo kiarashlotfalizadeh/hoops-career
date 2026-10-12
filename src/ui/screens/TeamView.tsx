@@ -12,8 +12,8 @@ import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
-import { f1, latestLine, moneyM, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
-import { openOption } from '../office/common';
+import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
+import { fmtM, openOption } from '../office/common';
 import { OutcomeTag, SectionLabel, StrategyTag, TabBar, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
@@ -110,22 +110,22 @@ function Hero({ league, tid }: { league: League; tid: number }) {
         <div className="lg-strip">
           <div>
             <span className="k">Off Rtg</span>
-            <span className="v">{gp ? f1(tr.ortg) : '–'}</span>
+            <span className="v">{gp ? f1(tr.ortg) : '—'}</span>
           </div>
           <div>
             <span className="k">Def Rtg</span>
-            <span className="v">{gp ? f1(tr.drtg) : '–'}</span>
+            <span className="v">{gp ? f1(tr.drtg) : '—'}</span>
           </div>
           <div>
             <span className="k">Net</span>
             <span className="v" style={{ color: gp ? (tr.net >= 0 ? 'var(--good)' : 'var(--bad)') : undefined }}>
-              {gp ? signed(tr.net) : '–'}
+              {gp ? signed(tr.net) : '—'}
             </span>
           </div>
           <div>
             <span className="k">Payroll{cs !== league.season ? ` ${seasonLabel(cs).slice(2)}` : ''}</span>
             <span className="v" style={{ color: payColor(league, pay, cs) }}>
-              {moneyM(pay)}
+              {fmtM(pay)}
             </span>
           </div>
         </div>
@@ -172,14 +172,14 @@ function PayrollBar({ league, tid }: { league: League; tid: number }) {
       <div className="row between" style={{ marginBottom: 8 }}>
         <span className="small dim">Payroll {seasonLabel(cs)}</span>
         <span className="bold num" style={{ color }}>
-          {moneyM(pay)}
+          {fmtM(pay)}
         </span>
       </div>
       <Bar value={(pay / (cap.luxuryTax * 1.1)) * 100} color={color} />
       <div className="row between tiny dim" style={{ marginTop: 6 }}>
-        <span>Cap {moneyM(cap.salaryCap)}</span>
-        <span>{room > cap.salaryCap ? `${moneyM(room - cap.salaryCap)} over cap${holds}` : `${moneyM(cap.salaryCap - room)} cap space${holds}`}</span>
-        <span>Tax {moneyM(cap.luxuryTax)}</span>
+        <span>Cap {fmtM(cap.salaryCap)}</span>
+        <span>{room > cap.salaryCap ? `${fmtM(room - cap.salaryCap)} over cap${holds}` : `${fmtM(cap.salaryCap - room)} cap space${holds}`}</span>
+        <span>Tax {fmtM(cap.luxuryTax)}</span>
       </div>
     </Card>
   );
@@ -269,7 +269,7 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
       <div className="lg-pstats">
         {(['pts', 'reb', 'ast'] as const).map((k) => (
           <div key={k} className="col" style={{ gap: 0 }}>
-            <span className="v">{line ? f1(line[k]) : '–'}</span>
+            <span className="v">{line ? f1(line[k]) : '—'}</span>
             <span className="k">{k.toUpperCase()}</span>
           </div>
         ))}
@@ -293,7 +293,7 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
       rows.map((r) => r.p),
       { initial: true },
     );
-    const pc = (x: number | string) => (typeof x === 'number' && x >= 0 ? (x * 100).toFixed(1) : '-');
+    const pc = (x: number | string) => (typeof x === 'number' && x >= 0 ? (x * 100).toFixed(1) : '—');
     return [
       {
         key: 'n',
@@ -363,13 +363,13 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
         get: (p) => salaryFor(p, s),
         fmt: (x, p) => {
           const amt = x as number;
-          if (!amt) return <span className="dim">–</span>;
+          if (!amt) return <span className="dim">—</span>;
           // (an option year already under way was settled)
           const o = openOption(league, p);
           const opt = o && contractExp(p.contract) === s ? (o === 'player' ? ' PO' : ' TO') : '';
           return (
             <span className={p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
-              {moneyM(amt)}
+              {fmtM(amt)}
               {opt && <span className="tiny warn">{opt}</span>}
             </span>
           );
@@ -391,7 +391,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
             <Kpi
               key={s}
               k={seasonLabel(s)}
-              v={<span style={{ fontSize: 18 }}>{moneyM(pay, 0)}</span>}
+              v={<span style={{ fontSize: 18 }}>{fmtM(pay, 0)}</span>}
               sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'}
             />
           );

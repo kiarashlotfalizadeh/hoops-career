@@ -10,8 +10,8 @@ import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented,
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
-import { f1, moneyM, ordinalSuffix, p1, perGame, signed } from '../stats';
-import { openOption } from '../office/common';
+import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
+import { fmtM, openOption } from '../office/common';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
@@ -201,10 +201,10 @@ export default function PlayerView() {
           </div>
         </div>
         <div className="grid4" style={{ marginTop: 12 }}>
-          <Kpi k="PTS" v={line ? f1(line.pts) : '-'} />
-          <Kpi k="REB" v={line ? f1(line.reb) : '-'} />
-          <Kpi k="AST" v={line ? f1(line.ast) : '-'} />
-          <Kpi k="TS%" v={line ? p1(line.tsPct).replace('%', '') : '-'} />
+          <Kpi k="PTS" v={line ? f1(line.pts) : '—'} />
+          <Kpi k="REB" v={line ? f1(line.reb) : '—'} />
+          <Kpi k="AST" v={line ? f1(line.ast) : '—'} />
+          <Kpi k="TS%" v={line ? p1(line.tsPct).replace('%', '') : '—'} />
         </div>
         {!cur && line && lastSeason ? (
           <div className="tiny dim" style={{ marginTop: 6 }}>
@@ -326,7 +326,7 @@ export default function PlayerView() {
                 <div className="col" style={{ gap: 6 }}>
                   <div className="row between">
                     <span className="dim2 small">This season</span>
-                    <span className="bold num">{moneyM(sal)}</span>
+                    <span className="bold num">{fmtM(sal)}</span>
                   </div>
                   <div className="row between">
                     <span className="dim2 small">Expires</span>
@@ -339,13 +339,13 @@ export default function PlayerView() {
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
                   <div className="row between">
                     <span className="dim2 small">Market value</span>
-                    <span className="num">{moneyM(marketSalary(league, p))}</span>
+                    <span className="num">{fmtM(marketSalary(league, p))}</span>
                   </div>
                 </div>
               ) : p.tid === FREE_AGENT ? (
                 <div className="col" style={{ gap: 8 }}>
                   <div className="small dim2">
-                    Asking {moneyM(askingContract(league, p, league.userTid).amount)} × {askingContract(league, p, league.userTid).years} yrs from you.
+                    Asking {fmtM(askingContract(league, p, league.userTid).amount)} × {askingContract(league, p, league.userTid).years} yrs from you.
                   </div>
                   <Link className="btn sm primary" to="/free-agents">
                     Make an offer
@@ -470,7 +470,7 @@ export default function PlayerView() {
             ? 'Two-way pay sits outside the cap, so releasing him leaves no dead money. He becomes a free agent.'
             : nonGuaranteed(league, p)
               ? "His minimum deal isn't guaranteed until opening night, so releasing him now costs nothing. He becomes a free agent."
-              : `His remaining salary (${moneyM(releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0))}) stays on your books as dead money. He becomes a free agent.`}
+              : `His remaining salary (${fmtM(releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0))}) stays on your books as dead money. He becomes a free agent.`}
         </p>
         <div className="row" style={{ marginTop: 12 }}>
           <button className="btn grow" onClick={() => setConfirmRelease(false)}>

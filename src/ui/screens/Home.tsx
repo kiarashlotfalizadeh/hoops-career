@@ -228,9 +228,9 @@ export default function Home() {
       {inSeason && (
         <div className="grid4">
           <Kpi k="Record" v={`${ts.won}-${ts.lost}`} sub={myRank >= 0 ? `${ordinal(myRank + 1)} in ${team.conf === 'E' ? 'East' : 'West'}` : ''} />
-          <Kpi k="Off Rtg" v={played ? f1(tr.ortg) : '–'} />
-          <Kpi k="Def Rtg" v={played ? f1(tr.drtg) : '–'} />
-          <Kpi k="Net" v={played ? signed(tr.net) : '–'} color={!played ? undefined : tr.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
+          <Kpi k="Off Rtg" v={played ? f1(tr.ortg) : '—'} />
+          <Kpi k="Def Rtg" v={played ? f1(tr.drtg) : '—'} />
+          <Kpi k="Net" v={played ? signed(tr.net) : '—'} color={!played ? undefined : tr.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
         </div>
       )}
 
@@ -321,7 +321,7 @@ export default function Home() {
                   {r.won}-{r.lost}
                 </span>
                 <span className="num dim small" style={{ width: 34, textAlign: 'right' }}>
-                  {r.gb === 0 ? '-' : r.gb.toFixed(1)}
+                  {r.gb === 0 ? '—' : r.gb.toFixed(1)}
                 </span>
               </Link>
             ))}
@@ -346,7 +346,7 @@ export default function Home() {
                 {leaders.map(({ k, best }) => (
                   <Link key={k} to={best ? `/player/${best.pid}` : '/roster'} className="kpi">
                     <span className="k">{k}</span>
-                    <span className="v">{best ? f1(best.v) : '-'}</span>
+                    <span className="v">{best ? f1(best.v) : '—'}</span>
                     <span className="tiny dim ellipsis">{best?.name ?? ''}</span>
                   </Link>
                 ))}

@@ -175,7 +175,7 @@ export function normalizeLink(link: string): string {
 }
 
 export function streakLabel(n: number) {
-  if (!n) return '-';
+  if (!n) return '—';
   return n > 0 ? `W${n}` : `L${-n}`;
 }
 

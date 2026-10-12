@@ -571,7 +571,7 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
             <div key={p.pid} className="row small">
               <span className="grow ellipsis">{names(p.pid)}</span>
               <span className="num dim nowrap" style={{ width: 120, textAlign: 'right' }}>
-                {b ? p1(b.usg) : '-'} → {p1(a.usg)}
+                {b ? p1(b.usg) : '—'} → {p1(a.usg)}
               </span>
               <span className="num" style={{ width: 70, textAlign: 'right' }}>
                 {f1(a.pts)} pts

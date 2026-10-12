@@ -362,13 +362,13 @@ function LegendCard({ league, p, hof }: { league: League; p: Player; hof?: boole
       </div>
       <div className="row tiny dim2 num" style={{ gap: 10, margin: '8px 0 8px 50px' }}>
         <span>
-          <b>{c.gp ? (c.pts / c.gp).toFixed(1) : '–'}</b> ppg
+          <b>{c.gp ? (c.pts / c.gp).toFixed(1) : '—'}</b> ppg
         </span>
         <span>
-          <b>{c.gp ? (c.reb / c.gp).toFixed(1) : '–'}</b> rpg
+          <b>{c.gp ? (c.reb / c.gp).toFixed(1) : '—'}</b> rpg
         </span>
         <span>
-          <b>{c.gp ? (c.ast / c.gp).toFixed(1) : '–'}</b> apg
+          <b>{c.gp ? (c.ast / c.gp).toFixed(1) : '—'}</b> apg
         </span>
         <span>
           <b>{Math.round(c.pts).toLocaleString()}</b> pts

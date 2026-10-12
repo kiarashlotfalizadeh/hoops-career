@@ -46,7 +46,7 @@ function teamGames(league: League, season: number, rows: StatRow[], playoffs: bo
   return mx || rows.reduce((m, r) => Math.max(m, r.s.gp), 0);
 }
 
-const pctCell = (v: number | string) => (typeof v === 'number' && v >= 0 ? (v * 100).toFixed(1) : '-');
+const pctCell = (v: number | string) => (typeof v === 'number' && v >= 0 ? (v * 100).toFixed(1) : '—');
 
 export function StatsTab({ league }: { league: League }) {
   const [view, setView] = useQueryParam<View>('sv', 'leaders', ['leaders', 'players', 'teams']);
@@ -332,14 +332,14 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
         key: 'pm',
         label: '+/-',
         get: (r) => (r.s.real && !r.s.pm ? -Infinity : tot ? r.s.pm : r.pg.pm),
-        fmt: (v) => (v === -Infinity ? '-' : <span className={(v as number) > 0 ? 'good' : (v as number) < 0 ? 'bad' : ''}>{signed(v as number, tot ? 0 : 1)}</span>),
+        fmt: (v) => (v === -Infinity ? '—' : <span className={(v as number) > 0 ? 'good' : (v as number) < 0 ? 'bad' : ''}>{signed(v as number, tot ? 0 : 1)}</span>),
       },
     ];
     if (hasAdv) {
       c.push(
-        { key: 'per', label: 'PER', get: (r) => r.s.adv?.per ?? -99, fmt: (v) => ((v as number) === -99 ? '-' : f1(v as number)) },
-        { key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '-' : signed(v as number)) },
-        { key: 'ws', label: 'WS', get: (r) => r.s.adv?.ws ?? -99, fmt: (v) => ((v as number) === -99 ? '-' : f1(v as number)) },
+        { key: 'per', label: 'PER', get: (r) => r.s.adv?.per ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)) },
+        { key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)) },
+        { key: 'ws', label: 'WS', get: (r) => r.s.adv?.ws ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)) },
       );
     }
     return c;

@@ -117,7 +117,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
         return (
           <Fragment key={r.tid}>
             <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`} aria-label={rowLabel(r, `${t.region} ${t.name}`, conf)}>
-              <span className="rk">{r.won + r.lost === 0 ? '–' : conf ? r.confRank : r.leagueRank}</span>
+              <span className="rk">{r.won + r.lost === 0 ? '—' : conf ? r.confRank : r.leagueRank}</span>
               <TeamLogo tid={r.tid} size={24} />
               <span className="nm">
                 <span>
@@ -134,7 +134,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
               <span className="wl">
                 {r.won}-{r.lost}
               </span>
-              <span className="c-basic dim2">{r.gb === 0 ? '–' : r.gb.toFixed(1)}</span>
+              <span className="c-basic dim2">{r.gb === 0 ? '—' : r.gb.toFixed(1)}</span>
               <span className="c-basic dim2">{r.lastTen}</span>
               <span className={`c-basic ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : 'dim'}`} style={{ fontWeight: 650 }}>
                 {streakLabel(r.streak)}
@@ -142,7 +142,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
               <span className="c-split dim2">{r.home}</span>
               <span className="c-split dim2">{r.away}</span>
               <span className="c-split dim2">{r.confRec}</span>
-              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : 'dim'}`}>{r.won + r.lost ? signed(r.diff) : '–'}</span>
+              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : 'dim'}`}>{r.won + r.lost ? signed(r.diff) : '—'}</span>
             </Link>
             {cuts && i === 5 && rows.length > 6 && (
               <div className="lg-cut">
@@ -224,9 +224,9 @@ function PowerRankings({ league }: { league: League }) {
                   {x.ts.won}-{x.ts.lost}
                 </span>
               </span>
-              <span className={`c-power bold ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`}>{x.gp ? signed(x.tr.net) : '–'}</span>
-              <span className="c-power dim2">{x.gp ? f1(x.tr.ortg) : '–'}</span>
-              <span className="c-power dim2">{x.gp ? f1(x.tr.drtg) : '–'}</span>
+              <span className={`c-power bold ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`}>{x.gp ? signed(x.tr.net) : '—'}</span>
+              <span className="c-power dim2">{x.gp ? f1(x.tr.ortg) : '—'}</span>
+              <span className="c-power dim2">{x.gp ? f1(x.tr.drtg) : '—'}</span>
               <span className="c-power dim2">{f0(x.talent)}</span>
             </Link>
           );

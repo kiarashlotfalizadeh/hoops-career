@@ -538,11 +538,11 @@ function InsightsTab() {
                 <span className="grow">{FINISH_LABEL[p.key as FinishType] ?? p.key}</span>
                 <span className="num" style={{ width: 92, textAlign: 'right' }}>
                   <span className="dim">{p.off.poss}</span>{' '}
-                  <b style={{ color: o >= 1.2 ? 'var(--good)' : o < 0.95 ? 'var(--bad)' : undefined }}>{p.off.poss ? o.toFixed(2) : '-'}</b>
+                  <b style={{ color: o >= 1.2 ? 'var(--good)' : o < 0.95 ? 'var(--bad)' : undefined }}>{p.off.poss ? o.toFixed(2) : '—'}</b>
                 </span>
                 <span className="num" style={{ width: 92, textAlign: 'right' }}>
                   <span className="dim">{p.def.poss}</span>{' '}
-                  <b style={{ color: d <= 0.95 ? 'var(--good)' : d > 1.2 ? 'var(--bad)' : undefined }}>{p.def.poss ? d.toFixed(2) : '-'}</b>
+                  <b style={{ color: d <= 0.95 ? 'var(--good)' : d > 1.2 ? 'var(--bad)' : undefined }}>{p.def.poss ? d.toFixed(2) : '—'}</b>
                 </span>
               </div>
             );

@@ -1,4 +1,4 @@
-import { capSeason, isOffseason, openOption } from '../office/common';
+import { capSeason, fmtM, isOffseason, openOption } from '../office/common';
 import { useQueryParam } from '../league/shared';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,7 +9,7 @@ import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col, act
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { f1, latestLine, moneyM, p1, playerSeason, rosterNames, signed, type PerGame } from '../stats';
+import { f1, latestLine, p1, playerSeason, rosterNames, signed, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 
@@ -98,11 +98,7 @@ export default function Roster() {
       label: `${String(s - 1).slice(2)}-${String(s).slice(2)}`,
       get: (p: Player) => salaryFor(p, s),
       fmt: (v: number | string, p: Player) =>
-        v ? (
-          <span style={{ color: openOption(league, p) && contractExp(p.contract) === s ? 'var(--warn)' : undefined }}>{moneyM(v as number)}</span>
-        ) : (
-          <span className="dim">—</span>
-        ),
+        v ? <span style={{ color: openOption(league, p) && contractExp(p.contract) === s ? 'var(--warn)' : undefined }}>{fmtM(v as number)}</span> : <span className="dim">—</span>,
     })),
     { key: 'exp', label: 'EXP', get: (p) => contractExp(p.contract) },
   ];
@@ -111,7 +107,7 @@ export default function Roster() {
     <main className="page">
       <PageHeader
         title="Roster"
-        sub={`${standard}/${CAP.rosterMax} players${twoWays ? ` + ${twoWays} two-way` : ''}${expiring ? ` + ${expiring} expiring` : ''} · ${isOffseason(league) ? `${seasonLabel(s0)} payroll` : 'Payroll'} ${moneyM(pay)} · ${pay > cap.salaryCap ? `${moneyM(pay - cap.salaryCap)} over cap` : `${moneyM(cap.salaryCap - pay)} cap space`}`}
+        sub={`${standard}/${CAP.rosterMax} players${twoWays ? ` + ${twoWays} two-way` : ''}${expiring ? ` + ${expiring} expiring` : ''} · ${isOffseason(league) ? `${seasonLabel(s0)} payroll` : 'Payroll'} ${fmtM(pay)} · ${pay > cap.salaryCap ? `${fmtM(pay - cap.salaryCap)} over cap` : `${fmtM(cap.salaryCap - pay)} cap space`}`}
       />
       <div className="grid3">
         <Link to="/rotation" className="btn sm">
@@ -203,7 +199,7 @@ export default function Roster() {
         <>
           <StatTable rows={roster} cols={contractCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
           <div className="small dim">
-            Cap {moneyM(cap.salaryCap)} · Tax line {moneyM(cap.luxuryTax)}. Orange = option year. Full cap sheet in{' '}
+            Cap {fmtM(cap.salaryCap)} · Tax line {fmtM(cap.luxuryTax)}. Orange = option year. Full cap sheet in{' '}
             <Link to="/office" style={{ color: 'var(--accent-text)' }}>
               Front Office
             </Link>

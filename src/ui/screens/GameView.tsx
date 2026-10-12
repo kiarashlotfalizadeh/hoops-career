@@ -144,10 +144,10 @@ export default function GameView() {
                 <div key={p.key} className="row small">
                   <span className="grow">{p.label}</span>
                   <span className="num" style={{ width: 82, textAlign: 'right' }}>
-                    <span className="dim">{p.userPoss}</span> <b style={{ color: pppColor(p.userPpp, p.userPoss) }}>{p.userPoss ? p.userPpp.toFixed(2) : '-'}</b>
+                    <span className="dim">{p.userPoss}</span> <b style={{ color: pppColor(p.userPpp, p.userPoss) }}>{p.userPoss ? p.userPpp.toFixed(2) : '—'}</b>
                   </span>
                   <span className="num" style={{ width: 82, textAlign: 'right' }}>
-                    <span className="dim">{p.oppPoss}</span> <b style={{ color: pppColor(p.oppPpp, p.oppPoss) }}>{p.oppPoss ? p.oppPpp.toFixed(2) : '-'}</b>
+                    <span className="dim">{p.oppPoss}</span> <b style={{ color: pppColor(p.oppPpp, p.oppPoss) }}>{p.oppPoss ? p.oppPpp.toFixed(2) : '—'}</b>
                   </span>
                 </div>
               ))}
@@ -262,7 +262,7 @@ export default function GameView() {
                         <span className="v" style={{ fontSize: 18 }}>
                           {m}/{zs.length}
                         </span>
-                        <span className="tiny dim">{zs.length ? p1(m / zs.length) : '-'}</span>
+                        <span className="tiny dim">{zs.length ? p1(m / zs.length) : '—'}</span>
                       </div>
                     );
                   })}
@@ -367,7 +367,7 @@ function QuarterTable({ g, abbrevs }: { g: GameResult; abbrevs: Record<number, s
             <tr key={t.tid}>
               <td className="l bold">{abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}</td>
               {Array.from({ length: n }, (_, i) => (
-                <td key={i}>{t.quarters[i] ?? '-'}</td>
+                <td key={i}>{t.quarters[i] ?? '—'}</td>
               ))}
               <td className="bold">{t.pts}</td>
             </tr>

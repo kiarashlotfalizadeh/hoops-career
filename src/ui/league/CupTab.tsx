@@ -172,7 +172,7 @@ function GroupCard({ league, table, seeds, decided }: { league: League; table: C
         const out = decided && seed === undefined;
         return (
           <Link key={r.tid} to={`/team/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
-            <span className="rk">{r.won + r.lost ? r.rank : '–'}</span>
+            <span className="rk">{r.won + r.lost ? r.rank : '—'}</span>
             <TeamLogo tid={r.tid} size={22} />
             <span className="nm">
               <span>
@@ -183,8 +183,8 @@ function GroupCard({ league, table, seeds, decided }: { league: League; table: C
             <span className="wl">
               {r.won}-{r.lost}
             </span>
-            <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : 'dim'}>{r.won + r.lost ? (r.pd > 0 ? `+${r.pd}` : r.pd) : '–'}</span>
-            <span className="dim2">{r.won + r.lost ? r.pf : '–'}</span>
+            <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : 'dim'}>{r.won + r.lost ? (r.pd > 0 ? `+${r.pd}` : r.pd) : '—'}</span>
+            <span className="dim2">{r.won + r.lost ? r.pf : '—'}</span>
             <span>{seed !== undefined && <span className={`tag ${!decided ? '' : seed === 4 ? 'info' : 'good'}`}>{seed === 4 ? 'WC' : `#${seed}`}</span>}</span>
           </Link>
         );

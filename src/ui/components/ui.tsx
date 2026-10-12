@@ -495,11 +495,11 @@ export function StatTable<T>({
 }
 
 export function fmtNum(v: number, d = 1) {
-  if (!isFinite(v)) return '-';
+  if (!isFinite(v)) return '—';
   return Number.isInteger(v) ? String(v) : v.toFixed(d);
 }
 
-export const pct = (v: number, d = 1) => (isFinite(v) ? `${(v * 100).toFixed(d)}` : '-');
+export const pct = (v: number, d = 1) => (isFinite(v) ? `${(v * 100).toFixed(d)}` : '—');
 
 export function Spinner() {
   return <div className="spinner" />;
