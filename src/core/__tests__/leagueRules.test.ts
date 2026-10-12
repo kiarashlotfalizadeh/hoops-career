@@ -551,15 +551,17 @@ describe('playoff calendar (L10)', () => {
     expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([105]);
   });
 
-  it('wear recovers on postseason days too', () => {
+  it('wear recovers on postseason days too, free agents included', () => {
     const l = league();
     l.phase = 'playoffs';
     l.playoffs = [];
     l.schedule = [];
     const p = standardRoster(l, U)[0];
-    p.wear = 40;
+    const fa = freeAgents(l)[0];
+    p.wear = fa.wear = 40;
     advanceDay(l);
     expect(p.wear).toBeCloseTo(39.25);
+    expect(fa.wear).toBeCloseTo(39.25);
   });
 });
 

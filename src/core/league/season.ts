@@ -220,8 +220,8 @@ export function advanceDay(league: League, report?: DayReport) {
     }
     healIdle(league, rng);
   });
-  // wear recovery, every day of the season and postseason
-  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
+  // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
+  for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   league.day++;
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) {
     endRegularSeason(league);
