@@ -145,6 +145,13 @@ export default function Live() {
   const [resultGid, setResultGid] = useState<number | null>(null);
   const [banner, setBanner] = useState<{ text: string; id: number } | null>(null);
   const [announce, setAnnounce] = useState('');
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const baselines = useMemo(() => playTypeBaselines(league), [league.season]);
 
@@ -168,6 +175,7 @@ export default function Live() {
     setGame(lg);
     setScript(null);
     setAtBreak(false);
+    setPaused(false);
     setDismissed([]);
     setPanel('none');
     setBanner(null);
@@ -449,10 +457,12 @@ export default function Live() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, dismissed, over, nameOf, baselines]);
 
-  const nextAction = flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame'));
+  // only offered once the game is over (or there is none): not worked out on every possession
+  const nextAction = status !== 'live' ? flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame')) : undefined;
   const nextGame = async () => {
     if (nextAction?.sim) await useStore.getState().simulate(nextAction.sim);
-    start();
+    // left during the sim: don't set up a live game nobody is watching
+    if (mounted.current) start();
   };
 
   if (status === 'none') {
