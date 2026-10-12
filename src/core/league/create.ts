@@ -1,6 +1,6 @@
 import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
-import { CAP, START_SEASON } from '../constants';
+import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
@@ -126,6 +126,17 @@ function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { expe
   return { experience, draft: { year: experience >= 15 ? 0 : season - 1 - experience, round: 0, pick: 0, tid: null } };
 }
 
+/**
+ * A first-round pick still on the deal he signed as a rookie: it ends within four seasons of his
+ * draft and pays about his slot's rookie scale or more (one waived onto a minimum deal isn't on it).
+ */
+function onRookieScale(sp: SeedPlayer, season: number): boolean {
+  const c = sp.contract;
+  if (!c || c.twoWay || !sp.draft || sp.draft.round !== 1) return false;
+  const scale = ROOKIE_SCALE[Math.min(29, sp.draft.pick - 1)] * Math.pow(1.045, season - 1 - sp.draft.year);
+  return season + c.salaries.length - 1 <= sp.draft.year + 4 && c.salaries[0] >= scale * 0.85;
+}
+
 function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, firstRecord: number): Player {
   const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
   const salaries = sp.contract?.salaries?.length ? sp.contract.salaries : [0];
@@ -153,7 +164,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     growth: sp.growth ?? clamp(rng.normal(0, 0.4), -1, 1),
     injuryProne: sp.injuryProne ?? 0.3,
     ratingsHistory: [],
-    contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}) },
+    contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}), ...(onRookieScale(sp, season) ? { rookie: true } : {}) },
     stats: sp.stats.map((s) => ({ ...s, tid: BBREF_TO_TID[String(s.tid)] ?? s.tid })),
     injury: null,
     injuryCount: 0,
@@ -196,7 +207,7 @@ export function createLeague(opts: CreateOpts): League {
   const league: League = {
     id: `lg_${Date.now().toString(36)}_${Math.floor(rng.next() * 1e6).toString(36)}`,
     name: opts.name,
-    version: 1,
+    version: SAVE_VERSION,
     created: Date.now(),
     userTid: opts.userTid,
     coachName: opts.coachName,
@@ -226,7 +237,6 @@ export function createLeague(opts: CreateOpts): League {
     ownerMood: { wins: 0, playoffs: 0, money: 0, total: 0 },
     faDay: 30,
     startSeason: season,
-    realAvgs: opts.seed?.realAvgs,
   };
   teams[opts.userTid].coach.name = opts.coachName;
 
@@ -278,6 +288,8 @@ export function createLeague(opts: CreateOpts): League {
       const age = rng.int(22, 34);
       const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age, talent: rng.normal(-1, 0.5), scale: DEFAULT_SCALE, taken });
       p.experience = Math.max(0, age - 21);
+      // undrafted, in the league since his first season (so not a rookie next year)
+      p.draft = { year: season - 1 - p.experience, round: 0, pick: 0, tid: null };
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
@@ -300,7 +312,7 @@ export function createLeague(opts: CreateOpts): League {
   league.ratingAnchors = ratingMeans(league);
   league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;
-  ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? (realSeed.picksThrough ?? 0) : 0));
+  ensureFuturePicks(league, Math.max(season + 4, realSeed?.picks ? (realSeed.picksThrough ?? 0) : 0));
   if (realSeed?.picks) applySeedPicks(league, realSeed.picks);
   generateDraftClass(league, season, rng);
   const sched = (realSeed?.schedule && realSchedule(league.teams, realSeed.schedule, season, rng, league.nextGid)) || generateSchedule(league.teams, season, rng, league.nextGid);
@@ -464,12 +476,16 @@ function applySeedInjuries(league: League, seed: SeedData) {
   const byId = new Map(seed.players.filter((sp) => sp.injury).map((sp) => [sp.id, sp.injury!]));
   if (!byId.size) return;
   const last = league.regularSeasonDays;
+  const cup = league.cup;
   for (const p of Object.values(league.players)) {
     const inj = p.bbrefId ? byId.get(p.bbrefId) : undefined;
     if (!inj || p.tid < 0) continue;
     let games = inj.games;
     if (inj.returnDay !== null) {
       games = league.schedule.filter((g) => g.type === 'regular' && g.day < inj.returnDay! && (g.home === p.tid || g.away === p.tid)).length;
+      // every team's last two games go in the Cup's knockout window once the groups are decided
+      // (before the championship); a return inside the window misses about one of them
+      if (cup && inj.returnDay > cup.qfDays[0]) games += inj.returnDay >= cup.finalDay ? 2 : 1;
       // back after the regular season: part or all of the playoffs too (~2.5 days per playoff game)
       if (inj.returnDay > last) games += Math.min(28, Math.round((inj.returnDay - last) / 2.5));
     }

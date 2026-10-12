@@ -9,7 +9,6 @@ import {
   TWO_WAY_MAX,
   contractSeason,
   addInbox,
-  addNews,
   freeAgents,
   payroll,
   playerName,
@@ -20,9 +19,11 @@ import {
 } from './helpers';
 import {
   FA_PRICE_CUT_DAYS,
+  FIRED_REASON,
   MLE_YEARS,
   type Ask,
   askingContract,
+  leaveTeam,
   marketSalary,
   mleRoom,
   preferredYears,
@@ -140,13 +141,11 @@ export function capPayroll(league: League, tid: number, season = contractSeason(
 /** Give up the rights to an expiring player during the re-signing window: he hits the market and his cap hold goes away. */
 export function renouncePlayer(league: League, pid: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Rights can be renounced during the re-signing period.' };
   if (!p || p.tid !== league.userTid || contractExp(p.contract) > league.season) return { ok: false, reason: 'Not one of your expiring players.' };
-  const team = league.teams[p.tid];
+  leaveTeam(league.teams[p.tid], pid);
   p.tid = FREE_AGENT;
-  team.rotation.order = team.rotation.order.filter((x) => x !== pid);
-  delete team.rotation.minutes[pid];
-  team.rotation.closers = team.rotation.closers.filter((x) => x !== pid);
   return { ok: true, reason: `${playerName(p)} is renounced: he becomes a free agent when the market opens.` };
 }
 
@@ -154,10 +153,8 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
 export function releaseExpiring(league: League) {
   for (const p of Object.values(league.players)) {
     if (p.tid >= 0 && contractExp(p.contract) <= league.season) {
-      const prevTeam = league.teams[p.tid];
+      leaveTeam(league.teams[p.tid], p.pid);
       p.tid = FREE_AGENT;
-      prevTeam.rotation.order = prevTeam.rotation.order.filter((x) => x !== p.pid);
-      delete prevTeam.rotation.minutes[p.pid];
     }
   }
   for (const p of freeAgents(league)) {
@@ -215,7 +212,7 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
   for (const p of freeAgents(league)) {
     const v = valueScore(league, p);
     if (v < floor || (size >= 13 && v < 64)) continue;
-    if (!signingRoute(league, t.tid, askingContract(league, p, t.tid).amount, season)) continue;
+    if (!signingRoute(league, t.tid, askingContract(league, p, t.tid).amount, season, p)) continue;
     const s = needScore(league, t.tid, p) + rng.normal(0, 1.5);
     if (s > bs) {
       bs = s;
@@ -227,7 +224,7 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
   // stars sometimes wait for a better offer early in the summer
   const patience = season > league.season && league.faDay < 10 && valueScore(league, pick) >= 78 ? 0.45 : 0.9;
   if (!rng.chance(patience)) return;
-  const route = signingRoute(league, t.tid, ask.amount, season);
+  const route = signingRoute(league, t.tid, ask.amount, season, pick);
   if (route === 'mle') t.mleSeason = season;
   // (summer signings just join camp: opening-night cuts trim the roster back to 15)
   if (cut && season === league.season) releasePlayer(league, cut, { news: false });
@@ -333,31 +330,33 @@ export function signingClosedReason(league: League): string | null {
   }
 }
 
-/** Why the user can't offer this much at all (roster or cap), or null. Asking price aside. */
-export function offerBlockedReason(league: League, amount: number, years: number): string | null {
+/** Why the user can't offer free agent `p` this much at all (roster or cap), or null. Asking price aside. */
+export function offerBlockedReason(league: League, p: Player, amount: number, years: number): string | null {
   const tid = league.userTid;
   const season = contractSeason(league);
   const max = rosterMaxNow(league);
   if (standardRoster(league, tid).length >= max) return `Your roster is full (${max}). Release or trade someone first.`;
-  const route = signingRoute(league, tid, amount, season);
+  const route = signingRoute(league, tid, amount, season, p);
   if (route === 'mle' && years > MLE_YEARS) return `Mid-level exception deals run ${MLE_YEARS} years at most.`;
   if (route) return null;
   const cap = CAP_FOR(league, season);
   const space = Math.max(0, cap.salaryCap - payroll(league, tid, season));
   const mle = mleRoom(league, tid, season);
-  return `Not enough cap space (${(space / 1000).toFixed(1)}M). Over the cap you can offer the minimum ($${(cap.vetMin / 1000).toFixed(2)}M)${mle > 0 ? ` or up to $${(mle / 1000).toFixed(1)}M with your mid-level exception` : ''}.`;
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  return `${space >= 50 ? `Not enough cap space ($${(space / 1000).toFixed(1)}M)` : 'No cap space'}. Over the cap you can offer his minimum ($${(min / 1000).toFixed(2)}M)${mle > 0 ? ` or up to $${(mle / 1000).toFixed(1)}M with your mid-level exception` : ''}.`;
 }
 
 export function userOffer(league: League, pid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid !== FREE_AGENT) return { ok: false, reason: 'Not a free agent.' };
   const season = contractSeason(league);
   const tid = league.userTid;
-  const closed = signingClosedReason(league) ?? offerBlockedReason(league, amount, years);
+  const closed = signingClosedReason(league) ?? offerBlockedReason(league, p, amount, years);
   if (closed) return { ok: false, reason: closed };
   const res = willSign(league, p, tid, amount, years);
   if (!res.ok) return res;
-  const mle = signingRoute(league, tid, amount, season) === 'mle';
+  const mle = signingRoute(league, tid, amount, season, p) === 'mle';
   if (mle) league.teams[tid].mleSeason = season;
   signPlayer(league, p, tid, amount, years, { start: season });
   addInbox(league, {
@@ -376,6 +375,7 @@ export function userOffer(league: League, pid: number, amount: number, years: nu
  */
 export function userTwoWayOffer(league: League, pid: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid !== FREE_AGENT) return { ok: false, reason: 'Not a free agent.' };
   const closed = signingClosedReason(league);
   if (closed) return { ok: false, reason: closed };
@@ -400,12 +400,12 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
 
 export function userResign(league: League, pid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Re-signing happens between the draft and free agency.' };
   if (!p || p.tid !== league.userTid) return { ok: false, reason: 'Not on your team.' };
   if (contractExp(p.contract) > league.season) return { ok: false, reason: `${playerName(p)} is still under contract.` };
   const res = willSign(league, p, league.userTid, amount, years);
   if (!res.ok) return res;
   signPlayer(league, p, league.userTid, amount, years, { start: league.season + 1 });
-  addNews(league, { kind: 'signing', text: `${playerName(p)} re-signs with the ${league.teams[league.userTid].name}.`, tids: [league.userTid], pids: [p.pid] });
   return { ok: true, reason: `${playerName(p)} re-signs!` };
 }

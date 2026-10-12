@@ -66,6 +66,11 @@ describe('finances (L1, L15)', () => {
       expect(attendanceFor(l, t)).toBe(18_800);
       expect(attendanceFor(l, { ...t, budget: { ...t.budget, ticketPrice: t.budget.ticketPrice + 5 } })).toBeLessThan(18_800);
     }
+    // playoff tickets cost 1.6x and fans pay 1.6x for them: a team that priced fans out still does
+    const t = l.teams[1];
+    const steep = { ...t, budget: { ...t.budget, ticketPrice: t.budget.ticketPrice * 1.5 } };
+    expect(attendanceFor(l, steep, true)).toBe(attendanceFor(l, steep));
+    expect(attendanceFor(l, steep, true)).toBeLessThan(12_000);
     const mine = l.teams[0].budget.ticketPrice;
     l.phase = 'freeAgency';
     l.faDay = 30;

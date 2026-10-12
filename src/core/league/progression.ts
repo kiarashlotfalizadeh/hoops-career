@@ -2,10 +2,10 @@
 // training focus, coaching quality, practice intensity and playing time.
 
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
-import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
+import { FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
-import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, potential, toDisplay, archetype } from '../ratings';
-import { followTendencies, playerAge } from '../playerGen';
+import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, toDisplay } from '../ratings';
+import { followTendencies, playerAge, refreshPlayerDerived } from '../playerGen';
 import { seasonTotals } from './helpers';
 
 type Group = 'athletic' | 'end' | 'str' | 'shooting' | 'skill' | 'iq' | 'perim' | 'interior' | 'reb' | 'hgt';
@@ -140,10 +140,9 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   return after - before;
 }
 
+/** OVR, potential and archetype for the league's season and scale. */
 export function refreshDerived(league: League, p: Player) {
-  p.ovr = toDisplay(ovrRaw(p.ratings), league.ovrScale);
-  p.pot = potential(p.ovr, playerAge(p, league.season), p.growth);
-  p.archetype = archetype(p.ratings).label;
+  refreshPlayerDerived(p, league.season, league.ovrScale);
 }
 
 /** `statsSeason` is the season whose minutes count: the one just finished in the offseason, the current one in season. */
@@ -240,16 +239,17 @@ function anchorOverallSpread(league: League) {
 export function annualProgression(league: League, rng: Rng): { pid: number; delta: number }[] {
   const out: { pid: number; delta: number }[] = [];
   const before = new Map(Object.values(league.players).map((p) => [p.pid, p.ovr]));
+  // (this summer's prospects are drafted or gone by now; next year's class arrives after this)
   for (const p of Object.values(league.players)) {
-    if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
-    develop(p, league.season, devContext(league, p, league.season - 1), rng, p.tid === DRAFT_PROSPECT ? 0.5 : 0.8);
+    if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
+    develop(p, league.season, devContext(league, p, league.season - 1), rng, 0.8);
   }
   anchorRatings(league);
   for (const p of Object.values(league.players)) {
-    if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
+    if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
     refreshDerived(league, p);
     // tendencies follow the year's change in level: from the OVR of his latest snapshot, which they
-    // were set for (in-season development and injuries since count too), or for a prospect without
+    // were set for (in-season development and injuries since count too), or for a draftee without
     // one, from before this summer's development
     followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });

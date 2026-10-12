@@ -242,21 +242,6 @@ export function toDisplay(raw: number, scale: OvrScale): number {
   return 99;
 }
 
-/** Inverse mapping: display rating -> raw composite (for generating players at a target level). */
-export function fromDisplay(disp: number, scale: OvrScale): number {
-  const { raw: xs, disp: ys } = scale;
-  const n = xs.length;
-  if (disp <= ys[0]) return xs[0] - (ys[0] - disp) * ((xs[1] - xs[0]) / (ys[1] - ys[0]));
-  if (disp >= ys[n - 1]) return xs[n - 1] + (disp - ys[n - 1]) * ((xs[n - 1] - xs[n - 2]) / (ys[n - 1] - ys[n - 2]));
-  for (let i = 1; i < n; i++) {
-    if (disp <= ys[i]) {
-      const t = (disp - ys[i - 1]) / (ys[i] - ys[i - 1]);
-      return xs[i - 1] + t * (xs[i] - xs[i - 1]);
-    }
-  }
-  return xs[n - 1];
-}
-
 /** Learned skills: everything but size and the physical tools. */
 export const SKILL_KEYS: RatingKey[] = ['ins', 'mid', 'tp', 'ft', 'drw', 'post', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'stl', 'diq', 'oreb', 'dreb'];
 
@@ -350,8 +335,8 @@ export function archetype(r: Ratings): ArchetypeInfo {
 }
 
 export const ROLE_META: Record<OffRole, { label: string; help: string }> = {
-  creator: { label: 'Primary Creator', help: 'Offense runs through him: most PnRs and isolations, highest usage.' },
-  scorer: { label: 'Secondary Scorer', help: 'Second option who attacks closeouts, runs PnR and gets isolations.' },
+  creator: { label: 'Primary Creator', help: 'Offense runs through him: most pick-and-rolls and isolations, highest usage.' },
+  scorer: { label: 'Secondary Scorer', help: 'Second option who attacks closeouts, runs pick-and-rolls and gets isolations.' },
   playmaker: { label: 'Playmaker', help: 'Initiates sets and looks to pass first. Moderate usage, high assists.' },
   shooter: { label: 'Movement Shooter', help: 'Runs off screens and handoffs for catch-and-shoot threes. Spaces the floor.' },
   slasher: { label: 'Slasher', help: 'Cuts and attacks closeouts toward the rim.' },

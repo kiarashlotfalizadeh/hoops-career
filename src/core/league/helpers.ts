@@ -56,8 +56,7 @@ export function age(league: League, p: Player) {
 export function teamSeason(team: Team, season: number): TeamSeason {
   let ts = team.seasons.find((s) => s.season === season);
   if (!ts) {
-    const prev = team.seasons[team.seasons.length - 1];
-    ts = newTeamSeason(season, prev?.hype ?? team.hype, team.pop);
+    ts = newTeamSeason(season, team.pop);
     team.seasons.push(ts);
   }
   return ts;

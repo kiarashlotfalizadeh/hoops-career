@@ -84,7 +84,7 @@ export function emptyTotals(): TeamTotals {
   return { fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0 };
 }
 
-export function newTeamSeason(season: number, hype: number, pop: number): TeamSeason {
+export function newTeamSeason(season: number, pop: number): TeamSeason {
   return {
     season,
     won: 0,
@@ -107,7 +107,6 @@ export function newTeamSeason(season: number, hype: number, pop: number): TeamSe
     expenses: 0,
     payroll: 0,
     attendance: 0,
-    hype,
     pop,
     t: emptyTotals(),
     o: emptyTotals(),
@@ -126,14 +125,14 @@ export function makeTeam(tid: number, season: number, rng: Rng): Team {
     conf: f.conf,
     div: f.div,
     pop: f.pop,
-    tactics: defaultTactics(coach.offPhilosophy, coach.defPhilosophy === 'zone' ? 'zone' : coach.defPhilosophy),
+    tactics: defaultTactics(coach.offPhilosophy, coach.defPhilosophy),
     rotation: { order: [], minutes: {}, closers: [], restB2B: [], caps: {}, manual: false },
     strategy: 'retool',
     budget: { coaching: 50, health: 50, facilities: 50, ticketPrice: 95 },
     cash: 60_000,
     hype: 0.5,
     coach,
-    seasons: [newTeamSeason(season, 0.5, f.pop)],
+    seasons: [newTeamSeason(season, f.pop)],
     deadMoney: [],
     practice: 'normal',
   };

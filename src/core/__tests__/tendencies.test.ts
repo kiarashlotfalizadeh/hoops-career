@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
+import { simDay, startRegularSeason } from '../league/season';
 import { followTendencies, genTendencies } from '../playerGen';
 import { Rng } from '../random';
 import { DRAFT_PROSPECT, type Player } from '../types';
@@ -14,14 +15,27 @@ const gmean = (xs: number[]) => Math.exp(xs.reduce((a, x) => a + Math.log(x), 0)
 const fictional = () => createLeague({ name: 'f', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 7 });
 
 describe('generated tendencies', () => {
-  it('give generated stars the share of the offense real stars have', () => {
+  it('let generated stars carry the offense without scoring like nobody ever has', () => {
     const l = fictional();
     const ps = Object.values(l.players).filter((p) => p.tid >= 0);
     for (const p of ps) for (const k of KEYS) expect(p.tend?.[k]).toBeGreaterThan(0);
     const use = (lo: number, hi: number) => gmean(ps.filter((p) => p.ovr >= lo && p.ovr < hi).map((p) => p.tend!.use));
-    // the seed's calibrated 86+ players carry about 2.5x the usage tendency of its 66-74s
-    expect(use(86, 100) / use(66, 74)).toBeGreaterThan(1.8);
-    expect(use(86, 100) / use(66, 74)).toBeLessThan(3.5);
+    // stars lean on their own shot more than role players do, but their ratings already make them
+    // the first option: drawn like the seed's calibrated ones (86+ at 2.8x the 66-74s, styles up to
+    // 25) they averaged 50-60 a game
+    expect(use(86, 100) / use(66, 74)).toBeGreaterThan(1.15);
+    expect(use(86, 100) / use(66, 74)).toBeLessThan(2);
+    expect(Math.max(...ps.map((p) => p.tend!.use))).toBeLessThan(8);
+    // the first weeks of a season (they had a 59-a-game scorer, 21 50-point games and 12 of 60)
+    expect(startRegularSeason(l)).toEqual([]);
+    for (let d = 0; d < 20; d++) simDay(l);
+    const lines = l.games.flatMap((g) => [...g.home.players, ...g.away.players]).filter((b) => b.min > 0);
+    const games = new Map<number, number[]>();
+    for (const b of lines) games.set(b.pid, [...(games.get(b.pid) ?? []), b.pts]);
+    const best = Math.max(...[...games.values()].filter((g) => g.length >= 5).map((g) => g.reduce((a, x) => a + x, 0) / g.length));
+    expect(best).toBeLessThan(52);
+    expect(lines.filter((b) => b.pts >= 50).length).toBeLessThan(15);
+    expect(lines.filter((b) => b.pts >= 60).length).toBeLessThanOrEqual(3);
   });
 
   it("leave real players' calibrated tendencies alone, and draw a draft class's without touching the league's random stream", () => {
@@ -50,8 +64,8 @@ describe('generated tendencies', () => {
     const ratio = a.tend!.use / b.tend!.use;
     grow(a);
     grow(b);
-    // a role player turned star takes a star's shots and fewer spot-up threes; his style relative to others stays
-    expect(a.tend!.use).toBeGreaterThan(before.use * 1.5);
+    // a role player turned star takes more of the shots and fewer spot-up threes; his style relative to others stays
+    expect(a.tend!.use).toBeGreaterThan(before.use * 1.15);
     expect(a.tend!.three).toBeLessThan(before.three);
     expect(a.tend!.use / b.tend!.use).toBeCloseTo(ratio, 1);
     // a player from a save made before tendencies were generated gets a full set

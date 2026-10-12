@@ -2,7 +2,7 @@ import type { CombineResults, DraftPick, League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
-import { composites, ratingToHeight, shiftToOvr } from '../ratings';
+import { composites, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
 
@@ -41,7 +41,7 @@ function blurb(p: Player): string {
   return `${p.archetype}. Best tools: ${strengths[0][0]} and ${strengths[1][0]}. Needs work: ${weak}.`;
 }
 
-/** Display OVR a year before the draft for the prospect at talent rank `i` (0 = best). */
+/** Display OVR when the class arrives, the preseason before its draft, for the prospect at talent rank `i` (0 = best). */
 function prospectLevel(i: number): number {
   return i < 30 ? 77 - 9.5 * Math.pow(i / 29, 0.8) : 64 - (5 * (i - 30)) / 42;
 }
@@ -68,7 +68,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     });
     p.bornYear = year - age;
     p.growth = clamp(rng.normal(0.15, 0.45), -1, 1);
-    // level to how real classes arrive: ~77 at the top a year out, ~68 by the end of round one
+    // level to how real classes arrive: ~77 at the top in the preseason, ~68 by the end of round one
     p.ratings = shiftToOvr(p.ratings, Math.round(prospectLevel(i) + rng.normal(0, 2.2)), league.ovrScale);
     refreshPlayerDerived(p, league.season, league.ovrScale);
     p.tend = genTendencies(p, rng);
@@ -76,10 +76,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     league.players[p.pid] = p;
     created.push(p);
   }
-  rankProspects(league, year, rng);
-  for (const p of created) {
-    p.prospect = { rank: p.prospect?.rank ?? 99, combine: combineFor(p, rng), blurb: blurb(p) };
-  }
+  for (const p of created) p.prospect = { rank: 99, combine: combineFor(p, rng), blurb: blurb(p) };
   rankProspects(league, year, rng);
 }
 
@@ -89,7 +86,7 @@ export function rankProspects(league: League, year: number, rng: Rng) {
     .map((p) => ({ p, s: p.pot * 0.62 + p.ovr * 0.38 + rng.normal(0, 1.2) }))
     .sort((a, b) => b.s - a.s);
   list.forEach((x, i) => {
-    x.p.prospect = { ...(x.p.prospect ?? { blurb: '' }), rank: i + 1 } as Player['prospect'];
+    x.p.prospect = { ...(x.p.prospect ?? { blurb: '' }), rank: i + 1 };
   });
 }
 
@@ -166,7 +163,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
         const orig = league.teams[dp.originalTid];
         addNews(league, {
           kind: 'draft',
-          text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${dp.pick}, top-${dp.protection} protected); the ${holder.name} come away empty.`,
+          text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${(round - 1) * 30 + dp.pick}, top-${(round - 1) * 30 + dp.protection} protected); the ${holder.name} come away empty.`,
           tids: [dp.tid, dp.originalTid],
           pids: [],
         });
@@ -192,7 +189,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
     addInbox(league, {
       from: 'Scouting Department',
       subject: 'Draft lottery results',
-      body: `You hold ${mine.map((d) => `#${d.pick}${d.round === 2 ? ' (2nd round)' : ''}`).join(', ')}. Check the Draft board: combine results and scouting blurbs are in.`,
+      body: `You hold ${mine.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}. Check the Draft board: combine results and scouting blurbs are in.`,
       tone: 'neutral',
       link: '/draft',
     });
@@ -288,5 +285,3 @@ export function finishDraft(league: League) {
   // remove any leftover current-season picks
   league.draftPicks = league.draftPicks.filter((d) => d.season > league.season);
 }
-
-export { ratingToHeight };

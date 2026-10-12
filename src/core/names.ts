@@ -444,7 +444,7 @@ export const NAME_POOLS: NamePool[] = [
     country: 'Canada',
     weight: 6,
     first: US_FIRST,
-    last: [...US_LAST.slice(0, 60), 'Alexander-Walker', 'Bennett', 'Dort', 'Murray', 'Nembhard', 'Brooks', 'Olynyk', 'Wiggins', 'Clarke', 'Boucher'],
+    last: [...US_LAST.slice(0, 60), 'Alexander-Walker', 'Dort', 'Murray', 'Nembhard', 'Olynyk', 'Wiggins', 'Clarke', 'Boucher'],
     colleges: COLLEGES,
   },
   {

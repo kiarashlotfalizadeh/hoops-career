@@ -7,7 +7,22 @@ import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
-import { CAP_FOR, addInbox, addNews, age, contractSeason, curTeamSeason, inSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from './helpers';
+import {
+  CAP_FOR,
+  addInbox,
+  addNews,
+  age,
+  contractSeason,
+  curTeamSeason,
+  inSeason,
+  payroll,
+  playerName,
+  revenueScale,
+  rosterMaxNow,
+  standardRoster,
+  teamPlayers,
+  winPct,
+} from './helpers';
 
 export type Strategy = Team['strategy'];
 
@@ -40,6 +55,9 @@ export function valueScore(league: League, p: Player): number {
 /** Trade value per $1M a season of salary below (or above) what a player is worth. */
 const SURPLUS_VALUE: Record<Strategy, number> = { contend: 0.1, retool: 0.1, rebuild: 0.18 };
 
+/** A team option on the contract's last season that is still to be decided: not guaranteed money. */
+const teamOptionOpen = (league: League, p: Player) => p.contract.option === 'team' && contractExp(p.contract) > league.season;
+
 /**
  * Trade value on an exponential scale (one 90 ≈ five 80s), with a premium for stars and the
  * contract's surplus or burden. A bad enough contract makes it negative: a liability.
@@ -61,11 +79,10 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
   // contract surplus/burden over the seasons still to be paid (next season's books in the offseason)
   const cs = contractSeason(league);
   const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
-  const sal = salaryFor(p, cs);
-  const fair = marketSalary(league, p);
-  const total = v + ((fair - sal) / 1000) * Math.min(yrs, 4) * SURPLUS_VALUE[strategy];
-  // after the season an undecided team option can still be declined, so it is never a burden
-  return cs > league.season && pendingOption(league, p) === 'team' ? Math.max(0, total) : total;
+  const surplus = (marketSalary(league, p) - salaryFor(p, cs)) / 1000;
+  // an undecided team option (the last year) can be declined, so it never counts as a burden
+  const optionYear = teamOptionOpen(league, p) && yrs <= 4;
+  return v + surplus * (optionYear && surplus < 0 ? yrs - 1 : Math.min(yrs, 4)) * SURPLUS_VALUE[strategy];
 }
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
@@ -86,8 +103,12 @@ const SALARY_CURVE: [number, number][] = [
 
 /** Fair annual salary ($K) for a player on the open market. */
 export function marketSalary(league: League, p: Player): number {
+  return salaryForScore(league, valueScore(league, p), p.experience);
+}
+
+/** Fair annual salary ($K) for a value score, within the minimum and max for his years in the league. */
+export function salaryForScore(league: League, s: number, experience: number): number {
   const cap = CAP_FOR(league, contractSeason(league));
-  const s = valueScore(league, p);
   let pct = 0;
   if (s <= SALARY_CURVE[0][0]) pct = 0;
   else if (s >= SALARY_CURVE[SALARY_CURVE.length - 1][0]) pct = SALARY_CURVE[SALARY_CURVE.length - 1][1];
@@ -101,8 +122,8 @@ export function marketSalary(league: League, p: Player): number {
       }
     }
   }
-  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-  const max = cap.maxContract(p.experience);
+  const min = experience >= 3 ? cap.vetMin : cap.minContract;
+  const max = cap.maxContract(experience);
   return clamp(Math.round((pct * cap.salaryCap) / 50) * 50, min, max);
 }
 
@@ -115,7 +136,7 @@ export function preferredYears(league: League, p: Player): number {
   return 1;
 }
 
-/** How attractive a team is to a player (0.85..1.2 multiplier on willingness). */
+/** How attractive a team is to a player (0.75..1.25 multiplier on willingness). */
 export function teamAppeal(league: League, tid: number, p: Player): number {
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
@@ -163,7 +184,10 @@ export function willSign(league: League, p: Player, tid: number, amount: number,
   const yearPenalty = Math.abs(years - ask.years) * 0.03;
   if (amount >= ask.amount * (1 + yearPenalty) - 1) return { ok: true, reason: 'Deal!' };
   const gap = ask.amount * (1 + yearPenalty) - amount;
-  return { ok: false, reason: `Asking for about ${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} years (you're ${(gap / 1000).toFixed(1)}M short).` };
+  return {
+    ok: false,
+    reason: `Asking for about $${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're $${(gap / 1000).toFixed(1)}M short).`,
+  };
 }
 
 /** Pass `experience` to keep the rounded first-year salary inside that player's min/max. */
@@ -179,18 +203,12 @@ export function makeContract(league: League, amount: number, years: number, star
 }
 
 export function rookieContract(league: League, pick: number, round: number, start: number) {
-  const g = Math.pow(1 + CAP.growth, Math.max(0, start - league.startSeason));
   if (round === 1) {
-    const base = ROOKIE_SCALE[Math.min(29, pick - 1)] * g;
+    const base = ROOKIE_SCALE[Math.min(29, pick - 1)] * revenueScale(league, start);
     return { start, salaries: [0, 1, 2, 3].map((i) => Math.round((base * Math.pow(1.045, i)) / 10) * 10), rookie: true, option: 'team' as const };
   }
-  const min = CAP.minContract * g;
-  return { start, salaries: [Math.round(min), Math.round(min * 1.05)], rookie: true };
-}
-
-/** Standard roster spots in use (two-way deals don't count). */
-export function rosterCount(league: League, tid: number) {
-  return standardRoster(league, tid).length;
+  const min = CAP_FOR(league, start).minContract;
+  return { start, salaries: [min, Math.round(min * 1.05)], rookie: true };
 }
 
 // ---------------------------------------------------------------- signing exceptions
@@ -212,10 +230,13 @@ export function mleRoom(league: League, tid: number, season = contractSeason(lea
 
 export type SigningRoute = 'min' | 'space' | 'mle';
 
-/** How a team can pay a free agent this much a season: the minimum, cap space, the mid-level exception, or not at all. */
-export function signingRoute(league: League, tid: number, amount: number, season = contractSeason(league)): SigningRoute | null {
+/**
+ * How a team can pay free agent `p` this much a season: the minimum (his own: the veteran minimum
+ * only after 3 seasons in the league), cap space, the mid-level exception, or not at all.
+ */
+export function signingRoute(league: League, tid: number, amount: number, season = contractSeason(league), p?: Pick<Player, 'experience'>): SigningRoute | null {
   const cap = CAP_FOR(league, season);
-  if (amount <= cap.vetMin + 1) return 'min';
+  if (amount <= (p && p.experience < 3 ? cap.minContract : cap.vetMin) + 1) return 'min';
   if (payroll(league, tid, season) + amount <= cap.salaryCap) return 'space';
   if (amount <= mleRoom(league, tid, season)) return 'mle';
   return null;
@@ -231,8 +252,9 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   if (opts.twoWay) p.contract.twoWay = true;
   if (prevTid !== tid) p.joinedSeason = league.season;
   // like the NBA's: no trading him until December 15 of his first season, or three months after
-  // signing if that is later (otherwise a free agent could be signed and flipped for more value)
-  p.tradeLock = p.contract.start > league.season ? { season: p.contract.start, day: DEC_15 } : { season: league.season, day: Math.max(DEC_15, league.day + 90) };
+  // an in-season signing if that is later (otherwise a free agent could be signed and flipped for
+  // more value); a summer or training-camp signing waits for December 15
+  p.tradeLock = league.phase === 'regular' ? { season: league.season, day: Math.max(DEC_15, league.day + 90) } : { season: p.contract.start, day: DEC_15 };
   p.asking = undefined;
   p.faDays = undefined;
   p.mood.tradeRequest = false;
@@ -250,8 +272,12 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   }
 }
 
+/** Why a fired coach can't run his old team's roster (see owner.ts). */
+export const FIRED_REASON = 'You were fired: take over another team first.';
+
 /** Why the user can't release this player now, or null. Two-way players never hold one of the 13. */
 export function releaseBlockedReason(league: League, p: Player): string | null {
+  if (league.fired && p.tid === league.userTid) return FIRED_REASON;
   if (p.tid < 0 || p.contract.twoWay || !inSeason(league)) return null;
   return standardRoster(league, p.tid).length <= CAP.rosterMin ? `Rosters need at least ${CAP.rosterMin} players during the season. Sign a replacement first.` : null;
 }
@@ -268,17 +294,31 @@ export function nonGuaranteed(league: League, p: Player): boolean {
 
 /**
  * Salary a release leaves on the books, by season: everything still to be paid from the current
- * contract season (next season's books in the offseason). Two-way pay sits outside the cap and camp
- * deals aren't guaranteed, so neither leaves dead money.
+ * contract season (next season's books in the offseason). Two-way pay sits outside the cap, camp
+ * deals and an undecided team option year aren't guaranteed, so none of those leaves dead money.
  */
 export function releaseDeadMoney(league: League, p: Player): { season: number; amount: number }[] {
   if (p.contract.twoWay || nonGuaranteed(league, p)) return [];
   const out: { season: number; amount: number }[] = [];
-  for (let s = contractSeason(league); s <= contractExp(p.contract); s++) {
+  const exp = contractExp(p.contract);
+  const last = teamOptionOpen(league, p) ? exp - 1 : exp;
+  for (let s = contractSeason(league); s <= last; s++) {
     const amount = salaryFor(p, s);
     if (amount > 0) out.push({ season: s, amount });
   }
   return out;
+}
+
+/** A player leaves the team: out of its rotation (order, minutes, caps, closers, rest days) and its tactics' roles. */
+export function leaveTeam(team: Team, pid: number) {
+  const r = team.rotation;
+  r.order = r.order.filter((x) => x !== pid);
+  r.closers = r.closers.filter((x) => x !== pid);
+  r.restB2B = r.restB2B.filter((x) => x !== pid);
+  delete r.minutes[pid];
+  delete r.caps[pid];
+  delete team.tactics.offense.roles[pid];
+  delete team.tactics.offense.freedom[pid];
 }
 
 /** Days between a free agent's price cuts while he goes unsigned (see faDay). */
@@ -291,9 +331,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean 
   for (const d of releaseDeadMoney(league, p)) team.deadMoney.push({ pid: p.pid, name: playerName(p), ...d });
   p.tid = FREE_AGENT;
   p.contract = { start: league.season, salaries: [0] };
-  team.rotation.order = team.rotation.order.filter((x) => x !== p.pid);
-  delete team.rotation.minutes[p.pid];
-  team.rotation.closers = team.rotation.closers.filter((x) => x !== p.pid);
+  leaveTeam(team, p.pid);
   // a free agent like any other: the trade-back rule and the trade lock went with the old contract
   delete p.tradedFrom;
   delete p.tradeLock;
@@ -326,6 +364,7 @@ export const twoWayYears = (p: Player) => (p.experience >= 3 ? 1 : 2);
 /** Promote a two-way player to a standard deal at the minimum for his remaining seasons. */
 export function convertTwoWay(league: League, pid: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid < 0 || !p.contract.twoWay) return { ok: false, reason: 'He is not on a two-way contract.' };
   const max = rosterMaxNow(league);
   if (standardRoster(league, p.tid).length >= max) return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
@@ -368,6 +407,7 @@ export function pendingTeamOptions(league: League, tid: number): Player[] {
 /** The user's call on one of his team options (re-signing period only). */
 export function decideTeamOption(league: League, pid: number, exercise: boolean): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Options are decided during the re-signing period.' };
   if (!p || p.tid !== league.userTid || pendingOption(league, p) !== 'team') return { ok: false, reason: 'No pending team option.' };
   if (exercise) exerciseOption(p);
@@ -437,10 +477,4 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
       link: '/office',
     });
   }
-}
-
-export function luxuryTaxBill(league: League, tid: number): number {
-  const cap = CAP_FOR(league);
-  const pay = payroll(league, tid);
-  return pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
 }
