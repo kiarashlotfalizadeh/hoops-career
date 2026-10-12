@@ -243,7 +243,9 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   // hard caps (load management) hold: the minutes go to the others; players who left take theirs along
   const hardCaps: Rotation['caps'] = {};
   for (const p of players) if (prev?.caps?.[p.pid]) hardCaps[p.pid] = prev.caps[p.pid];
-  const ceiling = depth.map((p) => Math.min(MAX_PLAN, hardCaps[p.pid] ?? MAX_PLAN));
+  // six or fewer healthy can't fill a game at 38 apiece: the ceiling rises to what does (48 at most)
+  const most = clamp(240 / Math.max(1, depth.length), MAX_PLAN, 48);
+  const ceiling = depth.map((p) => Math.min(most, hardCaps[p.pid] ?? most));
   // stamina sets what a player can sustain; a proven heavy-minute role counts too
   const caps = depth.map((p, i) => {
     const r = roles.get(p.pid);
