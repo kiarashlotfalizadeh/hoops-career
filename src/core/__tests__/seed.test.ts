@@ -5,6 +5,7 @@ import { simDay, startRegularSeason } from '../league/season';
 import { teamPlayers } from '../league/helpers';
 import { CAP } from '../constants';
 import { RATING_KEYS } from '../ratings';
+import { BBREF_TO_TID } from '../teams';
 import { FREE_AGENT } from '../types';
 
 const seed = seedJson as unknown as SeedData;
@@ -64,6 +65,24 @@ describe.skipIf(!real)('real-player seed', () => {
     const avg = games.reduce((a, g) => a + g.home.pts + g.away.pts, 0) / (games.length * 2);
     expect(avg).toBeGreaterThan(100);
     expect(avg).toBeLessThan(130);
+  });
+
+  it("keeps waived players' leftover pay as dead money, not as players on the roster", () => {
+    const league = createLeague({ name: 's', userTid: 0, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 5, preseasonCuts: false });
+    // the contracts table lists them under the team still paying them, below any playing contract
+    const waived = seed.players.filter((sp) => sp.team && sp.contract && !sp.contract.twoWay && sp.contract.salaries[0] < CAP.minContract);
+    expect(waived.length).toBeGreaterThan(0);
+    const byId = new Map(Object.values(league.players).map((p) => [p.bbrefId, p]));
+    for (const sp of waived) {
+      const p = byId.get(sp.id);
+      // a free agent if he played in the seed's seasons, else not in the league (Rubio retired in 2024)
+      if (sp.stats.some((s) => s.gp > 0)) expect(p?.tid).toBe(FREE_AGENT);
+      else expect(p).toBeUndefined();
+      expect(league.teams[BBREF_TO_TID[sp.team!]].deadMoney).toContainEqual(
+        expect.objectContaining({ name: `${sp.first} ${sp.last}`, season: league.season, amount: sp.contract!.salaries[0] }),
+      );
+    }
+    for (const p of Object.values(league.players)) if (p.tid >= 0 && !p.contract.twoWay) expect(p.contract.salaries[0]).toBeGreaterThanOrEqual(CAP.minContract);
   });
 
   it('puts first-round picks still on their first deal on the rookie scale', () => {

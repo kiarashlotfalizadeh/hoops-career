@@ -244,6 +244,18 @@ export function createLeague(opts: CreateOpts): League {
     const firstRecord = Math.min(season - 1, ...opts.seed.players.flatMap((sp) => sp.stats.filter((s) => s.real).map((s) => s.season)));
     for (const sp of opts.seed.players) {
       const p = seedToPlayer(sp, league.nextPid++, season, rng, firstRecord);
+      // the contracts table also lists waived players a team still pays (a stretched or partly
+      // guaranteed deal, below any playing contract): that is dead money (a team option year isn't
+      // guaranteed), and the player is a free agent, or out of the league if he hasn't played in the
+      // seed's seasons
+      const c = p.contract;
+      if (p.tid >= 0 && !c.twoWay && c.salaries[0] < CAP.minContract) {
+        const years = c.option === 'team' ? c.salaries.length - 1 : c.salaries.length;
+        for (let i = 0; i < years; i++) if (c.salaries[i] > 0) league.teams[p.tid].deadMoney.push({ pid: p.pid, name: playerName(p), season: season + i, amount: c.salaries[i] });
+        if (!p.stats.some((s) => s.real && s.gp > 0)) continue;
+        p.tid = FREE_AGENT;
+        p.contract = { start: season, salaries: [0] };
+      }
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
