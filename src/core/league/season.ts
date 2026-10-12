@@ -36,7 +36,7 @@ import { champion, playInDone, processPlayInResult, processPlayoffResult, schedu
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { askingContract, releasePlayer, resolveOptions } from './contracts';
+import { askingContract, leaveTeam, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
@@ -307,10 +307,7 @@ function retirements(league: League, rng: Rng) {
     if (p.tid >= 0 && p.contract.start + p.contract.salaries.length - 1 > league.season) prob *= 0.25;
     if (rng.chance(prob)) {
       const wasTid = p.tid;
-      if (p.tid >= 0) {
-        const t = league.teams[p.tid];
-        t.rotation.order = t.rotation.order.filter((x) => x !== p.pid);
-      }
+      if (p.tid >= 0) leaveTeam(league.teams[p.tid], p.pid);
       p.tid = RETIRED;
       p.retiredSeason = league.season;
       p.contract = { start: league.season + 1, salaries: [0] };

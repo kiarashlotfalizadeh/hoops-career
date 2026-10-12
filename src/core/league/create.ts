@@ -80,7 +80,6 @@ export interface SeedData {
   source: string;
   season: number;
   players: SeedPlayer[];
-  realAvgs?: Record<string, number>;
   /** The real regular-season schedule (80 games per team plus the Cup, or completed to 82 at creation). */
   schedule?: SeedSchedule;
   /** Real future pick ownership: picks not listed belong to their original team. */

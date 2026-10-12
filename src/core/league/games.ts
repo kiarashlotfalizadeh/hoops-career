@@ -128,6 +128,8 @@ export function ensureRotation(league: League, tid: number) {
     for (const p of players.sort((a, b) => b.ovr - a.ovr)) if (!rot.order.includes(p.pid)) rot.order.push(p.pid);
     for (const k of Object.keys(rot.minutes)) if (!pids.has(+k)) delete rot.minutes[+k];
     rot.closers = rot.closers.filter((pid) => pids.has(pid));
+    rot.restB2B = rot.restB2B.filter((pid) => pids.has(pid));
+    for (const k of Object.keys(rot.caps)) if (!pids.has(+k)) delete rot.caps[+k];
   }
   if (!isUser || !team.rotation.manual) benchTwoWays(team.rotation, players);
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
