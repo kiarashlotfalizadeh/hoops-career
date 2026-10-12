@@ -104,7 +104,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/data/seed.json
           git commit -m "Update seed data"
-          # the token goes to these two commands only, in the same header checkout sends
+          # only these two commands get the token, in the header actions/checkout itself uses
           auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "$auth" pull --rebase origin main
           git -c "$auth" push origin HEAD:main
