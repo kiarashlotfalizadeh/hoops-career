@@ -165,14 +165,29 @@ export function Chips<T extends string | number>({
   );
 }
 
+/** The switch is named by `label` alone; `help` is its description (screen readers read it after the state). */
 export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode }) {
+  const id = useId();
   return (
     <label className="row between" style={{ gap: 12, cursor: 'pointer' }}>
       <div className="grow">
-        <div style={{ fontWeight: 650 }}>{label}</div>
-        {help && <div className="small dim">{help}</div>}
+        <div id={`${id}l`} style={{ fontWeight: 650 }}>
+          {label}
+        </div>
+        {help && (
+          <div id={`${id}h`} className="small dim">
+            {help}
+          </div>
+        )}
       </div>
-      <button className={`toggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} onClick={() => onChange(!on)} />
+      <button
+        className={`toggle ${on ? 'on' : ''}`}
+        role="switch"
+        aria-checked={on}
+        aria-labelledby={`${id}l`}
+        aria-describedby={help ? `${id}h` : undefined}
+        onClick={() => onChange(!on)}
+      />
     </label>
   );
 }
