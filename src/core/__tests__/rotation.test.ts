@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildMinutePlan, normalizeMinutes, planInputs, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
+import { createLeague, defaultSettings } from '../league/create';
+import { teamPlayers } from '../league/helpers';
+import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
 import type { Rotation } from '../types';
 
 const players: PlanPlayer[] = [36, 34, 33, 31, 29, 24, 20, 16, 12, 5].map((m, i) => ({
@@ -30,6 +32,29 @@ describe('rotation plan', () => {
     const plan = buildMinutePlan(players);
     expect([...plan[0]].sort()).toEqual([0, 1, 2, 3, 4]);
     expect([...plan[47]].sort()).toEqual([0, 1, 2, 3, 4]);
+  });
+  it("opens the third quarter with the starters in every team's default rotation, minutes and closers intact", () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 5 });
+    let starters = 0;
+    let oneMinute = 0;
+    for (const t of league.teams) {
+      const pp = planInputs(
+        teamPlayers(league, t.tid).map((p) => ({ pid: p.pid, available: !(p.injury && p.injury.gamesRemaining > 0), ...planRoles(p.ratings, p.pos), endurance: p.ratings.end })),
+        t.rotation,
+      );
+      const plan = buildMinutePlan(pp);
+      const norm = normalizeMinutes(pp);
+      starters += plan[24].filter((pid) => pp.find((p) => p.pid === pid)!.starter).length;
+      // nobody takes the floor for the tip only to leave a minute later
+      for (const pid of plan[24]) expect(plan[25]).toContain(pid);
+      pp.forEach((p, i) => expect(Math.abs(plan.filter((s) => s.includes(p.pid)).length - norm[i])).toBeLessThanOrEqual(1));
+      for (const p of pp.filter((x) => x.closer)) for (const slot of plan.slice(44)) expect(slot).toContain(p.pid);
+      // one-minute stints within a half stay rare
+      for (const p of pp)
+        for (let s = 0; s < 48; s++) if (plan[s].includes(p.pid) && (s % 24 === 0 || !plan[s - 1].includes(p.pid)) && (s % 24 === 23 || !plan[s + 1].includes(p.pid))) oneMinute++;
+    }
+    expect(starters / league.teams.length).toBeGreaterThanOrEqual(4);
+    expect(oneMinute / league.teams.length).toBeLessThan(4);
   });
   it('never lists a player twice when one swap fixes both a missing guard and too many bigs', () => {
     // five bigs and no ball handler start: the guard swapped in must not be picked again as the "small"
