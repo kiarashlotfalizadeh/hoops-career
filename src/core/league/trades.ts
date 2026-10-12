@@ -126,11 +126,14 @@ export const PICK_LENS: Record<Strategy, number> = { contend: 0.7, retool: 1, re
  * the user, an AI team never lets its own assets go below neutral: the lens only adds a premium
  * for what it receives (a rebuilder's veteran bought cheap and sold to a contender, or picks the
  * other way, paid up to 1.8x a round trip). Among themselves AI teams sell down to 85%, which is
- * what gets their deals done. An asset that changed hands this season is worth its neutral value
- * to everyone, so it can't be flipped at a second team's premium.
+ * what gets their deals done. A liability's band runs the same way: taken in at most 15% less of a
+ * burden than neutral, sent away among AI teams as up to 15% more of one. An asset that changed
+ * hands this season is worth its neutral value to everyone, so it can't be flipped at a second
+ * team's premium.
  */
 function lens(own: number, neutral: number, incoming: boolean, aiDeal: boolean) {
-  return incoming ? Math.min(own, neutral * 1.15) : Math.max(own, neutral * (aiDeal ? 0.85 : 1));
+  const band = 0.15 * Math.abs(neutral);
+  return incoming ? Math.min(own, neutral + band) : Math.max(own, neutral - (aiDeal ? band : 0));
 }
 
 const flipped = (league: League, a: Player | DraftPick) => a.tradedFrom?.season === league.season;

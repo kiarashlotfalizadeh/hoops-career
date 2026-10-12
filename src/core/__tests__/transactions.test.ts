@@ -118,6 +118,26 @@ describe('AI trade valuation', () => {
     expect(playerValueFor(l, vet, 2, true)).toBeCloseTo(neutral);
   });
 
+  it('keeps a liability within 15% of neutral the same way: no team takes one in as a bigger burden than it sees', () => {
+    const l = league();
+    l.phase = 'regular';
+    // an overpaid 76 at 31: a burden to the league, worth having to a contender, a bigger burden to a rebuilder
+    const bad = shape(l, standardRoster(l, AI)[0], 76, 31, Math.round(CAP_FOR(l).salaryCap * 0.25), 4);
+    const neutral = tradeValue(l, bad);
+    expect(neutral).toBeLessThan(0);
+    expect(tradeValue(l, bad, 'contend')).toBeGreaterThan(0);
+    expect(tradeValue(l, bad, 'rebuild')).toBeLessThan(neutral * 1.15);
+    // coming in: a retooling team's own (neutral) view, and a contender's at most 15% better than neutral
+    l.teams[2].strategy = 'retool';
+    expect(playerValueFor(l, bad, 2, true)).toBeCloseTo(neutral);
+    l.teams[2].strategy = 'contend';
+    expect(playerValueFor(l, bad, 2, true)).toBeCloseTo(neutral * 0.85);
+    // going out: a rebuilder dumps him on the user at neutral, on another AI team for up to 115%
+    l.teams[AI].strategy = 'rebuild';
+    expect(playerValueFor(l, bad, AI, false)).toBeCloseTo(neutral);
+    expect(playerValueFor(l, bad, AI, false, true)).toBeCloseTo(neutral * 1.15);
+  });
+
   it("doesn't pay to buy a rebuilder's veteran with picks and sell him to a contender for its picks (T1)", () => {
     const l = league();
     l.phase = 'regular';
