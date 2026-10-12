@@ -1295,8 +1295,10 @@ export class GameSim {
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
     // the period is about to run out: push it up the floor and get a shot off before the buzzer
-    // (unless it's a lead to run out: then the clock dies with the ball)
-    if (!late.milk && this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
+    // (unless it's a lead to run out: then the clock dies with the ball); tied or down three or less
+    // at the end of the game, a second is enough for a quick catch-and-shoot
+    const chasing = this.q >= 4 && off.score <= def.score && off.score >= def.score - 3;
+    if (!late.milk && this.clock >= (chasing ? 0.8 : 2.5) && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
     // the shot clock started on the inbound: time spent breaking a press (or before a side-out foul) is gone
     let shotClock = GAME.shotClock - (clockStart - this.clock);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });

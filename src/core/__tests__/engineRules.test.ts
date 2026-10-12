@@ -185,6 +185,8 @@ describe('engine rules', () => {
       return shots;
     };
     expect(lastPossession(2, 5, 0)).toBeGreaterThanOrEqual(18);
+    // down one with two seconds left in the game: still a shot at the win
+    expect(lastPossession(4, 2, -1)).toBeGreaterThanOrEqual(18);
     expect(lastPossession(4, 8, 12)).toBeLessThanOrEqual(2);
     expect(lastPossession(4, 20, 12)).toBeLessThanOrEqual(2);
   });
