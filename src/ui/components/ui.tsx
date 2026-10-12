@@ -177,8 +177,10 @@ export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (
   );
 }
 
+/** `name` is what screen readers call the slider when `label` isn't plain text. */
 export function Slider({
   label,
+  name,
   value,
   onChange,
   min = 0,
@@ -191,6 +193,7 @@ export function Slider({
   disabled,
 }: {
   label: ReactNode;
+  name?: string;
   value: number;
   onChange: (v: number) => void;
   min?: number;
@@ -218,7 +221,7 @@ export function Slider({
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ ['--fill' as string]: `${fill}%` }}
-        aria-label={typeof label === 'string' ? label : undefined}
+        aria-label={name ?? (typeof label === 'string' ? label : undefined)}
         aria-valuetext={format ? format(value) : undefined}
       />
       {(left || right) && (
@@ -247,7 +250,20 @@ let openSheets = 0;
  * Tab stays inside, Escape / the close button / a backdrop tap / a downward swipe dismiss it,
  * and the page behind doesn't scroll.
  */
-export function Sheet({ open, onClose, children, title }: { open: boolean; onClose: () => void; children: ReactNode; title?: ReactNode }) {
+export function Sheet({
+  open,
+  onClose,
+  children,
+  title,
+  label,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  title?: ReactNode;
+  /** What screen readers call a sheet without a title. */
+  label?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const [drag, setDrag] = useState(0);
@@ -324,7 +340,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
-        aria-label={title ? undefined : 'Dialog'}
+        aria-label={title ? undefined : (label ?? 'Dialog')}
         tabIndex={-1}
         style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
         onTouchStart={onTouchStart}
