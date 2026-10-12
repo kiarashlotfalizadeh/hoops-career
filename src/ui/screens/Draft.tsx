@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucide-react';
 import type { CombineResults, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { curTeamSeason, playerName, prospects, withRng, winPct } from '../../core/league/helpers';
+import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
 import { pickLabel } from '../../core/league/trades';
 import { finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
@@ -11,12 +11,11 @@ import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, activateOnKey, type Col } from '../components/ui';
+import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, type Col } from '../components/ui';
 import { OvrPot, SecTitle, ordinal } from '../office/common';
+import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mine' | 'results';
-
-const overall = (round: number, pick: number) => (round - 1) * 30 + pick;
 
 function fmtIn(x: number | undefined) {
   if (x === undefined || !isFinite(x)) return '—';
@@ -61,12 +60,12 @@ export default function Draft() {
   if (league.phase === 'draft') views.push({ id: 'live', label: 'Live' });
   if (league.phase === 'draftLottery') views.push({ id: 'lottery', label: 'Lottery' });
   if (after) views.push({ id: 'results', label: 'Results' });
-  if (!after) views.push({ id: 'board', label: 'Big Board' }, { id: 'combine', label: 'Combine' });
-  views.push({ id: 'mine', label: 'My Picks' });
+  if (!after) views.push({ id: 'board', label: 'Big board' }, { id: 'combine', label: 'Combine' });
+  views.push({ id: 'mine', label: 'Your picks' });
 
   const draft = (pid: number) => {
     const name = playerName(league.players[pid]);
-    const n = np ? overall(np.round, np.pick!) : 0;
+    const n = np ? overallPick(league, np.round, np.pick!) : 0;
     let err: string | null = null;
     useStore.getState().mutate((l) => {
       err = userDraftPick(l, pid);
@@ -99,16 +98,26 @@ export default function Draft() {
     });
   };
 
-  const finish = () => {
+  // the rest of the picks (the scouts make yours): the draft stays open until "Continue to re-signing"
+  const simToEnd = () => {
     setConfirmSim(false);
-    useStore.getState().mutate((l) => finishDraftPhase(l));
+    useStore.getState().mutate((l) => {
+      withRng(l, (rng) => draftUntilUser(l, rng, true));
+    });
+  };
+
+  // phase changes run behind the progress bar, as from the Play menu: a second tap is a no-op and an error changes nothing
+  const busy = useStore((s) => !!s.sim);
+  const finish = async () => {
+    let done = false;
+    if (!(await useStore.getState().task('Finishing the draft', (l) => void (done = finishDraftPhase(l)))) || !done) return;
     useStore.getState().toast('The draft is complete. Time to re-sign your players.', 'good');
     nav('/resign');
   };
 
-  const begin = () => {
-    useStore.getState().mutate((l) => startDraft(l));
-    setView('live');
+  const begin = async () => {
+    let done = false;
+    if ((await useStore.getState().task('Draft night', (l) => void (done = startDraft(l)))) && done) setView('live');
   };
 
   const myRemaining = league.phase === 'draft' ? draftOrder(league).filter((d) => d.tid === user) : [];
@@ -130,14 +139,24 @@ export default function Draft() {
               not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Big Board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
+              <b>Big board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
             </p>
             <p style={{ margin: 0 }}>Undrafted prospects with promise become free agents after the draft.</p>
           </Help>
         }
       />
 
-      {league.phase === 'draft' && <OnTheClock league={league} onAuto={autoPick} onSimToMine={simToMine} onFinish={() => (myRemaining.length ? setConfirmSim(true) : finish())} />}
+      {league.phase === 'draft' && (
+        <OnTheClock
+          league={league}
+          hasPicks={myRemaining.length > 0}
+          busy={busy}
+          onAuto={autoPick}
+          onSimToMine={simToMine}
+          onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : simToEnd())}
+          onFinish={() => void finish()}
+        />
+      )}
 
       {league.phase === 'draftLottery' && (
         <Card accent className="fo-hero">
@@ -148,13 +167,13 @@ export default function Draft() {
               <div className="small dim2">Study the board, then head to the draft.</div>
             </div>
           </div>
-          <button className="btn primary block" style={{ marginTop: 12 }} onClick={begin}>
+          <button className="btn primary block" style={{ marginTop: 12 }} disabled={busy} onClick={() => void begin()}>
             <Play size={16} fill="currentColor" /> Start the draft
           </button>
         </Card>
       )}
 
-      {views.length > 1 && <Segmented value={view} onChange={setView} options={views} />}
+      {views.length > 1 && <Segmented value={view} onChange={setView} options={views} label="Draft sections" />}
 
       {view === 'live' && league.phase === 'draft' && <LiveView league={league} cls={cls} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} />}
       {view === 'lottery' && <LotteryView league={league} />}
@@ -173,12 +192,12 @@ export default function Draft() {
               <div className="grow">
                 <div className="bold">{playerName(league.players[confirmPick])}</div>
                 <div className="small dim">
-                  {league.players[confirmPick].pos} · {league.players[confirmPick].archetype} · Big Board #{league.players[confirmPick].prospect?.rank ?? '—'}
+                  {league.players[confirmPick].pos} · {league.players[confirmPick].archetype} · Big board #{league.players[confirmPick].prospect?.rank ?? '—'}
                 </div>
               </div>
             </div>
             <div className="small dim2">
-              Pick #{overall(np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie scale deal' : 'second round, 2-year minimum deal'}).
+              Pick #{overallPick(league, np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie scale deal' : 'second round, 2-year minimum deal'}).
             </div>
             <div className="row">
               <button className="btn grow" onClick={() => setConfirmPick(null)}>
@@ -195,14 +214,14 @@ export default function Draft() {
       <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Sim to the end?">
         <div className="col" style={{ gap: 12 }}>
           <div className="dim2">
-            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overall(d.round, d.pick!)}`).join(', ')}). Your scouts will
-            make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
+            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}). Your
+            scouts will make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
           </div>
           <div className="row">
             <button className="btn grow" onClick={() => setConfirmSim(false)}>
               Cancel
             </button>
-            <button className="btn primary grow" onClick={finish}>
+            <button className="btn primary grow" onClick={simToEnd}>
               Sim the draft
             </button>
           </div>
@@ -214,7 +233,23 @@ export default function Draft() {
 
 // ------------------------------------------------------------------ live draft
 
-function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League; onAuto: () => void; onSimToMine: () => void; onFinish: () => void }) {
+function OnTheClock({
+  league,
+  hasPicks,
+  busy,
+  onAuto,
+  onSimToMine,
+  onSimToEnd,
+  onFinish,
+}: {
+  league: League;
+  hasPicks: boolean;
+  busy: boolean;
+  onAuto: () => void;
+  onSimToMine: () => void;
+  onSimToEnd: () => void;
+  onFinish: () => void;
+}) {
   const np = nextPick(league);
   const user = league.userTid;
   if (!np) {
@@ -225,7 +260,7 @@ function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League;
           All picks are in
         </div>
         <div className="small dim2">Undrafted prospects become free agents. Next up: re-signing your own players.</div>
-        <button className="btn primary block" style={{ marginTop: 12 }} onClick={onFinish}>
+        <button className="btn primary block" style={{ marginTop: 12 }} disabled={busy} onClick={onFinish}>
           Continue to re-signing
         </button>
       </Card>
@@ -244,7 +279,7 @@ function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League;
       <div className="row" style={{ gap: 12, marginTop: 10 }}>
         <TeamLogo tid={np.tid} size={54} />
         <div className="grow" style={{ minWidth: 0 }}>
-          <div className="fo-big">#{overall(np.round, np.pick!)}</div>
+          <div className="fo-big">#{overallPick(league, np.round, np.pick!)}</div>
           <div className="bold ellipsis">
             {mine ? "You're up" : `${t.region} ${t.name}`}
             {np.originalTid !== np.tid && <span className="dim small"> · via {league.teams[np.originalTid].abbrev}</span>}
@@ -260,17 +295,19 @@ function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League;
             <button className="btn sm grow" onClick={onAuto}>
               <Bot size={16} /> Auto-pick for me
             </button>
-            <button className="btn sm grow ghost" onClick={onFinish}>
+            <button className="btn sm grow ghost" onClick={onSimToEnd}>
               <FastForward size={16} /> Sim to end
             </button>
           </div>
         </>
       ) : (
         <div className="row" style={{ marginTop: 12, gap: 8 }}>
-          <button className="btn sm grow primary" onClick={onSimToMine}>
-            <Play size={15} fill="currentColor" /> Sim to my pick
-          </button>
-          <button className="btn sm grow ghost" onClick={onFinish}>
+          {hasPicks && (
+            <button className="btn sm grow primary" onClick={onSimToMine}>
+              <Play size={15} fill="currentColor" /> Sim to my pick
+            </button>
+          )}
+          <button className={`btn sm grow ${hasPicks ? 'ghost' : 'primary'}`} onClick={onSimToEnd}>
             <FastForward size={16} /> Sim to end of draft
           </button>
         </div>
@@ -282,7 +319,7 @@ function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League;
 function draftedThisYear(league: League): Player[] {
   return Object.values(league.players)
     .filter((p) => p.draft.year === league.season && p.draft.round > 0)
-    .sort((a, b) => overall(a.draft.round, a.draft.pick) - overall(b.draft.round, b.draft.pick));
+    .sort((a, b) => overallPick(league, a.draft.round, a.draft.pick) - overallPick(league, b.draft.round, b.draft.pick));
 }
 
 function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; cls: Player[]; onClock: boolean; onOpen: (pid: number) => void; onDraft: (pid: number) => void }) {
@@ -297,7 +334,7 @@ function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; c
           <div className="hscroll">
             {order.slice(1, 13).map((d) => (
               <div key={d.dpid} className={`fo-pickchip ${d.tid === league.userTid ? 'me' : ''}`}>
-                <span className="n">#{overall(d.round, d.pick!)}</span>
+                <span className="n">#{overallPick(league, d.round, d.pick!)}</span>
                 <TeamLogo tid={d.tid} size={26} />
                 <span className="tiny bold">{league.teams[d.tid].abbrev}</span>
               </div>
@@ -333,7 +370,7 @@ function SelectionRow({ league, p }: { league: League; p: Player }) {
   return (
     <Link to={`/player/${p.pid}`} className="listrow" style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}>
       <span className="fo-rank" style={{ fontSize: 16 }}>
-        {overall(p.draft.round, p.draft.pick)}
+        {overallPick(league, p.draft.round, p.draft.pick)}
       </span>
       <TeamLogo tid={p.draft.tid ?? 0} size={28} />
       <div className="grow" style={{ minWidth: 0 }}>
@@ -356,33 +393,21 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
     <Card className="flush">
       <div className="list wide2">
         {list.slice(0, limit).map((p) => (
-          <div
-            key={p.pid}
-            className="fo-prow"
-            role="button"
-            tabIndex={0}
-            style={{ cursor: 'pointer' }}
-            onClick={() => onOpen(p.pid)}
-            onKeyDown={activateOnKey(() => onOpen(p.pid))}
-          >
-            <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
-            <OvrPot p={p} />
-            <div className="grow" style={{ minWidth: 0 }}>
-              <div className="fo-name">{playerName(p)}</div>
-              <div className="fo-meta">
-                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+          // the scouting report and the Draft button sit side by side: a button inside a button is announced as one
+          <div key={p.pid} className="row" style={{ gap: 0, paddingRight: onDraft ? 12 : 0 }}>
+            <button className="fo-prow grow" onClick={() => onOpen(p.pid)}>
+              <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
+              <OvrPot p={p} />
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="fo-name">{playerName(p)}</div>
+                <div className="fo-meta">
+                  {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+                </div>
+                <div className="fo-meta tiny">{p.archetype}</div>
               </div>
-              <div className="fo-meta tiny">{p.archetype}</div>
-            </div>
+            </button>
             {onDraft && (
-              <button
-                className="btn sm good"
-                aria-label={`Draft ${playerName(p)}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDraft(p.pid);
-                }}
-              >
+              <button className="btn sm good" aria-label={`Draft ${playerName(p)}`} onClick={() => onDraft(p.pid)}>
                 Draft
               </button>
             )}
@@ -411,7 +436,7 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
     { key: 'hgt', label: 'Height', help: 'Height without shoes', get: (p) => num(c(p).heightNoShoes), fmt: (_v, p) => fmtIn(c(p).heightNoShoes) },
     { key: 'wing', label: 'Wingspan', get: (p) => num(c(p).wingspan), fmt: (_v, p) => fmtIn(c(p).wingspan) },
     { key: 'reach', label: 'Reach', help: 'Standing reach', get: (p) => num(c(p).standingReach), fmt: (_v, p) => fmtIn(c(p).standingReach) },
-    { key: 'wt', label: 'Wt', help: 'Weight (lbs)', get: (p) => num(c(p).weight) },
+    { key: 'wt', label: 'Wt', help: 'Weight (lb)', get: (p) => num(c(p).weight) },
     { key: 'vert', label: 'Vert', help: 'Max vertical (in)', get: (p) => num(c(p).maxVert), fmt: (v) => (Number(v) < 0 ? '—' : `${Number(v).toFixed(1)}"`) },
     { key: 'lane', label: 'Lane', help: 'Lane agility (s, lower is better)', get: (p) => num(c(p).laneAgility), fmt: (v) => (Number(v) < 0 ? '—' : Number(v).toFixed(2)) },
     { key: 'sprint', label: '¾ Sprint', help: '3/4 court sprint (s, lower is better)', get: (p) => num(c(p).sprint), fmt: (v) => (Number(v) < 0 ? '—' : Number(v).toFixed(2)) },
@@ -421,7 +446,7 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
   return (
     <>
       <div className="tiny dim">Tap a column to sort; tap a row for the full scouting report. Lane agility and sprint: lower is better.</div>
-      <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} highlight={() => false} maxHeight={560} />
+      <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} maxHeight={560} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
         {league.season} draft combine · {list.length} invitees
       </div>
@@ -480,10 +505,8 @@ function MyPicks({ league }: { league: League }) {
   const user = league.userTid;
   const owned = league.draftPicks.filter((d) => d.tid === user).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user).sort((a, b) => a.season - b.season || a.round - b.round);
-  // rough projection from the current standings for picks without a slot yet
-  const ranked = league.teams.map((t) => ({ tid: t.tid, ts: curTeamSeason(league, t.tid) })).sort((a, b) => winPct(a.ts) - winPct(b.ts));
-  const gp = curTeamSeason(league, user).won + curTeamSeason(league, user).lost;
-  const proj = (orig: number) => ranked.findIndex((x) => x.tid === orig) + 1;
+  // picks without a slot yet, projected as on the team page
+  const proj = useLeagueMemo(() => pickProjection(league), [league]);
   const drafted = draftedThisYear(league).filter((p) => p.draft.tid === user);
   return (
     <>
@@ -511,13 +534,12 @@ function MyPicks({ league }: { league: League }) {
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="bold ellipsis">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
-                    {d.originalTid === user ? 'Own pick' : `Acquired from ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}`} · drafted after{' '}
-                    {seasonLabel(d.season)}
+                    {d.originalTid === user ? 'Own pick' : `Acquired from the ${teamName(league.teams[d.originalTid])}`} · drafted after {seasonLabel(d.season)}
                   </div>
                 </div>
                 {/* the label carries the overall number once the order is set */}
-                {!d.pick && d.season === league.season && gp >= 10 ? (
-                  <span className="tag">Proj. #{overall(d.round, proj(d.originalTid))}</span>
+                {proj(d) !== undefined ? (
+                  <span className="tag">Proj. #{proj(d)}</span>
                 ) : (
                   <span className={`tag ${d.pick ? 'info' : ''}`}>
                     <Ticket size={11} /> R{d.round}
@@ -538,9 +560,7 @@ function MyPicks({ league }: { league: League }) {
                   <TeamLogo tid={d.tid} size={30} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">{pickLabel(league, d)}</div>
-                    <div className="tiny dim">
-                      Owned by {league.teams[d.tid].region} {league.teams[d.tid].name}
-                    </div>
+                    <div className="tiny dim">Owned by the {teamName(league.teams[d.tid])}</div>
                   </div>
                   <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
                 </div>
@@ -549,7 +569,7 @@ function MyPicks({ league }: { league: League }) {
           </Card>
         </>
       )}
-      <div className="tiny dim">Projections use the current standings (worst record = #1) and ignore the lottery.</div>
+      {owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>}
     </>
   );
 }
@@ -563,6 +583,7 @@ function Results({ league }: { league: League }) {
   return (
     <>
       <Segmented
+        label="Round"
         value={String(round) as '1' | '2'}
         onChange={(x) => setRound(Number(x) as 1 | 2)}
         options={[
@@ -610,7 +631,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                 {playerName(p)}
               </h2>
               <div className="fo-meta">
-                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lbs
+                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lb
               </div>
               <div className="fo-meta">{p.college ? `${p.college} · ${p.country}` : p.country}</div>
             </div>
@@ -620,7 +641,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
             <span className="tag info">{p.archetype}</span>
             {p.tid >= 0 && (
               <span className="tag good">
-                Drafted #{overall(p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}
+                Drafted #{overallPick(league, p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}
               </span>
             )}
           </div>
@@ -636,7 +657,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                 {stat('Height', fmtIn(c.heightNoShoes))}
                 {stat('Wingspan', fmtIn(c.wingspan))}
                 {stat('Reach', fmtIn(c.standingReach))}
-                {stat('Weight', `${c.weight}`)}
+                {stat('Weight', `${c.weight} lb`)}
                 {stat('Vert', `${c.maxVert.toFixed(1)}"`)}
                 {stat('Lane', `${c.laneAgility.toFixed(2)}s`)}
                 {stat('Sprint', `${c.sprint.toFixed(2)}s`)}

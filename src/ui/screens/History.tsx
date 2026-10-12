@@ -18,6 +18,7 @@ export default function History() {
     <main className="page">
       <PageHeader title="History" sub={`${league.name} · since ${seasonLabel(league.startSeason)}`} back />
       <Segmented
+        label="History sections"
         value={view}
         onChange={setView}
         options={[
@@ -49,7 +50,8 @@ function Franchise({ league }: { league: League }) {
   const rec = `${w}-${l}`;
   const titles = seasons.filter((s) => s.playoffRound === 5);
   const apps = finished.filter((s) => s.playoffRound >= 1).length;
-  const best = [...seasons].filter((s) => s.won + s.lost > 0).sort((a, b) => b.won / Math.max(1, b.won + b.lost) - a.won / Math.max(1, a.won + a.lost))[0];
+  // a 3-0 start isn't a best season: only seasons of 20+ games count
+  const best = [...seasons].filter((s) => s.won + s.lost >= 20).sort((a, b) => b.won / (b.won + b.lost) - a.won / (a.won + a.lost))[0];
 
   const leaders = useLeagueMemo(() => {
     const rows: { p: Player; pts: number; reb: number; ast: number; gp: number; seasons: number }[] = [];
@@ -83,7 +85,7 @@ function Franchise({ league }: { league: League }) {
         </select>
       </div>
       <div className="grid4">
-        <Kpi k="Seasons" v={seasons.length} sub={best && best.won + best.lost >= 20 ? `Best ${best.won}-${best.lost}` : undefined} />
+        <Kpi k="Seasons" v={seasons.length} sub={best ? `Best ${best.won}-${best.lost}` : undefined} />
         <Kpi
           k="Record"
           // a multi-season record stays on one line in a phone-width tile

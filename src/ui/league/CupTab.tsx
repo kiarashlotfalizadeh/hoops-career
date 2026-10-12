@@ -141,6 +141,7 @@ export function CupTab({ league }: { league: League }) {
 function ConfToggle({ value, onChange }: { value: 'E' | 'W'; onChange: (v: 'E' | 'W') => void }) {
   return (
     <Segmented
+      label="Conference"
       value={value}
       onChange={onChange}
       options={[

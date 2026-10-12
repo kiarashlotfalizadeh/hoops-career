@@ -1,4 +1,4 @@
-import { useQueryParam } from '../league/shared';
+import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight } from 'lucide-react';
@@ -6,16 +6,18 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel, type Composites } from '../../core/ratings';
-import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, type Col } from '../components/ui';
+import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, pct, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
-import { fmtM, openOption } from '../office/common';
-import { contractExp, salaryFor } from '../../core/playerGen';
+import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption } from '../office/common';
+import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, convertTwoWay, marketSalary, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason } from '../../core/league/contracts';
+import { untradeableReason } from '../../core/league/trades';
+import { pendingLive } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 
@@ -133,9 +135,15 @@ export default function PlayerView() {
       </main>
     );
   }
-  const age = league.season - p.bornYear;
+  const age = playerAge(p, league.season);
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
-  const mine = p.tid === league.userTid;
+  // a fired coach's old team isn't his to run
+  const mine = p.tid === league.userTid && !league.fired;
+  // a paused live game would record a moved player's line for his old team; a contract that's up is re-signed or let go, as in the Office
+  const busyWhy = pendingLive(league) ? 'Finish your live game first.' : null;
+  const upNote = contractUpNote(league, p);
+  const tradeWhy = busyWhy ?? upNote ?? untradeableReason(league, p);
+  const releaseWhy = busyWhy ?? upNote ?? releaseBlockedReason(league, p);
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
   const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
@@ -146,7 +154,10 @@ export default function PlayerView() {
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
   const line = cur ?? (lastSeason ? seasonLine(lastSeason) : null);
-  const sal = salaryFor(p, league.season) || salaryFor(p, league.season + 1);
+  // the season contracts count against (next season in the offseason), or this one for a contract that's up
+  const salSeason = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
+  const sal = salaryFor(p, salSeason);
+  const faAsk = p.tid === FREE_AGENT ? askingContract(league, p, league.userTid) : null;
   const status =
     p.tid === FREE_AGENT
       ? 'Free agent'
@@ -175,7 +186,8 @@ export default function PlayerView() {
               {p.firstName} {p.lastName}
             </div>
             <div className="small dim2">
-              {p.pos} · #{p.jersey || '—'} · {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb
+              {p.pos}
+              {p.jersey ? ` · #${p.jersey}` : ''} · {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb
             </div>
             <div className="small dim">
               {p.country}
@@ -204,7 +216,7 @@ export default function PlayerView() {
           <Kpi k="PTS" v={line ? f1(line.pts) : '—'} />
           <Kpi k="REB" v={line ? f1(line.reb) : '—'} />
           <Kpi k="AST" v={line ? f1(line.ast) : '—'} />
-          <Kpi k="TS%" v={line ? p1(line.tsPct).replace('%', '') : '—'} />
+          <Kpi k="TS%" v={line ? pct(line.tsPct) : '—'} />
         </div>
         {!cur && line && lastSeason ? (
           <div className="tiny dim" style={{ marginTop: 6 }}>
@@ -325,7 +337,7 @@ export default function PlayerView() {
               {p.tid >= 0 ? (
                 <div className="col" style={{ gap: 6 }}>
                   <div className="row between">
-                    <span className="dim2 small">This season</span>
+                    <span className="dim2 small">{seasonLabel(salSeason)} salary</span>
                     <span className="bold num">{fmtM(sal)}</span>
                   </div>
                   <div className="row between">
@@ -342,10 +354,10 @@ export default function PlayerView() {
                     <span className="num">{fmtM(marketSalary(league, p))}</span>
                   </div>
                 </div>
-              ) : p.tid === FREE_AGENT ? (
+              ) : faAsk ? (
                 <div className="col" style={{ gap: 8 }}>
                   <div className="small dim2">
-                    Asking {fmtM(askingContract(league, p, league.userTid).amount)} × {askingContract(league, p, league.userTid).years} yrs from you.
+                    Asking {fmtM(faAsk.amount)} × {faAsk.years} yr{faAsk.years === 1 ? '' : 's'} from you.
                   </div>
                   <Link className="btn sm primary" to="/free-agents">
                     Make an offer
@@ -356,54 +368,57 @@ export default function PlayerView() {
               ) : (
                 <div className="small dim">—</div>
               )}
-              {p.tid >= 0 && (
-                <div className="row" style={{ marginTop: 10, gap: 6 }}>
-                  {mine ? (
-                    <>
+              {mine ? (
+                <>
+                  <div className="row" style={{ marginTop: 10, gap: 6 }}>
+                    {tradeWhy ? (
+                      <button className="btn xs" disabled>
+                        <ArrowLeftRight size={14} /> Trade
+                      </button>
+                    ) : (
                       <Link className="btn xs" to={`/trade?give=${p.pid}`}>
                         <ArrowLeftRight size={14} /> Trade
                       </Link>
-                      {p.contract.twoWay && (
-                        <button
-                          className="btn xs"
-                          onClick={() => {
-                            let res = { ok: false, reason: '' };
-                            useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
-                            useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-                          }}
-                        >
-                          Convert to standard
-                        </button>
-                      )}
+                    )}
+                    {p.contract.twoWay && (
                       <button
-                        className="btn xs danger"
+                        className="btn xs"
+                        disabled={!!busyWhy}
                         onClick={() => {
-                          const why = releaseBlockedReason(league, p);
-                          if (why) useStore.getState().toast(why, 'bad');
-                          else setConfirmRelease(true);
+                          let res = { ok: false, reason: '' };
+                          useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
+                          useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
                         }}
                       >
-                        Release
+                        Convert to standard
                       </button>
-                    </>
-                  ) : (
+                    )}
+                    <button className="btn xs danger" disabled={!!releaseWhy} onClick={() => setConfirmRelease(true)}>
+                      Release
+                    </button>
+                  </div>
+                  {(tradeWhy || releaseWhy) && (
+                    <div className="tiny dim" style={{ marginTop: 6 }}>
+                      {[...new Set([tradeWhy, releaseWhy])].filter(Boolean).join(' ')}
+                    </div>
+                  )}
+                </>
+              ) : (
+                p.tid >= 0 &&
+                p.tid !== league.userTid && (
+                  <div className="row" style={{ marginTop: 10, gap: 6 }}>
                     <Link className="btn xs" to={`/trade?with=${p.tid}&get=${p.pid}`}>
                       <ArrowLeftRight size={14} /> Trade for him
                     </Link>
-                  )}
-                </div>
+                  </div>
+                )
               )}
             </Card>
           </div>
-          {p.awards.length > 0 && (
+          {/* the same honors, names and order as the league history (the Hall of Fame has its own tag above) */}
+          {accolades(p).length > 0 && (
             <Card title="Honors">
-              <div className="chips">
-                {summarizeAwards(p).map((a) => (
-                  <span key={a} className="tag warn">
-                    {a}
-                  </span>
-                ))}
-              </div>
+              <AccoladeChips p={p} max={Infinity} />
             </Card>
           )}
         </>
@@ -464,29 +479,9 @@ export default function PlayerView() {
       <Sheet open={roleOpen} onClose={() => setRoleOpen(false)} title={`${p.firstName} ${p.lastName}: role`}>
         <RoleEditor p={p} onDone={() => setRoleOpen(false)} />
       </Sheet>
-      <Sheet open={confirmRelease} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
-        <p className="dim2">
-          {p.contract.twoWay
-            ? 'Two-way pay sits outside the cap, so releasing him leaves no dead money. He becomes a free agent.'
-            : nonGuaranteed(league, p)
-              ? "His minimum deal isn't guaranteed until opening night, so releasing him now costs nothing. He becomes a free agent."
-              : `His remaining salary (${fmtM(releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0))}) stays on your books as dead money. He becomes a free agent.`}
-        </p>
-        <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn grow" onClick={() => setConfirmRelease(false)}>
-            Cancel
-          </button>
-          <button
-            className="btn danger grow"
-            onClick={() => {
-              useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
-              setConfirmRelease(false);
-              useStore.getState().toast(`${p.lastName} released.`);
-              nav('/roster');
-            }}
-          >
-            Release
-          </button>
+      <Sheet open={confirmRelease && mine && !releaseWhy} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
+        <div className="col" style={{ gap: 12 }}>
+          <ReleaseConfirm league={league} p={p} onKeep={() => setConfirmRelease(false)} onDone={() => (setConfirmRelease(false), nav('/roster'))} />
         </div>
       </Sheet>
     </main>
@@ -501,12 +496,6 @@ function sumStats(a: PlayerStats, b: PlayerStats): Partial<PlayerStats> {
     if (typeof va === 'number' && typeof vb === 'number' && k !== 'season' && k !== 'tid') out[k] = va + vb;
   }
   return out as Partial<PlayerStats>;
-}
-
-function summarizeAwards(p: Player) {
-  const counts = new Map<string, number>();
-  for (const a of p.awards) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
-  return [...counts.entries()].map(([k, n]) => (n > 1 ? `${n}× ${k}` : k));
 }
 
 function StatsTab({ p, league }: { p: Player; league: League }) {
@@ -537,12 +526,13 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'stl', label: 'STL', get: (r) => pg(r).stl, fmt: (v) => f1(v as number) },
     { key: 'blk', label: 'BLK', get: (r) => pg(r).blk, fmt: (v) => f1(v as number) },
     { key: 'tov', label: 'TOV', get: (r) => pg(r).tov, fmt: (v) => f1(v as number) },
-    { key: 'fg', label: 'FG%', get: (r) => pg(r).fgPct, fmt: (v) => p1(v as number) },
-    { key: 'tp', label: '3P%', get: (r) => pg(r).tpPct, fmt: (v) => p1(v as number) },
+    // the % lives in the header, as in the league stats
+    { key: 'fg', label: 'FG%', get: (r) => pg(r).fgPct, fmt: (v) => pct(v as number) },
+    { key: 'tp', label: '3P%', get: (r) => pg(r).tpPct, fmt: (v) => pct(v as number) },
     { key: 'tpa', label: '3PA', get: (r) => pg(r).tpa, fmt: (v) => f1(v as number) },
-    { key: 'ft', label: 'FT%', get: (r) => pg(r).ftPct, fmt: (v) => p1(v as number) },
-    { key: 'ts', label: 'TS%', get: (r) => pg(r).tsPct, fmt: (v) => p1(v as number) },
-    { key: 'usg', label: 'USG', get: (r) => pg(r).usg, fmt: (v) => p1(v as number) },
+    { key: 'ft', label: 'FT%', get: (r) => pg(r).ftPct, fmt: (v) => pct(v as number) },
+    { key: 'ts', label: 'TS%', get: (r) => pg(r).tsPct, fmt: (v) => pct(v as number) },
+    { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
     { key: 'per', label: 'PER', get: (r) => r.tot.adv?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
     { key: 'ws', label: 'WS', get: (r) => r.tot.adv?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
@@ -611,7 +601,7 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
 
 function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean }) {
   const hist = p.ratingsHistory;
-  const age = league.season - p.bornYear;
+  const age = playerAge(p, league.season);
   return (
     <>
       <Card title="Overall by season">
@@ -649,7 +639,7 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
         <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi k="Age" v={age} />
           <Kpi k="Potential" v={p.pot} />
-          {p.tid >= 0 && <Kpi k="Season wear" v={Math.round(p.wear)} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />}
+          {p.tid >= 0 && <Kpi k="Season wear" v={`${Math.round(p.wear)}/100`} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />}
         </div>
       </Card>
       {mine && (

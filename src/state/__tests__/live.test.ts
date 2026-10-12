@@ -7,6 +7,8 @@ import { pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../liv
 import { useStore } from '../store';
 import { flowActions } from '../../ui/flow';
 import { regularGamesLeft, simDay } from '../../core/league/season';
+import { releasePlayer, signPlayer } from '../../core/league/contracts';
+import { buildGameReport } from '../../core/analysis/gameReport';
 import { curTeamSeason } from '../../core/league/helpers';
 import type { League } from '../../core/types';
 import { testLeague, toGameDay, userGames } from './fixtures';
@@ -99,6 +101,30 @@ describe('live game', () => {
     const lg = goLive(l);
     useStore.getState().mutate((x) => (x.userTid = lg.game.home === x.userTid ? lg.game.away : lg.game.home));
     expect(pendingLive(l)).toBeNull();
+  });
+
+  it('a player who leaves the team mid-game keeps the game he played, for the team he played it for', () => {
+    const l = testLeague('left');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    const gone = lg.sim.T[lg.userSide].on[0];
+    const p = l.players[gone.pid];
+    const opp = lg.game.home === l.userTid ? lg.game.away : lg.game.home;
+    // released, then signed by the team on the other bench
+    releasePlayer(l, p, { news: false });
+    signPlayer(l, p, opp, 1500, 1, { news: false });
+    const res = lg.commit(l);
+    expect(once(l, res.gid)).toBe(1);
+    const mine = res.home.tid === l.userTid ? res.home : res.away;
+    expect(mine.players.some((b) => b.pid === p.pid && b.min > 0)).toBe(true);
+    expect(p.tid).toBe(opp);
+    expect(p.stats.find((s) => s.season === l.season && !s.real && s.tid === l.userTid)?.gp).toBe(1);
+    expect(p.stats.some((s) => s.season === l.season && s.tid === opp)).toBe(false);
+    expect(buildGameReport(l, res)?.grades.some((g) => g.pid === p.pid)).toBe(true);
+    // the next day plans without him
+    simDay(l);
+    expect(l.teams[l.userTid].rotation.order).not.toContain(p.pid);
   });
 
   it('skipping to the end of a quarter stops at the break (E12)', () => {

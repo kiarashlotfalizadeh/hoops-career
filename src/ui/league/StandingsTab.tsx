@@ -22,6 +22,7 @@ export function StandingsTab({ league }: { league: League }) {
   return (
     <>
       <Segmented
+        label="Standings view"
         value={view}
         onChange={setView}
         options={[

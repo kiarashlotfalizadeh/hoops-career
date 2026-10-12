@@ -3,18 +3,19 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted } from '../../core/league/helpers';
+import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted, teamName } from '../../core/league/helpers';
+import { pickLabel } from '../../core/league/trades';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
-import { contractExp, salaryFor } from '../../core/playerGen';
+import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
 import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
-import { fmtM, openOption } from '../office/common';
-import { OutcomeTag, SectionLabel, StrategyTag, TabBar, overallPick, pickName, seasonOutcome, shortName, useQueryParam } from '../league/shared';
+import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
+import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickProjection, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
 
@@ -123,7 +124,7 @@ function Hero({ league, tid }: { league: League; tid: number }) {
             </span>
           </div>
           <div>
-            <span className="k">Payroll{cs !== league.season ? ` ${seasonLabel(cs).slice(2)}` : ''}</span>
+            <span className="k">Payroll{cs !== league.season ? ` ${shortSeason(cs)}` : ''}</span>
             <span className="v" style={{ color: payColor(league, pay, cs) }}>
               {fmtM(pay)}
             </span>
@@ -248,19 +249,24 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
 function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: string; min?: number }) {
   const cur = playerSeason(p, league.season);
   const line: PerGame | null = cur && cur.gp > 0 ? cur : (latestLine(league, p)?.pg ?? null);
-  const age = league.season - p.bornYear;
+  const age = playerAge(p, league.season);
   return (
     <Link to={`/player/${p.pid}`} className="lg-prow">
       <Avatar p={p} />
       <div style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 6 }}>
           <span className="bold ellipsis">{name}</span>
-          {p.mood.tradeRequest && <span className="tag warn">Wants out</span>}
         </div>
+        {/* what's wrong leads the details: the name line has no room for it on a phone */}
         <div className="tiny dim ellipsis">
           {p.injury && (
-            <span className="bad" style={{ fontWeight: 700 }} title={p.injury.type}>
-              Out {p.injury.gamesRemaining}g ·{' '}
+            <span className="bad" style={{ fontWeight: 700 }}>
+              Out {p.injury.gamesRemaining}g ({p.injury.type}) ·{' '}
+            </span>
+          )}
+          {p.mood.tradeRequest && (
+            <span className="warn" style={{ fontWeight: 700 }}>
+              Wants a trade ·{' '}
             </span>
           )}
           {p.pos} · {age} yrs{min ? ` · ${Math.round(min)} min` : ''} · {p.archetype}
@@ -333,54 +339,77 @@ function RosterStats({ league, tid }: { league: League; tid: number }) {
   return <StatTable rows={rows} cols={cols} initialSort="pts" rowKey={(r) => r.p.pid} onRow={(r) => nav(`/player/${r.p.pid}`)} />;
 }
 
+/** A contracts row: a player, or the salary still owed to one the team released (dead money). */
+interface ContractRow {
+  key: string;
+  pid: number;
+  p?: Player;
+  name: string;
+  amount: (season: number) => number;
+}
+
 function Contracts({ league, tid }: { league: League; tid: number }) {
   const nav = useNavigate();
   const cs = contractSeason(league);
   const seasons = [0, 1, 2, 3].map((i) => cs + i);
-  const rows = useLeagueMemo(() => rosterSorted(league, tid).sort((a, b) => salaryFor(b, cs) - salaryFor(a, cs)), [league, tid, cs]);
+  // names are worked out with the rows, so a new arrival never shows a blank one
+  const rows = useLeagueMemo(() => {
+    const players = rosterSorted(league, tid).sort((a, b) => salaryFor(b, cs) - salaryFor(a, cs));
+    const nameOf = rosterNames(players, { initial: true });
+    const out: ContractRow[] = players.map((p) => ({ key: `p${p.pid}`, pid: p.pid, p, name: nameOf(p.pid), amount: (s) => salaryFor(p, s) }));
+    // payroll counts dead money, so the table lists it too (as the Office does)
+    const dead = new Map<number, { name: string; by: Map<number, number> }>();
+    for (const d of league.teams[tid].deadMoney) {
+      if (d.season < cs || d.season > cs + 3) continue;
+      const e = dead.get(d.pid) ?? { name: d.name, by: new Map<number, number>() };
+      e.by.set(d.season, (e.by.get(d.season) ?? 0) + d.amount);
+      dead.set(d.pid, e);
+    }
+    for (const [pid, e] of dead) out.push({ key: `d${pid}`, pid, name: e.name, amount: (s) => e.by.get(s) ?? 0 });
+    return out;
+  }, [league, tid, cs]);
   const cap = CAP_FOR(league, cs);
-  const nameOf = rosterNames(rows, { initial: true });
-  const cols = useMemo<Col<Player>[]>(
+  const cols = useMemo<Col<ContractRow>[]>(
     () => [
       {
         key: 'n',
         label: 'Player',
         left: true,
         sticky: true,
-        get: (p) => p.lastName,
-        fmt: (_x, p) => (
+        get: (r) => r.p?.lastName ?? r.name,
+        fmt: (_x, r) => (
           <span className="lg-pcell">
-            <span className="n">{nameOf(p.pid)}</span>
-            {p.contract.twoWay && <span className="tag">2W</span>}
+            <span className="n">{r.name}</span>
+            {r.p?.contract.twoWay && <span className="tag">2W</span>}
+            {!r.p && <span className="tiny dim">dead money</span>}
           </span>
         ),
       },
-      { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (x) => <Ovr v={x as number} size="sm" /> },
-      { key: 'age', label: 'Age', get: (p) => league.season - p.bornYear },
-      ...seasons.map((s, i): Col<Player> => ({
+      { key: 'ovr', label: 'OVR', get: (r) => r.p?.ovr ?? -1, fmt: (x, r) => (r.p ? <Ovr v={x as number} size="sm" /> : '') },
+      { key: 'age', label: 'Age', get: (r) => (r.p ? playerAge(r.p, league.season) : -1), fmt: (x, r) => (r.p ? x : '') },
+      ...[0, 1, 2, 3].map((i): Col<ContractRow> => ({
         key: `s${i}`,
-        label: seasonLabel(s).slice(2),
-        get: (p) => salaryFor(p, s),
-        fmt: (x, p) => {
+        label: shortSeason(cs + i),
+        get: (r) => r.amount(cs + i),
+        fmt: (x, r) => {
           const amt = x as number;
           if (!amt) return <span className="dim">—</span>;
           // (an option year already under way was settled)
-          const o = openOption(league, p);
-          const opt = o && contractExp(p.contract) === s ? (o === 'player' ? ' PO' : ' TO') : '';
+          const o = r.p ? openOption(league, r.p) : undefined;
+          const opt = r.p && o && contractExp(r.p.contract) === cs + i ? (o === 'player' ? ' PO' : ' TO') : '';
           return (
-            <span className={p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
+            <span className={!r.p || r.p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
               {fmtM(amt)}
               {opt && <span className="tiny warn">{opt}</span>}
             </span>
           );
         },
       })),
-      { key: 'exp', label: 'Exp', get: (p) => contractExp(p.contract) },
+      { key: 'exp', label: 'Exp', get: (r) => (r.p ? contractExp(r.p.contract) : -1), fmt: (x, r) => (r.p ? x : '') },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, cs],
   );
-  const twoWay = rows.some((p) => p.contract.twoWay);
+  const twoWay = rows.some((r) => r.p?.contract.twoWay);
   return (
     <>
       <PayrollBar league={league} tid={tid} />
@@ -397,7 +426,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
           );
         })}
       </div>
-      <StatTable rows={rows} cols={cols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
+      <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} onRow={(r) => nav(`/player/${r.pid}`)} />
       <div className="lg-note">
         PO = player option, TO = team option on the final year.{twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from
         released players counts toward payroll.
@@ -546,7 +575,7 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
           <Meter label="Adjustments" value={team.coach.tactics} color="var(--good)" />
         </div>
         <div className="lg-note" style={{ marginTop: 8 }}>
-          Practice: {team.practice}. Development boosts young players' growth; adjustments drive in-game counters.
+          Practice intensity: {PRACTICE.find((x) => x.id === team.practice)?.label ?? '—'}. Development boosts young players' growth; adjustments drive in-game counters.
         </div>
       </Card>
       <Card title="Rotation minutes">
@@ -716,26 +745,14 @@ function ScheduleTab({ league, tid }: { league: League; tid: number }) {
 
 // ---------------------------------------------------------------- picks
 
-/** Projected draft slot by current record (worst record picks first) before the lottery sets the order. */
-function projectedSlots(league: League): Map<number, number> {
-  const order = league.teams
-    .map((t) => ({ tid: t.tid, ts: curTeamSeason(league, t.tid) }))
-    .sort((a, b) => a.ts.won / Math.max(1, a.ts.won + a.ts.lost) - b.ts.won / Math.max(1, b.ts.won + b.ts.lost) || a.ts.ptsFor - a.ts.ptsAgainst - (b.ts.ptsFor - b.ts.ptsAgainst));
-  return new Map(order.map((x, i) => [x.tid, i + 1]));
-}
-
 function PicksTab({ league, tid }: { league: League; tid: number }) {
-  const proj = useLeagueMemo(() => projectedSlots(league), [league]);
-  const started = league.phase !== 'preseason';
+  const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  // a pick whose slot is set carries its number in its name
   const slotTag = (d: DraftPick) => {
-    const n = overallPick(league, d);
-    if (n) return { text: `#${n} overall`, tone: 'good' };
-    if (d.season === league.season && started) {
-      const p = (proj.get(d.originalTid) ?? 15) + (d.round === 2 ? league.teams.length : 0);
-      return { text: `Proj. #${p}`, tone: d.round === 1 && p <= 14 ? 'warn' : 'info' };
-    }
+    const p = proj(d);
+    if (p !== undefined) return { text: `Proj. #${p}`, tone: d.round === 1 && p <= 14 ? 'warn' : 'info' };
     const yrs = d.season - league.season;
-    return { text: yrs <= 0 ? 'This draft' : `In ${yrs} yr${yrs === 1 ? '' : 's'}`, tone: '' };
+    return { text: yrs <= 0 ? 'This draft' : `In ${yrs} yr${yrs === 1 ? '' : 's'}`, tone: d.pick ? 'good' : '' };
   };
   const owned = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || a.originalTid - b.originalTid);
   const away = league.draftPicks.filter((d) => d.originalTid === tid && d.tid !== tid).sort((a, b) => a.season - b.season || a.round - b.round);
@@ -747,9 +764,7 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
         <Kpi k="1st rounders" v={firsts} />
         <Kpi k="Traded away" v={away.length} color={away.length ? 'var(--warn)' : undefined} />
       </div>
-      {started && owned.some((d) => d.season === league.season && !d.pick) && (
-        <div className="lg-note">Projected slots follow the current standings (worst record picks first). The lottery reshuffles the top 14.</div>
-      )}
+      {owned.some((d) => proj(d) !== undefined) && <div className="lg-note">{PROJECTION_NOTE}</div>}
       <Card className="flush lg-flat">
         {owned.length === 0 ? (
           <Empty>No draft picks owned.</Empty>
@@ -760,8 +775,8 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
               <div key={d.dpid} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
                 <TeamLogo tid={d.originalTid} size={28} />
                 <div style={{ minWidth: 0 }}>
-                  <div className="bold">{pickName(d)}</div>
-                  <div className="tiny dim">{acquired ? `Acquired from the ${league.teams[d.originalTid].region} ${league.teams[d.originalTid].name}` : 'Own pick'}</div>
+                  <div className="bold">{pickLabel(league, d)}</div>
+                  <div className="tiny dim">{acquired ? `Acquired from the ${teamName(league.teams[d.originalTid])}` : 'Own pick'}</div>
                 </div>
                 {(() => {
                   const t = slotTag(d);
@@ -780,13 +795,8 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
               <Link key={d.dpid} to={`/team/${d.tid}`} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
                 <TeamLogo tid={d.tid} size={28} />
                 <div style={{ minWidth: 0 }}>
-                  <div className="bold">
-                    {pickName(d)}
-                    {d.pick ? ` · #${overallPick(league, d)} overall` : ''}
-                  </div>
-                  <div className="tiny dim">
-                    Owned by the {league.teams[d.tid].region} {league.teams[d.tid].name}
-                  </div>
+                  <div className="bold">{pickLabel(league, d)}</div>
+                  <div className="tiny dim">Owned by the {teamName(league.teams[d.tid])}</div>
                 </div>
                 <ChevronRight size={16} className="dim" />
               </Link>

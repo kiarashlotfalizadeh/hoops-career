@@ -2,11 +2,16 @@
 // small player-row building blocks used by Office, Trade, Free Agents, Re-sign,
 // Draft, Finances and Settings.
 import type { ReactNode } from 'react';
-import type { League, Phase, Player } from '../../core/types';
+import { TriangleAlert } from 'lucide-react';
+import type { League, Phase, Player, Team } from '../../core/types';
+import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
+import { playerName, standardRoster } from '../../core/league/helpers';
+import { nonGuaranteed, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
+import { useStore } from '../../state/store';
 import { Ovr } from '../components/ui';
 import './office.css';
 
@@ -17,14 +22,17 @@ export const isOffseason = (l: League) => OFFSEASON_PHASES.includes(l.phase);
 /** The season new contracts/trades count against: next season during the offseason. */
 export const capSeason = (l: League) => (isOffseason(l) ? l.season + 1 : l.season);
 
-/** Money in $K → "$X.XM" (negative values get a leading minus). */
+/** Money in $K → "$X.XM" (negative values get a leading minus; one that rounds to zero doesn't). */
 export function fmtM(k: number, d = 1): string {
-  const m = Math.abs(k) / 1000;
-  return `${k < 0 ? '-' : ''}$${m.toFixed(d)}M`;
+  const m = (Math.abs(k) / 1000).toFixed(d);
+  return `${k < 0 && Number(m) !== 0 ? '-' : ''}$${m}M`;
 }
 
-/** Signed money "+$1.2M" / "-$3.4M". */
-export const fmtMs = (k: number, d = 1) => `${k >= 0 ? '+' : '-'}$${(Math.abs(k) / 1000).toFixed(d)}M`;
+/** Signed money "+$1.2M" / "-$3.4M" (a value that rounds to zero reads "+$0.0M"). */
+export const fmtMs = (k: number, d = 1) => {
+  const m = (Math.abs(k) / 1000).toFixed(d);
+  return `${k < 0 && Number(m) !== 0 ? '-' : '+'}$${m}M`;
+};
 
 /** "26-27" style short season label. */
 export const shortSeason = (season: number) => `${String((season - 1) % 100).padStart(2, '0')}-${String(season % 100).padStart(2, '0')}`;
@@ -34,8 +42,12 @@ export { ordinal } from '../stats';
 // tones match the league screens' strategy tags
 export { STRATEGY_META } from '../league/shared';
 
-export const PLAYOFF_LABEL = (round: number) =>
-  round >= 5 ? 'Champion' : round === 4 ? 'Finals' : round === 3 ? 'Conf. Finals' : round === 2 ? '2nd Round' : round === 1 ? '1st Round' : round === 0 ? 'Play-In' : 'Missed';
+/** Practice intensity levels as the Finances budget tab names and explains them. */
+export const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string }[] = [
+  { id: 'light', label: 'Light', dev: 'Slower skill growth (about −0.35 rating points per skill each year)', risk: 'Fresher legs: least wear and injury risk' },
+  { id: 'normal', label: 'Normal', dev: 'Standard development', risk: 'Standard wear and injury risk' },
+  { id: 'intense', label: 'Intense', dev: 'Faster skill growth (about +0.45 rating points per skill each year)', risk: 'Heavier legs: more wear and injury risk' },
+];
 
 export function playerMeta(league: League, p: Player, extra?: string): string {
   const bits = [p.pos, String(playerAge(p, league.season)), fmtHeight(p.heightIn)];
@@ -46,6 +58,24 @@ export function playerMeta(league: League, p: Player, extra?: string): string {
 /** The option on a contract's final season while it is still to be decided (after the season before it); an option year already under way was settled. */
 export function openOption(league: League, p: Player): 'player' | 'team' | undefined {
   return contractExp(p.contract) > league.season ? p.contract.option : undefined;
+}
+
+/** "Deadline in 12 days" or "Deadline today" during the regular season until the trade deadline; null otherwise. */
+export function deadlineLabel(league: League): string | null {
+  const days = league.tradeDeadlineDay - league.day;
+  if (league.phase !== 'regular' || days < 0) return null;
+  return days === 0 ? 'Deadline today' : `Deadline in ${days} day${days === 1 ? '' : 's'}`;
+}
+
+/**
+ * A contract that's up after the season is a set of Bird rights until free agency opens: he is
+ * re-signed or let go in the re-sign period, not released or traded. Null for anyone else.
+ */
+export function contractUpNote(league: League, p: Player): string | null {
+  if (p.tid < 0 || !isOffseason(league) || contractExp(p.contract) > league.season) return null;
+  return league.phase === 'resign'
+    ? 'His contract is up. Re-sign him now or he becomes a free agent.'
+    : 'His contract is up. You hold his rights until free agency opens: re-sign him in the re-sign period after the draft.';
 }
 
 export function contractYearsLabel(league: League, p: Player, fromSeason: number): string {
@@ -190,7 +220,7 @@ export function MoodTag({ p, withNotes = false }: { p: Player; withNotes?: boole
   );
 }
 
-/** Bare range input using the design-system track styling. */
+/** Bare range input for an amount of money ($K) using the design-system track styling. */
 export function Range({ value, min, max, step = 1, onChange, label }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; label: string }) {
   const fill = max > min ? clamp(((value - min) / (max - min)) * 100, 0, 100) : 0;
   return (
@@ -201,6 +231,7 @@ export function Range({ value, min, max, step = 1, onChange, label }: { value: n
       step={step}
       value={clamp(value, min, max)}
       aria-label={label}
+      aria-valuetext={fmtM(value, 2)}
       onChange={(e) => onChange(Number(e.target.value))}
       style={{ ['--fill' as string]: `${fill}%`, display: 'block' }}
     />
@@ -213,5 +244,67 @@ export function Callout({ tone, icon, children }: { tone?: 'good' | 'bad' | 'war
       {icon}
       <div className="grow">{children}</div>
     </div>
+  );
+}
+
+/** Releasing one of your players: what it leaves on the books, and the buttons (the Office contract sheet and the player page). */
+export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; p: Player; onKeep: () => void; onDone: () => void }) {
+  const remaining = releaseDeadMoney(league, p);
+  const owed = remaining.reduce((a, r) => a + r.amount, 0);
+  const n = standardRoster(league, league.userTid).length;
+  const release = () => {
+    const name = playerName(p);
+    useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
+    useStore.getState().toast(`${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books.` : ''}`, 'neutral');
+    onDone();
+  };
+  return (
+    <>
+      <p className="dim2" style={{ margin: 0 }}>
+        {playerName(p)} becomes a free agent immediately and can sign with any team.{' '}
+        {p.contract.twoWay ? (
+          'Two-way pay sits outside the cap, so there is no dead money.'
+        ) : nonGuaranteed(league, p) ? (
+          "His minimum deal isn't guaranteed until opening night, so there is no dead money."
+        ) : owed > 0 ? (
+          <>
+            <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out.
+          </>
+        ) : (
+          'Nothing is left to pay on his contract, so there is no dead money.'
+        )}
+      </p>
+      {remaining.length > 0 && (
+        <div className="card tight">
+          {remaining.map((r) => (
+            <div key={r.season} className="row between small" style={{ padding: '3px 0' }}>
+              <span className="dim2">{seasonLabel(r.season)}</span>
+              <span className="num bold">{fmtM(r.amount)}</span>
+            </div>
+          ))}
+          <div className="divider" />
+          <div className="row between small">
+            <span className="bold">Dead money</span>
+            <span className="num bold bad">{fmtM(owed)}</span>
+          </div>
+        </div>
+      )}
+      {!p.contract.twoWay && n - 1 < CAP.rosterMin && (
+        <div className="fo-callout warn">
+          <TriangleAlert size={18} className="warn" />
+          <div>
+            You'll have {n - 1} players. Rosters need at least {CAP.rosterMin} to start the season.
+          </div>
+        </div>
+      )}
+      <div className="row">
+        <button className="btn grow" onClick={onKeep}>
+          Keep him
+        </button>
+        <button className="btn danger grow" onClick={release}>
+          Release
+        </button>
+      </div>
+    </>
   );
 }

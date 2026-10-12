@@ -27,9 +27,12 @@ export const SAVE_VERSION = 2;
 
 /** Another window saved (or deleted) this league after this one read it. */
 export class SaveConflictError extends Error {
-  constructor() {
-    super('This league was changed in another window.');
+  /** The other window deleted it. */
+  readonly deleted: boolean;
+  constructor(deleted = false) {
+    super(deleted ? 'This league was deleted in another window.' : 'This league was changed in another window.');
     this.name = 'SaveConflictError';
+    this.deleted = deleted;
   }
 }
 
@@ -104,9 +107,13 @@ function broadcast() {
 }
 
 /** Subscribe to saves and deletions made in other windows; returns the unsubscribe. */
-export function onRemoteChange(fn: (id: string) => void): () => void {
+export function onRemoteChange(fn: (id: string, deleted: boolean) => void): () => void {
   const ch = broadcast();
-  const h = (e: MessageEvent) => typeof e.data === 'string' && fn(e.data);
+  // a save posts the league's id, a deletion { id, deleted: true }
+  const h = (e: MessageEvent<unknown>) => {
+    if (typeof e.data === 'string') fn(e.data, false);
+    else if (obj(e.data) && typeof e.data.id === 'string') fn(e.data.id, e.data.deleted === true);
+  };
   ch?.addEventListener('message', h);
   return () => ch?.removeEventListener('message', h);
 }
@@ -137,7 +144,7 @@ async function write(league: League) {
   const prev = synced.get(league);
   const cur = (await metas.get(league.id)) as LeagueMeta | undefined;
   // checked inside the write transaction, so no other window can save in between
-  if ((cur ? (cur.rev ?? 0) : undefined) !== prev?.rev) throw new SaveConflictError();
+  if ((cur ? (cur.rev ?? 0) : undefined) !== prev?.rev) throw new SaveConflictError(!cur);
   const rev = (prev?.rev ?? 0) + 1;
   const next = new Map<number, { g: GameResult; pbp: boolean }>();
   const ops: Promise<unknown>[] = [];
@@ -265,7 +272,7 @@ export async function deleteLeague(id: string) {
   const d = await db();
   const tx = d.transaction(['leagues', 'meta', 'games'], 'readwrite');
   await Promise.all([tx.objectStore('leagues').delete(id), tx.objectStore('meta').delete(id), tx.objectStore('games').delete(gamesOf(id)), tx.done]);
-  broadcast()?.postMessage(id);
+  broadcast()?.postMessage({ id, deleted: true });
 }
 
 export function lastLeagueId(): string | null {

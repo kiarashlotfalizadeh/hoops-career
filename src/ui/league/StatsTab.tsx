@@ -65,6 +65,7 @@ export function StatsTab({ league }: { league: League }) {
   return (
     <>
       <Segmented
+        label="Stats view"
         value={view}
         onChange={setView}
         options={[
@@ -97,6 +98,8 @@ export function StatsTab({ league }: { league: League }) {
           </button>
         </div>
       </div>
+      {/* why Playoffs is greyed out (the team table says so itself) */}
+      {real && !playoffs && view !== 'teams' && <div className="tiny dim">Playoff stats aren&apos;t included for imported real-life seasons.</div>}
       {real && playoffs ? (
         <Card>
           <Empty>Playoff stats aren&apos;t included for imported real-life seasons. Switch to the regular season, or pick a season played in this league.</Empty>
@@ -471,7 +474,7 @@ function TeamStatsTable({ league, season }: { league: League; season: number }) 
   return (
     <>
       <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(`/team/${r.tid}`)} highlight={(r) => r.tid === league.userTid} />
-      <div className="lg-note">Team stats cover the regular season. Rates are per 100 possessions. Sorting DRtg, TOV% and Opp eFG% puts the best (lowest) first.</div>
+      <div className="lg-note">Team stats cover the regular season. ORtg, DRtg and Net are per 100 possessions. Sorting DRtg, TOV% and Opp eFG% puts the best (lowest) first.</div>
     </>
   );
 }

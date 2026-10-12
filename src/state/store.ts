@@ -34,6 +34,8 @@ export interface SaveProblem {
   /** 'conflict': another window saved this league after this one loaded it, so only a reload helps. */
   kind: 'quota' | 'conflict' | 'error';
   text: string;
+  /** A conflict where the other window deleted the league, so a reload won't find it either. */
+  deleted?: boolean;
 }
 
 interface AppState {
@@ -53,6 +55,12 @@ interface AppState {
   save: () => Promise<boolean>;
   /** Save only if something changed since the last save. */
   flush: () => Promise<boolean>;
+  /**
+   * Get the open league's changes onto the device before another league replaces it or the app
+   * closes. Resolves false (see saveProblem) if they would be lost, so the caller can offer an
+   * export first; a copy another window has saved over has nothing worth keeping.
+   */
+  saveBeforeLeaving: () => Promise<boolean>;
   simulate: (target: SimTarget) => Promise<void>;
   /** Heavy one-shot league work (phase changes) behind the progress bar: buttons that watch `sim`
    * are disabled meanwhile and a second call is ignored. Resolves false if it didn't run. */
@@ -71,7 +79,7 @@ let toastId = 1;
 const nextFrame = () => new Promise<void>((r) => setTimeout(r, 0));
 
 export function problemOf(e: unknown): SaveProblem {
-  if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message };
+  if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message, deleted: e.deleted };
   if (isQuotaError(e)) return { kind: 'quota', text: 'Device storage is full. Free up some space, or export a backup.' };
   return { kind: 'error', text: `Could not save to device storage${e instanceof Error && e.message ? ` (${e.message})` : ''}.` };
 }
@@ -157,8 +165,14 @@ async function reloadLastSave(l: League) {
     console.error(e);
   }
   const st = useStore.getState();
-  st.setLeague(last ?? null);
-  st.toast(last ? 'The simulation hit an error, so your league went back to its last save.' : 'The simulation hit an error. Open your league again from the main menu.', 'bad');
+  if (last) {
+    st.setLeague(last);
+    st.toast('The simulation hit an error, so your league went back to its last save.', 'bad');
+    return;
+  }
+  // never saved (or the device can't be read): this copy is the only one, so keep it
+  useStore.setState({ sim: null, stopRequested: false, v: st.v + 1 });
+  st.toast("The simulation hit an error, and this league has no save to go back to. Export a backup of it (Settings) so it isn't lost.", 'bad');
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -173,8 +187,15 @@ export const useStore = create<AppState>((set, get) => ({
     const old = get().league;
     // another league opened over this one (Back to the main menu, then another save): keep its
     // unsaved changes. A reload of the same league is a way back from them, so it skips this.
+    // (callers that can wait use saveBeforeLeaving first, and offer an export when it fails)
     if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict')
-      void (saving ?? Promise.resolve()).then(() => saveLeague(old)).catch((e) => console.error('save failed', e));
+      void (saving ?? Promise.resolve())
+        .then(() => saveLeague(old))
+        .catch((e) => {
+          console.error('save failed', e);
+          // a copy another window has saved over was stale anyway
+          if (!(e instanceof SaveConflictError)) get().toast(`Your latest changes to "${old.name}" could not be saved${isQuotaError(e) ? ': device storage is full' : ''}.`, 'bad');
+        });
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;
     clearLive();
@@ -210,6 +231,7 @@ export const useStore = create<AppState>((set, get) => ({
     return (saving = write(l).finally(() => (saving = null)));
   },
   flush: () => (get().dirty ? get().save() : Promise.resolve(true)),
+  saveBeforeLeaving: async () => (await get().flush()) || get().saveProblem?.kind === 'conflict',
   simulate: async (target) => {
     const l = get().league;
     if (!l || get().sim) return;

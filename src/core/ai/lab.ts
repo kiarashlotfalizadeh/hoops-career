@@ -26,7 +26,6 @@ export interface LabRequest {
 
 export interface ShotProfile {
   rimRate: number;
-  midRate: number;
   threeRate: number;
   ftRate: number;
   efg: number;
@@ -50,7 +49,6 @@ export interface LabSummary {
   playTypes: Record<string, { freq: number; ppp: number }>;
   oppPlayTypes: Record<string, { freq: number; ppp: number }>;
   players: Record<number, { min: number; pts: number; usg: number; ts: number }>;
-  oppPlayers: Record<number, { min: number; pts: number; usg: number; ts: number }>;
   /** Points per game each tactical effect earned each side: both can gain from the same one (each side's drop coverage conceding pull-ups). */
   impacts: Record<string, { us: number; them: number }>;
   /** Per-game point margins (side A minus side B), in seed order, for paired comparisons. */
@@ -77,11 +75,10 @@ export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
   return out;
 }
 
-function profile(t: TeamBox, o: TeamBox, rimA: number, midA: number): ShotProfile {
+function profile(t: TeamBox, o: TeamBox, rimA: number): ShotProfile {
   const fga = Math.max(1, t.t.fga);
   return {
     rimRate: rimA / fga,
-    midRate: midA / fga,
     threeRate: t.t.tpa / fga,
     ftRate: t.t.fta / fga,
     efg: (t.t.fgm + 0.5 * t.t.tpm) / fga,
@@ -105,7 +102,6 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   const pt: Record<string, { poss: number; pts: number }> = {};
   const opt: Record<string, { poss: number; pts: number }> = {};
   const pl: Record<number, { sec: number; pts: number; use: number; teamUse: number; fga: number; fta: number }> = {};
-  const opl: Record<number, { sec: number; pts: number; use: number; teamUse: number; fga: number; fta: number }> = {};
   const impacts: Record<string, { us: number; them: number }> = {};
   for (let g = 0; g < req.games; g++) {
     // each game gets its own seed so two configurations can be compared game by game
@@ -125,20 +121,14 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     possA += a.poss;
     possB += b.poss;
     let rimA = 0;
-    let midA = 0;
     let orimA = 0;
-    let omidA = 0;
     for (const rb of sim.rawBoxes()) {
-      const isA = rb.tid === teamA.tid;
-      const store = isA ? pl : opl;
-      if (isA) {
-        rimA += rb.b.rimA;
-        midA += rb.b.midA;
-      } else {
+      if (rb.tid !== teamA.tid) {
         orimA += rb.b.rimA;
-        omidA += rb.b.midA;
+        continue;
       }
-      const e = (store[rb.pid] ??= { sec: 0, pts: 0, use: 0, teamUse: 0, fga: 0, fta: 0 });
+      rimA += rb.b.rimA;
+      const e = (pl[rb.pid] ??= { sec: 0, pts: 0, use: 0, teamUse: 0, fga: 0, fta: 0 });
       e.sec += rb.b.sec;
       e.pts += rb.b.pts;
       e.use += rb.b.fga + 0.44 * rb.b.fta + rb.b.tov;
@@ -146,8 +136,8 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
       e.fga += rb.b.fga;
       e.fta += rb.b.fta;
     }
-    sp.push(profile(a, b, rimA, midA));
-    osp.push(profile(b, a, orimA, omidA));
+    sp.push(profile(a, b, rimA));
+    osp.push(profile(b, a, orimA));
     for (const [k, v] of Object.entries(a.playTypes)) {
       const e = (pt[k] ??= { poss: 0, pts: 0 });
       e.poss += v.poss;
@@ -169,7 +159,7 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   const mean = margins.reduce((x, y) => x + y, 0) / n;
   const sd = Math.sqrt(margins.reduce((x, y) => x + (y - mean) ** 2, 0) / Math.max(1, n - 1));
   const avgProfile = (arr: ShotProfile[]): ShotProfile => {
-    const out: ShotProfile = { rimRate: 0, midRate: 0, threeRate: 0, ftRate: 0, efg: 0, tov: 0, orb: 0 };
+    const out: ShotProfile = { rimRate: 0, threeRate: 0, ftRate: 0, efg: 0, tov: 0, orb: 0 };
     for (const p of arr) for (const k of Object.keys(out) as (keyof ShotProfile)[]) out[k] += p[k] / arr.length;
     return out;
   };
@@ -209,7 +199,6 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     playTypes: freq(pt),
     oppPlayTypes: freq(opt),
     players: playerOut(pl),
-    oppPlayers: playerOut(opl),
     impacts,
     margins,
   };

@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
-import { seasonTotals } from '../../core/league/helpers';
+import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
+import { draftStandings } from '../../core/league/draft';
 import { Segmented } from '../components/ui';
 import './league.css';
 
@@ -110,7 +111,11 @@ export interface Outcome {
   gold?: boolean;
 }
 
-const ROUND_NAME = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
+const ROUND_FULL = ['Play-In', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
+const ROUND_SHORT = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
+
+/** A playoff round's name (1-4; 0 is the play-in), in full or short for tight spots. Core's seriesLabel adds the conference ("East Semifinals"). */
+export const roundName = (round: number, short = false) => (short ? ROUND_SHORT : ROUND_FULL)[round] ?? 'Playoffs';
 
 /** Human label for how a team season ended (or where it stands now). */
 export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outcome {
@@ -119,18 +124,14 @@ export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outc
     if (league.phase === 'preseason' || league.phase === 'regular') return { label: 'In progress', short: 'Ongoing' };
     if (r === 5) return { label: 'Champion', short: 'Champion', tone: 'good', gold: true };
     const alive = league.playoffs.some((s) => (s.high === tid || s.low === tid) && s.winner === undefined);
-    if (alive)
-      return { label: `Playing in the ${r === 4 ? 'Finals' : (ROUND_NAME[r] ?? 'playoffs')}`, short: r === 4 ? 'In Finals' : `In ${ROUND_NAME[r] ?? 'Playoffs'}`, tone: 'info' };
+    if (alive) return { label: `Playing in the ${roundName(r)}`, short: `In ${roundName(r, true)}`, tone: 'info' };
     if (league.phase === 'playin') {
       if (r >= 1) return { label: 'Qualified for the playoffs', short: 'Qualified', tone: 'good' };
       if (r === 0) return { label: 'In the play-in', short: 'Play-In', tone: 'info' };
     }
   }
   if (r === 5) return { label: 'Won the championship', short: 'Champion', tone: 'good', gold: true };
-  if (r === 4) return { label: 'Lost in the Finals', short: 'Lost Finals', tone: 'good' };
-  if (r === 3) return { label: 'Lost in the Conference Finals', short: 'Lost Conf. Finals', tone: 'info' };
-  if (r === 2) return { label: 'Lost in the 2nd round', short: 'Lost 2nd Rd', tone: 'info' };
-  if (r === 1) return { label: 'Lost in the 1st round', short: 'Lost 1st Rd', tone: 'info' };
+  if (r >= 1 && r <= 4) return { label: `Lost in the ${roundName(r)}`, short: `Lost ${roundName(r, true)}`, tone: r === 4 ? 'good' : 'info' };
   // a play-in loser's round drops to -1: the play-in flag tells it apart from a lottery team
   if (r === 0 || ts.playIn) return { label: 'Lost in the play-in', short: 'Lost Play-In', tone: 'warn' };
   return { label: 'Missed the playoffs', short: 'Missed' };
@@ -156,15 +157,23 @@ export function StrategyTag({ team }: { team: Team }) {
   return <span className={`tag ${m.tone}`}>{m.label}</span>;
 }
 
-/** Overall slot of a pick once the draft order is set (the second round continues from 31). */
-export function overallPick(league: League, d: DraftPick): number | undefined {
-  return d.pick ? (d.round - 1) * league.teams.length + d.pick : undefined;
-}
+/** Overall number of a draft slot: the second round continues from 31. */
+export const overallPick = (league: League, round: number, pick: number) => (round - 1) * league.teams.length + pick;
 
-/** "2027 2nd round", plus "Top-4 protected" while another team holds a protected pick. */
-export function pickName(d: DraftPick): string {
-  const name = `${d.season} ${d.round === 1 ? '1st' : '2nd'} round`;
-  return d.protection && d.tid !== d.originalTid ? `${name} · Top-${d.protection} protected` : name;
+/** The note under projected picks (team pages and the Draft screen). */
+export const PROJECTION_NOTE = 'Projected slots follow the current standings, worst record first, until the lottery reshuffles the top 14.';
+
+/**
+ * Where this season's picks would land if the season ended today, until the lottery sets the
+ * order: the lottery's own pre-lottery order (worst record first, ties drawn as it draws them),
+ * playoff teams after the rest in the first round. Undefined before games are played, for a pick
+ * that has its slot, and for later drafts.
+ */
+export function pickProjection(league: League): (d: DraftPick) => number | undefined {
+  const played = league.teams.some((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost > 0);
+  const recs = draftStandings(league);
+  const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: recs };
+  return (d) => (!played || d.pick || d.season !== league.season ? undefined : overallPick(league, d.round, order[d.round].findIndex((r) => r.tid === d.originalTid) + 1));
 }
 
 /** Map legacy deep links (e.g. /league/awards) to routes that exist. */
@@ -209,10 +218,12 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
     { label: 'Cup MVP', n: count((t) => t === 'NBA Cup MVP') },
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
+    { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },
     { label: '6MOY', n: count((t) => t === 'Sixth Man of the Year') },
     { label: 'MIP', n: count((t) => t === 'Most Improved Player') },
+    { label: 'All-Rookie', n: count((t) => t.startsWith('All-Rookie')) },
   ];
   return out.filter((x) => x.n > 0);
 }

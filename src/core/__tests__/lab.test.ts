@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab } from '../ai/lab';
-import { counterCandidates, scoutTeam } from '../ai/advisor';
+import { counterCandidates, scoutTeam, teamAlerts } from '../ai/advisor';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
+import type { GameResult } from '../types';
 
 describe('tactics lab & reports', () => {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
@@ -24,6 +25,41 @@ describe('tactics lab & reports', () => {
     expect(rep.headline.length).toBeGreaterThan(10);
     expect(rep.playTypes.length).toBeGreaterThan(3);
     expect(rep.grades.length).toBeGreaterThan(4);
+  });
+  it("headlines a factor that went the winner's way, with one colon, and no nail-biter in overtime", () => {
+    league.phase = 'regular';
+    const g = playGame(
+      league,
+      league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!,
+    );
+    const side = g.home.tid === 0 ? 'home' : 'away';
+    const oppSide = side === 'home' ? 'away' : 'home';
+    const [me, them]: (0 | 1)[] = side === 'home' ? [0, 1] : [1, 0];
+    // a one-point overtime loss where the biggest effect by far went the user's way
+    const res: GameResult = {
+      ...g,
+      ot: 1,
+      [side]: { ...g[side], pts: 120 },
+      [oppSide]: { ...g[oppSide], pts: 121 },
+      impacts: [
+        { key: 'drop_pullup:o', t: me, count: 30, pts: 40, players: {} },
+        { key: 'help_kick:o', t: them, count: 1, pts: 0.9, players: {} },
+      ],
+    };
+    const rep = buildGameReport(league, res)!;
+    expect(rep.userWon).toBe(false);
+    expect(rep.factors[0].pts).toBeGreaterThan(0);
+    expect(rep.headline).toMatch(/^The .+ fell to the .+ 121-120 in OT\. Biggest factor: /);
+    expect(rep.headline).not.toMatch(/pull-up|nail-biter/);
+    expect(rep.headline.split(':')).toHaveLength(2);
+    expect(rep.factors.find((f) => f.title.includes('kick-out'))!.detail).toMatch(/over 1 play\.$/);
+    // an opposing star's big night suggests a Star plan only to a team without one
+    const star: GameResult = { ...res, [oppSide]: { ...res[oppSide], players: res[oppSide].players.map((p, i) => (i === 0 ? { ...p, pts: 45 } : p)) } };
+    const t = league.teams[0].tactics;
+    expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toMatch(/Star plan \(Defense\)/);
+    league.teams[0].tactics = applyPatch(t, { defense: { starPlan: 'deny' } });
+    expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toBeUndefined();
+    league.teams[0].tactics = t;
   });
   it('only gives advice the team still needs: no "try Hedge" for a team already hedging', () => {
     const t = league.teams[0].tactics;
@@ -57,6 +93,44 @@ describe('tactics lab & reports', () => {
     mine.tactics = applyPatch(mine.tactics, { offense: { actions: { ...mine.tactics.offense.actions, pnr: 100, handoff: 100 } } });
     expect(counterCandidates(league, 0, 1).map((c) => c.id)).not.toContain('vs-drop');
     [mine.tactics, opp.tactics] = saved;
+  });
+  it('gives a zone no ball-screen coverage advice, and says when a coverage counter leaves your zone', () => {
+    const [mine, opp] = [league.teams[0], league.teams[1]];
+    const saved = [mine.tactics, opp.tactics];
+    // a zone keeps the coverage it had in man-to-man, but the engine ignores it
+    opp.tactics = applyPatch(opp.tactics, { defense: { scheme: 'zone23', pnr: 'drop', switchOffBall: true } });
+    const rep = scoutTeam(league, 1);
+    expect(rep.defense[0]).toMatch(/no ball-screen coverage/);
+    expect(rep.weaknesses.join(' ')).not.toMatch(/Drop|Switching|Blitz/);
+    expect(counterCandidates(league, 0, 1).map((c) => c.id)).not.toContain('vs-switch');
+    expect(teamAlerts(league, 1).map((a) => a.id)).not.toContain('drop-noprot');
+    // from a zone, a coverage counter is a move to man-to-man too, and only Switch switches off the ball
+    mine.tactics = applyPatch(mine.tactics, { defense: { scheme: 'zone23', pnr: 'switch', switchOffBall: false } });
+    const covs = counterCandidates(league, 0, 1).filter((c) => c.id.startsWith('cov-'));
+    expect(covs.map((c) => c.id)).toContain('cov-switch');
+    for (const c of covs) {
+      expect(c.patch.defense).toMatchObject({ scheme: 'man' });
+      expect(c.patch.defense?.switchOffBall).toBe(c.id === 'cov-switch' ? true : undefined);
+      expect(c.why).toMatch(/man-to-man instead of your zone/);
+    }
+    [mine.tactics, opp.tactics] = saved;
+  });
+  it('reads spacing as scouting does: a zone only against the poor spacing it flags, never pack the paint and stay home at once', () => {
+    const mine = league.teams[0];
+    const saved = mine.tactics;
+    mine.tactics = applyPatch(saved, { defense: { scheme: 'man', help: 55 } });
+    let flagged = 0;
+    for (let tid = 1; tid < 30; tid++) {
+      const poor = scoutTeam(league, tid).weaknesses.some((w) => w.startsWith('Poor spacing'));
+      const ids = counterCandidates(league, 0, tid).map((c) => c.id);
+      expect(ids.includes('zone')).toBe(poor);
+      if (poor) expect(ids).toContain('help-high');
+      expect(ids.includes('help-high') && ids.includes('help-low')).toBe(false);
+      flagged += +poor;
+    }
+    expect(flagged).toBeGreaterThan(0);
+    expect(flagged).toBeLessThan(15);
+    mine.tactics = saved;
   });
   it('scouts in plain English: plural team names, the creator role named once', () => {
     for (let tid = 1; tid < 30; tid++) {

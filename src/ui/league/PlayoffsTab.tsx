@@ -9,7 +9,8 @@ import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Segmented, Sheet } from '../components/ui';
-import { confName, useQueryParam } from './shared';
+import { periodLabel } from '../stats';
+import { confName, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
 interface Slot {
@@ -130,6 +131,7 @@ export function PlayoffsTab({ league }: { league: League }) {
       </div>
       <div className="bk-only-narrow">
         <Segmented
+          label="Conference"
           value={conf}
           onChange={setConf}
           options={[
@@ -191,9 +193,9 @@ function Bracket({ league, slots, onOpen }: { league: League; slots: Slot[][]; o
   return (
     <>
       <div className="bk-head">
-        <span>1st Round</span>
-        <span>Semifinals</span>
-        <span>Conf. Finals</span>
+        {[1, 2, 3].map((r) => (
+          <span key={r}>{roundName(r, true)}</span>
+        ))}
       </div>
       <div className="bk">
         <div className="bk-col r1">
@@ -466,7 +468,7 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
                   <span className={homeWon ? 'bold' : 'dim'}>
                     {league.teams[g.home.tid].abbrev} {g.home.pts}
                   </span>
-                  {g.ot ? <span className="dim"> · OT</span> : null}
+                  {g.ot ? <span className="dim"> · {periodLabel(4 + g.ot)}</span> : null}
                 </span>
                 <span className="tiny dim">{fmtDate(league.season, g.day)}</span>
                 <ChevronRight size={15} className="dim" />

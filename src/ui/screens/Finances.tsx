@@ -1,5 +1,5 @@
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, seasonsInCharge } from '../../core/league/owner';
-import { useQueryParam } from '../league/shared';
+import { seasonOutcome, useQueryParam } from '../league/shared';
 import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
 import type { Team } from '../../core/types';
@@ -20,16 +20,10 @@ import {
 } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
-import { CenterBar, Gauge, PLAYOFF_LABEL, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
+import { CenterBar, Gauge, PRACTICE, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict, shortSeason } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
-
-const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string }[] = [
-  { id: 'light', label: 'Light', dev: 'Slower skill growth (about −0.35 rating points per skill each year)', risk: 'Fresher legs: least wear and injury risk' },
-  { id: 'normal', label: 'Normal', dev: 'Standard development', risk: 'Standard wear and injury risk' },
-  { id: 'intense', label: 'Intense', dev: 'Faster skill growth (about +0.45 rating points per skill each year)', risk: 'Heavier legs: more wear and injury risk' },
-];
 
 export default function Finances() {
   const league = useLeague();
@@ -40,6 +34,7 @@ export default function Finances() {
     <main className="page">
       <PageHeader title={tab === 'owner' ? 'Owner' : 'Finances'} sub={`${team.region} ${team.name} · ${seasonLabel(league.season)}`} back />
       <Segmented
+        label="Finances sections"
         value={tab}
         onChange={setTab}
         options={[
@@ -88,7 +83,7 @@ function Overview({ team }: { team: Team }) {
       <div className="grid2">
         <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub="Bank balance" />
         <Kpi
-          k={`Profit ${seasonLabel(league.season).slice(-5)}`}
+          k={`Profit ${shortSeason(league.season)}`}
           v={games || pr ? fmtMs(pr) : '—'}
           color={pr >= 0 ? 'var(--good)' : 'var(--bad)'}
           sub={games ? `after ${games} games` : 'season not started'}
@@ -161,7 +156,9 @@ function Overview({ team }: { team: Team }) {
 
 function BudgetTab({ team }: { team: Team }) {
   const league = useLeague();
-  const set = (fn: (t: Team) => void) => useStore.getState().mutate((l) => fn(l.teams[l.userTid]));
+  // a fired coach's old team isn't his to run
+  const fired = !!league.fired;
+  const set = (fn: (t: Team) => void) => !fired && useStore.getState().mutate((l) => fn(l.teams[l.userTid]));
   const rank = (k: BudgetKey) => 1 + league.teams.filter((t) => t.budget[k] > team.budget[k]).length;
   const avg = (k: BudgetKey) => league.teams.reduce((a, t) => a + t.budget[k], 0) / league.teams.length;
   const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
@@ -222,6 +219,14 @@ function BudgetTab({ team }: { team: Team }) {
   const totalBudget = items.reduce((a, it) => a + cost(team.budget[it.k]), 0);
   return (
     <>
+      {fired && (
+        <div className="fo-callout bad">
+          <TriangleAlert size={18} className="bad" />
+          <div>
+            <b>You've been fired.</b> Budgets, ticket prices and practice are no longer yours to set. Take over another team from Settings to keep your career going.
+          </div>
+        </div>
+      )}
       <div className="small dim2">
         Spending comes straight out of profit, which is 20% of how the owner judges you. Budgets are charged per game across the season, so changes take effect immediately.
       </div>
@@ -254,7 +259,8 @@ function BudgetTab({ team }: { team: Team }) {
               })()}
             </div>
             <Slider
-              label={<span className="dim2">Level {lvl}</span>}
+              // a plain-text label also names the slider for screen readers
+              label={`Level ${lvl}`}
               value={lvl}
               min={1}
               max={100}
@@ -262,6 +268,7 @@ function BudgetTab({ team }: { team: Team }) {
               format={(x) => `${fmtM(cost(x))}/season`}
               left="Bare bones"
               right="Best in league"
+              disabled={fired}
             />
             <div className="small" style={{ marginTop: 6, color: lvl > 50 ? 'var(--good)' : lvl < 50 ? 'var(--warn)' : 'var(--text-2)' }}>
               {it.effect(lvl)}
@@ -282,7 +289,7 @@ function BudgetTab({ team }: { team: Team }) {
         }
       >
         <Slider
-          label={<span className="dim2">Average ticket</span>}
+          label="Average ticket"
           value={price}
           min={minPrice}
           max={Math.max(maxPrice, price)}
@@ -291,6 +298,7 @@ function BudgetTab({ team }: { team: Team }) {
           format={(x) => `$${x}`}
           left={`$${minPrice}`}
           right={`$${maxPrice}`}
+          disabled={fired}
         />
         <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi
@@ -315,13 +323,13 @@ function BudgetTab({ team }: { team: Team }) {
           </h3>
         }
       >
-        <div className="seg">
-          {PRACTICE.map((p) => (
-            <button key={p.id} className={team.practice === p.id ? 'on' : ''} onClick={() => set((t) => (t.practice = p.id))}>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          value={team.practice}
+          onChange={(v) => set((t) => (t.practice = v))}
+          label="Practice intensity"
+          disabled={fired}
+          options={PRACTICE.map((p) => ({ id: p.id, label: p.label }))}
+        />
         {(() => {
           const cur = PRACTICE.find((p) => p.id === team.practice)!;
           return (
@@ -349,6 +357,7 @@ function OwnerTab() {
   const seasonsIn = seasonsInCharge(league);
   const ts = curTeamSeason(league, league.userTid);
   const games = ts.won + ts.lost;
+  const outcome = seasonOutcome(league, league.userTid, ts);
   // the owner's profit target and range grow with league revenue
   const scale = revenueScale(league);
   const [target, range] = [OWNER_PROFIT_TARGET * scale, OWNER_PROFIT_RANGE * scale];
@@ -415,13 +424,14 @@ function OwnerTab() {
             for 60%, so one bad year won't sink you, but a pattern will.
           </div>
           <div>
-            This is season {seasonsIn} of your tenure.{' '}
+            {/* a team taken over after the season is his from the next one */}
+            {seasonsIn < 1 ? 'Your tenure starts next season.' : `This is season ${seasonsIn} of your tenure.`}{' '}
             {seasonsIn <= 2 ? <span className="good">You're in your grace period: you can't be fired before the end of your third season.</span> : 'Your grace period is over.'}
           </div>
           {games > 0 && (
             <div>
-              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit
-              {ts.playoffRound >= 0 ? `, ${PLAYOFF_LABEL(ts.playoffRound)}` : ''}.
+              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit.
+              {outcome.short !== 'Ongoing' ? ` ${outcome.label}.` : ''}
             </div>
           )}
         </div>
@@ -452,7 +462,11 @@ function HistoryTab({ team }: { team: Team }) {
       label: 'Playoffs',
       left: true,
       get: (r) => r.playoffRound,
-      fmt: (_v, r) => (r.season === league.season && (league.phase === 'regular' || league.phase === 'preseason') ? '—' : PLAYOFF_LABEL(r.playoffRound)),
+      // how the season ended, as on the team and history pages (a play-in loss isn't a plain miss)
+      fmt: (_v, r) => {
+        const o = seasonOutcome(league, team.tid, r);
+        return o.short === 'Ongoing' ? '—' : o.short;
+      },
     },
     { key: 'rev', label: 'Revenue', get: (r) => r.revenue, fmt: (v) => fmtM(Number(v)) },
     { key: 'exp', label: 'Expenses', get: (r) => r.expenses, fmt: (v) => fmtM(Number(v)) },
@@ -494,7 +508,7 @@ function HistoryTab({ team }: { team: Team }) {
                       opacity: r.season === league.season ? 0.55 : 0.9,
                     }}
                   />
-                  <span className="tiny dim">{seasonLabel(r.season).slice(-5)}</span>
+                  <span className="tiny dim">{shortSeason(r.season)}</span>
                 </div>
               );
             })}

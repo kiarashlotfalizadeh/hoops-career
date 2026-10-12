@@ -1,5 +1,5 @@
 // Contract offer / re-sign negotiation bottom sheet shared by Free Agents and Re-sign.
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, CircleCheck, Minus, Plus, TriangleAlert } from 'lucide-react';
 import type { Player } from '../../core/types';
@@ -9,9 +9,9 @@ import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { MLE_YEARS, askingContract, makeContract, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
 import { capHolds, signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Help, Sheet } from '../components/ui';
-import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta } from './common';
+import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from './common';
 
 export type OfferMode = 'fa' | 'resign';
 
@@ -41,8 +41,9 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const [years, setYears] = useState(() => (mode === 'fa' && signingRoute(league, tid, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
 
-  // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount)
-  const needed = useMemo(() => {
+  // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount);
+  // his price moves with the league (interest, mood, price cuts), as the verdict below does
+  const needed = useLeagueMemo(() => {
     if (!willSign(league, p, tid, maxAmt, years).ok) return null;
     let lo = minAmt;
     let hi = maxAmt;
@@ -54,12 +55,13 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
       else lo = mid;
     }
     return hi;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.pid, years, minAmt, maxAmt]);
+  }, [league, p, tid, years, minAmt, maxAmt]);
 
   const verdict = willSign(league, p, tid, amount, years);
   const appeal = teamAppeal(league, tid, p);
   const ai = appealInfo(appeal);
+  // his ask from you against a neutral team's: interest and the difficulty setting both move it
+  const vsNeutral = Math.round((ask.amount / askingContract(league, p).amount - 1) * 100);
   const market = marketSalary(league, p);
   const pay = payroll(league, tid, season);
   const space = cap.salaryCap - pay;
@@ -110,7 +112,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             {fmtM(ask.amount, 2)}
           </span>
           <span className="tiny dim">
-            {ask.years} yr{ask.years > 1 ? 's' : ''} · market {fmtM(market)}
+            {ask.years} yr{ask.years > 1 ? 's' : ''} · market {fmtM(market, 2)}
           </span>
         </div>
         <div className="kpi">
@@ -124,8 +126,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
                     you a discount; lukewarm ones want a premium.
                   </p>
                   <p style={{ margin: 0 }}>
-                    Right now his price for you is {appeal >= 1 ? `${Math.round((1 - 1 / appeal) * 100)}% below` : `${Math.round((1 / appeal - 1) * 100)}% above`} what he'd ask a
-                    neutral team.
+                    Right now his price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral
+                    team.
                   </p>
                 </>
               ) : (
@@ -183,7 +185,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             </button>
           )}
           <button className={`chip ${amount === maxAmt ? 'on' : ''}`} onClick={() => set(maxAmt)}>
-            Max {fmtM(maxAmt)}
+            Max {fmtM(maxAmt, 2)}
           </button>
         </div>
       </div>
@@ -194,7 +196,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
           {[1, 2, 3, 4, 5].map((y) => (
             <button key={y} className={`fo-yr ${years === y ? 'on' : ''}`} aria-pressed={years === y} onClick={() => setYears(y)}>
               {y}
-              <small>{y === ask.years ? 'wants' : seasonLabel(season + y - 1).slice(-5)}</small>
+              <small>{y === ask.years ? 'wants' : shortSeason(season + y - 1)}</small>
             </button>
           ))}
         </div>
@@ -239,16 +241,16 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             </Help>
           </div>
           <div className="small dim2" style={{ marginTop: 2 }}>
-            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can offer the minimum ({fmtM(cap.vetMin, 2)})
+            This offer would put you {fmtM(after - cap.salaryCap)} over the cap. Over the cap you can offer the minimum ({fmtM(minAmt, 2)})
             {mle > 0 ? ` or up to ${fmtM(mle, 2)} with your mid-level exception` : ''}.
           </div>
           <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
             {mle > cap.vetMin && (
               <button className="btn xs" onClick={() => (set(Math.floor(Math.min(mle, maxAmt) / STEP) * STEP), setYears(Math.min(years, MLE_YEARS)))}>
-                Use the mid-level ({fmtM(mle)})
+                Use the mid-level ({fmtM(mle, 2)})
               </button>
             )}
-            <button className="btn xs" onClick={() => set(Math.min(cap.vetMin, maxAmt))}>
+            <button className="btn xs" onClick={() => set(minAmt)}>
               Offer the minimum instead
             </button>
           </div>
@@ -301,7 +303,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             </div>
             <div>
               <div className="tiny dim upper bold">After signing</div>
-              <div className="fo-mid" style={{ color: cap.salaryCap - after >= 0 ? 'var(--good)' : isMin ? 'var(--warn)' : 'var(--bad)' }}>
+              {/* over the cap is only a problem when no exception covers the signing */}
+              <div className="fo-mid" style={{ color: cap.salaryCap - after >= 0 ? 'var(--good)' : isMin || route === 'mle' ? 'var(--warn)' : 'var(--bad)' }}>
                 {fmtM(cap.salaryCap - after)}
               </div>
             </div>
