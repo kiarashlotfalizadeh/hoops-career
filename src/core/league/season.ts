@@ -14,7 +14,6 @@ import {
   TWO_WAY_MAX,
   addInbox,
   addNews,
-  curTeamSeason,
   dateToDay,
   payroll,
   playerName,
@@ -24,32 +23,23 @@ import {
   teamPlayers,
   teamSeason,
   twoWayRoster,
-  winPct,
   withRng,
 } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { aiTicketPrice, assessLuxuryTax, profit, shareRevenue } from './finances';
+import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
-import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, rankProspects, runLottery, draftPlayer } from './draft';
+import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { askingContract, releasePlayer, resolveOptions, valueScore } from './contracts';
+import { askingContract, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
-
-export interface DayReport {
-  day: number;
-  games: number;
-  userGame?: number; // gid
-  phaseChanged?: boolean;
-  messages: string[];
-}
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -134,7 +124,7 @@ function playAllStarGame(league: League, rng: Rng) {
   if (!aw || !aw.allStars.E.length) return;
   const mk = (conf: 'E' | 'W', tidSlot: number) => {
     const team = makeTeam(tidSlot, league.season, rng);
-    team.region = conf === 'E' ? 'Team' : 'Team';
+    team.region = 'Team';
     team.name = conf === 'E' ? 'East' : 'West';
     team.abbrev = conf === 'E' ? 'EAST' : 'WEST';
     const players = aw.allStars[conf].map((pid) => league.players[pid]).filter((p) => p && !missesAllStarGame(p));
@@ -166,25 +156,21 @@ function playAllStarGame(league: League, rng: Rng) {
 /**
  * Simulate one day. `skipGid` lets the UI play that game live and commit it separately.
  */
-export function simDay(league: League, opts: { skipGid?: number; record?: boolean } = {}): DayReport {
-  const report: DayReport = { day: league.day, games: 0, messages: [] };
+export function simDay(league: League, opts: { skipGid?: number } = {}) {
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') {
     if (league.phase === 'playoffs') schedulePlayoffDay(league);
     const games = gamesOnDay(league, league.day);
     for (const g of games) {
       if (g.gid === opts.skipGid) continue;
-      const res = playGame(league, g, { record: opts.record && (g.home === league.userTid || g.away === league.userTid) });
+      const res = playGame(league, g);
       postGame(league, g, res.home.pts > res.away.pts);
-      report.games++;
-      if (g.home === league.userTid || g.away === league.userTid) report.userGame = g.gid;
     }
     if (opts.skipGid !== undefined && games.some((g) => g.gid === opts.skipGid && !g.played)) {
       // live game still pending: do not advance the day yet
-      return report;
+      return;
     }
-    advanceDay(league, report);
+    advanceDay(league);
   }
-  return report;
 }
 
 /**
@@ -208,7 +194,7 @@ export function postGame(league: League, g: ScheduledGame, homeWon: boolean) {
   if (g.type === 'playoffs') processPlayoffResult(league, g, homeWon);
 }
 
-export function advanceDay(league: League, report?: DayReport) {
+export function advanceDay(league: League) {
   withRng(league, (rng) => {
     if (league.phase === 'regular') {
       advanceCup(league, rng);
@@ -223,16 +209,9 @@ export function advanceDay(league: League, report?: DayReport) {
   // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
   for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   league.day++;
-  if (league.phase === 'regular' && regularGamesLeft(league) === 0) {
-    endRegularSeason(league);
-    if (report) report.phaseChanged = true;
-  } else if (league.phase === 'playin' && playInDone(league)) {
-    startPlayoffs(league);
-    if (report) report.phaseChanged = true;
-  } else if (league.phase === 'playoffs' && champion(league) !== undefined) {
-    endPlayoffs(league);
-    if (report) report.phaseChanged = true;
-  }
+  if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
+  else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
+  else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);
 }
 
 function endRegularSeason(league: League) {
@@ -509,12 +488,10 @@ export function newSeason(league: League): boolean {
   league.playoffs = [];
   league.schedule = [];
   for (const t of league.teams) {
-    const prev = t.seasons.find((s) => s.season === prevSeason);
     t.hype = clamp(t.hype * 0.85 + 0.075, 0.05, 1);
     // ticket prices keep pace with league revenue (AI teams reprice at opening night)
     t.budget.ticketPrice = Math.round(t.budget.ticketPrice * (1 + CAP.growth));
     teamSeason(t, league.season);
-    void prev;
     t.deadMoney = t.deadMoney.filter((d) => d.season >= league.season);
   }
   withRng(league, (rng) => {
@@ -608,10 +585,3 @@ function compactRetired(league: League) {
     p.mood = blankMood();
   }
 }
-
-export function seasonSummary(league: League, tid: number) {
-  const ts = curTeamSeason(league, tid);
-  return { won: ts.won, lost: ts.lost, pct: winPct(ts), profit: profit(league, tid), value: valueScore };
-}
-
-export { rankProspects };

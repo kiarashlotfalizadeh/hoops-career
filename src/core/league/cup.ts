@@ -18,8 +18,6 @@ export interface CupSetup {
   finalDay: number;
 }
 
-export const CUP_TEAMS_PER_GROUP = 5;
-
 /** Group stage, quarterfinals and semifinals are regular-season games; the final isn't. */
 export const CUP_ROUND_LABEL: Record<'group' | 'qf' | 'sf' | 'final', string> = {
   group: 'Group stage',

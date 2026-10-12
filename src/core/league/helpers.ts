@@ -1,5 +1,5 @@
 import type { InboxMessage, League, NewsItem, Player, PlayerStats, Team, TeamSeason } from '../types';
-import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
+import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
 import { CAP } from '../constants';
 import { blankStats, playerAge, salaryFor } from '../playerGen';
 import { Rng } from '../random';
@@ -10,10 +10,6 @@ export function withRng<T>(league: League, fn: (rng: Rng) => T): T {
   const out = fn(rng);
   league.rng = rng.state;
   return out;
-}
-
-export function allPlayers(league: League): Player[] {
-  return Object.values(league.players);
 }
 
 export function teamPlayers(league: League, tid: number): Player[] {
@@ -45,20 +41,12 @@ export function rosterMaxNow(league: League): number {
   return inSeason(league) ? CAP.rosterMax : OFFSEASON_ROSTER_MAX;
 }
 
-export function activePlayers(league: League): Player[] {
-  return Object.values(league.players).filter((p) => p.tid >= 0);
-}
-
 export function freeAgents(league: League): Player[] {
   return Object.values(league.players).filter((p) => p.tid === FREE_AGENT);
 }
 
 export function prospects(league: League, year?: number): Player[] {
   return Object.values(league.players).filter((p) => p.tid === DRAFT_PROSPECT && (year === undefined || p.draft.year === year));
-}
-
-export function retired(league: League): Player[] {
-  return Object.values(league.players).filter((p) => p.tid === RETIRED);
 }
 
 export function age(league: League, p: Player) {
@@ -90,10 +78,6 @@ export function payroll(league: League, tid: number, season = league.season): nu
 /** Season new contracts and offseason payroll refer to (next season during the offseason). */
 export function contractSeason(league: League): number {
   return league.phase === 'draftLottery' || league.phase === 'draft' || league.phase === 'resign' || league.phase === 'freeAgency' ? league.season + 1 : league.season;
-}
-
-export function capSpace(league: League, tid: number, season = league.season): number {
-  return CAP_FOR(league, season).salaryCap - payroll(league, tid, season);
 }
 
 /**

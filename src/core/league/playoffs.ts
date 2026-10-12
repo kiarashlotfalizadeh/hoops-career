@@ -17,17 +17,8 @@ export function startPlayIn(league: League) {
   }
   league.phase = 'playin';
   league.day = league.regularSeasonDays + 2;
-  schedulePlayIn(league);
-}
-
-function schedulePlayIn(league: League) {
-  for (const pi of league.playIn) {
-    if (pi.winner !== undefined) continue;
-    const exists = league.schedule.some((g) => g.type === 'playin' && g.seriesId === pi.id);
-    if (exists) continue;
-    const day = pi.id.endsWith('-8') ? league.day + 2 : league.day;
-    league.schedule.push({ gid: league.nextGid++, day, home: pi.home, away: pi.away, type: 'playin', seriesId: pi.id });
-  }
+  // 7 v 8 and 9 v 10 tip off together; the game for the last spot is added once both are in
+  for (const pi of league.playIn) league.schedule.push({ gid: league.nextGid++, day: league.day, home: pi.home, away: pi.away, type: 'playin', seriesId: pi.id });
 }
 
 export function processPlayInResult(league: League, g: ScheduledGame, homeWon: boolean) {
