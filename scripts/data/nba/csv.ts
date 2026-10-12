@@ -27,9 +27,16 @@ export function splitCsv(line: string): string[] {
   return out;
 }
 
-/** Stream rows of the first CSV inside a .tar.xz as header-keyed accessors. */
+/**
+ * Stream rows of the first CSV inside a .tar.xz as header-keyed accessors. Throws when tar fails
+ * (a missing, truncated or non-archive file), which would otherwise read as an empty season.
+ */
 export async function* tarCsvRows(file: string): AsyncGenerator<(col: string) => string> {
   const child = spawn('tar', ['-xJOf', file]);
+  // listened for from the start: tar may exit before the last line is read
+  const exit = new Promise<number | null>((r) => child.on('close', r));
+  let stderr = '';
+  child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
   const rl = createInterface({ input: child.stdout, crlfDelay: Infinity });
   let idx: Record<string, number> | null = null;
   for await (const line of rl) {
@@ -42,5 +49,6 @@ export async function* tarCsvRows(file: string): AsyncGenerator<(col: string) =>
     const map = idx;
     yield (col: string) => cells[map[col]] ?? '';
   }
-  await new Promise((r) => child.on('close', r));
+  const code = await exit;
+  if (code !== 0) throw new Error(`could not read ${file} (tar exited with ${code}): ${stderr.trim()}`);
 }
