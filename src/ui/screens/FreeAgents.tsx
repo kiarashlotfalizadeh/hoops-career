@@ -3,7 +3,7 @@ import { CalendarDays, FastForward, Lock, Newspaper, SkipForward } from 'lucide-
 import type { Player, Pos } from '../../core/types';
 import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, twoWaySalary, twoWayYears, valueScore, wantsTwoWay } from '../../core/league/contracts';
 import { capPayroll, signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { FA_DAYS, faAdvance, faDayNumber, faOver } from '../../core/league/season';
@@ -137,7 +137,7 @@ export default function FreeAgents() {
               the season they are still available.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Roster.</b> Up to 21 players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
+              <b>Roster.</b> Up to {OFFSEASON_ROSTER_MAX} players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
             </p>
             <p style={{ margin: 0 }}>
               <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {fmtM(twoWaySalary(league, s), 2)}. They don't use a

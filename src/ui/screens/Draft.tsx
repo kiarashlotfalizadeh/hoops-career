@@ -446,7 +446,7 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
   return (
     <>
       <div className="tiny dim">Tap a column to sort; tap a row for the full scouting report. Lane agility and sprint: lower is better.</div>
-      <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} highlight={() => false} maxHeight={560} />
+      <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} maxHeight={560} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
         {league.season} draft combine · {list.length} invitees
       </div>

@@ -218,10 +218,12 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
     { label: 'Cup MVP', n: count((t) => t === 'NBA Cup MVP') },
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
+    { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },
     { label: '6MOY', n: count((t) => t === 'Sixth Man of the Year') },
     { label: 'MIP', n: count((t) => t === 'Most Improved Player') },
+    { label: 'All-Rookie', n: count((t) => t.startsWith('All-Rookie')) },
   ];
   return out.filter((x) => x.n > 0);
 }

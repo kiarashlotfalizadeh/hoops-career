@@ -8,7 +8,7 @@ import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
 import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col, activateOnKey } from '../components/ui';
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
-import { contractExp, salaryFor } from '../../core/playerGen';
+import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, playerSeason, rosterNames, signed, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
@@ -39,7 +39,7 @@ export default function Roster() {
   const standard = roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) >= s0).length;
   const twoWays = roster.filter((p) => p.contract.twoWay).length;
   const expiring = isOffseason(league) ? roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) < s0).length : 0;
-  const age = (p: Player) => league.season - p.bornYear;
+  const age = (p: Player) => playerAge(p, league.season);
 
   const ratingCols: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },

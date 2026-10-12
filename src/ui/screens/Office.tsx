@@ -22,7 +22,7 @@ import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
 import { untradeableReason } from '../../core/league/trades';
-import { contractExp, salaryFor } from '../../core/playerGen';
+import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet } from '../components/ui';
@@ -586,7 +586,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                         )}
                       </div>
                       <div className="tiny dim">
-                        {p.pos} · {league.season - p.bornYear}
+                        {p.pos} · {playerAge(p, league.season)}
                       </div>
                     </div>
                   </td>

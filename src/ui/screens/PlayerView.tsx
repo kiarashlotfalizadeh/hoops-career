@@ -1,4 +1,4 @@
-import { useQueryParam } from '../league/shared';
+import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight } from 'lucide-react';
@@ -12,7 +12,7 @@ import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption } from '../office/common';
-import { contractExp, salaryFor } from '../../core/playerGen';
+import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
 import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason } from '../../core/league/contracts';
@@ -135,7 +135,7 @@ export default function PlayerView() {
       </main>
     );
   }
-  const age = league.season - p.bornYear;
+  const age = playerAge(p, league.season);
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   // a fired coach's old team isn't his to run
   const mine = p.tid === league.userTid && !league.fired;
@@ -415,15 +415,10 @@ export default function PlayerView() {
               )}
             </Card>
           </div>
-          {p.awards.length > 0 && (
+          {/* the same honors, names and order as the league history (the Hall of Fame has its own tag above) */}
+          {accolades(p).length > 0 && (
             <Card title="Honors">
-              <div className="chips">
-                {summarizeAwards(p).map((a) => (
-                  <span key={a} className="tag warn">
-                    {a}
-                  </span>
-                ))}
-              </div>
+              <AccoladeChips p={p} max={Infinity} />
             </Card>
           )}
         </>
@@ -501,12 +496,6 @@ function sumStats(a: PlayerStats, b: PlayerStats): Partial<PlayerStats> {
     if (typeof va === 'number' && typeof vb === 'number' && k !== 'season' && k !== 'tid') out[k] = va + vb;
   }
   return out as Partial<PlayerStats>;
-}
-
-function summarizeAwards(p: Player) {
-  const counts = new Map<string, number>();
-  for (const a of p.awards) counts.set(a.type, (counts.get(a.type) ?? 0) + 1);
-  return [...counts.entries()].map(([k, n]) => (n > 1 ? `${n}× ${k}` : k));
 }
 
 function StatsTab({ p, league }: { p: Player; league: League }) {
@@ -612,7 +601,7 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
 
 function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean }) {
   const hist = p.ratingsHistory;
-  const age = league.season - p.bornYear;
+  const age = playerAge(p, league.season);
   return (
     <>
       <Card title="Overall by season">

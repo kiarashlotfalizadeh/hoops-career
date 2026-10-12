@@ -413,7 +413,7 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
   const nameOf = rosterNames(players, { initial: true });
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   return (
-    <Card className="flush" title={undefined}>
+    <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
         <div className="row" style={{ gap: 8, minWidth: 0 }}>
           <TeamLogo tid={tid} size={22} />
