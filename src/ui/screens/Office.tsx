@@ -393,7 +393,7 @@ function Spotlight({ league }: { league: League }) {
                   Cut down to {CAP.rosterMax} players before opening night ({roster} now).
                 </span>
               ) : (
-                `Roster set at ${roster}. Best players you can still afford:`
+                `Roster set at ${roster}.${topFAs.length ? ' Best players you can still afford:' : ' No free agent left fits your cap space, mid-level or the minimum.'}`
               )}
             </div>
           )}
