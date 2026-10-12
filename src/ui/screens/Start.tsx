@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Download, Plus, Trash2 } from 'lucide-react';
 import { deleteLeague, listLeagues, loadLeague, type LeagueMeta } from '../../state/persistence';
+import { exportLeague } from '../../state/backup';
 import { useStore } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
-import { Card, Empty, Sheet, activateOnKey } from '../components/ui';
+import { Card, Empty, Sheet } from '../components/ui';
 import { ImportButton } from '../components/ImportButton';
 
 export default function Start() {
@@ -14,6 +15,10 @@ export default function Start() {
   const setLeague = useStore((s) => s.setLeague);
   const [leagues, setLeagues] = useState<LeagueMeta[] | null>(null);
   const [confirm, setConfirm] = useState<LeagueMeta | null>(null);
+  // the league to open once the user decides about the open one's unsaved changes
+  const [unsaved, setUnsaved] = useState<string | null>(null);
+  const openLeague = useStore((s) => s.league);
+  const saveProblem = useStore((s) => s.saveProblem);
   const [error, setError] = useState<string | null>(null);
   const refresh = () =>
     listLeagues()
@@ -29,12 +34,17 @@ export default function Start() {
   useEffect(() => {
     void refresh();
   }, []);
-  const open = async (id: string) => {
+  const open = async (id: string, force = false) => {
     // still open (Back from the game to here): a copy from the device would drop its latest changes,
     // unless another window has saved over them
     const st = useStore.getState();
     if (st.league?.id === id && st.saveProblem?.kind !== 'conflict') {
       nav('/');
+      return;
+    }
+    // another league still open behind this screen saves first: if it can't, say so rather than drop its changes
+    if (!force && st.league && st.saveProblem?.kind !== 'conflict' && !(await st.flush())) {
+      setUnsaved(id);
       return;
     }
     try {
@@ -86,26 +96,27 @@ export default function Start() {
             {leagues.map((m) => {
               const tid = FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
               return (
-                <div key={m.id} className="listrow clickable" role="button" tabIndex={0} onClick={() => void open(m.id)} onKeyDown={activateOnKey(() => void open(m.id))}>
-                  <TeamLogo tid={tid >= 0 ? tid : 0} size={38} decorative />
-                  <div className="grow">
-                    <div className="bold ellipsis">{m.name}</div>
-                    {/* two lines, so the record isn't the part a phone cuts off */}
-                    <div className="small dim ellipsis">
-                      {m.teamName} · {m.record}
-                    </div>
-                    <div className="small dim ellipsis">
-                      {seasonLabel(m.season)} · {PHASE_LABEL[m.phase]}
-                    </div>
-                  </div>
+                <div key={m.id} className="listrow clickable">
+                  {/* open and Delete are sibling buttons; this one reaches the row's edges, as the whole row used to */}
                   <button
-                    className="iconbtn"
-                    aria-label={`Delete ${m.name}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirm(m);
-                    }}
+                    type="button"
+                    className="row grow"
+                    style={{ minWidth: 0, textAlign: 'left', margin: '-10px 0 -10px -12px', padding: '10px 0 10px 12px' }}
+                    onClick={() => void open(m.id)}
                   >
+                    <TeamLogo tid={tid >= 0 ? tid : 0} size={38} decorative />
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="bold ellipsis">{m.name}</div>
+                      {/* two lines, so the record isn't the part a phone cuts off */}
+                      <div className="small dim ellipsis">
+                        {m.teamName} · {m.record}
+                      </div>
+                      <div className="small dim ellipsis">
+                        {seasonLabel(m.season)} · {PHASE_LABEL[m.phase]}
+                      </div>
+                    </div>
+                  </button>
+                  <button className="iconbtn" aria-label={`Delete ${m.name}`} onClick={() => setConfirm(m)}>
                     <Trash2 size={18} />
                   </button>
                 </div>
@@ -114,6 +125,41 @@ export default function Start() {
           </div>
         )}
       </Card>
+      <Sheet open={!!unsaved && !!openLeague} onClose={() => setUnsaved(null)} title="Switch without saving?">
+        {openLeague && (
+          <div className="col" style={{ gap: 12 }}>
+            <div className="dim2">
+              {saveProblem?.text} The latest changes to “{openLeague.name}” are only in this window: export a backup to keep them.
+            </div>
+            <button
+              className="btn primary block"
+              onClick={() =>
+                void exportLeague(openLeague).catch((e) => {
+                  console.error(e);
+                  useStore.getState().toast('Export failed.', 'bad');
+                })
+              }
+            >
+              <Download size={16} /> Export backup
+            </button>
+            <div className="row">
+              <button className="btn grow" onClick={() => setUnsaved(null)}>
+                Stay
+              </button>
+              <button
+                className="btn danger grow"
+                onClick={() => {
+                  const id = unsaved;
+                  setUnsaved(null);
+                  if (id) void open(id, true);
+                }}
+              >
+                Open anyway
+              </button>
+            </div>
+          </div>
+        )}
+      </Sheet>
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title="Delete league?">
         <p className="dim2">“{confirm?.name}” will be permanently removed from this device.</p>
         <div className="row" style={{ marginTop: 12 }}>
