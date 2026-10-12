@@ -162,10 +162,10 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   while (dayToDate(season, allStarStart).getUTCDay() !== 5) allStarStart++;
   const allStarLen = 6;
   const lastTarget = 168;
-  // the NBA's dark days: Thanksgiving and Christmas Eve
+  // the NBA's dark days: Thanksgiving (the fourth Thursday of November) and Christmas Eve
   const holiday = (d: number) => {
     const date = dayToDate(season, d);
-    return (date.getUTCMonth() === 10 && date.getUTCDay() === 4 && date.getUTCDate() >= 22) || (date.getUTCMonth() === 11 && date.getUTCDate() === 24);
+    return (date.getUTCMonth() === 10 && date.getUTCDay() === 4 && date.getUTCDate() >= 22 && date.getUTCDate() <= 28) || (date.getUTCMonth() === 11 && date.getUTCDate() === 24);
   };
   const blocked = (d: number) => (d >= allStarStart && d < allStarStart + allStarLen) || (!!cup && d >= cup.setup.qfDays[0] && d <= cup.setup.finalDay) || holiday(d);
   // every day each team plays, including the Cup nights fixed in advance

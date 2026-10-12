@@ -8,7 +8,7 @@
 
 import type { BoxLine, CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
 import type { Rng } from '../random';
-import { addInbox, addNews, dayToDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { addInbox, addNews, dateToDay, dayToDate, playerName, teamName, teamPlayers, winPct } from './helpers';
 
 export interface CupSetup {
   groups: CupGroup[];
@@ -64,7 +64,8 @@ export function drawCupGroups(teams: Team[], season: number, rng: Rng): CupGroup
  * a Friday and Saturday, semifinals the Tuesday, the championship the Friday.
  */
 export function cupCalendar(season: number): Omit<CupSetup, 'groups'> {
-  let f1 = 12; // Nov 1 (day 0 = Oct 20)
+  // the first Friday from Nov 2: three weeks later is always the day after Thanksgiving (Nov 23-29)
+  let f1 = dateToDay(season, 10, 2);
   while (dayToDate(season, f1).getUTCDay() !== 5) f1++;
   const nights = [f1, f1 + 7, f1 + 11, f1 + 18, f1 + 21];
   const q0 = nights[4] + 7;
