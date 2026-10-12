@@ -183,7 +183,7 @@ function TopBar() {
   const [open, setOpen] = useState(false);
   const run = useFlowRunner();
   const { pathname } = useLocation();
-  const sim = useStore((s) => s.sim);
+  const simming = useStore((s) => !!s.sim);
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
@@ -213,7 +213,7 @@ function TopBar() {
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
           <SettingsIcon size={20} />
         </button>
-        <button className="btn primary sm" onClick={() => setOpen(true)} disabled={!!sim} aria-label="Play">
+        <button className="btn primary sm" onClick={() => setOpen(true)} disabled={simming} aria-label="Play">
           <Play size={16} fill="currentColor" /> Play
         </button>
       </div>
