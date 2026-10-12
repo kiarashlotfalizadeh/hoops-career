@@ -91,6 +91,28 @@ describe('saving', () => {
     await vi.waitFor(async () => expect((await loadLeague(a.id))!.name).toBe('renamed'));
   });
 
+  it('says so when the league another one replaces could not be saved', async () => {
+    const a = testLeague('full');
+    st().setLeague(a);
+    await st().save();
+    st().mutate((x) => (x.name = 'renamed'), false);
+    failPuts(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
+    st().setLeague(testLeague('next'));
+    await vi.waitFor(() => expect(st().toasts.at(-1)?.text).toBe('Your latest changes to "renamed" could not be saved: device storage is full.'));
+  });
+
+  it('saves the open league before leaving it, and says when it could not', async () => {
+    st().setLeague(testLeague('leaving'));
+    expect(await st().saveBeforeLeaving()).toBe(true);
+    st().mutate((x) => (x.name = 'changed'), false);
+    failPuts(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
+    expect(await st().saveBeforeLeaving()).toBe(false);
+    expect(st().saveProblem?.kind).toBe('quota');
+    // a copy another window has saved over has nothing worth keeping
+    useStore.setState({ saveProblem: problemOf(new SaveConflictError()) });
+    expect(await st().saveBeforeLeaving()).toBe(true);
+  });
+
   it('stops saving a copy another window has saved over', async () => {
     st().setLeague(testLeague('stale'));
     useStore.setState({ saveProblem: problemOf(new SaveConflictError()) });

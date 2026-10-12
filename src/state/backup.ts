@@ -69,8 +69,7 @@ export async function importLeague(file: File): Promise<League> {
   const st = useStore.getState();
   if (st.sim) throw new Error('Wait for the simulation to finish, then import.');
   // the import replaces the open league: don't drop changes of it that never reached the disk
-  if (st.league && !(await st.flush()) && useStore.getState().saveProblem?.kind !== 'conflict')
-    throw new Error('Your current league could not be saved. Export a backup of it first.');
+  if (st.league && !(await st.saveBeforeLeaving())) throw new Error('Your current league could not be saved. Export a backup of it first.');
   if (file.size > MAX_IMPORT_BYTES) throw new Error('That file is too big to be a Hoops Career backup.');
   let data: unknown;
   try {
