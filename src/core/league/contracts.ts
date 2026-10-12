@@ -235,8 +235,9 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   if (opts.twoWay) p.contract.twoWay = true;
   if (prevTid !== tid) p.joinedSeason = league.season;
   // like the NBA's: no trading him until December 15 of his first season, or three months after
-  // signing if that is later (otherwise a free agent could be signed and flipped for more value)
-  p.tradeLock = p.contract.start > league.season ? { season: p.contract.start, day: DEC_15 } : { season: league.season, day: Math.max(DEC_15, league.day + 90) };
+  // an in-season signing if that is later (otherwise a free agent could be signed and flipped for
+  // more value); a summer or training-camp signing waits for December 15
+  p.tradeLock = league.phase === 'regular' ? { season: league.season, day: Math.max(DEC_15, league.day + 90) } : { season: p.contract.start, day: DEC_15 };
   p.asking = undefined;
   p.faDays = undefined;
   p.mood.tradeRequest = false;

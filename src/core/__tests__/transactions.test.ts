@@ -355,6 +355,14 @@ describe('AI trade valuation', () => {
     expect(untradeableReason(l, summer)).toMatch(/Dec 15/);
     l.day = DEC_15;
     expect(untradeableReason(l, summer)).toBeNull();
+    // so does a training-camp signing (not three months from the preseason, into January)
+    l.phase = 'preseason';
+    l.day = 0;
+    const camp = freeAgents(l)[0];
+    signPlayer(l, camp, U, CAP_FOR(l).vetMin, 1, { news: false });
+    l.phase = 'regular';
+    l.day = DEC_15;
+    expect(untradeableReason(l, camp)).toBeNull();
     // in season, three months when that runs past December 15
     const fall = freeAgents(l)[0];
     l.day = 40;
