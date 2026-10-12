@@ -383,6 +383,9 @@ export function userDraftPick(league: League, pid: number): string | null {
   if (league.fired) return FIRED_REASON;
   const dp = nextPick(league);
   if (!dp || dp.tid !== league.userTid) return 'It is not your pick.';
+  // (a stale board or a double tap can name a player who has just been taken)
+  const p = league.players[pid];
+  if (p?.tid !== DRAFT_PROSPECT || p.draft.year !== league.season) return `${p ? playerName(p) : 'That player'} is no longer on the board.`;
   draftPlayer(league, dp, pid);
   withRng(league, (rng) => draftUntilUser(league, rng));
   return null;

@@ -177,13 +177,15 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   const result: LotteryResult = {
     order: lotteryOrder.map((x, i) => ({ tid: x.tid, odds: x.w / 10, pick: i + 1, pre: x.pre })),
   };
+  // (every team in the playoffs would leave nobody to draw)
   const top = result.order[0];
-  addNews(league, {
-    kind: 'draft',
-    text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick (pre-lottery position ${top.pre}).`,
-    tids: [top.tid],
-    pids: [],
-  });
+  if (top)
+    addNews(league, {
+      kind: 'draft',
+      text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick (pre-lottery position ${top.pre}).`,
+      tids: [top.tid],
+      pids: [],
+    });
   const mine = league.draftPicks.filter((d) => d.season === season && d.tid === league.userTid && d.pick);
   if (mine.length) {
     addInbox(league, {
