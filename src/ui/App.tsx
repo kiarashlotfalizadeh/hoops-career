@@ -337,22 +337,24 @@ function SaveBanner() {
     >
       <AlertTriangle size={18} className="bad" style={{ flex: 'none' }} />
       <div className="grow small">
-        <b>{conflict ? problem.text : 'Not saved.'}</b> {conflict ? 'Reload to pick it up from there. Changes made in this window since then are not kept.' : problem.text}
+        <b>{conflict ? problem.text : 'Not saved.'}</b>{' '}
+        {conflict ? 'Reload to pick it up from there. Changes made in this window since then are not kept unless you export a backup.' : problem.text}
       </div>
-      {conflict ? (
-        <button className="btn xs" onClick={() => window.location.reload()}>
-          Reload
+      {/* either way, this window's copy can be kept as a file */}
+      <div className="col" style={{ gap: 6 }}>
+        <button className="btn xs" disabled={busy} onClick={() => void offerFile(() => exportLeague(league))}>
+          Export backup
         </button>
-      ) : (
-        <div className="col" style={{ gap: 6 }}>
-          <button className="btn xs" disabled={busy} onClick={() => void offerFile(() => exportLeague(league))}>
-            Export backup
+        {conflict ? (
+          <button className="btn xs" onClick={() => window.location.reload()}>
+            Reload
           </button>
+        ) : (
           <button className="btn xs" disabled={busy} onClick={() => void retry()}>
             Try again
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
