@@ -450,6 +450,8 @@ export interface Col<T> {
   sticky?: boolean;
   width?: number;
   help?: string;
+  /** Lower is better (a rank, a sprint time): the first tap sorts lowest first. */
+  asc?: boolean;
 }
 
 /** Sortable table. `limit` renders only the first rows of the sorted list, for long tables that page with "Show more". */
@@ -492,7 +494,7 @@ export function StatTable<T>({
                 style={{ minWidth: c.width }}
                 title={c.help}
                 aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
-                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left ? 1 : -1 }))}
+                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left || c.asc ? 1 : -1 }))}
               >
                 <button type="button" className="th-sort" aria-label={`Sort by ${c.help ?? c.label}`} onClick={(e) => e.preventDefault()}>
                   {c.label}
