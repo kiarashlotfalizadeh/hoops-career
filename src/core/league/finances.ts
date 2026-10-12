@@ -31,8 +31,9 @@ export function referencePrice(league: League, team: Team): number {
 }
 
 export function attendanceFor(league: League, team: Team, playoffs = false): number {
+  // playoff tickets cost more and fans will pay more for them, by the same multiple
   const ref = referencePrice(league, team) * (playoffs ? PLAYOFF_PRICE_MULT : 1);
-  const price = team.budget.ticketPrice;
+  const price = team.budget.ticketPrice * (playoffs ? PLAYOFF_PRICE_MULT : 1);
   const demand = 1.05 * Math.exp((-1.1 * (price - ref)) / ref);
   return Math.round(clamp(ARENA_CAPACITY * demand, 1_500, ARENA_CAPACITY));
 }
