@@ -126,11 +126,14 @@ export const PICK_LENS: Record<Strategy, number> = { contend: 0.7, retool: 1, re
  * the user, an AI team never lets its own assets go below neutral: the lens only adds a premium
  * for what it receives (a rebuilder's veteran bought cheap and sold to a contender, or picks the
  * other way, paid up to 1.8x a round trip). Among themselves AI teams sell down to 85%, which is
- * what gets their deals done. An asset that changed hands this season is worth its neutral value
- * to everyone, so it can't be flipped at a second team's premium.
+ * what gets their deals done. A liability's band runs the same way: taken in at most 15% less of a
+ * burden than neutral, sent away among AI teams as up to 15% more of one. An asset that changed
+ * hands this season is worth its neutral value to everyone, so it can't be flipped at a second
+ * team's premium.
  */
 function lens(own: number, neutral: number, incoming: boolean, aiDeal: boolean) {
-  return incoming ? Math.min(own, neutral * 1.15) : Math.max(own, neutral * (aiDeal ? 0.85 : 1));
+  const band = 0.15 * Math.abs(neutral);
+  return incoming ? Math.min(own, neutral + band) : Math.max(own, neutral - (aiDeal ? band : 0));
 }
 
 const flipped = (league: League, a: Player | DraftPick) => a.tradedFrom?.season === league.season;
@@ -642,9 +645,9 @@ export function aiProposeToUser(league: League, rng: Rng) {
  * Occasional AI-to-AI deals (a few a season): contenders buy rebuilding teams' veterans. The buyer
  * matches salary first (without sending an over-the-cap seller more than it can take back, or
  * taking its own payroll past the tax after using the mid-level), then adds its two most valuable
- * young players and picks from the cheapest up (two firsts at most) until the seller agrees, and
- * the deal only goes through if the buyer likes it too. Only assets the rules let move are
- * offered. Up to three veterans are tried.
+ * young players and picks from the cheapest up (three at most, so better ones replace the cheapest;
+ * two firsts at most) until the seller agrees, and the deal only goes through if the buyer likes it
+ * too. Only assets the rules let move are offered. Up to three veterans are tried.
  */
 export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
@@ -704,10 +707,16 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   for (const x of [...youth.slice(0, 2), ...picks]) {
     if (teamAccepts(league, offer(), seller)) break;
     if (!('pid' in x)) {
-      if (dps.length < 3 && (x.round === 2 || dps.filter((d) => d.round === 1).length < MAX_FIRSTS_OUT)) {
-        dps.push(x);
-        // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
-        if (stepienError(league, offer(), offer().a)) dps.pop();
+      // three picks at most: past that the cheapest one in makes way for this better one (else
+      // three second-rounders would be as far as an offer ever got)
+      const out = dps.length >= 3 ? dps[0] : null;
+      if (x.round === 1 && dps.filter((d) => d !== out && d.round === 1).length >= MAX_FIRSTS_OUT) continue;
+      if (out) dps.shift();
+      dps.push(x);
+      // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
+      if (stepienError(league, offer(), offer().a)) {
+        dps.pop();
+        if (out) dps.unshift(out);
       }
     } else if (pkg.length < maxPkg && sellerFits(x)) pkg.push(x);
   }

@@ -213,8 +213,14 @@ const ALL_STAR_KNOCK_GAMES = 2;
 /** Hurt worse than a knock the break heals: an All-Star who sits the game out and is replaced. */
 export const missesAllStarGame = (p: Player) => (p.injury?.gamesRemaining ?? 0) > ALL_STAR_KNOCK_GAMES;
 
+/** The reserves are named about two and a half weeks before the game: some seven games. */
+const ALL_STAR_VOTE_GAMES = 7;
+
+/** Already out when the coaches voted and not back for the game: they pass him over (one hurt since is picked, then replaced). */
+const outAtTheVote = (p: Player) => missesAllStarGame(p) && p.injury!.gamesTotal - p.injury!.gamesRemaining >= ALL_STAR_VOTE_GAMES;
+
 export function selectAllStars(league: League): SeasonAwards['allStars'] {
-  const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0);
+  const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0 && !outAtTheVote(c.p));
   const out: SeasonAwards['allStars'] = { E: [], W: [] };
   const replacements: { text: string; pid: number }[] = [];
   for (const conf of ['E', 'W'] as const) {
@@ -236,7 +242,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     take(6, (c) => !guard(c));
     take(12, () => true);
     const picks = ranked.filter((c) => chosen.has(c));
-    // injured selections keep the honor; the next healthy players in the conference take their spots
+    // those hurt since the vote keep the honor; the next healthy players in the conference take their spots
     const hurt = picks.filter((c) => missesAllStarGame(c.p));
     const subs = ranked.filter((c) => !chosen.has(c) && !missesAllStarGame(c.p)).slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));

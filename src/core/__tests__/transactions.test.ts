@@ -119,6 +119,26 @@ describe('AI trade valuation', () => {
     expect(playerValueFor(l, vet, 2, true)).toBeCloseTo(neutral);
   });
 
+  it('keeps a liability within 15% of neutral the same way: no team takes one in as a bigger burden than it sees', () => {
+    const l = league();
+    l.phase = 'regular';
+    // an overpaid 76 at 31: a burden to the league, worth having to a contender, a bigger burden to a rebuilder
+    const bad = shape(l, standardRoster(l, AI)[0], 76, 31, Math.round(CAP_FOR(l).salaryCap * 0.25), 4);
+    const neutral = tradeValue(l, bad);
+    expect(neutral).toBeLessThan(0);
+    expect(tradeValue(l, bad, 'contend')).toBeGreaterThan(0);
+    expect(tradeValue(l, bad, 'rebuild')).toBeLessThan(neutral * 1.15);
+    // coming in: a retooling team's own (neutral) view, and a contender's at most 15% better than neutral
+    l.teams[2].strategy = 'retool';
+    expect(playerValueFor(l, bad, 2, true)).toBeCloseTo(neutral);
+    l.teams[2].strategy = 'contend';
+    expect(playerValueFor(l, bad, 2, true)).toBeCloseTo(neutral * 0.85);
+    // going out: a rebuilder dumps him on the user at neutral, on another AI team for up to 115%
+    l.teams[AI].strategy = 'rebuild';
+    expect(playerValueFor(l, bad, AI, false)).toBeCloseTo(neutral);
+    expect(playerValueFor(l, bad, AI, false, true)).toBeCloseTo(neutral * 1.15);
+  });
+
   it("doesn't pay to buy a rebuilder's veteran with picks and sell him to a contender for its picks (T1)", () => {
     const l = league();
     l.phase = 'regular';
@@ -226,6 +246,29 @@ describe('AI trade valuation', () => {
       expect(picks.filter((d) => d.round === 1).length).toBeLessThanOrEqual(MAX_FIRSTS_OUT);
     }
     expect(trades).toBeGreaterThan(0);
+  });
+
+  it('an AI buyer holding its own second-rounders still offers firsts: the cheapest picks make way for better ones', () => {
+    const l = league();
+    l.phase = 'regular';
+    const [S, B] = [1, 2];
+    for (const t of l.teams) t.strategy = 'retool';
+    l.teams[S].strategy = 'rebuild';
+    l.teams[B].strategy = 'contend';
+    // the rebuilder's one veteran, on a minimum deal so the salaries match with anyone; the
+    // contender has no young players to offer, only picks
+    const vet = shape(l, standardRoster(l, S)[0], 80, 29, CAP_FOR(l).vetMin);
+    for (const p of standardRoster(l, S)) if (p !== vet) p.ovr = Math.min(p.ovr, 73);
+    for (const p of standardRoster(l, B)) p.bornYear = Math.min(p.bornYear, l.season - 27);
+    expect(l.draftPicks.filter((d) => d.tid === B && d.round === 2).length).toBeGreaterThanOrEqual(3);
+    const owner = new Map(l.draftPicks.map((d) => [d.dpid, d.tid]));
+    for (let i = 0; i < 40 && vet.tid === S; i++) aiToAiTrade(l, new Rng(i + 1));
+    // three seconds are nowhere near him: the deal takes firsts (two at most)
+    expect(vet.tid).toBe(B);
+    const rounds = l.draftPicks.filter((d) => owner.get(d.dpid) !== d.tid).map((d) => d.round);
+    expect(rounds).toContain(1);
+    expect(rounds.length).toBeLessThanOrEqual(3);
+    expect(rounds.filter((r) => r === 1).length).toBeLessThanOrEqual(MAX_FIRSTS_OUT);
   });
 
   it("won't leave a team without firsts in back-to-back drafts (Stepien rule)", () => {

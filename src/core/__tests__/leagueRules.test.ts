@@ -695,6 +695,26 @@ describe('awards (L13, L18)', () => {
     expect(l.inbox[0].body).toBe(`${names[0]}, ${names[1]} and ${names[2]} made the All-Star team.`);
   });
 
+  it('a star already out when the coaches voted is passed over; one hurt since is picked and replaced', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [out, since] = Object.values(l.players).filter((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E');
+    line(out, 70, 70, 40);
+    line(since, 70, 70, 40);
+    for (const p of Object.values(l.players)) p.injury = null;
+    // a month into a torn meniscus, three weeks still to go
+    out.injury = { type: 'Torn Meniscus', gamesRemaining: 12, gamesTotal: 30, severity: 'major' };
+    // a broken hand in the last game before the break
+    since.injury = { type: 'Broken Hand', gamesRemaining: 20, gamesTotal: 20, severity: 'moderate' };
+    const as = selectAllStars(l);
+    expect(as.E).not.toContain(out.pid);
+    expect(as.E.slice(0, 12)).toContain(since.pid);
+    expect(as.E.length).toBe(13);
+    const news = l.news.find((n) => n.text.startsWith('All-Star replacements'))!.text;
+    expect(news).toContain(`replaces the injured ${since.firstName} ${since.lastName}`);
+    expect(news).not.toContain(out.lastName);
+  });
+
   it('a knock the All-Star break heals costs nobody his place', () => {
     const l = league();
     const line = seasonOf(l);
