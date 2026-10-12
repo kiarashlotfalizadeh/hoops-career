@@ -83,6 +83,20 @@ describe('live game', () => {
     expect(l.day).toBe(day + 1);
   });
 
+  it('a game the Live screen finishes while "Finish this game" is saving is the one day that sim plays', async () => {
+    const l = testLeague('race');
+    toGameDay(l);
+    const lg = goLive(l);
+    const day = l.day;
+    // the sim saves before its first day, and the court plays its last possession meanwhile
+    const running = useStore.getState().simulate({ kind: 'days', n: 1 });
+    useStore.getState().mutate((x) => void lg.commit(x));
+    await running;
+    expect(l.day).toBe(day + 1);
+    expect(once(l, lg.game.gid)).toBe(1);
+    expect(l.schedule.filter((g) => g.day === day + 1 && g.played)).toEqual([]);
+  });
+
   it('a game played without the controller is not recorded again', () => {
     const l = testLeague('elsewhere');
     toGameDay(l);
