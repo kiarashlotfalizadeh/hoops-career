@@ -38,7 +38,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const maxAmt = cap.maxContract(p.experience);
   const [amount, setAmount] = useState(() => clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt));
   // a mid-level offer can run 4 years at most
-  const [years, setYears] = useState(() => (mode === 'fa' && signingRoute(league, tid, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
+  const [years, setYears] = useState(() => (mode === 'fa' && signingRoute(league, tid, amount, season, p) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
 
   // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount);
@@ -74,7 +74,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
   const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
   const rosterBlocked = mode === 'fa' && rosterN >= rosterMax;
-  const route = signingRoute(league, tid, amount, season);
+  const route = signingRoute(league, tid, amount, season, p);
   const mle = mleRoom(league, tid, season);
   const capBlocked = mode === 'fa' && !route;
   const mleTooLong = mode === 'fa' && route === 'mle' && years > MLE_YEARS;

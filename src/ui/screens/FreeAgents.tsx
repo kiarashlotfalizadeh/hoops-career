@@ -50,7 +50,7 @@ export default function FreeAgents() {
           appeal: teamAppeal(league, tid, p),
           val: valueScore(league, p),
           age: playerAge(p, league.season),
-          route: signingRoute(league, tid, ask.amount, s),
+          route: signingRoute(league, tid, ask.amount, s, p),
           twoWay: wantsTwoWay(league, p, tid),
         };
       }),

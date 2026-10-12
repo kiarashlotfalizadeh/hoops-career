@@ -306,7 +306,7 @@ function Spotlight({ league }: { league: League }) {
     () =>
       league.phase === 'freeAgency' || league.phase === 'preseason'
         ? freeAgents(league)
-            .filter((p) => signingRoute(league, tid, askingContract(league, p, tid).amount, s0))
+            .filter((p) => signingRoute(league, tid, askingContract(league, p, tid).amount, s0, p))
             .sort((a, b) => valueScore(league, b) - valueScore(league, a))
             .slice(0, league.phase === 'preseason' ? 3 : 5)
         : [],

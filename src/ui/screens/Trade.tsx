@@ -17,6 +17,7 @@ import {
   tradeRoster,
   untradeable,
   validateTrade,
+  valueVerdict,
   type TradeEval,
   type TradeOffer,
 } from '../../core/league/trades';
@@ -523,14 +524,12 @@ function PickAsset({ league, dp, on, onToggle }: { league: League; dp: DraftPick
 
 function reaction(ev: TradeEval): { pct: number; label: string; color: string } {
   if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)' };
-  const gap = -ev.delta;
-  const rel = ev.valueOut > 0 ? gap / ev.valueOut : gap > 0 ? 1 : 0;
+  // the AI's own verdict on how far the value is from enough
+  const { gap: rel, label } = valueVerdict(ev);
   const pct = Math.max(4, Math.min(94, (1 - rel) * 100));
   // value is there but something else blocks it: the rules, or too many first-round picks
   if (ev.delta >= 0) return ev.ok ? { pct: 94, label: ev.message, color: 'var(--warn)' } : { pct: 100, label: 'They would take it', color: 'var(--good)' };
-  if (rel > 0.6) return { pct, label: 'Not even close', color: 'var(--bad)' };
-  if (rel > 0.25) return { pct, label: 'You need to add significant value', color: 'var(--warn)' };
-  return { pct, label: 'Close — add a little more', color: 'var(--tier-elite)' };
+  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)' };
 }
 
 function Dock({
