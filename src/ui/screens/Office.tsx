@@ -590,7 +590,11 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                   </td>
                   {!anySalary ? (
                     <td colSpan={4} className="l">
-                      <span className="tag warn">Expiring</span> <span className="tiny dim">{league.phase === 'resign' ? 'Re-sign or he walks' : 'Free agent this summer'}</span>
+                      <span className="tag warn">Expiring</span>{' '}
+                      <span className="tiny dim">
+                        {/* before the re-sign period (lottery, draft) his Bird rights are still yours */}
+                        {league.phase === 'resign' ? 'Re-sign or he walks' : 'Re-sign him after the draft'}
+                      </span>
                     </td>
                   ) : (
                     seasons.map((s) => {
