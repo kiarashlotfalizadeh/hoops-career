@@ -18,13 +18,13 @@ import type { League } from '../../core/types';
 function phaseTitle(league: League): string {
   switch (league.phase) {
     case 'draftLottery':
-      return `${league.season} Draft lottery`;
+      return `${league.season} Draft Lottery`;
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
-      return `${league.season} Re-sign period`;
+      return `${league.season} Re-sign Period`;
     case 'freeAgency':
-      return `${league.season} Free agency`;
+      return `${league.season} Free Agency`;
     default:
       return `${PHASE_LABEL[league.phase]} · ${seasonLabel(league.season)}`;
   }

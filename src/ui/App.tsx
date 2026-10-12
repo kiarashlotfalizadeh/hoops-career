@@ -161,17 +161,17 @@ function statusLine(league: League): string {
       return `${date} · ${ordinal(rank)} ${t.conf === 'E' ? 'East' : 'West'}`;
     }
     case 'playin':
-      return `Play-in · ${date}`;
+      return `Play-In · ${date}`;
     case 'playoffs':
       return `Playoffs · ${date}`;
     case 'draftLottery':
-      return `Draft lottery · ${league.season}`;
+      return `Draft Lottery · ${league.season}`;
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
-      return `Re-sign period · ${league.season}`;
+      return `Re-sign Period · ${league.season}`;
     case 'freeAgency':
-      return `Free agency · day ${faDayNumber(league)}`;
+      return `Free Agency · day ${faDayNumber(league)}`;
     default:
       return PHASE_LABEL[league.phase] ?? '';
   }

@@ -59,8 +59,7 @@ export default function GameView() {
   ];
   const flowColors = matchupColors(home.colors, away.colors);
   const typeLabel =
-    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ??
-    (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : g.type === 'allstar' ? 'All-Star' : 'Regular season');
+    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular Season');
   return (
     <main className="page">
       <PageHeader
