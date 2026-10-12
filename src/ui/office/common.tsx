@@ -22,14 +22,17 @@ export const isOffseason = (l: League) => OFFSEASON_PHASES.includes(l.phase);
 /** The season new contracts/trades count against: next season during the offseason. */
 export const capSeason = (l: League) => (isOffseason(l) ? l.season + 1 : l.season);
 
-/** Money in $K → "$X.XM" (negative values get a leading minus). */
+/** Money in $K → "$X.XM" (negative values get a leading minus; one that rounds to zero doesn't). */
 export function fmtM(k: number, d = 1): string {
-  const m = Math.abs(k) / 1000;
-  return `${k < 0 ? '-' : ''}$${m.toFixed(d)}M`;
+  const m = (Math.abs(k) / 1000).toFixed(d);
+  return `${k < 0 && Number(m) !== 0 ? '-' : ''}$${m}M`;
 }
 
-/** Signed money "+$1.2M" / "-$3.4M". */
-export const fmtMs = (k: number, d = 1) => `${k >= 0 ? '+' : '-'}$${(Math.abs(k) / 1000).toFixed(d)}M`;
+/** Signed money "+$1.2M" / "-$3.4M" (a value that rounds to zero reads "+$0.0M"). */
+export const fmtMs = (k: number, d = 1) => {
+  const m = (Math.abs(k) / 1000).toFixed(d);
+  return `${k < 0 && Number(m) !== 0 ? '-' : '+'}$${m}M`;
+};
 
 /** "26-27" style short season label. */
 export const shortSeason = (season: number) => `${String((season - 1) % 100).padStart(2, '0')}-${String(season % 100).padStart(2, '0')}`;

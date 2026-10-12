@@ -496,7 +496,8 @@ function MiniRow({ league, p, right, to }: { league: League; p: Player; right: R
 
 // ------------------------------------------------------------------ contracts
 
-const m1 = (k: number) => (k / 1000).toFixed(1);
+// $M to one decimal, with no "-0.0" for a value that rounds to zero
+const m1 = (k: number) => (Math.abs(k) < 50 ? 0 : k / 1000).toFixed(1);
 
 function ContractsTable({ league, onPick }: { league: League; onPick: (pid: number) => void }) {
   const tid = league.userTid;
