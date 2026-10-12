@@ -177,11 +177,6 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
         }
         k++;
       }
-      while (firstHalf > 120) {
-        const i = need.indexOf(Math.max(...need));
-        need[i]--;
-        firstHalf--;
-      }
       firstHalfNeed = need.slice();
     } else {
       for (let i = 0; i < n; i++) need[i] = mins[i] - firstHalfNeed[i];
@@ -227,7 +222,7 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
           chosen = chosen.map((i) => (i === drop ? alt.i : i));
         }
       }
-      // fill if fewer than five have minutes left (short roster): use the freshest regulars
+      // fill if fewer than five have minutes left (short roster): use the regulars with the most minutes
       if (chosen.length < 5) {
         const extra = players
           .map((_, i) => i)

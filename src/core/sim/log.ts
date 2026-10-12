@@ -34,7 +34,6 @@ export type StepKind =
   | 'steal'
   | 'foul'
   | 'ft'
-  | 'sub'
   | 'timeout';
 
 /** One beat of a possession, used by the 2D court to animate and by the PBP feed. */
@@ -57,7 +56,7 @@ export interface PossLog {
   q: number;
   clockStart: number;
   clockEnd: number;
-  kind: 'half' | 'transition' | 'putback' | 'ft' | 'press';
+  kind: 'half' | 'transition' | 'ft' | 'press';
   action?: ActionType;
   coverage?: PnrCoverage | 'zone';
   finish?: FinishType;
@@ -68,8 +67,6 @@ export interface PossLog {
   label: string;
   /** PBP lines produced in this possession. */
   lines: string[];
-  /** Assistant-coach style note when something notable happened (tactic tag). */
-  note?: string;
   /** On-court pids at the start of the possession: [home five, away five]. */
   on: [number[], number[]];
   /** Offensive pid -> defender pid at possession start. */
