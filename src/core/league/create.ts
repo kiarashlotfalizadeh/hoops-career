@@ -475,12 +475,16 @@ function applySeedInjuries(league: League, seed: SeedData) {
   const byId = new Map(seed.players.filter((sp) => sp.injury).map((sp) => [sp.id, sp.injury!]));
   if (!byId.size) return;
   const last = league.regularSeasonDays;
+  const cup = league.cup;
   for (const p of Object.values(league.players)) {
     const inj = p.bbrefId ? byId.get(p.bbrefId) : undefined;
     if (!inj || p.tid < 0) continue;
     let games = inj.games;
     if (inj.returnDay !== null) {
       games = league.schedule.filter((g) => g.type === 'regular' && g.day < inj.returnDay! && (g.home === p.tid || g.away === p.tid)).length;
+      // every team's last two games go in the Cup's knockout window once the groups are decided
+      // (before the championship); a return inside the window misses about one of them
+      if (cup && inj.returnDay > cup.qfDays[0]) games += inj.returnDay >= cup.finalDay ? 2 : 1;
       // back after the regular season: part or all of the playoffs too (~2.5 days per playoff game)
       if (inj.returnDay > last) games += Math.min(28, Math.round((inj.returnDay - last) / 2.5));
     }

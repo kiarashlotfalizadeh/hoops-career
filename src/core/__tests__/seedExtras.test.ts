@@ -114,6 +114,19 @@ describe('opening-night injuries and two-way contracts', () => {
     expect(hurt.length).toBeGreaterThan(0);
     expect(hurt.length).toBeLessThanOrEqual(listed.length);
     for (const p of hurt) expect(p.injury!.gamesRemaining).toBeGreaterThan(0);
+    // back after the Cup's knockout window: his team's two games there count too
+    const cup = league.cup;
+    const byId = new Map(seed.players.map((sp) => [sp.id, sp]));
+    const late = hurt.filter((p) => {
+      const back = byId.get(p.bbrefId!)?.injury?.returnDay;
+      return cup && back != null && back >= cup.finalDay && back <= league.regularSeasonDays && p.tid >= 0;
+    });
+    if (cup) expect(late.length).toBeGreaterThan(0);
+    for (const p of late) {
+      const back = byId.get(p.bbrefId!)!.injury!.returnDay!;
+      const before = league.schedule.filter((g) => g.type === 'regular' && g.day < back && (g.home === p.tid || g.away === p.tid)).length;
+      expect(p.injury!.gamesRemaining).toBe(before + 2);
+    }
     // injuries off: everyone healthy
     expect(Object.values(make(seed, { ...defaultSettings(), injuries: false }).players).some((p) => p.injury)).toBe(false);
   });
