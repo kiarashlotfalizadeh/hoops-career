@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab } from '../ai/lab';
-import { counterCandidates, scoutTeam } from '../ai/advisor';
+import { counterCandidates, scoutTeam, teamAlerts } from '../ai/advisor';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
 
@@ -56,6 +56,27 @@ describe('tactics lab & reports', () => {
     expect(counterCandidates(league, 0, 1).map((c) => c.id)).toContain('vs-drop');
     mine.tactics = applyPatch(mine.tactics, { offense: { actions: { ...mine.tactics.offense.actions, pnr: 100, handoff: 100 } } });
     expect(counterCandidates(league, 0, 1).map((c) => c.id)).not.toContain('vs-drop');
+    [mine.tactics, opp.tactics] = saved;
+  });
+  it('gives a zone no ball-screen coverage advice, and says when a coverage counter leaves your zone', () => {
+    const [mine, opp] = [league.teams[0], league.teams[1]];
+    const saved = [mine.tactics, opp.tactics];
+    // a zone keeps the coverage it had in man-to-man, but the engine ignores it
+    opp.tactics = applyPatch(opp.tactics, { defense: { scheme: 'zone23', pnr: 'drop', switchOffBall: true } });
+    const rep = scoutTeam(league, 1);
+    expect(rep.defense[0]).toMatch(/no ball-screen coverage/);
+    expect(rep.weaknesses.join(' ')).not.toMatch(/Drop|Switching|Blitz/);
+    expect(counterCandidates(league, 0, 1).map((c) => c.id)).not.toContain('vs-switch');
+    expect(teamAlerts(league, 1).map((a) => a.id)).not.toContain('drop-noprot');
+    // from a zone, a coverage counter is a move to man-to-man too, and only Switch switches off the ball
+    mine.tactics = applyPatch(mine.tactics, { defense: { scheme: 'zone23', pnr: 'switch', switchOffBall: false } });
+    const covs = counterCandidates(league, 0, 1).filter((c) => c.id.startsWith('cov-'));
+    expect(covs.map((c) => c.id)).toContain('cov-switch');
+    for (const c of covs) {
+      expect(c.patch.defense).toMatchObject({ scheme: 'man' });
+      expect(c.patch.defense?.switchOffBall).toBe(c.id === 'cov-switch' ? true : undefined);
+      expect(c.why).toMatch(/man-to-man instead of your zone/);
+    }
     [mine.tactics, opp.tactics] = saved;
   });
   it('scouts in plain English: plural team names, the creator role named once', () => {

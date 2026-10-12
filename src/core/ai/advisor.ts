@@ -3,7 +3,7 @@
 
 import type { League, Player, PnrCoverage } from '../types';
 import { composites, ROLE_META } from '../ratings';
-import { DEF_PRESETS, OFF_PRESETS, COVERAGE_META } from '../sim/tactics';
+import { DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
@@ -55,8 +55,13 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   );
   if (t.offense.threePoint >= 70) offense.push('Lives behind the arc.');
   if (t.offense.crashBoards >= 65) offense.push('Crashes the offensive glass hard, which leaves them open to run-outs.');
+  // ball-screen coverages and off-ball switching only apply in man-to-man: a zone plays its zone
+  const man = t.defense.scheme === 'man';
+  const scheme = SCHEME_META[t.defense.scheme].label;
   defense.push(
-    `Plays ${def?.name ?? 'man-to-man'}: ${COVERAGE_META[t.defense.pnr].label.toLowerCase()} coverage on ball screens${t.defense.scheme !== 'man' ? ', with zone looks' : ''}.`,
+    man
+      ? `Plays ${def?.name ?? 'man-to-man'}: ${COVERAGE_META[t.defense.pnr].label.toLowerCase()} coverage on ball screens.`
+      : `Plays ${def && def.name !== scheme ? `${def.name} in a ${scheme}` : scheme}, so there is no ball-screen coverage to attack.`,
   );
   if (t.defense.press !== 'none') defense.push('Uses a full-court press, so secure ball handlers matter.');
   if (t.defense.help >= 65) defense.push('Helps aggressively off shooters into the paint.');
@@ -64,12 +69,12 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (spacing < CRAMPED_SPACING) weaknesses.push(`Poor spacing (${pct(spacing)}): pack the paint and dare them to shoot.`);
   if (security < 52) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
-  if (t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
-  if (t.defense.pnr === 'switch' || t.defense.switchOffBall) {
+  if (man && t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
+  if (man && (t.defense.pnr === 'switch' || t.defense.switchOffBall)) {
     const slow = cs.filter((x) => x.p.ratings.hgt >= 60 && x.p.ratings.spd < 40);
     if (slow.length) weaknesses.push(`Switching with a slow big (${slow[0].p.lastName}): hunt that mismatch.`);
   }
-  if (t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
+  if (man && t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
   const threats: Threat[] = [];
   if (creators[0]) {
     const role = t.offense.roles[creators[0].p.pid] ?? 'creator';
@@ -98,9 +103,16 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   const security = cs.slice(0, 5).reduce((a, x) => a + x.c.ballSec, 0) / Math.max(1, Math.min(5, cs.length));
   const out: Candidate[] = [];
   const cur = mine.tactics;
+  // coverages only apply in man-to-man, so from a zone each one is a change of scheme too
+  const zone = cur.defense.scheme !== 'man';
   const cov = (c: PnrCoverage, why: string) => {
-    if (cur.defense.pnr !== c)
-      out.push({ id: `cov-${c}`, label: `${COVERAGE_META[c].label} coverage`, why, patch: { defense: { pnr: c, scheme: 'man', switchOffBall: c === 'switch' } } });
+    if (zone || cur.defense.pnr !== c)
+      out.push({
+        id: `cov-${c}`,
+        label: `${COVERAGE_META[c].label} coverage`,
+        why: zone ? `${why} You'd play man-to-man instead of your zone.` : why,
+        patch: { defense: { pnr: c, scheme: 'man', ...(c === 'switch' ? { switchOffBall: true } : {}) } },
+      });
   };
   if (top) {
     const pull = (top.c.pu3 + top.c.midShot) / 2;
@@ -146,7 +158,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       why: 'Pull-up jumpers and handoffs beat drop coverage.',
       patch: { offense: { actions: { ...cur.offense.actions, pnr: Math.min(100, cur.offense.actions.pnr + 20), handoff: Math.min(100, cur.offense.actions.handoff + 20) } } },
     });
-  if (od.pnr === 'switch' || od.switchOffBall)
+  if (od.scheme === 'man' && (od.pnr === 'switch' || od.switchOffBall))
     out.push({
       id: 'vs-switch',
       label: 'Hunt mismatches',
@@ -236,7 +248,9 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         body: 'Lineup balance matters: spacing, a ball handler and a rim protector each swing efficiency.',
         link: '/rotation',
       });
-    if (team.tactics.defense.pnr === 'drop' && ev.rimProtection < 52)
+    // (coverages only apply in man-to-man)
+    const man = team.tactics.defense.scheme === 'man';
+    if (man && team.tactics.defense.pnr === 'drop' && ev.rimProtection < 52)
       alerts.push({
         id: 'drop-noprot',
         tone: 'alert',
@@ -244,7 +258,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
         link: '/tactics',
       });
-    if ((team.tactics.defense.pnr === 'switch' || team.tactics.defense.switchOffBall) && starters.some((p) => p.ratings.hgt >= 60 && p.ratings.spd < 38)) {
+    if (man && (team.tactics.defense.pnr === 'switch' || team.tactics.defense.switchOffBall) && starters.some((p) => p.ratings.hgt >= 60 && p.ratings.spd < 38)) {
       alerts.push({
         id: 'switch-slow',
         tone: 'alert',
