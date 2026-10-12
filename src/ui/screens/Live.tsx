@@ -20,12 +20,7 @@ import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames } from '../s
 import { adviceFor } from '../seasonAnalysis';
 import { colorDistance } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
-
-const SPEEDS = [
-  { id: 1, label: '1×' },
-  { id: 2, label: '2×' },
-  { id: 4, label: '4×' },
-];
+import { LIVE_SPEEDS } from '../settingsOptions';
 
 const FEED_MAX = 80;
 
@@ -560,7 +555,7 @@ export default function Live() {
                 {paused ? <Play size={16} /> : <Pause size={16} />}
               </button>
               <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
-                {SPEEDS.map((s) => (
+                {LIVE_SPEEDS.map((s) => (
                   <button
                     key={s.id}
                     className={speed === s.id ? 'on' : ''}

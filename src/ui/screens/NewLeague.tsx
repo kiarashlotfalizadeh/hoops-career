@@ -11,6 +11,7 @@ import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { canGoBack } from '../nav';
+import { COMPLEXITY, DIFFICULTY, helpFor } from '../settingsOptions';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -278,44 +279,15 @@ export default function NewLeague() {
             </div>
           </Card>
           <Card title="Difficulty">
-            <Chips
-              label="Difficulty"
-              value={settings.difficulty}
-              onChange={(d) => setSettings({ ...settings, difficulty: d })}
-              options={[
-                { id: 'casual', label: 'Casual' },
-                { id: 'normal', label: 'Normal' },
-                { id: 'hard', label: 'Hard' },
-              ]}
-            />
+            <Chips label="Difficulty" value={settings.difficulty} onChange={(d) => setSettings({ ...settings, difficulty: d })} options={DIFFICULTY} />
             <div className="small dim" style={{ marginTop: 8 }}>
-              {/* the same numbers Settings quotes */}
-              {settings.difficulty === 'casual'
-                ? 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.'
-                : settings.difficulty === 'hard'
-                  ? 'AI GMs want a 12% premium in trades, and free agents ask you for 12% more.'
-                  : 'Fair trades and market-rate contracts.'}{' '}
-              You can change this any time.
+              {helpFor(DIFFICULTY, settings.difficulty)} You can change this any time.
             </div>
           </Card>
           <Card title="Coaching depth">
-            <Chips
-              label="Coaching depth"
-              value={settings.complexity}
-              onChange={(c) => setSettings({ ...settings, complexity: c })}
-              options={[
-                { id: 'simple', label: 'Simple' },
-                { id: 'advanced', label: 'Advanced' },
-                { id: 'expert', label: 'Expert' },
-              ]}
-            />
+            <Chips label="Coaching depth" value={settings.complexity} onChange={(c) => setSettings({ ...settings, complexity: c })} options={COMPLEXITY} />
             <div className="small dim" style={{ marginTop: 8 }}>
-              {settings.complexity === 'simple'
-                ? 'Pick a playbook and a defensive identity. The staff handles the details.'
-                : settings.complexity === 'advanced'
-                  ? 'Tune pace, shot profile, actions, coverages and help. Recommended.'
-                  : 'Everything: individual roles, shot freedom, matchups, end-of-game rules.'}{' '}
-              You can change this any time.
+              {helpFor(COMPLEXITY, settings.complexity)} You can change this any time.
             </div>
           </Card>
           <Card>
