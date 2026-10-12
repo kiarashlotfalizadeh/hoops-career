@@ -373,7 +373,9 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     const outSal = sideSalary(league, mine);
     if (salaryMatchGap(league, offer, key) > 0) {
       const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
-      errors.push(`${abbrev} is over the cap and can take back at most 125% of outgoing salary ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`);
+      errors.push(
+        `${abbrev} would be over the cap after the trade, so it can take back at most 125% of outgoing salary plus $0.1M ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`,
+      );
     }
     // the mid-level is for teams under the tax, so using it caps the team at the tax line for that season
     const tax = CAP_FOR(league, s).luxuryTax;
@@ -465,7 +467,7 @@ export function pickLabel(league: League, dp: DraftPick) {
   const orig = league.teams[dp.originalTid];
   const slot = dp.pick ? ` #${(dp.round - 1) * 30 + dp.pick}` : '';
   const via = dp.originalTid !== dp.tid ? ` (${orig.abbrev})` : '';
-  const prot = dp.protection && dp.originalTid !== dp.tid ? ` · top-${dp.protection} prot.` : '';
+  const prot = dp.protection && dp.originalTid !== dp.tid ? ` · top-${(dp.round - 1) * 30 + dp.protection} prot.` : '';
   return `${dp.season} ${dp.round === 1 ? '1st' : '2nd'}${slot}${via}${prot}`;
 }
 

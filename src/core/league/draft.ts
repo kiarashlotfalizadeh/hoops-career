@@ -166,7 +166,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
         const orig = league.teams[dp.originalTid];
         addNews(league, {
           kind: 'draft',
-          text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${dp.pick}, top-${dp.protection} protected); the ${holder.name} come away empty.`,
+          text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${(round - 1) * 30 + dp.pick}, top-${(round - 1) * 30 + dp.protection} protected); the ${holder.name} come away empty.`,
           tids: [dp.tid, dp.originalTid],
           pids: [],
         });
@@ -192,7 +192,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
     addInbox(league, {
       from: 'Scouting Department',
       subject: 'Draft lottery results',
-      body: `You hold ${mine.map((d) => `#${d.pick}${d.round === 2 ? ' (2nd round)' : ''}`).join(', ')}. Check the Draft board: combine results and scouting blurbs are in.`,
+      body: `You hold ${mine.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}. Check the Draft board: combine results and scouting blurbs are in.`,
       tone: 'neutral',
       link: '/draft',
     });
