@@ -748,11 +748,13 @@ describe('owner (L11, L19)', () => {
     const ts = curTeamSeason(l, U);
     [ts.won, ts.lost, ts.playoffRound] = [15, 67, -1];
     const review = (tenureStart: number, jobSecurity: boolean) => {
+      l.fired = false;
       l.ownerMood = { wins: -0.8, playoffs: -0.25, money: 0, total: -0.6 };
       l.tenureStart = tenureStart;
       l.settings.jobSecurity = jobSecurity;
       ownerEvaluation(l);
     };
+    // the grace period is the first two seasons in charge
     review(l.season - 1, true);
     expect(l.fired).toBeFalsy();
     review(l.season - 3, false);
@@ -760,6 +762,9 @@ describe('owner (L11, L19)', () => {
     review(l.season - 3, true);
     expect(l.fired).toBe(true);
     expect(l.inbox[0].subject).toBe("You're fired");
+    // the third season is the first one that counts
+    review(l.season - 2, true);
+    expect(l.fired).toBe(true);
   });
 
   it('a fired coach is not reviewed again; taking over a team clears the old plan and board', () => {
