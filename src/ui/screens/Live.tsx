@@ -244,6 +244,8 @@ export default function Live() {
   const showFinal = useCallback(
     (lg: LiveGame) => {
       const res = lg.committed!;
+      // the coaching sheets have nothing left to change
+      setPanel('none');
       setStatus('final');
       setResultGid(res.gid);
       ticker.set(0, [res.home.pts, res.away.pts], true);
@@ -260,6 +262,7 @@ export default function Live() {
     (lg: LiveGame) => {
       const res = useStore.getState().league!.games.find((g) => g.gid === lg.game.gid);
       clearLive();
+      setPanel('none');
       setStatus('simmed');
       setResultGid(res?.gid ?? null);
       if (res) ticker.set(0, [res.home.pts, res.away.pts], true);
@@ -400,7 +403,8 @@ export default function Live() {
     const me = lg.sim.T[userSide];
     const them = lg.sim.T[1 - userSide];
     const out: Suggestion[] = [];
-    if (them.run >= 8 && me.timeouts > 0)
+    // a timeout can't be called at a quarter break
+    if (them.run >= 8 && me.timeouts > 0 && !atBreak)
       out.push({ id: `run-${them.score}`, text: `${them.team.name} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
     for (const p of me.on) {
       if (p.energy < 0.55) {
@@ -455,7 +459,7 @@ export default function Live() {
     }
     return out.filter((s) => !dismissed.includes(s.id)).slice(0, 2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, dismissed, over, nameOf, baselines]);
+  }, [tick, dismissed, over, atBreak, nameOf, baselines]);
 
   // only offered once the game is over (or there is none): not worked out on every possession
   const nextAction = status !== 'live' ? flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame')) : undefined;
@@ -643,7 +647,7 @@ export default function Live() {
 
           {!over && (
             <div className="grid4 live-ctl">
-              <button className="btn sm" disabled={me.timeouts <= 0} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
+              <button className="btn sm" disabled={me.timeouts <= 0 || atBreak} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
                 <Timer size={16} /> TO
               </button>
               <button className="btn sm" onClick={() => setPanel('subs')}>
