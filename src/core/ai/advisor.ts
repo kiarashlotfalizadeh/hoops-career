@@ -311,14 +311,20 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       });
   }
   for (const p of players) {
-    if (p.wear >= 55)
+    if (p.wear >= 55) {
+      // a player who already sits back-to-backs needs a lighter load instead
+      const cap = rot.caps[p.pid];
+      const ease = !rot.restB2B.includes(p.pid)
+        ? 'Rest him on back-to-backs (Rotation).'
+        : `He already rests on back-to-backs: ${cap ? `lowering his ${cap}-minute cap` : 'a hard minute cap'} (Rotation) lightens his load further.`;
       alerts.push({
         id: `wear-${p.pid}`,
         tone: 'alert',
         title: `${p.lastName} is worn down`,
-        body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. Rest him on back-to-backs (Rotation).`,
+        body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. ${ease}`,
         link: '/rotation',
       });
+    }
     if (p.mood.tradeRequest)
       alerts.push({ id: `tr-${p.pid}`, tone: 'bad', title: `${p.lastName} wants a trade`, body: moodText(p, 'He wants a fresh start somewhere else.'), link: `/player/${p.pid}` });
     else if (p.mood.score <= -4 && p.ovr >= 70)

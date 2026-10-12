@@ -141,6 +141,21 @@ describe('tactics lab & reports', () => {
     big.ratings = r;
     [team.tactics, team.rotation] = [tactics, rotation];
   });
+  it('only tells you to rest a worn-down player on back-to-backs when he does not already', () => {
+    const rotation = league.teams[2].rotation;
+    const p = teamPlayers(league, 2)[0];
+    const wear = p.wear;
+    p.wear = 70;
+    const body = () => teamAlerts(league, 2).find((a) => a.id === `wear-${p.pid}`)!.body;
+    league.teams[2].rotation = { ...rotation, restB2B: [], caps: {} };
+    expect(body()).toMatch(/^Season wear 70\. .* Rest him on back-to-backs \(Rotation\)\.$/);
+    league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: {} };
+    expect(body()).toMatch(/already rests on back-to-backs: a hard minute cap \(Rotation\)/);
+    league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: { [p.pid]: 28 } };
+    expect(body()).toMatch(/lowering his 28-minute cap \(Rotation\)/);
+    league.teams[2].rotation = rotation;
+    p.wear = wear;
+  });
   it('only offers counters that change something', () => {
     const [mine, opp] = [league.teams[0], league.teams[1]];
     const saved = [mine.tactics, opp.tactics];
