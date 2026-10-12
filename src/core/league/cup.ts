@@ -6,9 +6,11 @@
 // and once the groups are decided the teams that didn't qualify get their last two games there
 // (quarterfinal losers one), so everyone ends on 82.
 
-import type { BoxLine, CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
+import type { CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
 import type { Rng } from '../random';
 import { addInbox, addNews, andList, dateToDay, dayToDate, fmtDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { gameScore } from './awards';
+import { drawLot } from './standings';
 
 export interface CupSetup {
   groups: CupGroup[];
@@ -36,12 +38,8 @@ export function drawCupGroups(teams: Team[], season: number, rng: Rng): CupGroup
   for (const conf of ['E', 'W'] as const) {
     const confTeams = teams.filter((t) => t.conf === conf);
     if (confTeams.length !== 15) return null;
-    const prev = (t: Team) => {
-      const s = t.seasons.find((x) => x.season === season - 1);
-      return s && s.won + s.lost > 0 ? winPct(s) : 0.5;
-    };
     const ranked = confTeams
-      .map((t) => ({ t, k: prev(t) + rng.next() * 1e-3 }))
+      .map((t) => ({ t, k: lastSeasonPct(t, season) + rng.next() * 1e-3 }))
       .sort((a, b) => b.k - a.k)
       .map((x) => x.t.tid);
     const ids = ['A', 'B', 'C'];
@@ -110,13 +108,13 @@ export interface CupGroupTable {
   rows: CupRow[];
 }
 
-/** Stable last-resort tiebreak (the NBA draws lots). */
-const lot = (season: number, tid: number) => (((season * 2654435761) ^ (tid * 40503)) >>> 0) % 1000;
-
-function prevPct(league: League, tid: number) {
-  const s = league.teams[tid].seasons.find((x) => x.season === league.season - 1);
+/** Last season's record (.500 in a league's first season), a late tiebreak and the draw's pots. */
+function lastSeasonPct(t: Team, season: number) {
+  const s = t.seasons.find((x) => x.season === season - 1);
   return s && s.won + s.lost > 0 ? winPct(s) : 0.5;
 }
+
+const prevPct = (league: League, tid: number) => lastSeasonPct(league.teams[tid], league.season);
 
 /**
  * Group tables from this season's group games. Ties: head-to-head among the tied teams, point
@@ -151,7 +149,7 @@ export function cupTables(league: League): CupGroupTable[] {
       // head-to-head among every team on the same record
       const tied = rows.filter((r) => Math.abs(pct(r) - pct(x)) < 1e-9);
       const h2h = (r: CupRow) => tied.reduce((s, o) => s + (beat.get(`${r.tid}-${o.tid}`) ?? 0) - (beat.get(`${o.tid}-${r.tid}`) ?? 0), 0);
-      return h2h(y) - h2h(x) || y.pd - x.pd || y.pf - x.pf || prevPct(league, y.tid) - prevPct(league, x.tid) || lot(cup.season, x.tid) - lot(cup.season, y.tid);
+      return h2h(y) - h2h(x) || y.pd - x.pd || y.pf - x.pf || prevPct(league, y.tid) - prevPct(league, x.tid) || drawLot(cup.season, x.tid) - drawLot(cup.season, y.tid);
     });
     rows.forEach((r, i) => (r.rank = i + 1));
     return { group, rows };
@@ -171,7 +169,7 @@ export function cupTables(league: League): CupGroupTable[] {
 function crossGroup(league: League, a: CupRow, b: CupRow) {
   const pa = a.won / Math.max(1, a.won + a.lost);
   const pb = b.won / Math.max(1, b.won + b.lost);
-  return pb - pa || b.pd - a.pd || b.pf - a.pf || prevPct(league, b.tid) - prevPct(league, a.tid) || lot(league.season, a.tid) - lot(league.season, b.tid);
+  return pb - pa || b.pd - a.pd || b.pf - a.pf || prevPct(league, b.tid) - prevPct(league, a.tid) || drawLot(league.season, a.tid) - drawLot(league.season, b.tid);
 }
 
 /** Knockout seeds per conference: the three group winners, then the best runner-up. */
@@ -414,13 +412,12 @@ const seedOf = (t: CupTie, tid: number) => (tid === t.high ? t.highSeed : t.lowS
 function cupMvp(league: League, champ: number, cup: CupState): number | undefined {
   const knockout = new Set(cup.bracket.map((t) => t.gid));
   const score = new Map<number, number>();
-  const gmsc = (b: BoxLine) => b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.orb + 0.3 * b.drb + b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov;
   for (const r of league.games) {
     if (r.season !== cup.season || !r.cup) continue;
     const side = r.home.tid === champ ? r.home : r.away.tid === champ ? r.away : null;
     if (!side) continue;
     const w = knockout.has(r.gid) ? 1.5 : 1;
-    for (const b of side.players) if (b.min > 0) score.set(b.pid, (score.get(b.pid) ?? 0) + gmsc(b) * w);
+    for (const b of side.players) if (b.min > 0) score.set(b.pid, (score.get(b.pid) ?? 0) + gameScore(b) * w);
   }
   let best: number | undefined;
   for (const [pid, s] of score) if (league.players[pid] && (best === undefined || s > score.get(best)!)) best = pid;

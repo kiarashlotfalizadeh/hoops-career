@@ -3,7 +3,8 @@ import { composites } from '../ratings';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
 
-export function gameScore(s: PlayerStats): number {
+/** Hollinger's game score, for a box line or a season's totals. */
+export function gameScore(s: Pick<PlayerStats, 'pts' | 'fgm' | 'fga' | 'ftm' | 'fta' | 'orb' | 'drb' | 'ast' | 'stl' | 'blk' | 'tov' | 'pf'>): number {
   return s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
 }
 
@@ -279,10 +280,7 @@ export function finalsMvp(league: League, champTid: number): number | undefined 
   for (const g of finals) {
     const side = g.home.tid === champTid ? g.home : g.away.tid === champTid ? g.away : null;
     if (!side) continue;
-    for (const bl of side.players) {
-      const v = bl.pts + 0.4 * bl.fgm - 0.7 * bl.fga + 0.7 * bl.orb + 0.3 * bl.drb + bl.stl + 0.7 * bl.ast + 0.7 * bl.blk - bl.tov;
-      totals.set(bl.pid, (totals.get(bl.pid) ?? 0) + v);
-    }
+    for (const bl of side.players) totals.set(bl.pid, (totals.get(bl.pid) ?? 0) + gameScore(bl));
   }
   for (const [pid, v] of totals) {
     if (v > bs) {
