@@ -2,7 +2,7 @@
 // training focus, coaching quality, practice intensity and playing time.
 
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
-import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
+import { FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
 import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, potential, toDisplay, archetype } from '../ratings';
 import { followTendencies, playerAge } from '../playerGen';
@@ -240,16 +240,17 @@ function anchorOverallSpread(league: League) {
 export function annualProgression(league: League, rng: Rng): { pid: number; delta: number }[] {
   const out: { pid: number; delta: number }[] = [];
   const before = new Map(Object.values(league.players).map((p) => [p.pid, p.ovr]));
+  // (this summer's prospects are drafted or gone by now; next year's class arrives after this)
   for (const p of Object.values(league.players)) {
-    if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
-    develop(p, league.season, devContext(league, p, league.season - 1), rng, p.tid === DRAFT_PROSPECT ? 0.5 : 0.8);
+    if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
+    develop(p, league.season, devContext(league, p, league.season - 1), rng, 0.8);
   }
   anchorRatings(league);
   for (const p of Object.values(league.players)) {
-    if (p.tid < 0 && p.tid !== FREE_AGENT && p.tid !== DRAFT_PROSPECT) continue;
+    if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
     refreshDerived(league, p);
     // tendencies follow the year's change in level: from the OVR of his latest snapshot, which they
-    // were set for (in-season development and injuries since count too), or for a prospect without
+    // were set for (in-season development and injuries since count too), or for a draftee without
     // one, from before this summer's development
     followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });

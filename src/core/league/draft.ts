@@ -76,10 +76,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     league.players[p.pid] = p;
     created.push(p);
   }
-  rankProspects(league, year, rng);
-  for (const p of created) {
-    p.prospect = { rank: p.prospect?.rank ?? 99, combine: combineFor(p, rng), blurb: blurb(p) };
-  }
+  for (const p of created) p.prospect = { rank: 99, combine: combineFor(p, rng), blurb: blurb(p) };
   rankProspects(league, year, rng);
 }
 
@@ -89,7 +86,7 @@ export function rankProspects(league: League, year: number, rng: Rng) {
     .map((p) => ({ p, s: p.pot * 0.62 + p.ovr * 0.38 + rng.normal(0, 1.2) }))
     .sort((a, b) => b.s - a.s);
   list.forEach((x, i) => {
-    x.p.prospect = { ...(x.p.prospect ?? { blurb: '' }), rank: i + 1 } as Player['prospect'];
+    x.p.prospect = { ...(x.p.prospect ?? { blurb: '' }), rank: i + 1 };
   });
 }
 
