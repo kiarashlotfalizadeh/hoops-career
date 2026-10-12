@@ -20,7 +20,7 @@ export interface FlowAction {
 }
 
 /** Is the user's team still playing this postseason? (Top-six seeds waiting out the play-in are.) */
-function stillAlive(league: League): boolean {
+export function stillAlive(league: League): boolean {
   const ts = curTeamSeason(league, league.userTid);
   if (league.phase === 'playin') return ts.playoffRound >= 0;
   return ts.playoffRound >= 1 && !league.playoffs.some((s) => s.winner !== undefined && s.winner !== league.userTid && (s.high === league.userTid || s.low === league.userTid));

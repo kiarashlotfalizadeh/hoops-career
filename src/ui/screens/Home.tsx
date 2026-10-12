@@ -194,7 +194,7 @@ export default function Home() {
               </>
             ) : (
               <button className="btn primary grow" disabled={!!sim} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
-                <FastForward size={18} /> Sim to game day
+                <FastForward size={18} /> Sim to next game
               </button>
             )}
           </div>

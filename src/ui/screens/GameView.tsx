@@ -11,7 +11,7 @@ import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
 import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
-import { p1, periodLabel, rosterNames, signed } from '../stats';
+import { finalLabel, p1, periodLabel, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 
@@ -79,7 +79,7 @@ export default function GameView() {
             <span className="score" style={{ opacity: g.away.pts > g.home.pts ? 1 : 0.55 }}>
               {g.away.pts}
             </span>
-            <span className="dim small">{g.ot ? `F/${g.ot > 1 ? `${g.ot}OT` : 'OT'}` : 'FINAL'}</span>
+            <span className="dim small">{finalLabel(g.ot)}</span>
             <span className="score" style={{ opacity: g.home.pts > g.away.pts ? 1 : 0.55 }}>
               {g.home.pts}
             </span>

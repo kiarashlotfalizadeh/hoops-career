@@ -120,6 +120,8 @@ export const ordinalSuffix = (n: number) => {
 export const ordinal = (n: number) => `${n}${ordinalSuffix(n)}`;
 /** Q1..Q4, then OT, 2OT, 3OT. */
 export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
+/** A finished game's scorebug: FINAL, F/OT, F/2OT. */
+export const finalLabel = (ot: number) => (ot > 0 ? `F/${periodLabel(4 + ot)}` : 'FINAL');
 
 /**
  * Last names for a roster, with as much of the first name as it takes to tell teammates apart:

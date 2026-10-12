@@ -16,10 +16,10 @@ import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameR
 import { buildSimInput } from '../../core/league/games';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
-import { periodLabel, rosterNames } from '../stats';
+import { finalLabel, periodLabel, rosterNames } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { colorDistance } from '../teamColors';
-import { flowActions } from '../flow';
+import { flowActions, stillAlive } from '../flow';
 
 const SPEEDS = [
   { id: 1, label: '1×' },
@@ -43,6 +43,9 @@ interface Suggestion {
 }
 
 type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
+
+/** "an 8-0 run", "an 11-0 run", "a 12-0 run". */
+const aRun = (n: number) => `${n === 8 || n === 11 || n === 18 || (n >= 80 && n < 90) ? 'an' : 'a'} ${n}-0 run`;
 
 /**
  * Clock and score as the court animates them. A tiny store outside React state, so only the
@@ -410,7 +413,7 @@ export default function Live() {
     const out: Suggestion[] = [];
     // a timeout can't be called at a quarter break
     if (them.run >= 8 && me.timeouts > 0 && !atBreak)
-      out.push({ id: `run-${them.score}`, text: `${them.team.name} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
+      out.push({ id: `run-${them.score}`, text: `The ${them.team.name} are on ${aRun(them.run)}.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
     for (const p of me.on) {
       if (p.energy < 0.55) {
         const bench = me.players.filter((b) => !b.on && b.out === 0 && b.energy > 0.8).sort((a, b) => b.c.create + b.c.helpD - (a.c.create + a.c.helpD))[0];
@@ -423,14 +426,17 @@ export default function Live() {
       if (p.fouls >= Math.min(lg.sim.q + 1, 5) && lg.sim.q < 4) out.push({ id: `fouls-${p.pid}-${p.fouls}`, text: `${nameOf(p.pid)} has ${p.fouls} fouls.` });
     }
     // opponent play types torching us: well above this season's norm for that play, on a real sample
+    // ("Other" is presses, the clock and late fouls: nothing to adjust against)
     for (const [k, v] of Object.entries(them.pt)) {
       const base = baselines[k];
-      if (base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
+      if (k === 'misc' || base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
       const ft = k as FinishType;
       const cov = me.t.defense.pnr;
+      // ball-screen coverage only applies in man-to-man
+      const man = me.t.defense.scheme === 'man';
       let advice: Suggestion['action'];
       let text = `Their ${FINISH_LABEL[ft]} is scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
-      if (ft === 'pnrBH' && cov === 'drop') {
+      if (ft === 'pnrBH' && man && cov === 'drop') {
         text += ' Drop is giving their handlers room.';
         advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
       } else if (ft === 'spotup' && me.t.defense.help > 55) {
@@ -440,14 +446,14 @@ export default function Live() {
         advice = { label: 'Sprint back', run: () => applyTactics((t) => void ((t.defense.getBack = 85), (t.offense.crashBoards = Math.min(t.offense.crashBoards, 30))), false) };
       } else if (ft === 'post') {
         advice = { label: 'Double the post', run: () => applyTactics((t) => void (t.defense.help = 80), false) };
-      } else if (ft === 'pnrRoll' && cov !== 'drop') {
+      } else if (ft === 'pnrRoll' && man && cov !== 'drop') {
         advice = { label: 'Go to Drop', run: () => applyTactics((t) => void (t.defense.pnr = 'drop'), false) };
       }
       out.push({ id: `pt-${k}`, text, action: advice });
     }
     for (const [k, v] of Object.entries(me.pt)) {
       const base = baselines[k];
-      if (base !== undefined && v.poss >= 12 && zScore(v, base) < -2)
+      if (k !== 'misc' && base !== undefined && v.poss >= 12 && zScore(v, base) < -2)
         out.push({
           id: `mypt-${k}`,
           text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP, league ${base.toFixed(2)}). Consider running other actions.`,
@@ -481,13 +487,15 @@ export default function Live() {
         <Empty>
           {league.phase === 'preseason'
             ? 'No games yet: start the regular season from Home or the Play menu.'
-            : ['regular', 'playin', 'playoffs'].includes(league.phase)
-              ? 'No game for your team today.'
-              : 'No games until next season.'}
+            : (league.phase === 'playin' || league.phase === 'playoffs') && !stillAlive(league)
+              ? 'Your season is over: no more games until next season.'
+              : ['regular', 'playin', 'playoffs'].includes(league.phase)
+                ? 'No game for your team today.'
+                : 'No games until next season.'}
         </Empty>
         {nextAction?.sim && (
           <button className="btn primary block big" disabled={simBusy} onClick={() => void nextGame()}>
-            <ChevronsRight size={18} /> Sim to game day
+            <ChevronsRight size={18} /> Sim to next game
           </button>
         )}
       </main>
@@ -503,16 +511,12 @@ export default function Live() {
   const sim = game.sim;
   const me = sim.T[userSide];
   const quarter = script?.q ?? sim.q;
-  const won =
-    resultGid !== null &&
-    (() => {
-      const res = league.games.find((g) => g.gid === resultGid);
-      return !!res && (userSide === 0 ? res.home.pts > res.away.pts : res.away.pts > res.home.pts);
-    })();
+  const result = resultGid !== null ? league.games.find((g) => g.gid === resultGid) : undefined;
+  const won = !!result && (userSide === 0 ? result.home.pts > result.away.pts : result.away.pts > result.home.pts);
 
   return (
     <main className="page full" style={{ gap: 10 }}>
-      <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} />
+      <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} />
       <div className="sr-only" aria-live="polite">
         {announce}
       </div>
@@ -713,7 +717,7 @@ export default function Live() {
   );
 }
 
-function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; sim: GameSim; home: Team; away: Team; quarter: number; over: boolean }) {
+function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Ticker; sim: GameSim; home: Team; away: Team; quarter: number; over: boolean; ot: number }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
   return (
@@ -721,7 +725,11 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
       className="card tight"
       style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}
     >
-      <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? 'final' : `${qLabel} ${fmtClock(clock)}`}`}>
+      <div
+        className="scorebug live-bug"
+        role="group"
+        aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? `final${ot ? ` in ${ot > 1 ? `${ot} overtimes` : 'overtime'}` : ''}` : `${qLabel} ${fmtClock(clock)}`}`}
+      >
         <div className="row" style={{ gap: 6, minWidth: 0 }}>
           <TeamLogo tid={away.tid} size={28} />
           <div style={{ minWidth: 0 }}>
@@ -742,7 +750,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
         </div>
         <div className="col center" style={{ gap: 0, minWidth: 56 }}>
           <span className="display bold" style={{ fontSize: 15 }}>
-            {over ? 'FINAL' : qLabel}
+            {over ? finalLabel(ot) : qLabel}
           </span>
           <span className="display num" style={{ fontSize: 20 }}>
             {over ? '' : fmtClock(clock)}

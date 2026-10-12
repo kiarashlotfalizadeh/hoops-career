@@ -1,6 +1,6 @@
 // Display helpers shared by the screens.
 import { describe, expect, it } from 'vitest';
-import { ordinal, ordinalSuffix } from '../stats';
+import { finalLabel, ordinal, ordinalSuffix } from '../stats';
 
 describe('ordinal', () => {
   it('reads 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")', () => {
@@ -23,5 +23,13 @@ describe('ordinal', () => {
     ];
     for (const [n, s] of cases) expect(ordinal(n)).toBe(s);
     expect(ordinalSuffix(53)).toBe('rd');
+  });
+});
+
+describe('finalLabel', () => {
+  it('marks overtime finals as the game report does', () => {
+    expect(finalLabel(0)).toBe('FINAL');
+    expect(finalLabel(1)).toBe('F/OT');
+    expect(finalLabel(2)).toBe('F/2OT');
   });
 });
