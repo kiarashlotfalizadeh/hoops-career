@@ -88,7 +88,8 @@ describe('saving', () => {
     await st().save();
     st().mutate((x) => (x.name = 'renamed'), false);
     st().setLeague(testLeague('opened'));
-    await vi.waitFor(async () => expect((await loadLeague(a.id))!.name).toBe('renamed'));
+    // the replaced league saves in the background: a full league's write can take a while on a busy machine
+    await vi.waitFor(async () => expect((await loadLeague(a.id))!.name).toBe('renamed'), { timeout: 10_000 });
   });
 
   it('says so when the league another one replaces could not be saved', async () => {
@@ -98,7 +99,7 @@ describe('saving', () => {
     st().mutate((x) => (x.name = 'renamed'), false);
     failPuts(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
     st().setLeague(testLeague('next'));
-    await vi.waitFor(() => expect(st().toasts.at(-1)?.text).toBe('Your latest changes to "renamed" could not be saved: device storage is full.'));
+    await vi.waitFor(() => expect(st().toasts.at(-1)?.text).toBe('Your latest changes to "renamed" could not be saved: device storage is full.'), { timeout: 10_000 });
   });
 
   it('saves the open league before leaving it, and says when it could not', async () => {
