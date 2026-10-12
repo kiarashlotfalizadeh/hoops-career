@@ -195,9 +195,11 @@ export function makeContract(league: League, amount: number, years: number, star
   const salaries: number[] = [];
   for (let i = 0; i < years; i++) salaries.push(Math.round((amount * Math.pow(1.05, i)) / 10) * 10);
   if (experience !== undefined) {
+    const min = (season: number) => (experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
     // clamp after rounding: a max deal rounded to $10K would otherwise exceed the max by a few $K
-    const cap = CAP_FOR(league, start);
-    salaries[0] = clamp(salaries[0], experience >= 3 ? cap.vetMin : cap.minContract, cap.maxContract(experience));
+    salaries[0] = clamp(salaries[0], min(start), CAP_FOR(league, start).maxContract(experience));
+    // and a minimum deal's raises (5%) trail the minimum's growth with the cap (6%)
+    for (let i = 1; i < years; i++) salaries[i] = Math.max(salaries[i], min(start + i));
   }
   return { start, salaries };
 }
@@ -207,8 +209,8 @@ export function rookieContract(league: League, pick: number, round: number, star
     const base = ROOKIE_SCALE[Math.min(29, pick - 1)] * revenueScale(league, start);
     return { start, salaries: [0, 1, 2, 3].map((i) => Math.round((base * Math.pow(1.045, i)) / 10) * 10), rookie: true, option: 'team' as const };
   }
-  const min = CAP_FOR(league, start).minContract;
-  return { start, salaries: [min, Math.round(min * 1.05)], rookie: true };
+  // a second-rounder's two minimum seasons: the minimum grows with the cap, faster than a 5% raise
+  return { start, salaries: [0, 1].map((i) => CAP_FOR(league, start + i).minContract), rookie: true };
 }
 
 // ---------------------------------------------------------------- signing exceptions
@@ -367,8 +369,10 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid < 0 || !p.contract.twoWay) return { ok: false, reason: 'He is not on a two-way contract.' };
   const max = rosterMaxNow(league);
-  if (standardRoster(league, p.tid).length >= max) return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
   const s = contractSeason(league);
+  // after the season the spots are next season's: expiring deals are leaving or being re-signed
+  if (standardRoster(league, p.tid).filter((x) => contractExp(x.contract) >= s).length >= max)
+    return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
   const exp = contractExp(p.contract);
   if (exp < s) return { ok: false, reason: 'His contract is up. Re-sign him to a standard deal instead.' };
   const min = (season: number) => (p.experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);

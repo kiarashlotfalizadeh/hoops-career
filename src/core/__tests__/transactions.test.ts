@@ -23,6 +23,7 @@ import {
   signingRoute,
   teamAppeal,
   tradeValue,
+  twoWaySalary,
   valueScore,
 } from '../league/contracts';
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
@@ -381,6 +382,34 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
   });
 
+  it('nor through a third team: every team that traded him away this season waits for next season', () => {
+    const l = league();
+    l.phase = 'regular';
+    const C = 2;
+    const p = shape(l, standardRoster(l, U)[0], 74, 27, CAP_FOR(l).vetMin);
+    const pick = l.draftPicks.find((d) => d.tid === U && d.round === 2)!;
+    executeTrade(l, offer([p.pid], [], [pick.dpid]));
+    executeTrade(l, { a: { tid: AI, pids: [p.pid], dpids: [pick.dpid] }, b: { tid: C, pids: [], dpids: [] } });
+    const back = (tid: number) =>
+      validateTrade(l, { a: { tid, pids: [], dpids: [] }, b: { tid: C, pids: [p.pid], dpids: [pick.dpid] } }).filter((e) => /can't get (him|it) back/.test(e)).length;
+    expect([back(U), back(AI), back(3)]).toEqual([2, 2, 0]);
+    l.season++;
+    expect([back(U), back(AI)]).toEqual([0, 0]);
+  });
+
+  it("doesn't count a player named twice in a deal (a deep link can repeat one)", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    const mine = shape(l, standardRoster(l, U)[0], 80, 27, vetMin);
+    const theirs = shape(l, standardRoster(l, AI)[0], 84, 27, vetMin);
+    expect(evaluateTrade(l, offer([mine.pid], [theirs.pid])).accept).toBe(false);
+    const twice = evaluateTrade(l, offer([mine.pid, mine.pid], [theirs.pid]));
+    expect([twice.ok, twice.accept]).toEqual([false, false]);
+    expect(twice.message).toMatch(/twice/);
+  });
+
   it('a released player can be traded for again once he signs elsewhere: the trade-back rule leaves with his contract', () => {
     const l = league();
     l.phase = 'regular';
@@ -500,6 +529,28 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /players \(max/.test(e))).toEqual([]);
   });
 
+  it("after the season, an expiring two-way deal doesn't hold one of the three two-way slots in trades", () => {
+    const l = league();
+    l.phase = 'draft';
+    const cs = contractSeason(l);
+    // two expiring two-ways (the fictional league's) and one signed through next season
+    signPlayer(
+      l,
+      freeAgents(l).find((p) => p.experience <= 2)!,
+      U,
+      twoWaySalary(l, cs),
+      2,
+      { start: cs, twoWay: true, news: false },
+    );
+    expect(twoWayRoster(l, U).length).toBe(3);
+    const theirs = twoWayRoster(l, AI)[0];
+    theirs.contract = { start: l.season, salaries: [twoWaySalary(l), twoWaySalary(l, cs)], twoWay: true };
+    expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /two-way/.test(e))).toEqual([]);
+    // in season all three hold a slot
+    l.phase = 'regular';
+    expect(validateTrade(l, offer([], [theirs.pid])).some((e) => /4 two-way players \(max 3\)/.test(e))).toBe(true);
+  });
+
   it('counts two-way pay out of trade salary (T13)', () => {
     const l = league();
     const tw = twoWayRoster(l, U)[0];
@@ -565,6 +616,17 @@ describe('free agency', () => {
     expect(userOffer(l, b.pid, cap.vetMin * 2, 1).ok).toBe(false);
   });
 
+  it("a minimum deal pays each season's minimum, which grows faster than a 5% raise", () => {
+    const l = league();
+    const [vet, young] = freeAgents(l);
+    vet.experience = 5;
+    young.experience = 1;
+    signPlayer(l, vet, U, CAP_FOR(l).vetMin, 3, { news: false });
+    signPlayer(l, young, U, CAP_FOR(l).minContract, 2, { news: false });
+    expect(vet.contract.salaries).toEqual([0, 1, 2].map((i) => CAP_FOR(l, l.season + i).vetMin));
+    expect(young.contract.salaries).toEqual([0, 1].map((i) => CAP_FOR(l, l.season + i).minContract));
+  });
+
   it("over the cap, the minimum is the player's own: the veteran minimum only after three seasons", () => {
     const l = league();
     l.phase = 'regular';
@@ -622,6 +684,36 @@ describe('free agency', () => {
     while (standardRoster(l, U).length < 21) signPlayer(l, cheap(), U, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
     const q = cheap();
     expect(userOffer(l, q.pid, askingContract(l, q, U).amount, askingContract(l, q, U).years).reason).toMatch(/full \(21\)/);
+  });
+
+  it("a re-signing takes one of next season's 21 spots", () => {
+    const l = league();
+    l.phase = 'resign';
+    const cs = contractSeason(l);
+    const p = shape(l, standardRoster(l, U)[0], 74, 27);
+    p.contract = { start: l.season, salaries: [5_000] };
+    const signed = () => standardRoster(l, U).filter((x) => contractExp(x.contract) >= cs);
+    while (signed().length < 21) signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l, cs).vetMin, 1, { news: false, start: cs });
+    const ask = askingContract(l, p, U);
+    expect(userResign(l, p.pid, ask.amount, ask.years).reason).toMatch(/full for next season \(21\)/);
+    releasePlayer(l, signed()[0], { news: false });
+    expect(userResign(l, p.pid, ask.amount, ask.years).ok).toBe(true);
+    expect(signed().length).toBe(21);
+  });
+
+  it("after the season, converting a two-way counts next season's roster, not the expiring deals", () => {
+    const l = league();
+    l.phase = 'resign';
+    const cs = contractSeason(l);
+    const signed = () => standardRoster(l, U).filter((x) => contractExp(x.contract) >= cs);
+    for (const p of standardRoster(l, U).slice(0, 2)) p.contract = { start: l.season, salaries: [5_000] };
+    while (signed().length < 20) signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l, cs).vetMin, 1, { news: false, start: cs });
+    expect(standardRoster(l, U).length).toBeGreaterThan(21);
+    const tw = twoWayRoster(l, U)[0];
+    tw.contract = { start: l.season, salaries: [twoWaySalary(l), twoWaySalary(l, cs)], twoWay: true };
+    expect(convertTwoWay(l, tw.pid).ok).toBe(true);
+    expect(signed().length).toBe(21);
+    expect(convertTwoWay(l, twoWayRoster(l, U)[0].pid).reason).toMatch(/No open roster spot \(21\)/);
   });
 
   it('cuts prices every 5 days until the market can pay, and the market clears (T1)', () => {
@@ -717,7 +809,8 @@ describe('free agency', () => {
     const now = rookieContract(l, 1, 1, l.season + 1);
     const later = rookieContract(l, 1, 1, l.season + 3);
     expect(later.salaries[0] / now.salaries[0]).toBeCloseTo((1 + CAP.growth) ** 2, 2);
-    expect(rookieContract(l, 5, 2, l.season + 3).salaries[0]).toBe(CAP_FOR(l, l.season + 3).minContract);
+    // a second-rounder gets each season's minimum
+    expect(rookieContract(l, 5, 2, l.season + 3).salaries).toEqual([CAP_FOR(l, l.season + 3).minContract, CAP_FOR(l, l.season + 4).minContract]);
   });
 
   it('camp deals are free to cut before opening night; releases count from the contract season (T10, UI2-5)', () => {

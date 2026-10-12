@@ -398,12 +398,17 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
   return { ok: true, reason: `${playerName(p)} signs a two-way deal!` };
 }
 
+/** The user's standard players signed for next season: what the offseason limit counts while expiring deals are re-signed or let go. */
+export const resignRoster = (league: League) => standardRoster(league, league.userTid).filter((p) => contractExp(p.contract) > league.season).length;
+
 export function userResign(league: League, pid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Re-signing happens between the draft and free agency.' };
   if (!p || p.tid !== league.userTid) return { ok: false, reason: 'Not on your team.' };
   if (contractExp(p.contract) > league.season) return { ok: false, reason: `${playerName(p)} is still under contract.` };
+  // a new deal takes one of next season's 21 spots, like any other signing
+  if (resignRoster(league) >= OFFSEASON_ROSTER_MAX) return { ok: false, reason: `Your roster is full for next season (${OFFSEASON_ROSTER_MAX}). Release or trade someone first.` };
   const res = willSign(league, p, league.userTid, amount, years);
   if (!res.ok) return res;
   signPlayer(league, p, league.userTid, amount, years, { start: league.season + 1 });
