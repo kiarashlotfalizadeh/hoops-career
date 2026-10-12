@@ -1708,7 +1708,7 @@ export class GameSim {
     const screen = (S.r.str * 0.5 + S.r.hgt * 0.3 + S.r.oiq * 0.2 - 50) / 100;
     const help = this.help(def);
     const spacing = this.spacingBonus(off);
-    let advH = (H.c.pnrHandle * H.perf - dH.c.perDef * this.dq(dH)) / 22 + screen + this.rng.normal(0, 0.55) + open - this.denyCatch(def, off, H, 'pnr');
+    let advH = (H.c.pnrHandle * H.perf - dH.c.perDef * this.dq(dH)) / 22 + screen + this.rng.normal(0, 0.55) + open;
 
     // ---- coverage branches
     if (cov === 'switch') {
@@ -1728,6 +1728,8 @@ export class GameSim {
       return this.iso(off, def, open, late, forced, { actor: H, defender: dS, tag: 'switch_mismatch', fromPnr: true });
     }
 
+    // a denied star catches it late (a switch has already traded his matchup for another)
+    advH -= this.denyCatch(def, off, H, 'pnr');
     if (cov !== 'blitz') advH += this.blowBy(def, H, 'pnr');
     let pullOpen = 0;
     let rimOpen = 0;

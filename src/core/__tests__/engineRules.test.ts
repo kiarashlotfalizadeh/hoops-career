@@ -530,6 +530,33 @@ describe('engine rules', () => {
     expect(doubles('double')).toBeGreaterThan(0);
   });
 
+  it('tags the star deny only where it slows the star: not on a switched pick-and-roll, where it changes nothing', () => {
+    type P = Internals & {
+      impact(key: string, benefit: number, pts: number): void;
+      halfCourt(): void;
+      pnr(off: unknown, def: unknown, open: number, late: unknown, forced: boolean): unknown;
+    };
+    const denies = (pnr: 'switch' | 'drop') => {
+      const sim = new GameSim(side(0), side(1, { defense: { scheme: 'man', pnr, starPlan: 'deny', starTarget: null } }), {
+        rng: new Rng(6),
+        type: 'regular',
+        injuries: false,
+      }) as unknown as P;
+      let n = 0;
+      const impact = sim.impact.bind(sim);
+      sim.impact = (key, benefit, pts) => {
+        if (key === 'star_deny') n++;
+        impact(key, benefit, pts);
+      };
+      // just the pick-and-roll: no further actions after an offensive board
+      sim.halfCourt = () => {};
+      for (let i = 0; i < 300; i++) sim.pnr(sim.T[0], sim.T[1], 0, sim.lateMode(sim.T[0], sim.T[1]), false);
+      return n;
+    };
+    expect(denies('drop')).toBeGreaterThan(20);
+    expect(denies('switch')).toBe(0);
+  });
+
   it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {
     type Sim = { T: { guardOf: Map<number, { pid: number }> }[]; starTarget(def: unknown, off: unknown): { pid: number } };
     const sim = (plan: 'none' | 'deny') =>
