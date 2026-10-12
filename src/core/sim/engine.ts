@@ -364,6 +364,11 @@ const PERMS5: number[][] = (() => {
   return out;
 })();
 
+/** Usage multiplier for a player's shot freedom: green light (1), normal (0) or limited (-1). */
+function freedomMult(fr: number) {
+  return fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1;
+}
+
 function shortName(p: Player) {
   return p.lastName || p.firstName;
 }
@@ -459,7 +464,6 @@ export class GameSim {
     const rest = new Set(input.rest ?? []);
     const players: SP[] = roster.map((p) => {
       const role = tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
-      const fr = tactics.offense.freedom[p.pid] ?? 0;
       const sp: SP = {
         pid: p.pid,
         name: shortName(p),
@@ -468,7 +472,7 @@ export class GameSim {
         r: p.ratings,
         c: composites(p.ratings),
         role,
-        freedom: fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1,
+        freedom: freedomMult(tactics.offense.freedom[p.pid] ?? 0),
         energy: 1,
         fouls: 0,
         on: false,
@@ -669,8 +673,7 @@ export class GameSim {
     t.t = cloneTactics(tactics);
     for (const p of t.players) {
       p.role = t.t.offense.roles[p.pid] ?? p.role;
-      const fr = t.t.offense.freedom[p.pid] ?? 0;
-      p.freedom = fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1;
+      p.freedom = freedomMult(t.t.offense.freedom[p.pid] ?? 0);
     }
     this.refreshMatchups();
   }
@@ -1417,8 +1420,7 @@ export class GameSim {
     this.impact('press_break', off.side, pBroken * 0.28);
     const r = this.rng.next();
     if (r < pTO) {
-      const stealer = def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
-      this.turnover(off, def, h, stealer, 'press');
+      this.turnover(off, def, h, this.stealer(def), 'press');
       return 'to';
     }
     if (r < pTO + pBroken) return 'broken';
@@ -1445,8 +1447,7 @@ export class GameSim {
     // turnover in the open floor
     const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv, 0.02, 0.18);
     if (this.rng.chance(pTO)) {
-      const st = def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
-      this.turnover(off, def, h, this.stealBy(st, 0.5), 'transition');
+      this.turnover(off, def, h, this.stealBy(this.stealer(def), 0.5), 'transition');
       return;
     }
     // shot selection
@@ -1649,6 +1650,10 @@ export class GameSim {
     const edge = K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2;
     if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, edge * K.advPts[from], h.pid);
     return edge;
+  }
+  /** The defender who gets his hands on the ball when nobody in particular is beaten: quick hands, steal tendency. */
+  private stealer(def: ST): SP {
+    return def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
   }
   /** Live-ball steal by `d` with base chance `base`, scaled by his steal tendency; else a dead-ball turnover. */
   private stealBy(d: SP, base: number): SP | null {
@@ -2060,7 +2065,7 @@ export class GameSim {
     const pTO = clamp((0.1 - escape * 0.25) * A.ttv, 0.03, 0.2);
     if (star) this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))], from);
+      this.turnover(off, def, A, this.stealer(def), from);
       return 'done';
     }
     // forced to give it up: 4-on-3 for teammates
@@ -2260,8 +2265,7 @@ export class GameSim {
     const passer = ballFrom && this.rng.chance(0.5) ? ballFrom : off.on[this.rng.weighted(off.on.map((p) => Math.pow(Math.max(5, p.c.passing) / 50, 2) * this.passT(p)))];
     const pTO = this.toChance(K.toBase * 0.8, passer, def);
     if (this.rng.chance(pTO)) {
-      const st = def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
-      this.turnover(off, def, passer, this.stealBy(st, 0.6), 'spotup');
+      this.turnover(off, def, passer, this.stealBy(this.stealer(def), 0.6), 'spotup');
       return 'done';
     }
     const cutters = off.on.filter((p) => p !== passer);
