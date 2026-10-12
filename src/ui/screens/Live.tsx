@@ -14,6 +14,7 @@ import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } 
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { buildSimInput } from '../../core/league/games';
+import { liveCounter } from '../../core/ai/advisor';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
 import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames, wholeMinutes } from '../stats';
@@ -428,25 +429,10 @@ export default function Live() {
       const base = baselines[k];
       if (k === 'misc' || base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
       const ft = k as FinishType;
-      const cov = me.t.defense.pnr;
-      // ball-screen coverage only applies in man-to-man
-      const man = me.t.defense.scheme === 'man';
-      let advice: Suggestion['action'];
-      let text = `Their ${playType(ft)} plays are scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
-      if (ft === 'pnrBH' && man && cov === 'drop') {
-        text += ' Drop is giving their handlers room.';
-        advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
-      } else if (ft === 'spotup' && me.t.defense.help > 55) {
-        text += ' Too much help is leaving shooters open.';
-        advice = { label: 'Stay home', run: () => applyTactics((t) => void (t.defense.help = 35), false) };
-      } else if (ft === 'transition') {
-        advice = { label: 'Sprint back', run: () => applyTactics((t) => void ((t.defense.getBack = 85), (t.offense.crashBoards = Math.min(t.offense.crashBoards, 30))), false) };
-      } else if (ft === 'post') {
-        advice = { label: 'Double the post', run: () => applyTactics((t) => void (t.defense.help = 80), false) };
-      } else if (ft === 'pnrRoll' && man && cov !== 'drop') {
-        advice = { label: 'Go to Drop', run: () => applyTactics((t) => void (t.defense.pnr = 'drop'), false) };
-      }
-      out.push({ id: `pt-${k}`, text, action: advice });
+      // only a button that changes something: none once the tactics already do it
+      const counter = liveCounter(ft, me.t);
+      const text = `Their ${playType(ft)} plays are scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).${counter?.note ? ` ${counter.note}` : ''}`;
+      out.push({ id: `pt-${k}`, text, action: counter && { label: counter.label, run: () => applyTactics(counter.apply, false) } });
     }
     for (const [k, v] of Object.entries(me.pt)) {
       const base = baselines[k];

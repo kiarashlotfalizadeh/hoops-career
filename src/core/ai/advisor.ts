@@ -1,9 +1,10 @@
 // The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
 // in a worker), and alerts about rotation/tactics issues on your own team.
 
-import type { ActionType, League, Player, PnrCoverage } from '../types';
+import type { ActionType, League, Player, PnrCoverage, Tactics } from '../types';
+import type { FinishType } from '../sim/log';
 import { composites, ROLE_META } from '../ratings';
-import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } from '../sim/tactics';
+import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
@@ -204,6 +205,38 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   // a counter that changes nothing (sliders already at the limit) isn't worth simulating
   const same = JSON.stringify(cur);
   return out.filter((c) => JSON.stringify(applyPatch(cur, c.patch)) !== same).slice(0, 9);
+}
+
+export interface LiveCounter {
+  label: string;
+  /** Why the current tactics invite it, when that's the problem. */
+  note?: string;
+  apply: (t: Tactics) => void;
+}
+
+/**
+ * The Live screen's one-tap answer to an opponent play type that's burning the defense: none
+ * when the tactics already do it, so the button always changes something (and never pulls a
+ * slider back from past its target).
+ */
+export function liveCounter(ft: FinishType, t: Tactics): LiveCounter | undefined {
+  // ball-screen coverage only applies in man-to-man
+  const man = t.defense.scheme === 'man';
+  const cov = t.defense.pnr;
+  let c: LiveCounter | undefined;
+  if (ft === 'pnrBH' && man && cov === 'drop') c = { label: 'Switch to Hedge', note: 'Drop is giving their handlers room.', apply: (x) => void (x.defense.pnr = 'hedge') };
+  else if (ft === 'spotup' && t.defense.help > 55) c = { label: 'Stay home', note: 'Too much help is leaving shooters open.', apply: (x) => void (x.defense.help = 35) };
+  else if (ft === 'transition')
+    c = {
+      label: 'Sprint back',
+      apply: (x) => void ((x.defense.getBack = Math.max(x.defense.getBack, 85)), (x.offense.crashBoards = Math.min(x.offense.crashBoards, 30))),
+    };
+  else if (ft === 'post') c = { label: 'Double the post', apply: (x) => void (x.defense.help = Math.max(x.defense.help, 80)) };
+  else if (ft === 'pnrRoll' && man && cov !== 'drop') c = { label: 'Go to Drop', apply: (x) => void (x.defense.pnr = 'drop') };
+  if (!c) return undefined;
+  const after = cloneTactics(t);
+  c.apply(after);
+  return JSON.stringify(after) !== JSON.stringify(t) ? c : undefined;
 }
 
 export interface Alert {
