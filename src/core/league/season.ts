@@ -464,10 +464,17 @@ export function startFreeAgency(league: League): boolean {
   return true;
 }
 
+/** Free agency lasts FA_DAYS days: opening day is day 1 (faDay 0), so the market closes at faDay FA_DAYS - 1. */
+export const FA_DAYS = 30;
+/** The free-agency day the market is on, 1 to FA_DAYS. */
+export const faDayNumber = (league: League) => Math.min(FA_DAYS, league.faDay + 1);
+/** Whether free agency has reached its last day (no more days to advance). */
+export const faOver = (league: League) => league.faDay >= FA_DAYS - 1;
+
 export function faAdvance(league: League, days = 1) {
   if (league.phase !== 'freeAgency') return;
-  // free agency lasts 30 days: "advance a week" near the end stops on the last day
-  const n = Math.min(days, 30 - league.faDay);
+  // "advance a week" near the end stops on the last day
+  const n = Math.max(0, Math.min(days, FA_DAYS - 1 - league.faDay));
   withRng(league, (rng) => {
     for (let i = 0; i < n; i++) {
       league.day++;
@@ -480,7 +487,7 @@ export function faAdvance(league: League, days = 1) {
 export function newSeason(league: League): boolean {
   if (league.phase !== 'freeAgency') return false;
   // finish free agency quickly
-  if (league.faDay < 30) faAdvance(league, 30 - league.faDay);
+  if (!faOver(league)) faAdvance(league, FA_DAYS);
   const prevSeason = league.season;
   league.season++;
   league.phase = 'preseason';

@@ -7,6 +7,7 @@ import { exportLeague, exportRawSave } from '../state/backup';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
+import { faDayNumber } from '../core/league/season';
 import type { League } from '../core/types';
 import { ordinal } from './league/shared';
 import { TeamLogo } from './components/TeamLogo';
@@ -169,7 +170,7 @@ function statusLine(league: League): string {
     case 'resign':
       return `Re-sign period · ${league.season}`;
     case 'freeAgency':
-      return `Free agency · day ${Math.min(30, league.faDay + 1)}`;
+      return `Free agency · day ${faDayNumber(league)}`;
     default:
       return PHASE_LABEL[league.phase] ?? '';
   }

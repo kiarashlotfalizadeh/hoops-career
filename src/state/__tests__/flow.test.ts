@@ -67,10 +67,14 @@ describe('Play menu', () => {
     l.faDay = 12;
     expect(flowActions(l).map((a) => a.id)).toEqual(['fas', 'faday', 'faweek', 'new']);
     expect(flowActions(l)[0]).toMatchObject({ primary: true, sub: 'Day 13 of 30' });
-    l.faDay = 30;
-    const a = flowActions(l);
-    expect(a.map((x) => x.id)).toEqual(['fas', 'new']);
-    expect(a.find((x) => x.primary)?.cmd).toBe('newSeason');
+    // day 30 is the last: no day 31 to advance to (faDay counts from 0 on opening day)
+    for (const day of [29, 30]) {
+      l.faDay = day;
+      const a = flowActions(l);
+      expect(a.map((x) => x.id)).toEqual(['fas', 'new']);
+      expect(a.find((x) => x.primary)?.cmd).toBe('newSeason');
+      expect(a[0].sub).toBe('Day 30 of 30: the market is winding down.');
+    }
   });
 
   it('"Sim to next game" names the day of the next game, not today', () => {

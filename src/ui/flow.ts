@@ -2,7 +2,7 @@
 import type { League, ScheduledGame } from '../core/types';
 import { allStarStop, type SimTarget } from '../state/store';
 import { pendingLive } from '../state/live';
-import { canStartRegularSeason, regularGamesLeft } from '../core/league/season';
+import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { periodLabel } from './stats';
@@ -117,9 +117,15 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       a.push({ id: 'fa', label: 'Open free agency', sub: 'Unsigned players will hit the market.', cmd: 'startFA' });
       break;
     case 'freeAgency': {
-      // after day 30 the calendar can't advance: the new season is all that's left
-      const over = league.faDay >= 30;
-      a.push({ id: 'fas', label: 'Free agents', sub: over ? 'Day 30 of 30: the market is winding down.' : `Day ${league.faDay + 1} of 30`, primary: !over, to: '/free-agents' });
+      // on the last day the calendar can't advance: the new season is all that's left
+      const over = faOver(league);
+      a.push({
+        id: 'fas',
+        label: 'Free agents',
+        sub: over ? `Day ${FA_DAYS} of ${FA_DAYS}: the market is winding down.` : `Day ${faDayNumber(league)} of ${FA_DAYS}`,
+        primary: !over,
+        to: '/free-agents',
+      });
       if (!over) {
         a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });
         a.push({ id: 'faweek', label: 'Advance 1 week', cmd: 'faWeek' });

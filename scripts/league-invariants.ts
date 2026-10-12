@@ -226,7 +226,7 @@ for (let s = 0; s < seasons; s++) {
   S.faAdvance(L, 10);
   check();
   S.faAdvance(L, 30);
-  if (L.faDay !== 30) bad('free agency past day 30', String(L.faDay));
+  if (S.faDayNumber(L) !== S.FA_DAYS || !S.faOver(L)) bad('free agency past its last day', String(L.faDay));
   S.newSeason(L);
   check();
   const sz = L.teams.map((t) => std(t.tid).length);

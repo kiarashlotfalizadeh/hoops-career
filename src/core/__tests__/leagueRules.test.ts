@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { advanceDay, faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
+import { advanceDay, faAdvance, faDayNumber, faOver, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
@@ -662,9 +662,15 @@ describe('free agency calendar (UI2-22)', () => {
   it('advancing past day 30 stops on day 30', () => {
     const l = league();
     l.phase = 'freeAgency';
-    l.faDay = 27;
+    l.faDay = 26;
     faAdvance(l, 7);
-    expect(l.faDay).toBe(30);
+    expect(faDayNumber(l)).toBe(30);
+    expect(faOver(l)).toBe(true);
+    // the last day is the last: nothing left to advance
+    const day = l.day;
+    faAdvance(l, 1);
+    expect(l.day).toBe(day);
+    expect(faDayNumber(l)).toBe(30);
   });
 
   it('the summer has dates: draft night in late June, free agency from June 30, a day per free-agency day', () => {
