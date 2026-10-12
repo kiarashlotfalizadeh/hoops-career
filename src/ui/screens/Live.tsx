@@ -18,7 +18,7 @@ import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
 import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
-import { colorDistance } from '../teamColors';
+import { jerseyColors } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
 import { LIVE_SPEEDS } from '../settingsOptions';
 
@@ -371,15 +371,7 @@ export default function Live() {
 
   const home = game ? league.teams[game.game.home] : null;
   const away = game ? league.teams[game.game.away] : null;
-  const colors = useMemo<[[string, string], [string, string]] | null>(() => {
-    if (!home || !away) return null;
-    const c: [[string, string], [string, string]] = [
-      [home.colors[0], home.colors[1] === home.colors[0] ? home.colors[2] : home.colors[1]],
-      [away.colors[0], away.colors[1] === away.colors[0] ? away.colors[2] : away.colors[1]],
-    ];
-    if (colorDistance(c[0][0], c[1][0]) < 90) c[1] = ['#f1f1f1', away.colors[0]];
-    return c;
-  }, [home, away]);
+  const colors = useMemo(() => (home && away ? jerseyColors(home.colors, away.colors) : null), [home, away]);
 
   // teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on every other screen
   const nameOf = useMemo(() => {

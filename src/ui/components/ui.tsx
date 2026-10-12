@@ -5,6 +5,7 @@ import type { Player } from '../../core/types';
 import { ovrColor } from '../../core/ratings';
 import { FRANCHISES } from '../../core/teams';
 import { useBack } from '../nav';
+import { inkOn } from '../teamColors';
 
 export function Card({
   title,
@@ -65,7 +66,11 @@ export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastNa
   const c2 = colors?.[1] ?? '#64748b';
   const initials = `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`;
   return (
-    <div className={`avatar ${size}`} style={{ background: `linear-gradient(140deg, ${c1}, ${shade(c1, -0.35)})`, boxShadow: `inset 0 0 0 2px ${c2}55` }}>
+    <div
+      className={`avatar ${size}`}
+      // initials sit mid-gradient: dark on light team colours (Spurs silver), white on the rest
+      style={{ background: `linear-gradient(140deg, ${c1}, ${shade(c1, -0.35)})`, boxShadow: `inset 0 0 0 2px ${c2}55`, color: inkOn(shade(c1, -0.175)) }}
+    >
       {initials}
       {p.jersey && <span className="jn">#{p.jersey}</span>}
     </div>

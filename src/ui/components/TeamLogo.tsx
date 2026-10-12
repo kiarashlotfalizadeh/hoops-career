@@ -1,4 +1,5 @@
 import { FRANCHISES } from '../../core/teams';
+import { inkOn } from '../teamColors';
 
 // Original monogram marks generated from franchise colors (no trademarked artwork). `decorative`: the
 // team's name is shown next to it, so screen readers skip the mark instead of reading the name twice.
@@ -8,7 +9,7 @@ export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: 
   const [c1, c2, c3] = colors ?? f?.colors ?? ['#334155', '#94a3b8', '#ffffff'];
   const shape = f?.mark ?? 'circle';
   const text = ab.length > 3 ? ab.slice(0, 3) : ab;
-  const ink = luminance(c1) > 0.6 ? '#0b0f15' : '#ffffff';
+  const ink = inkOn(c1);
   const ring = c2.toLowerCase() === c1.toLowerCase() ? c3 : c2;
   let body: JSX.Element;
   switch (shape) {
@@ -36,12 +37,4 @@ export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: 
       </text>
     </svg>
   );
-}
-
-function luminance(hex: string) {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }

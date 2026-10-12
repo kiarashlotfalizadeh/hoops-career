@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Frame, Pt, Script } from './choreo';
+import { inkOn } from '../teamColors';
 
 export interface CourtProps {
   script: Script | null;
@@ -229,7 +230,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
     ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.fillStyle = contrast(colors[0]);
+  ctx.fillStyle = inkOn(colors[0]);
   ctx.font = `800 ${Math.max(10, r * 1.05)}px "Barlow Condensed", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -250,12 +251,4 @@ function drawFlash(ctx: CanvasRenderingContext2D, k: number, text: string, kind:
   ctx.fillStyle = color;
   ctx.fillText(text, x, y);
   ctx.globalAlpha = 1;
-}
-
-function contrast(hex: string) {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 150 ? '#0b0f15' : '#ffffff';
 }
