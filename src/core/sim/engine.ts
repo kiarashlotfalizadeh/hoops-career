@@ -2439,9 +2439,12 @@ export class GameSim {
         .sort((a, b) => (b.outAt ?? 0) - (a.outAt ?? 0))
         .slice(0, 1);
     if (!bench.length) return false;
-    // in garbage time the deep bench fills in for its own: a starter doesn't come back to replace one
+    // whoever the staff would send in at this point of the game (the stint plan, fatigue, fouls) goes
+    // first, so he isn't subbed straight back out at the next dead ball; in garbage time the deep
+    // bench fills in for its own: a starter doesn't come back to replace one
+    const wanted = this.desiredLineup(t);
     const garbage = this.inGarbageTime(t);
-    const score = (x: SP) => (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
+    const score = (x: SP) => (wanted.includes(x) ? 8 : 0) + (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
     this.applySub(
       t,

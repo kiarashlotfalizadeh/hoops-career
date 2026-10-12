@@ -71,6 +71,25 @@ describe('engine rules', () => {
     expect(t.on.every((x) => x.out === 0)).toBe(true);
   });
 
+  it("replaces a fouled-out player with the staff's choice, who isn't subbed straight back out", () => {
+    type R = Internals & { T: { on: { pid: number }[] }[]; step(): boolean; checkSubs(t: unknown, force?: boolean): void };
+    let undone = 0;
+    for (let g = 0; g < 12; g++) {
+      const sim = new GameSim(side(2), side(3), { rng: new Rng(60 + g), type: g % 2 ? 'playoffs' : 'regular', injuries: false }) as unknown as R;
+      while (sim.q < 2 || sim.clock > 200 + 20 * g) sim.step();
+      for (const t of sim.T) {
+        sim.checkSubs(t, true);
+        const p = t.players.find((x) => x.on && x.out === 0)!;
+        p.fouls = 5;
+        sim.chargeFoul(t, p);
+        const lineup = t.on.map((x) => x.pid).join();
+        sim.checkSubs(t, true);
+        if (t.on.map((x) => x.pid).join() !== lineup) undone++;
+      }
+    }
+    expect(undone).toBe(0);
+  });
+
   it('never plays four: a sixth foul with nobody left costs a technical, and the last man disqualified comes back for an injured one', () => {
     type SP = { out: number; pid: number; fouls: number; on: boolean; outAt?: number };
     type Short = {
