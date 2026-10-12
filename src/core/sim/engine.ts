@@ -2749,8 +2749,10 @@ export class GameSim {
     }
   }
 
-  /** Free throws, booked to the play type that drew the foul. */
+  /** Free throws, booked to the play type that drew the foul (a missed last one included). */
   private freeThrows(off: ST, def: ST, sh: SP, n: number, finish: FinishType) {
+    this.possFinish = finish;
+    if (this.cur && !this.cur.finish) this.cur.finish = finish;
     let made = 0;
     let lastMade = false;
     const pressure = this.q >= 4 && this.clock < 60 && Math.abs(off.score - def.score) <= 4 ? 0.02 : 0;
@@ -2829,8 +2831,9 @@ export class GameSim {
 
   private continueAfterOrb(off: ST, def: ST, rebounder: SP | null) {
     this.secondChance = true;
+    // a clock that runs out on the offensive board counts against the shot before it
     if (this.clock <= 0.3) {
-      this.finishPoss(off, def, 'putback');
+      this.finishPoss(off, def, this.possFinish);
       return;
     }
     // immediate putback for bigs near the rim
@@ -2852,7 +2855,7 @@ export class GameSim {
     const setup = Math.min(this.rng.uniform(1.5, 4), Math.max(0.3, this.clock * 0.4));
     this.tick(setup);
     if (this.clock <= 0.05) {
-      this.finishPoss(off, def, 'putback');
+      this.finishPoss(off, def, this.possFinish);
       return;
     }
     this.halfCourt(off, def, 14 - setup, late, paceF);

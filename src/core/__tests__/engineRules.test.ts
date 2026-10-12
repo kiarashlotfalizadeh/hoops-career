@@ -245,7 +245,9 @@ describe('engine rules', () => {
       const sim = new GameSim(side(6), side(7), { rng: new Rng(70 + g), type: 'regular', record: true, injuries: false });
       const res = sim.simToEnd();
       for (const l of sim.drainLogs()) {
-        if (l.steps.some((s) => s.k === 'ft') && !l.steps.some((s) => s.k === 'shot')) expect(['pnrBH', 'iso', 'misc']).toContain(l.finish);
+        // a reach-in in the penalty counts for the action, made or missed; only late intentional fouls are 'misc'
+        if (l.steps.some((s) => s.k === 'ft') && !l.steps.some((s) => s.k === 'shot')) expect(l.kind === 'ft' ? ['misc'] : ['pnrBH', 'iso']).toContain(l.finish);
+        if (!l.steps.some((s) => s.k === 'shot')) expect(l.finish).not.toBe('putback');
       }
       for (const tb of [res.home, res.away]) {
         const onCourtFta = sim
