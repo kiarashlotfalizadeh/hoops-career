@@ -3,12 +3,12 @@ import type { ActionType, PnrCoverage, ShotZone } from '../types';
 export type FinishType = 'pnrBH' | 'pnrRoll' | 'iso' | 'post' | 'spotup' | 'offscreen' | 'handoff' | 'cut' | 'transition' | 'putback' | 'misc';
 
 export const FINISH_LABEL: Record<FinishType, string> = {
-  pnrBH: 'P&R Ball Handler',
-  pnrRoll: 'P&R Roll/Pop',
+  pnrBH: 'P&R ball handler',
+  pnrRoll: 'P&R roll/pop',
   iso: 'Isolation',
-  post: 'Post-Up',
-  spotup: 'Spot-Up',
-  offscreen: 'Off Screen',
+  post: 'Post-up',
+  spotup: 'Spot-up',
+  offscreen: 'Off screen',
   handoff: 'Handoff',
   cut: 'Cut',
   transition: 'Transition',
@@ -64,7 +64,7 @@ export interface PossLog {
   steps: PossStep[];
   pts: number;
   score: [number, number];
-  /** Short headline for the court overlay: 'PnR: Brunson + Towns vs Drop'. */
+  /** Short headline for the court overlay: 'P&R: Brunson + Towns vs drop'. */
   label: string;
   /** PBP lines produced in this possession. */
   lines: string[];
