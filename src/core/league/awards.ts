@@ -129,17 +129,16 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const dpoy = rank(eligible, (c) => dpoyScore(c, dctx));
   const roy = rank(rookies, royScore);
   const smoy = rank(bench, smoyScore);
-  const mip = rank(
-    eligible.filter((c) => c.p.draft.year !== season - 1),
-    (c) => {
-      const prev = seasonTotals(c.p, season - 1, false);
-      if (!prev || prev.gp < 20) return -99;
-      const before = gameScore(prev) / prev.gp;
-      // voters reward a breakout, not an established star bouncing back
-      if (before >= 15) return -99;
-      return c.gmsc - before;
-    },
-  );
+  // Most Improved needs a season to improve on (none in a fictional league's first season)
+  const before = new Map<Cand, number>();
+  for (const c of eligible) {
+    const prev = seasonTotals(c.p, season - 1, false);
+    if (c.p.draft.year === season - 1 || !prev || prev.gp < 20) continue;
+    const g = gameScore(prev) / prev.gp;
+    // voters reward a breakout, not an established star bouncing back
+    if (g < 15) before.set(c, g);
+  }
+  const mip = rank([...before.keys()], (c) => c.gmsc - before.get(c)!);
   const coy = [...league.teams].sort((a, b) => {
     const imp = (tid: number) => {
       const t = league.teams[tid];

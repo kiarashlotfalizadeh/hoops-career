@@ -642,6 +642,20 @@ describe('awards (L13, L18)', () => {
     expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
   });
 
+  it("Most Improved needs last season's numbers: nobody wins it in a fictional league's first season", () => {
+    const l = createLeague({ name: 'f', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 7 });
+    const line = seasonOf(l);
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.mip).toBeUndefined();
+    expect(aw.mvp).toBeDefined();
+    expect(Object.values(l.players).some((p) => p.awards.some((a) => a.type === 'Most Improved Player'))).toBe(false);
+    // a breakout from a real baseline wins it
+    const p = standardRoster(l, U).find((x) => x.draft.year !== l.season - 1)!;
+    Object.assign(statsLine(p, l.season - 1, U, false), { gp: 60, min: 60 * 20, pts: 60 * 8, fgm: 60 * 3, fga: 60 * 7 });
+    line(p, 70, 70, 20);
+    expect(computeRegularSeasonAwards(l).mip).toBe(p.pid);
+  });
+
   it('MVP needs 65 games and 20 minutes; Rookie of the Year goes to a rookie (L19)', () => {
     const l = league();
     const line = seasonOf(l);
