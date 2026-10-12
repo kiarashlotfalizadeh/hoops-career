@@ -6,9 +6,9 @@ import { rosterSorted } from '../../core/league/helpers';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
-import type { Player, Rotation as RotationT } from '../../core/types';
-import { f1, ordinal, playerSeason, rosterNames } from '../stats';
-import { seasonLineups } from '../seasonAnalysis';
+import type { League, Player, Rotation as RotationT } from '../../core/types';
+import { f1, gamesMemo, ordinal, playerSeason, rosterNames } from '../stats';
+import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
 
 export default function Rotation() {
   const league = useLeague();
@@ -264,14 +264,15 @@ function stints(slots: number[][], pid: number) {
   return out.join(', ');
 }
 
+const lineupLists = new WeakMap<League, { key: string; value: LineupAgg[] }>();
+
 function LineupsCard() {
   const league = useLeague();
-  const lineups = useLeagueMemo(
-    () =>
-      seasonLineups(league)
-        .filter((l) => l.min >= 8)
-        .slice(0, 10),
-    [league],
+  // a scan of every game's lineups: worked out again when a game is played, not at every step of a minutes slider
+  const lineups = gamesMemo(lineupLists, league, () =>
+    seasonLineups(league)
+      .filter((l) => l.min >= 8)
+      .slice(0, 10),
   );
   // named from the lineups themselves: players traded or released since still read as themselves
   const names = rosterNames([...new Set(lineups.flatMap((l) => l.pids))].map((pid) => league.players[pid]).filter(Boolean));

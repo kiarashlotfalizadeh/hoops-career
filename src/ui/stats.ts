@@ -120,6 +120,20 @@ export const ordinalSuffix = (n: number) => {
 export const ordinal = (n: number) => `${n}${ordinalSuffix(n)}`;
 /** Q1..Q4, then OT, 2OT, 3OT. */
 export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
+/**
+ * A value worked out by scanning the games played (standings, lineups), kept until a game is played or
+ * the date, phase, season or team changes: a slider drag edits the league at every step, and these
+ * scans have nothing new to find then.
+ */
+export function gamesMemo<T>(cache: WeakMap<League, { key: string; value: T }>, league: League, compute: () => T): T {
+  const key = `${league.season}|${league.phase}|${league.day}|${league.faDay}|${league.userTid}|${league.games.length}`;
+  const hit = cache.get(league);
+  if (hit && hit.key === key) return hit.value;
+  const value = compute();
+  cache.set(league, { key, value });
+  return value;
+}
+
 /** The game clock: "11:42", then tenths in the last minute ("24.3"), cut rather than rounded as an arena clock does. */
 export function fmtClock(sec: number) {
   // (a hair added so a stored 24.3 that reads 24.2999… still shows 24.3)

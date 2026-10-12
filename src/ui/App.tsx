@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
-import { problemOf, useLeague, useLeagueMemo, useStore } from '../state/store';
+import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
 import { pendingLive } from '../state/live';
@@ -11,6 +11,7 @@ import { confStandings } from '../core/league/standings';
 import { faDayNumber } from '../core/league/season';
 import type { League } from '../core/types';
 import { ordinal } from './league/shared';
+import { gamesMemo } from './stats';
 import { TeamLogo } from './components/TeamLogo';
 import { Sheet, Spinner } from './components/ui';
 import { flowActions } from './flow';
@@ -147,6 +148,8 @@ function Boot({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+const statusLines = new WeakMap<League, { key: string; value: string }>();
+
 /** One short line under the team name: where the season stands, sized to fit a phone. */
 function statusLine(league: League): string {
   const date = fmtDate(league.season, league.day);
@@ -187,8 +190,8 @@ function TopBar() {
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
-  // standings scans every game: recompute per league change, not per render
-  const status = useLeagueMemo(() => statusLine(league), [league]);
+  // the standings scan every game: worked out again when a game is played, not on every edit
+  const status = gamesMemo(statusLines, league, () => statusLine(league));
   const actions = open ? flowActions(league, { onLive: pathname === '/live' }) : [];
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
