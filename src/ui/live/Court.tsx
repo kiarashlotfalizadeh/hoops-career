@@ -46,6 +46,10 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, l
     const ctx = canvas.getContext('2d')!;
     let drawn = '';
     let lastScript: typeof state.current.script | undefined;
+    // the floor, its lines and the vignette never change: drawn once per canvas size, then copied each frame
+    const floor = document.createElement('canvas');
+    // reduced motion: players and the ball jump from spot to spot instead of gliding, and nothing flashes over the court
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const s = state.current;
@@ -67,12 +71,21 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, l
       if (sig === drawn && s.script === lastScript) return;
       drawn = sig;
       lastScript = s.script;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const k = cssW / W_FT;
-      drawCourt(ctx, cssW, cssH, k);
+      if (floor.width !== canvas.width || floor.height !== canvas.height) {
+        floor.width = canvas.width;
+        floor.height = canvas.height;
+        const fctx = floor.getContext('2d')!;
+        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawCourt(fctx, cssW, cssH, k);
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // (a hidden, zero-size canvas can't be copied, but the possession still has to play out)
+      if (floor.width && floor.height) ctx.drawImage(floor, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const sc = s.script;
       if (sc && sc.frames.length > 0) drawScript(sc);
-      if (fl && flAge < BANNER_MS) drawFlash(ctx, k, fl.text, 'info', 0, 26, Math.min(1, flAge / 150, (BANNER_MS - flAge) / 400));
+      if (fl && flAge < BANNER_MS && !still?.matches) drawFlash(ctx, k, fl.text, 'info', 0, 26, Math.min(1, flAge / 150, (BANNER_MS - flAge) / 400));
     };
     const drawScript = (sc: Script) => {
       const s = state.current;
@@ -94,7 +107,7 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, l
       } else {
         a = sc.frames[i - 1];
         b = sc.frames[i];
-        u = b.dur ? ease(Math.min(1, (s.t - acc) / b.dur)) : 1;
+        u = b.dur && !still?.matches ? ease(Math.min(1, (s.t - acc) / b.dur)) : 1;
       }
       // score/clock callbacks
       const reached = sc.frames.slice(0, i + (u >= 1 ? 1 : 0)).filter((f) => f.score);
@@ -122,7 +135,7 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, l
       ctx.stroke();
       // flash
       const fl = (u > 0.35 ? b.flash : undefined) ?? (u <= 0.35 ? a.flash : undefined);
-      if (fl) {
+      if (fl && !still?.matches) {
         const alpha = fl === b.flash ? Math.min(1, (u - 0.35) / 0.25) : 1 - u / 0.35;
         drawFlash(ctx, k, fl.text, fl.kind, fl.x, fl.y, alpha);
       }
