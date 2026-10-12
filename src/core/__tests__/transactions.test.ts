@@ -7,19 +7,24 @@ import { startRegularSeason } from '../league/season';
 import { CAP_FOR, contractSeason, dateToDay, freeAgents, payroll, prospects, standardRoster, teamPlayers, twoWayRoster } from '../league/helpers';
 import {
   DEC_15,
+  FIRED_REASON,
   MLE_YEARS,
   askingContract,
+  convertTwoWay,
+  decideTeamOption,
   marketSalary,
   mleRoom,
   nonGuaranteed,
+  releaseBlockedReason,
   releaseDeadMoney,
   releasePlayer,
   signPlayer,
+  signingRoute,
   teamAppeal,
   tradeValue,
   valueScore,
 } from '../league/contracts';
-import { capHolds, capPayroll, faDay, renouncePlayer, userOffer } from '../league/freeAgency';
+import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
 import {
   aiProposeToUser,
   canMakeWork,
@@ -510,6 +515,52 @@ describe('free agency', () => {
     // used up for the season
     expect(mleRoom(l, U)).toBe(0);
     expect(userOffer(l, b.pid, cap.vetMin * 2, 1).ok).toBe(false);
+  });
+
+  it("over the cap, the minimum is the player's own: the veteran minimum only after three seasons", () => {
+    const l = league();
+    l.phase = 'regular';
+    while (standardRoster(l, U).length > 13) releasePlayer(l, standardRoster(l, U)[0], { news: false });
+    overCap(l, U);
+    const s = contractSeason(l);
+    const cap = CAP_FOR(l, s);
+    l.teams[U].mleSeason = s;
+    expect(signingRoute(l, U, cap.minContract, s, { experience: 1 })).toBe('min');
+    expect(signingRoute(l, U, cap.vetMin, s, { experience: 1 })).toBeNull();
+    expect(signingRoute(l, U, cap.vetMin, s, { experience: 5 })).toBe('min');
+    const young = freeAgents(l)[0];
+    young.experience = 1;
+    young.asking = undefined;
+    const no = userOffer(l, young.pid, cap.vetMin, 1);
+    expect(no.ok).toBe(false);
+    expect(no.reason).toBe(`No cap space. Over the cap you can offer his minimum ($${(cap.minContract / 1000).toFixed(2)}M).`);
+  });
+
+  it("a fired coach can't sign, re-sign, release, convert or decide options for his old team (T7)", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.fired = true;
+    const fa = freeAgents(l)[0];
+    expect(userOffer(l, fa.pid, CAP_FOR(l).vetMin, 1).reason).toBe(FIRED_REASON);
+    expect(userTwoWayOffer(l, fa.pid).reason).toBe(FIRED_REASON);
+    expect(releaseBlockedReason(l, standardRoster(l, U)[0])).toBe(FIRED_REASON);
+    expect(convertTwoWay(l, twoWayRoster(l, U)[0].pid).reason).toBe(FIRED_REASON);
+    l.phase = 'resign';
+    const p = standardRoster(l, U)[0];
+    p.contract = { start: l.season, salaries: [5_000] };
+    expect(userResign(l, p.pid, 50_000, 2).reason).toBe(FIRED_REASON);
+    expect(renouncePlayer(l, p.pid).reason).toBe(FIRED_REASON);
+    expect(decideTeamOption(l, p.pid, true).reason).toBe(FIRED_REASON);
+  });
+
+  it('re-signing a player is one news item', () => {
+    const l = league();
+    l.phase = 'resign';
+    const p = shape(l, standardRoster(l, U)[0], 74, 27);
+    p.contract = { start: l.season, salaries: [5_000] };
+    const ask = askingContract(l, p, U);
+    expect(userResign(l, p.pid, ask.amount, ask.years).ok).toBe(true);
+    expect(l.news.filter((n) => n.pids.includes(p.pid))).toHaveLength(1);
   });
 
   it('allows 21 players in the offseason and 15 in season (T12)', () => {

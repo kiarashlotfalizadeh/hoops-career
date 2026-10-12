@@ -169,7 +169,10 @@ export function willSign(league: League, p: Player, tid: number, amount: number,
   const yearPenalty = Math.abs(years - ask.years) * 0.03;
   if (amount >= ask.amount * (1 + yearPenalty) - 1) return { ok: true, reason: 'Deal!' };
   const gap = ask.amount * (1 + yearPenalty) - amount;
-  return { ok: false, reason: `Asking for about ${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} years (you're ${(gap / 1000).toFixed(1)}M short).` };
+  return {
+    ok: false,
+    reason: `Asking for about $${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're $${(gap / 1000).toFixed(1)}M short).`,
+  };
 }
 
 /** Pass `experience` to keep the rounded first-year salary inside that player's min/max. */
@@ -218,10 +221,13 @@ export function mleRoom(league: League, tid: number, season = contractSeason(lea
 
 export type SigningRoute = 'min' | 'space' | 'mle';
 
-/** How a team can pay a free agent this much a season: the minimum, cap space, the mid-level exception, or not at all. */
-export function signingRoute(league: League, tid: number, amount: number, season = contractSeason(league)): SigningRoute | null {
+/**
+ * How a team can pay free agent `p` this much a season: the minimum (his own: the veteran minimum
+ * only after 3 seasons in the league), cap space, the mid-level exception, or not at all.
+ */
+export function signingRoute(league: League, tid: number, amount: number, season = contractSeason(league), p?: Pick<Player, 'experience'>): SigningRoute | null {
   const cap = CAP_FOR(league, season);
-  if (amount <= cap.vetMin + 1) return 'min';
+  if (amount <= (p && p.experience < 3 ? cap.minContract : cap.vetMin) + 1) return 'min';
   if (payroll(league, tid, season) + amount <= cap.salaryCap) return 'space';
   if (amount <= mleRoom(league, tid, season)) return 'mle';
   return null;
@@ -257,8 +263,12 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   }
 }
 
+/** Why a fired coach can't run his old team's roster (see owner.ts). */
+export const FIRED_REASON = 'You were fired: take over another team first.';
+
 /** Why the user can't release this player now, or null. Two-way players never hold one of the 13. */
 export function releaseBlockedReason(league: League, p: Player): string | null {
+  if (league.fired && p.tid === league.userTid) return FIRED_REASON;
   if (p.tid < 0 || p.contract.twoWay || !inSeason(league)) return null;
   return standardRoster(league, p.tid).length <= CAP.rosterMin ? `Rosters need at least ${CAP.rosterMin} players during the season. Sign a replacement first.` : null;
 }
@@ -335,6 +345,7 @@ export const twoWayYears = (p: Player) => (p.experience >= 3 ? 1 : 2);
 /** Promote a two-way player to a standard deal at the minimum for his remaining seasons. */
 export function convertTwoWay(league: League, pid: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid < 0 || !p.contract.twoWay) return { ok: false, reason: 'He is not on a two-way contract.' };
   const max = rosterMaxNow(league);
   if (standardRoster(league, p.tid).length >= max) return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
@@ -377,6 +388,7 @@ export function pendingTeamOptions(league: League, tid: number): Player[] {
 /** The user's call on one of his team options (re-signing period only). */
 export function decideTeamOption(league: League, pid: number, exercise: boolean): { ok: boolean; reason: string } {
   const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Options are decided during the re-signing period.' };
   if (!p || p.tid !== league.userTid || pendingOption(league, p) !== 'team') return { ok: false, reason: 'No pending team option.' };
   if (exercise) exerciseOption(p);
