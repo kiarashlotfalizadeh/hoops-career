@@ -61,6 +61,18 @@ describe('rotation plan', () => {
     const bigs = players.map((p, i) => ({ ...p, guard: i >= 5, big: i < 5 }));
     for (const slot of buildMinutePlan(bigs)) expect(new Set(slot).size).toBe(5);
   });
+  it('adds up to 240 when the rotation is capped out: the deep bench, then the caps, take the rest', () => {
+    // five healthy players: 48 minutes each, past the usual 46 ceiling
+    expect(normalizeMinutes(players.slice(0, 5))).toEqual([48, 48, 48, 48, 48]);
+    // a six-man rotation with two capped players: the 16 minutes nobody in it can take go to the deep bench
+    const six = players.map((p, i) => ({ ...p, minutes: i < 4 ? 40 : i < 6 ? 20 : 0, cap: i === 4 || i === 5 ? 20 : undefined }));
+    const m = normalizeMinutes(six);
+    expect(m.reduce((a, b) => a + b, 0)).toBe(240);
+    expect(m.slice(0, 6)).toEqual([46, 46, 46, 46, 20, 20]);
+    expect(m.slice(6).reduce((a, b) => a + b, 0)).toBe(16);
+    // nobody with minutes: an even split among the first ten, in whole minutes
+    expect(normalizeMinutes(players.slice(0, 7).map((p) => ({ ...p, minutes: 0 })))).toEqual([35, 35, 34, 34, 34, 34, 34]);
+  });
 });
 
 describe('plan inputs', () => {

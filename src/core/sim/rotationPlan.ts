@@ -102,8 +102,9 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
   const raw = players.map((p) => Math.max(0, Math.min(48, p.minutes)));
   const sum = raw.reduce((a, b) => a + b, 0);
   if (sum <= 0) {
-    // fall back to an even split among the first 10
-    return players.map((_, i) => (i < 10 ? total / Math.min(10, players.length) : 0));
+    // fall back to an even split among the first 10 (in whole minutes, caps held)
+    const even = players.map((p, i) => ({ ...p, minutes: i < 10 ? 1 : 0 }));
+    return players.length ? normalizeMinutes(even, total) : [];
   }
   const lim = players.map((p) => Math.min(46, p.cap ?? 46));
   let scaled = raw.map((m) => (m * total) / sum);
@@ -111,27 +112,22 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
   // they are all capped, to the deep bench; only past that do caps give
   const spread = (open: (i: number) => boolean) => {
     for (let iter = 0; iter < 8; iter++) {
-      let overflow = 0;
-      scaled = scaled.map((m, i) => {
-        if (m > lim[i]) {
-          overflow += m - lim[i];
-          return lim[i];
-        }
-        return m;
-      });
-      if (overflow < 0.01) return 0;
+      scaled = scaled.map((m, i) => Math.min(m, lim[i]));
+      // what is still short of the total: the capped minutes, and what an earlier pass couldn't place
+      const short = total - scaled.reduce((a, b) => a + b, 0);
+      if (short < 0.01) return;
       const room = scaled.reduce((a, m, i) => a + (m < lim[i] && open(i) ? lim[i] - m : 0), 0);
-      if (room <= overflow) {
+      if (room <= short) {
         scaled = scaled.map((m, i) => (open(i) ? Math.max(m, lim[i]) : m));
-        return overflow - room;
+        return;
       }
-      scaled = scaled.map((m, i) => (m < lim[i] && open(i) ? m + (overflow * (lim[i] - m)) / room : m));
+      scaled = scaled.map((m, i) => (m < lim[i] && open(i) ? m + (short * (lim[i] - m)) / room : m));
     }
-    return 0;
   };
-  let left = spread((i) => raw[i] > 0);
-  if (left > 0) left = spread(() => true);
-  if (left > 0) scaled = scaled.map((m) => (m * total) / (total - left));
+  spread((i) => raw[i] > 0);
+  spread(() => true);
+  const left = total - scaled.reduce((a, b) => a + b, 0);
+  if (left > 0.01) scaled = scaled.map((m) => (m * total) / (total - left));
   // integer minutes via largest remainder, never rounding a capped player past his cap
   const floors = scaled.map((m) => Math.floor(m));
   let rem = total - floors.reduce((a, b) => a + b, 0);
