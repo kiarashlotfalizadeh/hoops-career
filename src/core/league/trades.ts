@@ -24,7 +24,7 @@ import {
   twoWayRoster,
   winPct,
 } from './helpers';
-import { type Strategy, marketSalary, pendingOption, rookieContract, salaryForScore, tradeValue, valueScore } from './contracts';
+import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 
 export interface TradeSide {
@@ -417,13 +417,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
   const move = (pids: number[], to: number) => {
     for (const pid of pids) {
       const p = league.players[pid];
-      const from = league.teams[p.tid];
-      from.rotation.order = from.rotation.order.filter((x) => x !== pid);
-      delete from.rotation.minutes[pid];
-      from.rotation.closers = from.rotation.closers.filter((x) => x !== pid);
-      from.rotation.restB2B = from.rotation.restB2B.filter((x) => x !== pid);
-      delete from.tactics.offense.roles[pid];
-      delete from.tactics.offense.freedom[pid];
+      leaveTeam(league.teams[p.tid], pid);
       p.tradedFrom = { tid: p.tid, season: league.season };
       p.tid = to;
       p.joinedSeason = league.season;

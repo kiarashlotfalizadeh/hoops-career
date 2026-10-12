@@ -23,6 +23,7 @@ import {
   MLE_YEARS,
   type Ask,
   askingContract,
+  leaveTeam,
   marketSalary,
   mleRoom,
   preferredYears,
@@ -143,11 +144,8 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Rights can be renounced during the re-signing period.' };
   if (!p || p.tid !== league.userTid || contractExp(p.contract) > league.season) return { ok: false, reason: 'Not one of your expiring players.' };
-  const team = league.teams[p.tid];
+  leaveTeam(league.teams[p.tid], pid);
   p.tid = FREE_AGENT;
-  team.rotation.order = team.rotation.order.filter((x) => x !== pid);
-  delete team.rotation.minutes[pid];
-  team.rotation.closers = team.rotation.closers.filter((x) => x !== pid);
   return { ok: true, reason: `${playerName(p)} is renounced: he becomes a free agent when the market opens.` };
 }
 
@@ -155,10 +153,8 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
 export function releaseExpiring(league: League) {
   for (const p of Object.values(league.players)) {
     if (p.tid >= 0 && contractExp(p.contract) <= league.season) {
-      const prevTeam = league.teams[p.tid];
+      leaveTeam(league.teams[p.tid], p.pid);
       p.tid = FREE_AGENT;
-      prevTeam.rotation.order = prevTeam.rotation.order.filter((x) => x !== p.pid);
-      delete prevTeam.rotation.minutes[p.pid];
     }
   }
   for (const p of freeAgents(league)) {

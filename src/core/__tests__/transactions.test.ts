@@ -18,6 +18,7 @@ import {
   releaseBlockedReason,
   releaseDeadMoney,
   releasePlayer,
+  rookieContract,
   signPlayer,
   signingRoute,
   teamAppeal,
@@ -687,6 +688,36 @@ describe('free agency', () => {
       // in season the weakest cheap player goes now; in the summer the cuts wait for opening night
       expect(standardRoster(l, fa.tid).length).toBe(phase === 'regular' ? CAP.rosterMax : CAP.rosterMax + 1);
     }
+  });
+
+  it("a released or renounced player leaves nothing behind in his old team's rotation or tactics", () => {
+    const l = league();
+    const t = l.teams[U];
+    const [a, b] = standardRoster(l, U);
+    for (const p of [a, b]) {
+      t.rotation.closers.push(p.pid);
+      t.rotation.restB2B.push(p.pid);
+      t.rotation.caps[p.pid] = 20;
+      t.rotation.minutes[p.pid] = 24;
+      t.tactics.offense.roles[p.pid] = 'glue';
+      t.tactics.offense.freedom[p.pid] = 1;
+    }
+    releasePlayer(l, a, { news: false });
+    l.phase = 'resign';
+    b.contract = { start: l.season, salaries: [5_000] };
+    expect(renouncePlayer(l, b.pid).ok).toBe(true);
+    for (const pid of [a.pid, b.pid]) {
+      expect([t.rotation.order, t.rotation.closers, t.rotation.restB2B].some((xs) => xs.includes(pid))).toBe(false);
+      expect([t.rotation.caps[pid], t.rotation.minutes[pid], t.tactics.offense.roles[pid], t.tactics.offense.freedom[pid]]).toEqual([undefined, undefined, undefined, undefined]);
+    }
+  });
+
+  it('rookie deals grow with the cap: a pick drafted two years on signs for 6% a year more', () => {
+    const l = league();
+    const now = rookieContract(l, 1, 1, l.season + 1);
+    const later = rookieContract(l, 1, 1, l.season + 3);
+    expect(later.salaries[0] / now.salaries[0]).toBeCloseTo((1 + CAP.growth) ** 2, 2);
+    expect(rookieContract(l, 5, 2, l.season + 3).salaries[0]).toBe(CAP_FOR(l, l.season + 3).minContract);
   });
 
   it('camp deals are free to cut before opening night; releases count from the contract season (T10, UI2-5)', () => {

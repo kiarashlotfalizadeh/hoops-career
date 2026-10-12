@@ -309,6 +309,18 @@ export function releaseDeadMoney(league: League, p: Player): { season: number; a
   return out;
 }
 
+/** A player leaves the team: out of its rotation (order, minutes, caps, closers, rest days) and its tactics' roles. */
+export function leaveTeam(team: Team, pid: number) {
+  const r = team.rotation;
+  r.order = r.order.filter((x) => x !== pid);
+  r.closers = r.closers.filter((x) => x !== pid);
+  r.restB2B = r.restB2B.filter((x) => x !== pid);
+  delete r.minutes[pid];
+  delete r.caps[pid];
+  delete team.tactics.offense.roles[pid];
+  delete team.tactics.offense.freedom[pid];
+}
+
 /** Days between a free agent's price cuts while he goes unsigned (see faDay). */
 export const FA_PRICE_CUT_DAYS = 5;
 
@@ -319,9 +331,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean 
   for (const d of releaseDeadMoney(league, p)) team.deadMoney.push({ pid: p.pid, name: playerName(p), ...d });
   p.tid = FREE_AGENT;
   p.contract = { start: league.season, salaries: [0] };
-  team.rotation.order = team.rotation.order.filter((x) => x !== p.pid);
-  delete team.rotation.minutes[p.pid];
-  team.rotation.closers = team.rotation.closers.filter((x) => x !== p.pid);
+  leaveTeam(team, p.pid);
   // a free agent like any other: the trade-back rule and the trade lock went with the old contract
   delete p.tradedFrom;
   delete p.tradeLock;
