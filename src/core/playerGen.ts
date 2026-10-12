@@ -131,10 +131,24 @@ const TEND_MODEL: Record<TendKey, { b: [number, number, number, number]; sd: num
   create: { b: [-0.253, 0.348, 0.262, -0.325], sd: 0.86, lo: 0.15, hi: 5 },
 };
 
+/**
+ * The calibrated tendencies were fitted to each real player's own numbers, so their spread around
+ * the fit, and part of its rise with level, also make up for what that player's ratings miss. Drawn
+ * whole on top of ratings that already make a star the first option, they compound: the real league
+ * with every player's tendencies generated had a 58-point scorer, 20 players over 30 a game and 190
+ * 50-point games a season (with its calibrated ones: 1 and 20), and fictional leagues the same. So
+ * generated players' usage and self-creation rise with level at 0.3 of the fit's rate, and the keys
+ * that choose who shoots and from where keep 0.3 of their spread: that league's 90+ players then use
+ * the real ones' share of possessions, and a fictional league's top scorers average 35-40 with
+ * 30-50 50-point games a season.
+ */
+const GEN_LEVEL: Partial<Record<TendKey, number>> = { use: 0.3, create: 0.3 };
+const GEN_STYLE: Partial<Record<TendKey, number>> = { use: 0.3, create: 0.3, three: 0.3, mid: 0.3, drive: 0.3, corner: 0.3, pass: 0.3 };
+
 /** The model's log-tendency for a player of this OVR and size. */
 function tendBase(k: TendKey, ovr: number, size: number): number {
   const [c, lvl, star, hgt] = TEND_MODEL[k].b;
-  return c + (lvl * (ovr - 75)) / 8 + (star * Math.max(0, ovr - 80)) / 8 + (hgt * (size - 50)) / 15;
+  return c + (GEN_LEVEL[k] ?? 1) * ((lvl * (ovr - 75)) / 8 + (star * Math.max(0, ovr - 80)) / 8) + (hgt * (size - 50)) / 15;
 }
 
 const setTend = (t: Tendencies, k: TendKey, v: number) => (t[k] = Math.round(clamp(v, TEND_MODEL[k].lo, TEND_MODEL[k].hi) * 1000) / 1000);
@@ -146,15 +160,15 @@ const setTend = (t: Tendencies, k: TendKey, v: number) => (t[k] = Math.round(cla
 export function genTendencies(p: Player, rng: Rng): Tendencies {
   const style = new Rng(Math.imul(rng.state ^ p.pid, 0x9e3779b1));
   const t = {} as Tendencies;
-  for (const k of TEND_KEYS) setTend(t, k, Math.exp(tendBase(k, p.ovr, p.ratings.hgt) + style.normal(0, TEND_MODEL[k].sd)));
+  for (const k of TEND_KEYS) setTend(t, k, Math.exp(tendBase(k, p.ovr, p.ratings.hgt) + style.normal(0, TEND_MODEL[k].sd * (GEN_STYLE[k] ?? 1))));
   return t;
 }
 
 /**
  * Tendencies follow his level (call after a year's development, with the OVR they were last set
  * for): his own style stays and the part that comes with quality moves, so a prospect who becomes
- * a star takes a star's shots and an aging star hands them on. A player without tendencies (from a
- * save made before they were generated) gets a set.
+ * a star takes more of the shots and an aging star hands them on (his ratings do most of that). A
+ * player without tendencies (from a save made before they were generated) gets a set.
  */
 export function followTendencies(p: Player, prevOvr: number, rng: Rng) {
   if (!p.tend) {
