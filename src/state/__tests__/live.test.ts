@@ -83,6 +83,30 @@ describe('live game', () => {
     expect(l.day).toBe(day + 1);
   });
 
+  it('a live game whose league went back to its last save (a sim error) is gone, and the save plays it from tip-off', async () => {
+    const l = testLeague('reload');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    expect(playedElsewhere(lg, l)).toBeNull();
+    // "Finish this game" from the Play menu throws halfway: the store opens the last save in its place
+    lg.commit = () => {
+      throw new Error('boom');
+    };
+    await useStore.getState().simulate({ kind: 'days', n: 1 });
+    const now = useStore.getState().league!;
+    expect(now).not.toBe(l);
+    // the Live screen stops animating it (finishing it would throw: its league isn't open any more)
+    expect(playedElsewhere(lg, now)).toBe('gone');
+    const again = prepareLive(now)!;
+    expect(again.game.gid).toBe(lg.game.gid);
+    expect([again.sim.T[0].score, again.sim.T[1].score]).toEqual([0, 0]);
+    expect(playedElsewhere(again, now)).toBeNull();
+    expect(again.commit(now).gid).toBe(lg.game.gid);
+    expect(playedElsewhere(again, now)).toBe(lg.game.gid);
+    expect(once(now, lg.game.gid)).toBe(1);
+  });
+
   it('a game the Live screen finishes while "Finish this game" is saving is the one day that sim plays', async () => {
     const l = testLeague('race');
     toGameDay(l);
