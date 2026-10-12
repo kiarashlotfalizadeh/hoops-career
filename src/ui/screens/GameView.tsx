@@ -11,7 +11,7 @@ import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
 import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
-import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed } from '../stats';
+import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 
@@ -401,6 +401,7 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
   const rows = box.players.filter((p) => p.min > 0);
   const dnp = box.players.filter((p) => p.min <= 0);
   const name = boxNames(league, box, true);
+  const min = wholeMinutes(box.players);
   return (
     <Card title={title} className="flush">
       <div className="tablewrap" style={{ border: 'none', borderRadius: 0 }}>
@@ -436,7 +437,7 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
                     )}
                   </Link>
                 </td>
-                <td>{Math.round(p.min)}</td>
+                <td>{min(p.pid)}</td>
                 <td className="bold">{p.pts}</td>
                 <td>{p.orb + p.drb}</td>
                 <td>{p.ast}</td>

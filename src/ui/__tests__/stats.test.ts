@@ -1,7 +1,7 @@
 // Display helpers shared by the screens.
 import { describe, expect, it } from 'vitest';
 import type { League } from '../../core/types';
-import { finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix } from '../stats';
+import { finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, wholeMinutes } from '../stats';
 
 describe('ordinal', () => {
   it('reads 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")', () => {
@@ -60,5 +60,16 @@ describe('gamesMemo', () => {
     expect(get()).toBe(2);
     league.userTid = 4;
     expect(get()).toBe(3);
+  });
+});
+
+describe('wholeMinutes', () => {
+  it('rounds a box score to whole minutes that still add up to the team total', () => {
+    // 240.0 at the tenth, as the engine books it; rounding each line alone gives 241
+    const box = [36.5, 35.5, 33.5, 31.5, 30.5, 22.4, 18.3, 15.2, 10.6, 6.0].map((min, pid) => ({ pid, min }));
+    expect(box.reduce((a, p) => a + Math.round(p.min), 0)).toBe(242);
+    const m = wholeMinutes(box);
+    expect(box.reduce((a, p) => a + m(p.pid), 0)).toBe(240);
+    for (const p of box) expect(Math.abs(m(p.pid) - p.min)).toBeLessThan(1);
   });
 });

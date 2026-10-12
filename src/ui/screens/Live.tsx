@@ -16,7 +16,7 @@ import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameR
 import { buildSimInput } from '../../core/league/games';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
-import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames } from '../stats';
+import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames, wholeMinutes } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { jerseyColors } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
@@ -1027,6 +1027,7 @@ function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const res = useMemo(() => live.sim.result(), [live, tick]);
   const tb = team === 0 ? res.home : res.away;
+  const min = wholeMinutes(tb.players);
   const pt = Object.entries(tb.playTypes).sort((a, b) => b[1].poss - a[1].poss);
   return (
     <div className="col" style={{ gap: 12 }}>
@@ -1060,7 +1061,7 @@ function StatsPanel({ live, side, league, nameOf, tick }: { live: LiveGame; side
               .map((p) => (
                 <tr key={p.pid}>
                   <td className="l sticky">{nameOf(p.pid)}</td>
-                  <td>{Math.round(p.min)}</td>
+                  <td>{min(p.pid)}</td>
                   <td className="bold">{p.pts}</td>
                   <td>{p.orb + p.drb}</td>
                   <td>{p.ast}</td>
