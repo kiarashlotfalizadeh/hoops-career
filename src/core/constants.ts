@@ -2,6 +2,13 @@
 
 export const START_SEASON = 2027; // 2026-27 season (named by end year, like Basketball Reference)
 
+/**
+ * Format of the league record. Bump it, with a step in migrate() (src/state/persistence.ts), when
+ * that format changes.
+ * 2: older ratings snapshots keep only OVR and potential (no `r`), which version-1 builds read unguarded.
+ */
+export const SAVE_VERSION = 2;
+
 export const CAP = {
   salaryCap: 165_000,
   luxuryTax: 201_000,

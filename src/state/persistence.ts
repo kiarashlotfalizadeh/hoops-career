@@ -4,6 +4,7 @@
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
 import type { GameResult, League } from '../core/types';
+import { SAVE_VERSION } from '../core/constants';
 
 export interface LeagueMeta {
   id: string;
@@ -19,11 +20,8 @@ export interface LeagueMeta {
   rev?: number;
 }
 
-/**
- * Format of the league record. Bump it, with a step in migrate(), when that format changes.
- * 2: older ratings snapshots keep only OVR and potential (no `r`), which version-1 builds read unguarded.
- */
-export const SAVE_VERSION = 2;
+// the save format lives in core, so a new league is stamped with it too
+export { SAVE_VERSION };
 
 /** Another window saved (or deleted) this league after this one read it. */
 export class SaveConflictError extends Error {

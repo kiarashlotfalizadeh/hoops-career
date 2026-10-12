@@ -1,6 +1,6 @@
 import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
-import { CAP, ROOKIE_SCALE, START_SEASON } from '../constants';
+import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
@@ -207,7 +207,7 @@ export function createLeague(opts: CreateOpts): League {
   const league: League = {
     id: `lg_${Date.now().toString(36)}_${Math.floor(rng.next() * 1e6).toString(36)}`,
     name: opts.name,
-    version: 1,
+    version: SAVE_VERSION,
     created: Date.now(),
     userTid: opts.userTid,
     coachName: opts.coachName,
@@ -237,7 +237,6 @@ export function createLeague(opts: CreateOpts): League {
     ownerMood: { wins: 0, playoffs: 0, money: 0, total: 0 },
     faDay: 30,
     startSeason: season,
-    realAvgs: opts.seed?.realAvgs,
   };
   teams[opts.userTid].coach.name = opts.coachName;
 

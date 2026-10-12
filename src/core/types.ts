@@ -385,7 +385,7 @@ export interface TeamSeason {
   ptsAgainst: number;
   poss: number;
   oppPoss: number;
-  playoffRound: number; // -1 missed, 0 play-in lost, 1.. round reached, 5 champion
+  playoffRound: number; // -1 missed (play-in losers too), 0 still in the play-in, 1.. round reached, 5 champion
   seed: number | null;
   revenue: number;
   expenses: number;
@@ -745,8 +745,6 @@ export interface League {
   draftBoard?: number[];
   /** Season the league was started. */
   startSeason: number;
-  /** Real-life league averages from seed data, for context in UI. */
-  realAvgs?: Record<string, number>;
   /** Opponent-specific adjustments for the user's next game against that opponent. */
   gamePlan?: GamePlan | null;
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
