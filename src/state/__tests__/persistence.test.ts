@@ -128,7 +128,7 @@ describe('two windows on one league', () => {
     const off = onRemoteChange(heard);
     simDay(theirs);
     await other.saveLeague(theirs);
-    await vi.waitFor(() => expect(heard).toHaveBeenCalledWith(l.id));
+    await vi.waitFor(() => expect(heard).toHaveBeenCalledWith(l.id, false));
     off();
     simDay(mine);
     simDay(mine);
@@ -137,9 +137,13 @@ describe('two windows on one league', () => {
     // the window that saved last keeps saving
     simDay(theirs);
     await other.saveLeague(theirs);
-    // and one that deleted the league stops the other from bringing it back
+    // and one that deleted the league stops the other from bringing it back, and says it was deleted
+    const told = vi.fn();
+    const off2 = other.onRemoteChange(told);
     await deleteLeague(l.id);
-    await expect(other.saveLeague(theirs)).rejects.toThrow('changed in another window');
+    await vi.waitFor(() => expect(told).toHaveBeenCalledWith(l.id, true));
+    off2();
+    await expect(other.saveLeague(theirs)).rejects.toThrow('deleted in another window');
     expect(await loadLeague(l.id)).toBeUndefined();
   });
 });

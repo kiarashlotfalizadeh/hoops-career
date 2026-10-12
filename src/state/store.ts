@@ -34,6 +34,8 @@ export interface SaveProblem {
   /** 'conflict': another window saved this league after this one loaded it, so only a reload helps. */
   kind: 'quota' | 'conflict' | 'error';
   text: string;
+  /** A conflict where the other window deleted the league, so a reload won't find it either. */
+  deleted?: boolean;
 }
 
 interface AppState {
@@ -71,7 +73,7 @@ let toastId = 1;
 const nextFrame = () => new Promise<void>((r) => setTimeout(r, 0));
 
 export function problemOf(e: unknown): SaveProblem {
-  if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message };
+  if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message, deleted: e.deleted };
   if (isQuotaError(e)) return { kind: 'quota', text: 'Device storage is full. Free up some space, or export a backup.' };
   return { kind: 'error', text: `Could not save to device storage${e instanceof Error && e.message ? ` (${e.message})` : ''}.` };
 }
