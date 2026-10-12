@@ -55,7 +55,6 @@ async function main() {
 
   const perGame: PerGameRow[] = [];
   const adv: AdvRow[] = [];
-  const leagueAvg: Record<number, PerGameRow> = {};
   for (const s of STAT_SEASONS) {
     const pg = read(`per_game_${s}`);
     const ad = read(`advanced_${s}`);
@@ -65,7 +64,6 @@ async function main() {
     }
     const parsed = parsePerGame(pg, s);
     perGame.push(...parsed.rows);
-    if (parsed.league) leagueAvg[s] = parsed.league;
     adv.push(...parseAdvanced(ad, s));
     console.log(`season ${s}: ${parsed.rows.length} per-game rows`);
   }
@@ -353,7 +351,6 @@ async function main() {
     source: `Basketball Reference: ${seasonLabel(STAT_SEASONS[0])} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced; current contracts`,
     season: SEED_SEASON,
     players,
-    realAvgs: realAvgs(leagueAvg[2026]),
   };
   const league = createLeague({ name: 'calib', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed, rngSeed: 99, preseasonCuts: false });
   const pidByIdx = new Map<number, number>();
@@ -541,11 +538,6 @@ function r3(x: number) {
 
 function estimateHeight(pos: Pos) {
   return { PG: 75, SG: 77, SF: 79, PF: 81, C: 83 }[pos];
-}
-
-function realAvgs(r?: PerGameRow): Record<string, number> | undefined {
-  if (!r) return undefined;
-  return { fga: r.fga, fg3a: r.fg3a, fta: r.fta, orb: r.orb, drb: r.drb, ast: r.ast, stl: r.stl, blk: r.blk, tov: r.tov, pf: r.pf, pts: r.pts };
 }
 
 function pearson(x: number[], y: number[]) {
