@@ -80,7 +80,7 @@ const ms = performance.now() - t0;
 const n = games * 2;
 const avg = (k: string) => sum[k] / n;
 const rows: [string, number, number][] = [
-  ['pace (poss)', avg('poss') * (48 / 48), TARGETS.pace],
+  ['pace (poss)', avg('poss'), TARGETS.pace],
   ['pts', avg('pts'), TARGETS.pts],
   ['ortg', (sum.pts / sum.poss) * 100, TARGETS.ortg],
   ['fga', avg('fga'), TARGETS.fga],
