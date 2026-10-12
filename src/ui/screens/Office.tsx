@@ -7,6 +7,7 @@ import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, roste
 import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, releasePlayer, signingRoute, valueScore } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
+import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { untradeableReason } from '../../core/league/trades';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -72,7 +73,7 @@ export default function Office() {
       title: 'Free Agents',
       sub:
         league.phase === 'freeAgency'
-          ? `Day ${Math.min(30, league.faDay + 1)} of 30 · ${faCount} left`
+          ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ${faCount} left`
           : signingClosed
             ? `${faCount} on the market · signings reopen in free agency`
             : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : mle > 0 ? `${fmtM(mle)} mid-level` : 'min deals only'}`,
@@ -334,7 +335,7 @@ function Spotlight({ league }: { league: League }) {
       return (
         <Card accent className="fo-hero">
           <div className="row between">
-            <div className="fo-eyebrow">{fa ? `Free agency · Day ${Math.min(30, league.faDay + 1)} of 30` : 'Preseason'}</div>
+            <div className="fo-eyebrow">{fa ? `Free agency · Day ${faDayNumber(league)} of ${FA_DAYS}` : 'Preseason'}</div>
             <span className="tag">{space > 0 ? `${fmtM(space)} space` : mle > 0 ? `Mid-level ${fmtM(mle)}` : 'Min deals only'}</span>
           </div>
           {full && (

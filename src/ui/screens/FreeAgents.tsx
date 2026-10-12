@@ -6,7 +6,7 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, twoWaySalary, twoWayYears, valueScore, wantsTwoWay } from '../../core/league/contracts';
 import { capPayroll, signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
-import { faAdvance } from '../../core/league/season';
+import { FA_DAYS, faAdvance, faDayNumber, faOver } from '../../core/league/season';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet } from '../components/ui';
@@ -76,16 +76,19 @@ export default function FreeAgents() {
       }
     });
 
-  const advance = (days: number) => {
+  const busy = useStore((st) => !!st.sim);
+  const over = faOver(league);
+  const advance = async (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
-    const from = Math.min(30, league.faDay + 2);
-    useStore.getState().mutate((l) => faAdvance(l, days));
+    const from = faDayNumber(league) + 1;
+    // behind the progress bar, like the Play menu's: a second tap while it runs is a no-op
+    if (!(await useStore.getState().task('Free agency', (l) => faAdvance(l, days)))) return;
     const l = useStore.getState().league!;
     const signed = before
       .map((pid) => l.players[pid])
       .filter((p) => p && p.tid >= 0 && p.tid !== l.userTid)
       .sort((a, b) => b.ovr - a.ovr);
-    const day = Math.min(30, l.faDay + 1);
+    const day = faDayNumber(l);
     const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
     useStore.getState().toast(
       signed.length
@@ -130,8 +133,8 @@ export default function FreeAgents() {
               <b>Asking price.</b> Offers at or above a player's ask are accepted on the spot. Interest in your team (winning, hype, market, playing time) moves his price.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Timing.</b> The summer market lasts 30 days. AI teams sign players every day, and stars go fast. Unsigned players cut their price every few days, and during the
-              season they are still available.
+              <b>Timing.</b> The summer market lasts {FA_DAYS} days. AI teams sign players every day, and stars go fast. Unsigned players cut their price every few days, and during
+              the season they are still available.
             </p>
             <p style={{ margin: 0 }}>
               <b>Roster.</b> Up to 21 players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
@@ -179,23 +182,25 @@ export default function FreeAgents() {
           <div className="row between">
             <div className="row" style={{ gap: 8 }}>
               <CalendarDays size={18} />
-              <span className="fo-mid">Day {Math.min(30, league.faDay + 1)} of 30</span>
+              <span className="fo-mid">
+                Day {faDayNumber(league)} of {FA_DAYS}
+              </span>
             </div>
             <span className="tiny dim upper bold">Free agency</span>
           </div>
           <div style={{ margin: '10px 0' }}>
-            <Bar value={Math.min(30, league.faDay)} max={30} />
+            <Bar value={faDayNumber(league)} max={FA_DAYS} />
           </div>
-          {league.faDay >= 30 ? (
+          {over ? (
             <div className="small dim2">The market is winding down. Start the new season from the Play button when your roster is set.</div>
           ) : (
             <div className="small dim2">Every day AI teams make offers. Players who wait too long may lower their price.</div>
           )}
           <div className="row" style={{ marginTop: 10, gap: 8 }}>
-            <button className="btn sm grow" disabled={league.faDay >= 30} onClick={() => advance(1)}>
+            <button className="btn sm grow" disabled={over || busy} onClick={() => void advance(1)}>
               <SkipForward size={16} /> Next day
             </button>
-            <button className="btn sm grow" disabled={league.faDay >= 30} onClick={() => advance(7)}>
+            <button className="btn sm grow" disabled={over || busy} onClick={() => void advance(7)}>
               <FastForward size={16} /> Advance a week
             </button>
           </div>
