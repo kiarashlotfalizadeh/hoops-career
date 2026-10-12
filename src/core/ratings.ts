@@ -45,7 +45,6 @@ export const RATING_KEYS: RatingKey[] = RATING_META.map((m) => m.key);
 export const attrDisplay = (v: number) => Math.round(40 + 0.59 * clamp(v, 0, 100));
 
 export const heightToRating = (inches: number) => clamp(50 + (inches - 79.5) * 4.3, 0, 100);
-export const ratingToHeight = (h: number) => 79.5 + (h - 50) / 4.3;
 
 export const fmtHeight = (inches: number) => {
   const i = Math.round(inches);

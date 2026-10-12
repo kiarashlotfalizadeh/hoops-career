@@ -383,5 +383,3 @@ export const BBREF_TO_TID: Record<string, number> = Object.fromEntries(FRANCHISE
 BBREF_TO_TID['BKN'] = BBREF_TO_TID['BRK'];
 BBREF_TO_TID['CHA'] = BBREF_TO_TID['CHO'];
 BBREF_TO_TID['PHX'] = BBREF_TO_TID['PHO'];
-
-export const DIVISIONS = ['Atlantic', 'Central', 'Southeast', 'Northwest', 'Pacific', 'Southwest'];
