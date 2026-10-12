@@ -12,7 +12,7 @@
   --text-dim: #8590a1;
   --accent: #3b82f6;
   --accent-2: #f59e0b;
-  --accent-ink: #ffffff;
+  --accent-ink: #0b0f15;
   --good: #2fd27a;
   --bad: #ff5468;
   --warn: #ffb547;
@@ -329,7 +329,7 @@ h3 {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--bad);
-  color: white;
+  color: var(--bg-2);
   font-size: 10px;
   font-weight: 700;
   display: grid;
@@ -425,6 +425,8 @@ h3 {
 .card.accent {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface-2)), var(--surface));
+  /* dim text keeps 4.5:1 on a gold team's tint */
+  --text-dim: var(--text-2);
 }
 .card.clickable:active {
   transform: scale(0.995);
@@ -508,7 +510,7 @@ h3 {
 .btn.danger {
   background: color-mix(in srgb, var(--bad) 18%, var(--surface-2));
   border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-  color: #ffd7dc;
+  color: color-mix(in srgb, var(--bad) 22%, white);
 }
 .btn.good {
   background: color-mix(in srgb, var(--good) 20%, var(--surface-2));
@@ -638,6 +640,8 @@ h3 {
 .tag.bad {
   background: color-mix(in srgb, var(--bad) 18%, transparent);
   color: var(--bad);
+  /* a little lighter, to keep 4.5:1 on its own tint over a card */
+  color: color-mix(in srgb, var(--bad) 80%, white);
 }
 .tag.warn {
   background: color-mix(in srgb, var(--warn) 18%, transparent);
@@ -660,7 +664,7 @@ h3 {
   font-weight: 700;
   font-size: 19px;
   font-variant-numeric: tabular-nums;
-  color: #0b0f15;
+  color: var(--bg-2);
   line-height: 1;
 }
 .ovr.sm {
@@ -846,7 +850,7 @@ input[type='range']:focus-visible::-moz-range-thumb {
 }
 .toggle.on::after {
   transform: translateX(18px);
-  background: white;
+  background: var(--accent-ink);
 }
 
 /* ------------------------------------------------------------------ bars */
