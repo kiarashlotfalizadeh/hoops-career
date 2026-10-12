@@ -4,8 +4,8 @@
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp } from '../random';
-import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, potential, toDisplay, archetype } from '../ratings';
-import { followTendencies, playerAge } from '../playerGen';
+import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, toDisplay } from '../ratings';
+import { followTendencies, playerAge, refreshPlayerDerived } from '../playerGen';
 import { seasonTotals } from './helpers';
 
 type Group = 'athletic' | 'end' | 'str' | 'shooting' | 'skill' | 'iq' | 'perim' | 'interior' | 'reb' | 'hgt';
@@ -140,10 +140,9 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   return after - before;
 }
 
+/** OVR, potential and archetype for the league's season and scale. */
 export function refreshDerived(league: League, p: Player) {
-  p.ovr = toDisplay(ovrRaw(p.ratings), league.ovrScale);
-  p.pot = potential(p.ovr, playerAge(p, league.season), p.growth);
-  p.archetype = archetype(p.ratings).label;
+  refreshPlayerDerived(p, league.season, league.ovrScale);
 }
 
 /** `statsSeason` is the season whose minutes count: the one just finished in the offseason, the current one in season. */

@@ -7,7 +7,22 @@ import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
-import { CAP_FOR, addInbox, addNews, age, contractSeason, curTeamSeason, inSeason, payroll, playerName, rosterMaxNow, standardRoster, teamPlayers, winPct } from './helpers';
+import {
+  CAP_FOR,
+  addInbox,
+  addNews,
+  age,
+  contractSeason,
+  curTeamSeason,
+  inSeason,
+  payroll,
+  playerName,
+  revenueScale,
+  rosterMaxNow,
+  standardRoster,
+  teamPlayers,
+  winPct,
+} from './helpers';
 
 export type Strategy = Team['strategy'];
 
@@ -188,13 +203,12 @@ export function makeContract(league: League, amount: number, years: number, star
 }
 
 export function rookieContract(league: League, pick: number, round: number, start: number) {
-  const g = Math.pow(1 + CAP.growth, Math.max(0, start - league.startSeason));
   if (round === 1) {
-    const base = ROOKIE_SCALE[Math.min(29, pick - 1)] * g;
+    const base = ROOKIE_SCALE[Math.min(29, pick - 1)] * revenueScale(league, start);
     return { start, salaries: [0, 1, 2, 3].map((i) => Math.round((base * Math.pow(1.045, i)) / 10) * 10), rookie: true, option: 'team' as const };
   }
-  const min = CAP.minContract * g;
-  return { start, salaries: [Math.round(min), Math.round(min * 1.05)], rookie: true };
+  const min = CAP_FOR(league, start).minContract;
+  return { start, salaries: [min, Math.round(min * 1.05)], rookie: true };
 }
 
 // ---------------------------------------------------------------- signing exceptions

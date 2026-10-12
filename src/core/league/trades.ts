@@ -49,10 +49,6 @@ export interface TradeEval {
   message: string;
 }
 
-function season(league: League) {
-  return contractSeason(league);
-}
-
 const findPick = (league: League, dpid: number) => league.draftPicks.find((d) => d.dpid === dpid);
 
 // ---------------------------------------------------------------- draft pick value
@@ -168,7 +164,7 @@ const TAX_VALUE = 0.1;
 const ROOM_VALUE = 0.04;
 
 /** Salary that counts in trades: two-way pay sits outside the cap, so it neither counts nor matches. */
-export function capSalary(league: League, pid: number, s = season(league)): number {
+export function capSalary(league: League, pid: number, s = contractSeason(league)): number {
   const p = league.players[pid];
   return !p || p.contract.twoWay ? 0 : salaryFor(p, s);
 }
@@ -176,7 +172,7 @@ export function capSalary(league: League, pid: number, s = season(league)): numb
 const sideSalary = (league: League, side: TradeSide) => side.pids.reduce((a, pid) => a + capSalary(league, pid), 0);
 
 function moneyCost(league: League, tid: number, inSal: number, outSal: number): number {
-  const s = season(league);
+  const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
   const before = capPayroll(league, tid, s);
   const after = before + inSal - outSal;
@@ -303,7 +299,7 @@ const assetName = (league: League, a: Player | DraftPick) => ('pid' in a ? playe
 export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b'): number {
   const mine = offer[side];
   const other = offer[side === 'a' ? 'b' : 'a'];
-  const s = season(league);
+  const s = contractSeason(league);
   const outSal = sideSalary(league, mine);
   const inSal = sideSalary(league, other);
   if (capPayroll(league, mine.tid, s) - outSal + inSal <= CAP_FOR(league, s).salaryCap) return 0;
@@ -336,7 +332,7 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
   if (league.phase === 'playoffs' || league.phase === 'playin') errors.push('No trades during the postseason.');
   const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;
   const maxSize = rosterMaxNow(league);
-  const s = season(league);
+  const s = contractSeason(league);
   for (const [key, mine, other] of [
     ['a', offer.a, offer.b],
     ['b', offer.b, offer.a],
@@ -670,7 +666,7 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   // an over-the-cap buyer must send back salary first (125% rule), and one that used the
   // mid-level enough to stay under the tax: the smallest contract that covers the gap, else the
   // biggest and keep going
-  const s = season(league);
+  const s = contractSeason(league);
   const taxGap = () => (league.teams[buyer].mleSeason === s ? capPayroll(league, buyer, s) + sal(vet) - pkg.reduce((a, p) => a + sal(p), 0) - CAP_FOR(league, s).luxuryTax : 0);
   const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), taxGap());
   while (gapNow() > 0) {
