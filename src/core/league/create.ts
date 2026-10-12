@@ -312,7 +312,7 @@ export function createLeague(opts: CreateOpts): League {
   league.ratingAnchors = ratingMeans(league);
   league.ratingSpreads = ratingSpreads(league);
   const realSeed = opts.seed && opts.seed.players.length ? opts.seed : null;
-  ensureFuturePicks(league, Math.max(season + 3, realSeed?.picks ? (realSeed.picksThrough ?? 0) : 0));
+  ensureFuturePicks(league, Math.max(season + 4, realSeed?.picks ? (realSeed.picksThrough ?? 0) : 0));
   if (realSeed?.picks) applySeedPicks(league, realSeed.picks);
   generateDraftClass(league, season, rng);
   const sched = (realSeed?.schedule && realSchedule(league.teams, realSeed.schedule, season, rng, league.nextGid)) || generateSchedule(league.teams, season, rng, league.nextGid);
