@@ -96,8 +96,8 @@ export default function Rotation() {
       <Card>
         <div className="row between">
           <div>
-            <div className="bold">Minutes: {total} / 240</div>
-            <div className="small dim">Targets are scaled to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
+            <div className="bold">Minute targets: {total}</div>
+            <div className="small dim">The stint plan below scales them to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
             {injuredMin > 0 && <div className="small warn">Injured players' {injuredMin} minutes go to the healthy ones: the stint plan shows who gets them.</div>}
           </div>
           <Help title="How rotations work">
@@ -141,7 +141,7 @@ export default function Rotation() {
                   </div>
                   <Avatar p={p} />
                   <div
-                    className="grow"
+                    className="grow row"
                     role="button"
                     tabIndex={0}
                     aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`}
@@ -149,28 +149,31 @@ export default function Rotation() {
                     onKeyDown={activateOnKey(() => setEdit(pid))}
                     style={{ cursor: 'pointer', minWidth: 0 }}
                   >
-                    {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
-                    <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
-                      <span className="bold ellipsis" style={{ minWidth: 0 }}>
-                        {fullNameOf(pid)}
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
+                      <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
+                        <span className="bold ellipsis" style={{ minWidth: 0 }}>
+                          {fullNameOf(pid)}
+                        </span>
+                        {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
+                        {closers.includes(pid) && <Tag>Closer</Tag>}
+                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                      </div>
+                      <div className="tiny dim">
+                        {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina{' '}
+                        {attrDisplay(p.ratings.end)}
+                        {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
+                      </div>
+                      <div className="bar" style={{ marginTop: 5, height: 5 }}>
+                        <div style={{ width: `${(m / 44) * 100}%` }} />
+                      </div>
+                    </div>
+                    <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
+                      <span className="display num" style={{ fontSize: 22 }}>
+                        {m}
                       </span>
-                      {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
-                      {closers.includes(pid) && <Tag>Closer</Tag>}
-                      {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                      <Ovr v={p.ovr} size="sm" />
                     </div>
-                    <div className="tiny dim">
-                      {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina {attrDisplay(p.ratings.end)}
-                      {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
-                    </div>
-                    <div className="bar" style={{ marginTop: 5, height: 5 }}>
-                      <div style={{ width: `${(m / 44) * 100}%` }} />
-                    </div>
-                  </div>
-                  <div className="col" style={{ alignItems: 'flex-end', gap: 2, cursor: 'pointer' }} onClick={() => setEdit(pid)}>
-                    <span className="display num" style={{ fontSize: 22 }}>
-                      {m}
-                    </span>
-                    <Ovr v={p.ovr} size="sm" />
                   </div>
                 </div>
               </Fragment>
@@ -221,7 +224,7 @@ export default function Rotation() {
       <LineupsCard />
 
       <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
-        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starting={startSet.has(ep.pid)} />}
+        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starters={startSet} />}
       </Sheet>
 
       {undo && !simming && (
@@ -270,7 +273,8 @@ function LineupsCard() {
         .slice(0, 10),
     [league],
   );
-  const names = rosterNames(Object.values(league.players).filter((p) => p.tid === league.userTid));
+  // named from the lineups themselves: players traded or released since still read as themselves
+  const names = rosterNames([...new Set(lineups.flatMap((l) => l.pids))].map((pid) => league.players[pid]).filter(Boolean));
   if (!lineups.length) return null;
   return (
     <Card
@@ -304,7 +308,7 @@ function EditPlayer({
   close,
   order,
   names,
-  starting,
+  starters,
 }: {
   p: Player;
   rot: RotationT;
@@ -312,9 +316,10 @@ function EditPlayer({
   close: () => void;
   order: number[];
   names: (pid: number) => string;
-  /** Among the first five healthy players, the ones who start tonight. */
-  starting: boolean;
+  /** The first five healthy players: the ones who start tonight. */
+  starters: Set<number>;
 }) {
+  const starting = starters.has(p.pid);
   const m = rot.minutes[p.pid] ?? 0;
   const cap = rot.caps[p.pid] ?? 0;
   const at = order.indexOf(p.pid);
@@ -344,7 +349,7 @@ function EditPlayer({
               const j = order.indexOf(pid);
               return (
                 <button key={pid} className="chip" onClick={() => swap(pid)}>
-                  {j < 5 ? (
+                  {starters.has(pid) ? (
                     <span className="tag info" style={{ height: 16, padding: '0 4px' }}>
                       S
                     </span>
