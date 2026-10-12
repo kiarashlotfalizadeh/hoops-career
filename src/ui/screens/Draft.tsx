@@ -99,16 +99,26 @@ export default function Draft() {
     });
   };
 
-  const finish = () => {
+  // the rest of the picks (the scouts make yours): the draft stays open until "Continue to re-signing"
+  const simToEnd = () => {
     setConfirmSim(false);
-    useStore.getState().mutate((l) => finishDraftPhase(l));
+    useStore.getState().mutate((l) => {
+      withRng(l, (rng) => draftUntilUser(l, rng, true));
+    });
+  };
+
+  // phase changes run behind the progress bar, as from the Play menu: a second tap is a no-op and an error changes nothing
+  const busy = useStore((s) => !!s.sim);
+  const finish = async () => {
+    let done = false;
+    if (!(await useStore.getState().task('Finishing the draft', (l) => void (done = finishDraftPhase(l)))) || !done) return;
     useStore.getState().toast('The draft is complete. Time to re-sign your players.', 'good');
     nav('/resign');
   };
 
-  const begin = () => {
-    useStore.getState().mutate((l) => startDraft(l));
-    setView('live');
+  const begin = async () => {
+    let done = false;
+    if ((await useStore.getState().task('Draft night', (l) => void (done = startDraft(l)))) && done) setView('live');
   };
 
   const myRemaining = league.phase === 'draft' ? draftOrder(league).filter((d) => d.tid === user) : [];
@@ -137,7 +147,17 @@ export default function Draft() {
         }
       />
 
-      {league.phase === 'draft' && <OnTheClock league={league} onAuto={autoPick} onSimToMine={simToMine} onFinish={() => (myRemaining.length ? setConfirmSim(true) : finish())} />}
+      {league.phase === 'draft' && (
+        <OnTheClock
+          league={league}
+          hasPicks={myRemaining.length > 0}
+          busy={busy}
+          onAuto={autoPick}
+          onSimToMine={simToMine}
+          onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : simToEnd())}
+          onFinish={() => void finish()}
+        />
+      )}
 
       {league.phase === 'draftLottery' && (
         <Card accent className="fo-hero">
@@ -148,7 +168,7 @@ export default function Draft() {
               <div className="small dim2">Study the board, then head to the draft.</div>
             </div>
           </div>
-          <button className="btn primary block" style={{ marginTop: 12 }} onClick={begin}>
+          <button className="btn primary block" style={{ marginTop: 12 }} disabled={busy} onClick={() => void begin()}>
             <Play size={16} fill="currentColor" /> Start the draft
           </button>
         </Card>
@@ -202,7 +222,7 @@ export default function Draft() {
             <button className="btn grow" onClick={() => setConfirmSim(false)}>
               Cancel
             </button>
-            <button className="btn primary grow" onClick={finish}>
+            <button className="btn primary grow" onClick={simToEnd}>
               Sim the draft
             </button>
           </div>
@@ -214,7 +234,23 @@ export default function Draft() {
 
 // ------------------------------------------------------------------ live draft
 
-function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League; onAuto: () => void; onSimToMine: () => void; onFinish: () => void }) {
+function OnTheClock({
+  league,
+  hasPicks,
+  busy,
+  onAuto,
+  onSimToMine,
+  onSimToEnd,
+  onFinish,
+}: {
+  league: League;
+  hasPicks: boolean;
+  busy: boolean;
+  onAuto: () => void;
+  onSimToMine: () => void;
+  onSimToEnd: () => void;
+  onFinish: () => void;
+}) {
   const np = nextPick(league);
   const user = league.userTid;
   if (!np) {
@@ -225,7 +261,7 @@ function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League;
           All picks are in
         </div>
         <div className="small dim2">Undrafted prospects become free agents. Next up: re-signing your own players.</div>
-        <button className="btn primary block" style={{ marginTop: 12 }} onClick={onFinish}>
+        <button className="btn primary block" style={{ marginTop: 12 }} disabled={busy} onClick={onFinish}>
           Continue to re-signing
         </button>
       </Card>
@@ -260,17 +296,19 @@ function OnTheClock({ league, onAuto, onSimToMine, onFinish }: { league: League;
             <button className="btn sm grow" onClick={onAuto}>
               <Bot size={16} /> Auto-pick for me
             </button>
-            <button className="btn sm grow ghost" onClick={onFinish}>
+            <button className="btn sm grow ghost" onClick={onSimToEnd}>
               <FastForward size={16} /> Sim to end
             </button>
           </div>
         </>
       ) : (
         <div className="row" style={{ marginTop: 12, gap: 8 }}>
-          <button className="btn sm grow primary" onClick={onSimToMine}>
-            <Play size={15} fill="currentColor" /> Sim to my pick
-          </button>
-          <button className="btn sm grow ghost" onClick={onFinish}>
+          {hasPicks && (
+            <button className="btn sm grow primary" onClick={onSimToMine}>
+              <Play size={15} fill="currentColor" /> Sim to my pick
+            </button>
+          )}
+          <button className={`btn sm grow ${hasPicks ? 'ghost' : 'primary'}`} onClick={onSimToEnd}>
             <FastForward size={16} /> Sim to end of draft
           </button>
         </div>
