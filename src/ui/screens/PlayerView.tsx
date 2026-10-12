@@ -15,7 +15,7 @@ import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, tradeClose
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
 import { pendingLive } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
@@ -340,7 +340,7 @@ export default function PlayerView() {
                     <span className="num">
                       {seasonLabel(contractExp(p.contract))}
                       {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
-                      {p.contract.rookie ? ' · rookie scale' : ''}
+                      {rookieScaleDeal(p) ? ' · rookie scale' : ''}
                     </span>
                   </div>
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}

@@ -213,6 +213,12 @@ export function rookieContract(league: League, pick: number, round: number, star
   return { start, salaries: [0, 1].map((i) => CAP_FOR(league, start + i).minContract), rookie: true };
 }
 
+/**
+ * A first-round pick on his rookie-scale deal. A second-rounder's two minimum seasons are rookie
+ * deals too (`contract.rookie`), but they aren't on the scale.
+ */
+export const rookieScaleDeal = (p: Player) => !!p.contract.rookie && p.draft.round === 1;
+
 // ---------------------------------------------------------------- signing exceptions
 
 /** Non-taxpayer mid-level exception, as a share of the cap. */

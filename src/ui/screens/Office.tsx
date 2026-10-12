@@ -16,7 +16,7 @@ import {
   standardRoster,
   twoWayRoster,
 } from '../../core/league/helpers';
-import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, signingRoute, valueScore } from '../../core/league/contracts';
+import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, rookieScaleDeal, signingRoute, valueScore } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
@@ -575,7 +575,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                         <button type="button" className="fo-name small" style={{ textAlign: 'left' }} aria-haspopup="dialog" onClick={(e) => (e.stopPropagation(), onPick(p.pid))}>
                           {nameOf(p.pid)}
                         </button>
-                        {p.contract.rookie && (
+                        {rookieScaleDeal(p) && (
                           <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
                             R
                           </span>
@@ -731,7 +731,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
       </div>
       <div className="row wrap" style={{ gap: 6 }}>
         <span className="tag">{contractYearsLabel(league, p, s0)}</span>
-        {p.contract.rookie && <span className="tag info">Rookie scale</span>}
+        {rookieScaleDeal(p) && <span className="tag info">Rookie scale</span>}
         {opt && (
           <span className={`tag ${opt === 'team' ? 'warn' : 'info'}`}>
             {opt === 'team' ? 'Team' : 'Player'} option {seasonLabel(exp)}
