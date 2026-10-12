@@ -79,6 +79,23 @@ describe('tactics lab & reports', () => {
     }
     [mine.tactics, opp.tactics] = saved;
   });
+  it('reads spacing as scouting does: a zone only against the poor spacing it flags, never pack the paint and stay home at once', () => {
+    const mine = league.teams[0];
+    const saved = mine.tactics;
+    mine.tactics = applyPatch(saved, { defense: { scheme: 'man', help: 55 } });
+    let flagged = 0;
+    for (let tid = 1; tid < 30; tid++) {
+      const poor = scoutTeam(league, tid).weaknesses.some((w) => w.startsWith('Poor spacing'));
+      const ids = counterCandidates(league, 0, tid).map((c) => c.id);
+      expect(ids.includes('zone')).toBe(poor);
+      if (poor) expect(ids).toContain('help-high');
+      expect(ids.includes('help-high') && ids.includes('help-low')).toBe(false);
+      flagged += +poor;
+    }
+    expect(flagged).toBeGreaterThan(0);
+    expect(flagged).toBeLessThan(15);
+    mine.tactics = saved;
+  });
   it('scouts in plain English: plural team names, the creator role named once', () => {
     for (let tid = 1; tid < 30; tid++) {
       for (const t of scoutTeam(league, tid).threats) expect(t.why).not.toMatch(/Primary creator \(Primary Creator\)/);

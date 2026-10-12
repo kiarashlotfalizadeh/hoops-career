@@ -136,16 +136,18 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
         patch: { defense: { starPlan: 'deny', starTarget: top.p.pid } },
       });
   }
-  if (spacing < 45 && cur.defense.help < 70)
+  // spacing as scouting reads it: a zone only against the cramped fifth it flags, packing the
+  // paint a little beyond that, staying home against about the best-spaced third
+  if (spacing < CRAMPED_SPACING + 4 && cur.defense.help < 70)
     out.push({
       id: 'help-high',
       label: 'Pack the paint',
       why: `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}). Sag off and protect the rim.`,
       patch: { defense: { help: 78 } },
     });
-  if (spacing >= 50 && cur.defense.help > 40)
+  if (spacing >= 45 && cur.defense.help > 40)
     out.push({ id: 'help-low', label: 'Stay home on shooters', why: `The ${opp.name} space the floor well; don't over-help.`, patch: { defense: { help: 32 } } });
-  if (spacing < 42 && cur.defense.scheme === 'man')
+  if (spacing < CRAMPED_SPACING && cur.defense.scheme === 'man')
     out.push({ id: 'zone', label: '2-3 zone', why: 'Dare a poor shooting team to beat you from outside.', patch: { defense: { scheme: 'zone23' } } });
   if (security < 55 && cur.defense.pressure < 70)
     out.push({ id: 'pressure-up', label: 'Turn up the pressure', why: 'Their ball handlers are loose with it.', patch: { defense: { pressure: 82 } } });
