@@ -24,7 +24,7 @@ import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '../components/ui';
-import { STRATEGY_META, Callout, capSeason, contractYearsLabel, fmtM, fmtMs } from '../office/common';
+import { STRATEGY_META, Callout, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { rosterNames } from '../stats';
 
@@ -169,7 +169,7 @@ export default function Trade() {
     <main className="page">
       <PageHeader
         title="Trade"
-        sub={league.phase === 'regular' && !closed ? `${deadlineLabel(league.tradeDeadlineDay - league.day)} · salaries for ${seasonLabel(s)}` : `Salaries for ${seasonLabel(s)}`}
+        sub={!closed && deadlineLabel(league) ? `${deadlineLabel(league)} · salaries for ${seasonLabel(s)}` : `Salaries for ${seasonLabel(s)}`}
         back
         right={
           <Help title="Trade rules">
@@ -517,8 +517,6 @@ function PickAsset({ league, dp, on, onToggle }: { league: League; dp: DraftPick
 }
 
 // ------------------------------------------------------------------ sticky summary dock
-
-const deadlineLabel = (days: number) => (days < 0 ? 'Deadline passed' : days === 0 ? 'Deadline today' : `Deadline in ${days} day${days === 1 ? '' : 's'}`);
 
 function reaction(ev: TradeEval): { pct: number; label: string; color: string } {
   if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)' };

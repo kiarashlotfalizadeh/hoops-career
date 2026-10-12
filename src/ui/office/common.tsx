@@ -53,6 +53,13 @@ export function openOption(league: League, p: Player): 'player' | 'team' | undef
   return contractExp(p.contract) > league.season ? p.contract.option : undefined;
 }
 
+/** "Deadline in 12 days" or "Deadline today" during the regular season until the trade deadline; null otherwise. */
+export function deadlineLabel(league: League): string | null {
+  const days = league.tradeDeadlineDay - league.day;
+  if (league.phase !== 'regular' || days < 0) return null;
+  return days === 0 ? 'Deadline today' : `Deadline in ${days} day${days === 1 ? '' : 's'}`;
+}
+
 /**
  * A contract that's up after the season is a set of Bird rights until free agency opens: he is
  * re-signed or let go in the re-sign period, not released or traded. Null for anyone else.

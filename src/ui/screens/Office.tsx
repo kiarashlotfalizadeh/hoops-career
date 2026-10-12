@@ -3,16 +3,29 @@ import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, History as HistoryIcon, ListOrdered, PenLine, PiggyBank, Timer, TriangleAlert, UserMinus, UserPlus } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, PHASE_LABEL, seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, fmtDate, freeAgents, payroll, playerName, rosterMaxNow, teamPlayers, standardRoster, twoWayRoster } from '../../core/league/helpers';
+import {
+  CAP_FOR,
+  OFFSEASON_ROSTER_MAX,
+  curTeamSeason,
+  fmtDate,
+  freeAgents,
+  payroll,
+  playerName,
+  rosterMaxNow,
+  teamPlayers,
+  standardRoster,
+  twoWayRoster,
+} from '../../core/league/helpers';
 import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, signingRoute, valueScore } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
+import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
 import { untradeableReason } from '../../core/league/trades';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet, activateOnKey } from '../components/ui';
+import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet } from '../components/ui';
 import {
   CapBar,
   CenterBar,
@@ -22,6 +35,7 @@ import {
   capSeason,
   contractUpNote,
   contractYearsLabel,
+  deadlineLabel,
   fmtM,
   isOffseason,
   openOption,
@@ -68,16 +82,7 @@ export default function Office() {
   const expiring = league.phase === 'resign' ? expiringPlayers(league, tid) : [];
   const inPost = league.phase === 'playin' || league.phase === 'playoffs';
   const pastDeadline = league.phase === 'regular' && league.day > league.tradeDeadlineDay;
-  const daysToDeadline = league.tradeDeadlineDay - league.day;
-  const tradeSub = inPost
-    ? 'Frozen during the postseason'
-    : pastDeadline
-      ? 'Deadline passed'
-      : league.phase === 'regular'
-        ? daysToDeadline === 0
-          ? 'Deadline today'
-          : `Deadline in ${daysToDeadline} day${daysToDeadline === 1 ? '' : 's'}`
-        : 'Open for business';
+  const tradeSub = inPost ? 'Frozen during the postseason' : pastDeadline ? 'Deadline passed' : (deadlineLabel(league) ?? 'Open for business');
   const thisDraftPicks = myPicks.filter((d) => d.season === league.season && d.pick).sort((a, b) => a.round - b.round || a.pick! - b.pick!);
 
   const tiles: Tile[] = [
@@ -100,7 +105,14 @@ export default function Office() {
       to: '/resign',
       icon: PenLine,
       title: 'Re-sign',
-      sub: league.phase === 'resign' ? `${expiring.length} expiring · negotiate now` : league.phase === 'freeAgency' ? 'Closed until next summer' : 'Opens after the draft',
+      sub:
+        league.phase === 'resign'
+          ? expiring.length
+            ? `${expiring.length} expiring · negotiate now`
+            : 'Nothing to re-sign'
+          : league.phase === 'freeAgency'
+            ? 'Closed until next summer'
+            : 'Opens after the draft',
       color: 'var(--warn)',
       hot: league.phase === 'resign' && expiring.length > 0,
       muted: league.phase !== 'resign',
@@ -141,19 +153,19 @@ export default function Office() {
               {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap. For the rest of that season, trades can't take its payroll past the tax line.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign phase, even over the cap. Until free agency opens (or you renounce
+              <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign period, even over the cap. Until free agency opens (or you renounce
               them), each one holds cap room at about his asking price.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Luxury tax ({fmtM(cap.luxuryTax)}).</b> Every dollar of payroll above the tax line costs {CAP.taxRate}× in tax at the end of the regular season. The pot is shared
-              by non-taxpaying teams.
+              <b>Luxury tax ({fmtM(cap.luxuryTax)}).</b> Every dollar of payroll above the tax line costs {CAP.taxRate}× in tax at the end of the regular season.{' '}
+              {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among the teams under the line.
             </p>
             <p style={{ margin: 0 }}>
               <b>Trades.</b> A team that is over the cap after a trade can take back at most 125% of the salary it sends out, plus $0.1M.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Rosters.</b> {CAP.rosterMin} to {CAP.rosterMax} players in season, up to 21 in the offseason. Minimum deals signed for the coming season aren't guaranteed until
-              opening night: cutting one before then leaves no dead money. First-round picks sign rookie-scale deals (4 years, team option on the last).
+              <b>Rosters.</b> {CAP.rosterMin} to {CAP.rosterMax} players in season, up to {OFFSEASON_ROSTER_MAX} in the offseason. Minimum deals signed for the coming season aren't
+              guaranteed until opening night: cutting one before then leaves no dead money. First-round picks sign rookie-scale deals (4 years, team option on the last).
             </p>
             <p style={{ margin: 0 }}>The cap, tax line and minimums grow 6% every season.</p>
           </Help>
@@ -195,17 +207,22 @@ export default function Office() {
             k={isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster'}
             v={`${signedN}/${CAP.rosterMax}`}
             color={signedN > rosterMaxNow(league) ? 'var(--bad)' : signedN > CAP.rosterMax || signedN < CAP.rosterMin ? 'var(--warn)' : undefined}
-            sub={
-              (expiringN > 0
-                ? `+${expiringN} expiring`
-                : signedN > CAP.rosterMax
-                  ? inSeasonNow
-                    ? `${signedN - CAP.rosterMax} over the limit`
-                    : `${signedN - CAP.rosterMax} to cut by opening night`
+            sub={[
+              expiringN > 0 ? `+${expiringN} expiring` : '',
+              // too many under contract matters even while some deals are expiring
+              signedN > CAP.rosterMax
+                ? inSeasonNow
+                  ? `${signedN - CAP.rosterMax} over the limit`
+                  : `${signedN - CAP.rosterMax} to cut by opening night`
+                : expiringN > 0
+                  ? ''
                   : signedN < CAP.rosterMin
                     ? `Need ${CAP.rosterMin - signedN} more`
-                    : `${CAP.rosterMax - signedN} open spot${CAP.rosterMax - signedN === 1 ? '' : 's'}`) + (twoWays ? ` · ${twoWays} two-way` : '')
-            }
+                    : `${CAP.rosterMax - signedN} open spot${CAP.rosterMax - signedN === 1 ? '' : 's'}`,
+              twoWays ? `${twoWays} two-way` : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           />
           <Kpi
             k={pay > cap.luxuryTax ? 'Tax bill (est.)' : 'Room under tax'}
@@ -254,6 +271,11 @@ export default function Office() {
                 <div className="grow">
                   <CenterBar value={val} />
                 </div>
+                {/* the number, not just the bar's colour */}
+                <span className="tiny num bold dim2" style={{ width: 28, textAlign: 'right' }}>
+                  {val >= 0 ? '+' : ''}
+                  {Math.round(val * 100)}
+                </span>
               </div>
             ))}
           </div>
@@ -326,7 +348,7 @@ function Spotlight({ league }: { league: League }) {
       const exp = expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
       return (
         <Card accent className="fo-hero">
-          <div className="fo-eyebrow">Re-signing window</div>
+          <div className="fo-eyebrow">Re-sign period</div>
           <div className="fo-mid" style={{ marginTop: 6 }}>
             {exp.length ? `${exp.length} contract${exp.length > 1 ? 's' : ''} expiring` : 'No expiring contracts'}
           </div>
@@ -415,7 +437,8 @@ function Spotlight({ league }: { league: League }) {
           <Card className="fo-hero">
             <div className="fo-eyebrow">Trade deadline passed</div>
             <div className="small dim2" style={{ marginTop: 6 }}>
-              Rosters are locked to trades until the offseason. You can still sign free agents: with cap space, or on minimum deals ({fmtM(CAP_FOR(league).vetMin, 2)}).
+              Rosters are locked to trades until the offseason. You can still sign free agents: with cap space,{' '}
+              {mle > 0 ? `with your mid-level exception (up to ${fmtM(mle)}), ` : ''}or on minimum deals ({fmtM(CAP_FOR(league).vetMin, 2)}).
             </div>
           </Card>
         );
@@ -490,12 +513,15 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
   }
   const totals = seasons.map((s) => payroll(league, tid, s));
   const caps = seasons.map((s) => CAP_FOR(league, s).salaryCap);
+  // until free agency opens, expiring players hold room on the first season's cap, as on the cap sheet above
+  const holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
+  const space = totals.map((t, i) => caps[i] - t - (i === 0 ? holds : 0));
   return (
     <>
       <SecTitle
         right={
           <Help title="Contracts">
-            <p style={{ margin: 0 }}>Salaries for the next four seasons. Contracts rise 5% per year.</p>
+            <p style={{ margin: 0 }}>Salaries for the next four seasons. New deals rise 5% a year, rookie-scale deals 4.5%.</p>
             <p style={{ margin: 0 }}>
               <span className="fo-opt">PO</span> player option and <span className="fo-opt team">TO</span> team option apply to the final season.{' '}
               <span className="tag info">R</span> marks a rookie-scale deal.
@@ -504,6 +530,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
               <span className="tag">2W</span> two-way deals are paid outside the cap and the tax, so they're left out of the totals.
             </p>
             <p style={{ margin: 0 }}>Dead money is salary still owed to players you released. It counts against the cap until it runs out.</p>
+            {holds > 0 && <p style={{ margin: 0 }}>Cap holds: until free agency opens, your expiring players hold cap room at about their asking price.</p>}
           </Help>
         }
       >
@@ -526,30 +553,39 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
               const opt = openOption(league, p);
               const anySalary = seasons.some((s) => salaryFor(p, s) > 0);
               return (
-                <tr key={p.pid} className="clickable" tabIndex={0} onClick={() => onPick(p.pid)} onKeyDown={activateOnKey(() => onPick(p.pid))}>
+                // the whole row opens the sheet; the name is its keyboard and screen-reader button
+                <tr key={p.pid} className="clickable" onClick={() => onPick(p.pid)}>
                   <td className="l sticky">
-                    <div className="row" style={{ gap: 5 }}>
-                      <span className="fo-name small" style={{ maxWidth: 96 }}>
-                        {nameOf(p.pid)}
-                      </span>
-                      {p.contract.rookie && (
-                        <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
-                          R
-                        </span>
-                      )}
-                      {p.contract.twoWay && (
-                        <span className="tag" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
-                          2W
-                        </span>
-                      )}
-                      {p.injury && (
-                        <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
-                          INJ
-                        </span>
-                      )}
-                    </div>
-                    <div className="tiny dim">
-                      {p.pos} · {league.season - p.bornYear}
+                    <div className="fo-ct-name">
+                      <div className="row" style={{ gap: 5 }}>
+                        <button
+                          type="button"
+                          className="fo-name small"
+                          style={{ maxWidth: 96, textAlign: 'left' }}
+                          aria-haspopup="dialog"
+                          onClick={(e) => (e.stopPropagation(), onPick(p.pid))}
+                        >
+                          {nameOf(p.pid)}
+                        </button>
+                        {p.contract.rookie && (
+                          <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                            R
+                          </span>
+                        )}
+                        {p.contract.twoWay && (
+                          <span className="tag" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                            2W
+                          </span>
+                        )}
+                        {p.injury && (
+                          <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                            INJ
+                          </span>
+                        )}
+                      </div>
+                      <div className="tiny dim">
+                        {p.pos} · {league.season - p.bornYear}
+                      </div>
                     </div>
                   </td>
                   <td>
@@ -576,10 +612,12 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
             {[...dead.entries()].map(([pid, d]) => (
               <tr key={`dead-${pid}`} className="dead">
                 <td className="l sticky">
-                  <span className="fo-name small" style={{ maxWidth: 120, display: 'inline-block' }}>
-                    {d.name}
-                  </span>
-                  <div className="tiny">dead money</div>
+                  <div className="fo-ct-name">
+                    <span className="fo-name small" style={{ maxWidth: 120, display: 'inline-block' }}>
+                      {d.name}
+                    </span>
+                    <div className="tiny">dead money</div>
+                  </div>
                 </td>
                 <td />
                 {seasons.map((s) => (
@@ -596,12 +634,23 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                 </td>
               ))}
             </tr>
+            {holds > 0 && (
+              <tr className="total">
+                <td className="l sticky">Cap holds</td>
+                <td />
+                {seasons.map((s, i) => (
+                  <td key={s} className={i === 0 ? '' : 'dim'}>
+                    {i === 0 ? m1(holds) : '—'}
+                  </td>
+                ))}
+              </tr>
+            )}
             <tr className="total">
               <td className="l sticky">Cap space</td>
               <td />
-              {totals.map((t, i) => (
+              {space.map((x, i) => (
                 <td key={i}>
-                  <div style={{ color: caps[i] - t >= 0 ? 'var(--good)' : 'var(--text-dim)' }}>{m1(caps[i] - t)}</div>
+                  <div style={{ color: x >= 0 ? 'var(--good)' : 'var(--text-dim)' }}>{m1(x)}</div>
                   <div className="tiny dim">cap {m1(caps[i])}</div>
                 </td>
               ))}
