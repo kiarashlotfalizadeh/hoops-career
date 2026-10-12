@@ -381,6 +381,10 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (stepien) errors.push(stepien);
   }
   if (!offer.a.pids.length && !offer.a.dpids.length && !offer.b.pids.length && !offer.b.dpids.length) errors.push('The trade is empty.');
+  // (a deep link can name a player twice: the AI would count him twice, and he'd move twice)
+  const pids = [...offer.a.pids, ...offer.b.pids];
+  const dpids = [...offer.a.dpids, ...offer.b.dpids];
+  if (new Set(pids).size < pids.length || new Set(dpids).size < dpids.length) errors.push('A player or pick is in the deal twice.');
   return [...new Set(errors)];
 }
 

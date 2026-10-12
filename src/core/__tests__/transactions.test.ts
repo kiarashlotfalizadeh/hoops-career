@@ -381,6 +381,19 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
   });
 
+  it("doesn't count a player named twice in a deal (a deep link can repeat one)", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const vetMin = CAP_FOR(l).vetMin;
+    const mine = shape(l, standardRoster(l, U)[0], 80, 27, vetMin);
+    const theirs = shape(l, standardRoster(l, AI)[0], 84, 27, vetMin);
+    expect(evaluateTrade(l, offer([mine.pid], [theirs.pid])).accept).toBe(false);
+    const twice = evaluateTrade(l, offer([mine.pid, mine.pid], [theirs.pid]));
+    expect([twice.ok, twice.accept]).toEqual([false, false]);
+    expect(twice.message).toMatch(/twice/);
+  });
+
   it('a released player can be traded for again once he signs elsewhere: the trade-back rule leaves with his contract', () => {
     const l = league();
     l.phase = 'regular';
