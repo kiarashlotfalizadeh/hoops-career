@@ -4,11 +4,11 @@
 // games before the expected return date.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { parquetReadObjects } from 'hyparquet';
-import { zstdDecompressSync } from 'node:zlib';
 import type { Injury } from '../../../src/core/types';
 import type { SeedInjury, SeedPlayer, SeedSchedule } from '../../../src/core/league/create';
 import { INJURY_TYPES } from '../../../src/core/league/injuries';
 import { normName } from '../nba/crosswalk';
+import { compressors } from '../nba/college';
 import { dayOf } from './schedule';
 import { teamByName, tricodeOf } from './teams';
 
@@ -30,8 +30,6 @@ export function parseEspnMirror(json: unknown): RawInjury[] {
   }
   return out;
 }
-
-const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) };
 
 /** sportsdataverse's ESPN injury history: the latest snapshot. */
 export async function parseSdvParquet(file: string): Promise<RawInjury[]> {

@@ -379,7 +379,7 @@ function poolClaims(row: RawPickRow, owner: string, ctx: Ctx, notes: string[]): 
       clause = clause.slice(0, tm.index).trim();
     }
     let m: RegExpMatchArray | null;
-    if ((m = clause.match(/^others? ?$/i)) || (m = clause.match(/^others?$/i))) {
+    if ((m = clause.match(/^others? ?$/i))) {
       if (base)
         give(
           to,

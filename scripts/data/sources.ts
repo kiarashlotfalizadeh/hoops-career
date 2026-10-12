@@ -2,11 +2,14 @@
 // (NBA_2026 = 2025-26). The game starts in 2026-27 (season 2027).
 
 export const BASE = 'https://www.basketball-reference.com';
-export const STAT_SEASONS = [2024, 2025, 2026];
-export const ROSTER_SEASONS = [2027, 2026];
+/** The season the game starts in; every other season here counts back from it. */
+export const SEED_SEASON = 2027;
+/** The three seasons of stats before it, oldest first. */
+export const STAT_SEASONS = [SEED_SEASON - 3, SEED_SEASON - 2, SEED_SEASON - 1];
+export const ROSTER_SEASONS = [SEED_SEASON, SEED_SEASON - 1];
 // 2003..2026: back to the longest-serving player's draft (LeBron James, 2003); a player who entered
 // the league earlier would have no draft row and be seeded as undrafted
-export const DRAFT_YEARS = Array.from({ length: 24 }, (_, i) => 2003 + i);
+export const DRAFT_YEARS = Array.from({ length: SEED_SEASON - 2003 }, (_, i) => 2003 + i);
 
 export const TEAM_CODES = [
   'ATL',

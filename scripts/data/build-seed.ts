@@ -5,7 +5,7 @@
 // birth date, jersey, country, college); draft pages (draft slot).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
+import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
 import {
   COUNTRY_NAMES,
   parseAdvanced,
@@ -33,7 +33,8 @@ import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { BBREF_TO_TID } from '../../src/core/teams';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
 import { clamp } from '../../src/core/random';
-import { inferPosition, statsPosition } from './positions';
+import { seasonLabel } from '../../src/core/constants';
+import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
@@ -42,7 +43,6 @@ const read = (key: string) => {
   const f = join(RAW, `${key}.html`);
   return existsSync(f) ? readFileSync(f, 'utf8') : null;
 };
-const COMBINED = /^(TOT|\dTM)$/;
 
 async function main() {
   const contractsHtml = read('contracts');
@@ -113,8 +113,8 @@ async function main() {
   // universe: everyone under contract + recent rotation players who are unsigned
   const ids = new Set<string>(contracts.map((c) => c.id));
   const fa = [...pgById.entries()]
-    .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === 2026 && r.g * r.mp >= 250))
-    .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === 2026 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
+    .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === SEED_SEASON - 1 && r.g * r.mp >= 250))
+    .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === SEED_SEASON - 1 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
     .sort((a, b) => b.min - a.min)
     .slice(0, 140);
   for (const f of fa) ids.add(f.id);
@@ -182,8 +182,8 @@ async function main() {
       const md = Number(ros.birthDate.slice(4));
       bornYear = y + (md > 201 ? 1 : 0);
     } else if (lastStat) bornYear = lastStat.season - lastStat.age;
-    else bornYear = 2027 - 21;
-    const age = 2027 - bornYear;
+    else bornYear = SEED_SEASON - 21;
+    const age = SEED_SEASON - bornYear;
     // box-score position (latest season, main team), else last season's roster page, else
     // inferred from the G/F/C label, size and skills once ratings exist
     const fivePos = (statsPosition(rows) ?? rosterFive.get(id) ?? null) as Pos | null;
@@ -336,8 +336,8 @@ async function main() {
   const seed: SeedData = {
     version: 1,
     generated: new Date().toISOString(),
-    source: 'Basketball Reference: 2023-24 to 2025-26 per-game & advanced; current contracts',
-    season: 2027,
+    source: `Basketball Reference: ${seasonLabel(STAT_SEASONS[0])} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced; current contracts`,
+    season: SEED_SEASON,
     players,
     realAvgs: realAvgs(leagueAvg[2026]),
   };
@@ -439,7 +439,7 @@ async function main() {
         id: p.id,
         name: `${p.first} ${p.last}`,
         team: p.team,
-        age: 2027 - p.bornYear,
+        age: SEED_SEASON - p.bornYear,
         pick: p.draft?.round ? (p.draft.round - 1) * 30 + p.draft.pick : null,
         rawMin: a?.rawMin ?? 0,
         wMin: a?.wMin ?? 0,
@@ -460,11 +460,11 @@ async function main() {
 
 /** Display OVR expected from draft slot and reputation alone (no NBA sample). */
 function priorOvr(sp: SeedPlayer): number {
-  const age = 2027 - sp.bornYear;
+  const age = SEED_SEASON - sp.bornYear;
   // overall pick; round 0 is undrafted
   const pick = sp.draft?.round ? (sp.draft.round - 1) * 30 + sp.draft.pick : null;
   const bump = (PROSPECT_HINTS[`${sp.first} ${sp.last}`.trim()]?.bump ?? 0) * 8;
-  const yearsSince = sp.draft ? Math.max(0, 2026 - sp.draft.year) : 0;
+  const yearsSince = sp.draft ? Math.max(0, SEED_SEASON - 1 - sp.draft.year) : 0;
   if (age <= 23 && yearsSince <= 2) {
     const base = pick === null ? 61 : pick <= 30 ? 78 - 9 * Math.pow((pick - 1) / 29, 0.8) : 65.5 - (4 * (pick - 31)) / 29;
     return base + bump + yearsSince * 1.5;

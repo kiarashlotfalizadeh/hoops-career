@@ -89,7 +89,7 @@ export async function applyExtras(seed: SeedData): Promise<void> {
 
   // injuries (before picks: they feed the projected standings)
   for (const p of seed.players) delete p.injury;
-  const inj = await loadInjuries(extraPath('injuries.json'), extraPath('injuries_2027.parquet'));
+  const inj = await loadInjuries(extraPath('injuries.json'), extraPath(`injuries_${season}.parquet`));
   if (!inj) console.warn('  injuries: no injury report (data/raw/extra/injuries.json); everyone starts healthy');
   else {
     const res = attachInjuries(seed.players, inj.rows, seed.schedule ?? null, season, inj.asOf);

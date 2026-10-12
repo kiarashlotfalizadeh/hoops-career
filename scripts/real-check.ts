@@ -12,6 +12,7 @@ import { CAP, TARGETS } from '../src/core/constants';
 import { FREE_AGENT, type Player } from '../src/core/types';
 import { engineDiag, resetEngineDiag } from '../src/core/sim/engine';
 import { awardLadder } from '../src/core/league/awards';
+import { SEASON_WEIGHT } from './data/derive';
 
 const seedPath = process.argv[2] ?? process.env.HC_SEED ?? 'src/data/seed.json';
 const rngSeed = Number(process.argv[3] ?? process.env.RNG ?? 7);
@@ -32,7 +33,7 @@ const rows = Object.values(league.players)
     const sim = p.stats.filter((s) => s.season === season && !s.playoffs);
     const gp = sim.reduce((a, s) => a + s.gp, 0);
     const tot = (k: K) => sim.reduce((a, s) => a + s[k], 0) / Math.max(1, gp);
-    const real = p.stats.filter((s) => s.real && s.season === 2026);
+    const real = p.stats.filter((s) => s.real && s.season === season - 1);
     const rgp = real.reduce((a, s) => a + s.gp, 0);
     const rt = (k: K) => real.reduce((a, s) => a + s[k], 0) / Math.max(1, rgp);
     const share = (f: typeof tot, k: 'rimA' | 'midA' | 'tpa') => f(k) / Math.max(0.01, f('fga'));
@@ -104,8 +105,6 @@ const lg: [string, number, number][] = [
 ];
 console.log('League per team game (sim vs 2025-26 NBA):');
 console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixed(1)} (${t < 2 ? t.toFixed(3) : t.toFixed(1)}, ${(((v - t) / t) * 100).toFixed(0)}%)`).join(' · '));
-/** Recency weights for real seasons. */
-const w3: Record<number, number> = { 2026: 1, 2025: 0.6, 2024: 0.3 };
 // ---- game-to-game shape, and how margin turns into wins (NBA: ~2.7 wins per point of average margin, win SD ~12)
 {
   const played = league.games.filter((g) => g.season === season && g.type === 'regular');
@@ -126,9 +125,9 @@ const w3: Record<number, number> = { 2026: 1, 2025: 0.6, 2024: 0.3 };
     let v = 0;
     let m = 0;
     for (const s of p.stats)
-      if (s.real && !s.playoffs && w3[s.season] && s.adv) {
-        v += s.adv.bpm * s.min * w3[s.season];
-        m += s.min * w3[s.season];
+      if (s.real && !s.playoffs && SEASON_WEIGHT[s.season] && s.adv) {
+        v += s.adv.bpm * s.min * SEASON_WEIGHT[s.season];
+        m += s.min * SEASON_WEIGHT[s.season];
       }
     return m >= 300 ? v / m : -2;
   };
@@ -253,7 +252,7 @@ console.log(
 const mrows = Object.values(league.players)
   .map((p) => {
     const s = seasonTotals(p, season);
-    const real = p.stats.filter((x) => x.real && x.season === 2026);
+    const real = p.stats.filter((x) => x.real && x.season === season - 1);
     const rgp = real.reduce((a, x) => a + x.gp, 0);
     return { p, gp: s?.gp ?? 0, mpg: s && s.gp ? s.min / s.gp : 0, rgp, rmpg: real.reduce((a, x) => a + x.min, 0) / Math.max(1, rgp) };
   })
@@ -299,9 +298,9 @@ const rate = (p: (typeof rows)[0]['p'], k: 'pts' | 'ast') => {
   let v = 0;
   let m = 0;
   for (const s of p.stats)
-    if (s.real && w3[s.season]) {
-      v += s[k] * w3[s.season];
-      m += s.min * w3[s.season];
+    if (s.real && SEASON_WEIGHT[s.season]) {
+      v += s[k] * SEASON_WEIGHT[s.season];
+      m += s.min * SEASON_WEIGHT[s.season];
     }
   return m >= 500 ? (v / m) * 36 : NaN;
 };

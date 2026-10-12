@@ -6,12 +6,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NBA_RAW } from './fetch';
 import { PBP_SEASONS } from './sources';
+import { SEED_SEASON } from '../sources';
 import { processSeason, type SeasonPbp, type PlayerPbp } from './pbp';
 import { processMatchups, type SeasonMatchups, type DefMatchup } from './matchups';
 import { rapm, type RapmResult } from './rapm';
 
 /** Recency weights for RAPM (seasons by end year). */
-export const RAPM_WEIGHTS: Record<number, number> = { 2026: 1, 2025: 0.7, 2024: 0.45 };
+export const RAPM_WEIGHTS: Record<number, number> = { [SEED_SEASON - 1]: 1, [SEED_SEASON - 2]: 0.7, [SEED_SEASON - 3]: 0.45 };
 export const RAPM_LAMBDA = 3000;
 
 export interface NbaProfile {

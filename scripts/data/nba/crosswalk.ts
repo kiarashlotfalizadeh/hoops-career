@@ -1,7 +1,7 @@
 // NBA.com person id ↔ Basketball Reference id. Names differ between the two (accents,
 // suffixes, nicknames), so matching goes: exact normalized name → same team & season with
 // matching surname and first initial → small edit distance → a short alias list.
-import { TRICODE_TO_BBREF } from './sources';
+import { teamByCode } from '../extra/teams';
 
 export function normName(s: string): string {
   return s
@@ -23,7 +23,6 @@ const ALIASES: Record<string, string> = {
   'cam thomas': 'cameron thomas',
   'gg jackson': 'gregory jackson',
   'carlton carrington': 'bub carrington',
-  'kj simpson': 'kj simpson',
   'nah shon hyland': 'bones hyland',
   'ron holland': 'ronald holland',
   'mohamed bamba': 'mo bamba',
@@ -64,7 +63,7 @@ export function crosswalk(nba: NbaPerson[], bbref: BbrefRow[]): { map: Map<numbe
     const k = `${r.season}|${r.team}`;
     (seasonTeam.get(k) ?? seasonTeam.set(k, []).get(k)!).push({ id: r.id, norm: n });
   }
-  const teamOk = (id: string, p: NbaPerson) => Object.entries(p.teams).some(([s, tri]) => (seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []).some((x) => x.id === id));
+  const teamOk = (id: string, p: NbaPerson) => Object.entries(p.teams).some(([s, tri]) => (seasonTeam.get(`${s}|${teamByCode(tri) ?? tri}`) ?? []).some((x) => x.id === id));
   const map = new Map<number, string>();
   const used = new Set<string>();
   const key = (p: NbaPerson) => {
@@ -93,7 +92,7 @@ export function crosswalk(nba: NbaPerson[], bbref: BbrefRow[]): { map: Map<numbe
     const last = parts[parts.length - 1];
     const cands = new Set<string>();
     for (const [s, tri] of Object.entries(p.teams))
-      for (const x of seasonTeam.get(`${s}|${TRICODE_TO_BBREF[tri] ?? tri}`) ?? []) {
+      for (const x of seasonTeam.get(`${s}|${teamByCode(tri) ?? tri}`) ?? []) {
         if (used.has(x.id)) continue;
         const xp = x.norm.split(' ');
         if (xp[xp.length - 1] === last && xp[0][0] === parts[0][0]) cands.add(x.id);
