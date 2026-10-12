@@ -98,6 +98,27 @@ describe('tactics lab & reports', () => {
     expect(alert.body).toMatch(/\(fit 100 vs 45\)\.$/);
     team.tactics = saved;
   });
+  it('warns about a slow big only where the engine hunts him: on switched ball screens, not off-ball switches', () => {
+    const team = league.teams[1];
+    const saved = team.tactics;
+    const big = league.players[team.rotation.order[0]];
+    const r = { ...big.ratings };
+    big.ratings.hgt = 70;
+    big.ratings.spd = 30;
+    const ids = () => teamAlerts(league, 1).map((a) => a.id);
+    const slowWeakness = () => scoutTeam(league, 1).weaknesses.some((w) => w.startsWith('Switching with a slow big'));
+    // drop coverage that switches off the ball: "use Drop or Ice" would be advice it already follows
+    team.tactics = applyPatch(saved, { defense: { scheme: 'man', pnr: 'drop', switchOffBall: true } });
+    expect(ids()).not.toContain('switch-slow');
+    expect(slowWeakness()).toBe(false);
+    expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch off-ball screens;/);
+    team.tactics = applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } });
+    expect(teamAlerts(league, 1).find((a) => a.id === 'switch-slow')!.body).toContain(big.lastName);
+    expect(slowWeakness()).toBe(true);
+    expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch everything;/);
+    big.ratings = r;
+    team.tactics = saved;
+  });
   it('only offers counters that change something', () => {
     const [mine, opp] = [league.teams[0], league.teams[1]];
     const saved = [mine.tactics, opp.tactics];

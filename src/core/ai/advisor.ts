@@ -83,7 +83,8 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (security < 52) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
   if (man && t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
-  if (man && (t.defense.pnr === 'switch' || t.defense.switchOffBall)) {
+  // (a switch on a ball screen leaves him on a guard; switching off-ball screens doesn't)
+  if (man && t.defense.pnr === 'switch') {
     const slow = cs.filter((x) => slowBig(x.p));
     if (slow.length) weaknesses.push(`Switching with a slow big (${slow[0].p.lastName}): hunt that mismatch.`);
   }
@@ -174,7 +175,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     out.push({
       id: 'vs-switch',
       label: 'Hunt mismatches',
-      why: 'They switch everything; isolate the weakest defender.',
+      why: `They switch ${od.pnr !== 'switch' ? 'off-ball screens' : od.switchOffBall ? 'everything' : 'ball screens'}; isolate the weakest defender.`,
       patch: {
         offense: { huntMismatch: true, actions: { ...cur.offense.actions, iso: Math.min(100, cur.offense.actions.iso + 25), post: Math.min(100, cur.offense.actions.post + 15) } },
       },
@@ -272,12 +273,14 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
         link: '/tactics',
       });
-    if (man && (team.tactics.defense.pnr === 'switch' || team.tactics.defense.switchOffBall) && starters.some(slowBig)) {
+    // only a switch on a ball screen leaves him on a guard (off-ball switches don't), so Drop or Ice fixes it
+    const slow = starters.find(slowBig);
+    if (man && team.tactics.defense.pnr === 'switch' && slow) {
       alerts.push({
         id: 'switch-slow',
         tone: 'alert',
         title: 'Switching with a slow big',
-        body: 'Opponents will hunt your center on switches. Use Drop or Ice when he is on the floor.',
+        body: `Opponents will hunt ${slow.lastName} on switched ball screens. Drop or Ice coverage keeps him near the rim.`,
         link: '/tactics',
       });
     }
