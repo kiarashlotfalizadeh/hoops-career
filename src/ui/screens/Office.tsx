@@ -666,7 +666,7 @@ function PlayerContractSheet({ pid, onClose }: { pid: number | null; onClose: ()
   const p = pid !== null ? league.players[pid] : undefined;
   const open = !!p && p.tid === league.userTid;
   return (
-    <Sheet open={open} onClose={onClose}>
+    <Sheet open={open} onClose={onClose} label={p ? `${playerName(p)}: contract` : undefined}>
       {open && p && <PlayerContractBody key={p.pid} p={p} onClose={onClose} />}
     </Sheet>
   );

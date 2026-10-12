@@ -20,7 +20,7 @@ export function ContractSheet({ pid, mode, onClose }: { pid: number | null; mode
   const p = pid !== null ? league.players[pid] : undefined;
   const valid = !!p && (mode === 'fa' ? p.tid === FREE_AGENT : p.tid === league.userTid);
   return (
-    <Sheet open={valid} onClose={onClose}>
+    <Sheet open={valid} onClose={onClose} label={p ? `${mode === 'fa' ? 'Offer to' : 'Re-sign'} ${playerName(p)}` : undefined}>
       {valid && p && <OfferBody key={p.pid} p={p} mode={mode} onClose={onClose} />}
     </Sheet>
   );

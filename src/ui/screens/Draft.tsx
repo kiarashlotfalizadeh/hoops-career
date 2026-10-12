@@ -619,7 +619,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
     </div>
   );
   return (
-    <Sheet open={!!p} onClose={onClose}>
+    <Sheet open={!!p} onClose={onClose} label={p ? playerName(p) : undefined}>
       {p && (
         <div className="col" style={{ gap: 12 }}>
           <div className="row" style={{ gap: 12 }}>

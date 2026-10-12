@@ -846,7 +846,7 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
           <button
             key={p.pid}
             className="card tight row"
-            style={{ gap: 8, opacity: p.out ? 0.45 : 1 }}
+            style={{ gap: 8, opacity: p.out ? 0.45 : undefined }}
             disabled={!!p.out || outPid === null}
             onClick={() => {
               if (outPid === null) return;
