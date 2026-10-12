@@ -3,7 +3,7 @@ import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
-import { makeTeam } from '../teamFactory';
+import { coachName, makeTeam } from '../teamFactory';
 import { DEFAULT_SCALE, blankMood, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
@@ -246,6 +246,15 @@ export function createLeague(opts: CreateOpts): League {
     startSeason: season,
   };
   teams[opts.userTid].coach.name = opts.coachName;
+  // no two head coaches share a name (drawn from 900, a third of leagues had two, and Coach of the
+  // Year history goes by name); redraws come from a stream of their own, so nothing else moves
+  const coachRng = new Rng(rngSeed ^ 0x2c1b3c6d);
+  const coaches = new Set([opts.coachName]);
+  for (const t of teams) {
+    if (t.tid === opts.userTid) continue;
+    while (coaches.has(t.coach.name)) t.coach.name = coachName(coachRng);
+    coaches.add(t.coach.name);
+  }
 
   if (opts.seed && opts.seed.players.length) {
     // the first season the seed's stats cover

@@ -70,9 +70,11 @@ const COACH_LAST = [
 const OFF_PHIL = ['balanced', 'helio', 'fiveOut', 'hub', 'paceSpace', 'grind'];
 const DEF_PHIL = ['drop', 'switch', 'blitz', 'ice', 'hedge', 'zone'];
 
+export const coachName = (rng: Rng) => `${rng.pick(COACH_FIRST)} ${rng.pick(COACH_LAST)}`;
+
 export function randomCoach(rng: Rng): CoachProfile {
   return {
-    name: `${rng.pick(COACH_FIRST)} ${rng.pick(COACH_LAST)}`,
+    name: coachName(rng),
     offPhilosophy: rng.pick(OFF_PHIL),
     defPhilosophy: rng.pick(DEF_PHIL),
     development: Math.round(rng.uniform(35, 85)),
