@@ -234,7 +234,7 @@ export function generateSchedule(teams: Team[], season: number, rng: Rng, startG
   return { games, lastDay, allStarDay: allStarStart + 2, tradeDeadlineDay: allStarStart - 8, cup: cup?.setup };
 }
 
-/** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = opening night). */
+/** Real schedule from the seed: one "day:AWY@HOM" string per game (day 0 = Oct 20). */
 export interface RealScheduleData {
   season: number;
   games: string[];

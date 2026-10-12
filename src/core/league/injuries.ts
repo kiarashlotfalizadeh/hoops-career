@@ -98,7 +98,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   }
 }
 
-/** Called once per game a team plays (or once per offseason chunk). */
+/** Called once per game a team plays, and about every other day for a player with no games to miss (healIdle in season.ts). */
 export function healOneGame(league: League, p: Player, rng: Rng) {
   if (!p.injury) return;
   const team = p.tid >= 0 ? league.teams[p.tid] : null;

@@ -111,7 +111,7 @@ export function statsLine(p: Player, season: number, tid: number, playoffs: bool
   return s;
 }
 
-/** Combined (all teams) regular-season stats for a season. */
+/** Combined (all teams) stats for a season: the regular season, or with `playoffs` the postseason (play-in included). */
 export function seasonTotals(p: Player, season: number, playoffs = false): PlayerStats | null {
   const rows = p.stats.filter((s) => s.season === season && s.playoffs === playoffs);
   if (!rows.length) return null;

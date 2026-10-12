@@ -38,8 +38,9 @@ export function gamesThreshold(league: League) {
 
 /**
  * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games (pro
- * rata during the season, with real minutes); Rookie and Sixth Man of the Year don't, so they ask
- * for a voter's 50 games. A sixth man came off the bench in more games than he started.
+ * rata during the season) and 20 minutes a game; Rookie and Sixth Man of the Year don't, so they ask
+ * for a voter's 50 games (Sixth Man for the 20 minutes too). A sixth man came off the bench in more
+ * games than he started.
  */
 function awardPools(league: League, season = league.season) {
   const minG = gamesThreshold(league);
