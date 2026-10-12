@@ -5,6 +5,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { GameResult, League } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
+import { FRANCHISES } from '../core/teams';
 
 export interface LeagueMeta {
   id: string;
@@ -97,6 +98,26 @@ function db() {
   return dbp;
 }
 
+/**
+ * Run one operation on the database. The browser may close or lose an idle connection without
+ * telling (Safari does, to a home-screen app left in the background): a failure reopens it and
+ * tries once more, so neither saves nor the saved-leagues list stay broken until a restart.
+ */
+async function withDb<T>(op: (d: IDBPDatabase) => Promise<T>): Promise<T> {
+  const p = db();
+  try {
+    return await op(await p);
+  } catch (e) {
+    if (e instanceof SaveConflictError || isQuotaError(e)) throw e;
+    // (unless another operation already reopened it)
+    if (dbp === p) {
+      dbp = null;
+      void p.then((d) => d.close()).catch(() => {});
+    }
+    return op(await db());
+  }
+}
+
 let channel: BroadcastChannel | null | undefined;
 /** Tells other windows which league changed, so they stop autosaving their stale copy right away. */
 function broadcast() {
@@ -132,8 +153,7 @@ export function metaFor(league: League): LeagueMeta {
   };
 }
 
-async function write(league: League) {
-  const d = await db();
+async function write(d: IDBPDatabase, league: League) {
   const tx = d.transaction(['leagues', 'meta', 'games'], 'readwrite');
   // a failed write rejects through the awaited requests below
   tx.done.catch(() => {});
@@ -171,15 +191,7 @@ async function write(league: League) {
 }
 
 export async function saveLeague(league: League) {
-  try {
-    await write(league);
-  } catch (e) {
-    if (e instanceof SaveConflictError || isQuotaError(e)) throw e;
-    // the browser may close or lose an idle connection (Safari does): reopen it once
-    void dbp?.then((d) => d.close()).catch(() => {});
-    dbp = null;
-    await write(league);
-  }
+  await withDb((d) => write(d, league));
 }
 
 const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
@@ -219,6 +231,8 @@ export function isLeague(x: unknown): x is League {
 
 /** In-app routes only: inbox links come from the save file, which may have been crafted. */
 const isRoute = (s: unknown) => typeof s === 'string' && /^\/(?![/\\])/.test(s);
+/** Team colours go into the screens' styles as they are: from a crafted save, one could pull in a remote url(). */
+const isColor = (s: unknown) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
 
 /**
  * Bring a league read from the device or a backup up to the current format. Refuses saves from a
@@ -229,21 +243,27 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Hoops Career. Update the app to open it.');
   if (!isLeague(x)) throw new Error(notALeague);
   for (const m of x.inbox) if (m.link !== undefined && !isRoute(m.link)) delete m.link;
+  for (const t of x.teams) {
+    if (t.colors.length === 3 && t.colors.every(isColor)) continue;
+    const [a, b, c] = FRANCHISES[t.tid]?.colors ?? ['#334155', '#94a3b8', '#ffffff'];
+    t.colors = [a, b, c];
+  }
   // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
   x.version = SAVE_VERSION;
   return x;
 }
 
-async function readAll(id: string) {
-  const d = await db();
-  const tx = d.transaction(['leagues', 'meta', 'games']);
-  const [raw, meta, games] = await Promise.all([
-    tx.objectStore('leagues').get(id),
-    tx.objectStore('meta').get(id) as Promise<LeagueMeta | undefined>,
-    tx.objectStore('games').getAll(gamesOf(id)) as Promise<GameResult[]>,
-    tx.done,
-  ]);
-  return { raw: raw as Record<string, unknown> | undefined, meta, games: games.sort(playOrder) };
+function readAll(id: string) {
+  return withDb(async (d) => {
+    const tx = d.transaction(['leagues', 'meta', 'games']);
+    const [raw, meta, games] = await Promise.all([
+      tx.objectStore('leagues').get(id),
+      tx.objectStore('meta').get(id) as Promise<LeagueMeta | undefined>,
+      tx.objectStore('games').getAll(gamesOf(id)) as Promise<GameResult[]>,
+      tx.done,
+    ]);
+    return { raw: raw as Record<string, unknown> | undefined, meta, games: games.sort(playOrder) };
+  });
 }
 
 export async function loadLeague(id: string): Promise<League | undefined> {
@@ -261,15 +281,15 @@ export async function loadRawLeague(id: string): Promise<unknown> {
 }
 
 export async function listLeagues(): Promise<LeagueMeta[]> {
-  const d = await db();
-  const all = (await d.getAll('meta')) as LeagueMeta[];
+  const all = (await withDb((d) => d.getAll('meta'))) as LeagueMeta[];
   return all.sort((a, b) => b.updated - a.updated);
 }
 
 export async function deleteLeague(id: string) {
-  const d = await db();
-  const tx = d.transaction(['leagues', 'meta', 'games'], 'readwrite');
-  await Promise.all([tx.objectStore('leagues').delete(id), tx.objectStore('meta').delete(id), tx.objectStore('games').delete(gamesOf(id)), tx.done]);
+  await withDb(async (d) => {
+    const tx = d.transaction(['leagues', 'meta', 'games'], 'readwrite');
+    await Promise.all([tx.objectStore('leagues').delete(id), tx.objectStore('meta').delete(id), tx.objectStore('games').delete(gamesOf(id)), tx.done]);
+  });
   broadcast()?.postMessage({ id, deleted: true });
 }
 

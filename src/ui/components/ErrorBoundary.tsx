@@ -14,17 +14,23 @@ const notLoaded = (e: Error) => /dynamically imported module|module script faile
 
 interface State {
   error: Error | null;
+  resetKey?: unknown;
 }
 
 /**
  * Catches render errors so a bad save or a bug shows a way out instead of a blank screen.
  * "Main menu" forgets the last opened league, so a save that crashes on load can't trap the app.
+ * A change of `resetKey` (the location, for a screen) clears the error and tries the screen again.
  */
-export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app' | 'screen' }, State> {
-  state: State = { error: null };
+export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app' | 'screen'; resetKey?: unknown }, State> {
+  state: State = { error: null, resetKey: this.props.resetKey };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
+  }
+
+  static getDerivedStateFromProps(props: { resetKey?: unknown }, state: State): Partial<State> | null {
+    return props.resetKey !== state.resetKey ? { error: null, resetKey: props.resetKey } : null;
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -56,8 +62,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
               <button
                 className="btn"
                 onClick={() => {
-                  this.setState({ error: null });
-                  // opened by a deep link or a reload: there's no screen of the app to go back to
+                  // the new location clears the error (clearing it here first drew the broken screen once more);
+                  // opened by a deep link or a reload, there's no screen of the app to go back to
                   if (canGoBack()) window.history.back();
                   else window.location.replace('#/');
                 }}

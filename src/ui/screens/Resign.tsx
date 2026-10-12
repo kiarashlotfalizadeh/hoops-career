@@ -4,7 +4,7 @@ import { CalendarClock, CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
-import { askingContract, decideTeamOption, pendingTeamOptions, teamOptionWorth } from '../../core/league/contracts';
+import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer } from '../../core/league/freeAgency';
 import { startFreeAgency } from '../../core/league/season';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
@@ -198,7 +198,7 @@ function ResignPhase() {
                 <div className="row" style={{ marginTop: 10, gap: 10 }}>
                   <div className="grow">
                     <div className="tiny dim upper bold">
-                      {seasonLabel(next)} option{p.contract.rookie ? ' · rookie scale' : ''}
+                      {seasonLabel(next)} option{rookieScaleDeal(p) ? ' · rookie scale' : ''}
                     </div>
                     <div className="small">
                       <b className="num" style={{ fontSize: 16 }}>
@@ -403,7 +403,8 @@ function OffPhase({ league }: { league: League }) {
         .sort((a, b) => b.ovr - a.ovr),
     [league, tid, s],
   );
-  const freed = list.reduce((a, p) => a + salaryFor(p, s), 0);
+  // two-way pay was never on the cap books (the committed figure beside it leaves it out too)
+  const freed = list.reduce((a, p) => a + (p.contract.twoWay ? 0 : salaryFor(p, s)), 0);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
   const when =

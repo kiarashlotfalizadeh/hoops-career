@@ -5,11 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deleteLeague, isLeague, listLeagues, loadLeague, migrate, onRemoteChange, SAVE_VERSION, saveLeague } from '../persistence';
 import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
+import { FRANCHISES } from '../../core/teams';
 import type { League } from '../../core/types';
 import { testLeague, userGames } from './fixtures';
 
 const put = IDBObjectStore.prototype.put;
 const del = IDBObjectStore.prototype.delete;
+const transaction = IDBDatabase.prototype.transaction;
 
 /** Count the puts and deletes each object store receives until restored. */
 function countWrites() {
@@ -148,6 +150,30 @@ describe('two windows on one league', () => {
   });
 });
 
+describe('a connection the browser dropped', () => {
+  /** Safari can lose an idle connection without a close event: the next transaction finds it closed. */
+  const dropConnection = () =>
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(function (this: IDBDatabase, ...args: Parameters<IDBDatabase['transaction']>) {
+      this.close();
+      return transaction.apply(this, args);
+    });
+
+  it('is opened again for the saved-leagues list, loading, saving and deleting', async () => {
+    const l = await saved('dropped');
+    dropConnection();
+    expect((await listLeagues()).some((m) => m.id === l.id)).toBe(true);
+    dropConnection();
+    expect((await loadLeague(l.id))!.games).toEqual(l.games);
+    simDay(l);
+    dropConnection();
+    await saveLeague(l);
+    expect((await loadLeague(l.id))!.day).toBe(l.day);
+    dropConnection();
+    await deleteLeague(l.id);
+    expect(await loadLeague(l.id)).toBeUndefined();
+  });
+});
+
 describe('reading a league', () => {
   it('refuses saves from a newer version of the app', async () => {
     const l = testLeague('future');
@@ -159,6 +185,18 @@ describe('reading a league', () => {
     const links = ['/roster', '/', '/trade?with=3', 'javascript:alert(1)', '//evil.example', '/\\evil.example', 'https://evil.example', 42];
     l.inbox = links.map((link, i) => ({ id: i, season: l.season, day: 0, from: 'x', subject: 's', body: 'b', read: false, link: link as string }));
     expect(migrate(l).inbox.map((m) => m.link)).toEqual(['/roster', '/', '/trade?with=3', undefined, undefined, undefined, undefined, undefined]);
+  });
+
+  it('keeps only #rrggbb team colours, which the screens put in styles as they are', () => {
+    const l = testLeague('colours');
+    const real = [...l.teams[0].colors];
+    // closes a gradient early and pulls in a remote image (Settings' team picker writes `${colour}55`)
+    l.teams[0].colors = ['#fff, #fff), url(https://evil.example/t.png), linear-gradient(#ff', '#000000', '#ffffff'];
+    (l.teams[1] as { colors: string[] }).colors = l.teams[1].colors.slice(0, 2);
+    const back = migrate(l);
+    expect(back.teams[0].colors).toEqual(real);
+    expect(back.teams[1].colors).toEqual(FRANCHISES[1].colors);
+    expect(back.teams[2].colors).toEqual(FRANCHISES[2].colors);
   });
 
   it('accepts real and fictional leagues, as saved or as backup files', () => {

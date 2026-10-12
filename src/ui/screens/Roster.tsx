@@ -9,7 +9,7 @@ import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
-import { f1, latestLine, playerSeason, rosterNames, signed, type PerGame } from '../stats';
+import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 
@@ -32,6 +32,8 @@ export default function Roster() {
   const team = league.teams[tid];
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   const nameOf = useMemo(() => rosterNames(roster, { initial: true }), [roster]);
+  // an injured starter sits: the next healthy player up starts, as on the Rotation screen
+  const starters = startingFive(roster);
   // between seasons, count and pay next season's contracts (the same view as Office and Re-sign)
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
@@ -73,6 +75,8 @@ export default function Roster() {
   const anyCur = roster.some((p) => (playerSeason(p, league.season)?.gp ?? 0) > 0);
   const lines = new Map(roster.map((p) => [p.pid, anyCur ? playerSeason(p, league.season) : (latestLine(league, p)?.pg ?? null)]));
   const stat = (p: Player, k: keyof PerGame) => lines.get(p.pid)?.[k] ?? -Infinity;
+  // a percentage needs an attempt: none reads "-" too, not 0.0
+  const shooting = (p: Player, k: 'tsPct' | 'tpPct', attempts: number | undefined) => (attempts ? stat(p, k) : -Infinity);
   const statCols: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     { key: 'gp', label: 'GP', get: (p) => lines.get(p.pid)?.gp ?? 0 },
@@ -83,8 +87,8 @@ export default function Roster() {
     { key: 'stl', label: 'STL', get: (p) => stat(p, 'stl'), fmt: (v) => f1(v as number) },
     { key: 'blk', label: 'BLK', get: (p) => stat(p, 'blk'), fmt: (v) => f1(v as number) },
     // the % lives in the header, as in the league stats
-    { key: 'ts', label: 'TS%', get: (p) => stat(p, 'tsPct'), fmt: (v) => pct(v as number) },
-    { key: 'tp', label: '3P%', get: (p) => stat(p, 'tpPct'), fmt: (v) => pct(v as number) },
+    { key: 'ts', label: 'TS%', get: (p) => shooting(p, 'tsPct', (lines.get(p.pid)?.fga ?? 0) + (lines.get(p.pid)?.fta ?? 0)), fmt: (v) => pct(v as number) },
+    { key: 'tp', label: '3P%', get: (p) => shooting(p, 'tpPct', lines.get(p.pid)?.tpa), fmt: (v) => pct(v as number) },
     { key: 'usg', label: 'USG%', get: (p) => stat(p, 'usg'), fmt: (v) => pct(v as number) },
     // imported seasons carry no on-court tracking
     { key: 'on', label: 'ON NET', get: (p) => (anyCur ? stat(p, 'onOff') : -Infinity), fmt: (v) => signed(v as number) },
@@ -157,7 +161,7 @@ export default function Roster() {
                   onKeyDown={activateOnKey(() => nav(`/player/${p.pid}`))}
                 >
                   <span className="tiny dim num" style={{ width: 14 }}>
-                    {i < 5 ? 'S' : i + 1}
+                    {starters.has(p.pid) ? 'S' : i + 1}
                   </span>
                   <Avatar p={p} />
                   <div className="grow">
@@ -201,7 +205,9 @@ export default function Roster() {
       {view === 'stats' && (
         <>
           <StatTable rows={roster} cols={statCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
-          {!anyCur && <div className="small dim">No games yet this season: each player's latest season, per game.</div>}
+          {!anyCur && (
+            <div className="small dim">{[...lines.values()].some(Boolean) ? "No games yet this season: each player's latest season, per game." : 'No games played yet.'}</div>
+          )}
         </>
       )}
       {view === 'contracts' && (

@@ -8,7 +8,7 @@ import { advanceDay, faAdvance, faDayNumber, faOver, finishDraftPhase, newSeason
 import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
-import { validateTrade } from '../league/trades';
+import { tradingClosedReason, validateTrade } from '../league/trades';
 import { buildSimInput, ensureRotation, wearInjuryRisk } from '../league/games';
 import { rankedPresets } from '../ai/coachAI';
 import { finalsHomeCourt, standings } from '../league/standings';
@@ -99,6 +99,17 @@ describe('trades', () => {
   });
 });
 
+describe('league creation', () => {
+  it('gives every head coach his own name, the user included', () => {
+    // these seeds drew two coaches with one name (Quin Spoelstra twice in seed 7)
+    for (const rngSeed of [2, 3, 7]) {
+      const l = createLeague({ name: 'c', userTid: U, coachName: 'Quin Kerr', settings: defaultSettings(), seed: null, rngSeed });
+      const names = l.teams.map((t) => (t.tid === U ? l.coachName : t.coach.name));
+      expect(new Set(names).size).toBe(30);
+    }
+  });
+});
+
 describe('simulation targets (bug 4)', () => {
   it('stops on deadline day (trades still open) and the day before the All-Star Game', async () => {
     const { vi } = await import('vitest');
@@ -118,6 +129,24 @@ describe('simulation targets (bug 4)', () => {
     expect(l.day).toBe(l.allStarDay - 1);
     expect(l.awards.find((a) => a.season === l.season)?.allStarMvp).toBeUndefined();
     expect(flowActions(l).some((a) => a.id === 'allstar')).toBe(false);
+  });
+
+  it('trading closes the day after the deadline and through the postseason, for every screen that asks', () => {
+    const l = league();
+    expect(startRegularSeason(l)).toEqual([]);
+    const empty = { a: { tid: U, pids: [], dpids: [] }, b: { tid: aiTeam(l), pids: [], dpids: [] } };
+    l.day = l.tradeDeadlineDay;
+    expect(tradingClosedReason(l)).toBeNull();
+    l.day++;
+    expect(tradingClosedReason(l)).toMatch(/deadline/);
+    expect(validateTrade(l, empty)).toContain(tradingClosedReason(l));
+    for (const phase of ['playin', 'playoffs'] as const) {
+      l.phase = phase;
+      expect(tradingClosedReason(l)).toMatch(/postseason/);
+    }
+    // it reopens with the lottery
+    l.phase = 'draftLottery';
+    expect(tradingClosedReason(l)).toBeNull();
   });
 });
 
@@ -333,6 +362,20 @@ describe('injuries (bug 15)', () => {
     fa.injury = { type: 'Torn ACL', gamesRemaining: 40, gamesTotal: 40, severity: 'severe' };
     for (let d = 0; d < 10; d++) simDay(l);
     expect(fa.injury?.gamesRemaining ?? 0).toBeLessThanOrEqual(36);
+  });
+
+  it("an assistant-run rotation takes a player back the day he's cleared, not at the next game", () => {
+    const l = league();
+    expect(startRegularSeason(l)).toEqual([]);
+    const star = teamPlayers(l, U).sort((a, b) => b.ovr - a.ovr)[0];
+    star.injury = { type: 'Sprained Ankle', gamesRemaining: 1, gamesTotal: 3, severity: 'minor' };
+    // his team's next game sits him and clears him
+    for (let d = 0; d < 10 && star.injury; d++) simDay(l);
+    expect(star.injury).toBeNull();
+    const rot = l.teams[U].rotation;
+    expect(rot.manual).toBe(false);
+    expect(rot.minutes[star.pid]).toBeGreaterThan(30);
+    expect(rot.order.slice(0, 5)).toContain(star.pid);
   });
 });
 
@@ -664,6 +707,26 @@ describe('awards (L13, L18)', () => {
     const names = [...as.E, ...as.W].filter((pid) => l.players[pid].tid === U).map((pid) => `${l.players[pid].firstName} ${l.players[pid].lastName}`);
     expect(names).toHaveLength(3);
     expect(l.inbox[0].body).toBe(`${names[0]}, ${names[1]} and ${names[2]} made the All-Star team.`);
+  });
+
+  it('a star already out when the coaches voted is passed over; one hurt since is picked and replaced', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const [out, since] = Object.values(l.players).filter((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E');
+    line(out, 70, 70, 40);
+    line(since, 70, 70, 40);
+    for (const p of Object.values(l.players)) p.injury = null;
+    // a month into a torn meniscus, three weeks still to go
+    out.injury = { type: 'Torn Meniscus', gamesRemaining: 12, gamesTotal: 30, severity: 'major' };
+    // a broken hand in the last game before the break
+    since.injury = { type: 'Broken Hand', gamesRemaining: 20, gamesTotal: 20, severity: 'moderate' };
+    const as = selectAllStars(l);
+    expect(as.E).not.toContain(out.pid);
+    expect(as.E.slice(0, 12)).toContain(since.pid);
+    expect(as.E.length).toBe(13);
+    const news = l.news.find((n) => n.text.startsWith('All-Star replacements'))!.text;
+    expect(news).toContain(`replaces the injured ${since.firstName} ${since.lastName}`);
+    expect(news).not.toContain(out.lastName);
   });
 
   it('a knock the All-Star break heals costs nobody his place', () => {

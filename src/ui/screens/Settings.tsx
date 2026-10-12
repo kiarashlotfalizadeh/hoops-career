@@ -6,12 +6,13 @@ import { ImportButton } from '../components/ImportButton';
 import type { League } from '../../core/types';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, teamPlayers } from '../../core/league/helpers';
+import { contractExp } from '../../core/playerGen';
 import { deleteLeague } from '../../state/persistence';
 import { seasonsInCharge, takeOverTeam } from '../../core/league/owner';
 import { useLeague, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
-import { STRATEGY_META, SecTitle, fmtM } from '../office/common';
+import { STRATEGY_META, SecTitle, capSeason, fmtM, shortSeason } from '../office/common';
 import { COMPLEXITY, DIFFICULTY, LIVE_SPEEDS, helpFor } from '../settingsOptions';
 
 export default function Settings() {
@@ -121,7 +122,8 @@ export default function Settings() {
               {team.region} {team.name}
             </div>
             <div className="small dim">
-              {seasonLabel(league.season)} · {PHASE_LABEL[league.phase]} · season {seasonsIn} in charge
+              {/* a team taken over after the season is his from the next one */}
+              {seasonLabel(league.season)} · {PHASE_LABEL[league.phase]} · {seasonsIn < 1 ? 'your tenure starts next season' : `season ${seasonsIn} in charge`}
             </div>
           </div>
         </div>
@@ -304,6 +306,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
   const [conf, setConf] = useState<'E' | 'W'>(cur.conf);
   const [pick, setPick] = useState<number | null>(null);
   const t = pick !== null ? league.teams[pick] : null;
+  const books = capSeason(league);
 
   const take = () => {
     if (pick === null) return;
@@ -383,7 +386,9 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
                   <div className="row" style={{ gap: 6 }}>
                     <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
                     <span className="tiny dim">
-                      {teamPlayers(league, t.tid).length} players · payroll {fmtM(payroll(league, t.tid))} / cap {fmtM(CAP_FOR(league).salaryCap)}
+                      {/* the books he'd inherit: next season's after this one ends, as on the Office cap sheet */}
+                      {teamPlayers(league, t.tid).filter((p) => contractExp(p.contract) >= books).length} players · {books > league.season ? `${shortSeason(books)} ` : ''}payroll{' '}
+                      {fmtM(payroll(league, t.tid, books))} / cap {fmtM(CAP_FOR(league, books).salaryCap)}
                     </span>
                   </div>
                 </div>

@@ -51,7 +51,10 @@ describe('generated tendencies', () => {
     if (!seed.players.length) return;
     const l = createLeague({ name: 'r', userTid: 0, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 7 });
     const byId = new Map(Object.values(l.players).map((p) => [p.bbrefId, p]));
-    for (const sp of seed.players) expect(byId.get(sp.id)?.tend).toEqual(sp.tend);
+    // (waived players a team still pays are its dead money, and not in the league unless they played)
+    const inLeague = seed.players.filter((sp) => byId.has(sp.id));
+    expect(inLeague.length).toBeGreaterThan(seed.players.length - 5);
+    for (const sp of inLeague) expect(byId.get(sp.id)!.tend).toEqual(sp.tend);
     const prospects = Object.values(l.players).filter((p) => p.tid === DRAFT_PROSPECT);
     expect(prospects.length).toBeGreaterThan(50);
     for (const p of prospects) for (const k of KEYS) expect(p.tend?.[k]).toBeGreaterThan(0);

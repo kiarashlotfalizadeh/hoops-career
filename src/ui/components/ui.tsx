@@ -165,14 +165,29 @@ export function Chips<T extends string | number>({
   );
 }
 
+/** The switch is named by `label` alone; `help` is its description (screen readers read it after the state). */
 export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode }) {
+  const id = useId();
   return (
     <label className="row between" style={{ gap: 12, cursor: 'pointer' }}>
       <div className="grow">
-        <div style={{ fontWeight: 650 }}>{label}</div>
-        {help && <div className="small dim">{help}</div>}
+        <div id={`${id}l`} style={{ fontWeight: 650 }}>
+          {label}
+        </div>
+        {help && (
+          <div id={`${id}h`} className="small dim">
+            {help}
+          </div>
+        )}
       </div>
-      <button className={`toggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} onClick={() => onChange(!on)} />
+      <button
+        className={`toggle ${on ? 'on' : ''}`}
+        role="switch"
+        aria-checked={on}
+        aria-labelledby={`${id}l`}
+        aria-describedby={help ? `${id}h` : undefined}
+        onClick={() => onChange(!on)}
+      />
     </label>
   );
 }
@@ -435,6 +450,8 @@ export interface Col<T> {
   sticky?: boolean;
   width?: number;
   help?: string;
+  /** Lower is better (a rank, a sprint time): the first tap sorts lowest first. */
+  asc?: boolean;
 }
 
 /** Sortable table. `limit` renders only the first rows of the sorted list, for long tables that page with "Show more". */
@@ -462,12 +479,7 @@ export function StatTable<T>({
     if (!sort) return rows;
     const col = cols.find((c) => c.key === sort.key);
     if (!col) return rows;
-    return [...rows].sort((a, b) => {
-      const va = col.get(a);
-      const vb = col.get(b);
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sort.dir;
-      return String(va).localeCompare(String(vb)) * sort.dir;
-    });
+    return [...rows].sort((a, b) => compareCells(col.get(a), col.get(b), sort.dir));
   }, [rows, cols, sort]);
   return (
     <div className="tablewrap" style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
@@ -482,7 +494,7 @@ export function StatTable<T>({
                 style={{ minWidth: c.width }}
                 title={c.help}
                 aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
-                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left ? 1 : -1 }))}
+                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left || c.asc ? 1 : -1 }))}
               >
                 <button type="button" className="th-sort" aria-label={`Sort by ${c.help ?? c.label}`} onClick={(e) => e.preventDefault()}>
                   {c.label}
@@ -516,6 +528,19 @@ export function StatTable<T>({
       </table>
     </div>
   );
+}
+
+/**
+ * A sorted column's order. A number that isn't there (NaN or ±Infinity: no PER outside imported
+ * seasons, no line yet) goes last either way, instead of scrambling the order around it.
+ */
+export function compareCells(va: number | string, vb: number | string, dir: 1 | -1): number {
+  if (typeof va === 'number' && typeof vb === 'number') {
+    const [ma, mb] = [!isFinite(va), !isFinite(vb)];
+    if (ma || mb) return Number(ma) - Number(mb);
+    return (va - vb) * dir;
+  }
+  return String(va).localeCompare(String(vb)) * dir;
 }
 
 export function fmtNum(v: number, d = 1) {

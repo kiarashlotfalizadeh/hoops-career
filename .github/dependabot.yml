@@ -16,6 +16,10 @@ updates:
       eslint:
         patterns: ['eslint', '@eslint/js']
         update-types: [major]
+      # @vitejs/plugin-react 6 needs vite 8, and plugin-react 4 refuses it
+      vite:
+        patterns: ['vite', '@vitejs/*']
+        update-types: [major]
       # one PR a week for patch/minor bumps; other majors still come one by one
       npm-minor:
         update-types: [minor, patch]

@@ -1,10 +1,11 @@
 // The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
 // in a worker), and alerts about rotation/tactics issues on your own team.
 
-import type { ActionType, League, Player, PnrCoverage } from '../types';
+import type { ActionType, League, Player, PnrCoverage, Tactics } from '../types';
+import type { FinishType } from '../sim/log';
 import { composites, ROLE_META } from '../ratings';
-import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } from '../sim/tactics';
-import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
+import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics } from '../sim/tactics';
+import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
@@ -83,7 +84,8 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (security < 52) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
   if (man && t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
-  if (man && (t.defense.pnr === 'switch' || t.defense.switchOffBall)) {
+  // (a switch on a ball screen leaves him on a guard; switching off-ball screens doesn't)
+  if (man && t.defense.pnr === 'switch') {
     const slow = cs.filter((x) => slowBig(x.p));
     if (slow.length) weaknesses.push(`Switching with a slow big (${slow[0].p.lastName}): hunt that mismatch.`);
   }
@@ -174,7 +176,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     out.push({
       id: 'vs-switch',
       label: 'Hunt mismatches',
-      why: 'They switch everything; isolate the weakest defender.',
+      why: `They switch ${od.pnr !== 'switch' ? 'off-ball screens' : od.switchOffBall ? 'everything' : 'ball screens'}; isolate the weakest defender.`,
       patch: {
         offense: { huntMismatch: true, actions: { ...cur.offense.actions, iso: Math.min(100, cur.offense.actions.iso + 25), post: Math.min(100, cur.offense.actions.post + 15) } },
       },
@@ -205,6 +207,38 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   return out.filter((c) => JSON.stringify(applyPatch(cur, c.patch)) !== same).slice(0, 9);
 }
 
+export interface LiveCounter {
+  label: string;
+  /** Why the current tactics invite it, when that's the problem. */
+  note?: string;
+  apply: (t: Tactics) => void;
+}
+
+/**
+ * The Live screen's one-tap answer to an opponent play type that's burning the defense: none
+ * when the tactics already do it, so the button always changes something (and never pulls a
+ * slider back from past its target).
+ */
+export function liveCounter(ft: FinishType, t: Tactics): LiveCounter | undefined {
+  // ball-screen coverage only applies in man-to-man
+  const man = t.defense.scheme === 'man';
+  const cov = t.defense.pnr;
+  let c: LiveCounter | undefined;
+  if (ft === 'pnrBH' && man && cov === 'drop') c = { label: 'Switch to Hedge', note: 'Drop is giving their handlers room.', apply: (x) => void (x.defense.pnr = 'hedge') };
+  else if (ft === 'spotup' && t.defense.help > 55) c = { label: 'Stay home', note: 'Too much help is leaving shooters open.', apply: (x) => void (x.defense.help = 35) };
+  else if (ft === 'transition')
+    c = {
+      label: 'Sprint back',
+      apply: (x) => void ((x.defense.getBack = Math.max(x.defense.getBack, 85)), (x.offense.crashBoards = Math.min(x.offense.crashBoards, 30))),
+    };
+  else if (ft === 'post') c = { label: 'Double the post', apply: (x) => void (x.defense.help = Math.max(x.defense.help, 80)) };
+  else if (ft === 'pnrRoll' && man && cov !== 'drop') c = { label: 'Go to Drop', apply: (x) => void (x.defense.pnr = 'drop') };
+  if (!c) return undefined;
+  const after = cloneTactics(t);
+  c.apply(after);
+  return JSON.stringify(after) !== JSON.stringify(t) ? c : undefined;
+}
+
 export interface Alert {
   id: string;
   tone: 'good' | 'bad' | 'alert' | 'neutral';
@@ -218,9 +252,11 @@ export function teamAlerts(league: League, tid: number): Alert[] {
   const players = teamPlayers(league, tid);
   const healthy = players.filter((p) => !p.injury);
   const alerts: Alert[] = [];
-  const pr = rosterProfile(healthy);
+  // the roster and fit scores the Tactics screen shows next to each playbook
+  const pr = rosterProfile(fitRoster(players));
   const offFit = offPresetFit(pr);
   const defFit = defPresetFit(pr);
+  const [offShown, defShown] = [fitScale(offFit), fitScale(defFit)];
   const curOff = team.tactics.offPreset;
   const curDef = team.tactics.defPreset;
   const bestOff = Object.entries(offFit).sort((a, b) => b[1] - a[1])[0];
@@ -231,7 +267,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       id: 'off-fit',
       tone: 'alert',
       title: `Offense may not fit: try ${nm}`,
-      body: `Your roster profile fits ${nm} better (fit ${Math.round(bestOff[1])} vs ${Math.round(offFit[curOff])}).`,
+      body: `Your roster profile fits ${nm} better (fit ${offShown(bestOff[0])} vs ${offShown(curOff)}).`,
       link: '/tactics',
     });
   }
@@ -241,15 +277,16 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       id: 'def-fit',
       tone: 'alert',
       title: `Defense may not fit: try ${nm}`,
-      body: `Your personnel fits ${nm} better (fit ${Math.round(bestDef[1])} vs ${Math.round(defFit[curDef])}).`,
+      body: `Your personnel fits ${nm} better (fit ${defShown(bestDef[0])} vs ${defShown(curDef)}).`,
       link: '/tactics',
     });
   }
   const rot = team.rotation;
+  // the five who start: the first healthy ones in the depth chart, as the engine and the Rotation screen have it
   const starters = rot.order
-    .slice(0, 5)
     .map((pid) => league.players[pid])
-    .filter(Boolean);
+    .filter((p) => p && p.tid === tid && !p.injury)
+    .slice(0, 5);
   if (starters.length === 5) {
     const ev = evaluateLineup(starters);
     for (const n of ev.notes)
@@ -270,25 +307,26 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
         link: '/tactics',
       });
-    if (man && (team.tactics.defense.pnr === 'switch' || team.tactics.defense.switchOffBall) && starters.some(slowBig)) {
+    // only a switch on a ball screen leaves him on a guard (off-ball switches don't), so Drop or Ice fixes it
+    const slow = starters.find(slowBig);
+    if (man && team.tactics.defense.pnr === 'switch' && slow) {
       alerts.push({
         id: 'switch-slow',
         tone: 'alert',
         title: 'Switching with a slow big',
-        body: 'Opponents will hunt your center on switches. Use Drop or Ice when he is on the floor.',
+        body: `Opponents will hunt ${slow.lastName} on switched ball screens. Drop or Ice coverage keeps him near the rim.`,
         link: '/tactics',
       });
     }
   }
-  const total = Object.entries(rot.minutes)
-    .filter(([pid]) => players.some((p) => p.pid === +pid && !p.injury))
-    .reduce((a, [, m]) => a + m, 0);
+  // injured players' minutes count: the plan hands them to teammates before it rescales anything
+  const total = players.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
   if (rot.manual && Math.abs(total - 240) > 6)
     alerts.push({
       id: 'min-total',
       tone: 'alert',
       title: `Minutes add up to ${Math.round(total)}`,
-      body: 'Minute targets are scaled to 240 automatically, so the actual split may differ from what you set.',
+      body: `Minute targets${healthy.length < players.length ? ", injured players' included," : ''} are scaled to 240 automatically, so the actual split may differ from what you set.`,
       link: '/rotation',
     });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
@@ -306,14 +344,20 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       });
   }
   for (const p of players) {
-    if (p.wear >= 55)
+    if (p.wear >= 55) {
+      // a player who already sits back-to-backs needs a lighter load instead
+      const cap = rot.caps[p.pid];
+      const ease = !rot.restB2B.includes(p.pid)
+        ? 'Rest him on back-to-backs (Rotation).'
+        : `He already rests on back-to-backs: ${cap ? `lowering his ${cap}-minute cap` : 'a hard minute cap'} (Rotation) lightens his load further.`;
       alerts.push({
         id: `wear-${p.pid}`,
         tone: 'alert',
         title: `${p.lastName} is worn down`,
-        body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. Rest him on back-to-backs (Rotation).`,
+        body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. ${ease}`,
         link: '/rotation',
       });
+    }
     if (p.mood.tradeRequest)
       alerts.push({ id: `tr-${p.pid}`, tone: 'bad', title: `${p.lastName} wants a trade`, body: moodText(p, 'He wants a fresh start somewhere else.'), link: `/player/${p.pid}` });
     else if (p.mood.score <= -4 && p.ovr >= 70)

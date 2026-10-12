@@ -56,6 +56,8 @@ const all: [string, TacticsPatch, string[]][] = [
   ['EXPLOIT-nopress', { defense: { pressure: 100, getBack: 100 }, offense: { crashBoards: 100 } }, []],
 ];
 const cfgs = all.filter(([k]) => !which.length || which.includes(k));
+const unknown = which.filter((w) => !all.some(([k]) => k === w));
+if (unknown.length) throw new Error(`No config named ${unknown.join(', ')}; the names are: ${all.map(([k]) => k).join(', ')}`);
 
 const base: LabSummary[] = pairs.map(([a, b]) => runLab({ a: side(a), b: side(b), games, seed: 4242 + a }));
 const avg = (f: (r: LabSummary) => number, rs: LabSummary[]) => rs.reduce((s, r) => s + f(r), 0) / rs.length;

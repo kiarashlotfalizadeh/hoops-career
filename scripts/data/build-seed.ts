@@ -7,7 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
 import {
-  COUNTRY_NAMES,
+  countryName,
   parseAdvanced,
   parseContracts,
   parseDraft,
@@ -305,7 +305,7 @@ async function main() {
       heightIn,
       weightLb,
       bornYear,
-      country: COUNTRY_NAMES[ros?.country ?? 'US'] ?? ros?.country ?? 'USA',
+      country: countryName(ros?.country),
       college: ros?.college || dr?.college || '',
       jersey: ros?.jersey ?? '',
       team: c ? c.team : null,

@@ -101,7 +101,12 @@ const FT_DEF: Pt[] = [
   { x: 0, y: 32 },
 ];
 
-export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script {
+/**
+ * Keyframes for one possession. `before` is the score it started from: its log keeps only the score
+ * it ended on and its own points, which leave out a technical free throw (a disqualified player
+ * staying on), so working back from those is only right when no technical was made.
+ */
+export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number]): Script {
   const off = log.off;
   const oPids = log.on[off];
   const dPids = log.on[1 - off];
@@ -143,15 +148,14 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
   };
 
   snap(0);
-  let score: [number, number] = [...log.score] as [number, number];
-  // reconstruct the score before this possession so makes can tick it up
-  const scoreBefore: [number, number] = [...score] as [number, number];
-  scoreBefore[off] -= log.pts;
-  score = [...scoreBefore] as [number, number];
+  // the score before this possession, so makes can tick it up
+  const score: [number, number] = before ? [...before] : [log.score[0] - (off === 0 ? log.pts : 0), log.score[1] - (off === 1 ? log.pts : 0)];
 
   for (const st of steps) {
     stepFrames(st);
   }
+  // a made technical free throw has no step of its own: the court ends on the scoreboard's score anyway
+  if (score[0] !== log.score[0] || score[1] !== log.score[1]) snap(600, { flash: { text: 'TECH FT', kind: 'make', x: 0, y: 9 }, score: [...log.score] });
   if (!frames.length || frames.length === 1) snap(500);
   return { off, oPids, dPids, frames, label: log.label, clockStart: log.clockStart, clockEnd: log.clockEnd, q: log.q };
 

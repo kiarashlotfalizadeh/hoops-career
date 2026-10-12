@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucide-react';
-import type { CombineResults, League, Player } from '../../core/types';
+import type { CombineResults, DraftPick, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
@@ -427,20 +427,22 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
 
 function CombineView({ league, list, onOpen }: { league: League; list: Player[]; onOpen: (pid: number) => void }) {
   const c = (p: Player): Partial<CombineResults> => p.prospect?.combine ?? {};
-  const num = (x: number | undefined) => (x === undefined ? -1 : x);
+  // a missing result sorts last either way, also in the columns where lower is better
+  const num = (x: number | undefined) => (x === undefined ? NaN : x);
+  const fmt = (show: (v: number) => string) => (v: number | string) => (Number.isFinite(v) ? show(Number(v)) : '—');
   const cols: Col<Player>[] = [
     { key: 'name', label: 'Prospect', left: true, sticky: true, get: (p) => p.lastName, fmt: (_v, p) => <span className="bold">{`${p.firstName[0]}. ${p.lastName}`}</span> },
-    { key: 'rk', label: 'Rk', get: (p) => p.prospect?.rank ?? 99 },
+    { key: 'rk', label: 'Rk', asc: true, get: (p) => p.prospect?.rank ?? 99 },
     { key: 'pos', label: 'Pos', get: (p) => p.pos },
     { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (v) => <Ovr v={Number(v)} size="sm" /> },
     { key: 'hgt', label: 'Height', help: 'Height without shoes', get: (p) => num(c(p).heightNoShoes), fmt: (_v, p) => fmtIn(c(p).heightNoShoes) },
     { key: 'wing', label: 'Wingspan', get: (p) => num(c(p).wingspan), fmt: (_v, p) => fmtIn(c(p).wingspan) },
     { key: 'reach', label: 'Reach', help: 'Standing reach', get: (p) => num(c(p).standingReach), fmt: (_v, p) => fmtIn(c(p).standingReach) },
     { key: 'wt', label: 'Wt', help: 'Weight (lb)', get: (p) => num(c(p).weight) },
-    { key: 'vert', label: 'Vert', help: 'Max vertical (in)', get: (p) => num(c(p).maxVert), fmt: (v) => (Number(v) < 0 ? '—' : `${Number(v).toFixed(1)}"`) },
-    { key: 'lane', label: 'Lane', help: 'Lane agility (s, lower is better)', get: (p) => num(c(p).laneAgility), fmt: (v) => (Number(v) < 0 ? '—' : Number(v).toFixed(2)) },
-    { key: 'sprint', label: '¾ Sprint', help: '3/4 court sprint (s, lower is better)', get: (p) => num(c(p).sprint), fmt: (v) => (Number(v) < 0 ? '—' : Number(v).toFixed(2)) },
-    { key: 'shoot', label: 'Shoot', help: 'Shooting drill makes out of 25', get: (p) => num(c(p).shootingDrill), fmt: (v) => (Number(v) < 0 ? '—' : `${v}/25`) },
+    { key: 'vert', label: 'Vert', help: 'Max vertical (in)', get: (p) => num(c(p).maxVert), fmt: fmt((v) => `${v.toFixed(1)}"`) },
+    { key: 'lane', label: 'Lane', help: 'Lane agility (s, lower is better)', asc: true, get: (p) => num(c(p).laneAgility), fmt: fmt((v) => v.toFixed(2)) },
+    { key: 'sprint', label: '¾ Sprint', help: '3/4 court sprint (s, lower is better)', asc: true, get: (p) => num(c(p).sprint), fmt: fmt((v) => v.toFixed(2)) },
+    { key: 'shoot', label: 'Shoot', help: 'Shooting drill makes out of 25', get: (p) => num(c(p).shootingDrill), fmt: fmt((v) => `${v}/25`) },
   ];
   if (!list.length) return <Empty>No combine results for this class.</Empty>;
   return (
@@ -503,10 +505,12 @@ function LotteryView({ league }: { league: League }) {
 
 function MyPicks({ league }: { league: League }) {
   const user = league.userTid;
-  const owned = league.draftPicks.filter((d) => d.tid === user).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
-  const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user).sort((a, b) => a.season - b.season || a.round - b.round);
   // picks without a slot yet, projected as on the team page
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  // this season's picks in draft order: by their slot once it is set, by the projection until then
+  const slot = (d: DraftPick) => (d.pick ? overallPick(league, d.round, d.pick) : (proj(d) ?? 99));
+  const owned = league.draftPicks.filter((d) => d.tid === user).sort((a, b) => a.season - b.season || a.round - b.round || slot(a) - slot(b));
+  const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user).sort((a, b) => a.season - b.season || a.round - b.round);
   const drafted = draftedThisYear(league).filter((p) => p.draft.tid === user);
   return (
     <>

@@ -3,7 +3,7 @@ import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
-import { makeTeam } from '../teamFactory';
+import { coachName, makeTeam } from '../teamFactory';
 import { DEFAULT_SCALE, blankMood, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
@@ -198,6 +198,14 @@ function assignJerseys(league: League, rng: Rng) {
   }
 }
 
+/**
+ * A fictional roster's heights by spot, each with some noise: the real league's mix of guards, wings
+ * and bigs, in both halves of the roster. Drawn independently, a fifth of the teams had no 6'10"
+ * player in their top eight (no real team is without one) and some had seven or eight players 6'4"
+ * or shorter.
+ */
+const SPOT_HEIGHTS = [74, 75, 76, 76.5, 77, 77.5, 78.5, 79, 80, 80.5, 81.5, 82, 83, 84];
+
 export function createLeague(opts: CreateOpts): League {
   const rngSeed = opts.rngSeed ?? hashString(opts.name + Date.now()) >>> 0;
   const rng = new Rng(rngSeed);
@@ -238,12 +246,33 @@ export function createLeague(opts: CreateOpts): League {
     startSeason: season,
   };
   teams[opts.userTid].coach.name = opts.coachName;
+  // no two head coaches share a name (drawn from 900, a third of leagues had two, and Coach of the
+  // Year history goes by name); redraws come from a stream of their own, so nothing else moves
+  const coachRng = new Rng(rngSeed ^ 0x2c1b3c6d);
+  const coaches = new Set([opts.coachName]);
+  for (const t of teams) {
+    if (t.tid === opts.userTid) continue;
+    while (coaches.has(t.coach.name)) t.coach.name = coachName(coachRng);
+    coaches.add(t.coach.name);
+  }
 
   if (opts.seed && opts.seed.players.length) {
     // the first season the seed's stats cover
     const firstRecord = Math.min(season - 1, ...opts.seed.players.flatMap((sp) => sp.stats.filter((s) => s.real).map((s) => s.season)));
     for (const sp of opts.seed.players) {
       const p = seedToPlayer(sp, league.nextPid++, season, rng, firstRecord);
+      // the contracts table also lists waived players a team still pays (a stretched or partly
+      // guaranteed deal, below any playing contract): that is dead money (a team option year isn't
+      // guaranteed), and the player is a free agent, or out of the league if he hasn't played in the
+      // seed's seasons
+      const c = p.contract;
+      if (p.tid >= 0 && !c.twoWay && c.salaries[0] < CAP.minContract) {
+        const years = c.option === 'team' ? c.salaries.length - 1 : c.salaries.length;
+        for (let i = 0; i < years; i++) if (c.salaries[i] > 0) league.teams[p.tid].deadMoney.push({ pid: p.pid, name: playerName(p), season: season + i, amount: c.salaries[i] });
+        if (!p.stats.some((s) => s.real && s.gp > 0)) continue;
+        p.tid = FREE_AGENT;
+        p.contract = { start: season, salaries: [0] };
+      }
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
@@ -258,13 +287,20 @@ export function createLeague(opts: CreateOpts): League {
       // OVR then spreads about 2 points, near real rosters' 1.75; a wider start (2.7) only drained
       // away over the first few offseasons
       const quality = rng.normal(0, 0.2);
+      // each pair of neighbouring heights is split between the better and the weaker half of the roster
+      const pairs = Array.from({ length: SPOT_HEIGHTS.length / 2 }, (_, j) => rng.shuffle([SPOT_HEIGHTS[2 * j], SPOT_HEIGHTS[2 * j + 1]]));
+      const heights = [...rng.shuffle(pairs.map((x) => x[0])), ...rng.shuffle(pairs.map((x) => x[1]))];
       for (let i = 0; i < 14; i++) {
         const talent = quality + rng.normal(i < 2 ? 1.6 : i < 5 ? 0.8 : i < 9 ? 0 : -0.8, 0.6);
-        // the last three spots go to young players (some of them on rookie deals)
-        const age = i >= 11 ? Math.round(clamp(rng.normal(21, 1.2), 19, 23)) : Math.round(clamp(rng.normal(26.5, 4), 19, 37));
+        // the last three spots go to young players (some of them on rookie deals); with the rest, about
+        // as many are 23 or younger as on real rosters. When half of them were, the anchor that holds
+        // the league's attribute means pulled everyone back as the league grew older: players peaked at
+        // 24-25 and lost OVR from 27
+        const age = i >= 11 ? Math.round(clamp(rng.normal(21.5, 1.2), 19, 23)) : Math.round(clamp(rng.normal(28, 4), 20, 38));
         // the last spot goes to a center if the roster has none yet
         const big = i === 13 && !roster.some((p) => p.pos === 'C');
-        let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: big ? rng.int(83, 85) : undefined, taken });
+        const heightIn = big ? rng.int(83, 85) : clamp(Math.round(heights[i] + rng.normal(0, 1.2)), 70, 88);
+        let p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn, taken });
         for (let tries = 0; big && p.pos !== 'C' && tries < 10; tries++)
           p = generatePlayer(rng, { pid: league.nextPid, season, tid, age, talent, scale: DEFAULT_SCALE, heightIn: rng.int(84, 86), taken });
         league.nextPid++;
@@ -273,9 +309,9 @@ export function createLeague(opts: CreateOpts): League {
         league.players[p.pid] = p;
         roster.push(p);
       }
-      // two-way prospects outside the 15
+      // two-way prospects outside the 15 (most real ones are 22 to 27)
       for (let i = 0; i < 2; i++) {
-        const age = rng.int(20, 23);
+        const age = rng.int(22, 27);
         const p = generatePlayer(rng, { pid: league.nextPid++, season, tid, age, talent: rng.normal(-1.3, 0.4), scale: DEFAULT_SCALE, taken });
         p.experience = rng.int(0, Math.min(2, age - 20));
         p.draft = { year: season - 1 - p.experience, round: 2, pick: rng.int(1, 30), tid: null };

@@ -326,7 +326,25 @@ export function seedDraft(dr: DraftRow | undefined, ros: RosterRow | undefined):
   return { year: ros.season - 1 - ros.exp, round: 0, pick: 0 };
 }
 
-export const COUNTRY_NAMES: Record<string, string> = {
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+
+/**
+ * A roster page's flag code ("us", "pt") as the game shows it: the short names below, else the
+ * region's English name (a code missing from the list would otherwise reach the Player page as "PT").
+ * No code (no roster row, or an empty flag cell) reads as USA.
+ */
+export function countryName(code: string | undefined): string {
+  const c = (code ?? '').trim().toUpperCase();
+  if (!c) return 'USA';
+  if (COUNTRY_NAMES[c]) return COUNTRY_NAMES[c];
+  try {
+    return regionNames.of(c) ?? c;
+  } catch {
+    return c; // not a region code
+  }
+}
+
+const COUNTRY_NAMES: Record<string, string> = {
   US: 'USA',
   CA: 'Canada',
   FR: 'France',

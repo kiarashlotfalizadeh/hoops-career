@@ -36,7 +36,7 @@ import { champion, playInDone, processPlayInResult, processPlayoffResult, schedu
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { askingContract, leaveTeam, releasePlayer, resolveOptions } from './contracts';
+import { FIRED_REASON, askingContract, leaveTeam, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
@@ -47,6 +47,7 @@ export function regularGamesLeft(league: League) {
 
 export function canStartRegularSeason(league: League): string[] {
   if (league.phase !== 'preseason') return ['The regular season starts from the preseason.'];
+  if (league.fired) return [FIRED_REASON];
   const errs: string[] = [];
   // two-way players don't take one of the 15 spots or count toward the 13-man minimum
   const n = standardRoster(league, league.userTid).length;
@@ -208,6 +209,10 @@ export function advanceDay(league: League) {
   });
   // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
   for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
+  // an assistant-run rotation follows today's injuries and recoveries now, not at the next game:
+  // the Rotation screen and the assistant's advice read it in between (a star just cleared read
+  // "only playing 0 minutes", with a starting five he wasn't in)
+  if (!league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
   league.day++;
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
@@ -364,11 +369,12 @@ function endPlayoffs(league: League) {
 // ---------------------------------------------------------------- draft & offseason
 
 // Phase transitions no-op (returning false) outside their phase, so a double tap or a stale
-// dispatch can't skip a draft, a free agency or a whole season. The summer has dates too, so
-// offseason news and mail carry the draft's and free agency's dates rather than Finals night.
+// dispatch can't skip a draft, a free agency or a whole season, and while the coach is fired: the
+// league waits until he takes over another team. The summer has dates too, so offseason news and
+// mail carry the draft's and free agency's dates rather than Finals night.
 
 export function startDraft(league: League): boolean {
-  if (league.phase !== 'draftLottery') return false;
+  if (league.phase !== 'draftLottery' || league.fired) return false;
   league.phase = 'draft';
   // draft night: late June, or the day after a late Finals
   league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 25));
@@ -378,8 +384,12 @@ export function startDraft(league: League): boolean {
 
 export function userDraftPick(league: League, pid: number): string | null {
   if (league.phase !== 'draft') return 'The draft is not on.';
+  if (league.fired) return FIRED_REASON;
   const dp = nextPick(league);
   if (!dp || dp.tid !== league.userTid) return 'It is not your pick.';
+  // (a stale board or a double tap can name a player who has just been taken)
+  const p = league.players[pid];
+  if (p?.tid !== DRAFT_PROSPECT || p.draft.year !== league.season) return `${p ? playerName(p) : 'That player'} is no longer on the board.`;
   draftPlayer(league, dp, pid);
   withRng(league, (rng) => draftUntilUser(league, rng));
   return null;
@@ -387,7 +397,7 @@ export function userDraftPick(league: League, pid: number): string | null {
 
 /** Let the staff make the user's current pick, then run AI picks until the user's next turn. */
 export function autoDraftUserPick(league: League) {
-  if (league.phase !== 'draft') return;
+  if (league.phase !== 'draft' || league.fired) return;
   withRng(league, (rng) => {
     const dp = nextPick(league);
     if (!dp || dp.tid !== league.userTid) return;
@@ -398,7 +408,7 @@ export function autoDraftUserPick(league: League) {
 }
 
 export function finishDraftPhase(league: League): boolean {
-  if (league.phase !== 'draft') return false;
+  if (league.phase !== 'draft' || league.fired) return false;
   withRng(league, (rng) => {
     draftUntilUser(league, rng, true);
     finishDraft(league);
@@ -424,7 +434,7 @@ export function finishDraftPhase(league: League): boolean {
 }
 
 export function startFreeAgency(league: League): boolean {
-  if (league.phase !== 'resign') return false;
+  if (league.phase !== 'resign' || league.fired) return false;
   withRng(league, (rng) => {
     // team options the user left open get the staff's default
     resolveOptions(league, rng, true);
@@ -471,7 +481,7 @@ export function faAdvance(league: League, days = 1) {
 }
 
 export function newSeason(league: League): boolean {
-  if (league.phase !== 'freeAgency') return false;
+  if (league.phase !== 'freeAgency' || league.fired) return false;
   // finish free agency quickly
   if (!faOver(league)) faAdvance(league, FA_DAYS);
   const prevSeason = league.season;

@@ -121,8 +121,8 @@ export default function FreeAgents() {
               .
             </p>
             <p style={{ margin: 0 }}>
-              <b>Minimum deals.</b> Over the cap, you can still sign players for the minimum (up to {fmtM(cap.vetMin, 2)}). A minimum deal signed for the coming season isn't
-              guaranteed until opening night.
+              <b>Minimum deals.</b> Over the cap, you can still sign players for their minimum: {fmtM(cap.minContract, 2)} in a player's first three seasons, {fmtM(cap.vetMin, 2)}{' '}
+              after. A minimum deal signed for the coming season isn't guaranteed until opening night.
             </p>
             <p style={{ margin: 0 }}>
               <b>Mid-level exception.</b> Once a season, if the signing keeps you under the tax line ({fmtM(cap.luxuryTax)}), you can sign one player over the cap for up to{' '}

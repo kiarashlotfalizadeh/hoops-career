@@ -20,7 +20,7 @@ import {
 } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
-import { CenterBar, Gauge, PRACTICE, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict, shortSeason } from '../office/common';
+import { CenterBar, Gauge, PRACTICE, SecTitle, capSeason, fmtM, fmtMs, isOffseason, ordinal, ownerVerdict, shortSeason } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -62,14 +62,16 @@ function Overview({ team }: { team: Team }) {
   const homeGames = ts.homeWon + ts.homeLost;
   const attAvg = homeGames ? ts.attendance / homeGames : 0;
   const attShown = homeGames ? attAvg : attendanceFor(league, team);
-  const cap = CAP_FOR(league);
-  const pay = payroll(league, team.tid);
-  const scale = revenueScale(league);
-  const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0);
+  // after the season the cost structure is next season's: the roster has moved on from the books just closed
+  const s = capSeason(league);
+  const cap = CAP_FOR(league, s);
+  const pay = payroll(league, team.tid, s);
+  const scale = revenueScale(league, s);
+  const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0) * (scale / revenueScale(league));
   const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
   const shortfall = Math.max(0, cap.minPayroll - pay);
   // two-way deals sit outside the cap and the tax, but they are still paid
-  const twoWayPay = twoWayRoster(league, team.tid).reduce((a, p) => a + salaryFor(p, league.season), 0);
+  const twoWayPay = twoWayRoster(league, team.tid).reduce((a, p) => a + salaryFor(p, s), 0);
   const expenses = [
     { k: twoWayPay > 0 ? 'Payroll (incl. two-way)' : 'Payroll', v: pay + twoWayPay, c: 'var(--accent)' },
     { k: 'Staff & facilities budgets', v: budgets, c: 'var(--tier-star)' },
@@ -121,7 +123,7 @@ function Overview({ team }: { team: Team }) {
         </div>
       </Card>
 
-      <Card title="Season cost structure" right={<span className="tiny dim">full-season</span>}>
+      <Card title="Season cost structure" right={<span className="tiny dim">{s > league.season ? `${seasonLabel(s)} projected` : 'full-season'}</span>}>
         <div className="row" style={{ height: 14, borderRadius: 7, overflow: 'hidden', gap: 2 }}>
           {expenses.map((e) => (
             <div key={e.k} style={{ width: `${(e.v / totalExp) * 100}%`, background: e.c, height: '100%' }} />
@@ -484,6 +486,8 @@ function HistoryTab({ team }: { team: Team }) {
     },
     { key: 'pay', label: 'Payroll', get: (r) => r.payroll, fmt: (v) => (Number(v) ? fmtM(Number(v)) : '—') },
   ];
+  // after the playoffs this season's books are closed
+  const inProgress = !isOffseason(league);
   const chart = [...rows].reverse().slice(-10);
   const maxAbs = Math.max(1, ...chart.map((r) => Math.abs(r.revenue - r.expenses)));
   return (
@@ -505,7 +509,7 @@ function HistoryTab({ team }: { team: Team }) {
                     style={{
                       height: `${Math.max(4, (Math.abs(pr) / maxAbs) * 52)}px`,
                       background: pr >= 0 ? 'var(--good)' : 'var(--bad)',
-                      opacity: r.season === league.season ? 0.55 : 0.9,
+                      opacity: inProgress && r.season === league.season ? 0.55 : 0.9,
                     }}
                   />
                   <span className="tiny dim">{shortSeason(r.season)}</span>
@@ -518,9 +522,7 @@ function HistoryTab({ team }: { team: Team }) {
       <SecTitle>Season by season</SecTitle>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.season} highlight={(r) => r.season === league.season} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
-        {league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs'
-          ? 'The highlighted season is still in progress. '
-          : ''}
+        {inProgress ? 'The highlighted season is still in progress. ' : ''}
         Payroll is recorded at the end of each regular season.
       </div>
     </>

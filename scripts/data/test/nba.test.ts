@@ -1,5 +1,9 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { splitCsv } from '../nba/csv';
+import { splitCsv, tarCsvRows } from '../nba/csv';
 import { rapm } from '../nba/rapm';
 import { crosswalk, normName } from '../nba/crosswalk';
 import { findCollege, type CollegeAgg } from '../nba/college';
@@ -10,6 +14,22 @@ describe('NBA.com data pipeline', () => {
   it('splits CSV lines with quoted commas and escaped quotes', () => {
     expect(splitCsv('1,"fastbreak, 2ndchance",x')).toEqual(['1', 'fastbreak, 2ndchance', 'x']);
     expect(splitCsv('"say ""hi""",,3')).toEqual(['say "hi"', '', '3']);
+  });
+
+  it('streams rows out of a .tar.xz, and fails on an archive tar cannot read instead of reading no rows', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hc-csv-'));
+    writeFileSync(join(dir, 'pbp.csv'), 'gameId,desc\n1,"Jump, ball"\n2,Dunk\n');
+    execFileSync('tar', ['-cJf', join(dir, 'ok.tar.xz'), '-C', dir, 'pbp.csv']);
+    const read = async (f: string) => {
+      const rows: string[] = [];
+      for await (const get of tarCsvRows(join(dir, f))) rows.push(`${get('gameId')}:${get('desc')}`);
+      return rows;
+    };
+    expect(await read('ok.tar.xz')).toEqual(['1:Jump, ball', '2:Dunk']);
+    // say a large-file pointer or an error page saved in place of the archive
+    writeFileSync(join(dir, 'bad.tar.xz'), 'version https://example.com/spec/v1\n');
+    await expect(read('bad.tar.xz')).rejects.toThrow(/could not read/);
+    await expect(read('missing.tar.xz')).rejects.toThrow(/could not read/);
   });
 
   it('RAPM recovers known offensive and defensive effects from simulated stints', () => {

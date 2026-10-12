@@ -101,10 +101,13 @@ export function pendingLive(league: League): LiveGame | null {
 }
 
 /**
- * Gid of the report for a live game that got recorded without the Live screen finishing it (the
- * Play menu or a sim did); null while it's still the screen's to finish.
+ * What became of a live game the Live screen is coaching, given the open league: null while it's
+ * still the screen's to finish; the gid of its report once it's recorded (by the screen, or by the
+ * Play menu's sims without it); 'gone' once its league isn't the open one (the last save reloaded
+ * after a sim error), where it can never be recorded.
  */
-export function playedElsewhere(lg: LiveGame, league: League): number | null {
+export function playedElsewhere(lg: LiveGame, league: League): number | 'gone' | null {
+  if (lg.league !== league) return 'gone';
   if (lg.committed) return lg.committed.gid;
   return league.games.some((g) => g.gid === lg.game.gid) ? lg.game.gid : null;
 }

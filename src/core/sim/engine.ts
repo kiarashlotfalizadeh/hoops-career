@@ -29,7 +29,7 @@ import { Rng, clamp } from '../random';
 import { archetype, composites, type Composites, ROLE_USAGE } from '../ratings';
 import { GAME } from '../constants';
 import { buildMinutePlan, planInputs, planRoles } from './rotationPlan';
-import { FINISH_LABEL, type FinishType, type PossLog, type PossStep } from './log';
+import { FINISH_LABEL, type FinishType, type PossLog } from './log';
 import { cloneTactics } from './tactics';
 
 // ---------------------------------------------------------------- tuning constants
@@ -1295,9 +1295,12 @@ export class GameSim {
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
     // the period is about to run out: push it up the floor and get a shot off before the buzzer
-    // (unless it's a lead to run out: then the clock dies with the ball)
-    if (!late.milk && this.clock >= 2.5 && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
-    let shotClock = GAME.shotClock;
+    // (unless it's a lead to run out: then the clock dies with the ball); tied or down three or less
+    // at the end of the game, a second is enough for a quick catch-and-shoot
+    const chasing = this.q >= 4 && off.score <= def.score && off.score >= def.score - 3;
+    if (!late.milk && this.clock >= (chasing ? 0.8 : 2.5) && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
+    // the shot clock started on the inbound: time spent breaking a press (or before a side-out foul) is gone
+    let shotClock = GAME.shotClock - (clockStart - this.clock);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
     this.tick(setup);
@@ -1358,8 +1361,9 @@ export class GameSim {
       fouled = off.on[this.rng.weighted(ws)];
       tag = 'foul_up3';
     }
+    // NBA: an away-from-the-play foul in the last two minutes of any period costs a free throw and the ball
     const hack = def.t.manage.hackThreshold;
-    if (!fouled && hack > 0 && !(final && clock < 120)) {
+    if (!fouled && hack > 0 && clock >= 120) {
       const target = off.on.filter((p) => p.ftPct * 100 < hack).sort((a, b) => a.ftPct - b.ftPct)[0];
       if (target && this.rng.chance(0.8)) {
         fouled = target;
@@ -1497,6 +1501,8 @@ export class GameSim {
     let ballFrom: SP | null = null;
     let forced = false;
     for (let n = 0; n < 6; n++) {
+      // a late lead with the shot clock off (it can't run out before the game clock): the clock dies with the ball
+      if (late.milk && this.clock <= shotClock) this.tick(this.clock);
       if (this.clock <= 0.05) {
         this.clockOut(off);
         return;
@@ -1702,7 +1708,7 @@ export class GameSim {
     const screen = (S.r.str * 0.5 + S.r.hgt * 0.3 + S.r.oiq * 0.2 - 50) / 100;
     const help = this.help(def);
     const spacing = this.spacingBonus(off);
-    let advH = (H.c.pnrHandle * H.perf - dH.c.perDef * this.dq(dH)) / 22 + screen + this.rng.normal(0, 0.55) + open - this.denyCatch(def, off, H, 'pnr');
+    let advH = (H.c.pnrHandle * H.perf - dH.c.perDef * this.dq(dH)) / 22 + screen + this.rng.normal(0, 0.55) + open;
 
     // ---- coverage branches
     if (cov === 'switch') {
@@ -1722,6 +1728,8 @@ export class GameSim {
       return this.iso(off, def, open, late, forced, { actor: H, defender: dS, tag: 'switch_mismatch', fromPnr: true });
     }
 
+    // a denied star catches it late (a switch has already traded his matchup for another)
+    advH -= this.denyCatch(def, off, H, 'pnr');
     if (cov !== 'blitz') advH += this.blowBy(def, H, 'pnr');
     let pullOpen = 0;
     let rimOpen = 0;
@@ -2437,9 +2445,12 @@ export class GameSim {
         .sort((a, b) => (b.outAt ?? 0) - (a.outAt ?? 0))
         .slice(0, 1);
     if (!bench.length) return false;
-    // in garbage time the deep bench fills in for its own: a starter doesn't come back to replace one
+    // whoever the staff would send in at this point of the game (the stint plan, fatigue, fouls) goes
+    // first, so he isn't subbed straight back out at the next dead ball; in garbage time the deep
+    // bench fills in for its own: a starter doesn't come back to replace one
+    const wanted = this.desiredLineup(t);
     const garbage = this.inGarbageTime(t);
-    const score = (x: SP) => (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
+    const score = (x: SP) => (wanted.includes(x) ? 8 : 0) + (this.capped(x) ? 0 : 4) + (garbage && x.starter ? 0 : 2) + (x.big === p.big ? 1 : 0);
     const rep = bench.reduce((a, x) => (score(x) > score(a) ? x : a), bench[0]);
     this.applySub(
       t,
@@ -2803,11 +2814,13 @@ export class GameSim {
     let pOrb = K.orbBase * Math.pow(offR / defR, 1.05) * glass;
     if (zone === 'c3' || zone === 'ab3') pOrb *= 1.03;
     if (ft) pOrb *= 0.5;
+    // the tags count the boards a scheme adds at an average rate: half as many off a free throw
+    const orbRate = K.orbBase * (ft ? 0.5 : 1);
     if (this.zone(def)) {
       pOrb *= 1.12;
-      this.impact('zone_glass', off.side, K.orbBase * 0.12 * K.orbPts);
+      this.impact('zone_glass', off.side, orbRate * 0.12 * K.orbPts);
     }
-    if (glass !== 1) this.impact('crash_orb', off.side, K.orbBase * (glass - 1) * K.orbPts);
+    if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts);
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {
       // the shooter has a step on his own miss (not on a free throw)
@@ -3075,5 +3088,3 @@ function ordinal(n: number) {
 function periodName(q: number) {
   return q <= 4 ? `${ordinal(q)} quarter` : q === 5 ? 'OT' : `${q - 4}OT`;
 }
-
-export type { Box as SimBox, PossStep };

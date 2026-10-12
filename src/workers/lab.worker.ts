@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink';
 import { evaluateCandidates, runLab, type Candidate, type LabRequest, type LabSide } from '../core/ai/lab';
+import type { GameType } from '../core/types';
 
 /** Progress callbacks arrive as Comlink proxies; report every few games to keep messages cheap. */
 const throttled = (onProgress?: (games: number) => void) => {
@@ -22,9 +23,9 @@ const api = {
       release(onProgress);
     }
   },
-  evaluate(a: LabSide, b: LabSide, candidates: Candidate[], games: number, seed: number, onProgress?: (games: number) => void) {
+  evaluate(a: LabSide, b: LabSide, candidates: Candidate[], games: number, seed: number, onProgress?: (games: number) => void, type?: GameType) {
     try {
-      return evaluateCandidates(a, b, candidates, games, seed, throttled(onProgress));
+      return evaluateCandidates(a, b, candidates, games, seed, throttled(onProgress), type);
     } finally {
       release(onProgress);
     }

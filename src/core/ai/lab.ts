@@ -1,7 +1,7 @@
 // Tactics Lab: run batches of games between two configurations and summarize the result.
 // Pure and serializable so it can run in a Web Worker.
 
-import type { DefenseTactics, GameManagement, OffenseTactics, Tactics, Team, TeamBox } from '../types';
+import type { DefenseTactics, GameManagement, GameType, OffenseTactics, Tactics, Team, TeamBox } from '../types';
 import { GameSim, type SimTeamInput } from '../sim/engine';
 import { Rng } from '../random';
 import { cloneTactics } from '../sim/tactics';
@@ -22,13 +22,17 @@ export interface LabRequest {
   seed: number;
   /** Optional patch applied to side A's tactics. */
   patch?: TacticsPatch;
+  /** The kind of game to play (regular season by default): playoff games shorten the assistants' rotations to eight. */
+  type?: GameType;
 }
 
 export interface ShotProfile {
   rimRate: number;
   threeRate: number;
+  /** Free-throw attempts per field-goal attempt (the post-game four factors' FT / FGA counts makes). */
   ftRate: number;
   efg: number;
+  /** Turnovers per possession. */
   tov: number;
   orb: number;
 }
@@ -109,7 +113,7 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     const aHome = g % 2 === 0;
     const A = { ...req.a, team: teamA };
     const B = { ...req.b, team: teamB };
-    const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: 'regular', injuries: false });
+    const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: req.type ?? 'regular', injuries: false });
     const res = sim.simToEnd();
     const a = aHome ? res.home : res.away;
     const b = aHome ? res.away : res.home;
@@ -230,10 +234,11 @@ export function evaluateCandidates(
   games: number,
   seed: number,
   onGame?: () => void,
+  type?: GameType,
 ): { base: LabSummary; results: CandidateResult[] } {
-  const base = runLab({ a, b, games, seed }, onGame);
+  const base = runLab({ a, b, games, seed, type }, onGame);
   const results = candidates.map((c) => {
-    const r = runLab({ a, b, games, seed, patch: c.patch }, onGame);
+    const r = runLab({ a, b, games, seed, type, patch: c.patch }, onGame);
     const { delta, se } = pairedDelta(base, r);
     return { id: c.id, label: c.label, why: c.why, patch: c.patch, net: r.net, delta, se, winPct: r.winPct };
   });

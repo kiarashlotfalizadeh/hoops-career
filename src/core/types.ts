@@ -181,7 +181,7 @@ export interface Player {
   ratings: Ratings;
   ovr: number; // display scale 40-99
   pot: number; // display scale 40-99
-  /** Hidden development tendency (-1..1), drives volatility of progression. */
+  /** Hidden development tendency (-1..1): shifts how good his summers are on average (most through 25) and his potential before 26. */
   growth: number;
   injuryProne: number; // 0..1
   ratingsHistory: RatingsSnapshot[];
@@ -194,8 +194,8 @@ export interface Player {
   awards: AwardRecord[];
   /** Season he joined current team. */
   joinedSeason: number;
-  /** The team that last traded him away, and when: he can't go straight back to it that season. */
-  tradedFrom?: { tid: number; season: number };
+  /** The team that last traded him away, and when (`also`: the others that traded him away that season): he can't go back to them that season. */
+  tradedFrom?: { tid: number; season: number; also?: number[] };
   /** Signed as a free agent or re-signed: he can't be traded before this season day (NBA: December 15, or three months after signing). */
   tradeLock?: { season: number; day: number };
   experience: number; // NBA seasons completed
@@ -471,8 +471,8 @@ export interface DraftPick {
   pick?: number;
   /** Top-N protected: if it lands in the first N picks of its round, it stays with originalTid (obligation ends). */
   protection?: number;
-  /** The team that last traded it away, and when: it can't go straight back to that team that season. */
-  tradedFrom?: { tid: number; season: number };
+  /** The team that last traded it away, and when (`also`: the others that traded it away that season): it can't go back to them that season. */
+  tradedFrom?: { tid: number; season: number; also?: number[] };
 }
 
 // ---------------------------------------------------------------- games

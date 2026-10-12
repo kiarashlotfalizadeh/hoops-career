@@ -74,14 +74,38 @@ export function perGame(s: PlayerStats | null | undefined): PerGame | null {
   };
 }
 
+type Adv = NonNullable<PlayerStats['adv']>;
+
+/**
+ * A season's totals across all his teams, imported advanced numbers included: a player traded
+ * during a real season has a row per team, and adding the rows up dropped them (his usage read
+ * 0.0, and his page showed his first team's PER, BPM and win shares as the season's).
+ */
+export function seasonLine(p: Player, season: number, playoffs = false): PlayerStats | null {
+  const t = seasonTotals(p, season, playoffs);
+  if (!t || t.adv) return t;
+  const rows = p.stats.filter((s) => s.season === season && s.playoffs === playoffs && s.adv);
+  if (!rows.length) return t;
+  // rates by minutes played, counts added up
+  const min = rows.reduce((a, r) => a + r.min, 0);
+  const rate = (k: keyof Adv) => rows.reduce((a, r) => a + r.adv![k] * r.min, 0) / Math.max(1e-9, min);
+  const sum = (k: keyof Adv) => rows.reduce((a, r) => a + r.adv![k], 0);
+  const keys: (keyof Adv)[] = ['per', 'ts', 'usg', 'astPct', 'trbPct', 'stlPct', 'blkPct', 'tovPct', 'obpm', 'dbpm', 'bpm'];
+  const adv = Object.fromEntries(keys.map((k) => [k, rate(k)])) as Adv;
+  adv.ws = sum('ws');
+  adv.vorp = sum('vorp');
+  adv.ws48 = min ? (adv.ws * 48) / min : 0;
+  return { ...t, adv };
+}
+
 export function playerSeason(p: Player, season: number, playoffs = false): PerGame | null {
-  return perGame(seasonTotals(p, season, playoffs));
+  return perGame(seasonLine(p, season, playoffs));
 }
 
 /** Most recent season with stats (current season first, then previous real seasons). */
 export function latestLine(league: League, p: Player): { season: number; pg: PerGame; real: boolean } | null {
   for (let s = league.season; s >= league.season - 4; s--) {
-    const t = seasonTotals(p, s, false);
+    const t = seasonLine(p, s, false);
     if (t && t.gp > 0) return { season: s, pg: perGame(t)!, real: !!t.real };
   }
   return null;
@@ -107,11 +131,21 @@ export function teamRatings(ts: TeamSeason) {
   };
 }
 
-export const f1 = (v: number) => (isFinite(v) ? v.toFixed(1) : '—');
-export const f0 = (v: number) => (isFinite(v) ? v.toFixed(0) : '—');
-export const p1 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—');
-export const p0 = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
-export const signed = (v: number, d = 1) => (isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(d)}` : '—');
+/** toFixed, but a value that rounds to zero reads "0.0", not "-0.0" (a -0.03 plus-minus or net rating). */
+const fixed = (v: number, d: number) => {
+  const s = v.toFixed(d);
+  return Number(s) === 0 ? (0).toFixed(d) : s;
+};
+export const f1 = (v: number) => (isFinite(v) ? fixed(v, 1) : '—');
+export const f0 = (v: number) => (isFinite(v) ? fixed(v, 0) : '—');
+export const p1 = (v: number) => (isFinite(v) ? `${fixed(v * 100, 1)}%` : '—');
+export const p0 = (v: number) => (isFinite(v) ? `${fixed(v * 100, 0)}%` : '—');
+/** "+2.4", "-1.3", and "0.0" for anything that rounds to zero (no sign: it favours neither side). */
+export const signed = (v: number, d = 1) => {
+  if (!isFinite(v)) return '—';
+  const s = fixed(v, d);
+  return Number(s) > 0 ? `+${s}` : s;
+};
 /** 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 101st, 111th. */
 export const ordinalSuffix = (n: number) => {
   const v = Math.abs(n) % 100;
@@ -142,20 +176,20 @@ export function fmtClock(sec: number) {
 }
 /** Play-by-play lines: substitutions fade back, but stay above 5:1 contrast. */
 export const pbpOpacity = (kind?: string) => (kind === 'sub' ? 0.7 : 1);
+/** Box-score minutes as whole numbers that add up to the team's total (the game report's grades quote them too). */
+export { wholeMinutes } from '../core/league/helpers';
+
 /**
- * A team's box-score minutes as whole numbers that still add up to the team's total (240, plus 25
- * per overtime): rounded down, then the leftover minutes go to the largest remainders.
+ * Who starts the next game, from players in depth-chart order: the first five healthy ones, as the
+ * engine starts them (an injured starter's spot goes to the next man up), as the Rotation screen shows.
  */
-export function wholeMinutes(players: { pid: number; min: number }[]): (pid: number) => number {
-  const total = Math.round(players.reduce((a, p) => a + p.min, 0));
-  const out = new Map(players.map((p) => [p.pid, Math.floor(p.min)]));
-  let left = total - [...out.values()].reduce((a, b) => a + b, 0);
-  for (const p of [...players].sort((a, b) => (b.min % 1) - (a.min % 1))) {
-    if (left <= 0) break;
-    out.set(p.pid, out.get(p.pid)! + 1);
-    left--;
-  }
-  return (pid) => out.get(pid) ?? 0;
+export function startingFive(players: { pid: number; injury: unknown }[]): Set<number> {
+  return new Set(
+    players
+      .filter((p) => !p.injury)
+      .slice(0, 5)
+      .map((p) => p.pid),
+  );
 }
 
 /** A finished game's scorebug: FINAL, F/OT, F/2OT. */

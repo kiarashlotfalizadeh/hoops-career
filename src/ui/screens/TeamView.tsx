@@ -13,7 +13,7 @@ import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
-import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, teamRatings, type PerGame } from '../stats';
+import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, startingFive, teamRatings, type PerGame } from '../stats';
 import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
 import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickProjection, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
@@ -217,20 +217,27 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
   if (!roster.length) return <Empty>No players on the roster.</Empty>;
   // the avatar already shows the initials: last names alone fit a phone ("Murray-Boyles", not "C. Murray-Boyl…")
   const nameOf = rosterNames(roster);
-  const starters = new Set(team.rotation.order.slice(0, 5));
+  // the five who start the next game: an injured starter is listed with the bench until he's back
+  const starters = startingFive(roster);
   const groups = [
     { label: 'Starters', list: roster.filter((p) => starters.has(p.pid)) },
     { label: 'Bench', list: roster.filter((p) => !starters.has(p.pid) && !p.contract.twoWay) },
     { label: 'Two-way', list: roster.filter((p) => !starters.has(p.pid) && p.contract.twoWay) },
   ];
   const anyCur = roster.some((p) => (playerSeason(p, league.season)?.gp ?? 0) > 0);
+  // before the first game the rows show each player's latest season: a new fictional league has none
+  const anyPast = !anyCur && roster.some((p) => latestLine(league, p));
   return (
     <>
       {groups.map((g) =>
         g.list.length ? (
           <div key={g.label} className="col" style={{ gap: 6 }}>
             <SectionLabel
-              right={g.label === 'Starters' ? <span className="tiny dim">{anyCur ? `${seasonLabel(league.season)} per game` : 'Last season per game'}</span> : undefined}
+              right={
+                g.label === 'Starters' ? (
+                  <span className="tiny dim">{anyCur ? `${seasonLabel(league.season)} per game` : anyPast ? 'Latest season per game' : 'No games yet'}</span>
+                ) : undefined
+              }
             >
               {g.label}
             </SectionLabel>

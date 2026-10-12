@@ -126,14 +126,30 @@ export const PICK_LENS: Record<Strategy, number> = { contend: 0.7, retool: 1, re
  * the user, an AI team never lets its own assets go below neutral: the lens only adds a premium
  * for what it receives (a rebuilder's veteran bought cheap and sold to a contender, or picks the
  * other way, paid up to 1.8x a round trip). Among themselves AI teams sell down to 85%, which is
- * what gets their deals done. An asset that changed hands this season is worth its neutral value
- * to everyone, so it can't be flipped at a second team's premium.
+ * what gets their deals done. A liability's band runs the same way: taken in at most 15% less of a
+ * burden than neutral, sent away among AI teams as up to 15% more of one. An asset that changed
+ * hands this season is worth its neutral value to everyone, so it can't be flipped at a second
+ * team's premium.
  */
 function lens(own: number, neutral: number, incoming: boolean, aiDeal: boolean) {
-  return incoming ? Math.min(own, neutral * 1.15) : Math.max(own, neutral * (aiDeal ? 0.85 : 1));
+  const band = 0.15 * Math.abs(neutral);
+  return incoming ? Math.min(own, neutral + band) : Math.max(own, neutral - (aiDeal ? band : 0));
 }
 
 const flipped = (league: League, a: Player | DraftPick) => a.tradedFrom?.season === league.season;
+
+/** Did team `tid` trade this player or pick away this season? Then it can't take him (or it) back until next season. */
+function tradedAwayBy(league: League, a: Player | DraftPick, tid: number): boolean {
+  const t = a.tradedFrom;
+  return t?.season === league.season && (t.tid === tid || !!t.also?.includes(tid));
+}
+
+/** `tid` trades it away now: remembered along with the teams that already traded it away this season. */
+function tradedAway(league: League, a: Player | DraftPick, tid: number): NonNullable<Player['tradedFrom']> {
+  const t = a.tradedFrom;
+  const also = t?.season === league.season ? [t.tid, ...(t.also ?? [])].filter((x) => x !== tid) : [];
+  return also.length ? { tid, season: league.season, also } : { tid, season: league.season };
+}
 
 /** What team `tid` thinks a player is worth in a deal (with the user unless `aiDeal`). */
 export function playerValueFor(league: League, p: Player, tid: number, incoming: boolean, aiDeal = false): number {
@@ -325,11 +341,18 @@ function stepienError(league: League, offer: TradeOffer, side: TradeSide): strin
   return null;
 }
 
+/** Why no team can trade right now (past the deadline, the postseason), or null while trading is open. */
+export function tradingClosedReason(league: League): string | null {
+  if (league.phase === 'regular' && league.day > league.tradeDeadlineDay) return 'The trade deadline has passed.';
+  if (league.phase === 'playoffs' || league.phase === 'playin') return 'No trades during the postseason.';
+  return null;
+}
+
 export function validateTrade(league: League, offer: TradeOffer): string[] {
   const errors: string[] = [];
   if (league.fired && (offer.a.tid === league.userTid || offer.b.tid === league.userTid)) errors.push('You were fired: take over another team to make trades.');
-  if (league.phase === 'regular' && league.day > league.tradeDeadlineDay) errors.push('The trade deadline has passed.');
-  if (league.phase === 'playoffs' || league.phase === 'playin') errors.push('No trades during the postseason.');
+  const closed = tradingClosedReason(league);
+  if (closed) errors.push(closed);
   const twoWay = (pid: number) => !!league.players[pid]?.contract.twoWay;
   const maxSize = rosterMaxNow(league);
   const s = contractSeason(league);
@@ -350,10 +373,11 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       const dp = findPick(league, dpid);
       if (!dp || dp.tid !== mine.tid) errors.push('A draft pick in the deal is no longer owned by that team.');
     }
-    // nothing goes straight back to the team that just traded it away: a there-and-back pair of
-    // trades shouldn't pay out (a casual discount, a pick bought cheap on draft night and sold back as the player)
+    // nothing goes back to a team that traded it away this season, directly or through another
+    // team: a there-and-back pair of trades shouldn't pay out (a casual discount, a pick bought
+    // cheap on draft night and sold back as the player)
     for (const a of [...other.pids.map((pid) => league.players[pid]), ...other.dpids.map((d) => findPick(league, d))]) {
-      if (a?.tradedFrom?.tid === mine.tid && a.tradedFrom.season === league.season)
+      if (a && tradedAwayBy(league, a, mine.tid))
         errors.push(`${abbrev} traded ${assetName(league, a)} away this season and can't get ${'pid' in a ? 'him' : 'it'} back until next season.`);
     }
     // standard roster spots: the cap only binds a team taking in bodies, the floor one sending them out
@@ -363,7 +387,8 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (inc > out && size > maxSize) errors.push(`${abbrev} would have ${size} players (max ${maxSize}${inSeason(league) ? '' : ' in the offseason'}).`);
     if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players (minimum ${CAP.rosterMin} during the season).`);
     const twIn = other.pids.filter(twoWay).length;
-    const twAfter = twoWayRoster(league, mine.tid).length - mine.pids.filter(twoWay).length + twIn;
+    // (after the season, as on the standard roster, only next season's two-way deals hold a slot)
+    const twAfter = twoWayRoster(league, mine.tid).filter((p) => contractExp(p.contract) >= s).length - mine.pids.filter(twoWay).length + twIn;
     if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players (max ${TWO_WAY_MAX}).`);
     const inSal = sideSalary(league, other);
     const outSal = sideSalary(league, mine);
@@ -381,6 +406,10 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (stepien) errors.push(stepien);
   }
   if (!offer.a.pids.length && !offer.a.dpids.length && !offer.b.pids.length && !offer.b.dpids.length) errors.push('The trade is empty.');
+  // (a deep link can name a player twice: the AI would count him twice, and he'd move twice)
+  const pids = [...offer.a.pids, ...offer.b.pids];
+  const dpids = [...offer.a.dpids, ...offer.b.dpids];
+  if (new Set(pids).size < pids.length || new Set(dpids).size < dpids.length) errors.push('A player or pick is in the deal twice.');
   return [...new Set(errors)];
 }
 
@@ -418,7 +447,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
     for (const pid of pids) {
       const p = league.players[pid];
       leaveTeam(league.teams[p.tid], pid);
-      p.tradedFrom = { tid: p.tid, season: league.season };
+      p.tradedFrom = tradedAway(league, p, p.tid);
       p.tid = to;
       p.joinedSeason = league.season;
       p.mood.tradeRequest = false;
@@ -430,7 +459,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
     for (const dpid of dpids) {
       const dp = findPick(league, dpid);
       if (!dp) continue;
-      dp.tradedFrom = { tid: dp.tid, season: league.season };
+      dp.tradedFrom = tradedAway(league, dp, dp.tid);
       dp.tid = to;
       // back with its original team, a protection has nothing left to protect
       if (to === dp.originalTid) delete dp.protection;
@@ -616,9 +645,9 @@ export function aiProposeToUser(league: League, rng: Rng) {
  * Occasional AI-to-AI deals (a few a season): contenders buy rebuilding teams' veterans. The buyer
  * matches salary first (without sending an over-the-cap seller more than it can take back, or
  * taking its own payroll past the tax after using the mid-level), then adds its two most valuable
- * young players and picks from the cheapest up (two firsts at most) until the seller agrees, and
- * the deal only goes through if the buyer likes it too. Only assets the rules let move are
- * offered. Up to three veterans are tried.
+ * young players and picks from the cheapest up (three at most, so better ones replace the cheapest;
+ * two firsts at most) until the seller agrees, and the deal only goes through if the buyer likes it
+ * too. Only assets the rules let move are offered. Up to three veterans are tried.
  */
 export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
@@ -642,7 +671,7 @@ export function aiToAiTrade(league: League, rng: Rng) {
 function aiPackage(league: League, buyer: number, seller: number, vet: Player): TradeOffer | null {
   const sal = (p: Player) => capSalary(league, p.pid);
   // nothing the rules hold back: a recent signing, or an asset the seller traded away this season
-  const movable = (a: Player | DraftPick) => !(a.tradedFrom?.tid === seller && a.tradedFrom.season === league.season) && !('pid' in a && untradeable(league, a));
+  const movable = (a: Player | DraftPick) => !tradedAwayBy(league, a, seller) && !('pid' in a && untradeable(league, a));
   // the buyer's three best players are off the table
   const roster = standardRoster(league, buyer).sort((x, y) => y.ovr - x.ovr);
   const avail = roster.slice(3).filter((p) => p.ovr < vet.ovr && movable(p));
@@ -678,10 +707,16 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   for (const x of [...youth.slice(0, 2), ...picks]) {
     if (teamAccepts(league, offer(), seller)) break;
     if (!('pid' in x)) {
-      if (dps.length < 3 && (x.round === 2 || dps.filter((d) => d.round === 1).length < MAX_FIRSTS_OUT)) {
-        dps.push(x);
-        // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
-        if (stepienError(league, offer(), offer().a)) dps.pop();
+      // three picks at most: past that the cheapest one in makes way for this better one (else
+      // three second-rounders would be as far as an offer ever got)
+      const out = dps.length >= 3 ? dps[0] : null;
+      if (x.round === 1 && dps.filter((d) => d !== out && d.round === 1).length >= MAX_FIRSTS_OUT) continue;
+      if (out) dps.shift();
+      dps.push(x);
+      // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
+      if (stepienError(league, offer(), offer().a)) {
+        dps.pop();
+        if (out) dps.unshift(out);
       }
     } else if (pkg.length < maxPkg && sellerFits(x)) pkg.push(x);
   }

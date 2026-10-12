@@ -144,6 +144,8 @@ try {
   // a game report from the week
   await page.goto(`${base}/#/`);
   const recent = page.locator('a[href^="#/game/"]').first();
+  // the screen it came from stays up until Home has loaded
+  await recent.waitFor({ timeout: 15_000 }).catch(() => {});
   if (await recent.count()) {
     await recent.click();
     await page.waitForSelector('text=Game report');

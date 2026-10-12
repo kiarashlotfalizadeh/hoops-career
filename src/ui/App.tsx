@@ -444,7 +444,7 @@ function GameShell() {
     <div className="app">
       <TopBar />
       <SaveBanner />
-      <ErrorBoundary scope="screen" key={loc.pathname}>
+      <ErrorBoundary scope="screen" key={loc.pathname} resetKey={loc.key}>
         <Suspense fallback={<div className="empty">Loading…</div>}>
           <Routes>
             <Route path="/" element={<Home />} />

@@ -61,6 +61,53 @@ describe('rotation plan', () => {
     const bigs = players.map((p, i) => ({ ...p, guard: i >= 5, big: i < 5 }));
     for (const slot of buildMinutePlan(bigs)) expect(new Set(slot).size).toBe(5);
   });
+  it('keeps the starting and closing fives the coach picked, however big or small', () => {
+    // four bigs and no ball handler among the starters, who are also the closers
+    const jumbo = players.map((p, i) => ({ ...p, guard: i >= 5, big: i < 4 }));
+    const plan = buildMinutePlan(jumbo);
+    expect([...plan[0]].sort()).toEqual([0, 1, 2, 3, 4]);
+    for (const slot of plan.slice(44)) expect([...slot].sort()).toEqual([0, 1, 2, 3, 4]);
+    for (const slot of plan) expect(new Set(slot).size).toBe(5);
+  });
+  it('never sits a player for positions when he needs every minute left, so the minutes still add up', () => {
+    // a playoff eight with four bigs (a real team's): swapping out a big who had to play every
+    // remaining minute of the half left him a minute short and gave a starter two extra
+    const spec: [number, number, string, number][] = [
+      [34, 42, 'SCg', 49],
+      [39, 42, 'SCg', 61.3],
+      [30, 42, 'SC', 51.6],
+      [24, 24, 'SC', 62.3],
+      [42, 42, 'SCb', 61.8],
+      [26, 0, 'b', 50.8],
+      [23, 0, 'gb', 46.2],
+      [22, 0, 'b', 46.5],
+    ];
+    const pp: PlanPlayer[] = spec.map(([minutes, cap, f, endurance], pid) => ({
+      pid,
+      minutes,
+      cap: cap || undefined,
+      starter: f.includes('S'),
+      closer: f.includes('C'),
+      guard: f.includes('g'),
+      big: f.includes('b'),
+      endurance,
+    }));
+    const plan = buildMinutePlan(pp);
+    const norm = normalizeMinutes(pp);
+    pp.forEach((p, i) => expect(Math.abs(plan.filter((s) => s.includes(p.pid)).length - norm[i])).toBeLessThanOrEqual(1));
+  });
+  it('adds up to 240 when the rotation is capped out: the deep bench, then the caps, take the rest', () => {
+    // five healthy players: 48 minutes each, past the usual 46 ceiling
+    expect(normalizeMinutes(players.slice(0, 5))).toEqual([48, 48, 48, 48, 48]);
+    // a six-man rotation with two capped players: the 16 minutes nobody in it can take go to the deep bench
+    const six = players.map((p, i) => ({ ...p, minutes: i < 4 ? 40 : i < 6 ? 20 : 0, cap: i === 4 || i === 5 ? 20 : undefined }));
+    const m = normalizeMinutes(six);
+    expect(m.reduce((a, b) => a + b, 0)).toBe(240);
+    expect(m.slice(0, 6)).toEqual([46, 46, 46, 46, 20, 20]);
+    expect(m.slice(6).reduce((a, b) => a + b, 0)).toBe(16);
+    // nobody with minutes: an even split among the first ten, in whole minutes
+    expect(normalizeMinutes(players.slice(0, 7).map((p) => ({ ...p, minutes: 0 })))).toEqual([35, 35, 34, 34, 34, 34, 34]);
+  });
 });
 
 describe('plan inputs', () => {
@@ -127,5 +174,18 @@ describe('plan inputs', () => {
     expect(Math.max(...Object.values(playoffs))).toBeLessThanOrEqual(42);
     // a user's custom rotation is left alone
     expect(mins(planInputs(src, rot(), { playoffs: true }))).toEqual(mins(planInputs(src, rot())));
+  });
+
+  it('keeps a low-minute starter and a bench closer in the playoff eight, so they still start and finish', () => {
+    // a 14-minute starting center and a 12-minute closer off the bench, behind seven bigger roles
+    const minutes = Object.fromEntries([36, 34, 33, 31, 14, 30, 28, 24, 20, 12, 0, 0].map((m, i) => [i, m]));
+    const pp = planInputs(src, rot({ manual: false, minutes, closers: [0, 1, 2, 3, 9] }), { playoffs: true });
+    const m = mins(pp);
+    expect(m[4]).toBeGreaterThan(0);
+    expect(m[9]).toBeGreaterThan(0);
+    expect(Object.values(m).filter((x) => x > 0).length).toBe(8);
+    const plan = buildMinutePlan(pp);
+    expect(plan[0]).toContain(4);
+    for (const slot of plan.slice(44)) expect(slot).toContain(9);
   });
 });

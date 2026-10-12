@@ -5,6 +5,7 @@ import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { FINISH_LABEL } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
+import { GAME } from '../constants';
 import type { Team } from '../types';
 
 // The engine's rule bookkeeping: fouls, free throws, caps, late-game modes, play-by-play.
@@ -43,6 +44,28 @@ describe('engine rules', () => {
     expect(total / 20).toBeGreaterThan(17);
   });
 
+  it('runs the shot clock from the inbound: breaking a full-court press uses some of it', () => {
+    let trips = 0;
+    let over = 0;
+    for (let g = 0; g < 4; g++) {
+      const sim = new GameSim(side(4, { defense: { press: 'always' } }), side(5), { rng: new Rng(g), type: 'regular', record: true, injuries: false });
+      sim.simToEnd();
+      for (const l of sim.drainLogs()) {
+        // one trip up the floor: no second chance (a board, a block out of bounds) and no foul to stop the clock
+        if (
+          l.steps[0]?.k !== 'press' ||
+          l.kind === 'transition' ||
+          l.steps.some((s) => s.k === 'block' || s.k === 'foul' || (s.k === 'reb' && (s.pid === undefined || l.on[l.off].includes(s.pid))))
+        )
+          continue;
+        trips++;
+        if (l.clockStart - l.clockEnd > GAME.shotClock + 1e-6) over++;
+      }
+    }
+    expect(trips).toBeGreaterThan(100);
+    expect(over).toBe(0);
+  });
+
   it('plays the coverage that was chosen, switching off the ball only off the ball', () => {
     const cov: Record<string, number> = {};
     for (let g = 0; g < 4; g++) {
@@ -69,6 +92,25 @@ describe('engine rules', () => {
     expect(p.on).toBe(false);
     expect(t.on.length).toBe(5);
     expect(t.on.every((x) => x.out === 0)).toBe(true);
+  });
+
+  it("replaces a fouled-out player with the staff's choice, who isn't subbed straight back out", () => {
+    type R = Internals & { T: { on: { pid: number }[] }[]; step(): boolean; checkSubs(t: unknown, force?: boolean): void };
+    let undone = 0;
+    for (let g = 0; g < 12; g++) {
+      const sim = new GameSim(side(2), side(3), { rng: new Rng(60 + g), type: g % 2 ? 'playoffs' : 'regular', injuries: false }) as unknown as R;
+      while (sim.q < 2 || sim.clock > 200 + 20 * g) sim.step();
+      for (const t of sim.T) {
+        sim.checkSubs(t, true);
+        const p = t.players.find((x) => x.on && x.out === 0)!;
+        p.fouls = 5;
+        sim.chargeFoul(t, p);
+        const lineup = t.on.map((x) => x.pid).join();
+        sim.checkSubs(t, true);
+        if (t.on.map((x) => x.pid).join() !== lineup) undone++;
+      }
+    }
+    expect(undone).toBe(0);
   });
 
   it('never plays four: a sixth foul with nobody left costs a technical, and the last man disqualified comes back for an injured one', () => {
@@ -123,7 +165,7 @@ describe('engine rules', () => {
       }
     }
     // five seconds left before the half: the offense gets a shot (or a trip to the line) off; eight
-    // seconds left in a 12-point game, the leader lets the clock run out instead
+    // or twenty seconds left in a 12-point game (the shot clock off), the leader lets the clock run out instead
     const lastPossession = (q: number, clock: number, lead: number) => {
       let shots = 0;
       for (let g = 0; g < 20; g++) {
@@ -143,7 +185,10 @@ describe('engine rules', () => {
       return shots;
     };
     expect(lastPossession(2, 5, 0)).toBeGreaterThanOrEqual(18);
+    // down one with two seconds left in the game: still a shot at the win
+    expect(lastPossession(4, 2, -1)).toBeGreaterThanOrEqual(18);
     expect(lastPossession(4, 8, 12)).toBeLessThanOrEqual(2);
+    expect(lastPossession(4, 20, 12)).toBeLessThanOrEqual(2);
   });
 
   it('brings the starters back as soon as a blowout gets back within reach', () => {
@@ -295,6 +340,23 @@ describe('engine rules', () => {
     expect(at(4, 7)).toBeNull();
   });
 
+  it('hacks a poor free-throw shooter only before the last two minutes of a period', () => {
+    type F = Internals & { intentionalFoul(off: unknown, def: unknown): string | null };
+    const hacks = (q: number, clock: number) => {
+      let n = 0;
+      for (let g = 0; g < 10; g++) {
+        const sim = new GameSim(side(0), side(1, { manage: { hackThreshold: 99 } }), { rng: new Rng(g), type: 'regular', injuries: false }) as unknown as F;
+        sim.q = q;
+        sim.clock = clock;
+        if (sim.intentionalFoul(sim.T[0], sim.T[1])) n++;
+      }
+      return n;
+    };
+    expect(hacks(2, 300)).toBeGreaterThan(5);
+    expect(hacks(2, 100)).toBe(0);
+    expect(hacks(4, 100)).toBe(0);
+  });
+
   it('hurries when two possessions down late, but not in a lost cause', () => {
     const sim = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false }) as unknown as Internals & { T: { score: number }[] };
     const [off, def] = sim.T;
@@ -434,6 +496,26 @@ describe('engine rules', () => {
     expect(screens).toBeGreaterThan(5);
   });
 
+  it('tags the boards a crashing offense or a zone gives up at half weight off a missed free throw', () => {
+    type Rb = { T: unknown[]; impact(key: string, benefit: number, pts: number): void; rebound(off: unknown, def: unknown, zone: string, blocked: boolean, ft: boolean): void };
+    const first = (ft: boolean) => {
+      const sim = new GameSim(side(0, { offense: { crashBoards: 100 } }), side(1, { defense: { scheme: 'zone23' } }), {
+        rng: new Rng(1),
+        type: 'regular',
+        injuries: false,
+      }) as unknown as Rb;
+      const tags: Record<string, number> = {};
+      sim.impact = (key, _benefit, pts) => void (tags[key] ??= pts);
+      sim.rebound(sim.T[0], sim.T[1], 'rim', false, ft);
+      return tags;
+    };
+    const [shot, ft] = [first(false), first(true)];
+    for (const key of ['crash_orb', 'zone_glass']) {
+      expect(shot[key]).toBeGreaterThan(0);
+      expect(ft[key]).toBeCloseTo(shot[key] / 2, 9);
+    }
+  });
+
   it('credits double teams to the Star plan only when the plan sent them', () => {
     const doubles = (plan: 'none' | 'double') => {
       let n = 0;
@@ -446,6 +528,33 @@ describe('engine rules', () => {
     };
     expect(doubles('none')).toBe(0);
     expect(doubles('double')).toBeGreaterThan(0);
+  });
+
+  it('tags the star deny only where it slows the star: not on a switched pick-and-roll, where it changes nothing', () => {
+    type P = Internals & {
+      impact(key: string, benefit: number, pts: number): void;
+      halfCourt(): void;
+      pnr(off: unknown, def: unknown, open: number, late: unknown, forced: boolean): unknown;
+    };
+    const denies = (pnr: 'switch' | 'drop') => {
+      const sim = new GameSim(side(0), side(1, { defense: { scheme: 'man', pnr, starPlan: 'deny', starTarget: null } }), {
+        rng: new Rng(6),
+        type: 'regular',
+        injuries: false,
+      }) as unknown as P;
+      let n = 0;
+      const impact = sim.impact.bind(sim);
+      sim.impact = (key, benefit, pts) => {
+        if (key === 'star_deny') n++;
+        impact(key, benefit, pts);
+      };
+      // just the pick-and-roll: no further actions after an offensive board
+      sim.halfCourt = () => {};
+      for (let i = 0; i < 300; i++) sim.pnr(sim.T[0], sim.T[1], 0, sim.lateMode(sim.T[0], sim.T[1]), false);
+      return n;
+    };
+    expect(denies('drop')).toBeGreaterThan(20);
+    expect(denies('switch')).toBe(0);
   });
 
   it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {

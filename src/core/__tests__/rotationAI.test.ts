@@ -140,4 +140,21 @@ describe('rotation AI: role memory', () => {
     expect(Math.max(...healthy)).toBeLessThanOrEqual(38);
     expect(Math.abs(healthy.reduce((a, b) => a + b, 0) - 240)).toBeLessThanOrEqual(3);
   });
+
+  it('still fills the game when only five or six are healthy (38 apiece would not)', () => {
+    for (const [n, each] of [
+      [5, 48],
+      [6, 40],
+    ]) {
+      const ps = roster(9);
+      for (const p of ps.slice(n)) p.injury = { type: 'Sprained ankle', gamesRemaining: 10, gamesTotal: 10, severity: 'minor' };
+      const rot = autoRotation(ps);
+      expect(total(rot.minutes)).toBe(240);
+      for (const p of ps.slice(0, n)) expect(rot.minutes[p.pid]).toBe(each);
+    }
+    // four can't fill it: they play every minute
+    const ps = roster(9);
+    for (const p of ps.slice(4)) p.injury = { type: 'Sprained ankle', gamesRemaining: 10, gamesTotal: 10, severity: 'minor' };
+    expect(total(autoRotation(ps).minutes)).toBe(192);
+  });
 });

@@ -1,7 +1,13 @@
-// The live court's keyframes: players (1.45 ft circles) shouldn't be drawn on top of each other.
+// The live court's keyframes: players (1.45 ft circles) shouldn't be drawn on top of each other,
+// and its score follows the scoreboard.
 import { describe, expect, it } from 'vitest';
 import { buildScript, type Frame } from '../live/choreo';
 import type { PossLog, PossStep } from '../../core/sim/log';
+import { createLeague, defaultSettings } from '../../core/league/create';
+import { teamPlayers } from '../../core/league/helpers';
+import { applyPatch } from '../../core/ai/lab';
+import { GameSim } from '../../core/sim/engine';
+import { Rng } from '../../core/random';
 
 const off = [1, 2, 3, 4, 5];
 const def = [11, 12, 13, 14, 15];
@@ -67,5 +73,68 @@ describe('live court choreography', () => {
     const s = buildScript(log([{ k: 'advance', pid: 1 }], 'zone32'), info);
     const set = s.frames[s.frames.length - 1].d;
     expect(set.filter((p) => p.y >= 18).length).toBe(3);
+  });
+});
+
+describe('the live court score', () => {
+  const scores = (s: ReturnType<typeof buildScript>) => s.frames.filter((f) => f.score).map((f) => f.score);
+
+  it("counts a technical free throw (which has no step of its own) when it's made, not on the other team's basket", () => {
+    // home scores two from 40-38; a disqualified home player's foul gave the visitors a technical point
+    const l = {
+      ...log([
+        { k: 'advance', pid: 1 },
+        { k: 'foul', pid: 3 },
+        { k: 'shot', pid: 1, x: 0, y: 6, zone: 'rim', made: true, v: 2 },
+      ]),
+      pts: 2,
+      score: [42, 39] as [number, number],
+    };
+    expect(scores(buildScript(l, info, [40, 38]))).toEqual([
+      [42, 38],
+      [42, 39],
+    ]);
+    // no basket at all: the court still ends on the scoreboard's score
+    const quiet = {
+      ...log([
+        { k: 'advance', pid: 1 },
+        { k: 'foul', pid: 12 },
+        { k: 'reb', pid: 13 },
+      ]),
+      score: [41, 38] as [number, number],
+    };
+    const s = buildScript(quiet, info, [40, 38]);
+    expect(scores(s)).toEqual([[41, 38]]);
+    expect(s.frames.at(-1)!.flash?.text).toBe('TECH FT');
+  });
+
+  it('ends every possession on the scoreboard, technical free throws included, and never runs backwards', () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
+    // six players against a physical, pressing defense: fouled-out players stay on and cost technicals
+    const home = {
+      team: { ...league.teams[0], tactics: applyPatch(league.teams[0].tactics, { defense: { physicality: 100, pressure: 100 } }) },
+      players: teamPlayers(league, 0).slice(0, 6),
+    };
+    const away = { team: league.teams[1], players: teamPlayers(league, 1) };
+    let techs = 0;
+    for (const seed of [103, 106]) {
+      const sim = new GameSim(home, away, { rng: new Rng(seed), type: 'regular', record: true, injuries: false });
+      let shown: [number, number] = [0, 0];
+      while (!sim.over) {
+        // as the Live screen draws it: the score before the step, then the possession it played
+        const from: [number, number] = [sim.T[0].score, sim.T[1].score];
+        sim.step();
+        for (const l of sim.drainLogs()) {
+          const s = buildScript(l, info, from);
+          techs += s.frames.filter((f) => f.flash?.text === 'TECH FT').length;
+          for (const sc of scores(s)) {
+            expect(sc![0] >= shown[0] && sc![1] >= shown[1]).toBe(true);
+            shown = sc!;
+          }
+          expect(shown).toEqual(l.score);
+        }
+      }
+    }
+    expect(techs).toBeGreaterThan(0);
   });
 });

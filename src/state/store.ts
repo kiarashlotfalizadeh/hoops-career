@@ -246,11 +246,16 @@ export const useStore = create<AppState>((set, get) => ({
     // a live game left mid-way finishes from its current score: re-simming it would record it twice
     const live = pendingLive(l);
     let days = 0;
+    // the day this sim left the league on: the Live screen can finish its game while the sim waits
+    // (the save above, a frame), and a target that move reached needs no more days
+    let left = startDay;
     try {
       for (;;) {
         if (get().stopRequested || get().league !== l) break;
+        if (l.day !== left && targetDone(l, target, startDay, startPhase)) break;
         if (live && !live.committed) live.commit(l);
         else simDay(l);
+        left = l.day;
         days++;
         changes++;
         // re-render league views weekly during long sims; the progress bar updates daily

@@ -11,6 +11,10 @@ import { FRANCHISES } from '../../../src/core/teams';
 import { contractExp, salaryFor } from '../../../src/core/playerGen';
 
 const out = process.argv[2];
+if (!out) {
+  console.error('Usage: tsx scripts/data/test/make-fixture.ts <outDir>');
+  process.exit(1);
+}
 mkdirSync(out, { recursive: true });
 const league = createLeague({ name: 'fx', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed: null, rngSeed: 5 });
 const id = (pid: number) => `fx${String(pid).padStart(5, '0')}01`;
