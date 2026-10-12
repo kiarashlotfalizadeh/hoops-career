@@ -122,20 +122,29 @@ export const PICK_LENS: Record<Strategy, number> = { contend: 0.7, retool: 1, re
 
 /**
  * A team's view of an asset it would receive (`incoming`) or send: its strategy's lens, kept
- * within 15% of the league-neutral value, so contenders don't overpay for veterans and
- * rebuilders don't give them away (no buying low from one AI to sell high to another).
+ * within 15% of the league-neutral value, so contenders don't overpay for veterans. Dealing with
+ * the user, an AI team never lets its own assets go below neutral: the lens only adds a premium
+ * for what it receives (a rebuilder's veteran bought cheap and sold to a contender, or picks the
+ * other way, paid up to 1.8x a round trip). Among themselves AI teams sell down to 85%, which is
+ * what gets their deals done. An asset that changed hands this season is worth its neutral value
+ * to everyone, so it can't be flipped at a second team's premium.
  */
-function lens(own: number, neutral: number, incoming: boolean) {
-  return incoming ? Math.min(own, neutral * 1.15) : Math.max(own, neutral * 0.85);
+function lens(own: number, neutral: number, incoming: boolean, aiDeal: boolean) {
+  return incoming ? Math.min(own, neutral * 1.15) : Math.max(own, neutral * (aiDeal ? 0.85 : 1));
 }
 
-export function playerValueFor(league: League, p: Player, tid: number, incoming: boolean): number {
-  return lens(tradeValue(league, p, league.teams[tid].strategy), tradeValue(league, p, 'retool'), incoming);
+const flipped = (league: League, a: Player | DraftPick) => a.tradedFrom?.season === league.season;
+
+/** What team `tid` thinks a player is worth in a deal (with the user unless `aiDeal`). */
+export function playerValueFor(league: League, p: Player, tid: number, incoming: boolean, aiDeal = false): number {
+  const neutral = tradeValue(league, p, 'retool');
+  return flipped(league, p) ? neutral : lens(tradeValue(league, p, league.teams[tid].strategy), neutral, incoming, aiDeal);
 }
 
-export function pickValueFor(league: League, dp: DraftPick, tid: number, incoming: boolean): number {
+/** What team `tid` thinks a draft pick is worth in a deal (with the user unless `aiDeal`). */
+export function pickValueFor(league: League, dp: DraftPick, tid: number, incoming: boolean, aiDeal = false): number {
   const neutral = pickValue(league, dp);
-  return lens(neutral * PICK_LENS[league.teams[tid].strategy], neutral, incoming);
+  return flipped(league, dp) ? neutral : lens(neutral * PICK_LENS[league.teams[tid].strategy], neutral, incoming, aiDeal);
 }
 
 /** Each extra player in the bigger half of a deal counts for less: depth is worth less than talent. */
@@ -204,16 +213,17 @@ interface Verdict {
 function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): Verdict {
   const mine = offer.a.tid === tid ? offer.a : offer.b;
   const other = mine === offer.a ? offer.b : offer.a;
+  const aiDeal = offer.a.tid !== league.userTid && offer.b.tid !== league.userTid;
   const players = (side: TradeSide, incoming: boolean, depth: boolean) =>
     weighted(
-      side.pids.map((pid) => playerValueFor(league, league.players[pid], tid, incoming)),
+      side.pids.map((pid) => playerValueFor(league, league.players[pid], tid, incoming, aiDeal)),
       depth ? DEPTH : null,
     );
   const picks = (side: TradeSide, incoming: boolean) =>
     weighted(
       side.dpids.flatMap((d) => {
         const dp = findPick(league, d);
-        return dp ? [pickValueFor(league, dp, tid, incoming)] : [];
+        return dp ? [pickValueFor(league, dp, tid, incoming, aiDeal)] : [];
       }),
       incoming ? PICK_DEPTH : null,
     );
@@ -232,7 +242,7 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
       }),
     ];
     const total = assets.reduce((s, x) => s + x.v, 0);
-    if (total > 0) slack *= assets.reduce((s, x) => s + (x.a.tradedFrom?.season === league.season ? 0 : x.v), 0) / total;
+    if (total > 0) slack *= assets.reduce((s, x) => s + (flipped(league, x.a) ? 0 : x.v), 0) / total;
   }
   const delta = valueIn - valueOut - slack;
   const tooManyFirsts = mine.dpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;

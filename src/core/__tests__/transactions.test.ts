@@ -95,12 +95,39 @@ describe('AI trade valuation', () => {
     l.teams[AI].strategy = 'rebuild';
     l.teams[2].strategy = 'contend';
     const neutral = tradeValue(l, vet);
-    const sellFloor = playerValueFor(l, vet, AI, false);
-    const buyCeiling = playerValueFor(l, vet, 2, true);
     expect(tradeValue(l, vet, 'rebuild')).toBeLessThan(neutral * 0.85);
     expect(tradeValue(l, vet, 'contend')).toBeGreaterThan(neutral * 1.15);
-    expect(sellFloor).toBeCloseTo(neutral * 0.85);
-    expect(buyCeiling).toBeCloseTo(neutral * 1.15);
+    // a rebuilder sells him to the user at neutral value, to another AI team down to 85%
+    expect(playerValueFor(l, vet, AI, false)).toBeCloseTo(neutral);
+    expect(playerValueFor(l, vet, AI, false, true)).toBeCloseTo(neutral * 0.85);
+    expect(playerValueFor(l, vet, 2, true)).toBeCloseTo(neutral * 1.15);
+    // once he has changed hands this season he is worth neutral value to everyone
+    vet.tradedFrom = { tid: 3, season: l.season };
+    expect(playerValueFor(l, vet, 2, true)).toBeCloseTo(neutral);
+  });
+
+  it("doesn't pay to buy a rebuilder's veteran with picks and sell him to a contender for its picks (T1)", () => {
+    const l = league();
+    l.phase = 'regular';
+    l.settings.difficulty = 'normal';
+    const C = 2;
+    l.teams[AI].strategy = 'rebuild';
+    l.teams[C].strategy = 'contend';
+    // a near-minimum salary keeps the 125% rule out of the way
+    const vet = shape(l, standardRoster(l, AI)[0], 78, 33, 50);
+    // the price in (neutral) pick value: what the rebuilder asks for him, then what the contender pays
+    const mine = l.draftPicks.find((d) => d.tid === U && d.round === 1)!;
+    const buy = evaluateTrade(l, offer([], [vet.pid], [mine.dpid]));
+    const price = (buy.valueOut / buy.valueIn) * pickValue(l, mine);
+    vet.tid = U;
+    vet.tradedFrom = { tid: AI, season: l.season };
+    const theirs = l.draftPicks.find((d) => d.tid === C && d.round === 1)!;
+    const sale = evaluateTrade(l, { a: { tid: U, pids: [vet.pid], dpids: [] }, b: { tid: C, pids: [], dpids: [theirs.dpid] } });
+    const proceeds = (sale.valueIn / sale.valueOut) * pickValue(l, theirs);
+    // the rebuilder's 15% premium on picks at most (rebuilders sold at 85%, contenders paid 115% in
+    // their own picks valued at 85%: 1.8x a round trip)
+    expect(proceeds / price).toBeLessThan(1.16);
+    expect(proceeds / price).toBeGreaterThan(1);
   });
 
   it('values bad contracts below zero and charges for absorbing them (T7)', () => {
