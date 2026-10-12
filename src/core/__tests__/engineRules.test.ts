@@ -326,6 +326,13 @@ describe('engine rules', () => {
     }
     for (const kind of ['sub', 'timeout', 'period'] as const) expect(pbp.some((e) => e.kind === kind && e.text.length > 8)).toBe(true);
     for (const e of pbp) expect(e.text).not.toMatch(/[!.?]\.$|\.\.|\s\./);
+    // an and-one names the fouler, an alley-oop always has its assist, and a three is a three-pointer
+    expect(pbp.some((e) => / — good.*, and one! Foul on .+\.$/.test(e.text))).toBe(true);
+    for (const e of pbp) {
+      if (e.text.includes('and one')) expect(e.text).toMatch(/and one! Foul on .+\.$/);
+      if (e.text.includes('alley-oop — good')) expect(e.text).toMatch(/assist\)/);
+      expect(e.text).not.toMatch(/(misses|fouled on) three(\.| by)/);
+    }
     // a rebound line names a player only when the box score credits him (the rest are team rebounds)
     const named = pbp.filter((e) => /^(Offensive|Defensive) rebound /.test(e.text)).length;
     expect(named).toBe(res.home.t.orb + res.home.t.drb + res.away.t.orb + res.away.t.drb);

@@ -2645,7 +2645,7 @@ export class GameSim {
     this.possFinish = s.finish;
     this.lastShooter = sh;
 
-    const desc = this.record ? this.shotDesc(zone, s.finish, s.pullup) : '';
+    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast) : '';
     if (made) {
       sh.b.fgm++;
       off.tot.fgm++;
@@ -2668,9 +2668,10 @@ export class GameSim {
       if (zone === 'rim' || zone === 'paint') off.ex.paint += 2;
       sh.hot = Math.min(5, sh.hot + 1);
       this.score(off, def, sh, value);
-      if (this.record) this.addPbp(off.side, `${sh.name} ${desc} — good${ast ? ` (${ast.name} assist)` : ''}${fouled ? ', and one!' : '.'}`, 'make');
-      if (fouled) {
-        const fouler = this.shootingFouler(def, c, sh);
+      const fouler = fouled ? this.shootingFouler(def, c, sh) : null;
+      if (this.record) this.addPbp(off.side, `${sh.name} ${desc} — good${ast ? ` (${ast.name} assist)` : ''}${fouler ? `, and one! Foul on ${fouler.name}.` : '.'}`, 'make');
+      if (fouler) {
+        if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
         this.addFoul(def, fouler);
         this.freeThrows(off, def, sh, 1, s.finish);
         return;
@@ -2746,19 +2747,25 @@ export class GameSim {
     }
   }
 
-  private shotDesc(zone: ShotZone, f: FinishType, pullup?: boolean) {
+  /** Play-by-play wording for a shot (an alley-oop needs the pass it's credited to). */
+  private shotDesc(zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean) {
     const r = this.fx;
     switch (zone) {
       case 'rim':
-        return f === 'pnrRoll' || f === 'cut' || f === 'transition' ? r.pick(['dunk', 'layup', 'alley-oop', 'layup']) : r.pick(['driving layup', 'layup', 'dunk', 'reverse layup']);
+        if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback dunk', 'putback layup']);
+        if (f === 'post') return r.pick(['drop-step layup', 'layup', 'dunk', 'up-and-under']);
+        return f === 'pnrRoll' || f === 'cut' || f === 'transition'
+          ? r.pick(['dunk', 'layup', assisted ? 'alley-oop' : 'dunk', 'layup'])
+          : r.pick(['driving layup', 'layup', 'dunk', 'reverse layup']);
       case 'paint':
+        if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback']);
         return f === 'post' ? r.pick(['hook shot', 'turnaround', 'post fadeaway']) : r.pick(['floater', 'runner', 'short jumper']);
       case 'mid':
         return pullup ? 'pull-up jumper' : r.pick(['mid-range jumper', 'elbow jumper', 'baseline jumper']);
       case 'c3':
         return 'corner three';
       default:
-        return pullup ? r.pick(['pull-up three', 'step-back three']) : r.pick(['three', 'catch-and-shoot three', 'three from the wing']);
+        return pullup ? r.pick(['pull-up three', 'step-back three']) : r.pick(['three-pointer', 'catch-and-shoot three', 'three from the wing']);
     }
   }
 
