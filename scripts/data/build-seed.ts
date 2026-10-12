@@ -47,7 +47,7 @@ const read = (key: string) => {
 async function main() {
   const contractsHtml = read('contracts');
   if (!contractsHtml) {
-    console.error('Missing data/raw/contracts.html. Run `npm run data:fetch` first.');
+    console.error(`Missing ${join(RAW, 'contracts.html')}. Run \`npm run data:fetch\` first.`);
     process.exit(1);
   }
   const contracts = parseContracts(contractsHtml);

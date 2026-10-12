@@ -1,11 +1,12 @@
 // Opening-night extras for the seed: the real schedule, future pick ownership, injuries and
-// two-way contracts. Each source is optional: a missing file leaves that part to the game's
-// generated defaults (generated schedule, own picks, healthy rosters, standard contracts).
+// two-way contracts. Each source is optional, and a part is only replaced when its file loads: a
+// missing one keeps the seed's current version (a refresh) or leaves that part to the game's
+// generated defaults (a fresh build: generated schedule, own picks, healthy rosters, standard contracts).
 import { existsSync, readFileSync } from 'node:fs';
 import type { SeedData, SeedPlayer } from '../../../src/core/league/create';
 import { buildOvrScale, ovrRaw, toDisplay } from '../../../src/core/ratings';
 import { seasonLabel } from '../../../src/core/constants';
-import { extraPath } from './sources';
+import { EXTRA_RAW, extraPath } from './sources';
 import { parseNbaSchedule } from './schedule';
 import { parseLdSport, projectionFromStrength, resolvePicks, type RawPickRow } from './picks';
 import { attachInjuries, loadInjuries } from './injuries';
@@ -15,10 +16,11 @@ import { ALL_TEAMS } from './teams';
 /** Seasons (drafts) of pick ownership to seed: next June's through seven years out. */
 export const PICK_YEARS = 7;
 
-const readJson = (key: string): unknown | null => {
+/** A source file's JSON, or null when it hasn't been downloaded (the warning says what the seed does instead). */
+const readJson = (key: string, part: string, instead: string): unknown | null => {
   const f = extraPath(key);
   if (!existsSync(f)) {
-    console.warn(`  (missing data/raw/extra/${key}; run npm run data:fetch-extra)`);
+    console.warn(`  ${part}: no ${f} (run npm run data:fetch-extra); ${instead}`);
     return null;
   }
   return JSON.parse(readFileSync(f, 'utf8'));
@@ -45,11 +47,11 @@ export async function applyExtras(seed: SeedData): Promise<void> {
   console.log('opening-night extras:');
 
   // schedule
-  delete seed.schedule;
-  const schedJson = readJson('schedule.json');
+  const schedInstead = seed.schedule ? 'keeping the current one' : 'using the generated one';
+  const schedJson = readJson('schedule.json', 'schedule', schedInstead);
   if (schedJson) {
     const parsed = parseNbaSchedule(schedJson, season);
-    if (!parsed) console.warn('  schedule: file is not the expected season; using the generated schedule');
+    if (!parsed) console.warn(`  schedule: file is not the expected season; ${schedInstead}`);
     else {
       seed.schedule = parsed.schedule;
       const per: Record<string, number> = {};
@@ -73,7 +75,8 @@ export async function applyExtras(seed: SeedData): Promise<void> {
   }
 
   // two-way contracts (before injuries: some two-way players were unsigned in the seed)
-  const swish = readJson('players.json') as { name: string; team: string; contractType?: string | null }[] | null;
+  const twInstead = seed.players.some((p) => p.contract?.twoWay) ? 'keeping the current ones' : 'none marked';
+  const swish = readJson('players.json', 'two-way contracts', twInstead) as { name: string; team: string; contractType?: string | null }[] | null;
   if (swish) {
     const tw = markTwoWays(seed.players, swish, seasonLabel(season));
     const per: Record<string, number> = {};
@@ -85,13 +88,13 @@ export async function applyExtras(seed: SeedData): Promise<void> {
     );
     if (tw.moved.length) console.log(`    joined their two-way team: ${tw.moved.join(', ')}`);
     if (tw.missing.length) console.log(`    ${tw.missing.length} listed players aren't in the seed (no NBA or college record we use); ignored`);
-  } else for (const p of seed.players) if (p.contract) delete p.contract.twoWay;
+  }
 
   // injuries (before picks: they feed the projected standings)
-  for (const p of seed.players) delete p.injury;
   const inj = await loadInjuries(extraPath('injuries.json'), extraPath(`injuries_${season}.parquet`));
-  if (!inj) console.warn('  injuries: no injury report (data/raw/extra/injuries.json); everyone starts healthy');
+  if (!inj) console.warn(`  injuries: no injury report in ${EXTRA_RAW}; ${seed.players.some((p) => p.injury) ? 'keeping the current ones' : 'everyone starts healthy'}`);
   else {
+    for (const p of seed.players) delete p.injury;
     const res = attachInjuries(seed.players, inj.rows, seed.schedule ?? null, season, inj.asOf);
     console.log(`  injuries (${inj.source}, ${inj.asOf}): ${res.applied.length} players out on opening night`);
     for (const a of res.applied.sort((x, y) => y.injury.games - x.injury.games)) {
@@ -102,9 +105,7 @@ export async function applyExtras(seed: SeedData): Promise<void> {
   }
 
   // future draft picks
-  delete seed.picks;
-  delete seed.picksThrough;
-  const rows = readJson('draft-picks.json') as RawPickRow[] | null;
+  const rows = readJson('draft-picks.json', 'draft picks', seed.picks ? 'keeping the current owners' : 'every team keeps its own') as RawPickRow[] | null;
   if (rows) {
     const last = season + PICK_YEARS - 1;
     const proj = projectionFromStrength(teamStrength(seed.players), season);

@@ -1,5 +1,7 @@
 // Downloads the opening-night extras (schedule, pick ownership, injuries, two-way contracts)
-// into data/raw/extra/. Usage: npm run data:fetch-extra [-- --force] [-- --only injuries]
+// into data/raw/extra/. Usage: npm run data:fetch-extra [-- --force] [-- --only injuries] [-- --strict]
+// With --strict (the seed workflow), a required source that can't be downloaded fails the run
+// instead of leaving that part of the seed as it was.
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { EXTRA_FILES, EXTRA_RAW, extraPath } from './sources';
 
@@ -21,10 +23,12 @@ async function download(url: string): Promise<Buffer | null> {
 
 async function main() {
   const force = process.argv.includes('--force');
+  const strict = process.argv.includes('--strict');
   const onlyIdx = process.argv.indexOf('--only');
   const only = onlyIdx > 0 ? process.argv[onlyIdx + 1] : null;
   mkdirSync(EXTRA_RAW, { recursive: true });
-  let failed = 0;
+  const missing: string[] = [];
+  const stale: string[] = [];
   for (const f of EXTRA_FILES.filter((x) => !only || x.key.includes(only))) {
     const file = extraPath(f.key);
     if (!force && existsSync(file) && statSync(file).size > 1000) continue;
@@ -35,11 +39,18 @@ async function main() {
       console.log(`ok (${(buf.length / 1024).toFixed(0)} KB)`);
     } else {
       console.log(f.optional ? 'skipped' : 'FAILED');
-      if (!f.optional) failed++;
+      if (f.optional) continue;
+      // a failed --force re-download leaves the copy already cached in use
+      if (existsSync(file) && statSync(file).size > 1000) stale.push(f.key);
+      else missing.push(f.key);
     }
   }
-  // the seed builds without these (it falls back to generated data), so a failure only warns
-  if (failed) console.warn(`${failed} extra source(s) could not be downloaded; the seed will fall back to generated data for them.`);
+  if (stale.length) console.warn(`Could not re-download ${stale.join(', ')}; the cached copy is used.`);
+  // the seed builds without these, so a failure only warns unless --strict
+  if (missing.length) {
+    console.warn(`Could not download ${missing.join(', ')}: npm run data:extras keeps the seed's current version of those parts, npm run data:build uses generated data.`);
+    if (strict) process.exit(1);
+  }
   console.log(`Done; cache at ${EXTRA_RAW}`);
 }
 
