@@ -440,6 +440,8 @@ export function executeTrade(league: League, offer: TradeOffer) {
       if (!dp) continue;
       dp.tradedFrom = { tid: dp.tid, season: league.season };
       dp.tid = to;
+      // back with its original team, a protection has nothing left to protect
+      if (to === dp.originalTid) delete dp.protection;
     }
   };
   move(offer.a.pids, offer.b.tid);

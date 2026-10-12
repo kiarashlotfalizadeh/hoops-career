@@ -307,6 +307,22 @@ describe('AI trade valuation', () => {
     expect(evaluateTrade(l, r.offer!).accept).toBe(true);
   });
 
+  it('drops a protection once the pick is back with its original team, and keeps one landing inside it home', () => {
+    const l = league();
+    const dp = l.draftPicks.find((d) => d.originalTid === AI && d.season === l.season + 1 && d.round === 1)!;
+    dp.tid = U;
+    dp.protection = 10;
+    executeTrade(l, offer([], [], [dp.dpid]));
+    expect([dp.tid, dp.protection]).toEqual([AI, undefined]);
+    // a protected pick that lands inside its protection stays home, and the obligation ends
+    const now = l.draftPicks.find((d) => d.originalTid === AI && d.season === l.season && d.round === 1)!;
+    now.tid = U;
+    now.protection = 30;
+    l.phase = 'draftLottery';
+    runLottery(l, new Rng(3));
+    expect([now.tid, now.protection]).toEqual([AI, undefined]);
+  });
+
   it("won't take a player or pick straight back from the team it traded him to, until next season", () => {
     const l = league();
     l.phase = 'regular';
