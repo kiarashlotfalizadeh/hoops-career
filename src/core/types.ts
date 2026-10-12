@@ -181,7 +181,7 @@ export interface Player {
   ratings: Ratings;
   ovr: number; // display scale 40-99
   pot: number; // display scale 40-99
-  /** Hidden development tendency (-1..1), drives volatility of progression. */
+  /** Hidden development tendency (-1..1): shifts how good his summers are on average (most through 25) and his potential before 26. */
   growth: number;
   injuryProne: number; // 0..1
   ratingsHistory: RatingsSnapshot[];
