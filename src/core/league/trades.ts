@@ -135,6 +135,19 @@ function lens(own: number, neutral: number, incoming: boolean, aiDeal: boolean) 
 
 const flipped = (league: League, a: Player | DraftPick) => a.tradedFrom?.season === league.season;
 
+/** Did team `tid` trade this player or pick away this season? Then it can't take him (or it) back until next season. */
+function tradedAwayBy(league: League, a: Player | DraftPick, tid: number): boolean {
+  const t = a.tradedFrom;
+  return t?.season === league.season && (t.tid === tid || !!t.also?.includes(tid));
+}
+
+/** `tid` trades it away now: remembered along with the teams that already traded it away this season. */
+function tradedAway(league: League, a: Player | DraftPick, tid: number): NonNullable<Player['tradedFrom']> {
+  const t = a.tradedFrom;
+  const also = t?.season === league.season ? [t.tid, ...(t.also ?? [])].filter((x) => x !== tid) : [];
+  return also.length ? { tid, season: league.season, also } : { tid, season: league.season };
+}
+
 /** What team `tid` thinks a player is worth in a deal (with the user unless `aiDeal`). */
 export function playerValueFor(league: League, p: Player, tid: number, incoming: boolean, aiDeal = false): number {
   const neutral = tradeValue(league, p, 'retool');
@@ -350,10 +363,11 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       const dp = findPick(league, dpid);
       if (!dp || dp.tid !== mine.tid) errors.push('A draft pick in the deal is no longer owned by that team.');
     }
-    // nothing goes straight back to the team that just traded it away: a there-and-back pair of
-    // trades shouldn't pay out (a casual discount, a pick bought cheap on draft night and sold back as the player)
+    // nothing goes back to a team that traded it away this season, directly or through another
+    // team: a there-and-back pair of trades shouldn't pay out (a casual discount, a pick bought
+    // cheap on draft night and sold back as the player)
     for (const a of [...other.pids.map((pid) => league.players[pid]), ...other.dpids.map((d) => findPick(league, d))]) {
-      if (a?.tradedFrom?.tid === mine.tid && a.tradedFrom.season === league.season)
+      if (a && tradedAwayBy(league, a, mine.tid))
         errors.push(`${abbrev} traded ${assetName(league, a)} away this season and can't get ${'pid' in a ? 'him' : 'it'} back until next season.`);
     }
     // standard roster spots: the cap only binds a team taking in bodies, the floor one sending them out
@@ -423,7 +437,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
     for (const pid of pids) {
       const p = league.players[pid];
       leaveTeam(league.teams[p.tid], pid);
-      p.tradedFrom = { tid: p.tid, season: league.season };
+      p.tradedFrom = tradedAway(league, p, p.tid);
       p.tid = to;
       p.joinedSeason = league.season;
       p.mood.tradeRequest = false;
@@ -435,7 +449,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
     for (const dpid of dpids) {
       const dp = findPick(league, dpid);
       if (!dp) continue;
-      dp.tradedFrom = { tid: dp.tid, season: league.season };
+      dp.tradedFrom = tradedAway(league, dp, dp.tid);
       dp.tid = to;
       // back with its original team, a protection has nothing left to protect
       if (to === dp.originalTid) delete dp.protection;
@@ -647,7 +661,7 @@ export function aiToAiTrade(league: League, rng: Rng) {
 function aiPackage(league: League, buyer: number, seller: number, vet: Player): TradeOffer | null {
   const sal = (p: Player) => capSalary(league, p.pid);
   // nothing the rules hold back: a recent signing, or an asset the seller traded away this season
-  const movable = (a: Player | DraftPick) => !(a.tradedFrom?.tid === seller && a.tradedFrom.season === league.season) && !('pid' in a && untradeable(league, a));
+  const movable = (a: Player | DraftPick) => !tradedAwayBy(league, a, seller) && !('pid' in a && untradeable(league, a));
   // the buyer's three best players are off the table
   const roster = standardRoster(league, buyer).sort((x, y) => y.ovr - x.ovr);
   const avail = roster.slice(3).filter((p) => p.ovr < vet.ovr && movable(p));

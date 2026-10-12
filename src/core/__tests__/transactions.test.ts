@@ -382,6 +382,21 @@ describe('AI trade valuation', () => {
     expect(validateTrade(l, back).filter((e) => /back until next season/.test(e))).toEqual([]);
   });
 
+  it('nor through a third team: every team that traded him away this season waits for next season', () => {
+    const l = league();
+    l.phase = 'regular';
+    const C = 2;
+    const p = shape(l, standardRoster(l, U)[0], 74, 27, CAP_FOR(l).vetMin);
+    const pick = l.draftPicks.find((d) => d.tid === U && d.round === 2)!;
+    executeTrade(l, offer([p.pid], [], [pick.dpid]));
+    executeTrade(l, { a: { tid: AI, pids: [p.pid], dpids: [pick.dpid] }, b: { tid: C, pids: [], dpids: [] } });
+    const back = (tid: number) =>
+      validateTrade(l, { a: { tid, pids: [], dpids: [] }, b: { tid: C, pids: [p.pid], dpids: [pick.dpid] } }).filter((e) => /can't get (him|it) back/.test(e)).length;
+    expect([back(U), back(AI), back(3)]).toEqual([2, 2, 0]);
+    l.season++;
+    expect([back(U), back(AI)]).toEqual([0, 0]);
+  });
+
   it("doesn't count a player named twice in a deal (a deep link can repeat one)", () => {
     const l = league();
     l.phase = 'regular';
