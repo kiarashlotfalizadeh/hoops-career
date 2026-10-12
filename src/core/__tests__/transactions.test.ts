@@ -798,7 +798,8 @@ describe('free agency', () => {
     const now = rookieContract(l, 1, 1, l.season + 1);
     const later = rookieContract(l, 1, 1, l.season + 3);
     expect(later.salaries[0] / now.salaries[0]).toBeCloseTo((1 + CAP.growth) ** 2, 2);
-    expect(rookieContract(l, 5, 2, l.season + 3).salaries[0]).toBe(CAP_FOR(l, l.season + 3).minContract);
+    // a second-rounder gets each season's minimum
+    expect(rookieContract(l, 5, 2, l.season + 3).salaries).toEqual([CAP_FOR(l, l.season + 3).minContract, CAP_FOR(l, l.season + 4).minContract]);
   });
 
   it('camp deals are free to cut before opening night; releases count from the contract season (T10, UI2-5)', () => {

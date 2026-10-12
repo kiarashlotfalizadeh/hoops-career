@@ -207,8 +207,8 @@ export function rookieContract(league: League, pick: number, round: number, star
     const base = ROOKIE_SCALE[Math.min(29, pick - 1)] * revenueScale(league, start);
     return { start, salaries: [0, 1, 2, 3].map((i) => Math.round((base * Math.pow(1.045, i)) / 10) * 10), rookie: true, option: 'team' as const };
   }
-  const min = CAP_FOR(league, start).minContract;
-  return { start, salaries: [min, Math.round(min * 1.05)], rookie: true };
+  // a second-rounder's two minimum seasons: the minimum grows with the cap, faster than a 5% raise
+  return { start, salaries: [0, 1].map((i) => CAP_FOR(league, start + i).minContract), rookie: true };
 }
 
 // ---------------------------------------------------------------- signing exceptions
