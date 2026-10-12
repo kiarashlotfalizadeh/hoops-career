@@ -177,8 +177,9 @@ export default function Office() {
             <div className="tiny dim upper bold">Payroll</div>
             <div className="fo-big">{fmtM(pay)}</div>
           </div>
-          <span className={`tag ${pay > cap.luxuryTax ? 'bad' : pay > cap.salaryCap ? 'warn' : 'good'}`}>
-            {pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
+          {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
+          <span className={`tag ${pay > cap.luxuryTax ? 'bad' : pay + holds > cap.salaryCap ? 'warn' : 'good'}`}>
+            {pay > cap.luxuryTax ? 'Taxpayer' : pay + holds > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
           </span>
         </div>
         <div style={{ marginTop: 6 }}>
