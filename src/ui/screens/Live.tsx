@@ -9,8 +9,8 @@ import { Court } from '../live/Court';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { composites } from '../../core/ratings';
-import type { League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
-import { COVERAGE_META, PRESS_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
+import type { DefScheme, League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { buildSimInput } from '../../core/league/games';
@@ -624,7 +624,7 @@ export default function Live() {
             </Card>
           )}
         </div>
-        <div className="col live-right" style={{ gap: 10 }}>
+        <div className="col" style={{ gap: 10 }}>
           {suggestions.map((s) => (
             <div key={s.id} className="card tight fade-in" style={{ borderColor: 'color-mix(in srgb, var(--warn) 40%, transparent)' }}>
               <div className="row top">
@@ -659,7 +659,7 @@ export default function Live() {
                 <Users size={16} /> Subs
               </button>
               <button className="btn sm" onClick={() => setPanel('tactics')}>
-                <SlidersHorizontal size={16} /> Plan
+                <SlidersHorizontal size={16} /> Adjust
               </button>
               <button className="btn sm" onClick={() => setPanel('stats')}>
                 <ListOrdered size={16} /> Box
@@ -670,7 +670,7 @@ export default function Live() {
           {/* a game simulated elsewhere: the coached version never happened, so don't show its floor or plays */}
           {status !== 'simmed' && (
             <>
-              <Card title="On the floor" right={<span className="tiny dim">energy · fouls</span>}>
+              <Card title="On the floor" right={<span className="tiny dim">energy · fouls · points</span>}>
                 <div className="col" style={{ gap: 6 }}>
                   {me.on.map((p) => (
                     <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} />
@@ -923,19 +923,16 @@ function TacticsPanel({
       </div>
       <Segmented
         value={t.defense.scheme}
-        onChange={(x) => set((tt) => void (tt.defense.scheme = x))}
-        label="Defensive scheme"
-        options={[
-          { id: 'man', label: 'Man' },
-          { id: 'zone23', label: '2-3 Zone' },
-          { id: 'zone32', label: '3-2 Zone' },
-        ]}
+        onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
+        label="Base scheme"
+        options={(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))}
       />
-      <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack paint" />
+      <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack the paint" />
       <Slider label="Ball pressure" value={t.defense.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} left="Contain" right="Swarm" />
+      <Slider label="Transition defense" value={t.defense.getBack} onChange={(x) => set((tt) => void (tt.defense.getBack = x))} left="Jog back" right="Sprint back" />
       <div>
         <div className="small bold" style={{ marginBottom: 6 }}>
-          Press
+          Full-court press
         </div>
         <Chips
           value={t.defense.press}
@@ -996,7 +993,7 @@ function TacticsPanel({
                       key={d.pid}
                       className={`chip ${t.defense.matchups[o.pid] === d.pid ? 'on' : ''}`}
                       aria-pressed={t.defense.matchups[o.pid] === d.pid}
-                      style={{ height: 28, fontSize: 12 }}
+                      style={{ fontSize: 12 }}
                       onClick={() =>
                         set((tt) => {
                           if (tt.defense.matchups[o.pid] === d.pid) delete tt.defense.matchups[o.pid];
@@ -1017,9 +1014,10 @@ function TacticsPanel({
           <div className="tiny dim">Assignments stick whenever both players are on the floor; otherwise the staff matches by size and threat.</div>
         </div>
       </div>
-      <Slider label="Pace" value={t.offense.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} left="Grind" right="Run" />
-      <Slider label="Three-point emphasis" value={t.offense.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} left="Mid ok" right="Threes" />
+      <Slider label="Pace" value={t.offense.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} left="Grind" right="Run & gun" />
+      <Slider label="Three-point emphasis" value={t.offense.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} left="Mid-range ok" right="Rim & 3s only" />
       <Slider label="Attack the rim" value={t.offense.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} left="Settle" right="Downhill" />
+      <Slider label="Crash the offensive glass" value={t.offense.crashBoards} onChange={(x) => set((tt) => void (tt.offense.crashBoards = x))} left="Get back" right="Crash" />
       <Toggle on={t.offense.huntMismatch} onChange={(x) => set((tt) => void (tt.offense.huntMismatch = x))} label="Hunt mismatches" />
       <div className="tiny dim">
         <Hand size={12} style={{ verticalAlign: -2 }} /> Changes take effect on the next possession.
