@@ -124,7 +124,7 @@ function Hero({ league, tid }: { league: League; tid: number }) {
             </span>
           </div>
           <div>
-            <span className="k">Payroll{cs !== league.season ? ` ${seasonLabel(cs).slice(2)}` : ''}</span>
+            <span className="k">Payroll{cs !== league.season ? ` ${shortSeason(cs)}` : ''}</span>
             <span className="v" style={{ color: payColor(league, pay, cs) }}>
               {fmtM(pay)}
             </span>
@@ -249,19 +249,24 @@ function RotationList({ league, tid }: { league: League; tid: number }) {
 function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: string; min?: number }) {
   const cur = playerSeason(p, league.season);
   const line: PerGame | null = cur && cur.gp > 0 ? cur : (latestLine(league, p)?.pg ?? null);
-  const age = league.season - p.bornYear;
+  const age = playerAge(p, league.season);
   return (
     <Link to={`/player/${p.pid}`} className="lg-prow">
       <Avatar p={p} />
       <div style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 6 }}>
           <span className="bold ellipsis">{name}</span>
-          {p.mood.tradeRequest && <span className="tag warn">Wants out</span>}
         </div>
+        {/* what's wrong leads the details: the name line has no room for it on a phone */}
         <div className="tiny dim ellipsis">
           {p.injury && (
-            <span className="bad" style={{ fontWeight: 700 }} title={p.injury.type}>
-              Out {p.injury.gamesRemaining}g ·{' '}
+            <span className="bad" style={{ fontWeight: 700 }}>
+              Out {p.injury.gamesRemaining}g ({p.injury.type}) ·{' '}
+            </span>
+          )}
+          {p.mood.tradeRequest && (
+            <span className="warn" style={{ fontWeight: 700 }}>
+              Wants a trade ·{' '}
             </span>
           )}
           {p.pos} · {age} yrs{min ? ` · ${Math.round(min)} min` : ''} · {p.archetype}

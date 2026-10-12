@@ -1,15 +1,15 @@
-import { capSeason, fmtM, isOffseason, openOption } from '../office/common';
+import { capSeason, fmtM, isOffseason, openOption, shortSeason } from '../office/common';
 import { useQueryParam } from '../league/shared';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Activity, ListOrdered, Workflow } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
-import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, type Col, activateOnKey } from '../components/ui';
+import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col, activateOnKey } from '../components/ui';
 import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { f1, latestLine, p1, playerSeason, rosterNames, signed, type PerGame } from '../stats';
+import { f1, latestLine, playerSeason, rosterNames, signed, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 
@@ -82,9 +82,10 @@ export default function Roster() {
     { key: 'ast', label: 'AST', get: (p) => stat(p, 'ast'), fmt: (v) => f1(v as number) },
     { key: 'stl', label: 'STL', get: (p) => stat(p, 'stl'), fmt: (v) => f1(v as number) },
     { key: 'blk', label: 'BLK', get: (p) => stat(p, 'blk'), fmt: (v) => f1(v as number) },
-    { key: 'ts', label: 'TS%', get: (p) => stat(p, 'tsPct'), fmt: (v) => p1(v as number) },
-    { key: 'tp', label: '3P%', get: (p) => stat(p, 'tpPct'), fmt: (v) => p1(v as number) },
-    { key: 'usg', label: 'USG', get: (p) => stat(p, 'usg'), fmt: (v) => p1(v as number) },
+    // the % lives in the header, as in the league stats
+    { key: 'ts', label: 'TS%', get: (p) => stat(p, 'tsPct'), fmt: (v) => pct(v as number) },
+    { key: 'tp', label: '3P%', get: (p) => stat(p, 'tpPct'), fmt: (v) => pct(v as number) },
+    { key: 'usg', label: 'USG%', get: (p) => stat(p, 'usg'), fmt: (v) => pct(v as number) },
     // imported seasons carry no on-court tracking
     { key: 'on', label: 'ON NET', get: (p) => (anyCur ? stat(p, 'onOff') : -Infinity), fmt: (v) => signed(v as number) },
   ];
@@ -95,7 +96,7 @@ export default function Roster() {
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
     ...seasons.map((s) => ({
       key: `s${s}`,
-      label: `${String(s - 1).slice(2)}-${String(s).slice(2)}`,
+      label: shortSeason(s),
       get: (p: Player) => salaryFor(p, s),
       fmt: (v: number | string, p: Player) =>
         v ? <span style={{ color: openOption(league, p) && contractExp(p.contract) === s ? 'var(--warn)' : undefined }}>{fmtM(v as number)}</span> : <span className="dim">—</span>,
@@ -168,7 +169,7 @@ export default function Roster() {
                           {p.injury.type} · {p.injury.gamesRemaining}g
                         </Tag>
                       )}
-                      {p.mood.tradeRequest && <Tag tone="bad">Trade request</Tag>}
+                      {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
                       {pg ? (
                         <span className="tiny dim2 num">
                           {f1(pg.pts)} pts · {f1(pg.reb)} reb · {f1(pg.ast)} ast · {f1(pg.min)} min

@@ -6,12 +6,12 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel, type Composites } from '../../core/ratings';
-import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, type Col } from '../components/ui';
+import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, pct, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
-import { ReleaseConfirm, contractUpNote, fmtM, openOption } from '../office/common';
+import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption } from '../office/common';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
@@ -154,7 +154,10 @@ export default function PlayerView() {
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
   const line = cur ?? (lastSeason ? seasonLine(lastSeason) : null);
-  const sal = salaryFor(p, league.season) || salaryFor(p, league.season + 1);
+  // the season contracts count against (next season in the offseason), or this one for a contract that's up
+  const salSeason = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
+  const sal = salaryFor(p, salSeason);
+  const faAsk = p.tid === FREE_AGENT ? askingContract(league, p, league.userTid) : null;
   const status =
     p.tid === FREE_AGENT
       ? 'Free agent'
@@ -183,7 +186,8 @@ export default function PlayerView() {
               {p.firstName} {p.lastName}
             </div>
             <div className="small dim2">
-              {p.pos} · #{p.jersey || '—'} · {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb
+              {p.pos}
+              {p.jersey ? ` · #${p.jersey}` : ''} · {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb
             </div>
             <div className="small dim">
               {p.country}
@@ -212,7 +216,7 @@ export default function PlayerView() {
           <Kpi k="PTS" v={line ? f1(line.pts) : '—'} />
           <Kpi k="REB" v={line ? f1(line.reb) : '—'} />
           <Kpi k="AST" v={line ? f1(line.ast) : '—'} />
-          <Kpi k="TS%" v={line ? p1(line.tsPct).replace('%', '') : '—'} />
+          <Kpi k="TS%" v={line ? pct(line.tsPct) : '—'} />
         </div>
         {!cur && line && lastSeason ? (
           <div className="tiny dim" style={{ marginTop: 6 }}>
@@ -333,7 +337,7 @@ export default function PlayerView() {
               {p.tid >= 0 ? (
                 <div className="col" style={{ gap: 6 }}>
                   <div className="row between">
-                    <span className="dim2 small">This season</span>
+                    <span className="dim2 small">{seasonLabel(salSeason)} salary</span>
                     <span className="bold num">{fmtM(sal)}</span>
                   </div>
                   <div className="row between">
@@ -350,10 +354,10 @@ export default function PlayerView() {
                     <span className="num">{fmtM(marketSalary(league, p))}</span>
                   </div>
                 </div>
-              ) : p.tid === FREE_AGENT ? (
+              ) : faAsk ? (
                 <div className="col" style={{ gap: 8 }}>
                   <div className="small dim2">
-                    Asking {fmtM(askingContract(league, p, league.userTid).amount)} × {askingContract(league, p, league.userTid).years} yrs from you.
+                    Asking {fmtM(faAsk.amount)} × {faAsk.years} yr{faAsk.years === 1 ? '' : 's'} from you.
                   </div>
                   <Link className="btn sm primary" to="/free-agents">
                     Make an offer
@@ -533,12 +537,13 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'stl', label: 'STL', get: (r) => pg(r).stl, fmt: (v) => f1(v as number) },
     { key: 'blk', label: 'BLK', get: (r) => pg(r).blk, fmt: (v) => f1(v as number) },
     { key: 'tov', label: 'TOV', get: (r) => pg(r).tov, fmt: (v) => f1(v as number) },
-    { key: 'fg', label: 'FG%', get: (r) => pg(r).fgPct, fmt: (v) => p1(v as number) },
-    { key: 'tp', label: '3P%', get: (r) => pg(r).tpPct, fmt: (v) => p1(v as number) },
+    // the % lives in the header, as in the league stats
+    { key: 'fg', label: 'FG%', get: (r) => pg(r).fgPct, fmt: (v) => pct(v as number) },
+    { key: 'tp', label: '3P%', get: (r) => pg(r).tpPct, fmt: (v) => pct(v as number) },
     { key: 'tpa', label: '3PA', get: (r) => pg(r).tpa, fmt: (v) => f1(v as number) },
-    { key: 'ft', label: 'FT%', get: (r) => pg(r).ftPct, fmt: (v) => p1(v as number) },
-    { key: 'ts', label: 'TS%', get: (r) => pg(r).tsPct, fmt: (v) => p1(v as number) },
-    { key: 'usg', label: 'USG', get: (r) => pg(r).usg, fmt: (v) => p1(v as number) },
+    { key: 'ft', label: 'FT%', get: (r) => pg(r).ftPct, fmt: (v) => pct(v as number) },
+    { key: 'ts', label: 'TS%', get: (r) => pg(r).tsPct, fmt: (v) => pct(v as number) },
+    { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
     { key: 'per', label: 'PER', get: (r) => r.tot.adv?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
     { key: 'ws', label: 'WS', get: (r) => r.tot.adv?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
@@ -645,7 +650,7 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
         <div className="grid3" style={{ marginTop: 10 }}>
           <Kpi k="Age" v={age} />
           <Kpi k="Potential" v={p.pot} />
-          {p.tid >= 0 && <Kpi k="Season wear" v={Math.round(p.wear)} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />}
+          {p.tid >= 0 && <Kpi k="Season wear" v={`${Math.round(p.wear)}/100`} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />}
         </div>
       </Card>
       {mine && (

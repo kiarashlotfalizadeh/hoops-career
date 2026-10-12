@@ -11,7 +11,7 @@ import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta } from '../office/common';
+import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 
 export default function Resign() {
@@ -253,7 +253,7 @@ function ResignPhase() {
               <div className="row" style={{ marginTop: 10, gap: 10 }}>
                 <div className="grow">
                   {p.mood.tradeRequest ? (
-                    <span className="small bad bold">Wants out: won't re-sign</span>
+                    <span className="small bad bold">Wants a trade: won't re-sign</span>
                   ) : (
                     <>
                       <div className="tiny dim upper bold">Asking</div>
@@ -297,7 +297,7 @@ function ResignPhase() {
                   </div>
                   <div className="fo-money">
                     <div className="a">{fmtM(salaryFor(p, next))}</div>
-                    <div className="b">thru {seasonLabel(contractExp(p.contract)).slice(-5)}</div>
+                    <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
                   </div>
                 </div>
               ))}
@@ -408,10 +408,10 @@ function OffPhase({ league }: { league: League }) {
   const after = payroll(league, tid, s + 1);
   const when =
     league.phase === 'freeAgency'
-      ? 'The re-sign window for this summer has closed. These contracts run out after next season.'
+      ? 'The re-sign period for this summer has closed. These contracts run out after next season.'
       : league.phase === 'draft' || league.phase === 'draftLottery'
-        ? 'The re-sign window opens right after the draft.'
-        : 'The re-sign window opens after the playoffs and the draft. Until then you can review who is up.';
+        ? 'The re-sign period opens right after the draft.'
+        : 'The re-sign period opens after the playoffs and the draft. Until then you can review who is up.';
   return (
     <main className="page">
       <PageHeader title="Re-sign Players" sub={`Contracts expiring after ${seasonLabel(s)}`} back />
@@ -419,7 +419,7 @@ function OffPhase({ league }: { league: League }) {
         <div className="row top" style={{ gap: 12 }}>
           <CalendarClock size={30} className="dim" />
           <div className="grow">
-            <div className="fo-mid">Not the re-signing period</div>
+            <div className="fo-mid">Not the re-sign period</div>
             <div className="small dim2" style={{ marginTop: 4 }}>
               {when} With Bird rights you can then re-sign your own players for any amount, even over the cap.
             </div>
@@ -428,9 +428,9 @@ function OffPhase({ league }: { league: League }) {
       </Card>
 
       <div className="grid2">
-        <Kpi k={`Expiring ${seasonLabel(s).slice(-5)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
+        <Kpi k={`Expiring ${shortSeason(s)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
         <Kpi
-          k={`${seasonLabel(s + 1)} committed`}
+          k={`${shortSeason(s + 1)} committed`}
           v={fmtM(after)}
           sub={after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`}
           color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'}

@@ -20,7 +20,7 @@ import {
 } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
-import { CenterBar, Gauge, PRACTICE, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
+import { CenterBar, Gauge, PRACTICE, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict, shortSeason } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -82,7 +82,7 @@ function Overview({ team }: { team: Team }) {
       <div className="grid2">
         <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub="Bank balance" />
         <Kpi
-          k={`Profit ${seasonLabel(league.season).slice(-5)}`}
+          k={`Profit ${shortSeason(league.season)}`}
           v={games || pr ? fmtMs(pr) : '—'}
           color={pr >= 0 ? 'var(--good)' : 'var(--bad)'}
           sub={games ? `after ${games} games` : 'season not started'}
@@ -506,7 +506,7 @@ function HistoryTab({ team }: { team: Team }) {
                       opacity: r.season === league.season ? 0.55 : 0.9,
                     }}
                   />
-                  <span className="tiny dim">{seasonLabel(r.season).slice(-5)}</span>
+                  <span className="tiny dim">{shortSeason(r.season)}</span>
                 </div>
               );
             })}

@@ -470,23 +470,24 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
               INJ
             </span>
           )}
-          {p.mood.tradeRequest && (
-            <span className="tag warn" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              REQ
-            </span>
-          )}
           {p.contract.twoWay && (
             <span className="tag" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              2-WAY
+              Two-way
             </span>
           )}
           {locked && (
             <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              {{ expiring: 'EXPIRING', option: 'OPTION', signed: 'SIGNED' }[locked.kind]}
+              {{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}
             </span>
           )}
         </div>
         <div className="fo-meta tiny">
+          {/* the name line has no room for it: it leads the details instead */}
+          {p.mood.tradeRequest && (
+            <span className="warn" style={{ fontWeight: 700 }}>
+              Wants a trade ·{' '}
+            </span>
+          )}
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
           {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''}
         </div>

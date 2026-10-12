@@ -60,8 +60,8 @@ export default function Draft() {
   if (league.phase === 'draft') views.push({ id: 'live', label: 'Live' });
   if (league.phase === 'draftLottery') views.push({ id: 'lottery', label: 'Lottery' });
   if (after) views.push({ id: 'results', label: 'Results' });
-  if (!after) views.push({ id: 'board', label: 'Big Board' }, { id: 'combine', label: 'Combine' });
-  views.push({ id: 'mine', label: 'My Picks' });
+  if (!after) views.push({ id: 'board', label: 'Big board' }, { id: 'combine', label: 'Combine' });
+  views.push({ id: 'mine', label: 'Your picks' });
 
   const draft = (pid: number) => {
     const name = playerName(league.players[pid]);
@@ -139,7 +139,7 @@ export default function Draft() {
               not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Big Board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
+              <b>Big board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
             </p>
             <p style={{ margin: 0 }}>Undrafted prospects with promise become free agents after the draft.</p>
           </Help>
@@ -192,7 +192,7 @@ export default function Draft() {
               <div className="grow">
                 <div className="bold">{playerName(league.players[confirmPick])}</div>
                 <div className="small dim">
-                  {league.players[confirmPick].pos} · {league.players[confirmPick].archetype} · Big Board #{league.players[confirmPick].prospect?.rank ?? '—'}
+                  {league.players[confirmPick].pos} · {league.players[confirmPick].archetype} · Big board #{league.players[confirmPick].prospect?.rank ?? '—'}
                 </div>
               </div>
             </div>
@@ -448,7 +448,7 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
     { key: 'hgt', label: 'Height', help: 'Height without shoes', get: (p) => num(c(p).heightNoShoes), fmt: (_v, p) => fmtIn(c(p).heightNoShoes) },
     { key: 'wing', label: 'Wingspan', get: (p) => num(c(p).wingspan), fmt: (_v, p) => fmtIn(c(p).wingspan) },
     { key: 'reach', label: 'Reach', help: 'Standing reach', get: (p) => num(c(p).standingReach), fmt: (_v, p) => fmtIn(c(p).standingReach) },
-    { key: 'wt', label: 'Wt', help: 'Weight (lbs)', get: (p) => num(c(p).weight) },
+    { key: 'wt', label: 'Wt', help: 'Weight (lb)', get: (p) => num(c(p).weight) },
     { key: 'vert', label: 'Vert', help: 'Max vertical (in)', get: (p) => num(c(p).maxVert), fmt: (v) => (Number(v) < 0 ? '—' : `${Number(v).toFixed(1)}"`) },
     { key: 'lane', label: 'Lane', help: 'Lane agility (s, lower is better)', get: (p) => num(c(p).laneAgility), fmt: (v) => (Number(v) < 0 ? '—' : Number(v).toFixed(2)) },
     { key: 'sprint', label: '¾ Sprint', help: '3/4 court sprint (s, lower is better)', get: (p) => num(c(p).sprint), fmt: (v) => (Number(v) < 0 ? '—' : Number(v).toFixed(2)) },
@@ -642,7 +642,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                 {playerName(p)}
               </h2>
               <div className="fo-meta">
-                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lbs
+                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lb
               </div>
               <div className="fo-meta">{p.college ? `${p.college} · ${p.country}` : p.country}</div>
             </div>
@@ -668,7 +668,7 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                 {stat('Height', fmtIn(c.heightNoShoes))}
                 {stat('Wingspan', fmtIn(c.wingspan))}
                 {stat('Reach', fmtIn(c.standingReach))}
-                {stat('Weight', `${c.weight}`)}
+                {stat('Weight', `${c.weight} lb`)}
                 {stat('Vert', `${c.maxVert.toFixed(1)}"`)}
                 {stat('Lane', `${c.laneAgility.toFixed(2)}s`)}
                 {stat('Sprint', `${c.sprint.toFixed(2)}s`)}
