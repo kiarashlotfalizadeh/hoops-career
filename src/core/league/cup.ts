@@ -8,7 +8,7 @@
 
 import type { BoxLine, CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
 import type { Rng } from '../random';
-import { addInbox, addNews, dateToDay, dayToDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { addInbox, addNews, andList, dateToDay, dayToDate, fmtDate, playerName, teamName, teamPlayers, winPct } from './helpers';
 
 export interface CupSetup {
   groups: CupGroup[];
@@ -291,7 +291,8 @@ export function fourInFive(days: Set<number>, d: number): boolean {
 }
 
 /** Put each game on the best open day: both teams free, never three days running or four in five nights, few back-to-backs. */
-function placeGames(league: League, pairs: { home: number; away: number }[], days: number[], rng: Rng) {
+function placeGames(league: League, pairs: { home: number; away: number }[], days: number[], rng: Rng): ScheduledGame[] {
+  const placed: ScheduledGame[] = [];
   const busy = teamDays(league);
   const perDay = new Map<number, number>();
   for (const g of league.schedule) perDay.set(g.day, (perDay.get(g.day) ?? 0) + 1);
@@ -316,11 +317,23 @@ function placeGames(league: League, pairs: { home: number; away: number }[], day
       best = days[days.length - 1] + 1;
       while (busy[p.home].has(best) || busy[p.away].has(best)) best++;
     }
-    addGame(league, { day: best, home: p.home, away: p.away, type: 'regular' });
+    placed.push(addGame(league, { day: best, home: p.home, away: p.away, type: 'regular' }));
     busy[p.home].add(best);
     busy[p.away].add(best);
     perDay.set(best, (perDay.get(best) ?? 0) + 1);
   }
+  return placed;
+}
+
+/** The user's games among `games`, for mail: "Dec 4 at home against the Boston Celtics and Dec 7 on the road against…". */
+function userFixtures(league: League, games: ScheduledGame[]): string {
+  const user = league.userTid;
+  return andList(
+    games
+      .filter((g) => g.home === user || g.away === user)
+      .sort((a, b) => a.day - b.day)
+      .map((g) => `${fmtDate(league.season, g.day)} ${g.home === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[g.home === user ? g.away : g.home])}`),
+  );
 }
 
 function range(a: number, b: number) {
@@ -348,7 +361,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
   const inKnockouts = new Set([...cup.seeds.E, ...cup.seeds.W]);
   const need = new Map<number, number>();
   for (const t of league.teams) if (!inKnockouts.has(t.tid)) need.set(t.tid, 2);
-  placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[0], cup.finalDay - 1), rng);
+  const placed = placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[0], cup.finalDay - 1), rng);
   sortSchedule(league);
 
   const nm = (tid: number) => league.teams[tid].abbrev;
@@ -372,10 +385,11 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
       link: '/league?tab=cup',
     });
   } else {
+    const mine = userFixtures(league, placed);
     addInbox(league, {
       from: 'League Office',
       subject: 'NBA Cup: out in the group stage',
-      body: 'You missed the knockout round. Your last two regular-season games have been added to the schedule in the knockout window in early December.',
+      body: `You missed the knockout round. Your last two regular-season games are in the knockout window${mine ? `: ${mine}` : ''}.`,
       tone: 'neutral',
       link: '/league?tab=cup',
     });
@@ -485,8 +499,19 @@ export function advanceCup(league: League, rng: Rng) {
     }
     // quarterfinal losers play one more game, between themselves
     const need = new Map(qf.map((t) => [loserOf(t), 1]));
-    placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[1] + 1, cup.finalDay - 1), rng);
+    const placed = placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[1] + 1, cup.finalDay - 1), rng);
     sortSchedule(league);
+    const out = qf.find((t) => loserOf(t) === league.userTid);
+    if (out) {
+      const mine = userFixtures(league, placed);
+      addInbox(league, {
+        from: 'League Office',
+        subject: 'NBA Cup: out in the quarterfinals',
+        body: `The ${teamName(league.teams[out.winner!])} knocked you out of the Cup. Your last regular-season game is in the knockout window${mine ? `: ${mine}` : ''}.`,
+        tone: 'neutral',
+        link: '/league?tab=cup',
+      });
+    }
   } else if (!fin && sf.length && sf.every((t) => t.winner !== undefined)) {
     const e = sf.find((t) => t.conf === 'E')!.winner!;
     const w = sf.find((t) => t.conf === 'W')!.winner!;
