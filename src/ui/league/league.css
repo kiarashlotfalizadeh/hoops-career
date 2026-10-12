@@ -86,7 +86,7 @@
   background-position: right 10px center;
   padding: 0 30px 0 12px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text);
   appearance: none;
   -webkit-appearance: none;
@@ -143,7 +143,7 @@
 }
 .lg-section-label {
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -160,10 +160,10 @@
 }
 .lg-link {
   color: var(--accent-text);
-  font-weight: 650;
+  font-weight: 700;
 }
 .lg-name-link {
-  font-weight: 650;
+  font-weight: 700;
 }
 .lg-name-link:active {
   color: var(--accent-text);
@@ -199,12 +199,12 @@
 }
 .lg-st-row .rk {
   color: var(--text-dim);
-  font-weight: 650;
+  font-weight: 700;
   font-size: 12px;
   text-align: right;
 }
 .lg-st-row .nm {
-  font-weight: 650;
+  font-weight: 700;
   min-width: 0;
   display: flex;
   align-items: baseline;
@@ -230,7 +230,7 @@
 }
 .lg-clinch {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-dim);
   letter-spacing: 0.02em;
 }
@@ -256,7 +256,7 @@
   padding: 0 0 0 6px;
   font-size: 10px;
   line-height: 12px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -398,7 +398,7 @@
 .lg-g-at {
   font-size: 12px;
   color: var(--text-dim);
-  font-weight: 650;
+  font-weight: 700;
   text-align: center;
 }
 .lg-g-res {
@@ -415,7 +415,7 @@
   height: 20px;
   border-radius: 6px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .lg-wl.w {
   background: color-mix(in srgb, var(--good) 20%, transparent);
@@ -429,7 +429,7 @@
   width: 100%;
   padding: 10px 12px;
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--accent-text);
   display: flex;
   align-items: center;
@@ -481,7 +481,7 @@
   justify-content: space-between;
   gap: 6px;
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -498,7 +498,7 @@
   height: 26px;
 }
 .lg-sb-t .ab {
-  font-weight: 750;
+  font-weight: 700;
   font-size: 14px;
   display: flex;
   align-items: baseline;
@@ -608,7 +608,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 650;
+  font-weight: 700;
 }
 .lg-tcell {
   display: inline-flex;
@@ -627,7 +627,7 @@
 .bk-head span {
   text-align: center;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -702,7 +702,7 @@
   padding: 0 6px;
   height: 26px;
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .bk-t + .bk-t {
   border-top: 1px solid var(--line);
@@ -722,9 +722,6 @@
   font-size: 15px;
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-.bk-t.win {
-  font-weight: 800;
 }
 .bk-t.win .w {
   color: var(--good);
@@ -852,7 +849,7 @@ a.bk-s:hover {
 }
 .lg-champ .kicker {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--tier-elite);
@@ -909,7 +906,7 @@ a.bk-s:hover {
 }
 .lg-award .lb {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -989,7 +986,7 @@ a.bk-s:hover {
   border-radius: 12px;
   border: 1px solid var(--line-2);
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-2);
   background: var(--surface);
   max-width: 100%;
@@ -1009,7 +1006,7 @@ a.bk-s:hover {
 .lg-date-h {
   padding: 8px 12px;
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1084,7 +1081,7 @@ a.bk-s:hover {
   margin-top: 1px;
 }
 .lg-msg.unread .subj {
-  font-weight: 750;
+  font-weight: 700;
   color: var(--text);
 }
 .lg-msg .prev {
@@ -1145,7 +1142,7 @@ a.bk-s:hover {
 }
 .lg-team-hero .kick {
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -1178,7 +1175,7 @@ a.bk-s:hover {
 }
 .lg-strip .k {
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1314,12 +1311,13 @@ a.bk-s:hover {
   white-space: nowrap;
 }
 .lg-season .rec {
-  font-weight: 750;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.lg-gold {
-  background: color-mix(in srgb, var(--tier-elite) 20%, transparent) !important;
-  color: var(--tier-elite) !important;
+/* gold beats a tag's tone (league.css loads after theme.css) */
+.tag.lg-gold {
+  background: color-mix(in srgb, var(--tier-elite) 20%, transparent);
+  color: var(--tier-elite);
 }
 .lg-hist-row {
   display: grid;
@@ -1334,7 +1332,7 @@ a.bk-s:hover {
 }
 .lg-hist-row .k {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1345,10 +1343,12 @@ a.bk-s:hover {
   gap: 5px;
 }
 
-/* iOS zooms into focused fields under 16px now that pinch-zoom is allowed */
+/* touch screens: 40px pickers and search, in 16px type (iOS zooms into a focused field under 16px
+   now that pinch-zoom is allowed) */
 @media (pointer: coarse) {
   .lg-select,
   .lg-search input {
+    height: 40px;
     font-size: 16px;
   }
 }

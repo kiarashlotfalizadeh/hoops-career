@@ -7,7 +7,7 @@
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -37,7 +37,7 @@
 }
 .fo-eyebrow {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent-text);
@@ -62,7 +62,7 @@
   align-items: center;
   gap: 6px;
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--bad);
@@ -76,9 +76,9 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 25%, transparent);
   animation: pulse 1.4s ease-in-out infinite;
 }
-.fo-clock {
-  border-color: color-mix(in srgb, var(--good) 55%, var(--line)) !important;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--good) 20%, var(--surface-2)), var(--surface)) !important;
+.card.fo-clock {
+  border-color: color-mix(in srgb, var(--good) 55%, var(--line));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--good) 20%, var(--surface-2)), var(--surface));
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--good) 25%, transparent),
     0 10px 30px color-mix(in srgb, var(--good) 12%, transparent);
@@ -202,7 +202,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-2);
 }
@@ -219,7 +219,7 @@
 }
 .fo-legend b {
   color: var(--text);
-  font-weight: 650;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .fo-legend i {
@@ -402,7 +402,7 @@
   border-radius: 12px;
   border: 1px solid transparent;
   font-size: 10.5px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-dim);
   scroll-snap-align: start;
@@ -425,7 +425,7 @@
   background: var(--surface-3);
   border: 1px solid var(--line-2);
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .fo-pill .x {
   position: relative;
@@ -503,12 +503,9 @@ table.stats.fo-contracts tr.dead td {
   font-style: italic;
 }
 table.stats.fo-contracts tr.total td {
-  font-weight: 750;
+  font-weight: 700;
   background: var(--surface-2);
   border-top: 1px solid var(--line-2);
-}
-table.stats.fo-contracts tr.total td.sticky {
-  background: var(--surface-2);
 }
 table.stats.fo-contracts tr.clickable td {
   cursor: pointer;
@@ -519,7 +516,7 @@ table.stats.fo-contracts tr.clickable td {
   padding: 0 3px;
   border-radius: 4px;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.04em;
   vertical-align: 1px;
   font-style: normal;
@@ -570,7 +567,7 @@ table.stats.fo-contracts tr.clickable td {
   align-items: center;
   gap: 2px;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -615,6 +612,7 @@ table.stats.fo-contracts tr.clickable td {
   font-weight: 700;
 }
 .fo-stepper {
+  position: relative;
   width: 34px;
   height: 34px;
   border-radius: 10px;
@@ -628,9 +626,6 @@ table.stats.fo-contracts tr.clickable td {
   transform: scale(0.94);
 }
 /* a 44px touch target around the compact button */
-.fo-stepper {
-  position: relative;
-}
 .fo-stepper::after {
   content: '';
   position: absolute;
@@ -647,7 +642,7 @@ table.stats.fo-contracts tr.clickable td {
   align-items: center;
   justify-content: center;
   gap: 1px;
-  font-weight: 750;
+  font-weight: 700;
   font-size: 15px;
   position: relative;
 }

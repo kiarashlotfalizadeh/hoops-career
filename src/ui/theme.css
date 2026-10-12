@@ -23,10 +23,7 @@
   --tier-avg: #4ade80;
   --tier-low: #c4cfdc;
   --tier-bad: #8a94a6;
-  --court: #c98b4f;
-  --court-2: #b77a43;
   --radius: 14px;
-  --radius-sm: 9px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --display: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
@@ -269,9 +266,7 @@ h3 {
 }
 @media (min-width: 760px) {
   .md-grid2 {
-    display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
     align-items: start;
   }
 }
@@ -349,7 +344,7 @@ h3 {
   right: 0;
   bottom: 0;
   z-index: 40;
-  padding-bottom: var(--safe-b);
+  padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
   background: rgba(11, 15, 21, 0.9);
   background: color-mix(in srgb, var(--bg-2) 90%, transparent);
   backdrop-filter: blur(16px) saturate(150%);
@@ -495,7 +490,7 @@ button.card:disabled {
   background: var(--surface-3);
   border: 1px solid var(--line-2);
   color: var(--text);
-  font-weight: 650;
+  font-weight: 700;
   font-size: 14.5px;
   white-space: nowrap;
   transition:
@@ -578,7 +573,7 @@ button.card:disabled {
   padding: 0 12px;
   border-radius: 9px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -621,13 +616,14 @@ button.card:disabled {
   position: relative;
 }
 .btn.sm::after,
-.seg button::after,
-.chip::after {
+.seg button::after {
   content: '';
   position: absolute;
   inset: -3px -1px;
 }
 .chip::after {
+  content: '';
+  position: absolute;
   inset: -3px;
 }
 .tag {
@@ -752,7 +748,7 @@ button.card:disabled {
   gap: 8px;
 }
 .slider-label {
-  font-weight: 650;
+  font-weight: 700;
   font-size: 14px;
 }
 .slider-val {
@@ -914,8 +910,10 @@ table.stats th {
   text-align: right;
   white-space: nowrap;
   border-bottom: 1px solid var(--line);
-  cursor: pointer;
   user-select: none;
+}
+table.stats th:has(.th-sort) {
+  cursor: pointer;
 }
 table.stats th.l,
 table.stats td.l {
@@ -942,9 +940,6 @@ table.stats th.sticky {
   z-index: 2;
 }
 table.stats tr.me td {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-}
-table.stats tr.me td.sticky {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
 table.stats th.sorted {
@@ -1137,7 +1132,7 @@ body:has(.simbar) .page {
   border-radius: 999px;
   background: var(--surface-3);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .help-btn {
   position: relative;
@@ -1147,7 +1142,7 @@ body:has(.simbar) .page {
   display: inline-grid;
   place-items: center;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-dim);
   border: 1px solid var(--line-2);
   flex: none;
@@ -1156,10 +1151,6 @@ body:has(.simbar) .page {
   content: '';
   position: absolute;
   inset: -10px;
-}
-.fit {
-  font-family: var(--display);
-  font-weight: 700;
 }
 .scorebug {
   display: grid;
@@ -1223,10 +1214,6 @@ body:has(.simbar) .page {
   font-size: clamp(26px, 8vw, 40px);
 }
 /* compact live controls, 42px to the finger */
-.live-ctl .btn.sm,
-.live-ctl .seg button {
-  position: relative;
-}
 .live-ctl .btn.sm::after,
 .live-ctl .seg button::after {
   content: '';
@@ -1275,10 +1262,6 @@ body:has(.simbar) .page {
 /* screens outside the game shell (no top bar) clear the notch themselves */
 .page.standalone {
   padding-top: max(12px, calc(var(--safe-t) + 8px));
-}
-.bottomnav {
-  padding-left: var(--safe-l);
-  padding-right: var(--safe-r);
 }
 /* typing: the on-screen keyboard pushes fixed bars up, so get the nav out of the way */
 body:has(.input:focus, .lg-search input:focus) .bottomnav,
@@ -1366,10 +1349,5 @@ body:has(.input:focus, .lg-search input:focus) .simbar {
   .live-ctl .btn.sm::after,
   .live-ctl .seg button::after {
     inset: -5px -1px;
-  }
-  /* the league hub's season / team pickers and its player search (league.css sets 34px) */
-  select.lg-select,
-  div.lg-search input {
-    height: 40px;
   }
 }
