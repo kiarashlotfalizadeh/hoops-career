@@ -70,7 +70,7 @@ export const PHASE_LABEL: Record<string, string> = {
   playoffs: 'Playoffs',
   draftLottery: 'Draft Lottery',
   draft: 'NBA Draft',
-  resign: 'Re-sign Players',
+  resign: 'Re-sign Period',
   freeAgency: 'Free Agency',
 };
 

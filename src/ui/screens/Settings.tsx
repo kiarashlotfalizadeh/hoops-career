@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Database, Download, HardDrive, LogOut, Save, Shuffle, Trash2, TriangleAlert } from 'lucide-react';
 import { exportLeague } from '../../state/backup';
 import { ImportButton } from '../components/ImportButton';
-import type { League, Settings as LeagueSettings } from '../../core/types';
+import type { League } from '../../core/types';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, teamPlayers } from '../../core/league/helpers';
 import { deleteLeague } from '../../state/persistence';
@@ -12,18 +12,7 @@ import { useLeague, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
 import { STRATEGY_META, SecTitle, fmtM } from '../office/common';
-
-const DIFFICULTY: Record<LeagueSettings['difficulty'], string> = {
-  casual: 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.',
-  normal: 'Fair trades and market-rate contracts.',
-  hard: 'AI GMs want a 12% premium in trades, and free agents ask you for 12% more.',
-};
-
-const COMPLEXITY: Record<LeagueSettings['complexity'], string> = {
-  simple: 'Pick a playbook and a defensive identity. Your staff handles the details.',
-  advanced: 'Tune pace, shot profile, actions, coverages and help defense. Recommended.',
-  expert: 'Everything: individual roles, shot freedom, matchups and end-of-game rules.',
-};
+import { COMPLEXITY, DIFFICULTY, LIVE_SPEEDS, helpFor } from '../settingsOptions';
 
 export default function Settings() {
   const league = useLeague();
@@ -115,17 +104,17 @@ export default function Settings() {
         <div className="fo-callout bad">
           <TriangleAlert size={18} className="bad" />
           <div className="grow">
-            <b>You've been fired.</b> Take over another team below to keep your career going.
+            <b>You were fired.</b> Take over another team to keep your career going.
           </div>
           <button className="btn xs" onClick={() => setSheet('switch')}>
-            Switch
+            Find a new job
           </button>
         </div>
       )}
 
       <Card className="fo-hero">
         <div className="row" style={{ gap: 12 }}>
-          <TeamLogo tid={team.tid} size={52} />
+          <TeamLogo tid={team.tid} size={52} decorative />
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="fo-eyebrow">Your career</div>
             <div className="fo-mid ellipsis">
@@ -172,43 +161,19 @@ export default function Settings() {
         <div className="col" style={{ gap: 16 }}>
           <div className="col" style={{ gap: 8 }}>
             <div className="bold">Difficulty</div>
-            <Chips
-              value={st.difficulty}
-              onChange={(d) => mutate((l) => (l.settings.difficulty = d))}
-              options={[
-                { id: 'casual', label: 'Casual' },
-                { id: 'normal', label: 'Normal' },
-                { id: 'hard', label: 'Hard' },
-              ]}
-            />
-            <div className="small dim">{DIFFICULTY[st.difficulty]}</div>
+            <Chips label="Difficulty" value={st.difficulty} onChange={(d) => mutate((l) => (l.settings.difficulty = d))} options={DIFFICULTY} />
+            <div className="small dim">{helpFor(DIFFICULTY, st.difficulty)}</div>
           </div>
           <div className="divider" />
           <div className="col" style={{ gap: 8 }}>
             <div className="bold">Coaching depth</div>
-            <Chips
-              value={st.complexity}
-              onChange={(c) => mutate((l) => (l.settings.complexity = c))}
-              options={[
-                { id: 'simple', label: 'Simple' },
-                { id: 'advanced', label: 'Advanced' },
-                { id: 'expert', label: 'Expert' },
-              ]}
-            />
-            <div className="small dim">{COMPLEXITY[st.complexity]} This only changes how much the Tactics screens show; your current game plan is kept.</div>
+            <Chips label="Coaching depth" value={st.complexity} onChange={(c) => mutate((l) => (l.settings.complexity = c))} options={COMPLEXITY} />
+            <div className="small dim">{helpFor(COMPLEXITY, st.complexity)} This only changes how much the Tactics screens show; your current game plan is kept.</div>
           </div>
           <div className="divider" />
           <div className="col" style={{ gap: 8 }}>
             <div className="bold">Live game speed</div>
-            <Chips
-              value={st.liveSpeed || 1}
-              onChange={(s) => mutate((l) => (l.settings.liveSpeed = s))}
-              options={[
-                { id: 1, label: '1×' },
-                { id: 2, label: '2×' },
-                { id: 4, label: '4×' },
-              ]}
-            />
+            <Chips label="Live game speed" value={st.liveSpeed || 1} onChange={(s) => mutate((l) => (l.settings.liveSpeed = s))} options={LIVE_SPEEDS} />
             <div className="small dim">Default playback speed when you watch and coach a game live.</div>
           </div>
           <div className="divider" />
@@ -357,6 +322,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
         <Segmented
           value={conf}
           onChange={setConf}
+          label="Conference"
           options={[
             { id: 'E', label: 'East' },
             { id: 'W', label: 'West' },
@@ -385,7 +351,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
                   }}
                   onClick={() => setPick(x.tid)}
                 >
-                  <TeamLogo tid={x.tid} size={38} />
+                  <TeamLogo tid={x.tid} size={38} decorative />
                   <span className="small bold ellipsis" style={{ maxWidth: '100%' }}>
                     {x.name}
                   </span>
@@ -409,7 +375,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
           {t && (
             <div className="card tight">
               <div className="row" style={{ gap: 10 }}>
-                <TeamLogo tid={t.tid} size={36} />
+                <TeamLogo tid={t.tid} size={36} decorative />
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="bold ellipsis">
                     {t.region} {t.name}

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Beaker, Check, Play } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { progressCallback, resetLab, withLab } from '../../state/labClient';
 import type { CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
@@ -15,7 +15,7 @@ import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
-import { takeLabBaseline } from './labBridge';
+import { clearLabBaseline, takeLabBaseline } from './labBridge';
 import type { League, Tactics } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
@@ -37,12 +37,14 @@ function familySigmas(n: number): number {
 
 /**
  * A lab side is built like a real game's: the game plan for this opponent on top of the tactics,
- * and injured players kept on the roster so the engine hands their minutes down the bench.
+ * injured players kept on the roster so the engine hands their minutes down the bench, morale and
+ * wear, rest, and an AI opponent's in-game adjustments.
  */
 function sideFor(league: League, tid: number, opp: number, tactics?: Tactics): LabSide {
   const view = tactics ? { ...league, teams: league.teams.map((t) => (t.tid === tid ? { ...t, tactics } : t)) } : league;
   const input = buildSimInput(view, tid, league.day, 'regular', opp);
-  return { team: { ...input.team, seasons: [] }, players: input.players };
+  // (the season history is never read by a game: it stays out of the message to the worker)
+  return { ...input, team: { ...input.team, seasons: [] } };
 }
 
 function defaultOpponent(league: League): number {
@@ -65,7 +67,8 @@ interface Run {
 export default function TacticsLab() {
   const league = useLeague();
   const [params] = useSearchParams();
-  const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline() : null));
+  const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline(league) : null));
+  useEffect(() => clearLabBaseline(), []);
   const [mode, setMode] = useState<Mode>(baseline ? 'compare' : 'project');
   // a link from before a team switch (or a hand-edited one) can name your own team or none: fall back to the next opponent
   const [opp, setOpp] = useState<number>(() => {
@@ -89,9 +92,10 @@ export default function TacticsLab() {
       if (busyRef.current) resetLab();
     };
   }, []);
+  // "opponent:counter id": counters are drafted per opponent and share their ids
   const [applied, setApplied] = useState<string[]>([]);
   const user = league.userTid;
-  const scout = useMemo(() => scoutTeam(league, opp), [league, opp]);
+  const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
   const plan = league.gamePlan && league.gamePlan.oppTid === opp && league.gamePlan.items.length ? league.gamePlan : null;
   const noBaseline = mode === 'compare' && !baseline;
 
@@ -109,7 +113,7 @@ export default function TacticsLab() {
       }, false);
       const b = sideFor(league, opp, user);
       const seed = (league.rng ^ (opp * 7919)) >>> 0;
-      // progress across parallel runs: each run reports its own count, the bar shows the sum
+      // progress across runs (Compare's two take turns on the worker): each reports its own count, the bar shows the sum
       const done: number[] = [];
       const track = (slot: number) =>
         progressCallback((n) => {
@@ -149,18 +153,28 @@ export default function TacticsLab() {
     useStore.getState().mutate((l) => {
       if (scope === 'always') {
         const tm = l.teams[l.userTid];
-        tm.tactics = { ...applyPatch(tm.tactics, c.patch), manual: true };
+        // a star target is this opponent's player: kept tactics go after each opponent's own star
+        const patch = c.patch?.defense ? { ...c.patch, defense: { ...c.patch.defense, starTarget: null } } : c.patch;
+        tm.tactics = { ...applyPatch(tm.tactics, patch), manual: true };
       } else {
         const gp = l.gamePlan && l.gamePlan.oppTid === vs ? l.gamePlan : { oppTid: vs, items: [] };
         gp.items = [...gp.items.filter((x) => x.id !== c.id), { id: c.id, label: c.label, patch: c.patch }];
         l.gamePlan = gp;
       }
     });
-    setApplied((a) => [...a, c.id]);
+    setApplied((a) => [...a, `${vs}:${c.id}`]);
     useStore.getState().toast(scope === 'game' ? `Game plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Applied to your tactics: ${c.label}`, 'good');
   };
-  // "This game" keeps one plan: confirm before it replaces the one for a different opponent
+  // "Vs" keeps one plan: confirm before it replaces the one for a different opponent
   const planOther = league.gamePlan && league.gamePlan.items.length && league.gamePlan.oppTid !== run?.opp ? league.gamePlan : null;
+
+  // the teams keep their order (a tapped one doesn't jump under the finger): the one picked on arrival scrolls into view
+  const picker = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = picker.current;
+    const btn = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (row && btn) row.scrollLeft = Math.max(0, btn.offsetLeft - (row.clientWidth - btn.offsetWidth) / 2);
+  }, []);
 
   const oppTeam = league.teams[opp];
   const ts = curTeamSeason(league, opp);
@@ -176,10 +190,10 @@ export default function TacticsLab() {
           </span>
         }
       >
-        <div className="hscroll">
+        <div className="hscroll" ref={picker}>
           {league.teams
             .filter((t) => t.tid !== user)
-            .sort((a, b) => (a.tid === opp ? -1 : b.tid === opp ? 1 : a.abbrev.localeCompare(b.abbrev)))
+            .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
             .map((t) => (
               <button
                 key={t.tid}
@@ -190,7 +204,7 @@ export default function TacticsLab() {
                 className="col"
                 style={{ alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}
               >
-                <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} />
+                <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} decorative />
                 <span className="tiny bold">{t.abbrev}</span>
               </button>
             ))}
@@ -239,6 +253,7 @@ export default function TacticsLab() {
       </div>
       <div className="row">
         <Chips
+          label="Games to simulate"
           value={games}
           onChange={setGames}
           disabled={busy}
@@ -327,14 +342,14 @@ export default function TacticsLab() {
                       <span className="tiny dim">
                         range ± {f1(sig * c.se)} · win {p0(c.winPct)}
                       </span>
-                      {applied.includes(c.id) ? (
+                      {applied.includes(`${shown.opp}:${c.id}`) ? (
                         <Tag tone="good">
                           <Check size={12} /> Applied
                         </Tag>
                       ) : (
                         <div className="row" style={{ gap: 6 }}>
                           <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => (planOther ? setReplace(c) : applyCand(c, 'game', shown.opp))}>
-                            This game
+                            Vs {league.teams[shown.opp].abbrev}
                           </button>
                           <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
                             Always
@@ -421,11 +436,11 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
       >
         <div className="col" style={{ gap: 10 }}>
           <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} />
-          <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} />
-          <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} />
-          <CompareBar label="FT rate" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} />
-          <CompareBar label="TOV%" a={r.shot.tov * 100} b={r.oppShot.tov * 100} higherBetter={false} />
-          <CompareBar label="ORB%" a={r.shot.orb * 100} b={r.oppShot.orb * 100} />
+          <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} neutral />
+          <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} neutral />
+          <CompareBar label="FT / FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} />
+          <CompareBar label="Turnover %" a={r.shot.tov * 100} b={r.oppShot.tov * 100} higherBetter={false} />
+          <CompareBar label="Off. rebound %" a={r.shot.orb * 100} b={r.oppShot.orb * 100} />
         </div>
       </Card>
       <Card title="Your play types">
@@ -540,10 +555,10 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
       <Card title="Shot profile shift">
         <div className="col" style={{ gap: 10 }}>
           <CompareBar label="eFG% (before / after)" a={before.shot.efg * 100} b={after.shot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
-          <CompareBar label="3PA rate" a={before.shot.threeRate * 100} b={after.shot.threeRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
-          <CompareBar label="Rim rate" a={before.shot.rimRate * 100} b={after.shot.rimRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
+          <CompareBar label="3PA rate" a={before.shot.threeRate * 100} b={after.shot.threeRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
+          <CompareBar label="Rim rate" a={before.shot.rimRate * 100} b={after.shot.rimRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
           <CompareBar label="Opp eFG%" a={before.oppShot.efg * 100} b={after.oppShot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" higherBetter={false} />
-          <CompareBar label="Opp TOV%" a={before.oppShot.tov * 100} b={after.oppShot.tov * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
+          <CompareBar label="Opp turnover %" a={before.oppShot.tov * 100} b={after.oppShot.tov * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
         </div>
       </Card>
       <Card title="Play types">

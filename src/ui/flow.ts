@@ -5,6 +5,7 @@ import { pendingLive } from '../state/live';
 import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
+import { seasonLabel } from '../core/constants';
 import { periodLabel } from './stats';
 
 export interface FlowAction {
@@ -20,7 +21,7 @@ export interface FlowAction {
 }
 
 /** Is the user's team still playing this postseason? (Top-six seeds waiting out the play-in are.) */
-function stillAlive(league: League): boolean {
+export function stillAlive(league: League): boolean {
   const ts = curTeamSeason(league, league.userTid);
   if (league.phase === 'playin') return ts.playoffRound >= 0;
   return ts.playoffRound >= 1 && !league.playoffs.some((s) => s.winner !== undefined && s.winner !== league.userTid && (s.high === league.userTid || s.low === league.userTid));
@@ -95,10 +96,11 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       }
       a.push({ id: 'day', label: 'Sim 1 day', sim: { kind: 'days', n: 1 } });
       if (league.phase === 'regular') {
+        const left = regularGamesLeft(league);
         a.push({ id: 'week', label: 'Sim 1 week', sim: { kind: 'week' } });
         if (league.day < league.tradeDeadlineDay) a.push({ id: 'deadline', label: 'Sim to trade deadline', sim: { kind: 'deadline' } });
         if (league.day < allStarStop(league)) a.push({ id: 'allstar', label: 'Sim to All-Star break', sim: { kind: 'allStar' } });
-        a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${regularGamesLeft(league)} games left league-wide`, sim: { kind: 'endRegular' } });
+        a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${left} game${left === 1 ? '' : 's'} left league-wide`, sim: { kind: 'endRegular' } });
       } else if (!out) {
         a.push({ id: 'endpost', label: league.phase === 'playin' ? 'Sim through play-in' : 'Sim to end of playoffs', sim: { kind: 'endPostseason' } });
       }
@@ -132,7 +134,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       }
       a.push({
         id: 'new',
-        label: `Start ${league.season}-${String((league.season + 1) % 100).padStart(2, '0')} season`,
+        label: `Start ${seasonLabel(league.season + 1)} season`,
         sub: 'Training camp: players develop and age.',
         primary: over,
         cmd: 'newSeason',

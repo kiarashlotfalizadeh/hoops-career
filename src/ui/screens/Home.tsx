@@ -1,9 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { pendingLive } from '../../state/live';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
 import { normalizeLink } from '../league/shared';
+import { inAppPath } from '../nav';
 import { userGameOnDay } from '../../core/league/games';
+import { cupLabel } from '../../core/league/cup';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
 import { TeamLogo } from '../components/TeamLogo';
@@ -18,22 +22,16 @@ import type { League } from '../../core/types';
 function phaseTitle(league: League): string {
   switch (league.phase) {
     case 'draftLottery':
-      return `${league.season} Draft lottery`;
+      return `${league.season} Draft Lottery`;
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
-      return `${league.season} Re-sign period`;
+      return `${league.season} Re-sign Period`;
     case 'freeAgency':
-      return `${league.season} Free agency`;
+      return `${league.season} Free Agency`;
     default:
       return `${PHASE_LABEL[league.phase]} · ${seasonLabel(league.season)}`;
   }
-}
-
-/** Inbox links come from saves, imported backups included: follow in-app paths only. */
-function inAppLink(link: string | undefined, fallback: string) {
-  const l = link ? normalizeLink(link) : '';
-  return /^\/(?![/\\])/.test(l) ? l : fallback;
 }
 
 function nextUserGame(league: League) {
@@ -46,7 +44,7 @@ export default function Home() {
   const league = useLeague();
   const nav = useNavigate();
   const run = useFlowRunner();
-  const sim = useStore((s) => s.sim);
+  const simming = useStore((s) => !!s.sim);
   const team = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
@@ -58,19 +56,23 @@ export default function Home() {
   const unread = league.inbox.filter((m) => !m.read).slice(0, 3);
   const conf = useLeagueMemo(() => confStandings(league, team.conf), [league, team.conf]);
   const myRank = conf.findIndex((r) => r.tid === league.userTid);
-  const window = conf.slice(Math.max(0, Math.min(myRank - 3, conf.length - 7)), Math.max(7, Math.min(conf.length, myRank + 4)));
-  const roster = teamPlayers(league, league.userTid);
-  const nameOf = rosterNames(roster);
-  const leaders = (['pts', 'reb', 'ast'] as const).map((k) => {
-    let best: { name: string; v: number; pid: number } | null = null;
-    for (const p of roster) {
-      const pg = playerSeason(p, league.season);
-      if (!pg || pg.gp < 1) continue;
-      const val = pg[k];
-      if (!best || val > best.v) best = { name: nameOf(p.pid), v: val, pid: p.pid };
-    }
-    return { k, best };
-  });
+  const nearby = conf.slice(Math.max(0, Math.min(myRank - 3, conf.length - 7)), Math.max(7, Math.min(conf.length, myRank + 4)));
+  const roster = useLeagueMemo(() => teamPlayers(league, league.userTid), [league]);
+  const nameOf = useMemo(() => rosterNames(roster), [roster]);
+  const leaders = useLeagueMemo(
+    () =>
+      (['pts', 'reb', 'ast'] as const).map((k) => {
+        let best: { name: string; v: number; pid: number } | null = null;
+        for (const p of roster) {
+          const pg = playerSeason(p, league.season);
+          if (!pg || pg.gp < 1) continue;
+          const val = pg[k];
+          if (!best || val > best.v) best = { name: nameOf(p.pid), v: val, pid: p.pid };
+        }
+        return { k, best };
+      }),
+    [league, roster, nameOf],
+  );
   const recent = league.games
     .filter((g) => g.season === league.season && (g.home.tid === league.userTid || g.away.tid === league.userTid))
     .slice(-5)
@@ -78,20 +80,24 @@ export default function Home() {
   const tr = teamRatings(ts);
   const played = ts.won + ts.lost > 0;
   const primary = actions.find((a) => a.primary);
+  // a live game in progress resumes, or finishes from its current score, as the Play menu says
+  const live = next ? pendingLive(league) : null;
+  const inProgress = !!live && live.game.gid === next?.gid;
+  const resume = inProgress ? actions.find((a) => a.cmd === 'watchLive') : undefined;
+  const finish = inProgress ? actions.find((a) => a.cmd === 'quickGame') : undefined;
+  const cup = next ? cupLabel(league, next) : null;
 
   return (
     <main className="page">
+      {/* (the phase card's primary action is Find a new job) */}
       {league.fired && (
         <Card accent>
           <div className="row">
             <AlertTriangle className="bad" />
             <div className="grow">
-              <div className="bold">You have been fired.</div>
+              <div className="bold">You were fired.</div>
               <div className="small dim">The team is out of your hands. Take over another one to keep your career going.</div>
             </div>
-            <Link className="btn sm" to="/settings?sheet=switch">
-              Find a job
-            </Link>
           </div>
         </Card>
       )}
@@ -103,13 +109,7 @@ export default function Home() {
         <Card accent>
           <div className="row between">
             <span className="tag info">
-              {next.type === 'playoffs'
-                ? 'Playoffs'
-                : next.type === 'playin'
-                  ? 'Play-In'
-                  : next.cup === 'final'
-                    ? 'NBA Cup Championship'
-                    : `Game ${ts.won + ts.lost + 1}${next.cup === 'group' ? ' · NBA Cup' : next.cup === 'qf' ? ' · Cup quarterfinal' : next.cup === 'sf' ? ' · Cup semifinal' : ''}`}
+              {next.type === 'playoffs' ? 'Playoffs' : next.type === 'playin' ? 'Play-In' : next.cup === 'final' ? cup : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`}
             </span>
             <span className="small dim">
               {fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -118,7 +118,7 @@ export default function Home() {
           </div>
           <div className="scorebug" style={{ marginTop: 12 }}>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
-              <TeamLogo tid={next.away} size={54} />
+              <TeamLogo tid={next.away} size={54} decorative />
               <div className="bold">{league.teams[next.away].abbrev}</div>
               <div className="tiny dim num">
                 {curTeamSeason(league, next.away).won}-{curTeamSeason(league, next.away).lost}
@@ -128,7 +128,7 @@ export default function Home() {
               @
             </div>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
-              <TeamLogo tid={next.home} size={54} />
+              <TeamLogo tid={next.home} size={54} decorative />
               <div className="bold">{league.teams[next.home].abbrev}</div>
               <div className="tiny dim num">
                 {curTeamSeason(league, next.home).won}-{curTeamSeason(league, next.home).lost}
@@ -185,19 +185,24 @@ export default function Home() {
           <div className="row" style={{ marginTop: 14 }}>
             {next.day === league.day ? (
               <>
-                <button className="btn primary grow" disabled={!!sim} onClick={() => nav('/live')}>
-                  <Eye size={18} /> Watch & coach
+                <button className="btn primary grow" disabled={simming} onClick={() => nav('/live')}>
+                  <Eye size={18} /> {resume?.label ?? 'Watch & coach'}
                 </button>
-                <button className="btn grow" disabled={!!sim} onClick={() => void run({ id: 'quick', label: '', cmd: 'quickGame' })}>
-                  <FastForward size={18} /> Quick sim
+                <button className="btn grow" disabled={simming} onClick={() => void run({ id: 'quick', label: '', cmd: 'quickGame' })}>
+                  <FastForward size={18} /> {finish?.label ?? 'Quick sim'}
                 </button>
               </>
             ) : (
-              <button className="btn primary grow" disabled={!!sim} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
-                <FastForward size={18} /> Sim to game day
+              <button className="btn primary grow" disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
+                <FastForward size={18} /> Sim to next game
               </button>
             )}
           </div>
+          {resume?.sub && (
+            <div className="small dim center" style={{ marginTop: 8 }}>
+              In progress: {resume.sub}
+            </div>
+          )}
         </Card>
       ) : (
         <Card accent title={<h3>{phaseTitle(league)}</h3>}>
@@ -208,7 +213,7 @@ export default function Home() {
                   {primary.disabled ?? primary.sub}
                 </div>
               )}
-              <button className="btn primary block big" disabled={!!primary.disabled || !!sim} onClick={() => void run(primary)}>
+              <button className="btn primary block big" disabled={!!primary.disabled || simming} onClick={() => void run(primary)}>
                 {primary.label}
               </button>
             </>
@@ -217,7 +222,7 @@ export default function Home() {
             {actions
               .filter((a) => !a.primary)
               .map((a) => (
-                <button key={a.id} className="btn sm" disabled={!!a.disabled || !!sim} onClick={() => void run(a)}>
+                <button key={a.id} className="btn sm" disabled={!!a.disabled || simming} onClick={() => void run(a)}>
                   {a.label}
                 </button>
               ))}
@@ -265,7 +270,7 @@ export default function Home() {
             </h3>
           }
           right={
-            <Link className="card-link" to="/inbox">
+            <Link className="card-link" to="/inbox" aria-label="All inbox messages">
               All
             </Link>
           }
@@ -277,7 +282,7 @@ export default function Home() {
               {unread.map((m) => (
                 <Link
                   key={m.id}
-                  to={inAppLink(m.link, '/inbox')}
+                  to={inAppPath(m.link ? normalizeLink(m.link) : '', '/inbox')}
                   onClick={() =>
                     useStore.getState().mutate((l) => {
                       const x = l.inbox.find((y) => y.id === m.id);
@@ -299,13 +304,13 @@ export default function Home() {
         <Card
           title={`${team.conf === 'E' ? 'East' : 'West'} standings`}
           right={
-            <Link className="card-link" to="/league">
+            <Link className="card-link" to="/league" aria-label="Full standings">
               Full
             </Link>
           }
         >
           <div className="col" style={{ gap: 0 }}>
-            {window.map((r) => (
+            {nearby.map((r) => (
               <Link
                 key={r.tid}
                 to={`/team/${r.tid}`}
@@ -315,7 +320,7 @@ export default function Home() {
                 <span className="num dim" style={{ width: 18 }}>
                   {r.confRank}
                 </span>
-                <TeamLogo tid={r.tid} size={22} />
+                <TeamLogo tid={r.tid} size={22} decorative />
                 <span className="grow">{league.teams[r.tid].name}</span>
                 <span className="num">
                   {r.won}-{r.lost}
@@ -366,7 +371,7 @@ export default function Home() {
                     <span className="small dim" style={{ width: 22 }}>
                       {home ? 'vs' : '@'}
                     </span>
-                    <TeamLogo tid={them.tid} size={22} />
+                    <TeamLogo tid={them.tid} size={22} decorative />
                     <span className="grow">{league.teams[them.tid].name}</span>
                     <span className="num bold">
                       {us.pts}-{them.pts}
@@ -413,17 +418,23 @@ export default function Home() {
 /** Before the first game: where the roster stacks up, by the same talent measure as Power rankings. */
 function SeasonOutlook({ league }: { league: League }) {
   const team = league.teams[league.userTid];
-  const talent = (tid: number) => {
-    const top8 = teamPlayers(league, tid)
-      .map((p) => p.ovr)
-      .sort((a, b) => b - a)
-      .slice(0, 8);
-    return top8.reduce((a, x) => a + x, 0) / Math.max(1, top8.length);
-  };
-  const ranked = league.teams.map((t) => ({ tid: t.tid, conf: t.conf, v: talent(t.tid) })).sort((a, b) => b.v - a.v);
-  const leagueRank = ranked.findIndex((x) => x.tid === team.tid) + 1;
-  const confRank = ranked.filter((x) => x.conf === team.conf).findIndex((x) => x.tid === team.tid) + 1;
-  const roster = teamPlayers(league, team.tid);
+  // every team's top eight: one pass over the players per league change, not per render
+  const { leagueRank, confRank } = useLeagueMemo(() => {
+    const ovrs: Record<number, number[]> = {};
+    for (const p of Object.values(league.players)) if (p.tid >= 0) (ovrs[p.tid] ??= []).push(p.ovr);
+    const talent = (tid: number) => {
+      const top8 = (ovrs[tid] ?? []).sort((a, b) => b - a).slice(0, 8);
+      return top8.reduce((a, x) => a + x, 0) / Math.max(1, top8.length);
+    };
+    const ranked = league.teams.map((t) => ({ tid: t.tid, conf: t.conf, v: talent(t.tid) })).sort((a, b) => b.v - a.v);
+    return {
+      leagueRank: ranked.findIndex((x) => x.tid === team.tid) + 1,
+      confRank: ranked.filter((x) => x.conf === team.conf).findIndex((x) => x.tid === team.tid) + 1,
+    };
+  }, [league, team.tid, team.conf]);
+  const roster = useLeagueMemo(() => teamPlayers(league, team.tid), [league, team.tid]);
+  // counted as the Roster screen counts them: two-way deals apart from the 15 standard spots
+  const twoWays = roster.filter((p) => p.contract.twoWay).length;
   const avgAge = roster.reduce((a, p) => a + age(league, p), 0) / Math.max(1, roster.length);
   const pay = payroll(league, team.tid);
   const cap = CAP_FOR(league);
@@ -439,7 +450,7 @@ function SeasonOutlook({ league }: { league: League }) {
     <Card
       title="Season outlook"
       right={
-        <Link className="card-link" to="/league?tab=standings&view=power">
+        <Link className="card-link" to="/league?tab=standings&view=power" aria-label="Power rankings">
           Power
         </Link>
       }
@@ -452,7 +463,7 @@ function SeasonOutlook({ league }: { league: League }) {
           sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
           color={pay > cap.luxuryTax ? 'var(--bad)' : undefined}
         />
-        <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length} players`} />
+        <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length - twoWays} players${twoWays ? ` + ${twoWays} two-way` : ''}`} />
       </div>
       <div className="small dim2" style={{ marginTop: 10 }}>
         {outlook}
@@ -470,7 +481,7 @@ function Onboarding() {
     },
     { to: '/rotation', title: 'Set the rotation', body: 'Order your depth chart and minute targets. The stint plan shows exactly when each player will be on the floor.' },
     { to: '/lab', title: 'Test it in the Lab', body: 'Simulate dozens of games against any opponent before you commit, and let the assistant find counters.' },
-    { to: '/', title: 'Coach games live', body: 'Watch on the court, call timeouts, sub and adjust coverages. After each game, "Why" breaks down what decided it.' },
+    { title: 'Coach games live', body: 'Watch on the court, call timeouts, sub and adjust coverages. After each game, "Why" breaks down what decided it.' },
   ];
   return (
     <Card
@@ -483,17 +494,29 @@ function Onboarding() {
       }
     >
       <div className="col" style={{ gap: 10 }}>
-        {steps.map((s, i) => (
-          <Link key={s.title} to={s.to} className="row top" style={{ gap: 10 }}>
-            <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent-text)' }}>
-              {i + 1}
-            </span>
-            <div className="grow">
-              <div className="bold small">{s.title}</div>
-              <div className="small dim">{s.body}</div>
+        {steps.map((s, i) => {
+          const body = (
+            <>
+              <span className="display bold" style={{ width: 22, fontSize: 20, color: 'var(--accent-text)' }}>
+                {i + 1}
+              </span>
+              <div className="grow">
+                <div className="bold small">{s.title}</div>
+                <div className="small dim">{s.body}</div>
+              </div>
+            </>
+          );
+          // games are coached from here (Watch & coach on game day): no link to the page you're on
+          return s.to ? (
+            <Link key={s.title} to={s.to} className="row top" style={{ gap: 10 }}>
+              {body}
+            </Link>
+          ) : (
+            <div key={s.title} className="row top" style={{ gap: 10 }}>
+              {body}
             </div>
-          </Link>
-        ))}
+          );
+        })}
         <div className="tiny dim">Change how deep the coaching controls go (Simple / Advanced / Expert) any time in Settings.</div>
       </div>
     </Card>

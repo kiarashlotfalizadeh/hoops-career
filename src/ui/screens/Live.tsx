@@ -9,32 +9,20 @@ import { Court } from '../live/Court';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { composites } from '../../core/ratings';
-import type { League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
-import { COVERAGE_META, PRESS_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
+import type { DefScheme, League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { buildSimInput } from '../../core/league/games';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
-import { periodLabel, rosterNames } from '../stats';
+import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
-import { colorDistance } from '../teamColors';
-import { flowActions } from '../flow';
-
-const SPEEDS = [
-  { id: 1, label: '1×' },
-  { id: 2, label: '2×' },
-  { id: 4, label: '4×' },
-];
+import { jerseyColors } from '../teamColors';
+import { flowActions, stillAlive } from '../flow';
+import { LIVE_SPEEDS } from '../settingsOptions';
 
 const FEED_MAX = 80;
-
-function fmtClock(sec: number) {
-  const s = Math.max(0, sec);
-  const m = Math.floor(s / 60);
-  const r = Math.floor(s % 60);
-  return s < 60 ? `${s.toFixed(1)}` : `${m}:${String(r).padStart(2, '0')}`;
-}
 
 interface Suggestion {
   id: string;
@@ -43,6 +31,9 @@ interface Suggestion {
 }
 
 type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
+
+/** "an 8-0 run", "an 11-0 run", "a 12-0 run". */
+const aRun = (n: number) => `${n === 8 || n === 11 || n === 18 || (n >= 80 && n < 90) ? 'an' : 'a'} ${n}-0 run`;
 
 /**
  * Clock and score as the court animates them. A tiny store outside React state, so only the
@@ -140,11 +131,20 @@ export default function Live() {
   const [atBreak, setAtBreak] = useState(false);
   const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
   const [panel, setPanel] = useState<'none' | 'subs' | 'tactics' | 'stats' | 'end'>('none');
+  // "Keep changes after this game": kept while the adjustments sheet is closed, until the next game
+  const [persist, setPersist] = useState(false);
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [resultGid, setResultGid] = useState<number | null>(null);
   const [banner, setBanner] = useState<{ text: string; id: number } | null>(null);
   const [announce, setAnnounce] = useState('');
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const baselines = useMemo(() => playTypeBaselines(league), [league.season]);
 
@@ -168,8 +168,10 @@ export default function Live() {
     setGame(lg);
     setScript(null);
     setAtBreak(false);
+    setPaused(false);
     setDismissed([]);
     setPanel('none');
+    setPersist(false);
     setBanner(null);
     setResultGid(null);
     setAnnounce('');
@@ -236,6 +238,8 @@ export default function Live() {
   const showFinal = useCallback(
     (lg: LiveGame) => {
       const res = lg.committed!;
+      // the coaching sheets have nothing left to change
+      setPanel('none');
       setStatus('final');
       setResultGid(res.gid);
       ticker.set(0, [res.home.pts, res.away.pts], true);
@@ -252,6 +256,7 @@ export default function Live() {
     (lg: LiveGame) => {
       const res = useStore.getState().league!.games.find((g) => g.gid === lg.game.gid);
       clearLive();
+      setPanel('none');
       setStatus('simmed');
       setResultGid(res?.gid ?? null);
       if (res) ticker.set(0, [res.home.pts, res.away.pts], true);
@@ -310,7 +315,10 @@ export default function Live() {
   const skip = (to: 'quarter' | 'end') => {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
-    lg.simTo(to);
+    // the sim runs a possession ahead of the court: already at the buzzer, "Qtr" stops at this break, not the next one
+    if (!(to === 'quarter' && lg.sim.clock <= 0.05)) lg.simTo(to);
+    // a decided game ends at the buzzer: no break before an overtime that won't be played
+    if (to === 'quarter' && !lg.over && lg.sim.q >= 4 && lg.sim.T[0].score !== lg.sim.T[1].score) lg.step();
     flushFeed();
     ticker.set(lg.sim.clock, [lg.sim.T[0].score, lg.sim.T[1].score], true);
     if (lg.over) finish();
@@ -351,6 +359,8 @@ export default function Live() {
       useStore.getState().mutate((l) => {
         const tt = l.teams[l.userTid].tactics;
         fn(tt);
+        // a star target is one of tonight's opponents: the saved plan goes after each opponent's own star
+        tt.defense.starTarget = null;
         tt.manual = true;
       });
       // this screen made the change: resuming later shouldn't treat it as an outside edit
@@ -361,15 +371,7 @@ export default function Live() {
 
   const home = game ? league.teams[game.game.home] : null;
   const away = game ? league.teams[game.game.away] : null;
-  const colors = useMemo<[[string, string], [string, string]] | null>(() => {
-    if (!home || !away) return null;
-    const c: [[string, string], [string, string]] = [
-      [home.colors[0], home.colors[1] === home.colors[0] ? home.colors[2] : home.colors[1]],
-      [away.colors[0], away.colors[1] === away.colors[0] ? away.colors[2] : away.colors[1]],
-    ];
-    if (colorDistance(c[0][0], c[1][0]) < 90) c[1] = ['#f1f1f1', away.colors[0]];
-    return c;
-  }, [home, away]);
+  const colors = useMemo(() => (home && away ? jerseyColors(home.colors, away.colors) : null), [home, away]);
 
   // teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on every other screen
   const nameOf = useMemo(() => {
@@ -389,8 +391,9 @@ export default function Live() {
     const me = lg.sim.T[userSide];
     const them = lg.sim.T[1 - userSide];
     const out: Suggestion[] = [];
-    if (them.run >= 8 && me.timeouts > 0)
-      out.push({ id: `run-${them.score}`, text: `${them.team.name} are on a ${them.run}-0 run.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
+    // a timeout can't be called at a quarter break
+    if (them.run >= 8 && me.timeouts > 0 && !atBreak)
+      out.push({ id: `run-${them.score}`, text: `The ${them.team.name} are on ${aRun(them.run)}.`, action: { label: 'Timeout', run: () => callTimeout('stop the run') } });
     for (const p of me.on) {
       if (p.energy < 0.55) {
         const bench = me.players.filter((b) => !b.on && b.out === 0 && b.energy > 0.8).sort((a, b) => b.c.create + b.c.helpD - (a.c.create + a.c.helpD))[0];
@@ -403,14 +406,17 @@ export default function Live() {
       if (p.fouls >= Math.min(lg.sim.q + 1, 5) && lg.sim.q < 4) out.push({ id: `fouls-${p.pid}-${p.fouls}`, text: `${nameOf(p.pid)} has ${p.fouls} fouls.` });
     }
     // opponent play types torching us: well above this season's norm for that play, on a real sample
+    // ("Other" is presses, the clock and late fouls: nothing to adjust against)
     for (const [k, v] of Object.entries(them.pt)) {
       const base = baselines[k];
-      if (base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
+      if (k === 'misc' || base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
       const ft = k as FinishType;
       const cov = me.t.defense.pnr;
+      // ball-screen coverage only applies in man-to-man
+      const man = me.t.defense.scheme === 'man';
       let advice: Suggestion['action'];
       let text = `Their ${FINISH_LABEL[ft]} is scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
-      if (ft === 'pnrBH' && cov === 'drop') {
+      if (ft === 'pnrBH' && man && cov === 'drop') {
         text += ' Drop is giving their handlers room.';
         advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
       } else if (ft === 'spotup' && me.t.defense.help > 55) {
@@ -420,14 +426,14 @@ export default function Live() {
         advice = { label: 'Sprint back', run: () => applyTactics((t) => void ((t.defense.getBack = 85), (t.offense.crashBoards = Math.min(t.offense.crashBoards, 30))), false) };
       } else if (ft === 'post') {
         advice = { label: 'Double the post', run: () => applyTactics((t) => void (t.defense.help = 80), false) };
-      } else if (ft === 'pnrRoll' && cov !== 'drop') {
+      } else if (ft === 'pnrRoll' && man && cov !== 'drop') {
         advice = { label: 'Go to Drop', run: () => applyTactics((t) => void (t.defense.pnr = 'drop'), false) };
       }
       out.push({ id: `pt-${k}`, text, action: advice });
     }
     for (const [k, v] of Object.entries(me.pt)) {
       const base = baselines[k];
-      if (base !== undefined && v.poss >= 12 && zScore(v, base) < -2)
+      if (k !== 'misc' && base !== undefined && v.poss >= 12 && zScore(v, base) < -2)
         out.push({
           id: `mypt-${k}`,
           text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP, league ${base.toFixed(2)}). Consider running other actions.`,
@@ -444,12 +450,14 @@ export default function Live() {
     }
     return out.filter((s) => !dismissed.includes(s.id)).slice(0, 2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, dismissed, over, nameOf, baselines]);
+  }, [tick, dismissed, over, atBreak, nameOf, baselines]);
 
-  const nextAction = flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame'));
+  // only offered once the game is over (or there is none): not worked out on every possession
+  const nextAction = status !== 'live' ? flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame')) : undefined;
   const nextGame = async () => {
     if (nextAction?.sim) await useStore.getState().simulate(nextAction.sim);
-    start();
+    // left during the sim: don't set up a live game nobody is watching
+    if (mounted.current) start();
   };
 
   if (status === 'none') {
@@ -459,13 +467,15 @@ export default function Live() {
         <Empty>
           {league.phase === 'preseason'
             ? 'No games yet: start the regular season from Home or the Play menu.'
-            : ['regular', 'playin', 'playoffs'].includes(league.phase)
-              ? 'No game for your team today.'
-              : 'No games until next season.'}
+            : (league.phase === 'playin' || league.phase === 'playoffs') && !stillAlive(league)
+              ? 'Your season is over: no more games until next season.'
+              : ['regular', 'playin', 'playoffs'].includes(league.phase)
+                ? 'No game for your team today.'
+                : 'No games until next season.'}
         </Empty>
         {nextAction?.sim && (
           <button className="btn primary block big" disabled={simBusy} onClick={() => void nextGame()}>
-            <ChevronsRight size={18} /> Sim to game day
+            <ChevronsRight size={18} /> Sim to next game
           </button>
         )}
       </main>
@@ -481,16 +491,16 @@ export default function Live() {
   const sim = game.sim;
   const me = sim.T[userSide];
   const quarter = script?.q ?? sim.q;
-  const won =
-    resultGid !== null &&
-    (() => {
-      const res = league.games.find((g) => g.gid === resultGid);
-      return !!res && (userSide === 0 ? res.home.pts > res.away.pts : res.away.pts > res.home.pts);
-    })();
+  const result = resultGid !== null ? league.games.find((g) => g.gid === resultGid) : undefined;
+  const won = !!result && (userSide === 0 ? result.home.pts > result.away.pts : result.away.pts > result.home.pts);
 
   return (
     <main className="page full" style={{ gap: 10 }}>
-      <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} />
+      {/* the scorebug is the visible title: screen readers get a heading to land on */}
+      <h1 className="sr-only">
+        Live game: {away.region} {away.name} at {home.region} {home.name}
+      </h1>
+      <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} />
       <div className="sr-only" aria-live="polite">
         {announce}
       </div>
@@ -541,7 +551,7 @@ export default function Live() {
                 {paused ? <Play size={16} /> : <Pause size={16} />}
               </button>
               <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
-                {SPEEDS.map((s) => (
+                {LIVE_SPEEDS.map((s) => (
                   <button
                     key={s.id}
                     className={speed === s.id ? 'on' : ''}
@@ -602,7 +612,7 @@ export default function Live() {
             </Card>
           )}
         </div>
-        <div className="col live-right" style={{ gap: 10 }}>
+        <div className="col" style={{ gap: 10 }}>
           {suggestions.map((s) => (
             <div key={s.id} className="card tight fade-in" style={{ borderColor: 'color-mix(in srgb, var(--warn) 40%, transparent)' }}>
               <div className="row top">
@@ -630,14 +640,14 @@ export default function Live() {
 
           {!over && (
             <div className="grid4 live-ctl">
-              <button className="btn sm" disabled={me.timeouts <= 0} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
+              <button className="btn sm" disabled={me.timeouts <= 0 || atBreak} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
                 <Timer size={16} /> TO
               </button>
               <button className="btn sm" onClick={() => setPanel('subs')}>
                 <Users size={16} /> Subs
               </button>
               <button className="btn sm" onClick={() => setPanel('tactics')}>
-                <SlidersHorizontal size={16} /> Plan
+                <SlidersHorizontal size={16} /> Adjust
               </button>
               <button className="btn sm" onClick={() => setPanel('stats')}>
                 <ListOrdered size={16} /> Box
@@ -648,7 +658,7 @@ export default function Live() {
           {/* a game simulated elsewhere: the coached version never happened, so don't show its floor or plays */}
           {status !== 'simmed' && (
             <>
-              <Card title="On the floor" right={<span className="tiny dim">energy · fouls</span>}>
+              <Card title="On the floor" right={<span className="tiny dim">energy · fouls · points</span>}>
                 <div className="col" style={{ gap: 6 }}>
                   {me.on.map((p) => (
                     <PlayerStrip key={p.pid} p={p} name={nameOf(p.pid)} />
@@ -665,7 +675,7 @@ export default function Live() {
         <SubsPanel live={game} side={userSide} nameOf={nameOf} onChange={() => setTick((x) => x + 1)} />
       </Sheet>
       <Sheet open={panel === 'tactics'} onClose={() => setPanel('none')} title="In-game adjustments">
-        <TacticsPanel live={game} side={userSide} nameOf={nameOf} apply={applyTactics} />
+        <TacticsPanel live={game} side={userSide} nameOf={nameOf} apply={applyTactics} persist={persist} setPersist={setPersist} />
       </Sheet>
       <Sheet open={panel === 'stats'} onClose={() => setPanel('none')} title="Live box score">
         <StatsPanel live={game} side={userSide} league={league} nameOf={nameOf} tick={tick} />
@@ -691,23 +701,28 @@ export default function Live() {
   );
 }
 
-function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; sim: GameSim; home: Team; away: Team; quarter: number; over: boolean }) {
+function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Ticker; sim: GameSim; home: Team; away: Team; quarter: number; over: boolean; ot: number }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
+  // the bonus dots are only colour: screen readers get them in the label
+  const bonus = [sim.bonus(sim.T[0]) ? away.abbrev : '', sim.bonus(sim.T[1]) ? home.abbrev : ''].filter(Boolean);
+  const state = over
+    ? `final${ot ? ` in ${ot > 1 ? `${ot} overtimes` : 'overtime'}` : ''}`
+    : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}`;
   return (
     <div
       className="card tight"
       style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}
     >
-      <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? 'final' : `${qLabel} ${fmtClock(clock)}`}`}>
+      <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}`}>
         <div className="row" style={{ gap: 6, minWidth: 0 }}>
-          <TeamLogo tid={away.tid} size={28} />
+          <TeamLogo tid={away.tid} size={28} decorative />
           <div style={{ minWidth: 0 }}>
             <div className="bold">{away.abbrev}</div>
             <div className="tiny dim nowrap">
               TO {sim.T[1].timeouts}
               {sim.bonus(sim.T[0]) && (
-                <span className="warn" title="In the bonus">
+                <span className="warn" title="In the bonus" aria-hidden="true">
                   {' '}
                   ●
                 </span>
@@ -720,19 +735,19 @@ function ScoreBug({ ticker, sim, home, away, quarter, over }: { ticker: Ticker; 
         </div>
         <div className="col center" style={{ gap: 0, minWidth: 56 }}>
           <span className="display bold" style={{ fontSize: 15 }}>
-            {over ? 'FINAL' : qLabel}
+            {over ? finalLabel(ot) : qLabel}
           </span>
           <span className="display num" style={{ fontSize: 20 }}>
             {over ? '' : fmtClock(clock)}
           </span>
         </div>
         <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
-          <TeamLogo tid={home.tid} size={28} />
+          <TeamLogo tid={home.tid} size={28} decorative />
           <div className="right" style={{ minWidth: 0 }}>
             <div className="bold">{home.abbrev}</div>
             <div className="tiny dim nowrap">
               {sim.bonus(sim.T[1]) && (
-                <span className="warn" title="In the bonus">
+                <span className="warn" title="In the bonus" aria-hidden="true">
                   ●{' '}
                 </span>
               )}
@@ -753,9 +768,8 @@ const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEnt
   return (
     <Card title="Play-by-play">
       <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-        {/* substitutions fade back, but stay above 4.5:1 contrast */}
         {feed.map(({ i, e }) => (
-          <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.7 : 1 }}>
+          <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
             <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
               {periodLabel(e.q)} {fmtClock(e.clock)}
             </span>
@@ -810,7 +824,7 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
           onChange();
         }}
         label="I'll handle substitutions"
-        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted)."
+        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted), and the staff calls no timeouts to stop runs."
       />
       <div className="small dim">{outPid === null ? 'Tap a player on the floor, then a bench player.' : 'Now pick who comes in.'}</div>
       <div className="col" style={{ gap: 6 }}>
@@ -836,7 +850,15 @@ function SubsPanel({ live, side, nameOf, onChange }: { live: LiveGame; side: 0 |
             disabled={!!p.out || outPid === null}
             onClick={() => {
               if (outPid === null) return;
-              live.sim.substitute(side, outPid, p.pid);
+              // the game plays on while this sheet is open: the staff may have made a change first
+              if (!live.sim.substitute(side, outPid, p.pid)) {
+                const why = !t.on.some((x) => x.pid === outPid)
+                  ? `${nameOf(outPid)} is already on the bench.`
+                  : p.on
+                    ? `${nameOf(p.pid)} is already on the floor.`
+                    : `${nameOf(p.pid)} can't come in right now.`;
+                useStore.getState().toast(why, 'bad');
+              }
               setOut(null);
               onChange();
             }}
@@ -861,13 +883,16 @@ function TacticsPanel({
   side,
   nameOf,
   apply,
+  persist,
+  setPersist,
 }: {
   live: LiveGame;
   side: 0 | 1;
   nameOf: (pid: number) => string;
   apply: (fn: (t: Tactics) => void, persist: boolean) => void;
+  persist: boolean;
+  setPersist: (on: boolean) => void;
 }) {
-  const [persist, setPersist] = useState(false);
   const [, force] = useState(0);
   const t = live.sim.T[side].t;
   const opp = live.sim.T[1 - side];
@@ -883,6 +908,7 @@ function TacticsPanel({
           Pick & roll coverage
         </div>
         <Chips
+          label="Pick & roll coverage"
           value={t.defense.pnr}
           onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
           options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
@@ -890,21 +916,19 @@ function TacticsPanel({
       </div>
       <Segmented
         value={t.defense.scheme}
-        onChange={(x) => set((tt) => void (tt.defense.scheme = x))}
-        label="Defensive scheme"
-        options={[
-          { id: 'man', label: 'Man' },
-          { id: 'zone23', label: '2-3 Zone' },
-          { id: 'zone32', label: '3-2 Zone' },
-        ]}
+        onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
+        label="Base scheme"
+        options={(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))}
       />
-      <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack paint" />
+      <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack the paint" />
       <Slider label="Ball pressure" value={t.defense.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} left="Contain" right="Swarm" />
+      <Slider label="Transition defense" value={t.defense.getBack} onChange={(x) => set((tt) => void (tt.defense.getBack = x))} left="Jog back" right="Sprint back" />
       <div>
         <div className="small bold" style={{ marginBottom: 6 }}>
-          Press
+          Full-court press
         </div>
         <Chips
+          label="Full-court press"
           value={t.defense.press}
           onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
           options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
@@ -915,6 +939,7 @@ function TacticsPanel({
           Star plan
         </div>
         <Chips
+          label="Star plan"
           value={t.defense.starPlan}
           onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))}
           options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
@@ -963,7 +988,7 @@ function TacticsPanel({
                       key={d.pid}
                       className={`chip ${t.defense.matchups[o.pid] === d.pid ? 'on' : ''}`}
                       aria-pressed={t.defense.matchups[o.pid] === d.pid}
-                      style={{ height: 28, fontSize: 12 }}
+                      style={{ fontSize: 12 }}
                       onClick={() =>
                         set((tt) => {
                           if (tt.defense.matchups[o.pid] === d.pid) delete tt.defense.matchups[o.pid];
@@ -984,9 +1009,10 @@ function TacticsPanel({
           <div className="tiny dim">Assignments stick whenever both players are on the floor; otherwise the staff matches by size and threat.</div>
         </div>
       </div>
-      <Slider label="Pace" value={t.offense.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} left="Grind" right="Run" />
-      <Slider label="Three-point emphasis" value={t.offense.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} left="Mid ok" right="Threes" />
+      <Slider label="Pace" value={t.offense.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} left="Grind" right="Run & gun" />
+      <Slider label="Three-point emphasis" value={t.offense.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} left="Mid-range ok" right="Rim & 3s only" />
       <Slider label="Attack the rim" value={t.offense.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} left="Settle" right="Downhill" />
+      <Slider label="Crash the offensive glass" value={t.offense.crashBoards} onChange={(x) => set((tt) => void (tt.offense.crashBoards = x))} left="Get back" right="Crash" />
       <Toggle on={t.offense.huntMismatch} onChange={(x) => set((tt) => void (tt.offense.huntMismatch = x))} label="Hunt mismatches" />
       <div className="tiny dim">
         <Hand size={12} style={{ verticalAlign: -2 }} /> Changes take effect on the next possession.

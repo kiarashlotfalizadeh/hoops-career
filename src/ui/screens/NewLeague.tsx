@@ -11,6 +11,7 @@ import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { canGoBack } from '../nav';
+import { COMPLEXITY, DIFFICULTY, helpFor } from '../settingsOptions';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -22,18 +23,33 @@ export default function NewLeague() {
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedLoaded, setSeedLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [kind, setKind] = useState<'real' | 'fictional'>('real');
-  // steps live in the URL so the system Back button walks back through them
+  // steps live in the URL so the system Back button walks back through them, and the choices with
+  // them, so Back or a reload can't quietly switch your league or team
   const [sp, setSp] = useSearchParams();
-  const step: Step = sp.get('step') === 'team' || sp.get('step') === 'setup' ? (sp.get('step') as Step) : 'type';
-  const setStep = (st: Step) => setSp(st === 'type' ? {} : { step: st });
+  const choose = (patch: Record<string, string | null>, push = false) => {
+    const next = new URLSearchParams(sp);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null) next.delete(k);
+      else next.set(k, v);
+    }
+    setSp(next, { replace: !push });
+  };
+  // a build without roster data can only make a fictional league
+  const kind: 'real' | 'fictional' = sp.get('kind') === 'fictional' || (seedLoaded && !seed && !loadFailed) ? 'fictional' : 'real';
+  const setKind = (k: 'real' | 'fictional') => choose({ kind: k === 'real' ? null : k });
+  // no tid: the default pick; an empty one: none, after switching to the other conference
+  const tidParam = sp.get('tid');
+  const tid: number | null = tidParam === null ? 19 : tidParam !== '' && FRANCHISES[Number(tidParam)] ? Number(tidParam) : null;
+  const setTid = (t: number) => choose({ tid: String(t) });
+  const asked = sp.get('step');
+  const step: Step = asked === 'team' || (asked === 'setup' && tid !== null) ? asked : asked === 'setup' ? 'team' : 'type';
+  const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
   const back = () => {
     if (step === 'type') nav('/start');
     else if (canGoBack()) nav(-1);
     else setStep(step === 'setup' ? 'team' : 'type');
   };
-  const [tid, setTid] = useState<number>(19);
-  const [conf, setConf] = useState<'E' | 'W'>('E');
+  const [conf, setConf] = useState<'E' | 'W'>(() => (tid !== null ? FRANCHISES[tid].conf : 'E'));
   const [name, setName] = useState('My League');
   const [coach, setCoach] = useState('');
   const [settings, setSettings] = useState<Settings>(defaultSettings());
@@ -41,10 +57,7 @@ export default function NewLeague() {
 
   useEffect(() => {
     loadSeed()
-      .then((s) => {
-        setSeed(s.players.length ? s : null);
-        if (!s.players.length) setKind('fictional');
-      })
+      .then((s) => setSeed(s.players.length ? s : null))
       // keep the choice: a league quietly turning fictional would be worse than a clear note (opening New League again retries)
       .catch((e) => {
         console.error(e);
@@ -85,7 +98,7 @@ export default function NewLeague() {
     setBusy(true);
     await new Promise((r) => setTimeout(r, 30));
     try {
-      const l = createLeague({ name: name.trim() || 'My League', userTid: tid, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null });
+      const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null });
       setLeague(l);
       // if it fails, play on: the save banner says so and offers a backup, and later saves retry
       await useStore.getState().save();
@@ -97,7 +110,7 @@ export default function NewLeague() {
     }
   };
 
-  const f = FRANCHISES[tid];
+  const f = tid !== null ? FRANCHISES[tid] : null;
   return (
     <main className="page standalone" style={{ paddingBottom: 40 }}>
       <div className="row">
@@ -174,7 +187,12 @@ export default function NewLeague() {
         <>
           <Segmented
             value={conf}
-            onChange={setConf}
+            onChange={(c) => {
+              setConf(c);
+              // the team you're taking over is always one you can see in the grid
+              if (tid !== null && FRANCHISES[tid].conf !== c) choose({ tid: '' });
+            }}
+            label="Conference"
             options={[
               { id: 'E', label: 'East' },
               { id: 'W', label: 'West' },
@@ -198,40 +216,56 @@ export default function NewLeague() {
                   }}
                   onClick={() => setTid(i)}
                 >
-                  <TeamLogo tid={i} size={44} />
+                  <TeamLogo tid={i} size={44} decorative />
                   <div className="bold small">{fr.name}</div>
                   <div className="tiny dim">{rank ? `Power #${rank[i]}` : `${market(fr.pop)} market`}</div>
                 </button>
               ))}
           </div>
-          <Card title={`${f.region} ${f.name}`} right={<TeamLogo tid={tid} size={32} />}>
-            <div className="small dim2">
-              {f.arena} · Market: {market(f.pop)} ({f.pop}M) · {f.div} Division
-            </div>
-            {kind === 'fictional' && (
-              <div className="small dim" style={{ marginTop: 8 }}>
-                Rosters are generated when the league is created, so every player here will be new.
+          {f && tid !== null && (
+            <Card title={`${f.region} ${f.name}`} right={<TeamLogo tid={tid} size={32} decorative />}>
+              <div className="small dim2">
+                {f.arena} · Market: {market(f.pop)} ({f.pop}M) · {f.div} Division
               </div>
-            )}
-            {teamInfo?.[tid] && (
-              <div className="col" style={{ marginTop: 10, gap: 6 }}>
-                {teamInfo[tid].top.map((p) => (
-                  <div key={p.name} className="row">
-                    <Ovr v={p.ovr} size="sm" />
-                    <span>{p.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-          <button className="btn primary big block" onClick={() => setStep('setup')}>
-            Take over the {f.name}
+              {kind === 'fictional' && (
+                <div className="small dim" style={{ marginTop: 8 }}>
+                  Rosters are generated when the league is created, so every player here will be new.
+                </div>
+              )}
+              {teamInfo?.[tid] && (
+                <div className="col" style={{ marginTop: 10, gap: 6 }}>
+                  {teamInfo[tid].top.map((p) => (
+                    <div key={p.name} className="row">
+                      <Ovr v={p.ovr} size="sm" />
+                      <span>{p.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+          <button className="btn primary big block" disabled={!f} onClick={() => setStep('setup')}>
+            {f ? `Take over the ${f.name}` : 'Pick a team'}
           </button>
         </>
       )}
 
-      {step === 'setup' && (
+      {step === 'setup' && f && tid !== null && (
         <>
+          <Card>
+            <div className="row">
+              <TeamLogo tid={tid} size={40} decorative />
+              <div className="grow">
+                <div className="bold">
+                  {f.region} {f.name}
+                </div>
+                <div className="small dim">{kind === 'real' ? 'Real 2026-27 NBA' : 'Fictional league'}</div>
+              </div>
+              <button className="btn sm" onClick={back}>
+                Change
+              </button>
+            </div>
+          </Card>
           <Card title="You">
             <div className="col" style={{ gap: 10 }}>
               <label className="col" style={{ gap: 4 }}>
@@ -245,42 +279,15 @@ export default function NewLeague() {
             </div>
           </Card>
           <Card title="Difficulty">
-            <Chips
-              value={settings.difficulty}
-              onChange={(d) => setSettings({ ...settings, difficulty: d })}
-              options={[
-                { id: 'casual', label: 'Casual' },
-                { id: 'normal', label: 'Normal' },
-                { id: 'hard', label: 'Hard' },
-              ]}
-            />
+            <Chips label="Difficulty" value={settings.difficulty} onChange={(d) => setSettings({ ...settings, difficulty: d })} options={DIFFICULTY} />
             <div className="small dim" style={{ marginTop: 8 }}>
-              {/* the same numbers Settings quotes */}
-              {settings.difficulty === 'casual'
-                ? 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.'
-                : settings.difficulty === 'hard'
-                  ? 'AI GMs want a 12% premium in trades, and free agents ask you for 12% more.'
-                  : 'Fair trades and market-rate contracts.'}{' '}
-              You can change this any time.
+              {helpFor(DIFFICULTY, settings.difficulty)} You can change this any time.
             </div>
           </Card>
           <Card title="Coaching depth">
-            <Chips
-              value={settings.complexity}
-              onChange={(c) => setSettings({ ...settings, complexity: c })}
-              options={[
-                { id: 'simple', label: 'Simple' },
-                { id: 'advanced', label: 'Advanced' },
-                { id: 'expert', label: 'Expert' },
-              ]}
-            />
+            <Chips label="Coaching depth" value={settings.complexity} onChange={(c) => setSettings({ ...settings, complexity: c })} options={COMPLEXITY} />
             <div className="small dim" style={{ marginTop: 8 }}>
-              {settings.complexity === 'simple'
-                ? 'Pick a playbook and a defensive identity. The staff handles the details.'
-                : settings.complexity === 'advanced'
-                  ? 'Tune pace, shot profile, actions, coverages and help. Recommended.'
-                  : 'Everything: individual roles, shot freedom, matchups, end-of-game rules.'}{' '}
-              You can change this any time.
+              {helpFor(COMPLEXITY, settings.complexity)} You can change this any time.
             </div>
           </Card>
           <Card>
