@@ -108,8 +108,20 @@ describe('rotation AI: role memory', () => {
     const healthy = ps.filter((p) => !p.injury).map((p) => rot.minutes[p.pid]);
     expect(Math.abs(healthy.reduce((a, b) => a + b, 0) - 240)).toBeLessThanOrEqual(3);
     expect(Math.max(...healthy)).toBeLessThanOrEqual(38);
-    // at least ten healthy players get a real look
+    // at least nine healthy players get a real look
     expect(healthy.filter((m) => m >= 8).length).toBeGreaterThanOrEqual(9);
+  });
+
+  it('keeps the hard caps it carries over, and drops those of players who have left', () => {
+    const ps = roster(8, (_, i) => [35, 34, 33, 31, 29, 25, 22, 18, 14, 11, 9, 6, 4, 3][i]);
+    const free = autoRotation(ps);
+    expect(free.minutes[0]).toBeGreaterThan(30);
+    const rot = autoRotation(ps, { ...free, caps: { 0: 20, 99: 25 } });
+    expect(rot.minutes[0]).toBeLessThanOrEqual(20);
+    expect(rot.caps).toEqual({ 0: 20 });
+    // the minutes go to the others
+    expect(Math.abs(total(rot.minutes) - 240)).toBeLessThanOrEqual(3);
+    expect(rot.minutes[1]).toBeGreaterThanOrEqual(free.minutes[1]);
   });
 
   it('lists the starters 1 through 5: a tall point guard still comes first', () => {

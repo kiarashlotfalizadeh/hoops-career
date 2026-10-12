@@ -2,7 +2,7 @@
 // (and move between devices) and import it again. A backup is the whole league, results included.
 import { Capacitor } from '@capacitor/core';
 import type { League } from '../core/types';
-import { listLeagues, loadRawLeague, migrate, saveLeague } from './persistence';
+import { listLeagues, loadRawLeague, migrate, SAVE_VERSION, saveLeague } from './persistence';
 import { useStore } from './store';
 
 const NOT_A_BACKUP = 'That file is not a Hoops Career backup.';
@@ -54,7 +54,8 @@ async function deliver(json: string, name: string): Promise<boolean> {
 
 /** Hand the league to the user as a JSON file. Resolves false if they cancelled the share sheet. */
 export function exportLeague(league: League): Promise<boolean> {
-  return deliver(JSON.stringify(league), fileName(league.name, league.season));
+  // in this build's format, even before its first save writes the version (a new league starts at 1)
+  return deliver(JSON.stringify({ ...league, version: SAVE_VERSION }), fileName(league.name, league.season));
 }
 
 /** Export a stored league as it is, for a save this version can't open (damaged, or from a newer app). */
@@ -69,8 +70,7 @@ export async function importLeague(file: File): Promise<League> {
   const st = useStore.getState();
   if (st.sim) throw new Error('Wait for the simulation to finish, then import.');
   // the import replaces the open league: don't drop changes of it that never reached the disk
-  if (st.league && !(await st.flush()) && useStore.getState().saveProblem?.kind !== 'conflict')
-    throw new Error('Your current league could not be saved. Export a backup of it first.');
+  if (st.league && !(await st.saveBeforeLeaving())) throw new Error('Your current league could not be saved. Export a backup of it first.');
   if (file.size > MAX_IMPORT_BYTES) throw new Error('That file is too big to be a Hoops Career backup.');
   let data: unknown;
   try {
