@@ -282,6 +282,8 @@ h3 {
   top: 0;
   z-index: 30;
   padding-top: var(--safe-t);
+  /* solid fallback first: iOS before 16.2 has no color-mix and would leave the bar see-through */
+  background: rgba(6, 8, 12, 0.82);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
@@ -348,6 +350,7 @@ h3 {
   bottom: 0;
   z-index: 40;
   padding-bottom: var(--safe-b);
+  background: rgba(11, 15, 21, 0.9);
   background: color-mix(in srgb, var(--bg-2) 90%, transparent);
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);

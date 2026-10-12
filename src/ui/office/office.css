@@ -449,6 +449,8 @@
   position: sticky;
   bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
   z-index: 20;
+  /* solid fallback first: iOS before 16.2 has no color-mix */
+  background: rgba(11, 15, 21, 0.94);
   background: color-mix(in srgb, var(--bg-2) 94%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
