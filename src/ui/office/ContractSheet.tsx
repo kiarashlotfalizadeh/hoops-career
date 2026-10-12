@@ -65,7 +65,6 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const market = marketSalary(league, p);
   const pay = payroll(league, tid, season);
   const space = cap.salaryCap - pay;
-  const isMin = amount <= cap.vetMin + 1;
   const after = pay + amount;
   // re-signing him clears his own cap hold; the other expiring players still hold their room
   const otherHolds = mode === 'resign' ? capHolds(league, tid).reduce((a, h) => a + (h.p.pid === p.pid ? 0 : h.amount), 0) : 0;
@@ -75,6 +74,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
   const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
   const rosterBlocked = mode === 'fa' && rosterN >= rosterMax;
   const route = signingRoute(league, tid, amount, season, p);
+  // his own minimum, as signing counts it (below the veteran minimum in his first three seasons)
+  const isMin = route === 'min';
   const mle = mleRoom(league, tid, season);
   const capBlocked = mode === 'fa' && !route;
   const mleTooLong = mode === 'fa' && route === 'mle' && years > MLE_YEARS;
@@ -228,7 +229,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
                 <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(season)}.
               </p>
               <p style={{ margin: 0 }}>
-                Once you're over the cap you can still add players on <b>minimum contracts</b> (up to {fmtM(cap.vetMin, 2)} per season), as long as you have a roster spot.
+                Once you're over the cap you can still add players on <b>minimum contracts</b> (his is {fmtM(minAmt, 2)} per season), as long as you have a roster spot.
               </p>
               <p style={{ margin: 0 }}>
                 Once a season you can also use the <b>mid-level exception</b>: one signing over the cap, up to {MLE_YEARS} years, as long as it keeps you under the tax line (
@@ -310,7 +311,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: 
             </div>
           </div>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
-          {isMin && after > cap.salaryCap && <div className="tiny dim">Minimum contracts (up to {fmtM(cap.vetMin, 2)}) can be signed even when you're over the cap.</div>}
+          {isMin && after > cap.salaryCap && <div className="tiny dim">Minimum deals (up to {fmtM(minAmt, 2)} for him) can be signed even when you're over the cap.</div>}
           {route === 'mle' && <div className="tiny dim">Uses your mid-level exception: once a season, up to {MLE_YEARS} years, and it keeps you under the tax line.</div>}
         </div>
       ) : (
