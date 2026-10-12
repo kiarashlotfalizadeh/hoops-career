@@ -638,9 +638,9 @@ export function aiProposeToUser(league: League, rng: Rng) {
  * Occasional AI-to-AI deals (a few a season): contenders buy rebuilding teams' veterans. The buyer
  * matches salary first (without sending an over-the-cap seller more than it can take back, or
  * taking its own payroll past the tax after using the mid-level), then adds its two most valuable
- * young players and picks from the cheapest up (two firsts at most) until the seller agrees, and
- * the deal only goes through if the buyer likes it too. Only assets the rules let move are
- * offered. Up to three veterans are tried.
+ * young players and picks from the cheapest up (three at most, so better ones replace the cheapest;
+ * two firsts at most) until the seller agrees, and the deal only goes through if the buyer likes it
+ * too. Only assets the rules let move are offered. Up to three veterans are tried.
  */
 export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
@@ -700,10 +700,16 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   for (const x of [...youth.slice(0, 2), ...picks]) {
     if (teamAccepts(league, offer(), seller)) break;
     if (!('pid' in x)) {
-      if (dps.length < 3 && (x.round === 2 || dps.filter((d) => d.round === 1).length < MAX_FIRSTS_OUT)) {
-        dps.push(x);
-        // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
-        if (stepienError(league, offer(), offer().a)) dps.pop();
+      // three picks at most: past that the cheapest one in makes way for this better one (else
+      // three second-rounders would be as far as an offer ever got)
+      const out = dps.length >= 3 ? dps[0] : null;
+      if (x.round === 1 && dps.filter((d) => d !== out && d.round === 1).length >= MAX_FIRSTS_OUT) continue;
+      if (out) dps.shift();
+      dps.push(x);
+      // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
+      if (stepienError(league, offer(), offer().a)) {
+        dps.pop();
+        if (out) dps.unshift(out);
       }
     } else if (pkg.length < maxPkg && sellerFits(x)) pkg.push(x);
   }
