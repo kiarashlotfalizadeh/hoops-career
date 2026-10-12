@@ -8,7 +8,7 @@ import { advanceDay, faAdvance, faDayNumber, faOver, finishDraftPhase, newSeason
 import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, payroll, standardRoster, statsLine, teamPlayers, winPct, withRng } from '../league/helpers';
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
-import { validateTrade } from '../league/trades';
+import { tradingClosedReason, validateTrade } from '../league/trades';
 import { buildSimInput, ensureRotation, wearInjuryRisk } from '../league/games';
 import { rankedPresets } from '../ai/coachAI';
 import { finalsHomeCourt, standings } from '../league/standings';
@@ -118,6 +118,24 @@ describe('simulation targets (bug 4)', () => {
     expect(l.day).toBe(l.allStarDay - 1);
     expect(l.awards.find((a) => a.season === l.season)?.allStarMvp).toBeUndefined();
     expect(flowActions(l).some((a) => a.id === 'allstar')).toBe(false);
+  });
+
+  it('trading closes the day after the deadline and through the postseason, for every screen that asks', () => {
+    const l = league();
+    expect(startRegularSeason(l)).toEqual([]);
+    const empty = { a: { tid: U, pids: [], dpids: [] }, b: { tid: aiTeam(l), pids: [], dpids: [] } };
+    l.day = l.tradeDeadlineDay;
+    expect(tradingClosedReason(l)).toBeNull();
+    l.day++;
+    expect(tradingClosedReason(l)).toMatch(/deadline/);
+    expect(validateTrade(l, empty)).toContain(tradingClosedReason(l));
+    for (const phase of ['playin', 'playoffs'] as const) {
+      l.phase = phase;
+      expect(tradingClosedReason(l)).toMatch(/postseason/);
+    }
+    // it reopens with the lottery
+    l.phase = 'draftLottery';
+    expect(tradingClosedReason(l)).toBeNull();
   });
 });
 

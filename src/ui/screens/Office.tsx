@@ -42,6 +42,7 @@ import {
   ownerVerdict,
   playerMeta,
   shortSeason,
+  tradeClosedNote,
 } from '../office/common';
 import { overallPick } from '../league/shared';
 import { rosterNames } from '../stats';
@@ -689,7 +690,8 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const tooFew = !!blocked;
   const upNote = contractUpNote(league, p);
   const expiringNow = !!upNote;
-  const noTrade = expiringNow ? null : untradeableReason(league, p);
+  // after the deadline and in the postseason, say so here rather than on the Trade screen
+  const noTrade = expiringNow ? null : (tradeClosedNote(league) ?? untradeableReason(league, p));
   const opt = openOption(league, p);
   const s0 = capSeason(league);
 
