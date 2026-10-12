@@ -86,9 +86,9 @@ function Boot({ children }: { children: ReactNode }) {
       setBlocked(true);
       useStore.getState().toast(BLOCKED, 'bad');
     });
-    // another window saved this league: this copy is stale, so stop autosaving it
-    const off = onRemoteChange((id) => {
-      if (useStore.getState().league?.id === id) useStore.setState({ saveProblem: problemOf(new SaveConflictError()) });
+    // another window saved (or deleted) this league: this copy is stale, so stop autosaving it
+    const off = onRemoteChange((id, deleted) => {
+      if (useStore.getState().league?.id === id) useStore.setState({ saveProblem: problemOf(new SaveConflictError(deleted)) });
     });
     const onHide = () => {
       if (document.visibilityState === 'hidden') void useStore.getState().flush();
@@ -338,7 +338,11 @@ function SaveBanner() {
       <AlertTriangle size={18} className="bad" style={{ flex: 'none' }} />
       <div className="grow small">
         <b>{conflict ? problem.text : 'Not saved.'}</b>{' '}
-        {conflict ? 'Reload to pick it up from there. Changes made in this window since then are not kept unless you export a backup.' : problem.text}
+        {conflict
+          ? problem.deleted
+            ? 'Export a backup to keep this copy; a reload opens the main menu without it.'
+            : 'Reload to pick it up from there. Changes made in this window since then are not kept unless you export a backup.'
+          : problem.text}
       </div>
       {/* either way, this window's copy can be kept as a file */}
       <div className="col" style={{ gap: 6 }}>
