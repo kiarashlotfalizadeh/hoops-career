@@ -23,7 +23,7 @@ import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
 import { untradeableReason } from '../../core/league/trades';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
-import { useLeague, useLeagueMemo } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet } from '../components/ui';
 import {
@@ -46,6 +46,7 @@ import {
 } from '../office/common';
 import { overallPick } from '../league/shared';
 import { rosterNames } from '../stats';
+import { useFlowRunner } from '../useFlow';
 
 interface Tile {
   to: string;
@@ -297,6 +298,8 @@ export default function Office() {
 
 function Spotlight({ league }: { league: League }) {
   const nav = useNavigate();
+  const run = useFlowRunner();
+  const busy = useStore((st) => !!st.sim);
   const tid = league.userTid;
   const s0 = capSeason(league);
   const space = CAP_FOR(league, s0).salaryCap - payroll(league, tid, s0);
@@ -321,6 +324,8 @@ function Spotlight({ league }: { league: League }) {
       const np = nextPick(league);
       const onClock = league.phase === 'draft' && np?.tid === tid;
       const mine = draftOrder(league).filter((d) => d.tid === tid);
+      // every pick is in: next is re-signing, as on the Draft screen
+      const done = league.phase === 'draft' && !np;
       return (
         <Card className={`fo-hero ${onClock ? 'fo-clock' : ''}`} accent={!onClock}>
           {onClock ? <div className="fo-live">You're on the clock</div> : <div className="fo-eyebrow">{league.phase === 'draft' ? 'Draft night' : 'Lottery results are in'}</div>}
@@ -341,8 +346,13 @@ function Spotlight({ league }: { league: League }) {
               </div>
             </div>
           </div>
-          <button className={`btn block ${onClock ? 'good' : 'primary'}`} style={{ marginTop: 12 }} onClick={() => nav('/draft')}>
-            {onClock ? 'Make your pick' : 'Open the draft board'}
+          <button
+            className={`btn block ${onClock ? 'good' : 'primary'}`}
+            style={{ marginTop: 12 }}
+            disabled={done && busy}
+            onClick={() => (done ? void run({ id: 'finish', label: 'Continue to re-signing', cmd: 'finishDraft' }) : nav('/draft'))}
+          >
+            {onClock ? 'Make your pick' : done ? 'Continue to re-signing' : 'Open the draft board'}
           </button>
         </Card>
       );
