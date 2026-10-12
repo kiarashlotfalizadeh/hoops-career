@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
-import { teamPlayers } from '../league/helpers';
-import { applyPatch, pairedDelta, runLab } from '../ai/lab';
-import { counterCandidates, scoutTeam, teamAlerts } from '../ai/advisor';
+import { teamPlayers, wholeMinutes } from '../league/helpers';
+import { applyPatch, pairedDelta, runLab, type TacticsPatch } from '../ai/lab';
+import { counterCandidates, liveCounter, scoutTeam, teamAlerts } from '../ai/advisor';
 import { fitRoster, offPresetFit, rosterProfile } from '../ai/coachAI';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
-import { OFF_PRESETS } from '../sim/tactics';
-import type { GameResult } from '../types';
+import { FINISH_LABEL, type FinishType } from '../sim/log';
+import { OFF_PRESETS, cloneTactics } from '../sim/tactics';
+import type { GameResult, Tactics } from '../types';
 
 describe('tactics lab & reports', () => {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
@@ -19,6 +20,16 @@ describe('tactics lab & reports', () => {
     const c = runLab({ a: side(0), b: side(1), games: 6, seed: 42, patch: { defense: { pnr: 'blitz' } } });
     expect(c.margins.length).toBe(6);
   });
+  it('plays playoff games when asked: the assistants shorten the rotation to eight, as in real playoff games', () => {
+    // the ninth man's minutes: a regular-season rotation plays ten, a playoff one leaves him garbage time
+    const ninth = (type?: 'playoffs') =>
+      Object.values(runLab({ a: side(0), b: side(1), games: 6, seed: 42, type }).players)
+        .map((p) => p.min)
+        .sort((x, y) => y - x)[8];
+    expect(league.teams[0].rotation.manual).toBeFalsy();
+    expect(ninth()).toBeGreaterThan(5);
+    expect(ninth('playoffs')).toBeLessThan(3);
+  });
   it('builds a post-game report for the user team', () => {
     const g = league.schedule.find((x) => x.home === 0 || x.away === 0)!;
     league.phase = 'regular';
@@ -27,6 +38,22 @@ describe('tactics lab & reports', () => {
     expect(rep.headline.length).toBeGreaterThan(10);
     expect(rep.playTypes.length).toBeGreaterThan(3);
     expect(rep.grades.length).toBeGreaterThan(4);
+  });
+  it("quotes the box score's whole minutes in the player grades", () => {
+    league.phase = 'regular';
+    const res = playGame(
+      league,
+      league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!,
+    );
+    const box = res.home.tid === 0 ? res.home : res.away;
+    // 240 at the tenth; rounding each line alone gives 242 (31.5 reads 32, the box score's 31)
+    const mins = [36.5, 35.5, 33.5, 31.5, 30.5, 22.4, 18.3, 15.2, 10.6, 6.0];
+    box.players.forEach((p, i) => (p.min = mins[i] ?? 0));
+    const shown = wholeMinutes(box.players);
+    const grades = buildGameReport(league, res)!.grades;
+    expect(grades).toHaveLength(10);
+    for (const g of grades) expect(g.note).toMatch(new RegExp(` in ${shown(g.pid)} min$`));
+    expect(grades.find((g) => g.pid === box.players[3].pid)!.note).toMatch(/ in 31 min$/);
   });
   it("headlines a factor that went the winner's way, with one colon, and no nail-biter in overtime", () => {
     league.phase = 'regular';
@@ -155,6 +182,35 @@ describe('tactics lab & reports', () => {
     expect(body()).toMatch(/lowering his 28-minute cap \(Rotation\)/);
     league.teams[2].rotation = rotation;
     p.wear = wear;
+  });
+  it("only offers a live game's quick counter when it changes something, and never pulls a slider back", () => {
+    const at = (patch: TacticsPatch) => applyPatch(league.teams[0].tactics, patch);
+    const after = (ft: FinishType, t: Tactics) => {
+      const x = cloneTactics(t);
+      liveCounter(ft, t)!.apply(x);
+      return x;
+    };
+    // already getting back and off the glass: "Sprint back" would do nothing
+    expect(liveCounter('transition', at({ defense: { getBack: 85 }, offense: { crashBoards: 30 } }))).toBeUndefined();
+    expect(liveCounter('transition', at({ defense: { getBack: 95 }, offense: { crashBoards: 10 } }))).toBeUndefined();
+    // still crashing: it pulls back from the glass and keeps the faster transition defense
+    const crashing = after('transition', at({ defense: { getBack: 95 }, offense: { crashBoards: 60 } }));
+    expect([crashing.defense.getBack, crashing.offense.crashBoards]).toEqual([95, 30]);
+    // already doubling the post: no "Double the post" that would lower help from 90 to 80
+    expect(liveCounter('post', at({ defense: { help: 80 } }))).toBeUndefined();
+    expect(liveCounter('post', at({ defense: { help: 90 } }))).toBeUndefined();
+    expect(after('post', at({ defense: { help: 60 } })).defense.help).toBe(80);
+    // whatever the tactics, an offered counter changes them
+    for (const ft of Object.keys(FINISH_LABEL) as FinishType[])
+      for (const patch of [
+        {},
+        { defense: { scheme: 'man', pnr: 'drop', help: 70 } },
+        { defense: { scheme: 'zone23', help: 40 } },
+        { defense: { scheme: 'man', pnr: 'switch', help: 85 } },
+      ] as TacticsPatch[]) {
+        const t = at(patch);
+        if (liveCounter(ft, t)) expect(JSON.stringify(after(ft, t))).not.toBe(JSON.stringify(t));
+      }
   });
   it('only offers counters that change something', () => {
     const [mine, opp] = [league.teams[0], league.teams[1]];

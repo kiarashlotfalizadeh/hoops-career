@@ -471,10 +471,11 @@ export default function Tactics() {
 function InsightsTab() {
   const league = useLeague();
   const pts = useLeagueMemo(() => seasonPlayTypes(league), [league]);
-  const imps = useLeagueMemo(() => seasonImpacts(league).filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3), [league]);
+  // the games the effects were tracked in, whether or not any effect is big enough to list
+  const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
+  const imps = effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3);
   const helping = imps.filter((x) => x.forUser).slice(0, 5);
   const hurting = imps.filter((x) => !x.forUser).slice(0, 5);
-  const games = imps[0]?.games ?? 0;
   if (!pts.length)
     return (
       <Card>
@@ -505,14 +506,7 @@ function InsightsTab() {
   };
   return (
     <>
-      <Card
-        title="What's working"
-        right={
-          <span className="tiny dim">
-            pts per game · {games} game{games === 1 ? '' : 's'}
-          </span>
-        }
-      >
+      <Card title="What's working" right={<span className="tiny dim">pts per game{games > 0 && ` · ${games} game${games === 1 ? '' : 's'}`}</span>}>
         <div className="col" style={{ gap: 8 }}>
           {helping.length ? helping.map(row) : <div className="small dim">Nothing stands out yet.</div>}
         </div>

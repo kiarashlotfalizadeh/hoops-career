@@ -176,21 +176,8 @@ export function fmtClock(sec: number) {
 }
 /** Play-by-play lines: substitutions fade back, but stay above 5:1 contrast. */
 export const pbpOpacity = (kind?: string) => (kind === 'sub' ? 0.7 : 1);
-/**
- * A team's box-score minutes as whole numbers that still add up to the team's total (240, plus 25
- * per overtime): rounded down, then the leftover minutes go to the largest remainders.
- */
-export function wholeMinutes(players: { pid: number; min: number }[]): (pid: number) => number {
-  const total = Math.round(players.reduce((a, p) => a + p.min, 0));
-  const out = new Map(players.map((p) => [p.pid, Math.floor(p.min)]));
-  let left = total - [...out.values()].reduce((a, b) => a + b, 0);
-  for (const p of [...players].sort((a, b) => (b.min % 1) - (a.min % 1))) {
-    if (left <= 0) break;
-    out.set(p.pid, out.get(p.pid)! + 1);
-    left--;
-  }
-  return (pid) => out.get(pid) ?? 0;
-}
+/** Box-score minutes as whole numbers that add up to the team's total (the game report's grades quote them too). */
+export { wholeMinutes } from '../core/league/helpers';
 
 /**
  * Who starts the next game, from players in depth-chart order: the first five healthy ones, as the

@@ -11,8 +11,9 @@ const pending = new Map<(e: Error) => void, ReturnType<typeof setTimeout>>();
 function ensure(): Lab {
   if (!worker || !remote) {
     const w = new Worker(new URL('../workers/lab.worker.ts', import.meta.url), { type: 'module' });
-    w.addEventListener('error', (e) => resetLab(new Error(e.message || 'The lab worker crashed.')));
-    w.addEventListener('messageerror', () => resetLab(new Error('The lab worker sent an unreadable message.')));
+    // a worker already stopped (left mid-run) can still report an error: it mustn't kill a newer run's worker
+    w.addEventListener('error', (e) => worker === w && resetLab(new Error(e.message || 'The lab worker crashed.')));
+    w.addEventListener('messageerror', () => worker === w && resetLab(new Error('The lab worker sent an unreadable message.')));
     worker = w;
     remote = Comlink.wrap<LabWorkerApi>(w);
   }

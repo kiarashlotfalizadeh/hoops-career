@@ -3,7 +3,7 @@ import { haptic } from '../../native';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Activity, ChevronsRight, FastForward, Hand, Home as HomeIcon, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
 import { useLeague, useStore, useVersion } from '../../state/store';
-import { prepareLive, clearLive, type LiveGame } from '../../state/live';
+import { prepareLive, clearLive, playedElsewhere, type LiveGame } from '../../state/live';
 import { buildScript, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
 import { TeamLogo } from '../components/TeamLogo';
@@ -14,6 +14,7 @@ import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } 
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { buildSimInput } from '../../core/league/games';
+import { liveCounter } from '../../core/ai/advisor';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
 import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames, wholeMinutes } from '../stats';
@@ -203,8 +204,8 @@ export default function Live() {
     setStatus('live');
   }, []);
 
-  /** The game this screen is coaching was played without it (simmed from the Play menu). */
-  const playedElsewhere = useCallback((lg: LiveGame) => !lg.committed && useStore.getState().league!.games.some((g) => g.gid === lg.game.gid), []);
+  /** What became of the game this screen is coaching: null while it's still the screen's to finish. */
+  const fate = useCallback((lg: LiveGame) => playedElsewhere(lg, useStore.getState().league!), []);
 
   const start = useCallback(() => {
     let lg: LiveGame | null = null;
@@ -232,9 +233,9 @@ export default function Live() {
   // a fresh visit to /live (also from the final card or the Play menu) picks up today's game; one in progress keeps going
   useEffect(() => {
     const lg = liveRef.current;
-    if (lg && !lg.committed && !playedElsewhere(lg)) return;
+    if (lg && fate(lg) === null) return;
     start();
-  }, [loc.key, start, playedElsewhere]);
+  }, [loc.key, start, fate]);
 
   const info = useCallback(
     (pid: number) => {
@@ -278,26 +279,31 @@ export default function Live() {
   const finish = useCallback(() => {
     const lg = liveRef.current;
     if (!lg) return;
-    if (!lg.committed && !playedElsewhere(lg)) {
+    const now = fate(lg);
+    // its league went back to the last save: today's game there starts over
+    if (now === 'gone') return start();
+    if (now === null) {
       useStore.getState().mutate((l) => void lg.commit(l));
       clearLive();
     }
     if (lg.committed) showFinal(lg);
     else showSimmed(lg);
-  }, [playedElsewhere, showFinal, showSimmed]);
+  }, [fate, start, showFinal, showSimmed]);
 
-  // another screen finished this game (the Play menu's sims): stop animating a ghost
+  // another screen finished this game (the Play menu's sims), or a sim error reloaded the last save: stop animating a ghost
   const v = useVersion();
   useEffect(() => {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
-    if (lg.committed) showFinal(lg);
-    else if (playedElsewhere(lg)) showSimmed(lg);
-  }, [v, status, playedElsewhere, showFinal, showSimmed]);
+    const now = fate(lg);
+    if (now === 'gone') start();
+    else if (lg.committed) showFinal(lg);
+    else if (now !== null) showSimmed(lg);
+  }, [v, status, fate, start, showFinal, showSimmed]);
 
   const nextPossession = useCallback(() => {
     const lg = liveRef.current;
-    if (!lg || lg.committed || playedElsewhere(lg)) return finish();
+    if (!lg || fate(lg) !== null) return finish();
     // the play-by-play catches up with the court only now, so it never gives away a play still being drawn
     const lines = flushFeed();
     // screen readers hear the basket and the score the court just finished showing, at most once a possession
@@ -310,14 +316,19 @@ export default function Live() {
     drawnBox.current = boxSnapshot(lg.sim);
     let logs: PossLog[] = [];
     let guard = 0;
-    while (!logs.length && !lg.over && guard++ < 5) logs = lg.step();
+    // the score the drawn possession starts from (its log keeps only the one it ends on)
+    let from: [number, number] = [0, 0];
+    while (!logs.length && !lg.over && guard++ < 5) {
+      from = [lg.sim.T[0].score, lg.sim.T[1].score];
+      logs = lg.step();
+    }
     if (!logs.length) {
       flushFeed();
       return finish();
     }
-    setScript(buildScript(logs[logs.length - 1], info));
+    setScript(buildScript(logs[logs.length - 1], info, logs.length > 1 ? logs[logs.length - 2].score : from));
     setTick((t) => t + 1);
-  }, [info, finish, flushFeed, playedElsewhere, ticker]);
+  }, [info, finish, flushFeed, fate, ticker]);
 
   useEffect(() => {
     if (status === 'live' && !script && !atBreak) nextPossession();
@@ -423,25 +434,10 @@ export default function Live() {
       const base = baselines[k];
       if (k === 'misc' || base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
       const ft = k as FinishType;
-      const cov = me.t.defense.pnr;
-      // ball-screen coverage only applies in man-to-man
-      const man = me.t.defense.scheme === 'man';
-      let advice: Suggestion['action'];
-      let text = `Their ${playType(ft)} plays are scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
-      if (ft === 'pnrBH' && man && cov === 'drop') {
-        text += ' Drop is giving their handlers room.';
-        advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
-      } else if (ft === 'spotup' && me.t.defense.help > 55) {
-        text += ' Too much help is leaving shooters open.';
-        advice = { label: 'Stay home', run: () => applyTactics((t) => void (t.defense.help = 35), false) };
-      } else if (ft === 'transition') {
-        advice = { label: 'Sprint back', run: () => applyTactics((t) => void ((t.defense.getBack = 85), (t.offense.crashBoards = Math.min(t.offense.crashBoards, 30))), false) };
-      } else if (ft === 'post') {
-        advice = { label: 'Double the post', run: () => applyTactics((t) => void (t.defense.help = 80), false) };
-      } else if (ft === 'pnrRoll' && man && cov !== 'drop') {
-        advice = { label: 'Go to Drop', run: () => applyTactics((t) => void (t.defense.pnr = 'drop'), false) };
-      }
-      out.push({ id: `pt-${k}`, text, action: advice });
+      // only a button that changes something: none once the tactics already do it
+      const counter = liveCounter(ft, me.t);
+      const text = `Their ${playType(ft)} plays are scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).${counter?.note ? ` ${counter.note}` : ''}`;
+      out.push({ id: `pt-${k}`, text, action: counter && { label: counter.label, run: () => applyTactics(counter.apply, false) } });
     }
     for (const [k, v] of Object.entries(me.pt)) {
       const base = baselines[k];
