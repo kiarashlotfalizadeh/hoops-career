@@ -350,8 +350,8 @@ export function archetype(r: Ratings): ArchetypeInfo {
 }
 
 export const ROLE_META: Record<OffRole, { label: string; help: string }> = {
-  creator: { label: 'Primary Creator', help: 'Offense runs through him: most PnRs and isolations, highest usage.' },
-  scorer: { label: 'Secondary Scorer', help: 'Second option who attacks closeouts, runs PnR and gets isolations.' },
+  creator: { label: 'Primary Creator', help: 'Offense runs through him: most pick-and-rolls and isolations, highest usage.' },
+  scorer: { label: 'Secondary Scorer', help: 'Second option who attacks closeouts, runs pick-and-rolls and gets isolations.' },
   playmaker: { label: 'Playmaker', help: 'Initiates sets and looks to pass first. Moderate usage, high assists.' },
   shooter: { label: 'Movement Shooter', help: 'Runs off screens and handoffs for catch-and-shoot threes. Spaces the floor.' },
   slasher: { label: 'Slasher', help: 'Cuts and attacks closeouts toward the rim.' },
