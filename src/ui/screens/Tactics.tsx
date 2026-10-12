@@ -1,5 +1,5 @@
 import { TabBar } from '../league/shared';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -66,8 +66,14 @@ export default function Tactics() {
   const tab = (tabs.find((t) => t.id === params.get('tab'))?.id ?? 'playbook') as Tab;
   const team = league.teams[league.userTid];
   const t = team.tactics;
-  const snapshot = useRef<TacticsT>(cloneTactics(t));
-  const changed = JSON.stringify(snapshot.current) !== JSON.stringify(t);
+  // what Undo and Compare go back to: the tactics as this visit found them (copied once, not every render)
+  const [snapshot] = useState(() => {
+    const tactics = cloneTactics(t);
+    return { tactics, sig: JSON.stringify(tactics) };
+  });
+  const changed = snapshot.sig !== JSON.stringify(t);
+  // a Play-menu sim's progress bar takes the same spot as the changes bar
+  const simming = useStore((s) => !!s.sim);
   const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
   // the roster as the assistant judges it (rankedPresets): a knock of five games or fewer doesn't swing the fits
   const healthy = useMemo(() => {
@@ -95,10 +101,10 @@ export default function Tactics() {
   const bigC = big ? composites(big.ratings) : null;
 
   return (
-    <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + 96px)' : undefined }}>
+    <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
       <PageHeader
         title="Tactics"
-        sub={`${OFF_PRESETS.find((x) => x.id === t.offPreset)?.name ?? 'Custom'} · ${DEF_PRESETS.find((x) => x.id === t.defPreset)?.name ?? 'Custom'}${t.manual ? ' · Custom' : ' · Assistant-managed'}`}
+        sub={`${OFF_PRESETS.find((x) => x.id === t.offPreset)?.name ?? 'Custom'} · ${DEF_PRESETS.find((x) => x.id === t.defPreset)?.name ?? 'Custom'}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
         right={
           <Link to="/lab" className="btn sm">
             <FlaskConical size={16} /> Lab
@@ -402,7 +408,7 @@ export default function Tactics() {
                 onChange={(x) => edit((tt) => void (tt.defense.getBack = x))}
                 left="Jog back"
                 right="Sprint back"
-                help="How hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash boards (Offense) sets how many go to the glass."
+                help="How hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash the offensive glass (Offense) sets how many players go after them."
               />
             </div>
           </Card>
@@ -436,7 +442,7 @@ export default function Tactics() {
       {tab === 'insights' && <InsightsTab />}
       {tab === 'manage' && <ManageTab edit={edit} t={t} />}
 
-      {changed && (
+      {changed && !simming && (
         <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
           <div className="grow small">
             <div className="bold">Changes saved</div>
@@ -447,7 +453,7 @@ export default function Tactics() {
             aria-label="Undo"
             onClick={() =>
               useStore.getState().mutate((l) => {
-                l.teams[l.userTid].tactics = cloneTactics(snapshot.current);
+                l.teams[l.userTid].tactics = cloneTactics(snapshot.tactics);
               })
             }
           >
@@ -456,7 +462,7 @@ export default function Tactics() {
           <button
             className="btn sm primary"
             onClick={() => {
-              setLabBaseline(cloneTactics(snapshot.current));
+              setLabBaseline(cloneTactics(snapshot.tactics));
               nav('/lab?compare=1');
             }}
           >
@@ -621,6 +627,7 @@ function RolesTab() {
                 <button
                   key={pl.pid}
                   className={`chip ${on ? 'on' : ''}`}
+                  aria-pressed={on}
                   onClick={() => edit((tt) => void (tt.offense.screeners = on ? tt.offense.screeners.filter((x) => x !== pl.pid) : [...tt.offense.screeners, pl.pid]))}
                 >
                   {nameOf(pl.pid)}
@@ -697,6 +704,7 @@ function ManageTab({ t, edit }: { t: TacticsT; edit: (fn: (t: TacticsT) => void)
           <Slider
             label="Timeout after a run of"
             value={t.manage.timeoutRun}
+            disabled={!t.manage.autoTimeouts}
             min={6}
             max={14}
             onChange={(x) => edit((tt) => void (tt.manage.timeoutRun = x))}

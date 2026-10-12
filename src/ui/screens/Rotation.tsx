@@ -23,6 +23,8 @@ export default function Rotation() {
   const [edit, setEdit] = useState<number | null>(null);
   // the rotation Auto replaced, until the next edit
   const [undo, setUndo] = useState<RotationT | null>(null);
+  // a Play-menu sim's progress bar takes the same spot as the undo bar
+  const simming = useStore((s) => !!s.sim);
 
   const update = (fn: (r: RotationT) => void) => {
     setUndo(null);
@@ -71,7 +73,7 @@ export default function Rotation() {
   const ep = edit !== null ? byId.get(edit) : null;
 
   return (
-    <main className="page" style={{ paddingBottom: undo ? 'calc(var(--nav-h) + 96px)' : undefined }}>
+    <main className="page" style={{ paddingBottom: undo ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
       <PageHeader
         title="Rotation"
         back
@@ -222,7 +224,7 @@ export default function Rotation() {
         {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starting={startSet.has(ep.pid)} />}
       </Sheet>
 
-      {undo && (
+      {undo && !simming && (
         <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
           <div className="grow small">
             <div className="bold">Assistant's rotation applied</div>
