@@ -22,6 +22,9 @@ import { jerseyColors } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
 import { LIVE_SPEEDS } from '../settingsOptions';
 
+/** A play type mid-sentence: "their isolation plays", "their P&R ball handler plays". */
+const playType = (ft: FinishType) => FINISH_LABEL[ft].replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase());
+
 const FEED_MAX = 80;
 
 interface Suggestion {
@@ -415,7 +418,7 @@ export default function Live() {
       // ball-screen coverage only applies in man-to-man
       const man = me.t.defense.scheme === 'man';
       let advice: Suggestion['action'];
-      let text = `Their ${FINISH_LABEL[ft]} is scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
+      let text = `Their ${playType(ft)} plays are scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).`;
       if (ft === 'pnrBH' && man && cov === 'drop') {
         text += ' Drop is giving their handlers room.';
         advice = { label: 'Switch to Hedge', run: () => applyTactics((t) => void (t.defense.pnr = 'hedge'), false) };
@@ -436,7 +439,7 @@ export default function Live() {
       if (k !== 'misc' && base !== undefined && v.poss >= 12 && zScore(v, base) < -2)
         out.push({
           id: `mypt-${k}`,
-          text: `Our ${FINISH_LABEL[k as FinishType]} is stalling (${(v.pts / v.poss).toFixed(2)} PPP, league ${base.toFixed(2)}). Consider running other actions.`,
+          text: `Our ${playType(k as FinishType)} plays are stalling at ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}). Consider running other actions.`,
         });
     }
     // biggest tactical edge against us so far
@@ -905,10 +908,10 @@ function TacticsPanel({
       <Toggle on={persist} onChange={setPersist} label="Keep changes after this game" help="Off: adjustments only apply to this game." />
       <div>
         <div className="small bold" style={{ marginBottom: 6 }}>
-          Pick & roll coverage
+          Pick-and-roll coverage
         </div>
         <Chips
-          label="Pick & roll coverage"
+          label="Pick-and-roll coverage"
           value={t.defense.pnr}
           onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
           options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}

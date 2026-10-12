@@ -31,7 +31,12 @@ interface SkillDef {
 }
 
 const SKILLS: SkillDef[] = [
-  { key: 'create', label: 'Shot creation', get: (c) => (c.create + c.pnrHandle) / 2, help: 'Beating a defender and running pick-and-roll. Drives usage in PnR and isolations.' },
+  {
+    key: 'create',
+    label: 'Shot creation',
+    get: (c) => (c.create + c.pnrHandle) / 2,
+    help: 'Beating a defender and running pick-and-roll. Drives usage in pick-and-rolls and isolations.',
+  },
   { key: 'three', label: 'Three-point shooting', get: (c) => (c.c3 + c.pu3) / 2, help: 'Catch-and-shoot and pull-up threes. Also creates spacing for teammates.' },
   { key: 'mid', label: 'Mid-range', get: (c) => c.midShot, help: 'Pull-ups and floaters, the answer to drop coverage.' },
   { key: 'rim', label: 'Finishing', get: (c) => c.rim, help: 'Converting at the rim through contact and rim protectors.' },

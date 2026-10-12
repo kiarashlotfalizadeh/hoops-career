@@ -1,6 +1,6 @@
 // Possession-by-possession game engine.
 //
-// Every possession is resolved through concrete basketball actions (pick & roll,
+// Every possession is resolved through concrete basketball actions (pick-and-roll,
 // isolation, post-up, handoffs, motion, transition) with explicit actors, defenders
 // and defensive coverages. Each tactical modifier is tagged, and its expected-points
 // effect is accumulated so post-game reports can say *why* a game was won or lost.

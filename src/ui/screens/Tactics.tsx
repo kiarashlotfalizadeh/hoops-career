@@ -258,8 +258,8 @@ export default function Tactics() {
             title="Actions"
             right={
               <Help title="How actions are chosen">
-                Each half-court trip, the offense picks an action weighted by these sliders and by how well the players on the floor can run it. A PnR-heavy plan with no ball
-                handler on the floor will naturally drift to other actions.
+                Each half-court trip, the offense picks an action weighted by these sliders and by how well the players on the floor can run it. A pick-and-roll-heavy plan with no
+                ball handler on the floor will naturally drift to other actions.
               </Help>
             }
           >
@@ -334,7 +334,7 @@ export default function Tactics() {
             </div>
           </Card>
           <Card
-            title="Pick & roll coverage"
+            title="Pick-and-roll coverage"
             right={
               <Help title="Coverages explained">
                 {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => (
@@ -346,7 +346,7 @@ export default function Tactics() {
             }
           >
             <Chips
-              label="Pick & roll coverage"
+              label="Pick-and-roll coverage"
               value={t.defense.pnr}
               onChange={(x: PnrCoverage) => edit((tt) => void (tt.defense.pnr = x))}
               options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
