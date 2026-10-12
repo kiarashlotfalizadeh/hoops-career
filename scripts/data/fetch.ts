@@ -58,6 +58,7 @@ async function main() {
   mkdirSync(RAW, { recursive: true });
   const sources = allSources().filter((s) => !only || s.key.includes(only));
   let fetched = 0;
+  const failed: string[] = [];
   for (const s of sources) {
     const file = join(RAW, `${s.key}.html`);
     if (!force && !(refresh && s.volatile) && existsSync(file) && statSync(file).size > 5000) continue;
@@ -84,9 +85,15 @@ async function main() {
         console.error('\nCould not reach basketball-reference.com. If you are in a sandboxed environment, allow the domain in its network settings.');
         process.exit(1);
       }
+      failed.push(s.key);
     }
   }
   console.log(`Done. ${fetched} request(s) made; cache at ${RAW}`);
+  // the seed can't be built without these, and a copy cached by an earlier run (--refresh) is out of date
+  if (failed.length) {
+    console.error(`\nCould not fetch ${failed.join(', ')}: data:build would be missing them or use an older cached copy.`);
+    process.exit(1);
+  }
 }
 
 void main();
