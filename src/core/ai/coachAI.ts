@@ -240,10 +240,14 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   depth = reorder(depth);
   talent = reorder(talent);
   want = reorder(want);
+  // hard caps (load management) hold: the minutes go to the others; players who left take theirs along
+  const hardCaps: Rotation['caps'] = {};
+  for (const p of players) if (prev?.caps?.[p.pid]) hardCaps[p.pid] = prev.caps[p.pid];
+  const ceiling = depth.map((p) => Math.min(MAX_PLAN, hardCaps[p.pid] ?? MAX_PLAN));
   // stamina sets what a player can sustain; a proven heavy-minute role counts too
-  const caps = depth.map((p) => {
+  const caps = depth.map((p, i) => {
     const r = roles.get(p.pid);
-    return Math.min(MAX_PLAN, Math.max(sustainableMinutes(p), r && r.w >= 0.2 ? Math.max(r.mpg + 2, healthyMinutes(r.mpg)) : 0));
+    return Math.min(ceiling[i], Math.max(sustainableMinutes(p), r && r.w >= 0.2 ? Math.max(r.mpg + 2, healthyMinutes(r.mpg)) : 0));
   });
   let mins = want.map((m, i) => Math.min(m, caps[i]));
   let total = mins.reduce((a, b) => a + b, 0);
@@ -283,7 +287,7 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
     if (!open.some((x) => x > 0)) open = mins.map((m, i) => (i < 13 && m < Math.min(caps[i], 16) - 0.05 ? Math.max(m, 6) : 0));
     if (!open.some((x) => x > 0)) {
       // everyone is at his stamina cap: stretch the regulars toward the ceiling
-      for (let i = 0; i < caps.length; i++) caps[i] = Math.min(MAX_PLAN, caps[i] + 3);
+      for (let i = 0; i < caps.length; i++) caps[i] = Math.min(ceiling[i], caps[i] + 3);
       open = mins.map((m, i) => (i < 10 && m < caps[i] - 0.05 ? Math.max(m, 4) : 0));
       if (!open.some((x) => x > 0)) break;
     }
@@ -303,7 +307,7 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
     minutes,
     closers,
     restB2B: prev?.restB2B?.filter((pid) => players.some((p) => p.pid === pid)) ?? [],
-    caps: prev?.caps ?? {},
+    caps: hardCaps,
     manual: false,
   };
 }
