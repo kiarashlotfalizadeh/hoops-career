@@ -713,16 +713,17 @@ export default function Live() {
 function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Ticker; sim: GameSim; home: Team; away: Team; quarter: number; over: boolean; ot: number }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
+  // the bonus dots are only colour: screen readers get them in the label
+  const bonus = [sim.bonus(sim.T[0]) ? away.abbrev : '', sim.bonus(sim.T[1]) ? home.abbrev : ''].filter(Boolean);
+  const state = over
+    ? `final${ot ? ` in ${ot > 1 ? `${ot} overtimes` : 'overtime'}` : ''}`
+    : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}`;
   return (
     <div
       className="card tight"
       style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}
     >
-      <div
-        className="scorebug live-bug"
-        role="group"
-        aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${over ? `final${ot ? ` in ${ot > 1 ? `${ot} overtimes` : 'overtime'}` : ''}` : `${qLabel} ${fmtClock(clock)}`}`}
-      >
+      <div className="scorebug live-bug" role="group" aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}`}>
         <div className="row" style={{ gap: 6, minWidth: 0 }}>
           <TeamLogo tid={away.tid} size={28} />
           <div style={{ minWidth: 0 }}>
@@ -730,7 +731,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Tick
             <div className="tiny dim nowrap">
               TO {sim.T[1].timeouts}
               {sim.bonus(sim.T[0]) && (
-                <span className="warn" title="In the bonus">
+                <span className="warn" title="In the bonus" aria-hidden="true">
                   {' '}
                   ●
                 </span>
@@ -755,7 +756,7 @@ function ScoreBug({ ticker, sim, home, away, quarter, over, ot }: { ticker: Tick
             <div className="bold">{home.abbrev}</div>
             <div className="tiny dim nowrap">
               {sim.bonus(sim.T[1]) && (
-                <span className="warn" title="In the bonus">
+                <span className="warn" title="In the bonus" aria-hidden="true">
                   ●{' '}
                 </span>
               )}
