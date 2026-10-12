@@ -11,7 +11,7 @@ import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta } from '../office/common';
+import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 
 export default function Resign() {
@@ -58,11 +58,14 @@ function ResignPhase() {
   const [sel, setSel] = useState<number | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [renounce, setRenounce] = useState<Player | null>(null);
+  const [decline, setDecline] = useState<Player | null>(null);
   const expiring = useLeagueMemo(() => expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   const asks = useMemo(() => new Map(expiring.map((p) => [p.pid, askingContract(league, p, tid)])), [expiring, league, tid]);
   const committed = payroll(league, tid, next);
-  const holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
-  const ifAll = committed + expiring.filter((p) => !p.mood.tradeRequest).reduce((a, p) => a + (asks.get(p.pid)?.amount ?? 0), 0);
+  // the players who hold cap room until free agency: two-way pay sits outside the cap, and a player who wants out won't re-sign
+  const holders = capHolds(league, tid);
+  const holds = holders.reduce((a, h) => a + h.amount, 0);
+  const ifAll = committed + holds;
   const resigned = teamPlayers(league, tid)
     .filter((p) => p.contract.start === next && !p.contract.rookie)
     .sort((a, b) => b.ovr - a.ovr);
@@ -166,10 +169,12 @@ function ResignPhase() {
             trade or release before then.
           </div>
         )}
-        <div className="tiny dim" style={{ marginTop: 8 }}>
-          Striped: what the {expiring.length} expiring player{expiring.length === 1 ? '' : 's'} would add at their current asks. Until free agency opens they hold that cap room
-          unless you renounce them; what's left after re-signing is yours to use in free agency.
-        </div>
+        {holders.length > 0 && (
+          <div className="tiny dim" style={{ marginTop: 8 }}>
+            Striped: what the {holders.length} expiring player{holders.length === 1 ? '' : 's'} on standard deals would add at their current asks. Until free agency opens they hold
+            that cap room unless you renounce them; what's left after re-signing is yours to use in free agency.
+          </div>
+        )}
       </Card>
 
       {options.length > 0 && (
@@ -202,10 +207,10 @@ function ResignPhase() {
                       <span className={worth ? 'good' : 'warn'}> · staff: {worth ? 'exercise' : 'decline'}</span>
                     </div>
                   </div>
-                  <button className="btn sm" onClick={() => decide(p, false)}>
+                  <button className="btn sm" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
                     Decline
                   </button>
-                  <button className="btn sm primary" onClick={() => decide(p, true)}>
+                  <button className="btn sm primary" aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
                     Exercise
                   </button>
                 </div>
@@ -248,7 +253,7 @@ function ResignPhase() {
               <div className="row" style={{ marginTop: 10, gap: 10 }}>
                 <div className="grow">
                   {p.mood.tradeRequest ? (
-                    <span className="small bad bold">Wants out: won't re-sign</span>
+                    <span className="small bad bold">Wants a trade: won't re-sign</span>
                   ) : (
                     <>
                       <div className="tiny dim upper bold">Asking</div>
@@ -264,10 +269,10 @@ function ResignPhase() {
                     </>
                   )}
                 </div>
-                <button className="btn sm ghost" onClick={() => setRenounce(p)}>
+                <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
                   Renounce
                 </button>
-                <button className="btn sm primary" disabled={p.mood.tradeRequest} onClick={() => setSel(p.pid)}>
+                <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} disabled={p.mood.tradeRequest} onClick={() => setSel(p.pid)}>
                   <PenLine size={15} /> Negotiate
                 </button>
               </div>
@@ -292,7 +297,7 @@ function ResignPhase() {
                   </div>
                   <div className="fo-money">
                     <div className="a">{fmtM(salaryFor(p, next))}</div>
-                    <div className="b">thru {seasonLabel(contractExp(p.contract)).slice(-5)}</div>
+                    <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
                   </div>
                 </div>
               ))}
@@ -314,8 +319,8 @@ function ResignPhase() {
           <div className="col" style={{ gap: 12 }}>
             <div className="dim2">
               You give up {playerName(renounce)}'s Bird rights: he becomes a free agent when the market opens
-              {renounce.mood.tradeRequest ? '' : `, and his ${fmtM(asks.get(renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring him back you'd have to outbid
-              other teams with cap space.
+              {renounce.mood.tradeRequest || renounce.contract.twoWay ? '' : `, and his ${fmtM(asks.get(renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring
+              him back you'd have to outbid other teams with cap space.
             </div>
             <div className="row">
               <button className="btn grow" onClick={() => setRenounce(null)}>
@@ -323,6 +328,25 @@ function ResignPhase() {
               </button>
               <button className="btn danger grow" onClick={() => doRenounce(renounce)}>
                 Renounce
+              </button>
+            </div>
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet open={!!decline} onClose={() => setDecline(null)} title={decline ? `Decline ${decline.lastName}'s option?` : undefined}>
+        {decline && (
+          <div className="col" style={{ gap: 12 }}>
+            <div className="dim2">
+              His {seasonLabel(next)} season ({fmtM(salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency opens, at
+              about {fmtM(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
+            </div>
+            <div className="row">
+              <button className="btn grow" onClick={() => setDecline(null)}>
+                Keep the option
+              </button>
+              <button className="btn danger grow" onClick={() => (decide(decline, false), setDecline(null))}>
+                Decline
               </button>
             </div>
           </div>
@@ -370,7 +394,8 @@ function ResignPhase() {
 
 function OffPhase({ league }: { league: League }) {
   const tid = league.userTid;
-  const s = capSeason(league);
+  // during the lottery and the draft, the contracts up are this season's: the ones the coming re-sign period is for
+  const s = league.phase === 'draftLottery' || league.phase === 'draft' ? league.season : capSeason(league);
   const list = useLeagueMemo(
     () =>
       teamPlayers(league, tid)
@@ -383,10 +408,10 @@ function OffPhase({ league }: { league: League }) {
   const after = payroll(league, tid, s + 1);
   const when =
     league.phase === 'freeAgency'
-      ? 'The re-sign window for this summer has closed. These contracts run out after next season.'
+      ? 'The re-sign period for this summer has closed. These contracts run out after next season.'
       : league.phase === 'draft' || league.phase === 'draftLottery'
-        ? 'The re-sign window opens right after the draft.'
-        : 'The re-sign window opens after the playoffs and the draft. Until then you can review who is up.';
+        ? 'The re-sign period opens right after the draft.'
+        : 'The re-sign period opens after the playoffs and the draft. Until then you can review who is up.';
   return (
     <main className="page">
       <PageHeader title="Re-sign Players" sub={`Contracts expiring after ${seasonLabel(s)}`} back />
@@ -394,7 +419,7 @@ function OffPhase({ league }: { league: League }) {
         <div className="row top" style={{ gap: 12 }}>
           <CalendarClock size={30} className="dim" />
           <div className="grow">
-            <div className="fo-mid">Not the re-signing period</div>
+            <div className="fo-mid">Not the re-sign period</div>
             <div className="small dim2" style={{ marginTop: 4 }}>
               {when} With Bird rights you can then re-sign your own players for any amount, even over the cap.
             </div>
@@ -403,9 +428,9 @@ function OffPhase({ league }: { league: League }) {
       </Card>
 
       <div className="grid2">
-        <Kpi k={`Expiring ${seasonLabel(s).slice(-5)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
+        <Kpi k={`Expiring ${shortSeason(s)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
         <Kpi
-          k={`${seasonLabel(s + 1)} committed`}
+          k={`${shortSeason(s + 1)} committed`}
           v={fmtM(after)}
           sub={after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`}
           color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'}

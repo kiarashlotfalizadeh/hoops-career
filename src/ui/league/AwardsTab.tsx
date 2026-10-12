@@ -155,10 +155,10 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
       </div>
       <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
       <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP · playoff stats" playoffs />
-      <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player" kind="def" />
+      <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player of the Year" kind="def" />
       <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
-      <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man" />
-      <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved" />
+      <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
+      <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
       {coyTeam && (
         <AwardRow icon={<Award size={18} />} to={`/team/${coyTeam.tid}`}>
           <TeamLogo tid={coyTeam.tid} size={40} />
@@ -282,9 +282,9 @@ function AwardRace({ league }: { league: League }) {
       </div>
       <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
         <RaceCard league={league} title="MVP ladder" icon={<Crown size={15} />} list={race.mvp} />
-        <RaceCard league={league} title="Defensive Player" icon={<Shield size={15} />} list={race.dpoy} kind="def" />
+        <RaceCard league={league} title="Defensive Player of the Year" icon={<Shield size={15} />} list={race.dpoy} kind="def" />
         <RaceCard league={league} title="Rookie of the Year" icon={<Sparkles size={15} />} list={race.roy} />
-        <RaceCard league={league} title="Sixth Man" icon={<Users size={15} />} list={race.smoy} />
+        <RaceCard league={league} title="Sixth Man of the Year" icon={<Users size={15} />} list={race.smoy} />
       </div>
     </>
   );
