@@ -1,9 +1,10 @@
 import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites } from '../ratings';
 import { clamp } from '../random';
-import { addInbox, addNews, curTeamSeason, playerName, seasonTotals, teamName, winPct } from './helpers';
+import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
 
-export function gameScore(s: PlayerStats): number {
+/** Hollinger's game score, for a box line or a season's totals. */
+export function gameScore(s: Pick<PlayerStats, 'pts' | 'fgm' | 'fga' | 'ftm' | 'fta' | 'orb' | 'drb' | 'ast' | 'stl' | 'blk' | 'tov' | 'pf'>): number {
   return s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
 }
 
@@ -37,8 +38,9 @@ export function gamesThreshold(league: League) {
 
 /**
  * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games (pro
- * rata during the season, with real minutes); Rookie and Sixth Man of the Year don't, so they ask
- * for a voter's 50 games. A sixth man came off the bench in more games than he started.
+ * rata during the season) and 20 minutes a game; Rookie and Sixth Man of the Year don't, so they ask
+ * for a voter's 50 games (Sixth Man for the 20 minutes too). A sixth man came off the bench in more
+ * games than he started.
  */
 function awardPools(league: League, season = league.season) {
   const minG = gamesThreshold(league);
@@ -129,17 +131,16 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const dpoy = rank(eligible, (c) => dpoyScore(c, dctx));
   const roy = rank(rookies, royScore);
   const smoy = rank(bench, smoyScore);
-  const mip = rank(
-    eligible.filter((c) => c.p.draft.year !== season - 1),
-    (c) => {
-      const prev = seasonTotals(c.p, season - 1, false);
-      if (!prev || prev.gp < 20) return -99;
-      const before = gameScore(prev) / prev.gp;
-      // voters reward a breakout, not an established star bouncing back
-      if (before >= 15) return -99;
-      return c.gmsc - before;
-    },
-  );
+  // Most Improved needs a season to improve on (none in a fictional league's first season)
+  const before = new Map<Cand, number>();
+  for (const c of eligible) {
+    const prev = seasonTotals(c.p, season - 1, false);
+    if (c.p.draft.year === season - 1 || !prev || prev.gp < 20) continue;
+    const g = gameScore(prev) / prev.gp;
+    // voters reward a breakout, not an established star bouncing back
+    if (g < 15) before.set(c, g);
+  }
+  const mip = rank([...before.keys()], (c) => c.gmsc - before.get(c)!);
   const coy = [...league.teams].sort((a, b) => {
     const imp = (tid: number) => {
       const t = league.teams[tid];
@@ -170,9 +171,11 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   };
   league.awards = league.awards.filter((a) => a.season !== season);
   league.awards.push(awards);
+  const won = new Map<number, string[]>();
   const give = (pid: number | undefined, type: string) => {
     if (pid === undefined) return;
     league.players[pid].awards.push({ season, type });
+    won.set(pid, [...(won.get(pid) ?? []), type]);
   };
   give(awards.mvp, 'MVP');
   give(awards.dpoy, 'Defensive Player of the Year');
@@ -185,22 +188,30 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const nm = (pid?: number) => (pid !== undefined ? playerName(league.players[pid]) : '—');
   addNews(league, {
     kind: 'award',
-    text: `Awards: MVP ${nm(awards.mvp)} · DPOY ${nm(awards.dpoy)} · ROY ${nm(awards.roy)} · 6MOY ${nm(awards.smoy)} · MIP ${nm(awards.mip)} · COY ${coy ? teamName(coy) : '—'}.`,
-    tids: [],
-    pids: [awards.mvp, awards.dpoy, awards.roy].filter((x): x is number => x !== undefined),
+    text: `Awards: MVP ${nm(awards.mvp)} · DPOY ${nm(awards.dpoy)} · ROY ${nm(awards.roy)} · 6MOY ${nm(awards.smoy)} · MIP ${nm(awards.mip)} · COY ${coy ? `${awards.coyCoach} (${coy.abbrev})` : '—'}.`,
+    tids: coy ? [coy.tid] : [],
+    pids: [awards.mvp, awards.dpoy, awards.roy, awards.smoy, awards.mip].filter((x): x is number => x !== undefined),
   });
-  const mine = [awards.mvp, awards.dpoy, awards.roy, awards.smoy, awards.mip, ...allNba.flat()].filter((pid) => pid !== undefined && league.players[pid].tid === league.userTid);
-  if (mine.length || coy?.tid === league.userTid) {
+  // "Name (MVP, All-NBA 1st Team)" for each of the user's winners
+  const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])} (${types.join(', ')})`);
+  if (coy?.tid === league.userTid) mine.push('Coach of the Year (you)');
+  if (mine.length) {
     addInbox(league, {
       from: 'League Office',
       subject: 'Season awards',
-      body: `Your team collected hardware: ${[...new Set(mine)].map((pid) => playerName(league.players[pid!])).join(', ')}${coy?.tid === league.userTid ? ' and Coach of the Year for you!' : ''}.`,
+      body: `Your team collected hardware: ${andList(mine)}.`,
       tone: 'good',
       link: '/league?tab=awards',
     });
   }
   return awards;
 }
+
+/** A knock this short heals over the All-Star break: the player keeps his place and plays. */
+const ALL_STAR_KNOCK_GAMES = 2;
+
+/** Hurt worse than a knock the break heals: an All-Star who sits the game out and is replaced. */
+export const missesAllStarGame = (p: Player) => (p.injury?.gamesRemaining ?? 0) > ALL_STAR_KNOCK_GAMES;
 
 export function selectAllStars(league: League): SeasonAwards['allStars'] {
   const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0);
@@ -226,8 +237,8 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     take(12, () => true);
     const picks = ranked.filter((c) => chosen.has(c));
     // injured selections keep the honor; the next healthy players in the conference take their spots
-    const hurt = picks.filter((c) => c.p.injury);
-    const subs = ranked.filter((c) => !chosen.has(c) && !c.p.injury).slice(0, hurt.length);
+    const hurt = picks.filter((c) => missesAllStarGame(c.p));
+    const subs = ranked.filter((c) => !chosen.has(c) && !missesAllStarGame(c.p)).slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
     out[conf] = [...picks, ...subs].map((c) => c.p.pid);
   }
@@ -254,7 +265,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     addInbox(league, {
       from: 'League Office',
       subject: 'All-Star selections',
-      body: `${mine.map((pid) => playerName(league.players[pid])).join(' and ')} made the All-Star team.`,
+      body: `${andList(mine.map((pid) => playerName(league.players[pid])))} made the All-Star team.`,
       tone: 'good',
       link: '/league?tab=awards',
     });
@@ -270,10 +281,7 @@ export function finalsMvp(league: League, champTid: number): number | undefined 
   for (const g of finals) {
     const side = g.home.tid === champTid ? g.home : g.away.tid === champTid ? g.away : null;
     if (!side) continue;
-    for (const bl of side.players) {
-      const v = bl.pts + 0.4 * bl.fgm - 0.7 * bl.fga + 0.7 * bl.orb + 0.3 * bl.drb + bl.stl + 0.7 * bl.ast + 0.7 * bl.blk - bl.tov;
-      totals.set(bl.pid, (totals.get(bl.pid) ?? 0) + v);
-    }
+    for (const bl of side.players) totals.set(bl.pid, (totals.get(bl.pid) ?? 0) + gameScore(bl));
   }
   for (const [pid, v] of totals) {
     if (v > bs) {

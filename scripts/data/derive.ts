@@ -9,8 +9,10 @@ import { Rng, clamp, hashString } from '../../src/core/random';
 import { genRatings } from '../../src/core/playerGen';
 import type { AdvRow, PerGameRow } from './parse';
 import type { PbpAgg } from './nba/profile';
+import { SEED_SEASON } from './sources';
 
-export const SEASON_WEIGHT: Record<number, number> = { 2026: 1.0, 2025: 0.6, 2024: 0.3 };
+/** Recency weights for the stat seasons (box scores and play-by-play alike). */
+export const SEASON_WEIGHT: Record<number, number> = { [SEED_SEASON - 1]: 1.0, [SEED_SEASON - 2]: 0.6, [SEED_SEASON - 3]: 0.3 };
 
 export interface Agg {
   /** Weighted minutes (recency-weighted). */

@@ -1,10 +1,7 @@
 // Dev helper: print the schema and a sample row of a Parquet file. Usage: tsx peek-parquet.ts <file> [needle]
 import { readFileSync } from 'node:fs';
 import { parquetReadObjects } from 'hyparquet';
-import { zstdDecompressSync } from 'node:zlib';
-
-/** hyparquet codecs not built in: ZSTD via Node's zlib. */
-export const compressors = { ZSTD: (input: Uint8Array) => new Uint8Array(zstdDecompressSync(input)) };
+import { compressors } from './college';
 
 async function main() {
   const buf = readFileSync(process.argv[2]);

@@ -1,9 +1,9 @@
-// What the save keeps: box scores of other teams' games, retired players' records, the Hall of Fame.
+// What the save keeps: box scores of other teams' games, retired players' records, the Hall of Fame, the news.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { hallOfFameScore, newSeason, simDay, startRegularSeason } from '../league/season';
-import { curTeamSeason, standardRoster, statsLine, teamPlayers } from '../league/helpers';
+import { addNews, curTeamSeason, standardRoster, statsLine, teamPlayers } from '../league/helpers';
 import { releasePlayer, valueScore } from '../league/contracts';
 import { gameFinances } from '../league/finances';
 import { CAP } from '../constants';
@@ -97,6 +97,26 @@ describe('retired players (L4)', () => {
     expect(s.min).toBe(Math.round(500 * 21.123456 * 10) / 10);
     expect(vet.mood.notes).toEqual([]);
     expect(vet.mood.score).toBe(0);
+  });
+});
+
+describe('news', () => {
+  it("injuries and big games make way first, so the season's story stays; the latest of them still show", () => {
+    const l = { news: [], nextMsgId: 1, season: 2027, day: 0 } as unknown as League;
+    const add = (kind: 'award' | 'injury' | 'milestone' | 'signing', text: string) => addNews(l, { kind, text, tids: [], pids: [] });
+    add('award', 'The Cup');
+    for (let i = 0; i < 600; i++) add(i % 3 ? 'injury' : 'milestone', `knock ${i}`);
+    expect(l.news).toHaveLength(400);
+    expect(l.news[0].text).toBe('The Cup');
+    // a summer of signings: the oldest injuries and big games still go first
+    for (let i = 0; i < 250; i++) add('signing', `signing ${i}`);
+    expect(l.news[0].text).toBe('The Cup');
+    // ...but the latest 100 always stay
+    for (let i = 250; i < 850; i++) add('signing', `signing ${i}`);
+    expect(l.news).toHaveLength(400);
+    expect(l.news.filter((n) => n.kind === 'injury' || n.kind === 'milestone')).toHaveLength(100);
+    expect(l.news.some((n) => n.text === 'knock 599')).toBe(true);
+    expect(l.news.some((n) => n.text === 'signing 849')).toBe(true);
   });
 });
 

@@ -5,8 +5,11 @@
   position: sticky;
   top: calc(var(--top-h) + var(--safe-t));
   z-index: 20;
-  margin: -6px -14px 0;
-  padding: 6px 14px 8px;
+  /* edge to edge across the page's padding, which grows past a landscape notch */
+  margin: -6px calc(-1 * max(14px, var(--safe-r))) 0 calc(-1 * max(14px, var(--safe-l)));
+  padding: 6px max(14px, var(--safe-r)) 8px max(14px, var(--safe-l));
+  /* solid fallback first: iOS before 16.2 has no color-mix */
+  background: rgba(6, 8, 12, 0.86);
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
@@ -28,12 +31,12 @@
   z-index: 1;
 }
 .lg-tabs::before {
-  left: 15px;
+  left: calc(max(14px, var(--safe-l)) + 1px);
   border-radius: 12px 0 0 12px;
   background: linear-gradient(90deg, var(--surface) 25%, transparent);
 }
 .lg-tabs::after {
-  right: 15px;
+  right: calc(max(14px, var(--safe-r)) + 1px);
   border-radius: 0 12px 12px 0;
   background: linear-gradient(270deg, var(--surface) 25%, transparent);
 }
@@ -78,19 +81,18 @@
   border-radius: 10px;
   border: 1px solid var(--line-2);
   background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237c8798' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238590a1' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding: 0 30px 0 12px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text);
   appearance: none;
   -webkit-appearance: none;
-  outline: none;
 }
 .lg-select:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .lg-sub .chip:disabled {
   opacity: 0.4;
@@ -123,10 +125,9 @@
   background: var(--surface);
   padding: 0 10px 0 32px;
   font-size: 13px;
-  outline: none;
 }
 .lg-search input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .lg-search svg {
   position: absolute;
@@ -140,13 +141,9 @@
 .lg-flat {
   background: var(--surface);
 }
-/* rows fill these flush cards edge to edge, where an outside focus ring would be clipped */
-.lg-flat :is(a, button):focus-visible {
-  outline-offset: -2px;
-}
 .lg-section-label {
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -163,10 +160,10 @@
 }
 .lg-link {
   color: var(--accent-text);
-  font-weight: 650;
+  font-weight: 700;
 }
 .lg-name-link {
-  font-weight: 650;
+  font-weight: 700;
 }
 .lg-name-link:active {
   color: var(--accent-text);
@@ -202,12 +199,12 @@
 }
 .lg-st-row .rk {
   color: var(--text-dim);
-  font-weight: 650;
+  font-weight: 700;
   font-size: 12px;
   text-align: right;
 }
 .lg-st-row .nm {
-  font-weight: 650;
+  font-weight: 700;
   min-width: 0;
   display: flex;
   align-items: baseline;
@@ -233,7 +230,7 @@
 }
 .lg-clinch {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-dim);
   letter-spacing: 0.02em;
 }
@@ -259,7 +256,7 @@
   padding: 0 0 0 6px;
   font-size: 10px;
   line-height: 12px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -292,6 +289,25 @@
 }
 .lg-st.mode-power .lg-st-row {
   grid-template-columns: 20px 24px minmax(0, 1fr) 46px 40px 40px 30px;
+}
+/* phones: tighter split columns leave room for an abbreviation and its clinch mark */
+@media (max-width: 389px) {
+  .lg-st.mode-splits .lg-st-row {
+    grid-template-columns: 18px 22px minmax(0, 1fr) repeat(4, 39px) 35px;
+    gap: 0 4px;
+    font-size: 12px;
+  }
+}
+/* small phones: the logo goes too (the abbreviation names the team) */
+@media (max-width: 359px) {
+  .lg-st.mode-splits .lg-st-row {
+    grid-template-columns: 16px minmax(0, 1fr) repeat(4, 39px) 35px;
+    gap: 0 3px;
+    padding: 0 10px;
+  }
+  .lg-st.mode-splits .lg-st-row > :nth-child(2) {
+    display: none;
+  }
 }
 .lg-st.mode-power .c-power {
   display: block;
@@ -382,7 +398,7 @@
 .lg-g-at {
   font-size: 12px;
   color: var(--text-dim);
-  font-weight: 650;
+  font-weight: 700;
   text-align: center;
 }
 .lg-g-res {
@@ -399,7 +415,7 @@
   height: 20px;
   border-radius: 6px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .lg-wl.w {
   background: color-mix(in srgb, var(--good) 20%, transparent);
@@ -413,7 +429,7 @@
   width: 100%;
   padding: 10px 12px;
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--accent-text);
   display: flex;
   align-items: center;
@@ -435,9 +451,6 @@
 .lg-day .iconbtn {
   background: var(--surface);
   border: 1px solid var(--line);
-}
-.lg-day .iconbtn:disabled {
-  opacity: 0.35;
 }
 .lg-sb-grid {
   display: grid;
@@ -468,7 +481,7 @@
   justify-content: space-between;
   gap: 6px;
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -485,7 +498,7 @@
   height: 26px;
 }
 .lg-sb-t .ab {
-  font-weight: 750;
+  font-weight: 700;
   font-size: 14px;
   display: flex;
   align-items: baseline;
@@ -497,6 +510,13 @@
   color: var(--text-dim);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* small phones: no room for a record beside the abbreviation and a three-digit score */
+@media (max-width: 359px) {
+  .lg-sb-t .rec {
+    display: none;
+  }
 }
 .lg-sb-t .sc {
   font-family: var(--display);
@@ -588,7 +608,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 650;
+  font-weight: 700;
 }
 .lg-tcell {
   display: inline-flex;
@@ -607,7 +627,7 @@
 .bk-head span {
   text-align: center;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -682,7 +702,7 @@
   padding: 0 6px;
   height: 26px;
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .bk-t + .bk-t {
   border-top: 1px solid var(--line);
@@ -703,20 +723,47 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.bk-t.win {
-  font-weight: 800;
-}
 .bk-t.win .w {
   color: var(--good);
 }
-/* faded, but the loser's name keeps 4.5:1 contrast */
+/* the loser dims: grey text that keeps 4.5:1, and a faded logo */
 .bk-t.lose {
+  color: var(--text-dim);
+}
+.bk-t.lose svg {
   opacity: 0.55;
 }
 .bk-t .tb {
   color: var(--text-dim);
   font-size: 11px;
   font-weight: 600;
+}
+/* phones: slimmer gaps and rows, so every round's column still shows a three-letter abbreviation */
+@media (max-width: 400px) {
+  .bk-head,
+  .bk {
+    gap: 0 8px;
+  }
+  .bk-pair::after {
+    right: -5px;
+    width: 4px;
+  }
+  .bk-col.r2 .bk-slot::before,
+  .bk-col.r3 .bk-slot::before {
+    left: -4px;
+    width: 4px;
+  }
+  .bk .bk-t {
+    grid-template-columns: 8px 18px minmax(0, 1fr) 10px;
+    gap: 3px;
+    padding: 0 3px;
+  }
+}
+@media (max-width: 359px) {
+  .bk .bk-t {
+    gap: 2px;
+    font-size: 12px;
+  }
 }
 .bk-panel-wrap {
   display: flex;
@@ -753,6 +800,9 @@
   min-width: 0;
 }
 .bk-finals .side.lose {
+  color: var(--text-dim);
+}
+.bk-finals .side.lose svg {
   opacity: 0.55;
 }
 .bk-finals .score {
@@ -799,7 +849,7 @@ a.bk-s:hover {
 }
 .lg-champ .kicker {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--tier-elite);
@@ -856,7 +906,7 @@ a.bk-s:hover {
 }
 .lg-award .lb {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -936,10 +986,17 @@ a.bk-s:hover {
   border-radius: 12px;
   border: 1px solid var(--line-2);
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-2);
   background: var(--surface);
   max-width: 100%;
+  position: relative;
+}
+/* compact chips that still give fingers a 40px target */
+.lg-pchip::after {
+  content: '';
+  position: absolute;
+  inset: -8px -3px;
 }
 .lg-pchip span {
   overflow: hidden;
@@ -949,7 +1006,7 @@ a.bk-s:hover {
 .lg-date-h {
   padding: 8px 12px;
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1024,7 +1081,7 @@ a.bk-s:hover {
   margin-top: 1px;
 }
 .lg-msg.unread .subj {
-  font-weight: 750;
+  font-weight: 700;
   color: var(--text);
 }
 .lg-msg .prev {
@@ -1085,7 +1142,7 @@ a.bk-s:hover {
 }
 .lg-team-hero .kick {
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-2);
@@ -1118,7 +1175,7 @@ a.bk-s:hover {
 }
 .lg-strip .k {
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1233,6 +1290,19 @@ a.bk-s:hover {
 .lg-season + .lg-season {
   border-top: 1px solid var(--line);
 }
+/* small phones: the seed gives way to the longest outcome tag ("Lost Conf. Finals") */
+@media (max-width: 359px) {
+  .lg-season {
+    grid-template-columns: 52px 50px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .lg-season > :nth-child(3) {
+    display: none;
+  }
+  .lg-season .tag {
+    justify-self: end;
+  }
+}
 .lg-season .yr {
   font-family: var(--display);
   font-weight: 700;
@@ -1241,12 +1311,13 @@ a.bk-s:hover {
   white-space: nowrap;
 }
 .lg-season .rec {
-  font-weight: 750;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.lg-gold {
-  background: color-mix(in srgb, var(--tier-elite) 20%, transparent) !important;
-  color: var(--tier-elite) !important;
+/* gold beats a tag's tone (league.css loads after theme.css) */
+.tag.lg-gold {
+  background: color-mix(in srgb, var(--tier-elite) 20%, transparent);
+  color: var(--tier-elite);
 }
 .lg-hist-row {
   display: grid;
@@ -1261,7 +1332,7 @@ a.bk-s:hover {
 }
 .lg-hist-row .k {
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1272,10 +1343,12 @@ a.bk-s:hover {
   gap: 5px;
 }
 
-/* iOS zooms into focused fields under 16px now that pinch-zoom is allowed */
+/* touch screens: 40px pickers and search, in 16px type (iOS zooms into a focused field under 16px
+   now that pinch-zoom is allowed) */
 @media (pointer: coarse) {
   .lg-select,
   .lg-search input {
+    height: 40px;
     font-size: 16px;
   }
 }

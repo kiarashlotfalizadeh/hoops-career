@@ -94,9 +94,9 @@ await page.waitForTimeout(800);
 await shot('04-trade');
 await page.goto(`${base}/#/`);
 let stops = 0;
-for (let i = 0; i < 25 && /Regular Season/.test((await phase()) ?? ''); i++) {
+for (let i = 0; i < 25 && /Regular season/i.test((await phase()) ?? ''); i++) {
   await play('Sim to end of regular season');
-  if (/Regular Season/.test((await phase()) ?? '')) {
+  if (/Regular season/i.test((await phase()) ?? '')) {
     stops++;
     const msg = await page
       .locator('.toast')

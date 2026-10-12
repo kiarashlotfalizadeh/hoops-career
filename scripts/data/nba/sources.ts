@@ -5,14 +5,15 @@
 //
 // Dataset files are named by the season's start year (cdnnba_2025 = 2025-26); the game names
 // seasons by end year (2026), like Basketball Reference.
+import { SEED_SEASON, STAT_SEASONS } from '../sources';
 
 export const NBA_DATA = 'https://raw.githubusercontent.com/shufinskiy/nba_data/main/datasets';
 export const NCAA_DATA = 'https://raw.githubusercontent.com/sportsdataverse/hoopR-mbb-data/main/mbb';
 
-/** Seasons (end year) with play-by-play and matchup data. */
-export const PBP_SEASONS = [2024, 2025, 2026];
+/** Seasons (end year) with play-by-play and matchup data: the same three as the box scores. */
+export const PBP_SEASONS = STAT_SEASONS;
 /** College seasons (end year) for incoming rookies and last year's draftees. */
-export const COLLEGE_SEASONS = [2026, 2025];
+export const COLLEGE_SEASONS = [SEED_SEASON - 1, SEED_SEASON - 2];
 
 export interface NbaFile {
   key: string; // cache name
@@ -30,6 +31,3 @@ export function nbaFiles(): NbaFile[] {
   for (const y of COLLEGE_SEASONS) out.push({ key: `ncaa_player_box_${y}.parquet`, url: `${NCAA_DATA}/player_box/parquet/player_box_${y}.parquet`, kind: 'college', season: y });
   return out;
 }
-
-/** NBA.com tricode → Basketball Reference team code (the game's franchises use NBA tricodes). */
-export const TRICODE_TO_BBREF: Record<string, string> = { BKN: 'BRK', CHA: 'CHO', PHX: 'PHO' };

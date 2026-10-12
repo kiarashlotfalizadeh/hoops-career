@@ -17,17 +17,8 @@ export function startPlayIn(league: League) {
   }
   league.phase = 'playin';
   league.day = league.regularSeasonDays + 2;
-  schedulePlayIn(league);
-}
-
-function schedulePlayIn(league: League) {
-  for (const pi of league.playIn) {
-    if (pi.winner !== undefined) continue;
-    const exists = league.schedule.some((g) => g.type === 'playin' && g.seriesId === pi.id);
-    if (exists) continue;
-    const day = pi.id.endsWith('-8') ? league.day + 2 : league.day;
-    league.schedule.push({ gid: league.nextGid++, day, home: pi.home, away: pi.away, type: 'playin', seriesId: pi.id });
-  }
+  // 7 v 8 and 9 v 10 tip off together; the game for the last spot is added once both are in
+  for (const pi of league.playIn) league.schedule.push({ gid: league.nextGid++, day: league.day, home: pi.home, away: pi.away, type: 'playin', seriesId: pi.id });
 }
 
 export function processPlayInResult(league: League, g: ScheduledGame, homeWon: boolean) {
@@ -138,8 +129,7 @@ export function processPlayoffResult(league: League, g: ScheduledGame, homeWon: 
     curTeamSeason(league, s.winner).playoffRound = s.round + 1;
     curTeamSeason(league, loser).playoffRound = s.round;
     const res = `${Math.max(s.highWins, s.lowWins)}-${Math.min(s.highWins, s.lowWins)}`;
-    const roundName = s.round === 4 ? 'NBA Finals' : s.round === 3 ? 'Conference Finals' : s.round === 2 ? 'Conference Semifinals' : 'First Round';
-    addNews(league, { kind: 'general', text: `${teamName(wt)} defeat the ${lt.name} ${res} in the ${roundName}.`, tids: [wt.tid, lt.tid], pids: [] });
+    addNews(league, { kind: 'general', text: `The ${teamName(wt)} beat the ${teamName(lt)} ${res} in the ${seriesLabel(s)}.`, tids: [wt.tid, lt.tid], pids: [] });
     advanceRounds(league);
   }
   // the next game (or the next round's opener) goes on the calendar as soon as it's known

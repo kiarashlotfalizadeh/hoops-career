@@ -146,8 +146,7 @@ export function simulateBatch(league: League, gamesPerTeam: number, seed: number
     const total = Math.round((gamesPerTeam * n) / 4);
     for (let g = 0; g < total; g++) {
       const h = g % n;
-      let a = (h + 1 + Math.floor(rng.next() * (n - 1))) % n;
-      if (a === h) a = (a + 1) % n;
+      const a = (h + 1 + Math.floor(rng.next() * (n - 1))) % n;
       const sim = new GameSim(lineup(sides[h]), lineup(sides[a]), { rng, type: 'regular', injuries: false });
       sim.simToEnd();
       for (const rb of sim.rawBoxes()) {

@@ -177,7 +177,7 @@ if (stages.includes('mid')) {
     mkdirSync(`${out}/live`, { recursive: true });
     await phone.screenshot({ path: `${out}/live/phone-live.png` });
     // the in-game sheets: substitutions, the game plan and the box score
-    for (const name of ['Subs', 'Plan', 'Box']) {
+    for (const name of ['Subs', 'Adjust', 'Box']) {
       const b = phone.getByRole('button', { name, exact: true }).first();
       if (await b.count()) {
         await b.click().catch(() => {});
@@ -204,13 +204,13 @@ if (stages.includes('mid')) {
   await tour('mid');
 }
 if (want('post')) {
-  for (let i = 0; i < 25 && /Regular Season/.test((await phase()) ?? ''); i++) await play('Sim to end of regular season');
+  for (let i = 0; i < 25 && /Regular season/i.test((await phase()) ?? ''); i++) await play('Sim to end of regular season');
   for (let i = 0; i < 4 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
 }
 if (stages.includes('post')) await tour('post');
-if (want('draft')) for (let i = 0; i < 4 && !/NBA Draft/.test((await phase()) ?? ''); i++) if (!(await play('(Go to the draft)'))) break;
+if (want('draft')) for (let i = 0; i < 4 && !/NBA draft/i.test((await phase()) ?? ''); i++) if (!(await play('(Go to the draft)'))) break;
 if (stages.includes('draft')) await tour('draft');
-if (want('resign')) for (let i = 0; i < 3 && /NBA Draft/.test((await phase()) ?? ''); i++) if (!(await play('Auto-draft the rest'))) break;
+if (want('resign')) for (let i = 0; i < 3 && /NBA draft/i.test((await phase()) ?? ''); i++) if (!(await play('Auto-draft the rest'))) break;
 if (stages.includes('resign')) await tour('resign');
 if (want('fa')) for (let i = 0; i < 3 && !/Free Agency/i.test((await phase()) ?? ''); i++) if (!(await play('Open free agency'))) break;
 if (stages.includes('fa')) await tour('fa');

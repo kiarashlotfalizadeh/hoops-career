@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # the seed workflow starts it after committing a new seed (a push with its token starts nothing)
+  workflow_dispatch:
 permissions:
   contents: read
 # a new push to a pull request replaces its running check; every commit on main gets its own result

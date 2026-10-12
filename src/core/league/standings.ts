@@ -17,7 +17,7 @@ export interface StandingRow {
   away: string;
   confRec: string;
   diff: number; // point differential per game
-  clinched?: 'x' | 'y' | 'p' | 'o' | 'e'; // x playoffs, p play-in, e eliminated
+  clinched?: 'x' | 'p' | 'e'; // x playoffs, p play-in, e eliminated
 }
 
 type Entry = { tid: number; ts: TeamSeason };

@@ -3,9 +3,7 @@
 import type { NbaProfile } from './build';
 import { ZONES, type PlayerPbp, type Zone } from './pbp';
 import { crosswalk, type BbrefRow, type NbaPerson } from './crosswalk';
-
-/** Same recency weights as the box-score aggregation. */
-const W: Record<number, number> = { 2026: 1, 2025: 0.6, 2024: 0.3 };
+import { SEASON_WEIGHT } from '../derive';
 
 export interface PbpAgg {
   nbaId: number;
@@ -126,7 +124,7 @@ export function profilesByBbref(prof: NbaProfile, bbref: BbrefRow[], log = conso
     let mdSaved = 0;
     let mdPoss = 0;
     prof.seasons.forEach((s, i) => {
-      const w = W[s] ?? 0.2;
+      const w = SEASON_WEIGHT[s] ?? 0.2;
       const p: PlayerPbp | undefined = prof.players[i][pid];
       if (p) {
         a.mins += (p.secs / 60) * w;

@@ -34,6 +34,12 @@ export function expectedMinutes(rank: number, ovr: number, sustainable = 40): nu
   return Math.min(clamp(base + (ovr - 76) * 0.4, 2, 37), sustainable);
 }
 
+/** The notes a happy player gets; everything else in mood.notes is a complaint. */
+const PRAISE = ['Happy with his role', 'Loves winning here'];
+
+/** What a player is unhappy about, from his mood notes (no praise). */
+export const complaints = (p: Player) => p.mood.notes.filter((n) => !PRAISE.includes(n));
+
 export function updateMorale(league: League, tid: number, notify = false) {
   const roster = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
   const ts = curTeamSeason(league, tid);
@@ -53,19 +59,22 @@ export function updateMorale(league: League, tid: number, notify = false) {
     const role = league.teams[tid].tactics.offense.roles[p.pid];
     const natural = archetype(p.ratings).role;
     let roleC = 0;
-    const notes: string[] = [];
+    // what he'd complain about, then what he likes
+    const gripes: string[] = [];
     if (role && natural === 'creator' && (role === 'glue' || role === 'shooter' || role === 'roller')) {
       roleC = -2;
-      notes.push('Wants the ball in his hands');
+      gripes.push('Wants the ball in his hands');
     } else if (role && role === natural) roleC = 0.5;
     const fair = marketSalary(league, p);
     const sal = salaryFor(p, league.season);
-    const contract = sal > 0 ? clamp(((sal - fair) / Math.max(fair, 2000)) * 2, -2, 1.5) : 0;
-    if (contract < -1) notes.push('Feels underpaid');
-    if (pt < -1.5) notes.push(`Wants more minutes (expects ~${Math.round(exp)} mpg)`);
-    if (pt > 1) notes.push('Happy with his role');
-    if (win > 1.5) notes.push('Loves winning here');
-    if (win < -1.5) notes.push('Frustrated by losing');
+    // a rookie-scale deal is set by the draft slot, so it's never held against the team
+    const contract = sal > 0 && !p.contract.rookie ? clamp(((sal - fair) / Math.max(fair, 2000)) * 2, -2, 1.5) : 0;
+    if (contract < -1) gripes.push('Feels underpaid');
+    if (pt < -1.5) gripes.push(`Wants more minutes (expects ~${Math.round(exp)} mpg)`);
+    if (win < -1.5) gripes.push('Frustrated by losing');
+    const notes = [...gripes];
+    if (pt > 1) notes.push(PRAISE[0]);
+    if (win > 1.5) notes.push(PRAISE[1]);
     const score = clamp(pt + win + roleC + contract, -10, 10);
     // smooth changes over time
     p.mood.score = Math.round((prev * 0.6 + score * 0.4) * 10) / 10;
@@ -82,9 +91,9 @@ export function updateMorale(league: League, tid: number, notify = false) {
       if (!wasRequest && p.mood.tradeRequest) {
         addInbox(league, {
           important: true,
-          from: playerName(p),
-          subject: 'Trade request',
-          body: `${playerName(p)}'s agent says he wants a trade. ${notes.join('. ')}. An unhappy star can drag down the locker room. Give him a bigger role or move him.`,
+          from: 'Assistant GM',
+          subject: `Trade request: ${playerName(p)}`,
+          body: `${playerName(p)}'s agent says he wants a trade.${gripes.length ? ` ${gripes.join('. ')}.` : ''} An unhappy star can drag down the locker room. Give him a bigger role or move him.`,
           tone: 'alert',
           link: `/player/${p.pid}`,
         });
@@ -92,7 +101,7 @@ export function updateMorale(league: League, tid: number, notify = false) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${playerName(p)} is unhappy`,
-          body: `${playerName(p)} is growing frustrated: ${notes.join('; ') || 'unclear reasons'}. Consider adjusting his minutes or role in Rotation/Tactics.`,
+          body: `${playerName(p)} is growing frustrated: ${gripes.join('; ') || 'unclear reasons'}. Consider adjusting his minutes or role in Rotation/Tactics.`,
           tone: 'bad',
           link: `/player/${p.pid}`,
         });

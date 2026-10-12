@@ -12,7 +12,7 @@
   --text-dim: #8590a1;
   --accent: #3b82f6;
   --accent-2: #f59e0b;
-  --accent-ink: #ffffff;
+  --accent-ink: #0b0f15;
   --good: #2fd27a;
   --bad: #ff5468;
   --warn: #ffb547;
@@ -23,10 +23,7 @@
   --tier-avg: #4ade80;
   --tier-low: #c4cfdc;
   --tier-bad: #8a94a6;
-  --court: #c98b4f;
-  --court-2: #b77a43;
   --radius: 14px;
-  --radius-sm: 9px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --display: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
@@ -51,7 +48,6 @@ body,
 #root {
   margin: 0;
   min-height: 100%;
-  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
@@ -60,8 +56,13 @@ body,
   overscroll-behavior-y: none;
 }
 
-body {
+/* the page colour lives on html alone: a background on body (index.html gives it one for the first
+   frame) would paint over the glow below */
+html {
   background: var(--bg);
+}
+body {
+  background: transparent;
 }
 /* the team-tinted glow stays put while content scrolls (background-attachment: fixed is ignored on iOS) */
 body::before {
@@ -80,9 +81,13 @@ body.sheet-open {
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
-.input:focus-visible,
+/* a slider rings its thumb instead (below) */
 input[type='range']:focus-visible {
   outline: none;
+}
+/* rows fill flush cards edge to edge, where an outside ring would be clipped */
+.card.flush :focus-visible {
+  outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -261,9 +266,7 @@ h3 {
 }
 @media (min-width: 760px) {
   .md-grid2 {
-    display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
     align-items: start;
   }
 }
@@ -274,6 +277,8 @@ h3 {
   top: 0;
   z-index: 30;
   padding-top: var(--safe-t);
+  /* solid fallback first: iOS before 16.2 has no color-mix and would leave the bar see-through */
+  background: rgba(6, 8, 12, 0.82);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
@@ -312,6 +317,10 @@ h3 {
 .iconbtn:active {
   background: var(--surface-2);
 }
+.iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .badge-dot {
   position: absolute;
   top: 6px;
@@ -321,7 +330,7 @@ h3 {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--bad);
-  color: white;
+  color: var(--bg-2);
   font-size: 10px;
   font-weight: 700;
   display: grid;
@@ -335,7 +344,8 @@ h3 {
   right: 0;
   bottom: 0;
   z-index: 40;
-  padding-bottom: var(--safe-b);
+  padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
+  background: rgba(11, 15, 21, 0.9);
   background: color-mix(in srgb, var(--bg-2) 90%, transparent);
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
@@ -417,9 +427,16 @@ h3 {
 .card.accent {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface-2)), var(--surface));
+  /* dim text keeps 4.5:1 on a gold team's tint */
+  --text-dim: var(--text-2);
 }
 .card.clickable:active {
   transform: scale(0.995);
+}
+/* cards that are buttons (pickers, the live bench) */
+button.card:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .divider {
   height: 1px;
@@ -473,7 +490,7 @@ h3 {
   background: var(--surface-3);
   border: 1px solid var(--line-2);
   color: var(--text);
-  font-weight: 650;
+  font-weight: 700;
   font-size: 14.5px;
   white-space: nowrap;
   transition:
@@ -500,7 +517,7 @@ h3 {
 .btn.danger {
   background: color-mix(in srgb, var(--bad) 18%, var(--surface-2));
   border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-  color: #ffd7dc;
+  color: color-mix(in srgb, var(--bad) 22%, white);
 }
 .btn.good {
   background: color-mix(in srgb, var(--good) 20%, var(--surface-2));
@@ -556,7 +573,7 @@ h3 {
   padding: 0 12px;
   border-radius: 9px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -599,13 +616,14 @@ h3 {
   position: relative;
 }
 .btn.sm::after,
-.seg button::after,
-.chip::after {
+.seg button::after {
   content: '';
   position: absolute;
   inset: -3px -1px;
 }
 .chip::after {
+  content: '';
+  position: absolute;
   inset: -3px;
 }
 .tag {
@@ -630,6 +648,8 @@ h3 {
 .tag.bad {
   background: color-mix(in srgb, var(--bad) 18%, transparent);
   color: var(--bad);
+  /* a little lighter, to keep 4.5:1 on its own tint over a card */
+  color: color-mix(in srgb, var(--bad) 80%, white);
 }
 .tag.warn {
   background: color-mix(in srgb, var(--warn) 18%, transparent);
@@ -652,7 +672,7 @@ h3 {
   font-weight: 700;
   font-size: 19px;
   font-variant-numeric: tabular-nums;
-  color: #0b0f15;
+  color: var(--bg-2);
   line-height: 1;
 }
 .ovr.sm {
@@ -728,7 +748,7 @@ h3 {
   gap: 8px;
 }
 .slider-label {
-  font-weight: 650;
+  font-weight: 700;
   font-size: 14px;
 }
 .slider-val {
@@ -785,6 +805,19 @@ input[type='range']::-moz-range-thumb {
   background: white;
   border: 3px solid var(--accent);
 }
+/* keyboard focus: a ring around the thumb (one rule per engine: a selector list with the other
+   engine's pseudo-element would be dropped whole) */
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-text),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+input[type='range']:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-text);
+}
 .input {
   height: 44px;
   width: 100%;
@@ -793,10 +826,9 @@ input[type='range']::-moz-range-thumb {
   background: var(--surface);
   padding: 0 12px;
   font-size: 16px;
-  outline: none;
 }
 .input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .toggle {
   position: relative;
@@ -826,7 +858,7 @@ input[type='range']::-moz-range-thumb {
 }
 .toggle.on::after {
   transform: translateX(18px);
-  background: white;
+  background: var(--accent-ink);
 }
 
 /* ------------------------------------------------------------------ bars */
@@ -878,8 +910,10 @@ table.stats th {
   text-align: right;
   white-space: nowrap;
   border-bottom: 1px solid var(--line);
-  cursor: pointer;
   user-select: none;
+}
+table.stats th:has(.th-sort) {
+  cursor: pointer;
 }
 table.stats th.l,
 table.stats td.l {
@@ -908,11 +942,29 @@ table.stats th.sticky {
 table.stats tr.me td {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
-table.stats tr.me td.sticky {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-}
 table.stats th.sorted {
   color: var(--text);
+}
+/* a focused row rings its cells from inside, where the scroller and the sticky name cell can't hide it */
+table.stats tr[tabindex]:focus-visible {
+  outline: none;
+}
+table.stats tr[tabindex]:focus-visible > td {
+  box-shadow:
+    inset 0 2px var(--accent-text),
+    inset 0 -2px var(--accent-text);
+}
+table.stats tr[tabindex]:focus-visible > td:first-child {
+  box-shadow:
+    inset 2px 0 var(--accent-text),
+    inset 0 2px var(--accent-text),
+    inset 0 -2px var(--accent-text);
+}
+table.stats tr[tabindex]:focus-visible > td:last-child {
+  box-shadow:
+    inset -2px 0 var(--accent-text),
+    inset 0 2px var(--accent-text),
+    inset 0 -2px var(--accent-text);
 }
 
 /* ------------------------------------------------------------------ sheets & toasts */
@@ -1039,6 +1091,10 @@ table.stats th.sorted {
   align-items: center;
   gap: 10px;
 }
+/* while it shows, the end of the page clears it (it is about 56px tall; office.css lifts its docks) */
+body:has(.simbar) .page {
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 80px);
+}
 
 /* ------------------------------------------------------------------ misc */
 .kpi {
@@ -1076,7 +1132,7 @@ table.stats th.sorted {
   border-radius: 999px;
   background: var(--surface-3);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .help-btn {
   position: relative;
@@ -1086,7 +1142,7 @@ table.stats th.sorted {
   display: inline-grid;
   place-items: center;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-dim);
   border: 1px solid var(--line-2);
   flex: none;
@@ -1095,10 +1151,6 @@ table.stats th.sorted {
   content: '';
   position: absolute;
   inset: -10px;
-}
-.fit {
-  font-family: var(--display);
-  font-weight: 700;
 }
 .scorebug {
   display: grid;
@@ -1162,10 +1214,6 @@ table.stats th.sorted {
   font-size: clamp(26px, 8vw, 40px);
 }
 /* compact live controls, 42px to the finger */
-.live-ctl .btn.sm,
-.live-ctl .seg button {
-  position: relative;
-}
 .live-ctl .btn.sm::after,
 .live-ctl .seg button::after {
   content: '';
@@ -1215,13 +1263,9 @@ table.stats th.sorted {
 .page.standalone {
   padding-top: max(12px, calc(var(--safe-t) + 8px));
 }
-.bottomnav {
-  padding-left: var(--safe-l);
-  padding-right: var(--safe-r);
-}
 /* typing: the on-screen keyboard pushes fixed bars up, so get the nav out of the way */
-body:has(.input:focus) .bottomnav,
-body:has(.input:focus) .simbar {
+body:has(.input:focus, .lg-search input:focus) .bottomnav,
+body:has(.input:focus, .lg-search input:focus) .simbar {
   display: none;
 }
 
@@ -1305,10 +1349,5 @@ body:has(.input:focus) .simbar {
   .live-ctl .btn.sm::after,
   .live-ctl .seg button::after {
     inset: -5px -1px;
-  }
-  /* the league hub's season / team pickers and its player search (league.css sets 34px) */
-  select.lg-select,
-  div.lg-search input {
-    height: 40px;
   }
 }

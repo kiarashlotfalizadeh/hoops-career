@@ -36,7 +36,7 @@ async function run(viewport, prefix) {
     if (await quick.count()) await quick.first().click();
     else
       await page
-        .getByRole('button', { name: /Sim to game day/ })
+        .getByRole('button', { name: /Sim to next game/ })
         .first()
         .click();
     await page.waitForTimeout(400);

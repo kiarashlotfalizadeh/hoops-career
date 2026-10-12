@@ -7,6 +7,7 @@ import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } fro
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
+import { complaints } from '../league/morale';
 import { possessive } from '../analysis/gameReport';
 
 export interface Threat {
@@ -44,7 +45,10 @@ function readRotation(league: League, tid: number) {
 const slowBig = (p: Player) => p.ratings.hgt >= 60 && p.ratings.spd < 40;
 
 /** A player's complaints as sentences, or `none` when he has nothing specific. */
-const moodText = (p: Player, none: string) => (p.mood.notes.length ? `${p.mood.notes.join('. ')}.` : none);
+const moodText = (p: Player, none: string) => {
+  const gripes = complaints(p);
+  return gripes.length ? `${gripes.join('. ')}.` : none;
+};
 
 const pct = (x: number) => Math.round(x);
 

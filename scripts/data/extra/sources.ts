@@ -3,6 +3,8 @@
 // (raw.githubusercontent.com, GitHub releases, NBA.com's public S3 bucket), cached in
 // data/raw/extra/.
 import { join } from 'node:path';
+import { seasonLabel } from '../../../src/core/constants';
+import { SEED_SEASON } from '../sources';
 
 // follows HC_RAW_DIR (the offline fixture build) unless HC_EXTRA_DIR says otherwise
 export const EXTRA_RAW = process.env.HC_EXTRA_DIR ?? join(process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw'), 'extra');
@@ -26,15 +28,15 @@ export const EXTRA_FILES: ExtraFile[] = [
   {
     key: 'schedule.json',
     url: 'https://nba-prod-us-east-1-mediaops-stats.s3.amazonaws.com/NBA/staticData/scheduleLeagueV2_1.json',
-    what: 'NBA.com 2026-27 league schedule',
+    what: `NBA.com ${seasonLabel(SEED_SEASON)} league schedule`,
   },
   { key: 'draft-picks.json', url: `${ROSTER_BUILDER}/draft-picks.json`, what: 'future draft-pick ownership (RealGM via nba-roster-builder)' },
   { key: 'players.json', url: `${ROSTER_BUILDER}/players.json`, what: 'contracts incl. two-way deals (SalarySwish via nba-roster-builder)' },
   // hourly mirror of ESPN's injury report; deliberately unpinned so a refetch gets today's list
   { key: 'injuries.json', url: 'https://raw.githubusercontent.com/BenoParadise/nba-injuries/main/data.json', what: 'ESPN injury report (hourly mirror)' },
   {
-    key: 'injuries_2027.parquet',
-    url: 'https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_nba_injuries/injuries_2027.parquet',
+    key: `injuries_${SEED_SEASON}.parquet`,
+    url: `https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_nba_injuries/injuries_${SEED_SEASON}.parquet`,
     what: 'ESPN injury history (sportsdataverse), backup for injuries.json',
     optional: true,
   },
