@@ -1,5 +1,5 @@
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, seasonsInCharge } from '../../core/league/owner';
-import { useQueryParam } from '../league/shared';
+import { seasonOutcome, useQueryParam } from '../league/shared';
 import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
 import type { Team } from '../../core/types';
@@ -20,7 +20,7 @@ import {
 } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
-import { CenterBar, Gauge, PLAYOFF_LABEL, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
+import { CenterBar, Gauge, SecTitle, fmtM, fmtMs, ordinal, ownerVerdict } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -361,6 +361,7 @@ function OwnerTab() {
   const seasonsIn = seasonsInCharge(league);
   const ts = curTeamSeason(league, league.userTid);
   const games = ts.won + ts.lost;
+  const outcome = seasonOutcome(league, league.userTid, ts);
   // the owner's profit target and range grow with league revenue
   const scale = revenueScale(league);
   const [target, range] = [OWNER_PROFIT_TARGET * scale, OWNER_PROFIT_RANGE * scale];
@@ -427,13 +428,14 @@ function OwnerTab() {
             for 60%, so one bad year won't sink you, but a pattern will.
           </div>
           <div>
-            This is season {seasonsIn} of your tenure.{' '}
+            {/* a team taken over after the season is his from the next one */}
+            {seasonsIn < 1 ? 'Your tenure starts next season.' : `This is season ${seasonsIn} of your tenure.`}{' '}
             {seasonsIn <= 2 ? <span className="good">You're in your grace period: you can't be fired before the end of your third season.</span> : 'Your grace period is over.'}
           </div>
           {games > 0 && (
             <div>
-              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit
-              {ts.playoffRound >= 0 ? `, ${PLAYOFF_LABEL(ts.playoffRound)}` : ''}.
+              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit.
+              {outcome.short !== 'Ongoing' ? ` ${outcome.label}.` : ''}
             </div>
           )}
         </div>
@@ -464,7 +466,11 @@ function HistoryTab({ team }: { team: Team }) {
       label: 'Playoffs',
       left: true,
       get: (r) => r.playoffRound,
-      fmt: (_v, r) => (r.season === league.season && (league.phase === 'regular' || league.phase === 'preseason') ? '—' : PLAYOFF_LABEL(r.playoffRound)),
+      // how the season ended, as on the team and history pages (a play-in loss isn't a plain miss)
+      fmt: (_v, r) => {
+        const o = seasonOutcome(league, team.tid, r);
+        return o.short === 'Ongoing' ? '—' : o.short;
+      },
     },
     { key: 'rev', label: 'Revenue', get: (r) => r.revenue, fmt: (v) => fmtM(Number(v)) },
     { key: 'exp', label: 'Expenses', get: (r) => r.expenses, fmt: (v) => fmtM(Number(v)) },

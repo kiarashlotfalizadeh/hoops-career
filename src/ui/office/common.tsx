@@ -39,9 +39,6 @@ export { ordinal } from '../stats';
 // tones match the league screens' strategy tags
 export { STRATEGY_META } from '../league/shared';
 
-export const PLAYOFF_LABEL = (round: number) =>
-  round >= 5 ? 'Champion' : round === 4 ? 'Finals' : round === 3 ? 'Conf. Finals' : round === 2 ? '2nd Round' : round === 1 ? '1st Round' : round === 0 ? 'Play-In' : 'Missed';
-
 export function playerMeta(league: League, p: Player, extra?: string): string {
   const bits = [p.pos, String(playerAge(p, league.season)), fmtHeight(p.heightIn)];
   if (extra) bits.push(extra);

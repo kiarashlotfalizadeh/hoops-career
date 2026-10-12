@@ -110,7 +110,11 @@ export interface Outcome {
   gold?: boolean;
 }
 
-const ROUND_NAME = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
+const ROUND_FULL = ['Play-In', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
+const ROUND_SHORT = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
+
+/** A playoff round's name (1-4; 0 is the play-in), in full or short for tight spots. Core's seriesLabel adds the conference ("East Semifinals"). */
+export const roundName = (round: number, short = false) => (short ? ROUND_SHORT : ROUND_FULL)[round] ?? 'Playoffs';
 
 /** Human label for how a team season ended (or where it stands now). */
 export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outcome {
@@ -119,18 +123,14 @@ export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outc
     if (league.phase === 'preseason' || league.phase === 'regular') return { label: 'In progress', short: 'Ongoing' };
     if (r === 5) return { label: 'Champion', short: 'Champion', tone: 'good', gold: true };
     const alive = league.playoffs.some((s) => (s.high === tid || s.low === tid) && s.winner === undefined);
-    if (alive)
-      return { label: `Playing in the ${r === 4 ? 'Finals' : (ROUND_NAME[r] ?? 'playoffs')}`, short: r === 4 ? 'In Finals' : `In ${ROUND_NAME[r] ?? 'Playoffs'}`, tone: 'info' };
+    if (alive) return { label: `Playing in the ${roundName(r)}`, short: `In ${roundName(r, true)}`, tone: 'info' };
     if (league.phase === 'playin') {
       if (r >= 1) return { label: 'Qualified for the playoffs', short: 'Qualified', tone: 'good' };
       if (r === 0) return { label: 'In the play-in', short: 'Play-In', tone: 'info' };
     }
   }
   if (r === 5) return { label: 'Won the championship', short: 'Champion', tone: 'good', gold: true };
-  if (r === 4) return { label: 'Lost in the Finals', short: 'Lost Finals', tone: 'good' };
-  if (r === 3) return { label: 'Lost in the Conference Finals', short: 'Lost Conf. Finals', tone: 'info' };
-  if (r === 2) return { label: 'Lost in the 2nd round', short: 'Lost 2nd Rd', tone: 'info' };
-  if (r === 1) return { label: 'Lost in the 1st round', short: 'Lost 1st Rd', tone: 'info' };
+  if (r >= 1 && r <= 4) return { label: `Lost in the ${roundName(r)}`, short: `Lost ${roundName(r, true)}`, tone: r === 4 ? 'good' : 'info' };
   // a play-in loser's round drops to -1: the play-in flag tells it apart from a lottery team
   if (r === 0 || ts.playIn) return { label: 'Lost in the play-in', short: 'Lost Play-In', tone: 'warn' };
   return { label: 'Missed the playoffs', short: 'Missed' };

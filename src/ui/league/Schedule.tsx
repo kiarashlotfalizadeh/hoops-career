@@ -7,7 +7,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { teamRatings } from '../stats';
 import { Card, Empty } from '../components/ui';
-import { ordinal, useGamesByGid, useQueryParam } from './shared';
+import { ordinal, roundName, useGamesByGid, useQueryParam } from './shared';
 import { standings, type StandingRow } from '../../core/league/standings';
 
 const TYPE_LABEL: Record<string, string> = { playin: 'Play-In', playoffs: 'Playoffs', allstar: 'All-Star' };
@@ -18,14 +18,12 @@ function record(league: League, tid: number) {
   return `${ts.won}-${ts.lost}`;
 }
 
-const ROUND_SHORT = ['', '1st Rd', 'Semis', 'Conf. Finals', 'Finals'];
-
-/** "1st Rd G4", "Finals G2", "Play-In", or '' for regular-season games. */
+/** "1st Round G4", "Finals G2", "Play-In", or '' for regular-season games. */
 function gameTag(league: League, g: ScheduledGame): string {
   if (g.type === 'playoffs') {
     const round = g.seriesId ? Number(g.seriesId[1]) : 0;
     const n = seriesGameNo(league, g);
-    return `${ROUND_SHORT[round] ?? 'Playoffs'}${n ? ` G${n}` : ''}`;
+    return `${round >= 1 ? roundName(round, true) : 'Playoffs'}${n ? ` G${n}` : ''}`;
   }
   if (g.cup) return CUP_SHORT[g.cup];
   return TYPE_LABEL[g.type] ?? '';
@@ -176,7 +174,8 @@ function rowSub(league: League, r: Row, tid: number, ranks: Map<number, Standing
   if (r.res) {
     const side = r.res.home.tid === tid ? r.res.home : r.res.away;
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
-    const lead = top ? `${top.name.split(' ').slice(-1)[0]} ${top.pts} pts` : '';
+    // the last word of a box-score name can be a suffix ("Jr."): the player's own last name when he's still in the league
+    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name} ${top.pts} pts` : '';
     return [r.g.type === 'regular' ? r.rec : '', lead].filter(Boolean).join(' · ');
   }
   const st = ranks.get(r.opp);
