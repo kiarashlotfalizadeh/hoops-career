@@ -129,7 +129,8 @@ function findOffers(league: League, pid: number): BlockOffer[] {
       // add a salary filler or two if matching fails
       let withFill = [...pkg];
       for (let k = 0; k < 2; k++) {
-        const used = new Set(withFill.map((a) => a.id));
+        // fillers are players: a pick's id can equal a player's
+        const used = new Set(withFill.filter((a) => a.kind === 'p').map((a) => a.id));
         const used_ai = withFill.reduce((a, x) => a + x.ai, 0);
         const f = fillers.find((x) => !used.has(x.id) && used_ai + x.ai <= budget);
         if (!f || withFill.filter((a) => a.kind === 'p').length >= maxPlayersIn) break;

@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { deleteLeague, listLeagues, loadLeague, type LeagueMeta } from '../../state/persistence';
-import { exportLeague } from '../../state/backup';
 import { useStore } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
 import { Card, Empty, Sheet } from '../components/ui';
 import { ImportButton } from '../components/ImportButton';
+import { UnsavedSheet } from '../components/UnsavedSheet';
 
 export default function Start() {
   const nav = useNavigate();
@@ -17,8 +17,6 @@ export default function Start() {
   const [confirm, setConfirm] = useState<LeagueMeta | null>(null);
   // the league to open once the user decides about the open one's unsaved changes
   const [unsaved, setUnsaved] = useState<string | null>(null);
-  const openLeague = useStore((s) => s.league);
-  const saveProblem = useStore((s) => s.saveProblem);
   const [error, setError] = useState<string | null>(null);
   const refresh = () =>
     listLeagues()
@@ -125,41 +123,17 @@ export default function Start() {
           </div>
         )}
       </Card>
-      <Sheet open={!!unsaved && !!openLeague} onClose={() => setUnsaved(null)} title="Switch without saving?">
-        {openLeague && (
-          <div className="col" style={{ gap: 12 }}>
-            <div className="dim2">
-              Your current league, “{openLeague.name}”, could not be saved. {saveProblem?.text} Export a backup of it first: its latest changes are only in this window.
-            </div>
-            <button
-              className="btn primary block"
-              onClick={() =>
-                void exportLeague(openLeague).catch((e) => {
-                  console.error(e);
-                  useStore.getState().toast('Export failed.', 'bad');
-                })
-              }
-            >
-              <Download size={16} /> Export backup
-            </button>
-            <div className="row">
-              <button className="btn grow" onClick={() => setUnsaved(null)}>
-                Stay
-              </button>
-              <button
-                className="btn danger grow"
-                onClick={() => {
-                  const id = unsaved;
-                  setUnsaved(null);
-                  if (id) void open(id, true);
-                }}
-              >
-                Open anyway
-              </button>
-            </div>
-          </div>
-        )}
-      </Sheet>
+      <UnsavedSheet
+        open={!!unsaved}
+        title="Switch without saving?"
+        proceed="Open anyway"
+        onStay={() => setUnsaved(null)}
+        onProceed={() => {
+          const id = unsaved;
+          setUnsaved(null);
+          if (id) void open(id, true);
+        }}
+      />
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title="Delete league?">
         <p className="dim2">“{confirm?.name}” will be permanently removed from this device.</p>
         <div className="row" style={{ marginTop: 12 }}>

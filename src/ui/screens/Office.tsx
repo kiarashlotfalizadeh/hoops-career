@@ -16,14 +16,14 @@ import {
   standardRoster,
   twoWayRoster,
 } from '../../core/league/helpers';
-import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, signingRoute, valueScore } from '../../core/league/contracts';
+import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, rookieScaleDeal, signingRoute, valueScore } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
 import { untradeableReason } from '../../core/league/trades';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
-import { useLeague, useLeagueMemo } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet } from '../components/ui';
 import {
@@ -42,9 +42,11 @@ import {
   ownerVerdict,
   playerMeta,
   shortSeason,
+  tradeClosedNote,
 } from '../office/common';
 import { overallPick } from '../league/shared';
 import { rosterNames } from '../stats';
+import { useFlowRunner } from '../useFlow';
 
 interface Tile {
   to: string;
@@ -296,6 +298,8 @@ export default function Office() {
 
 function Spotlight({ league }: { league: League }) {
   const nav = useNavigate();
+  const run = useFlowRunner();
+  const busy = useStore((st) => !!st.sim);
   const tid = league.userTid;
   const s0 = capSeason(league);
   const space = CAP_FOR(league, s0).salaryCap - payroll(league, tid, s0);
@@ -320,6 +324,8 @@ function Spotlight({ league }: { league: League }) {
       const np = nextPick(league);
       const onClock = league.phase === 'draft' && np?.tid === tid;
       const mine = draftOrder(league).filter((d) => d.tid === tid);
+      // every pick is in: next is re-signing, as on the Draft screen
+      const done = league.phase === 'draft' && !np;
       return (
         <Card className={`fo-hero ${onClock ? 'fo-clock' : ''}`} accent={!onClock}>
           {onClock ? <div className="fo-live">You're on the clock</div> : <div className="fo-eyebrow">{league.phase === 'draft' ? 'Draft night' : 'Lottery results are in'}</div>}
@@ -340,8 +346,13 @@ function Spotlight({ league }: { league: League }) {
               </div>
             </div>
           </div>
-          <button className={`btn block ${onClock ? 'good' : 'primary'}`} style={{ marginTop: 12 }} onClick={() => nav('/draft')}>
-            {onClock ? 'Make your pick' : 'Open the draft board'}
+          <button
+            className={`btn block ${onClock ? 'good' : 'primary'}`}
+            style={{ marginTop: 12 }}
+            disabled={done && busy}
+            onClick={() => (done ? void run({ id: 'finish', label: 'Continue to re-signing', cmd: 'finishDraft' }) : nav('/draft'))}
+          >
+            {onClock ? 'Make your pick' : done ? 'Continue to re-signing' : 'Open the draft board'}
           </button>
         </Card>
       );
@@ -564,7 +575,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                         <button type="button" className="fo-name small" style={{ textAlign: 'left' }} aria-haspopup="dialog" onClick={(e) => (e.stopPropagation(), onPick(p.pid))}>
                           {nameOf(p.pid)}
                         </button>
-                        {p.contract.rookie && (
+                        {rookieScaleDeal(p) && (
                           <span className="tag info" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
                             R
                           </span>
@@ -689,7 +700,8 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const tooFew = !!blocked;
   const upNote = contractUpNote(league, p);
   const expiringNow = !!upNote;
-  const noTrade = expiringNow ? null : untradeableReason(league, p);
+  // after the deadline and in the postseason, say so here rather than on the Trade screen
+  const noTrade = expiringNow ? null : (tradeClosedNote(league) ?? untradeableReason(league, p));
   const opt = openOption(league, p);
   const s0 = capSeason(league);
 
@@ -719,7 +731,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
       </div>
       <div className="row wrap" style={{ gap: 6 }}>
         <span className="tag">{contractYearsLabel(league, p, s0)}</span>
-        {p.contract.rookie && <span className="tag info">Rookie scale</span>}
+        {rookieScaleDeal(p) && <span className="tag info">Rookie scale</span>}
         {opt && (
           <span className={`tag ${opt === 'team' ? 'warn' : 'info'}`}>
             {opt === 'team' ? 'Team' : 'Player'} option {seasonLabel(exp)}

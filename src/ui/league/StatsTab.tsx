@@ -3,12 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronDown, Search } from 'lucide-react';
 import type { League, Player, PlayerStats, Pos, TeamSeason } from '../../core/types';
 import { POSITIONS } from '../../core/types';
-import { seasonTotals } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Empty, Segmented, StatTable, type Col } from '../components/ui';
-import { f1, perGame, signed, teamRatings, type PerGame } from '../stats';
+import { f1, perGame, seasonLine, signed, teamRatings, type PerGame } from '../stats';
 import { shortName, statSeasons, statTid, teamAbbrev, useQueryParam } from './shared';
 
 type View = 'leaders' | 'players' | 'teams';
@@ -25,7 +24,8 @@ export function useSeasonRows(league: League, season: number, playoffs: boolean)
   return useLeagueMemo(() => {
     const out: StatRow[] = [];
     for (const p of Object.values(league.players)) {
-      const s = seasonTotals(p, season, playoffs);
+      // a player traded during an imported season keeps his usage and advanced numbers
+      const s = seasonLine(p, season, playoffs);
       if (!s || s.gp === 0) continue;
       const pg = perGame(s);
       if (!pg) continue;

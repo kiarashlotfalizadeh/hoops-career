@@ -20,7 +20,7 @@ import {
 } from '../../core/league/finances';
 import { useLeague, useStore } from '../../state/store';
 import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
-import { CenterBar, Gauge, PRACTICE, SecTitle, capSeason, fmtM, fmtMs, ordinal, ownerVerdict, shortSeason } from '../office/common';
+import { CenterBar, Gauge, PRACTICE, SecTitle, capSeason, fmtM, fmtMs, isOffseason, ordinal, ownerVerdict, shortSeason } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -486,6 +486,8 @@ function HistoryTab({ team }: { team: Team }) {
     },
     { key: 'pay', label: 'Payroll', get: (r) => r.payroll, fmt: (v) => (Number(v) ? fmtM(Number(v)) : '—') },
   ];
+  // after the playoffs this season's books are closed
+  const inProgress = !isOffseason(league);
   const chart = [...rows].reverse().slice(-10);
   const maxAbs = Math.max(1, ...chart.map((r) => Math.abs(r.revenue - r.expenses)));
   return (
@@ -507,7 +509,7 @@ function HistoryTab({ team }: { team: Team }) {
                     style={{
                       height: `${Math.max(4, (Math.abs(pr) / maxAbs) * 52)}px`,
                       background: pr >= 0 ? 'var(--good)' : 'var(--bad)',
-                      opacity: r.season === league.season ? 0.55 : 0.9,
+                      opacity: inProgress && r.season === league.season ? 0.55 : 0.9,
                     }}
                   />
                   <span className="tiny dim">{shortSeason(r.season)}</span>
@@ -520,9 +522,7 @@ function HistoryTab({ team }: { team: Team }) {
       <SecTitle>Season by season</SecTitle>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.season} highlight={(r) => r.season === league.season} />
       <div className="tiny dim" style={{ marginTop: -6 }}>
-        {league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs'
-          ? 'The highlighted season is still in progress. '
-          : ''}
+        {inProgress ? 'The highlighted season is still in progress. ' : ''}
         Payroll is recorded at the end of each regular season.
       </div>
     </>

@@ -11,11 +11,11 @@ import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
-import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption } from '../office/common';
+import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, tradeClosedNote } from '../office/common';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
 import { pendingLive } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
@@ -138,7 +138,7 @@ export default function PlayerView() {
   // a paused live game would record a moved player's line for his old team; a contract that's up is re-signed or let go, as in the Office
   const busyWhy = pendingLive(league) ? 'Finish your live game first.' : null;
   const upNote = contractUpNote(league, p);
-  const tradeWhy = busyWhy ?? upNote ?? untradeableReason(league, p);
+  const tradeWhy = busyWhy ?? upNote ?? tradeClosedNote(league) ?? untradeableReason(league, p);
   const releaseWhy = busyWhy ?? upNote ?? releaseBlockedReason(league, p);
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
@@ -340,7 +340,7 @@ export default function PlayerView() {
                     <span className="num">
                       {seasonLabel(contractExp(p.contract))}
                       {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
-                      {p.contract.rookie ? ' · rookie scale' : ''}
+                      {rookieScaleDeal(p) ? ' · rookie scale' : ''}
                     </span>
                   </div>
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}

@@ -19,6 +19,7 @@ import {
   releaseDeadMoney,
   releasePlayer,
   rookieContract,
+  rookieScaleDeal,
   signPlayer,
   signingRoute,
   teamAppeal,
@@ -811,6 +812,25 @@ describe('free agency', () => {
     expect(later.salaries[0] / now.salaries[0]).toBeCloseTo((1 + CAP.growth) ** 2, 2);
     // a second-rounder gets each season's minimum
     expect(rookieContract(l, 5, 2, l.season + 3).salaries).toEqual([CAP_FOR(l, l.season + 3).minContract, CAP_FOR(l, l.season + 4).minContract]);
+  });
+
+  it("only a first-round pick's deal is on the rookie scale (the Office's R tag): a second-rounder's minimum seasons aren't", () => {
+    const l = league();
+    l.phase = 'draft';
+    const [first, second] = [1, 2].map((round) => {
+      const dp = l.draftPicks.find((d) => d.season === l.season && d.round === round && d.tid === U)!;
+      dp.pick = 20;
+      const p = prospectsBy(l)[0];
+      draftPlayer(l, dp, p.pid);
+      return p;
+    });
+    // both are rookie deals (no contract grumbles, the team wants to keep them)
+    expect([first.contract.rookie, second.contract.rookie]).toEqual([true, true]);
+    expect(rookieScaleDeal(first)).toBe(true);
+    expect(rookieScaleDeal(second)).toBe(false);
+    // re-signed, he's off it
+    first.contract = { start: l.season + 1, salaries: [10_000] };
+    expect(rookieScaleDeal(first)).toBe(false);
   });
 
   it('camp deals are free to cut before opening night; releases count from the contract season (T10, UI2-5)', () => {

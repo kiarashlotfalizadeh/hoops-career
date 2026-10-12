@@ -11,6 +11,7 @@ import { contractExp, playerAge } from '../../core/playerGen';
 import { playerName, standardRoster } from '../../core/league/helpers';
 import { nonGuaranteed, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
+import { tradingClosedReason } from '../../core/league/trades';
 import { useStore } from '../../state/store';
 import { Ovr } from '../components/ui';
 import './office.css';
@@ -76,6 +77,12 @@ export function contractUpNote(league: League, p: Player): string | null {
   return league.phase === 'resign'
     ? 'His contract is up. Re-sign him now or he becomes a free agent.'
     : 'His contract is up. You hold his rights until free agency opens: re-sign him in the re-sign period after the draft.';
+}
+
+/** Why none of the user's players can be traded right now (past the deadline, the postseason) and when that ends, or null. */
+export function tradeClosedNote(league: League): string | null {
+  const why = tradingClosedReason(league);
+  return why && `${why} Trading reopens after the playoffs, with the draft lottery.`;
 }
 
 export function contractYearsLabel(league: League, p: Player, fromSeason: number): string {
