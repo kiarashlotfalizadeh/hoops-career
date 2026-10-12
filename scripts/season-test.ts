@@ -11,9 +11,14 @@ import { expiringPlayers, userOffer, userResign } from '../src/core/league/freeA
 import { askingContract, releasePlayer } from '../src/core/league/contracts';
 import { ovrRaw } from '../src/core/ratings';
 
-const seasons = Number(process.argv[2] ?? 2);
 const seedIdx = process.argv.indexOf('--seed');
 const seedPath = seedIdx > 0 ? process.argv[seedIdx + 1] : 'src/data/seed.json';
+// the season count is whichever argument isn't the seed option, so `--seed x` alone still plays the default
+const countArg = process.argv.slice(2).find((a, i, args) => a !== '--seed' && args[i - 1] !== '--seed');
+const seasons = Number(countArg ?? 2);
+if (!Number.isInteger(seasons) || seasons < 1) throw new Error(`Usage: season-test [seasons] [--seed path/to/seed.json] (got "${countArg}" seasons)`);
+// a seed asked for by name must exist; without --seed, a missing default seed means a fictional league
+if (seedIdx > 0 && !existsSync(seedPath)) throw new Error(`No seed at ${seedPath}`);
 const seed: SeedData | null = existsSync(seedPath) ? JSON.parse(readFileSync(seedPath, 'utf8')) : null;
 console.log(seed ? `Using seed ${seedPath} (${seed.players.length} players)` : 'Fictional league');
 const t0 = performance.now();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseContracts, parsePerGame, parseRoster, seedDraft, type RosterRow } from '../parse';
+import { countryName, parseContracts, parsePerGame, parseRoster, seedDraft, type RosterRow } from '../parse';
 
 const pg = `<div><!-- <table id="per_game_stats"><tbody>
 <tr><th data-stat="ranker">1</th><td data-stat="name_display" data-append-csv="gilgesh01"><a href="/players/g/gilgesh01.html">Shai Gilgeous-Alexander</a></td><td data-stat="age">27</td><td data-stat="team_name_abbr">OKC</td><td data-stat="pos">PG</td><td data-stat="games">76</td><td data-stat="games_started">76</td><td data-stat="mp_per_g">34.2</td><td data-stat="fga_per_g">21.8</td><td data-stat="fg3a_per_g">5.7</td><td data-stat="pts_per_g">32.7</td></tr>
@@ -26,6 +26,16 @@ describe('bbref parsers', () => {
     // "R" is a rookie; a page without the column says nothing (not "rookie")
     expect(parseRoster(html.replace('>7<', '>R<'), 'OKC', 2027)[0].exp).toBe(0);
     expect(parseRoster(html.replace('<td data-stat="years_experience">7</td>', ''), 'OKC', 2027)[0].exp).toBeNull();
+  });
+  it('names every flag code: the short list first, any other region in English', () => {
+    expect(countryName('CA')).toBe('Canada');
+    expect(countryName('CD')).toBe('DR Congo');
+    // Neemias Queta and Henri Veesaar's codes aren't on the short list: no "PT" or "EE" on their Player pages
+    expect(countryName('PT')).toBe('Portugal');
+    expect(countryName('EE')).toBe('Estonia');
+    expect(countryName('')).toBe('USA');
+    expect(countryName(undefined)).toBe('USA');
+    expect(countryName('1')).toBe('1');
   });
   it('gives undrafted players their entry class, so their experience and rookie year are right', () => {
     const ros = (season: number, exp: number | null) => ({ season, exp }) as RosterRow;

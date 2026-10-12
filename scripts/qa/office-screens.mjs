@@ -102,9 +102,9 @@ await go('/draft');
 await shot('o13-draft-board');
 await tryClick(page.getByRole('radio', { name: 'Combine' }), 'combine');
 await shot('o14-draft-combine');
-await tryClick(page.getByRole('radio', { name: 'My Picks' }), 'my picks');
+await tryClick(page.getByRole('radio', { name: 'Your picks' }), 'your picks');
 await shot('o15-draft-mypicks');
-await tryClick(page.getByRole('radio', { name: 'Big Board' }), 'board');
+await tryClick(page.getByRole('radio', { name: 'Big board' }), 'board');
 if (await tryClick(page.locator('.fo-prow').first(), 'prospect')) {
   await shot('o16-draft-prospect');
   await closeSheet();
@@ -170,14 +170,19 @@ if (stage === 'all') {
   await page.waitForTimeout(600);
   await shot('s05-draft-live');
   await shot('s05b-draft-live-full', true);
-  if (await tryClick(page.locator('.fo-prow .btn.good').first(), 'draft btn')) {
+  // each prospect's Draft button sits next to his row (".fo-prow"), not inside it
+  if (await tryClick(page.locator('button.btn.sm.good').first(), 'draft btn')) {
     await shot('s06-draft-confirm');
     await tryClick(page.getByRole('button', { name: 'Draft him' }), 'draft him');
     await page.waitForTimeout(600);
     await shot('s07-draft-after-pick');
   }
   await tryClick(page.getByRole('button', { name: /Sim to end/ }).first(), 'sim to end');
-  await tryClick(page.getByRole('button', { name: /Sim the draft|Continue to re-signing/ }), 'confirm sim');
+  // asked only while you still hold a pick; the simmed draft then stays open until you move on
+  await tryClick(page.getByRole('button', { name: 'Sim the draft' }), 'confirm sim');
+  await page.waitForTimeout(600);
+  await tryClick(page.getByRole('button', { name: /Continue to re-signing/ }), 'continue to re-signing');
+  await waitSim();
   await page.waitForTimeout(800);
   await go('/resign');
   await shot('s08-resign', true);

@@ -119,7 +119,8 @@ await page.goto(`${base}/#/league?tab=standings`);
 await page.waitForTimeout(600);
 await shot('06-standings');
 await page.goto(`${base}/#/`);
-for (let i = 0; i < 3 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
+// big news pauses the postseason sim too: keep going until the playoffs are over
+for (let i = 0; i < 10 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
 await page.goto(`${base}/#/league?tab=playoffs`);
 await page.waitForTimeout(600);
 await shot('07-playoffs');
@@ -156,6 +157,29 @@ await shot('13-new-preseason');
 await page.goto(`${base}/#/roster`);
 await page.waitForTimeout(600);
 await shot('14-roster-y2');
+// the draft can leave more than 15 standard contracts: cut the cheapest one, as a player would, until the season can start
+for (let i = 0; i < 5; i++) {
+  await page.goto(`${base}/#/`);
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.waitForTimeout(300);
+  const start = page
+    .locator('.sheet')
+    .getByRole('button', { name: /^Start regular season/ })
+    .first();
+  const over = (await start.count()) && (await start.isDisabled()) && /Release or trade down/.test((await start.textContent()) ?? '');
+  await page.keyboard.press('Escape');
+  if (!over) break;
+  await page.goto(`${base}/#/office`);
+  await page.waitForTimeout(600);
+  // two-way deals don't count toward the 15
+  const row = page.locator('table.fo-contracts tbody tr.clickable').filter({ hasNotText: '2W' }).last();
+  const who = (await row.locator('.fo-name').first().textContent())?.trim();
+  await row.click();
+  await page.locator('.sheet').getByRole('button', { name: 'Release', exact: true }).click();
+  await page.locator('.sheet').getByRole('button', { name: 'Release', exact: true }).click();
+  await page.waitForTimeout(400);
+  log(`  released ${who} to get down to 15`);
+}
 await page.goto(`${base}/#/`);
 await play('Start regular season');
 log(`final phase: ${await phase()}`);

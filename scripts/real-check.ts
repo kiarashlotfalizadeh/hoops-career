@@ -404,9 +404,10 @@ for (const n of watch) {
 }
 
 const team = process.env.TEAM;
-const T = team ? league.teams.find((t) => t.abbrev === team) : undefined;
+const T = team ? league.teams.find((t) => t.abbrev === team.toUpperCase()) : undefined;
+if (team && !T) console.log(`\nTEAM=${team} is none of ${league.teams.map((t) => t.abbrev).join(', ')}`);
 if (T) {
-  console.log(`\n${team} rotation plan vs actual:`);
+  console.log(`\n${T.abbrev} rotation plan vs actual:`);
   for (const pid of T.rotation.order) {
     const p = league.players[pid];
     const r = rows.find((x) => x.p.pid === pid);

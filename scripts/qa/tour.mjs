@@ -206,7 +206,7 @@ if (stages.includes('mid')) {
 }
 if (want('post')) {
   for (let i = 0; i < 25 && /Regular season/i.test((await phase()) ?? ''); i++) await play('Sim to end of regular season');
-  for (let i = 0; i < 4 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
+  for (let i = 0; i < 10 && /Play-in|Playoffs/i.test((await phase()) ?? ''); i++) await play('Sim (through play-in|to end of playoffs)');
 }
 if (stages.includes('post')) await tour('post');
 if (want('draft')) for (let i = 0; i < 4 && !/NBA draft/i.test((await phase()) ?? ''); i++) if (!(await play('(Go to the draft)'))) break;
