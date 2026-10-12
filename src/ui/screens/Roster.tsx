@@ -205,7 +205,9 @@ export default function Roster() {
       {view === 'stats' && (
         <>
           <StatTable rows={roster} cols={statCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
-          {!anyCur && <div className="small dim">No games yet this season: each player's latest season, per game.</div>}
+          {!anyCur && (
+            <div className="small dim">{[...lines.values()].some(Boolean) ? "No games yet this season: each player's latest season, per game." : 'No games played yet.'}</div>
+          )}
         </>
       )}
       {view === 'contracts' && (
