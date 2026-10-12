@@ -6,9 +6,11 @@
 // and once the groups are decided the teams that didn't qualify get their last two games there
 // (quarterfinal losers one), so everyone ends on 82.
 
-import type { BoxLine, CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
+import type { CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
 import type { Rng } from '../random';
-import { addInbox, addNews, dayToDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { addInbox, addNews, andList, dateToDay, dayToDate, fmtDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { gameScore } from './awards';
+import { drawLot } from './standings';
 
 export interface CupSetup {
   groups: CupGroup[];
@@ -17,8 +19,6 @@ export interface CupSetup {
   sfDay: number;
   finalDay: number;
 }
-
-export const CUP_TEAMS_PER_GROUP = 5;
 
 /** Group stage, quarterfinals and semifinals are regular-season games; the final isn't. */
 export const CUP_ROUND_LABEL: Record<'group' | 'qf' | 'sf' | 'final', string> = {
@@ -38,12 +38,8 @@ export function drawCupGroups(teams: Team[], season: number, rng: Rng): CupGroup
   for (const conf of ['E', 'W'] as const) {
     const confTeams = teams.filter((t) => t.conf === conf);
     if (confTeams.length !== 15) return null;
-    const prev = (t: Team) => {
-      const s = t.seasons.find((x) => x.season === season - 1);
-      return s && s.won + s.lost > 0 ? winPct(s) : 0.5;
-    };
     const ranked = confTeams
-      .map((t) => ({ t, k: prev(t) + rng.next() * 1e-3 }))
+      .map((t) => ({ t, k: lastSeasonPct(t, season) + rng.next() * 1e-3 }))
       .sort((a, b) => b.k - a.k)
       .map((x) => x.t.tid);
     const ids = ['A', 'B', 'C'];
@@ -64,7 +60,8 @@ export function drawCupGroups(teams: Team[], season: number, rng: Rng): CupGroup
  * a Friday and Saturday, semifinals the Tuesday, the championship the Friday.
  */
 export function cupCalendar(season: number): Omit<CupSetup, 'groups'> {
-  let f1 = 12; // Nov 1 (day 0 = Oct 20)
+  // the first Friday from Nov 2: three weeks later is always the day after Thanksgiving (Nov 23-29)
+  let f1 = dateToDay(season, 10, 2);
   while (dayToDate(season, f1).getUTCDay() !== 5) f1++;
   const nights = [f1, f1 + 7, f1 + 11, f1 + 18, f1 + 21];
   const q0 = nights[4] + 7;
@@ -111,13 +108,13 @@ export interface CupGroupTable {
   rows: CupRow[];
 }
 
-/** Stable last-resort tiebreak (the NBA draws lots). */
-const lot = (season: number, tid: number) => (((season * 2654435761) ^ (tid * 40503)) >>> 0) % 1000;
-
-function prevPct(league: League, tid: number) {
-  const s = league.teams[tid].seasons.find((x) => x.season === league.season - 1);
+/** Last season's record (.500 in a league's first season), a late tiebreak and the draw's pots. */
+function lastSeasonPct(t: Team, season: number) {
+  const s = t.seasons.find((x) => x.season === season - 1);
   return s && s.won + s.lost > 0 ? winPct(s) : 0.5;
 }
+
+const prevPct = (league: League, tid: number) => lastSeasonPct(league.teams[tid], league.season);
 
 /**
  * Group tables from this season's group games. Ties: head-to-head among the tied teams, point
@@ -152,7 +149,7 @@ export function cupTables(league: League): CupGroupTable[] {
       // head-to-head among every team on the same record
       const tied = rows.filter((r) => Math.abs(pct(r) - pct(x)) < 1e-9);
       const h2h = (r: CupRow) => tied.reduce((s, o) => s + (beat.get(`${r.tid}-${o.tid}`) ?? 0) - (beat.get(`${o.tid}-${r.tid}`) ?? 0), 0);
-      return h2h(y) - h2h(x) || y.pd - x.pd || y.pf - x.pf || prevPct(league, y.tid) - prevPct(league, x.tid) || lot(cup.season, x.tid) - lot(cup.season, y.tid);
+      return h2h(y) - h2h(x) || y.pd - x.pd || y.pf - x.pf || prevPct(league, y.tid) - prevPct(league, x.tid) || drawLot(cup.season, x.tid) - drawLot(cup.season, y.tid);
     });
     rows.forEach((r, i) => (r.rank = i + 1));
     return { group, rows };
@@ -172,7 +169,7 @@ export function cupTables(league: League): CupGroupTable[] {
 function crossGroup(league: League, a: CupRow, b: CupRow) {
   const pa = a.won / Math.max(1, a.won + a.lost);
   const pb = b.won / Math.max(1, b.won + b.lost);
-  return pb - pa || b.pd - a.pd || b.pf - a.pf || prevPct(league, b.tid) - prevPct(league, a.tid) || lot(league.season, a.tid) - lot(league.season, b.tid);
+  return pb - pa || b.pd - a.pd || b.pf - a.pf || prevPct(league, b.tid) - prevPct(league, a.tid) || drawLot(league.season, a.tid) - drawLot(league.season, b.tid);
 }
 
 /** Knockout seeds per conference: the three group winners, then the best runner-up. */
@@ -217,11 +214,10 @@ function sortSchedule(league: League) {
 function pairFillers(league: League, need: Map<number, number>, rng: Rng): { home: number; away: number }[] {
   const homeCount = new Map<number, number>();
   const meet = new Map<string, number>();
-  const mk = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   for (const g of league.schedule) {
     if (g.type !== 'regular') continue;
     homeCount.set(g.home, (homeCount.get(g.home) ?? 0) + 1);
-    meet.set(mk(g.home, g.away), (meet.get(mk(g.home, g.away)) ?? 0) + 1);
+    meet.set(pairKey(g.home, g.away), (meet.get(pairKey(g.home, g.away)) ?? 0) + 1);
   }
   const hostSlots: number[] = [];
   const awaySlots: number[] = [];
@@ -247,8 +243,8 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
     let ok = true;
     for (const host of rng.shuffle(hostSlots.slice())) {
       const opts = visitors
-        .map((v, i) => ({ v, i, s: (used.get(mk(host, v)) ?? 0) * 10 + (league.teams[v].conf !== league.teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
-        .filter((o) => o.v !== host && !out.some((g) => mk(g.home, g.away) === mk(host, o.v)))
+        .map((v, i) => ({ v, i, s: (used.get(pairKey(host, v)) ?? 0) * 10 + (league.teams[v].conf !== league.teams[host].conf ? 6 : 0) + rng.uniform(0, 4 + attempt) }))
+        .filter((o) => o.v !== host && !out.some((g) => pairKey(g.home, g.away) === pairKey(host, o.v)))
         .sort((a, b) => a.s - b.s);
       if (!opts.length) {
         ok = false;
@@ -256,7 +252,7 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
       }
       visitors.splice(opts[0].i, 1);
       out.push({ home: host, away: opts[0].v });
-      used.set(mk(host, opts[0].v), (used.get(mk(host, opts[0].v)) ?? 0) + 1);
+      used.set(pairKey(host, opts[0].v), (used.get(pairKey(host, opts[0].v)) ?? 0) + 1);
     }
     if (ok) return out;
   }
@@ -270,6 +266,16 @@ function pairFillers(league: League, need: Map<number, number>, rng: Rng): { hom
   return out;
 }
 
+/** Key for a pair of teams, the same whichever comes first. */
+export function pairKey(a: number, b: number): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+/** Would a game on day `d` make three days running? */
+export function threeInThree(days: Set<number>, d: number): boolean {
+  return (days.has(d - 1) && days.has(d - 2)) || (days.has(d - 1) && days.has(d + 1)) || (days.has(d + 1) && days.has(d + 2));
+}
+
 /** Would a game on day `d` make four in five nights? (The NBA hasn't scheduled one since 2018.) */
 export function fourInFive(days: Set<number>, d: number): boolean {
   for (let w = d - 4; w <= d; w++) {
@@ -281,21 +287,18 @@ export function fourInFive(days: Set<number>, d: number): boolean {
 }
 
 /** Put each game on the best open day: both teams free, never three days running or four in five nights, few back-to-backs. */
-function placeGames(league: League, pairs: { home: number; away: number }[], days: number[], rng: Rng) {
+function placeGames(league: League, pairs: { home: number; away: number }[], days: number[], rng: Rng): ScheduledGame[] {
+  const placed: ScheduledGame[] = [];
   const busy = teamDays(league);
   const perDay = new Map<number, number>();
   for (const g of league.schedule) perDay.set(g.day, (perDay.get(g.day) ?? 0) + 1);
-  const three = (t: number, d: number) => {
-    const b = busy[t];
-    return (b.has(d - 1) && b.has(d - 2)) || (b.has(d - 1) && b.has(d + 1)) || (b.has(d + 1) && b.has(d + 2));
-  };
   for (const p of pairs) {
     let best = -1;
     let bestScore = Infinity;
     for (const d of days) {
       if (busy[p.home].has(d) || busy[p.away].has(d)) continue;
       const s =
-        (three(p.home, d) || three(p.away, d) ? 100 : 0) +
+        (threeInThree(busy[p.home], d) || threeInThree(busy[p.away], d) ? 100 : 0) +
         (fourInFive(busy[p.home], d) || fourInFive(busy[p.away], d) ? 50 : 0) +
         [p.home, p.away].filter((t) => busy[t].has(d - 1) || busy[t].has(d + 1)).length * 4 +
         (perDay.get(d) ?? 0) * 0.6 +
@@ -310,11 +313,23 @@ function placeGames(league: League, pairs: { home: number; away: number }[], day
       best = days[days.length - 1] + 1;
       while (busy[p.home].has(best) || busy[p.away].has(best)) best++;
     }
-    addGame(league, { day: best, home: p.home, away: p.away, type: 'regular' });
+    placed.push(addGame(league, { day: best, home: p.home, away: p.away, type: 'regular' }));
     busy[p.home].add(best);
     busy[p.away].add(best);
     perDay.set(best, (perDay.get(best) ?? 0) + 1);
   }
+  return placed;
+}
+
+/** The user's games among `games`, for mail: "Dec 4 at home against the Boston Celtics and Dec 7 on the road against…". */
+function userFixtures(league: League, games: ScheduledGame[]): string {
+  const user = league.userTid;
+  return andList(
+    games
+      .filter((g) => g.home === user || g.away === user)
+      .sort((a, b) => a.day - b.day)
+      .map((g) => `${fmtDate(league.season, g.day)} ${g.home === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[g.home === user ? g.away : g.home])}`),
+  );
 }
 
 function range(a: number, b: number) {
@@ -342,7 +357,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
   const inKnockouts = new Set([...cup.seeds.E, ...cup.seeds.W]);
   const need = new Map<number, number>();
   for (const t of league.teams) if (!inKnockouts.has(t.tid)) need.set(t.tid, 2);
-  placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[0], cup.finalDay - 1), rng);
+  const placed = placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[0], cup.finalDay - 1), rng);
   sortSchedule(league);
 
   const nm = (tid: number) => league.teams[tid].abbrev;
@@ -366,10 +381,11 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
       link: '/league?tab=cup',
     });
   } else {
+    const mine = userFixtures(league, placed);
     addInbox(league, {
       from: 'League Office',
       subject: 'NBA Cup: out in the group stage',
-      body: 'You missed the knockout round. Your last two regular-season games have been added to the schedule in the knockout window in early December.',
+      body: `You missed the knockout round. Your last two regular-season games are in the knockout window${mine ? `: ${mine}` : ''}.`,
       tone: 'neutral',
       link: '/league?tab=cup',
     });
@@ -396,13 +412,12 @@ const seedOf = (t: CupTie, tid: number) => (tid === t.high ? t.highSeed : t.lowS
 function cupMvp(league: League, champ: number, cup: CupState): number | undefined {
   const knockout = new Set(cup.bracket.map((t) => t.gid));
   const score = new Map<number, number>();
-  const gmsc = (b: BoxLine) => b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.orb + 0.3 * b.drb + b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov;
   for (const r of league.games) {
     if (r.season !== cup.season || !r.cup) continue;
     const side = r.home.tid === champ ? r.home : r.away.tid === champ ? r.away : null;
     if (!side) continue;
     const w = knockout.has(r.gid) ? 1.5 : 1;
-    for (const b of side.players) if (b.min > 0) score.set(b.pid, (score.get(b.pid) ?? 0) + gmsc(b) * w);
+    for (const b of side.players) if (b.min > 0) score.set(b.pid, (score.get(b.pid) ?? 0) + gameScore(b) * w);
   }
   let best: number | undefined;
   for (const [pid, s] of score) if (league.players[pid] && (best === undefined || s > score.get(best)!)) best = pid;
@@ -479,8 +494,19 @@ export function advanceCup(league: League, rng: Rng) {
     }
     // quarterfinal losers play one more game, between themselves
     const need = new Map(qf.map((t) => [loserOf(t), 1]));
-    placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[1] + 1, cup.finalDay - 1), rng);
+    const placed = placeGames(league, pairFillers(league, need, rng), range(cup.qfDays[1] + 1, cup.finalDay - 1), rng);
     sortSchedule(league);
+    const out = qf.find((t) => loserOf(t) === league.userTid);
+    if (out) {
+      const mine = userFixtures(league, placed);
+      addInbox(league, {
+        from: 'League Office',
+        subject: 'NBA Cup: out in the quarterfinals',
+        body: `The ${teamName(league.teams[out.winner!])} knocked you out of the Cup. Your last regular-season game is in the knockout window${mine ? `: ${mine}` : ''}.`,
+        tone: 'neutral',
+        link: '/league?tab=cup',
+      });
+    }
   } else if (!fin && sf.length && sf.every((t) => t.winner !== undefined)) {
     const e = sf.find((t) => t.conf === 'E')!.winner!;
     const w = sf.find((t) => t.conf === 'W')!.winner!;

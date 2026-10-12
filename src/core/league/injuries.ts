@@ -61,6 +61,12 @@ export function injuryText(type: string, article = false): string {
   return `${an ? 'an' : 'a'} ${text}`;
 }
 
+/** What the medical staff says about the lasting damage major and severe injuries do (see applyInjury). */
+const LASTING: Partial<Record<Injury['severity'], string>> = {
+  major: ' Injuries like this can take a little off his speed and athleticism for good.',
+  severe: ' This is a long-term injury and may permanently sap some of his explosiveness.',
+};
+
 export function applyInjury(league: League, p: Player, rng: Rng) {
   const inj = rollInjury(league, p, rng);
   p.injury = inj;
@@ -74,7 +80,8 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;
-  if (inj.gamesRemaining >= 5 || p.ovr >= 80) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
+  // news for real absences: ten games, or five for a star
+  if (inj.gamesRemaining >= 10 || (p.ovr >= 80 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
   // day-to-day knocks only show on the roster; the inbox is for absences that change plans
   if (p.tid === league.userTid && inj.gamesRemaining >= MAIL_MIN_GAMES) {
     // a month-long absence for one of the six core players is worth pausing a long sim for
@@ -84,14 +91,14 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
       important: inj.gamesRemaining >= 15 && core.includes(p.pid),
       from: 'Medical Staff',
       subject: `${playerName(p)}: ${inj.type}`,
-      body: `${playerName(p)} is out with ${injuryText(inj.type, true)} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${inj.severity === 'severe' ? ' This is a long-term injury and may permanently sap some of his explosiveness.' : ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
+      body: `${playerName(p)} is out with ${injuryText(inj.type, true)} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${LASTING[inj.severity] ?? ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });
   }
 }
 
-/** Called once per game a team plays (or once per offseason chunk). */
+/** Called once per game a team plays, and about every other day for a player with no games to miss (healIdle in season.ts). */
 export function healOneGame(league: League, p: Player, rng: Rng) {
   if (!p.injury) return;
   const team = p.tid >= 0 ? league.teams[p.tid] : null;

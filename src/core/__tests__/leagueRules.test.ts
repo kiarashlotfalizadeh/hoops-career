@@ -17,6 +17,7 @@ import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../leagu
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
 import { injuryText } from '../league/injuries';
+import { updateMorale } from '../league/morale';
 import { generateDraftClass, lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -550,15 +551,17 @@ describe('playoff calendar (L10)', () => {
     expect(l.schedule.filter((g) => !g.played).map((g) => g.day)).toEqual([105]);
   });
 
-  it('wear recovers on postseason days too', () => {
+  it('wear recovers on postseason days too, free agents included', () => {
     const l = league();
     l.phase = 'playoffs';
     l.playoffs = [];
     l.schedule = [];
     const p = standardRoster(l, U)[0];
-    p.wear = 40;
+    const fa = freeAgents(l)[0];
+    p.wear = fa.wear = 40;
     advanceDay(l);
     expect(p.wear).toBeCloseTo(39.25);
+    expect(fa.wear).toBeCloseTo(39.25);
   });
 });
 
@@ -642,6 +645,54 @@ describe('awards (L13, L18)', () => {
     expect(l.news.some((n) => n.text.includes(`replaces the injured ${star.firstName} ${star.lastName}`))).toBe(true);
   });
 
+  it('award mail reads as one sentence: Coach of the Year alone, three All-Stars', () => {
+    const l = league();
+    const line = seasonOf(l);
+    for (const p of Object.values(l.players)) p.injury = null;
+    // the user's team wins big with nobody playing enough to win anything
+    [curTeamSeason(l, U).won, curTeamSeason(l, U).lost] = [70, 12];
+    for (const p of teamPlayers(l, U)) line(p, 10, 0, 6);
+    expect(computeRegularSeasonAwards(l).coy).toBe(U);
+    expect(l.inbox[0].body).toBe('Your team collected hardware: Coach of the Year (you).');
+    const news = l.news[l.news.length - 1];
+    expect(news.text).toContain(`COY ${l.coachName} (${l.teams[U].abbrev}).`);
+    expect(news.tids).toEqual([U]);
+    // three of the user's players have All-Star seasons
+    const stars = standardRoster(l, U).slice(0, 3);
+    for (const p of stars) line(p, 70, 70, 40);
+    const as = selectAllStars(l);
+    const names = [...as.E, ...as.W].filter((pid) => l.players[pid].tid === U).map((pid) => `${l.players[pid].firstName} ${l.players[pid].lastName}`);
+    expect(names).toHaveLength(3);
+    expect(l.inbox[0].body).toBe(`${names[0]}, ${names[1]} and ${names[2]} made the All-Star team.`);
+  });
+
+  it('a knock the All-Star break heals costs nobody his place', () => {
+    const l = league();
+    const line = seasonOf(l);
+    const star = Object.values(l.players).find((p) => p.tid >= 0 && l.teams[p.tid].conf === 'E')!;
+    line(star, 70, 70, 40);
+    for (const p of Object.values(l.players)) p.injury = null;
+    star.injury = { type: 'Sprained Ankle', gamesRemaining: 1, gamesTotal: 2, severity: 'minor' };
+    const as = selectAllStars(l);
+    expect(as.E).toContain(star.pid);
+    expect(as.E.length).toBe(12);
+    expect(l.news.some((n) => n.text.startsWith('All-Star replacements'))).toBe(false);
+  });
+
+  it("Most Improved needs last season's numbers: nobody wins it in a fictional league's first season", () => {
+    const l = createLeague({ name: 'f', userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 7 });
+    const line = seasonOf(l);
+    const aw = computeRegularSeasonAwards(l);
+    expect(aw.mip).toBeUndefined();
+    expect(aw.mvp).toBeDefined();
+    expect(Object.values(l.players).some((p) => p.awards.some((a) => a.type === 'Most Improved Player'))).toBe(false);
+    // a breakout from a real baseline wins it
+    const p = standardRoster(l, U).find((x) => x.draft.year !== l.season - 1)!;
+    Object.assign(statsLine(p, l.season - 1, U, false), { gp: 60, min: 60 * 20, pts: 60 * 8, fgm: 60 * 3, fga: 60 * 7 });
+    line(p, 70, 70, 20);
+    expect(computeRegularSeasonAwards(l).mip).toBe(p.pid);
+  });
+
   it('MVP needs 65 games and 20 minutes; Rookie of the Year goes to a rookie (L19)', () => {
     const l = league();
     const line = seasonOf(l);
@@ -697,11 +748,13 @@ describe('owner (L11, L19)', () => {
     const ts = curTeamSeason(l, U);
     [ts.won, ts.lost, ts.playoffRound] = [15, 67, -1];
     const review = (tenureStart: number, jobSecurity: boolean) => {
+      l.fired = false;
       l.ownerMood = { wins: -0.8, playoffs: -0.25, money: 0, total: -0.6 };
       l.tenureStart = tenureStart;
       l.settings.jobSecurity = jobSecurity;
       ownerEvaluation(l);
     };
+    // the grace period is the first two seasons in charge
     review(l.season - 1, true);
     expect(l.fired).toBeFalsy();
     review(l.season - 3, false);
@@ -709,6 +762,9 @@ describe('owner (L11, L19)', () => {
     review(l.season - 3, true);
     expect(l.fired).toBe(true);
     expect(l.inbox[0].subject).toBe("You're fired");
+    // the third season is the first one that counts
+    review(l.season - 2, true);
+    expect(l.fired).toBe(true);
   });
 
   it('a fired coach is not reviewed again; taking over a team clears the old plan and board', () => {
@@ -754,6 +810,18 @@ describe('morale and wear (L17)', () => {
     const after = buildSimInput(l, U, 0, 'regular').perf!;
     expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
     expect(after[star.pid]).toBeCloseTo(before[star.pid]);
+  });
+
+  it('a rookie-scale deal never leaves a player feeling underpaid; a cheap veteran deal does', () => {
+    const l = league();
+    const star = standardRoster(l, U).sort((a, b) => b.ovr - a.ovr)[0];
+    star.contract = { start: l.season, salaries: [CAP.minContract, CAP.minContract], rookie: true, option: 'team' };
+    updateMorale(l, U);
+    expect(star.mood.notes).not.toContain('Feels underpaid');
+    expect(star.mood.contractComponent).toBe(0);
+    delete star.contract.rookie;
+    updateMorale(l, U);
+    expect(star.mood.notes).toContain('Feels underpaid');
   });
 
   it('injury names read as English in messages', () => {

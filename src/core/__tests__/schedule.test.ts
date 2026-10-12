@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateSchedule } from '../league/schedule';
+import { cupCalendar } from '../league/cup';
 import { FRANCHISES } from '../teams';
 import { makeTeam } from '../teamFactory';
 import { Rng } from '../random';
@@ -46,7 +47,7 @@ describe('schedule', () => {
     }
   });
   it('follows the NBA calendar: the All-Star Game on a Sunday, the deadline the Thursday ten days before, dark on Thanksgiving and Christmas Eve', () => {
-    for (const season of [2027, 2028, 2031]) {
+    for (const season of [2027, 2028, 2030, 2031]) {
       const s = generateSchedule(teams, season, new Rng(season), 1);
       expect(dayToDate(season, s.allStarDay).getUTCDay()).toBe(0);
       expect(dayToDate(season, s.allStarDay).getUTCMonth()).toBe(1);
@@ -55,8 +56,22 @@ describe('schedule', () => {
       for (const g of s.games) {
         const d = dayToDate(season, g.day);
         expect(d.getUTCMonth() === 11 && d.getUTCDate() === 24).toBe(false);
-        expect(d.getUTCMonth() === 10 && d.getUTCDay() === 4 && d.getUTCDate() >= 22).toBe(false);
+        // Thanksgiving is the fourth Thursday
+        expect(d.getUTCMonth() === 10 && d.getUTCDay() === 4 && d.getUTCDate() >= 22 && d.getUTCDate() <= 28).toBe(false);
       }
+      // a fifth Thursday in November (2029-30) is a game night like any other
+      const fifth = [29, 30].find((x) => new Date(Date.UTC(season - 1, 10, x)).getUTCDay() === 4);
+      if (fifth) expect(s.games.some((g) => dayToDate(season, g.day).getUTCMonth() === 10 && dayToDate(season, g.day).getUTCDate() === fifth)).toBe(true);
+    }
+  });
+  it("ends the Cup's group stage on the day after Thanksgiving every season, whatever day November starts on", () => {
+    for (let season = 2027; season <= 2045; season++) {
+      const { nights } = cupCalendar(season);
+      for (const d of nights) expect(dayToDate(season, d).getUTCMonth()).toBe(10);
+      const thanksgiving = dayToDate(season, nights[4] - 1);
+      expect(thanksgiving.getUTCDay()).toBe(4);
+      expect(thanksgiving.getUTCDate()).toBeGreaterThanOrEqual(22);
+      expect(thanksgiving.getUTCDate()).toBeLessThanOrEqual(28);
     }
   });
   it('never schedules a team twice on one day and leaves the All-Star break empty', () => {

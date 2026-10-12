@@ -58,7 +58,7 @@ await page.getByRole('button', { name: 'Start regular season' }).first().click()
 await page.waitForTimeout(800);
 await shot('17-home-season');
 await page
-  .getByRole('button', { name: /Sim to game day|Watch/ })
+  .getByRole('button', { name: /Sim to next game|Watch/ })
   .first()
   .click()
   .catch(() => {});
@@ -69,7 +69,7 @@ await shot('18-home-gameday', true);
 await page.goto(`${base}/#/live`);
 await page.waitForTimeout(6000);
 await shot('19-live');
-await page.getByRole('button', { name: 'Plan' }).click();
+await page.getByRole('button', { name: 'Adjust' }).click();
 await shot('20-live-plan');
 await page.keyboard.press('Escape');
 await page.getByRole('button', { name: 'Sim to final', exact: true }).click();

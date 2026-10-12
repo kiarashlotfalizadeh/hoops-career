@@ -104,7 +104,7 @@ try {
     .click();
   await waitSim();
   const phase = await page.locator('.topbar').getAttribute('data-phase');
-  if (phase !== 'Regular Season') fail.push(`expected regular season, got ${phase}`);
+  if (!/^Regular season$/i.test(phase ?? '')) fail.push(`expected regular season, got ${phase}`);
   step(`played into the season (${await page.locator('.topbar .sub').textContent()})`);
 
   const routes = [

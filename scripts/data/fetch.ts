@@ -1,17 +1,26 @@
 // Polite fetcher for Basketball Reference pages (they rate-limit at ~20 requests/minute).
-// Pages are cached in data/raw/ so re-runs only fetch what's missing.
-// Usage: npm run data:fetch [-- --force] [-- --only per_game]
+// Pages are cached in data/raw/ so re-runs only fetch what's missing; --refresh also re-fetches
+// the ones that change through the offseason (contracts, current rosters).
+// Usage: npm run data:fetch [-- --force] [-- --refresh] [-- --only per_game]
 import { existsSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { allSources } from './sources';
 
-const RAW = join(process.cwd(), 'data', 'raw');
+const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const force = process.argv.includes('--force');
+const refresh = process.argv.includes('--refresh');
 const onlyIdx = process.argv.indexOf('--only');
 const only = onlyIdx > 0 ? process.argv[onlyIdx + 1] : null;
 const DELAY_MS = 3700;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Retry-After as seconds or an HTTP date; 60 s when missing or unreadable. */
+function retryAfterMs(header: string | null): number {
+  if (header && /^\d+$/.test(header.trim())) return Number(header) * 1000;
+  const at = header ? Date.parse(header) : NaN;
+  return Number.isNaN(at) ? 60_000 : at - Date.now();
+}
 
 async function get(url: string): Promise<{ status: number; body: string }> {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -25,9 +34,11 @@ async function get(url: string): Promise<{ status: number; body: string }> {
         },
       });
       if (res.status === 429) {
-        const wait = Number(res.headers.get('retry-after') ?? '60') * 1000;
-        console.warn(`429 rate limited, waiting ${wait / 1000}s`);
-        await sleep(Math.max(wait, 60_000));
+        const wait = Math.max(retryAfterMs(res.headers.get('retry-after')), 60_000);
+        // a longer ban (Basketball Reference's lasts an hour) would outlast the run: give up now
+        if (wait > 5 * 60_000) break;
+        console.warn(`429 rate limited, waiting ${Math.round(wait / 1000)}s`);
+        await sleep(wait);
         continue;
       }
       if (res.status >= 500) {
@@ -49,7 +60,7 @@ async function main() {
   let fetched = 0;
   for (const s of sources) {
     const file = join(RAW, `${s.key}.html`);
-    if (!force && existsSync(file) && statSync(file).size > 5000) continue;
+    if (!force && !(refresh && s.volatile) && existsSync(file) && statSync(file).size > 5000) continue;
     if (fetched > 0) await sleep(DELAY_MS);
     process.stdout.write(`GET ${s.url} ... `);
     const { status, body } = await get(s.url);
@@ -57,11 +68,19 @@ async function main() {
     if (status === 200 && body.length > 5000) {
       writeFileSync(file, body);
       console.log(`ok (${(body.length / 1024).toFixed(0)} KB)`);
+    } else if (status === 0) {
+      // out of retries (still rate limited, or unreachable), optional page or not: stop now, so a CI
+      // run archives the pages that did arrive instead of timing out on the rest
+      console.log('FAILED');
+      console.error(
+        '\nCould not reach basketball-reference.com, or it is still rate limiting: the pages fetched so far are cached, so run again later. If you are in a sandboxed environment, allow the domain in its network settings.',
+      );
+      process.exit(1);
     } else if (s.optional) {
       console.log(`skipped (HTTP ${status})`);
     } else {
       console.log(`FAILED (HTTP ${status})`);
-      if (status === 0 || status === 403) {
+      if (status === 403) {
         console.error('\nCould not reach basketball-reference.com. If you are in a sandboxed environment, allow the domain in its network settings.');
         process.exit(1);
       }

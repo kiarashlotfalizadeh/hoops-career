@@ -4,7 +4,7 @@ import type { GameResult, League, Player, Rotation, ScheduledGame, Team, TeamSea
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
-import { addInbox, addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
+import { addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { lockerRoomPerf, moodPerf } from './morale';
@@ -223,7 +223,6 @@ function recordTeamGame(
 }
 
 export interface PlayOpts {
-  record?: boolean;
   /** Use an already-finished live sim instead of simulating. */
   sim?: GameSim;
 }
@@ -238,7 +237,6 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
     sim = new GameSim(buildSimInput(league, g.home, g.day, g.type, g.away), buildSimInput(league, g.away, g.day, g.type, g.home), {
       rng,
       type: g.type,
-      record: opts.record ?? false,
       keepShots: userGame,
       injuries: league.settings.injuries,
       neutral: neutralSite(g),
@@ -364,7 +362,6 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     if (userGames.length > 6) delete userGames[0].pbp;
   }
   notableNews(league, res);
-  if (userGame && g.type !== 'allstar') userGameInbox(league, res);
 }
 
 function notableNews(league: League, res: GameResult) {
@@ -373,7 +370,7 @@ function notableNews(league: League, res: GameResult) {
       const p = league.players[bl.pid];
       if (!p) continue;
       const tdbl = [bl.pts, bl.orb + bl.drb, bl.ast, bl.stl, bl.blk].filter((x) => x >= 10).length >= 3;
-      if (bl.pts >= 50 || (tdbl && bl.pts >= 20 && (bl.orb + bl.drb >= 12 || bl.ast >= 12)) || bl.pts >= 45) {
+      if (bl.pts >= 45 || (tdbl && bl.pts >= 20 && (bl.orb + bl.drb >= 12 || bl.ast >= 12))) {
         const team = league.teams[side.tid];
         const opp = league.teams[side === res.home ? res.away.tid : res.home.tid];
         const line = `${bl.pts} pts, ${bl.orb + bl.drb} reb, ${bl.ast} ast`;
@@ -383,12 +380,6 @@ function notableNews(league: League, res: GameResult) {
   }
 }
 
-function userGameInbox(league: League, res: GameResult) {
-  void res;
-  void league;
-  // Post-game reports are generated on demand in the UI (analysis/gameReport), so no inbox spam here.
-}
-
 export function gamesOnDay(league: League, day: number): ScheduledGame[] {
   return league.schedule.filter((g) => g.day === day && !g.played);
 }
@@ -396,5 +387,3 @@ export function gamesOnDay(league: League, day: number): ScheduledGame[] {
 export function userGameOnDay(league: League, day: number): ScheduledGame | undefined {
   return league.schedule.find((g) => g.day === day && !g.played && (g.home === league.userTid || g.away === league.userTid));
 }
-
-export { addInbox };
