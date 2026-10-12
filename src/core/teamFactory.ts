@@ -123,7 +123,8 @@ export function makeTeam(tid: number, season: number, rng: Rng): Team {
     abbrev: f.abbrev,
     region: f.region,
     name: f.name,
-    colors: f.colors,
+    // a copy: the franchise table is shared by every league
+    colors: [...f.colors],
     conf: f.conf,
     div: f.div,
     pop: f.pop,
