@@ -361,13 +361,20 @@ export const ROLE_USAGE: Record<OffRole, number> = {
   glue: 0.6,
 };
 
+/**
+ * Position of a generated player: his size, less how much more he handles and passes than he does
+ * everything else (talent lifts every skill alike, so it's that difference that makes a lead guard
+ * or a point forward play smaller). The cut-offs give draft classes the real league's shares of
+ * each position, and on the real players it agrees with their box-score positions three times in
+ * five (nearly all the rest one position off). The size cut-offs it replaced made 31% of real
+ * players point guards and 8% power forwards (18% and 19% are): draft classes came out with half
+ * the real share of power forwards and centers, and a dozen seasons into a career only a quarter
+ * of the league were bigs (two in five are).
+ */
 export function inferPos(r: Ratings): Pos {
-  const guardScore = r.hnd * 0.5 + r.pas * 0.5;
-  if (r.hgt >= 68) return 'C';
-  if (r.hgt >= 57) return guardScore > 60 ? 'SF' : r.hgt >= 63 ? 'C' : 'PF';
-  if (r.hgt >= 47) return guardScore > 62 ? 'SG' : 'SF';
-  if (r.hgt >= 36) return guardScore > 58 ? 'PG' : 'SG';
-  return 'PG';
+  const skills = SKILL_KEYS.reduce((a, k) => a + r[k], 0) / SKILL_KEYS.length;
+  const size = r.hgt - 0.7 * ((r.hnd + r.pas) / 2 - skills);
+  return size <= 24.5 ? 'PG' : size <= 40.5 ? 'SG' : size <= 50.5 ? 'SF' : size <= 64 ? 'PF' : 'C';
 }
 
 export function emptyRatings(): Ratings {

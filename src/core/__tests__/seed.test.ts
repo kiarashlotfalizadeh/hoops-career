@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
+import { generateDraftClass } from '../league/draft';
 import { simDay, startRegularSeason } from '../league/season';
 import { teamPlayers } from '../league/helpers';
 import { CAP } from '../constants';
-import { RATING_KEYS } from '../ratings';
+import { RATING_KEYS, inferPos } from '../ratings';
 import { BBREF_TO_TID } from '../teams';
-import { FREE_AGENT } from '../types';
+import { Rng } from '../random';
+import { DRAFT_PROSPECT, FREE_AGENT, POSITIONS, type Pos } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 const real = seed.players.length > 0;
@@ -83,6 +85,20 @@ describe.skipIf(!real)('real-player seed', () => {
       );
     }
     for (const p of Object.values(league.players)) if (p.tid >= 0 && !p.contract.twoWay) expect(p.contract.salaries[0]).toBeGreaterThanOrEqual(CAP.minContract);
+  });
+
+  it("gives generated players the real league's mix of positions", () => {
+    // from size and handling, which agree with the real players' box-score positions three times in five
+    expect(seed.players.filter((sp) => inferPos(sp.ratings) === sp.pos).length / seed.players.length).toBeGreaterThan(0.6);
+    // draft classes come out in the real shares (they had 10% power forwards and 12% centers, so a long
+    // career ran out of bigs)
+    const league = createLeague({ name: 's', userTid: 0, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 5, preseasonCuts: false });
+    const rng = new Rng(3);
+    for (let y = 1; y <= 10; y++) generateDraftClass(league, league.season + y, rng);
+    const share = (pos: Pos[]) => POSITIONS.map((k) => pos.filter((x) => x === k).length / pos.length);
+    const real = share(seed.players.map((sp) => sp.pos));
+    const drafted = share(Object.values(league.players).flatMap((p) => (p.tid === DRAFT_PROSPECT ? [p.pos] : [])));
+    drafted.forEach((x, i) => expect(Math.abs(x - real[i])).toBeLessThan(0.04));
   });
 
   it('puts first-round picks still on their first deal on the rookie scale', () => {
