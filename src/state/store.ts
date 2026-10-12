@@ -165,8 +165,14 @@ async function reloadLastSave(l: League) {
     console.error(e);
   }
   const st = useStore.getState();
-  st.setLeague(last ?? null);
-  st.toast(last ? 'The simulation hit an error, so your league went back to its last save.' : 'The simulation hit an error. Open your league again from the main menu.', 'bad');
+  if (last) {
+    st.setLeague(last);
+    st.toast('The simulation hit an error, so your league went back to its last save.', 'bad');
+    return;
+  }
+  // never saved (or the device can't be read): this copy is the only one, so keep it
+  useStore.setState({ sim: null, stopRequested: false, v: st.v + 1 });
+  st.toast("The simulation hit an error, and this league has no save to go back to. Export a backup of it (Settings) so it isn't lost.", 'bad');
 }
 
 export const useStore = create<AppState>((set, get) => ({

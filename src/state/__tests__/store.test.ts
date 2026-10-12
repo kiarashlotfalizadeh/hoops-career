@@ -140,6 +140,19 @@ describe('recovering from errors', () => {
     expect(st().toasts.at(-1)?.text).toMatch(/last save/);
   });
 
+  it('a sim that throws keeps a league that was never saved, and points to a backup', async () => {
+    const l = testLeague('never saved');
+    st().setLeague(l);
+    failPuts(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
+    vi.mocked(simDay).mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    await st().simulate({ kind: 'week' });
+    expect(st().league).toBe(l);
+    expect(st().sim).toBeNull();
+    expect(st().toasts.at(-1)?.text).toMatch(/no save to go back to\. Export a backup/);
+  });
+
   it('a phase change that throws leaves the league as it was', async () => {
     const l = testLeague('task error');
     st().setLeague(l);
