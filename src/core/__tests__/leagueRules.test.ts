@@ -363,6 +363,20 @@ describe('injuries (bug 15)', () => {
     for (let d = 0; d < 10; d++) simDay(l);
     expect(fa.injury?.gamesRemaining ?? 0).toBeLessThanOrEqual(36);
   });
+
+  it("an assistant-run rotation takes a player back the day he's cleared, not at the next game", () => {
+    const l = league();
+    expect(startRegularSeason(l)).toEqual([]);
+    const star = teamPlayers(l, U).sort((a, b) => b.ovr - a.ovr)[0];
+    star.injury = { type: 'Sprained Ankle', gamesRemaining: 1, gamesTotal: 3, severity: 'minor' };
+    // his team's next game sits him and clears him
+    for (let d = 0; d < 10 && star.injury; d++) simDay(l);
+    expect(star.injury).toBeNull();
+    const rot = l.teams[U].rotation;
+    expect(rot.manual).toBe(false);
+    expect(rot.minutes[star.pid]).toBeGreaterThan(30);
+    expect(rot.order.slice(0, 5)).toContain(star.pid);
+  });
 });
 
 describe('signing window (bug 12) and two-way contracts', () => {

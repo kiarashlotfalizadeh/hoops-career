@@ -209,6 +209,10 @@ export function advanceDay(league: League) {
   });
   // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
   for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
+  // an assistant-run rotation follows today's injuries and recoveries now, not at the next game:
+  // the Rotation screen and the assistant's advice read it in between (a star just cleared read
+  // "only playing 0 minutes", with a starting five he wasn't in)
+  if (!league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
   league.day++;
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
