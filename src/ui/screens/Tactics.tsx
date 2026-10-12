@@ -505,7 +505,14 @@ function InsightsTab() {
   };
   return (
     <>
-      <Card title="What's working" right={<span className="tiny dim">pts per game · {games} games</span>}>
+      <Card
+        title="What's working"
+        right={
+          <span className="tiny dim">
+            pts per game · {games} game{games === 1 ? '' : 's'}
+          </span>
+        }
+      >
         <div className="col" style={{ gap: 8 }}>
           {helping.length ? helping.map(row) : <div className="small dim">Nothing stands out yet.</div>}
         </div>
