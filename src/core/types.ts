@@ -391,7 +391,6 @@ export interface TeamSeason {
   expenses: number;
   payroll: number;
   attendance: number;
-  hype: number;
   pop: number;
   playIn?: boolean;
   /** Team totals for advanced team stats. */
