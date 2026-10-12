@@ -6,7 +6,8 @@ import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { anchorRatings, develop } from '../league/progression';
 import { OVR_ANCHORS, RATING_KEYS, ovrRaw } from '../ratings';
 import { Rng } from '../random';
-import type { League, TrainingFocus } from '../types';
+import { standardRoster } from '../league/helpers';
+import type { League, Pos, TrainingFocus } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 const league = () => createLeague({ name: 'p', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: seed.players.length ? seed : null, rngSeed: 7 });
@@ -103,5 +104,26 @@ describe('fictional leagues', () => {
     const ps = Object.values(fict.players).filter((p) => p.tid >= 0);
     const m = ps.reduce((a, p) => a + p.ratings.tp, 0) / ps.length;
     expect(Math.sqrt(ps.reduce((a, p) => a + (p.ratings.tp - m) ** 2, 0) / ps.length)).toBeGreaterThan(12);
+  });
+
+  it("start with real rosters' guards and bigs on every team, and their age mix", () => {
+    for (const rngSeed of [1, 2, 3]) {
+      const l = createLeague({ name: 'f', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+      const rosters = l.teams.map((t) => standardRoster(l, t.tid).sort((a, b) => b.ovr - a.ovr));
+      // drawn independently, a quarter of the teams had one or two bigs, some nine to twelve guards, and a
+      // fifth no 6'10" player in their top eight
+      for (const ps of rosters) {
+        const n = (pos: Pos[]) => ps.filter((p) => pos.includes(p.pos)).length;
+        expect(n(['PF', 'C'])).toBeGreaterThanOrEqual(3);
+        expect(n(['PG', 'SG'])).toBeLessThanOrEqual(9);
+        expect(ps.some((p) => p.heightIn >= 82)).toBe(true);
+      }
+      expect(rosters.filter((ps) => ps.slice(0, 10).some((p) => p.heightIn >= 82)).length).toBeGreaterThanOrEqual(27);
+      // and the real rosters' age mix (28% are 23 or younger): when half were, the anchor held everyone's
+      // development back as the league grew older, and players peaked at 24-25
+      const ages = Object.values(l.players).flatMap((p) => (p.tid >= 0 ? [l.season - p.bornYear] : []));
+      expect(ages.filter((a) => a <= 23).length / ages.length).toBeLessThan(0.36);
+      expect(ages.reduce((a, b) => a + b, 0) / ages.length).toBeGreaterThan(25.8);
+    }
   });
 });
