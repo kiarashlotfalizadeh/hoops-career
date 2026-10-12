@@ -65,4 +65,20 @@ describe.skipIf(!real)('real-player seed', () => {
     expect(avg).toBeGreaterThan(100);
     expect(avg).toBeLessThan(130);
   });
+
+  it('puts first-round picks still on their first deal on the rookie scale', () => {
+    const league = createLeague({ name: 's', userTid: 0, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 5, preseasonCuts: false });
+    const byId = new Map(Object.values(league.players).map((p) => [p.bbrefId, p]));
+    // the last two classes' first-rounders are all on their rookie deals
+    const recent = seed.players.filter((sp) => sp.draft?.round === 1 && sp.draft.year >= league.season - 2 && sp.contract && !sp.contract.twoWay);
+    expect(recent.length).toBeGreaterThan(40);
+    for (const sp of recent) expect(byId.get(sp.id)!.contract.rookie).toBe(true);
+    // so is a third-year pick (Castle's deal runs through next season, the team's option year)
+    const castle = byId.get('castlst01');
+    if (castle) expect(castle.contract).toMatchObject({ rookie: true, option: 'team' });
+    // a first-rounder waived onto a minimum deal, second-rounders and veterans past their four years aren't
+    const bufkin = byId.get('bufkiko01');
+    if (bufkin) expect(bufkin.contract.rookie).toBeUndefined();
+    for (const p of Object.values(league.players)) if (p.contract.rookie) expect([p.draft.round, league.season - 1 - p.draft.year < 4]).toEqual([1, true]);
+  });
 });

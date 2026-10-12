@@ -1,6 +1,6 @@
 import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { FREE_AGENT } from '../types';
-import { CAP, START_SEASON } from '../constants';
+import { CAP, ROOKIE_SCALE, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { makeTeam } from '../teamFactory';
@@ -126,6 +126,17 @@ function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { expe
   return { experience, draft: { year: experience >= 15 ? 0 : season - 1 - experience, round: 0, pick: 0, tid: null } };
 }
 
+/**
+ * A first-round pick still on the deal he signed as a rookie: it ends within four seasons of his
+ * draft and pays about his slot's rookie scale or more (one waived onto a minimum deal isn't on it).
+ */
+function onRookieScale(sp: SeedPlayer, season: number): boolean {
+  const c = sp.contract;
+  if (!c || c.twoWay || !sp.draft || sp.draft.round !== 1) return false;
+  const scale = ROOKIE_SCALE[Math.min(29, sp.draft.pick - 1)] * Math.pow(1.045, season - 1 - sp.draft.year);
+  return season + c.salaries.length - 1 <= sp.draft.year + 4 && c.salaries[0] >= scale * 0.85;
+}
+
 function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, firstRecord: number): Player {
   const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
   const salaries = sp.contract?.salaries?.length ? sp.contract.salaries : [0];
@@ -153,7 +164,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     growth: sp.growth ?? clamp(rng.normal(0, 0.4), -1, 1),
     injuryProne: sp.injuryProne ?? 0.3,
     ratingsHistory: [],
-    contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}) },
+    contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}), ...(onRookieScale(sp, season) ? { rookie: true } : {}) },
     stats: sp.stats.map((s) => ({ ...s, tid: BBREF_TO_TID[String(s.tid)] ?? s.tid })),
     injury: null,
     injuryCount: 0,
