@@ -10,6 +10,7 @@ import { createLeague, defaultSettings } from '../../core/league/create';
 import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
+import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
 import { COMPLEXITY, DIFFICULTY, helpFor } from '../settingsOptions';
 
@@ -54,6 +55,8 @@ export default function NewLeague() {
   const [coach, setCoach] = useState('');
   const [settings, setSettings] = useState<Settings>(defaultSettings());
   const [busy, setBusy] = useState(false);
+  // the league still open behind the main menu couldn't be saved: the user decides before it's replaced
+  const [unsaved, setUnsaved] = useState(false);
 
   useEffect(() => {
     loadSeed()
@@ -94,8 +97,15 @@ export default function NewLeague() {
     return Object.fromEntries(ids.map((id, i) => [id, i + 1])) as Record<number, number>;
   }, [teamInfo]);
 
-  const create = async () => {
+  const create = async (force = false) => {
     setBusy(true);
+    // a league still open behind the main menu saves first: if it can't, say so rather than drop its changes
+    const st = useStore.getState();
+    if (!force && st.league && !(await st.saveBeforeLeaving())) {
+      setBusy(false);
+      setUnsaved(true);
+      return;
+    }
     await new Promise((r) => setTimeout(r, 30));
     try {
       const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null });
@@ -315,6 +325,16 @@ export default function NewLeague() {
           )}
         </>
       )}
+      <UnsavedSheet
+        open={unsaved}
+        title="Create without saving?"
+        proceed="Create anyway"
+        onStay={() => setUnsaved(false)}
+        onProceed={() => {
+          setUnsaved(false);
+          void create(true);
+        }}
+      />
     </main>
   );
 }
