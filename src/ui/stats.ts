@@ -74,14 +74,38 @@ export function perGame(s: PlayerStats | null | undefined): PerGame | null {
   };
 }
 
+type Adv = NonNullable<PlayerStats['adv']>;
+
+/**
+ * A season's totals across all his teams, imported advanced numbers included: a player traded
+ * during a real season has a row per team, and adding the rows up dropped them (his usage read
+ * 0.0, and his page showed his first team's PER, BPM and win shares as the season's).
+ */
+export function seasonLine(p: Player, season: number, playoffs = false): PlayerStats | null {
+  const t = seasonTotals(p, season, playoffs);
+  if (!t || t.adv) return t;
+  const rows = p.stats.filter((s) => s.season === season && s.playoffs === playoffs && s.adv);
+  if (!rows.length) return t;
+  // rates by minutes played, counts added up
+  const min = rows.reduce((a, r) => a + r.min, 0);
+  const rate = (k: keyof Adv) => rows.reduce((a, r) => a + r.adv![k] * r.min, 0) / Math.max(1e-9, min);
+  const sum = (k: keyof Adv) => rows.reduce((a, r) => a + r.adv![k], 0);
+  const keys: (keyof Adv)[] = ['per', 'ts', 'usg', 'astPct', 'trbPct', 'stlPct', 'blkPct', 'tovPct', 'obpm', 'dbpm', 'bpm'];
+  const adv = Object.fromEntries(keys.map((k) => [k, rate(k)])) as Adv;
+  adv.ws = sum('ws');
+  adv.vorp = sum('vorp');
+  adv.ws48 = min ? (adv.ws * 48) / min : 0;
+  return { ...t, adv };
+}
+
 export function playerSeason(p: Player, season: number, playoffs = false): PerGame | null {
-  return perGame(seasonTotals(p, season, playoffs));
+  return perGame(seasonLine(p, season, playoffs));
 }
 
 /** Most recent season with stats (current season first, then previous real seasons). */
 export function latestLine(league: League, p: Player): { season: number; pg: PerGame; real: boolean } | null {
   for (let s = league.season; s >= league.season - 4; s--) {
-    const t = seasonTotals(p, s, false);
+    const t = seasonLine(p, s, false);
     if (t && t.gp > 0) return { season: s, pg: perGame(t)!, real: !!t.real };
   }
   return null;

@@ -10,7 +10,7 @@ import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented,
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
-import { f1, ordinalSuffix, p1, perGame, signed } from '../stats';
+import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption } from '../office/common';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
@@ -101,22 +101,13 @@ function seasonsOf(p: Player) {
   }
   const rows: { key: string; season: number; playoffs: boolean; teams: number[]; tot: PlayerStats }[] = [];
   for (const [k, list] of bySeason) {
-    const tot = { ...list[0] } as PlayerStats;
-    if (list.length > 1) {
-      for (const s of list.slice(1)) {
-        for (const f of Object.keys(tot) as (keyof PlayerStats)[]) {
-          const v = s[f];
-          if (typeof v === 'number' && f !== 'season' && f !== 'tid') (tot as unknown as Record<string, number>)[f] += v;
-        }
-      }
-      // advanced numbers from real seasons: keep the total row's (first) values
-    }
     rows.push({
       key: k,
       season: list[0].season,
       playoffs: list[0].playoffs,
       teams: list.map((s) => (typeof s.tid === 'number' ? s.tid : (BBREF_TO_TID[String(s.tid)] ?? -1))),
-      tot,
+      // a season split between teams: its totals, and its imported advanced numbers combined
+      tot: seasonLine(p, list[0].season, list[0].playoffs)!,
     });
   }
   return rows.sort((a, b) => b.season - a.season || Number(a.playoffs) - Number(b.playoffs));
@@ -153,12 +144,10 @@ export default function PlayerView() {
   const arch = archetype(p.ratings);
   const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
   const mood = MOOD_META[moodLevel(p.mood.score)];
-  const seasonLine = (season: number) =>
-    perGame(p.stats.filter((s) => s.season === season && !s.playoffs).reduce<PlayerStats | null>((a, s) => (a ? { ...a, ...sumStats(a, s) } : s), null));
-  const cur = seasonLine(league.season);
+  const cur = playerSeason(p, league.season);
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
-  const line = cur ?? (lastSeason ? seasonLine(lastSeason) : null);
+  const line = cur ?? (lastSeason ? playerSeason(p, lastSeason) : null);
   // the season contracts count against (next season in the offseason), or this one for a contract that's up
   const salSeason = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
   const sal = salaryFor(p, salSeason);
@@ -492,16 +481,6 @@ export default function PlayerView() {
       </Sheet>
     </main>
   );
-}
-
-function sumStats(a: PlayerStats, b: PlayerStats): Partial<PlayerStats> {
-  const out: Record<string, number> = {};
-  for (const k of Object.keys(a) as (keyof PlayerStats)[]) {
-    const va = a[k];
-    const vb = b[k];
-    if (typeof va === 'number' && typeof vb === 'number' && k !== 'season' && k !== 'tid') out[k] = va + vb;
-  }
-  return out as Partial<PlayerStats>;
 }
 
 function StatsTab({ p, league }: { p: Player; league: League }) {
