@@ -3,8 +3,10 @@ import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab } from '../ai/lab';
 import { counterCandidates, scoutTeam, teamAlerts } from '../ai/advisor';
+import { fitRoster, offPresetFit, rosterProfile } from '../ai/coachAI';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
+import { OFF_PRESETS } from '../sim/tactics';
 import type { GameResult } from '../types';
 
 describe('tactics lab & reports', () => {
@@ -83,6 +85,76 @@ describe('tactics lab & reports', () => {
     league.teams[0].tactics = drop;
     expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Hedge/);
     league.teams[0].tactics = t;
+  });
+  it("quotes playbook fits on the Tactics screen's scale: 100 for the best fit, 45 for the worst", () => {
+    const team = league.teams[0];
+    const saved = team.tactics;
+    const fits = offPresetFit(rosterProfile(fitRoster(teamPlayers(league, 0))));
+    const [best, worst] = [Object.keys(fits).sort((a, b) => fits[b] - fits[a])[0], Object.keys(fits).sort((a, b) => fits[a] - fits[b])[0]];
+    expect(fits[best] - fits[worst]).toBeGreaterThan(12);
+    team.tactics = { ...applyPatch(saved), offPreset: worst, manual: true };
+    const alert = teamAlerts(league, 0).find((a) => a.id === 'off-fit')!;
+    expect(alert.title).toBe(`Offense may not fit: try ${OFF_PRESETS.find((p) => p.id === best)!.name}`);
+    expect(alert.body).toMatch(/\(fit 100 vs 45\)\.$/);
+    team.tactics = saved;
+  });
+  it('warns about a slow big only where the engine hunts him: on switched ball screens, not off-ball switches', () => {
+    const team = league.teams[1];
+    const saved = team.tactics;
+    const big = league.players[team.rotation.order[0]];
+    const r = { ...big.ratings };
+    big.ratings.hgt = 70;
+    big.ratings.spd = 30;
+    const ids = () => teamAlerts(league, 1).map((a) => a.id);
+    const slowWeakness = () => scoutTeam(league, 1).weaknesses.some((w) => w.startsWith('Switching with a slow big'));
+    // drop coverage that switches off the ball: "use Drop or Ice" would be advice it already follows
+    team.tactics = applyPatch(saved, { defense: { scheme: 'man', pnr: 'drop', switchOffBall: true } });
+    expect(ids()).not.toContain('switch-slow');
+    expect(slowWeakness()).toBe(false);
+    expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch off-ball screens;/);
+    team.tactics = applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } });
+    expect(teamAlerts(league, 1).find((a) => a.id === 'switch-slow')!.body).toContain(big.lastName);
+    expect(slowWeakness()).toBe(true);
+    expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch everything;/);
+    big.ratings = r;
+    team.tactics = saved;
+  });
+  it("judges the five healthy starters and counts an injured player's minutes, as the engine does", () => {
+    const team = league.teams[1];
+    const [tactics, rotation] = [team.tactics, team.rotation];
+    const big = league.players[team.rotation.order[0]];
+    const r = { ...big.ratings };
+    big.ratings.hgt = 70;
+    big.ratings.spd = 30;
+    team.tactics = applyPatch(tactics, { defense: { scheme: 'man', pnr: 'switch' } });
+    // a custom rotation whose targets add up to 240, the slow big starting
+    const minutes = Object.fromEntries(rotation.order.map((pid, i) => [pid, [36, 34, 33, 31, 29, 24, 20, 16, 12, 5][i] ?? 0]));
+    team.rotation = { ...rotation, minutes, manual: true };
+    const ids = () => teamAlerts(league, 1).map((a) => a.id);
+    expect(ids()).toContain('switch-slow');
+    expect(ids()).not.toContain('min-total');
+    // out injured, he neither starts nor takes his 36 minutes away from the total
+    big.injury = { type: 'Sprained ankle', gamesRemaining: 4, gamesTotal: 4, severity: 'minor' };
+    expect(ids()).not.toContain('switch-slow');
+    expect(ids()).not.toContain('min-total');
+    big.injury = null;
+    big.ratings = r;
+    [team.tactics, team.rotation] = [tactics, rotation];
+  });
+  it('only tells you to rest a worn-down player on back-to-backs when he does not already', () => {
+    const rotation = league.teams[2].rotation;
+    const p = teamPlayers(league, 2)[0];
+    const wear = p.wear;
+    p.wear = 70;
+    const body = () => teamAlerts(league, 2).find((a) => a.id === `wear-${p.pid}`)!.body;
+    league.teams[2].rotation = { ...rotation, restB2B: [], caps: {} };
+    expect(body()).toMatch(/^Season wear 70\. .* Rest him on back-to-backs \(Rotation\)\.$/);
+    league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: {} };
+    expect(body()).toMatch(/already rests on back-to-backs: a hard minute cap \(Rotation\)/);
+    league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: { [p.pid]: 28 } };
+    expect(body()).toMatch(/lowering his 28-minute cap \(Rotation\)/);
+    league.teams[2].rotation = rotation;
+    p.wear = wear;
   });
   it('only offers counters that change something', () => {
     const [mine, opp] = [league.teams[0], league.teams[1]];

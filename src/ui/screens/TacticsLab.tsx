@@ -438,7 +438,7 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
           <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} />
           <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} neutral />
           <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} neutral />
-          <CompareBar label="FT / FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} />
+          <CompareBar label="FTA / FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} />
           <CompareBar label="Turnover %" a={r.shot.tov * 100} b={r.oppShot.tov * 100} higherBetter={false} />
           <CompareBar label="Off. rebound %" a={r.shot.orb * 100} b={r.oppShot.orb * 100} />
         </div>

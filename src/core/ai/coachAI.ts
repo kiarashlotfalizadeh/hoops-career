@@ -417,10 +417,23 @@ export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; 
   return { roles, freedom };
 }
 
+/** The players a playbook is fitted to: a knock of five games or fewer doesn't swing the fits, nor do injuries that leave fewer than eight. */
+export function fitRoster(players: Player[]): Player[] {
+  const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
+  return healthy.length >= 8 ? healthy : players;
+}
+
+/** Fit scores as the Tactics screen shows them: 100 for the playbook that fits best, 45 for the worst. */
+export function fitScale(fits: Record<string, number>): (k: string) => number {
+  const vals = Object.values(fits);
+  const max = Math.max(...vals);
+  const min = Math.min(...vals);
+  return (k: string) => Math.round(45 + ((fits[k] - min) / Math.max(1, max - min)) * 55);
+}
+
 /** Offensive and defensive presets ranked by fit for this roster and coach, best first. */
 export function rankedPresets(team: Team, players: Player[]): { off: string[]; def: string[] } {
-  const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
-  const pr = rosterProfile(healthy.length >= 8 ? healthy : players);
+  const pr = rosterProfile(fitRoster(players));
   const offBias = PHILOSOPHY_BIAS[team.coach.offPhilosophy] ?? {};
   const defBias: Record<string, number> = { [team.coach.defPhilosophy]: 7 };
   const rank = (fits: Record<string, number>, bias: Record<string, number>) =>

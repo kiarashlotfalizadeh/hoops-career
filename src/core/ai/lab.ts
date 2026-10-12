@@ -27,8 +27,10 @@ export interface LabRequest {
 export interface ShotProfile {
   rimRate: number;
   threeRate: number;
+  /** Free-throw attempts per field-goal attempt (the post-game four factors' FT / FGA counts makes). */
   ftRate: number;
   efg: number;
+  /** Turnovers per possession. */
   tov: number;
   orb: number;
 }
