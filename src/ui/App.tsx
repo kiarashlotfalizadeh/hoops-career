@@ -4,6 +4,7 @@ import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as Set
 import { problemOf, useLeague, useLeagueMemo, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
+import { pendingLive } from '../state/live';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
@@ -393,19 +394,28 @@ function ScrollTop() {
   return null;
 }
 
-/** A fired coach's old team isn't his to run: the front-office screens wait until he takes another job. */
-function FiredGate({ children }: { children: ReactNode }) {
+/**
+ * The front-office screens wait while they aren't the coach's to use: a fired coach's old team until he
+ * takes another job, and any roster move while a live game is in progress (a player moved mid-game
+ * would have his line recorded for the wrong team).
+ */
+function OfficeGate({ children }: { children: ReactNode }) {
   const fired = useStore((s) => !!s.league?.fired);
+  const live = useStore((s) => !!s.league && !!pendingLive(s.league));
   const nav = useNavigate();
-  if (!fired) return <>{children}</>;
+  if (!fired && !live) return <>{children}</>;
   return (
     <main className="page">
       <div className="card col" role="alert" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <AlertTriangle className="bad" size={24} />
-        <h2>You were fired</h2>
-        <div className="small dim2">The front office isn't yours to run anymore. Take over another team to trade, sign and draft again.</div>
-        <button className="btn primary" onClick={() => nav('/settings?sheet=switch')}>
-          Find a new job
+        <AlertTriangle className={fired ? 'bad' : 'warn'} size={24} />
+        <h2>{fired ? 'You were fired' : 'Finish your live game first'}</h2>
+        <div className="small dim2">
+          {fired
+            ? "The front office isn't yours to run anymore. Take over another team to trade, sign and draft again."
+            : 'Trades, signings and releases wait until the game in progress is over, so every player is counted for the team he played for.'}
+        </div>
+        <button className="btn primary" onClick={() => nav(fired ? '/settings?sheet=switch' : '/live')}>
+          {fired ? 'Find a new job' : 'Back to the game'}
         </button>
       </div>
     </main>
@@ -443,41 +453,41 @@ function GameShell() {
             <Route
               path="/office"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Office />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/trade"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Trade />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/free-agents"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <FreeAgents />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/resign"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Resign />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route
               path="/draft"
               element={
-                <FiredGate>
+                <OfficeGate>
                   <Draft />
-                </FiredGate>
+                </OfficeGate>
               }
             />
             <Route path="/finances" element={<Finances />} />
