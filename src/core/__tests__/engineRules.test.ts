@@ -496,6 +496,26 @@ describe('engine rules', () => {
     expect(screens).toBeGreaterThan(5);
   });
 
+  it('tags the boards a crashing offense or a zone gives up at half weight off a missed free throw', () => {
+    type Rb = { T: unknown[]; impact(key: string, benefit: number, pts: number): void; rebound(off: unknown, def: unknown, zone: string, blocked: boolean, ft: boolean): void };
+    const first = (ft: boolean) => {
+      const sim = new GameSim(side(0, { offense: { crashBoards: 100 } }), side(1, { defense: { scheme: 'zone23' } }), {
+        rng: new Rng(1),
+        type: 'regular',
+        injuries: false,
+      }) as unknown as Rb;
+      const tags: Record<string, number> = {};
+      sim.impact = (key, _benefit, pts) => void (tags[key] ??= pts);
+      sim.rebound(sim.T[0], sim.T[1], 'rim', false, ft);
+      return tags;
+    };
+    const [shot, ft] = [first(false), first(true)];
+    for (const key of ['crash_orb', 'zone_glass']) {
+      expect(shot[key]).toBeGreaterThan(0);
+      expect(ft[key]).toBeCloseTo(shot[key] / 2, 9);
+    }
+  });
+
   it('credits double teams to the Star plan only when the plan sent them', () => {
     const doubles = (plan: 'none' | 'double') => {
       let n = 0;

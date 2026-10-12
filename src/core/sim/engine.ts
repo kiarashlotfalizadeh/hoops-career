@@ -2812,11 +2812,13 @@ export class GameSim {
     let pOrb = K.orbBase * Math.pow(offR / defR, 1.05) * glass;
     if (zone === 'c3' || zone === 'ab3') pOrb *= 1.03;
     if (ft) pOrb *= 0.5;
+    // the tags count the boards a scheme adds at an average rate: half as many off a free throw
+    const orbRate = K.orbBase * (ft ? 0.5 : 1);
     if (this.zone(def)) {
       pOrb *= 1.12;
-      this.impact('zone_glass', off.side, K.orbBase * 0.12 * K.orbPts);
+      this.impact('zone_glass', off.side, orbRate * 0.12 * K.orbPts);
     }
-    if (glass !== 1) this.impact('crash_orb', off.side, K.orbBase * (glass - 1) * K.orbPts);
+    if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts);
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {
       // the shooter has a step on his own miss (not on a free throw)
