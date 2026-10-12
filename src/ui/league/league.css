@@ -449,9 +449,6 @@
   background: var(--surface);
   border: 1px solid var(--line);
 }
-.lg-day .iconbtn:disabled {
-  opacity: 0.35;
-}
 .lg-sb-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

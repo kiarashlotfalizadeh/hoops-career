@@ -320,6 +320,10 @@ h3 {
 .iconbtn:active {
   background: var(--surface-2);
 }
+.iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .badge-dot {
   position: absolute;
   top: 6px;
@@ -430,6 +434,11 @@ h3 {
 }
 .card.clickable:active {
   transform: scale(0.995);
+}
+/* cards that are buttons (pickers, the live bench) */
+button.card:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .divider {
   height: 1px;
