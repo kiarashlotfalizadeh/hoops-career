@@ -26,7 +26,9 @@ import {
 } from '../league/contracts';
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
 import {
+  MAX_FIRSTS_OUT,
   aiProposeToUser,
+  aiToAiTrade,
   canMakeWork,
   capSalary,
   evaluateTrade,
@@ -192,6 +194,35 @@ describe('AI trade valuation', () => {
     expect(ev.ok).toBe(true);
     expect(ev.accept).toBe(false);
     expect(ev.message).toMatch(/first-round picks/);
+  });
+
+  it('AI teams trade among themselves only deals the rules allow, with two firsts at most', () => {
+    const l = league(2);
+    expect(startRegularSeason(l)).toEqual([]);
+    // some fresh signings that can't move yet, and contenders that used the mid-level
+    for (const p of Object.values(l.players).filter((x) => x.tid > 0 && x.pid % 3 === 0)) p.tradeLock = { season: l.season, day: DEC_15 };
+    for (const t of l.teams.filter((x) => x.strategy === 'contend')) t.mleSeason = l.season;
+    let trades = 0;
+    for (let i = 0; i < 150; i++) {
+      const before: League = structuredClone(l);
+      aiToAiTrade(l, new Rng(i + 1));
+      const moved = Object.values(l.players).filter((p) => before.players[p.pid]?.tid !== p.tid);
+      const picks = l.draftPicks.filter((d) => before.draftPicks.find((x) => x.dpid === d.dpid)!.tid !== d.tid);
+      if (!moved.length) continue;
+      trades++;
+      // the buyer sends players and picks for one veteran
+      const from = (p: Player) => before.players[p.pid].tid;
+      const sides = [...new Set(moved.map(from))];
+      const buyer = picks.length ? before.draftPicks.find((x) => x.dpid === picks[0].dpid)!.tid : (sides.find((t) => moved.filter((p) => from(p) === t).length > 1) ?? sides[0]);
+      const seller = sides.find((t) => t !== buyer)!;
+      const deal: TradeOffer = {
+        a: { tid: buyer, pids: moved.filter((p) => from(p) === buyer).map((p) => p.pid), dpids: picks.map((d) => d.dpid) },
+        b: { tid: seller, pids: moved.filter((p) => from(p) === seller).map((p) => p.pid), dpids: [] },
+      };
+      expect(validateTrade(before, deal)).toEqual([]);
+      expect(picks.filter((d) => d.round === 1).length).toBeLessThanOrEqual(MAX_FIRSTS_OUT);
+    }
+    expect(trades).toBeGreaterThan(0);
   });
 
   it("won't leave a team without firsts in back-to-back drafts (Stepien rule)", () => {

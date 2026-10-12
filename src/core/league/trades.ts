@@ -622,9 +622,11 @@ export function aiProposeToUser(league: League, rng: Rng) {
 
 /**
  * Occasional AI-to-AI deals (a few a season): contenders buy rebuilding teams' veterans. The buyer
- * matches salary first (without sending an over-the-cap seller more than it can take back), then
- * adds young players and picks (least valuable first, two firsts at most) until the seller agrees,
- * and the deal only goes through if the buyer likes it too. Up to three veterans are tried.
+ * matches salary first (without sending an over-the-cap seller more than it can take back, or
+ * taking its own payroll past the tax after using the mid-level), then adds its two most valuable
+ * young players and picks from the cheapest up (two firsts at most) until the seller agrees, and
+ * the deal only goes through if the buyer likes it too. Only assets the rules let move are
+ * offered. Up to three veterans are tried.
  */
 export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
@@ -635,7 +637,7 @@ export function aiToAiTrade(league: League, rng: Rng) {
   if (!sellers.length || !buyers.length) return;
   const s = rng.pick(sellers);
   const b = rng.pick(buyers);
-  const vets = rng.shuffle(standardRoster(league, s.tid).filter((p) => league.season - p.bornYear >= 27 && p.ovr >= 74));
+  const vets = rng.shuffle(standardRoster(league, s.tid).filter((p) => league.season - p.bornYear >= 27 && p.ovr >= 74 && !untradeable(league, p)));
   for (const vet of vets.slice(0, 3)) {
     const deal = aiPackage(league, b.tid, s.tid, vet);
     if (deal) {
@@ -647,9 +649,11 @@ export function aiToAiTrade(league: League, rng: Rng) {
 
 function aiPackage(league: League, buyer: number, seller: number, vet: Player): TradeOffer | null {
   const sal = (p: Player) => capSalary(league, p.pid);
+  // nothing the rules hold back: a recent signing, or an asset the seller traded away this season
+  const movable = (a: Player | DraftPick) => !(a.tradedFrom?.tid === seller && a.tradedFrom.season === league.season) && !('pid' in a && untradeable(league, a));
   // the buyer's three best players are off the table
   const roster = standardRoster(league, buyer).sort((x, y) => y.ovr - x.ovr);
-  const avail = roster.slice(3).filter((p) => p.ovr < vet.ovr);
+  const avail = roster.slice(3).filter((p) => p.ovr < vet.ovr && movable(p));
   // bodies going out for one coming back: keep the seller at 15 and the buyer at 13 or more
   const maxPkg = Math.min(4, CAP.rosterMax - standardRoster(league, seller).length + 1, roster.length - CAP.rosterMin + 1);
   if (maxPkg < 1) return null;
@@ -661,10 +665,14 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   });
   // an over-the-cap seller can only take back so much salary
   const sellerFits = (p: Player) => salaryMatchGap(league, offer(p), 'b') === 0;
-  // an over-the-cap buyer must send back salary first (125% rule): the smallest contract that
-  // covers the gap, else the biggest and keep going
-  while (salaryMatchGap(league, offer(), 'a') > 0) {
-    const gap = salaryMatchGap(league, offer(), 'a');
+  // an over-the-cap buyer must send back salary first (125% rule), and one that used the
+  // mid-level enough to stay under the tax: the smallest contract that covers the gap, else the
+  // biggest and keep going
+  const s = season(league);
+  const taxGap = () => (league.teams[buyer].mleSeason === s ? capPayroll(league, buyer, s) + sal(vet) - pkg.reduce((a, p) => a + sal(p), 0) - CAP_FOR(league, s).luxuryTax : 0);
+  const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), taxGap());
+  while (gapNow() > 0) {
+    const gap = gapNow();
     const rest = avail.filter((x) => !pkg.includes(x) && sellerFits(x));
     const p = rest.filter((x) => sal(x) >= gap).sort((x, y) => sal(x) - sal(y))[0] ?? rest.sort((x, y) => sal(y) - sal(x))[0];
     if (!p || pkg.length >= maxPkg) return null;
@@ -674,11 +682,15 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   const youth = avail
     .filter((p) => !pkg.includes(p) && league.season - p.bornYear <= 25)
     .sort((x, y) => playerValueFor(league, y, seller, true) - playerValueFor(league, x, seller, true));
-  const picks = league.draftPicks.filter((d) => d.tid === buyer).sort((x, y) => pickValueFor(league, x, seller, true) - pickValueFor(league, y, seller, true));
+  const picks = league.draftPicks.filter((d) => d.tid === buyer && movable(d)).sort((x, y) => pickValueFor(league, x, seller, true) - pickValueFor(league, y, seller, true));
   for (const x of [...youth.slice(0, 2), ...picks]) {
     if (teamAccepts(league, offer(), seller)) break;
     if (!('pid' in x)) {
-      if (dps.length < 3 && (x.round === 2 || dps.filter((d) => d.round === 1).length < MAX_FIRSTS_OUT)) dps.push(x);
+      if (dps.length < 3 && (x.round === 2 || dps.filter((d) => d.round === 1).length < MAX_FIRSTS_OUT)) {
+        dps.push(x);
+        // the Stepien rule: not if it leaves the buyer without a first in back-to-back drafts
+        if (stepienError(league, offer(), offer().a)) dps.pop();
+      }
     } else if (pkg.length < maxPkg && sellerFits(x)) pkg.push(x);
   }
   const deal = offer();
