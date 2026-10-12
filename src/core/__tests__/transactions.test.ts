@@ -675,6 +675,21 @@ describe('free agency', () => {
     expect(signed().length).toBe(21);
   });
 
+  it("after the season, converting a two-way counts next season's roster, not the expiring deals", () => {
+    const l = league();
+    l.phase = 'resign';
+    const cs = contractSeason(l);
+    const signed = () => standardRoster(l, U).filter((x) => contractExp(x.contract) >= cs);
+    for (const p of standardRoster(l, U).slice(0, 2)) p.contract = { start: l.season, salaries: [5_000] };
+    while (signed().length < 20) signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l, cs).vetMin, 1, { news: false, start: cs });
+    expect(standardRoster(l, U).length).toBeGreaterThan(21);
+    const tw = twoWayRoster(l, U)[0];
+    tw.contract = { start: l.season, salaries: [twoWaySalary(l), twoWaySalary(l, cs)], twoWay: true };
+    expect(convertTwoWay(l, tw.pid).ok).toBe(true);
+    expect(signed().length).toBe(21);
+    expect(convertTwoWay(l, twoWayRoster(l, U)[0].pid).reason).toMatch(/No open roster spot \(21\)/);
+  });
+
   it('cuts prices every 5 days until the market can pay, and the market clears (T1)', () => {
     const l = league();
     l.phase = 'freeAgency';

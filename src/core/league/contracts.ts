@@ -367,8 +367,10 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid < 0 || !p.contract.twoWay) return { ok: false, reason: 'He is not on a two-way contract.' };
   const max = rosterMaxNow(league);
-  if (standardRoster(league, p.tid).length >= max) return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
   const s = contractSeason(league);
+  // after the season the spots are next season's: expiring deals are leaving or being re-signed
+  if (standardRoster(league, p.tid).filter((x) => contractExp(x.contract) >= s).length >= max)
+    return { ok: false, reason: `No open roster spot (${max}). Release or trade someone first.` };
   const exp = contractExp(p.contract);
   if (exp < s) return { ok: false, reason: 'His contract is up. Re-sign him to a standard deal instead.' };
   const min = (season: number) => (p.experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
