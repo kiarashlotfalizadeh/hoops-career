@@ -49,6 +49,8 @@ export interface PossStep {
   v?: number;
   /** For shots: finishing play type. */
   f?: FinishType;
+  /** For free throws: attempts (v counts the makes). */
+  n?: number;
 }
 
 export interface PossLog {

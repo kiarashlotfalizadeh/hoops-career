@@ -284,14 +284,16 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
         break;
       }
       case 'reb': {
-        const pid = st.pid!;
+        // no pid: a team rebound (out of bounds, or the ball loose after a free throw)
+        const pid = st.pid;
         const pt = { x: (Math.random() - 0.5) * 8, y: 7 + Math.random() * 4 };
-        if (o.has(pid)) {
+        if (pid !== undefined && o.has(pid)) {
           moveTo(pid, pt);
           holder = pid;
-        } else if (d.has(pid)) d.set(pid, pt);
+        } else if (pid !== undefined && d.has(pid)) d.set(pid, pt);
         ball = { ...pt };
-        snap(420, { flash: { text: o.has(pid) ? 'OFF. REBOUND' : 'REBOUND', kind: 'info', x: pt.x, y: pt.y + 4 } });
+        const text = pid === undefined ? 'TEAM REBOUND' : o.has(pid) ? 'OFF. REBOUND' : 'REBOUND';
+        snap(420, { flash: { text, kind: 'info', x: pt.x, y: pt.y + 4 } });
         break;
       }
       case 'to':
@@ -317,7 +319,12 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo): Script 
         snap(450);
         ball = { ...BASKET };
         score[off] += st.v ?? 0;
-        snap(520, { ballZ: 1, flash: { text: `${st.v ?? 0} FT`, kind: (st.v ?? 0) > 0 ? 'make' : 'miss', x: 0, y: 9 }, score: [...score] as [number, number] });
+        // "1/2 FT": makes out of attempts (a log without attempts just counts the makes)
+        snap(520, {
+          ballZ: 1,
+          flash: { text: st.n ? `${st.v ?? 0}/${st.n} FT` : `${st.v ?? 0} FT`, kind: (st.v ?? 0) > 0 ? 'make' : 'miss', x: 0, y: 9 },
+          score: [...score] as [number, number],
+        });
         break;
       }
       case 'timeout':

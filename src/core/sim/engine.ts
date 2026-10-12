@@ -2776,7 +2776,7 @@ export class GameSim {
       }
     }
     if (this.record) {
-      this.cur!.steps.push({ k: 'ft', pid: sh.pid, made: lastMade, v: made });
+      this.cur!.steps.push({ k: 'ft', pid: sh.pid, made: lastMade, v: made, n });
       this.addPbp(off.side, `${sh.name} ${made}/${n} from the line.`, 'ft');
     }
     if (lastMade) {
