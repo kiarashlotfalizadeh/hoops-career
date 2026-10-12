@@ -1,6 +1,6 @@
 // Display helpers shared by the screens.
 import { describe, expect, it } from 'vitest';
-import { finalLabel, ordinal, ordinalSuffix } from '../stats';
+import { finalLabel, fmtClock, ordinal, ordinalSuffix } from '../stats';
 
 describe('ordinal', () => {
   it('reads 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")', () => {
@@ -31,5 +31,17 @@ describe('finalLabel', () => {
     expect(finalLabel(0)).toBe('FINAL');
     expect(finalLabel(1)).toBe('F/OT');
     expect(finalLabel(2)).toBe('F/2OT');
+  });
+});
+
+describe('fmtClock', () => {
+  it('shows minutes, then tenths in the last minute, never rounding up to the next second', () => {
+    expect(fmtClock(720)).toBe('12:00');
+    expect(fmtClock(61.9)).toBe('1:01');
+    expect(fmtClock(60)).toBe('1:00');
+    expect(fmtClock(59.97)).toBe('59.9');
+    expect(fmtClock(24.3)).toBe('24.3');
+    expect(fmtClock(0.04)).toBe('0.0');
+    expect(fmtClock(-1)).toBe('0.0');
   });
 });

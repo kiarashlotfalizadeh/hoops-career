@@ -16,7 +16,7 @@ import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameR
 import { buildSimInput } from '../../core/league/games';
 import { shade } from '../components/ui';
 import type { GameSim, SP } from '../../core/sim/engine';
-import { finalLabel, periodLabel, rosterNames } from '../stats';
+import { finalLabel, fmtClock, pbpOpacity, periodLabel, rosterNames } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { colorDistance } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
@@ -28,13 +28,6 @@ const SPEEDS = [
 ];
 
 const FEED_MAX = 80;
-
-function fmtClock(sec: number) {
-  const s = Math.max(0, sec);
-  const m = Math.floor(s / 60);
-  const r = Math.floor(s % 60);
-  return s < 60 ? `${s.toFixed(1)}` : `${m}:${String(r).padStart(2, '0')}`;
-}
 
 interface Suggestion {
   id: string;
@@ -783,9 +776,8 @@ const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEnt
   return (
     <Card title="Play-by-play">
       <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-        {/* substitutions fade back, but stay above 4.5:1 contrast */}
         {feed.map(({ i, e }) => (
-          <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.7 : 1 }}>
+          <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
             <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
               {periodLabel(e.q)} {fmtClock(e.clock)}
             </span>

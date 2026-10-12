@@ -11,7 +11,7 @@ import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
 import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
-import { finalLabel, p1, periodLabel, rosterNames, signed } from '../stats';
+import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 
@@ -324,9 +324,9 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
       <Card>
         <div className="col" style={{ gap: 6 }}>
           {rows.map((e, i) => (
-            <div key={i} className="row top small" style={{ gap: 8, opacity: e.kind === 'sub' ? 0.6 : 1 }}>
+            <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
               <span className="tiny dim num" style={{ width: 62, flex: 'none' }}>
-                {periodLabel(e.q)} {Math.floor(e.clock / 60)}:{String(Math.floor(e.clock % 60)).padStart(2, '0')}
+                {periodLabel(e.q)} {fmtClock(e.clock)}
               </span>
               <span className="grow" style={{ fontWeight: e.kind === 'period' ? 700 : 400 }}>
                 {e.text}
