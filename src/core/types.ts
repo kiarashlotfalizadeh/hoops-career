@@ -215,7 +215,7 @@ export interface Player {
   tend?: Tendencies;
   /** Free agent asking contract while in FA. */
   asking?: { amount: number; years: number };
-  /** Days remaining in which FA will consider offers before re-evaluating. */
+  /** Free-agency days left until his next price cut (see faDay). */
   faDays?: number;
 }
 

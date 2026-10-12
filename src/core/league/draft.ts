@@ -41,7 +41,7 @@ function blurb(p: Player): string {
   return `${p.archetype}. Best tools: ${strengths[0][0]} and ${strengths[1][0]}. Needs work: ${weak}.`;
 }
 
-/** Display OVR a year before the draft for the prospect at talent rank `i` (0 = best). */
+/** Display OVR when the class arrives, the preseason before its draft, for the prospect at talent rank `i` (0 = best). */
 function prospectLevel(i: number): number {
   return i < 30 ? 77 - 9.5 * Math.pow(i / 29, 0.8) : 64 - (5 * (i - 30)) / 42;
 }
@@ -68,7 +68,7 @@ export function generateDraftClass(league: League, year: number, rng: Rng, size 
     });
     p.bornYear = year - age;
     p.growth = clamp(rng.normal(0.15, 0.45), -1, 1);
-    // level to how real classes arrive: ~77 at the top a year out, ~68 by the end of round one
+    // level to how real classes arrive: ~77 at the top in the preseason, ~68 by the end of round one
     p.ratings = shiftToOvr(p.ratings, Math.round(prospectLevel(i) + rng.normal(0, 2.2)), league.ovrScale);
     refreshPlayerDerived(p, league.season, league.ovrScale);
     p.tend = genTendencies(p, rng);

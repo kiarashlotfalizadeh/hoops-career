@@ -121,7 +121,7 @@ export function preferredYears(league: League, p: Player): number {
   return 1;
 }
 
-/** How attractive a team is to a player (0.85..1.2 multiplier on willingness). */
+/** How attractive a team is to a player (0.75..1.25 multiplier on willingness). */
 export function teamAppeal(league: League, tid: number, p: Player): number {
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
