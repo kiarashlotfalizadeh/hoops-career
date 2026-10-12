@@ -496,6 +496,10 @@ export default function Live() {
 
   return (
     <main className="page full" style={{ gap: 10 }}>
+      {/* the scorebug is the visible title: screen readers get a heading to land on */}
+      <h1 className="sr-only">
+        Live game: {away.region} {away.name} at {home.region} {home.name}
+      </h1>
       <ScoreBug ticker={ticker} sim={sim} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} />
       <div className="sr-only" aria-live="polite">
         {announce}
