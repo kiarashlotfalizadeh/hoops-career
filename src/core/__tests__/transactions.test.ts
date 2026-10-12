@@ -40,7 +40,7 @@ import { CAP } from '../constants';
 import { contractExp } from '../playerGen';
 import { Rng } from '../random';
 import type { League, Player } from '../types';
-import { FREE_AGENT } from '../types';
+import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
 
 const U = 0;
 const AI = 1;
@@ -640,6 +640,8 @@ describe('league creation and the draft', () => {
       ),
     ).toBeGreaterThan(0.4);
     expect(Object.values(l.players).some((p) => p.contract.option && !p.contract.rookie)).toBe(true);
+    // only this summer's prospects are still to be drafted: the free-agent veterans aren't next year's rookies
+    for (const p of Object.values(l.players)) if (p.tid !== DRAFT_PROSPECT) expect(p.draft.year).toBeLessThan(l.season);
   });
 
   it('breaks lottery ties with a seeded draw, the same on every call (T17)', () => {

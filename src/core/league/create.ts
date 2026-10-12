@@ -288,6 +288,8 @@ export function createLeague(opts: CreateOpts): League {
       const age = rng.int(22, 34);
       const p = generatePlayer(rng, { pid: league.nextPid++, season, tid: FREE_AGENT, age, talent: rng.normal(-1, 0.5), scale: DEFAULT_SCALE, taken });
       p.experience = Math.max(0, age - 21);
+      // undrafted, in the league since his first season (so not a rookie next year)
+      p.draft = { year: season - 1 - p.experience, round: 0, pick: 0, tid: null };
       league.players[p.pid] = p;
     }
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
