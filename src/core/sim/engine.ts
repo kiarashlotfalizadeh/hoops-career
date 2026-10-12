@@ -826,6 +826,8 @@ export class GameSim {
         p.stint = 0;
       }
     }
+    // the break draws from its own stream, so the possessions around it stay paired in Lab comparisons
+    this.rng = new Rng(mix(this.seed, 0x7ff00000 + this.q));
     for (const t of this.T) this.adjust(t);
     // possession arrow: loser of tip gets Q2 & Q3, winner Q4; OT is a jump
     if (this.q === 2 || this.q === 3) this.poss = (1 - this.tipWinner) as 0 | 1;
@@ -2921,6 +2923,8 @@ export class GameSim {
     const mult = this.opts.injuryMult ?? 1;
     for (const t of this.T) {
       for (const p of t.on) {
+        // one left on the floor hurt (nobody to replace him) can't get hurt again
+        if (p.out === 2) continue;
         const fatigue = p.energy < 0.6 ? 1.6 : 1;
         if (this.rng.chance(K.injuryRate * mult * t.injMult * fatigue)) {
           p.out = 2;

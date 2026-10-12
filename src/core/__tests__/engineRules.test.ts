@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { GameSim, type SimTeamInput } from '../sim/engine';
+import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
 import type { Team } from '../types';
@@ -367,6 +367,37 @@ describe('engine rules', () => {
     const a = run();
     expect(a.changes).toBeGreaterThan(0);
     expect(run()).toEqual(a);
+  });
+
+  it('draws the overtime jump ball from its own stream, so paired games stay paired', () => {
+    type O = { q: number; clock: number; poss: number; rng: Rng; endPeriod(): boolean };
+    const winners = new Set<number>();
+    for (let k = 0; k < 8; k++) {
+      const sim = new GameSim(side(0), side(1), { rng: new Rng(3), type: 'regular', injuries: false }) as unknown as O;
+      sim.q = 4;
+      sim.clock = 0;
+      // a different last possession of regulation
+      for (let i = 0; i < k; i++) sim.rng.next();
+      expect(sim.endPeriod()).toBe(true);
+      winners.add(sim.poss);
+    }
+    expect(winners.size).toBe(1);
+  });
+
+  it('never injures a player twice when nobody is left to replace him', () => {
+    type I = { T: { on: { pid: number }[]; players: { on: boolean; out: number }[] }[]; injuries: { pid: number }[]; injuryCheck(): void };
+    const sim = new GameSim(side(0), side(1), { rng: new Rng(4), type: 'regular' }) as unknown as I;
+    for (const p of sim.T[0].players) if (!p.on) p.out = 2;
+    const rate = K.injuryRate;
+    K.injuryRate = 1;
+    try {
+      sim.injuryCheck();
+      sim.injuryCheck();
+    } finally {
+      K.injuryRate = rate;
+    }
+    expect(sim.injuries.length).toBe(2);
+    expect(new Set(sim.injuries.map((i) => i.pid)).size).toBe(2);
   });
 
   it('keeps the best defender on a denied star (threat ignores the deny itself)', () => {
