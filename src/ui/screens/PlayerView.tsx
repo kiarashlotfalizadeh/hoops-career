@@ -221,7 +221,8 @@ export default function PlayerView() {
           <Kpi k="PTS" v={line ? f1(line.pts) : '—'} />
           <Kpi k="REB" v={line ? f1(line.reb) : '—'} />
           <Kpi k="AST" v={line ? f1(line.ast) : '—'} />
-          <Kpi k="TS%" v={line ? pct(line.tsPct) : '—'} />
+          {/* no shots, no percentage: "—", not 0.0 */}
+          <Kpi k="TS%" v={line && (line.fga || line.fta) ? pct(line.tsPct) : '—'} />
         </div>
         {!cur && line && lastSeason ? (
           <div className="tiny dim" style={{ marginTop: 6 }}>
@@ -532,11 +533,12 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'blk', label: 'BLK', get: (r) => pg(r).blk, fmt: (v) => f1(v as number) },
     { key: 'tov', label: 'TOV', get: (r) => pg(r).tov, fmt: (v) => f1(v as number) },
     // the % lives in the header, as in the league stats
-    { key: 'fg', label: 'FG%', get: (r) => pg(r).fgPct, fmt: (v) => pct(v as number) },
-    { key: 'tp', label: '3P%', get: (r) => pg(r).tpPct, fmt: (v) => pct(v as number) },
+    // a season without an attempt reads "—" (and sorts last), not 0.0
+    { key: 'fg', label: 'FG%', get: (r) => (r.tot.fga ? pg(r).fgPct : NaN), fmt: (v) => pct(v as number) },
+    { key: 'tp', label: '3P%', get: (r) => (r.tot.tpa ? pg(r).tpPct : NaN), fmt: (v) => pct(v as number) },
     { key: 'tpa', label: '3PA', get: (r) => pg(r).tpa, fmt: (v) => f1(v as number) },
-    { key: 'ft', label: 'FT%', get: (r) => pg(r).ftPct, fmt: (v) => pct(v as number) },
-    { key: 'ts', label: 'TS%', get: (r) => pg(r).tsPct, fmt: (v) => pct(v as number) },
+    { key: 'ft', label: 'FT%', get: (r) => (r.tot.fta ? pg(r).ftPct : NaN), fmt: (v) => pct(v as number) },
+    { key: 'ts', label: 'TS%', get: (r) => (r.tot.fga || r.tot.fta ? pg(r).tsPct : NaN), fmt: (v) => pct(v as number) },
     { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
     { key: 'per', label: 'PER', get: (r) => r.tot.adv?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
