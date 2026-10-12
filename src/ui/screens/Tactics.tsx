@@ -16,7 +16,7 @@ import {
   applyOffPreset,
   cloneTactics,
 } from '../../core/sim/tactics';
-import { autoTactics, defPresetFit, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
+import { autoTactics, defPresetFit, fitRoster, fitScale, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
@@ -29,13 +29,6 @@ import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
-
-function fitScale(fits: Record<string, number>) {
-  const vals = Object.values(fits);
-  const max = Math.max(...vals);
-  const min = Math.min(...vals);
-  return (k: string) => Math.round(45 + ((fits[k] - min) / Math.max(1, max - min)) * 55);
-}
 
 function FitTag({ v }: { v: number }) {
   const tone = v >= 88 ? 'good' : v >= 70 ? 'info' : v >= 58 ? 'warn' : 'bad';
@@ -76,10 +69,7 @@ export default function Tactics() {
   const simming = useStore((s) => !!s.sim);
   const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
   // the roster as the assistant judges it (rankedPresets): a knock of five games or fewer doesn't swing the fits
-  const healthy = useMemo(() => {
-    const fit = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
-    return fit.length >= 8 ? fit : players;
-  }, [players]);
+  const healthy = useMemo(() => fitRoster(players), [players]);
   const prof = useMemo(() => rosterProfile(healthy), [healthy]);
   const offFit = useMemo(() => fitScale(offPresetFit(prof)), [prof]);
   const defFit = useMemo(() => fitScale(defPresetFit(prof)), [prof]);

@@ -4,7 +4,7 @@
 import type { ActionType, League, Player, PnrCoverage } from '../types';
 import { composites, ROLE_META } from '../ratings';
 import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META } from '../sim/tactics';
-import { CRAMPED_SPACING, defPresetFit, evaluateLineup, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
+import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
@@ -218,9 +218,11 @@ export function teamAlerts(league: League, tid: number): Alert[] {
   const players = teamPlayers(league, tid);
   const healthy = players.filter((p) => !p.injury);
   const alerts: Alert[] = [];
-  const pr = rosterProfile(healthy);
+  // the roster and fit scores the Tactics screen shows next to each playbook
+  const pr = rosterProfile(fitRoster(players));
   const offFit = offPresetFit(pr);
   const defFit = defPresetFit(pr);
+  const [offShown, defShown] = [fitScale(offFit), fitScale(defFit)];
   const curOff = team.tactics.offPreset;
   const curDef = team.tactics.defPreset;
   const bestOff = Object.entries(offFit).sort((a, b) => b[1] - a[1])[0];
@@ -231,7 +233,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       id: 'off-fit',
       tone: 'alert',
       title: `Offense may not fit: try ${nm}`,
-      body: `Your roster profile fits ${nm} better (fit ${Math.round(bestOff[1])} vs ${Math.round(offFit[curOff])}).`,
+      body: `Your roster profile fits ${nm} better (fit ${offShown(bestOff[0])} vs ${offShown(curOff)}).`,
       link: '/tactics',
     });
   }
@@ -241,7 +243,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       id: 'def-fit',
       tone: 'alert',
       title: `Defense may not fit: try ${nm}`,
-      body: `Your personnel fits ${nm} better (fit ${Math.round(bestDef[1])} vs ${Math.round(defFit[curDef])}).`,
+      body: `Your personnel fits ${nm} better (fit ${defShown(bestDef[0])} vs ${defShown(curDef)}).`,
       link: '/tactics',
     });
   }

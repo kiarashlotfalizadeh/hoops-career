@@ -3,8 +3,10 @@ import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab } from '../ai/lab';
 import { counterCandidates, scoutTeam, teamAlerts } from '../ai/advisor';
+import { fitRoster, offPresetFit, rosterProfile } from '../ai/coachAI';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
+import { OFF_PRESETS } from '../sim/tactics';
 import type { GameResult } from '../types';
 
 describe('tactics lab & reports', () => {
@@ -83,6 +85,18 @@ describe('tactics lab & reports', () => {
     league.teams[0].tactics = drop;
     expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Hedge/);
     league.teams[0].tactics = t;
+  });
+  it("quotes playbook fits on the Tactics screen's scale: 100 for the best fit, 45 for the worst", () => {
+    const team = league.teams[0];
+    const saved = team.tactics;
+    const fits = offPresetFit(rosterProfile(fitRoster(teamPlayers(league, 0))));
+    const [best, worst] = [Object.keys(fits).sort((a, b) => fits[b] - fits[a])[0], Object.keys(fits).sort((a, b) => fits[a] - fits[b])[0]];
+    expect(fits[best] - fits[worst]).toBeGreaterThan(12);
+    team.tactics = { ...applyPatch(saved), offPreset: worst, manual: true };
+    const alert = teamAlerts(league, 0).find((a) => a.id === 'off-fit')!;
+    expect(alert.title).toBe(`Offense may not fit: try ${OFF_PRESETS.find((p) => p.id === best)!.name}`);
+    expect(alert.body).toMatch(/\(fit 100 vs 45\)\.$/);
+    team.tactics = saved;
   });
   it('only offers counters that change something', () => {
     const [mine, opp] = [league.teams[0], league.teams[1]];
