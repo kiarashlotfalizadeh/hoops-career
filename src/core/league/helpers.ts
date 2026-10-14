@@ -41,8 +41,9 @@ export function rosterMaxNow(league: League): number {
   return inSeason(league) ? CAP.rosterMax : OFFSEASON_ROSTER_MAX;
 }
 
+/** Free agents who can be signed: a player still on waivers can only be claimed (see resolveWaivers). */
 export function freeAgents(league: League): Player[] {
-  return Object.values(league.players).filter((p) => p.tid === FREE_AGENT);
+  return Object.values(league.players).filter((p) => p.tid === FREE_AGENT && !p.waivers);
 }
 
 export function prospects(league: League, year?: number): Player[] {

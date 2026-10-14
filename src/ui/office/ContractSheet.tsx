@@ -9,11 +9,25 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { MLE_YEARS, askingContract, makeContract, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
-import { capHolds, resignRoster, signingClosedReason, userOffer, userResign } from '../../core/league/freeAgency';
+import {
+  bidFloor,
+  bidHolds,
+  capHolds,
+  marqueeFA,
+  offerRoute,
+  pendingBid,
+  resignRoster,
+  signingClosedReason,
+  userBid,
+  userMleRoom,
+  userOffer,
+  userResign,
+} from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Help, Sheet } from '../components/ui';
 import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from './common';
 import { ExtendBody } from './ExtendBody';
+import { BidPanel } from './BidPanel';
 
 export type OfferMode = 'fa' | 'resign' | 'extend';
 
@@ -38,9 +52,12 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const ask = askingContract(league, p, tid);
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const maxAmt = cap.maxContract(p.experience);
-  const [amount, setAmount] = useState(() => clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt));
+  // a top free agent in the summer weighs offers: the sheet opens on your pending one, and raising it replaces it
+  const bidding = mode === 'fa' && marqueeFA(league, p);
+  const bid = bidding ? pendingBid(league, p.pid) : undefined;
+  const [amount, setAmount] = useState(() => bid?.amount ?? clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt));
   // a mid-level offer can run 4 years at most
-  const [years, setYears] = useState(() => (mode === 'fa' && signingRoute(league, tid, amount, season, p) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
+  const [years, setYears] = useState(() => bid?.years ?? (mode === 'fa' && offerRoute(league, p, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
 
   // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount);
@@ -65,24 +82,28 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // his ask from you against a neutral team's: interest and the difficulty setting both move it
   const vsNeutral = Math.round((ask.amount / askingContract(league, p).amount - 1) * 100);
   const market = marketSalary(league, p);
-  const pay = payroll(league, tid, season);
+  // your other pending offers on cap space hold their room
+  const held = mode === 'fa' ? bidHolds(league, p.pid) : 0;
+  const pay = payroll(league, tid, season) + held;
   const space = cap.salaryCap - pay;
   const after = pay + amount;
   // re-signing him clears his own cap hold; the other expiring players still hold their room
   const otherHolds = mode === 'resign' ? capHolds(league, tid).reduce((a, h) => a + (h.p.pid === p.pid ? 0 : h.amount), 0) : 0;
   // re-signing counts next season's contracts: the other expiring deals are leaving or re-signing too
-  const rosterN = mode === 'resign' ? resignRoster(league) : standardRoster(league, tid).length;
+  const pendingN = mode === 'fa' ? (league.faBids ?? []).filter((b) => b.pid !== p.pid).length : 0;
+  const rosterN = mode === 'resign' ? resignRoster(league) : standardRoster(league, tid).length + pendingN;
   const rosterMax = rosterMaxNow(league);
   // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
   const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
   const rosterBlocked = rosterN >= rosterMax;
-  const route = signingRoute(league, tid, amount, season, p);
+  const route = mode === 'fa' ? offerRoute(league, p, amount, season) : signingRoute(league, tid, amount, season, p);
   // his own minimum, as signing counts it (below the veteran minimum in his first three seasons)
   const isMin = route === 'min';
-  const mle = mleRoom(league, tid, season);
+  const mle = mode === 'fa' ? userMleRoom(league, season, p.pid) : mleRoom(league, tid, season);
   const capBlocked = mode === 'fa' && !route;
   const mleTooLong = mode === 'fa' && route === 'mle' && years > MLE_YEARS;
-  const blocked = !!closed || rosterBlocked || capBlocked || mleTooLong;
+  const floor = bidding ? bidFloor(league, p, years) : 0;
+  const blocked = !!closed || rosterBlocked || capBlocked || mleTooLong || amount < floor;
   // as signed: each season at least his minimum
   const contract = makeContract(league, amount, years, season, p.experience);
   const total = contract.salaries.reduce((a, b) => a + b, 0);
@@ -91,7 +112,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const submit = () => {
     let res = { ok: false, reason: '' };
     useStore.getState().mutate((l) => {
-      res = mode === 'fa' ? userOffer(l, p.pid, amount, years) : userResign(l, p.pid, amount, years);
+      res = mode === 'fa' ? (bidding ? userBid : userOffer)(l, p.pid, amount, years) : userResign(l, p.pid, amount, years);
     });
     useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
     if (res.ok) onClose();
@@ -215,7 +236,10 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
       {rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>Your roster is full ({rosterMax}).</b> Release or trade someone from the Office first.
+          <b>Your roster is full ({rosterMax}).</b>{' '}
+          {pendingN > 0
+            ? `Counting your ${pendingN} pending offer${pendingN > 1 ? 's' : ''}: withdraw one, or release or trade someone.`
+            : 'Release or trade someone from the Office first.'}
         </Callout>
       )}
       {mleTooLong && !closed && !rosterBlocked && (
@@ -267,7 +291,10 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         </Callout>
       )}
 
+      {bidding && !closed && !rosterBlocked && !capBlocked && !mleTooLong && <BidPanel p={p} amount={amount} years={years} floor={floor} onAmount={set} />}
+
       {!blocked &&
+        !bidding &&
         (verdict.ok ? (
           <Callout tone="good" icon={<CircleCheck size={18} className="good" />}>
             <b>He'll sign at this number.</b>
@@ -307,7 +334,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               </div>
             </div>
             <div>
-              <div className="tiny dim upper bold">After signing</div>
+              <div className="tiny dim upper bold">{bidding ? 'If he signs' : 'After signing'}</div>
               {/* over the cap is only a problem when no exception covers the signing */}
               <div className="fo-mid" style={{ color: cap.salaryCap - after >= 0 ? 'var(--good)' : isMin || route === 'mle' ? 'var(--warn)' : 'var(--bad)' }}>
                 {fmtM(cap.salaryCap - after)}
@@ -317,6 +344,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           {isMin && after > cap.salaryCap && <div className="tiny dim">Minimum deals (up to {fmtM(minAmt, 2)} for him) can be signed even when you're over the cap.</div>}
           {route === 'mle' && <div className="tiny dim">Uses your mid-level exception: once a season, up to {MLE_YEARS} years, and it keeps you under the tax line.</div>}
+          {held > 0 && <div className="tiny dim">Counts {fmtM(held)} of cap space held for your other pending offers.</div>}
         </div>
       ) : (
         <div className="card tight col" style={{ gap: 8 }}>
@@ -352,8 +380,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>
-        <button className={`btn grow ${verdict.ok && !blocked ? 'primary' : ''}`} disabled={blocked} onClick={submit}>
-          {mode === 'fa' ? 'Offer' : 'Re-sign'} {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
+        <button className={`btn grow ${(verdict.ok || bidding) && !blocked ? 'primary' : ''}`} disabled={blocked} onClick={submit}>
+          {mode === 'fa' ? (bidding ? (bid ? 'Update offer' : 'Submit offer') : 'Offer') : 'Re-sign'} {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
         </button>
       </div>
     </div>

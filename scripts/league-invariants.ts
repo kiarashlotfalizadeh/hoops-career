@@ -97,6 +97,9 @@ function check() {
         bad('extension outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
     }
     if (p.tid === -1 && !(p.asking && p.asking.amount > 0)) bad('FA without asking price', nm(p.pid));
+    // waivers: only free agents released in season, cleared or claimed before the season ends
+    if (p.waivers && p.tid !== -1) bad('rostered player on waivers', nm(p.pid));
+    if (p.waivers && !H.inSeason(L)) bad('waivers outside the season', nm(p.pid));
     // generated players get tendencies like the seed's calibrated ones (without them a star plays like a role player)
     if (p.tid >= -2 && !p.tend) bad('player without tendencies', nm(p.pid));
     if (p.tid === -3 && p.contract.salaries.some((x) => x > 0)) bad('retired with salary', nm(p.pid));
@@ -107,6 +110,8 @@ function check() {
     // a player traded between teams with different schedules can pass 82, as in the NBA
     if (gp > (rows.length > 1 ? 88 : 82)) bad('player gp over the limit', `${nm(p.pid)} ${gp} (${rows.length} teams)`);
   }
+  if (ph !== 'freeAgency' && L.faBids?.length) bad('offers to free agents outside free agency', L.faBids.map((b) => nm(b.pid)).join(', '));
+  for (const b of L.faBids ?? []) if (L.players[b.pid]?.tid !== -1) bad('offer to a player off the market', nm(b.pid));
   const first = ['resign', 'freeAgency'].includes(ph) ? season + 1 : season;
   const cnt = new Map<string, number>();
   for (const d of L.draftPicks) {
@@ -380,6 +385,20 @@ function fixUserRoster() {
     }
 }
 
+/** The user's offer each summer to the best top free agent the team can pay: what leads the field now if it can, else his asking price. */
+function bidOnStar(): number | null {
+  const u = L.userTid;
+  const stars = H.freeAgents(L)
+    .filter((p) => FA.marqueeFA(L, p))
+    .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a));
+  for (const p of stars) {
+    const a = C.askingContract(L, p, u);
+    const lead = FA.bidStanding(L, p, a.amount, a.years).toLead;
+    if ((lead !== null && lead > a.amount && FA.userBid(L, p.pid, lead, a.years).ok) || FA.userBid(L, p.pid, a.amount, a.years).ok) return p.pid;
+  }
+  return null;
+}
+
 /** `realCalendar`: the first season plays the NBA's own schedule; `fire`: the coach loses his job after it. */
 function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
   for (let s = 0; s < n; s++) {
@@ -394,11 +413,21 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     checkCalendar(!(opts.realCalendar && s === 0));
     // news is capped, so count trades by id as they appear
     let trades = 0;
+    let buyouts = 0;
+    let claims = 0;
     let lastId = L.nextMsgId;
     for (let g = 0; L.phase === 'regular' && g < 400; g++) {
+      const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from }));
       S.simDay(L);
       trades += L.news.filter((x) => x.kind === 'trade' && x.id >= lastId).length;
+      buyouts += L.news.filter((x) => x.kind === 'release' && x.id >= lastId && x.text.includes('bought out')).length;
       lastId = L.nextMsgId;
+      // a player can't be signed on waivers: one on a roster now was claimed, and took his dead money with him
+      for (const w of waived) {
+        if (!(L.players[w.pid]?.tid >= 0)) continue;
+        claims++;
+        if (L.teams[w.from].deadMoney.some((d) => d.pid === w.pid && d.season >= L.season)) bad('dead money left for a claimed player', `${nm(w.pid)} ${L.teams[w.from].abbrev}`);
+      }
       if (L.day % 30 === 0) check();
       if (L.day > 90 && L.phase === 'regular') checkClinch();
       if (L.day === L.allStarDay + 1 && L.phase === 'regular') checkAllStars();
@@ -424,15 +453,21 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     S.startFreeAgency(L);
     check();
     checkOptions(true);
+    const star = bidOnStar();
     S.faAdvance(L, 10);
     check();
+    if (L.faBids?.some((b) => b.decideDay < L.faDay)) bad('offer past its decision day', L.faBids.map((b) => `${nm(b.pid)} d${b.decideDay}`).join(', '));
+    const bid =
+      star === null
+        ? 'none'
+        : `${H.playerName(L.players[star])} ${L.players[star].tid >= 0 ? `-> ${L.teams[L.players[star].tid].abbrev}${L.players[star].tid === L.userTid ? '*' : ''}` : 'unsigned'}`;
     S.faAdvance(L, 30);
     if (S.faDayNumber(L) !== S.FA_DAYS || !S.faOver(L)) bad('free agency past its last day', String(L.faDay));
     S.newSeason(L);
     check();
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
-      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, extensions ${extended}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
+      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
   }
 }

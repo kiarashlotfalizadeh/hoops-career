@@ -372,10 +372,13 @@ export default function PlayerView() {
               ) : faAsk ? (
                 <div className="col" style={{ gap: 8 }}>
                   <div className="small dim2">
-                    Asking {fmtM(faAsk.amount)} × {faAsk.years} yr{faAsk.years === 1 ? '' : 's'} from you.
+                    {p.waivers
+                      ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
+                      : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                   </div>
-                  <Link className="btn sm primary" to="/free-agents">
-                    Make an offer
+                  {/* straight to his offer (or claim) sheet on the Free Agents screen */}
+                  <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
+                    {p.waivers ? 'Claim off waivers' : 'Make an offer'}
                   </Link>
                 </div>
               ) : p.tid === DRAFT_PROSPECT ? (
