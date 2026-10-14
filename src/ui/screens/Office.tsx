@@ -45,6 +45,7 @@ import {
   tradeClosedNote,
 } from '../office/common';
 import { overallPick } from '../league/shared';
+import { UntouchableToggle } from '../office/Untouchable';
 import { rosterNames } from '../stats';
 import { useFlowRunner } from '../useFlow';
 
@@ -792,6 +793,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
         )
       )}
       {noTrade && <div className="tiny dim">{noTrade}</div>}
+      {!expiringNow && <UntouchableToggle league={league} p={p} />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { pendingLive } from '../../state/live';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
@@ -9,6 +9,7 @@ import { inAppPath } from '../nav';
 import { userGameOnDay } from '../../core/league/games';
 import { cupLabel } from '../../core/league/cup';
 import { confStandings } from '../../core/league/standings';
+import { openProposals } from '../../core/league/proposals';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Kpi, Ovr } from '../components/ui';
@@ -54,6 +55,8 @@ export default function Home() {
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid), [league]);
   const actions = flowActions(league);
   const unread = league.inbox.filter((m) => !m.read).slice(0, 3);
+  // AI teams' open trade offers (each also in the inbox)
+  const offers = openProposals(league).length;
   const conf = useLeagueMemo(() => confStandings(league, team.conf), [league, team.conf]);
   const myRank = conf.findIndex((r) => r.tid === league.userTid);
   const nearby = conf.slice(Math.max(0, Math.min(myRank - 3, conf.length - 7)), Math.max(7, Math.min(conf.length, myRank + 4)));
@@ -228,6 +231,13 @@ export default function Home() {
               ))}
           </div>
         </Card>
+      )}
+
+      {offers > 0 && (
+        <Link to="/trade?tab=offers" className="chip on" style={{ alignSelf: 'flex-start' }}>
+          <Handshake size={14} /> {offers} trade offer{offers > 1 ? 's' : ''}
+          <ChevronRight size={14} className="dim" />
+        </Link>
       )}
 
       {inSeason && (
