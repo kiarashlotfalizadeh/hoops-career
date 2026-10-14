@@ -217,6 +217,35 @@ export interface Player {
   asking?: { amount: number; years: number };
   /** Free-agency days left until his next price cut (see faDay). */
   faDays?: number;
+  /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
+  waivers?: Waivers;
+}
+
+export interface Waivers {
+  /** The team that released him. */
+  from: number;
+  /** Season day he clears waivers (and becomes a free agent) unless claimed. */
+  until: number;
+  /** The contract a claiming team takes over. */
+  contract: Contract;
+  /** The dead money the release left his old team, which a claim takes off its books. */
+  dead: { season: number; amount: number }[];
+  /** The user has put in a claim. */
+  claim?: boolean;
+}
+
+/** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
+export interface FaBid {
+  pid: number;
+  amount: number;
+  years: number;
+  /** faDay it was made (a raised offer keeps the first one's day and decision day). */
+  day: number;
+  decideDay: number;
+  /** How it is paid for: cap space is held for it, the mid-level is reserved for it. */
+  route?: 'space' | 'mle' | 'min';
+  /** Salary the user signed over the cap (minimum and mid-level deals) while it was pending: those could have come after it, so they don't count against it. */
+  slack?: number;
 }
 
 export interface Tendencies {
@@ -740,6 +769,8 @@ export interface League {
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;
+  /** The user's pending offers to top free agents (summer free agency only). */
+  faBids?: FaBid[];
   /** User's draft board ordering (pids). */
   draftBoard?: number[];
   /** Season the league was started. */

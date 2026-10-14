@@ -4,8 +4,8 @@
 
 import type { League, Player, Team } from '../types';
 import { FREE_AGENT } from '../types';
-import { CAP, ROOKIE_SCALE } from '../constants';
-import { Rng, clamp } from '../random';
+import { CAP, ROOKIE_SCALE, seasonLabel } from '../constants';
+import { Rng, clamp, hashString } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
 import {
   CAP_FOR,
@@ -136,23 +136,64 @@ export function preferredYears(league: League, p: Player): number {
   return 1;
 }
 
-/** How attractive a team is to a player (0.75..1.25 multiplier on willingness). */
-export function teamAppeal(league: League, tid: number, p: Player): number {
+/** What a player weighs in choosing a team, each around 1 (their mean is 1). */
+export interface PlayerPrefs {
+  winning: number;
+  money: number;
+  /** Playing time: minutes available on the roster. */
+  role: number;
+  /** Market size and buzz. */
+  market: number;
+}
+
+export const PREF_KEYS = ['winning', 'money', 'role', 'market'] as const;
+
+/** Everyone weighing everything the same: what teamAppeal was before players had priorities. */
+export const EVEN_PREFS: PlayerPrefs = { winning: 1, money: 1, role: 1, market: 1 };
+
+/**
+ * A player's priorities, fixed for the league (a hash of its id and his): each weight is drawn
+ * from 0.4 to 1.6 and the four are scaled to a mean of 1, so across players each averages 1 and
+ * the market as a whole prices teams as it did before priorities.
+ */
+export function playerPrefs(league: League, p: Pick<Player, 'pid'>): PlayerPrefs {
+  const rng = new Rng(hashString(`${league.id}:${p.pid}:prefs`));
+  const raw = PREF_KEYS.map(() => 0.4 + rng.next() * 1.2);
+  const mean = raw.reduce((a, b) => a + b, 0) / raw.length;
+  const [winning, money, role, market] = raw.map((x) => x / mean);
+  return { winning, money, role, market };
+}
+
+/**
+ * The parts of a team's appeal to a player, before his priorities weigh them: winning (this
+ * season's record once 10 games are in, else last season's), market (hype and size), role (is he
+ * better than the team's current rotation?) and, on his current team, his mood.
+ */
+export function appealTerms(league: League, tid: number, p: Player): { winning: number; market: number; role: number; mood: number; wp: number; rank: number } {
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
   const games = ts.won + ts.lost;
   const prev = team.seasons.find((s) => s.season === league.season - 1);
   const wp = games >= 10 ? winPct(ts) : prev ? winPct(prev) : 0.5;
-  let a = 1 + (wp - 0.5) * 0.35 + (team.hype - 0.5) * 0.15 + Math.min(0.06, (team.pop - 3) * 0.01);
-  // playing time available: is he better than the team's current rotation?
   const roster = teamPlayers(league, tid)
     .filter((x) => x.pid !== p.pid)
     .sort((x, y) => y.ovr - x.ovr);
   const rank = roster.filter((x) => x.ovr > p.ovr).length;
-  if (rank <= 4) a += 0.06;
-  else if (rank >= 9) a -= 0.08;
-  if (p.tid === tid) a += p.mood.score * 0.02; // current team: mood matters
-  return clamp(a, 0.75, 1.25);
+  return {
+    winning: (wp - 0.5) * 0.35,
+    market: (team.hype - 0.5) * 0.15 + Math.min(0.06, (team.pop - 3) * 0.01),
+    role: rank <= 4 ? 0.06 : rank >= 9 ? -0.08 : 0,
+    // current team: mood matters
+    mood: p.tid === tid ? p.mood.score * 0.02 : 0,
+    wp,
+    rank,
+  };
+}
+
+/** How attractive a team is to a player (0.75..1.25 multiplier on willingness), each part weighted by his priorities. */
+export function teamAppeal(league: League, tid: number, p: Player, prefs: PlayerPrefs = playerPrefs(league, p)): number {
+  const t = appealTerms(league, tid, p);
+  return clamp(1 + prefs.winning * t.winning + prefs.market * t.market + prefs.role * t.role + t.mood, 0.75, 1.25);
 }
 
 export interface Ask {
@@ -332,21 +373,246 @@ export function leaveTeam(team: Team, pid: number) {
 /** Days between a free agent's price cuts while he goes unsigned (see faDay). */
 export const FA_PRICE_CUT_DAYS = 5;
 
-export function releasePlayer(league: League, p: Player, opts: { news?: boolean } = {}) {
+/** Days a player released in season stays on waivers. */
+export const WAIVER_DAYS = 2;
+
+/**
+ * Release a player: what's left of his guaranteed money stays on the team's books as dead money
+ * (less the share he gives back in a buyout, `giveback`). In the regular season a release that
+ * leaves dead money puts him on waivers for WAIVER_DAYS first: another team can claim his contract
+ * and take that dead money off the books (see resolveWaivers). Bought-out players skip waivers,
+ * and so do preseason cuts and minimum camp deals, which leave no dead money.
+ */
+export function releasePlayer(league: League, p: Player, opts: { news?: boolean; giveback?: number } = {}) {
   const tid = p.tid;
   if (tid < 0) return;
   const team = league.teams[tid];
-  for (const d of releaseDeadMoney(league, p)) team.deadMoney.push({ pid: p.pid, name: playerName(p), ...d });
+  const keep = 1 - (opts.giveback ?? 0);
+  const dead = releaseDeadMoney(league, p)
+    .map((d) => ({ season: d.season, amount: opts.giveback ? Math.round((d.amount * keep) / 10) * 10 : d.amount }))
+    .filter((d) => d.amount > 0);
+  for (const d of dead) team.deadMoney.push({ pid: p.pid, name: playerName(p), ...d });
+  const waive = league.phase === 'regular' && opts.giveback === undefined && dead.length > 0;
+  const contract = p.contract;
   p.tid = FREE_AGENT;
   p.contract = { start: league.season, salaries: [0] };
   leaveTeam(team, p.pid);
   // a free agent like any other: the trade-back rule and the trade lock went with the old contract
   delete p.tradedFrom;
   delete p.tradeLock;
+  if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead };
+  else delete p.waivers;
   p.asking = undefined;
   p.asking = askingContract(league, p);
   p.faDays = FA_PRICE_CUT_DAYS;
-  if (opts.news !== false) addNews(league, { kind: 'release', text: `The ${team.name} released ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
+  if (opts.news !== false) addNews(league, { kind: 'release', text: `The ${team.name} ${waive ? 'waived' : 'released'} ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
+}
+
+// ---------------------------------------------------------------- waivers
+
+/** Players on waivers, soonest to clear first. */
+export function onWaivers(league: League): Player[] {
+  return Object.values(league.players)
+    .filter((p) => p.tid === FREE_AGENT && p.waivers)
+    .sort((a, b) => a.waivers!.until - b.waivers!.until || a.pid - b.pid);
+}
+
+/** This season's salary on the contract a waiver claim takes over. */
+export const waiverSalary = (league: League, p: Player) => (p.waivers ? salaryFor({ contract: p.waivers.contract }, league.season) : 0);
+
+/** Waiver priority: the worst record first (ties by team id). */
+export function waiverOrder(league: League): Team[] {
+  return [...league.teams].sort((a, b) => winPct(curTeamSeason(league, a.tid)) - winPct(curTeamSeason(league, b.tid)) || a.tid - b.tid);
+}
+
+/**
+ * Why team `tid` can't claim him, or null. A claim takes over his contract, so it needs a roster
+ * spot and either cap room for this season's salary or a minimum salary, as a signing would.
+ */
+export function claimBlockedReason(league: League, tid: number, p: Player): string | null {
+  const w = p.waivers;
+  if (!w || p.tid !== FREE_AGENT) return `${playerName(p)} isn't on waivers.`;
+  if (tid === w.from) return "A team can't claim a player it released.";
+  if (tid === league.userTid && league.fired) return FIRED_REASON;
+  if (standardRoster(league, tid).length >= CAP.rosterMax) return `No open roster spot (${CAP.rosterMax}). Release someone first.`;
+  const cap = CAP_FOR(league, league.season);
+  const salary = waiverSalary(league, p);
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  const room = cap.salaryCap - payroll(league, tid, league.season);
+  if (salary > min + 10 && salary > room)
+    return `His ${seasonLabel(league.season)} salary is $${(salary / 1000).toFixed(1)}M: claiming him needs that much cap space (${room > 0 ? `$${(room / 1000).toFixed(1)}M` : 'none'} now).`;
+  return null;
+}
+
+/** An AI team claims a player whose contract is worth having (positive trade value to it) and who'd make its roster: 64+ in value, or anyone when it's short of 13. */
+function aiClaims(league: League, t: Team, p: Player): boolean {
+  if (claimBlockedReason(league, t.tid, p)) return false;
+  if (standardRoster(league, t.tid).length >= CAP.rosterMin && valueScore(league, p) < 64) return false;
+  return tradeValue(league, { ...p, contract: p.waivers!.contract }, t.strategy) > 0;
+}
+
+/** Team `tid` takes over his contract; his old team's dead money for him comes off its books. */
+function claimPlayer(league: League, p: Player, tid: number) {
+  const w = p.waivers!;
+  const old = league.teams[w.from];
+  for (const d of w.dead) {
+    const i = old.deadMoney.findIndex((x) => x.pid === p.pid && x.season === d.season && x.amount === d.amount);
+    if (i >= 0) old.deadMoney.splice(i, 1);
+  }
+  const team = league.teams[tid];
+  p.tid = tid;
+  p.contract = w.contract;
+  p.joinedSeason = league.season;
+  delete p.waivers;
+  p.asking = undefined;
+  p.faDays = undefined;
+  if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
+  addNews(league, { kind: 'signing', text: `The ${team.region} ${team.name} claimed ${playerName(p)} off waivers from the ${old.name}.`, tids: [tid, w.from], pids: [p.pid] });
+}
+
+/**
+ * Players whose waiver days are up go to the first team in waiver order (the worst record first)
+ * that claims them: the user's team when he has put in a claim, an AI team when the contract is
+ * worth having and it fits. The rest clear to free agency. Outside the season everyone clears.
+ */
+export function resolveWaivers(league: League) {
+  const due = onWaivers(league).filter((p) => p.waivers!.until <= league.day || !inSeason(league));
+  if (!due.length) return;
+  const order = waiverOrder(league);
+  const user = league.userTid;
+  for (const p of due) {
+    const w = p.waivers!;
+    const dead = w.dead.reduce((a, d) => a + d.amount, 0);
+    const claimer = inSeason(league)
+      ? order.find((t) => t.tid !== w.from && (t.tid === user ? !!w.claim && !claimBlockedReason(league, user, p) : aiClaims(league, t, p)))
+      : undefined;
+    const name = playerName(p);
+    if (claimer) {
+      // (read before the claim moves him)
+      const yourClaimFailed = w.claim && claimer.tid !== user ? claimBlockedReason(league, user, p) : null;
+      claimPlayer(league, p, claimer.tid);
+      if (w.from === user)
+        addInbox(league, {
+          from: 'Assistant GM',
+          subject: `${name} claimed off waivers`,
+          body: `The ${teamNameOf(league, claimer.tid)} claimed ${name} and took over his contract, so the $${(dead / 1000).toFixed(1)}M in dead money he left comes off our books.`,
+          tone: 'good',
+          link: '/office',
+        });
+      else if (claimer.tid === user)
+        addInbox(league, {
+          from: 'Assistant GM',
+          subject: `${name} claimed`,
+          body: `Our waiver claim on ${name} went through: his contract ($${(salaryFor(p, league.season) / 1000).toFixed(1)}M this season, through ${seasonLabel(contractExp(p.contract))}) is ours, and the ${league.teams[w.from].name} are off the hook for it.`,
+          tone: 'good',
+          link: `/player/${p.pid}`,
+        });
+      else if (w.claim)
+        addInbox(league, {
+          from: 'Assistant GM',
+          subject: `${name} went elsewhere`,
+          body: yourClaimFailed
+            ? `Our claim on ${name} fell through (${yourClaimFailed}) and the ${teamNameOf(league, claimer.tid)} claimed him.`
+            : `The ${teamNameOf(league, claimer.tid)} claimed ${name} ahead of us: worse records come first in the waiver order.`,
+          tone: 'neutral',
+          link: `/player/${p.pid}`,
+        });
+      continue;
+    }
+    delete p.waivers;
+    if (w.from === user || w.claim)
+      addInbox(league, {
+        from: 'Assistant GM',
+        subject: `${name} cleared waivers`,
+        body:
+          w.from === user
+            ? `Nobody claimed ${name}, so he is a free agent and his $${(dead / 1000).toFixed(1)}M stays on our books as dead money.`
+            : `Our claim on ${name} fell through (${claimBlockedReason(league, user, { ...p, waivers: w }) ?? 'the claim no longer fit'}). He is a free agent now.`,
+        tone: 'neutral',
+        link: w.from === user ? '/office' : `/player/${p.pid}`,
+      });
+  }
+}
+
+const teamNameOf = (league: League, tid: number) => `${league.teams[tid].region} ${league.teams[tid].name}`;
+
+/** Put in (or withdraw) the user's claim on a player on waivers; it is decided when he clears, in waiver order. */
+export function userClaim(league: League, pid: number, claim = true): { ok: boolean; reason: string } {
+  const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
+  if (!p?.waivers) return { ok: false, reason: 'He is not on waivers.' };
+  if (!claim) {
+    delete p.waivers.claim;
+    return { ok: true, reason: `Claim on ${playerName(p)} withdrawn.` };
+  }
+  const why = claimBlockedReason(league, league.userTid, p);
+  if (why) return { ok: false, reason: why };
+  p.waivers.claim = true;
+  const days = Math.max(0, p.waivers.until - league.day);
+  return { ok: true, reason: `Claim in on ${playerName(p)}: decided ${days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}, worst record first.` };
+}
+
+// ---------------------------------------------------------------- buyouts
+
+/**
+ * What a buyout would look like: a veteran (28+) with guaranteed money left gives some of it back
+ * to be let go, 0-35%: more when he's unhappy or has asked out, at 32+, or when the team isn't
+ * contending, plus a little that is his own (a hash, so the terms hold still). null when he isn't
+ * a candidate.
+ */
+export function buyoutTerms(league: League, p: Player): { giveback: number; owed: number; saved: number; dead: number } | null {
+  if (p.tid < 0 || p.contract.twoWay || age(league, p) < 28) return null;
+  const owed = releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0);
+  if (owed <= 0) return null;
+  let g = 0.02 + 0.05 * (hashString(`${league.id}:${p.pid}:buyout`) / 4294967296);
+  if (p.mood.tradeRequest) g += 0.15;
+  else if (p.mood.score <= -2) g += 0.1;
+  if (age(league, p) >= 32) g += 0.08;
+  if (league.teams[p.tid].strategy !== 'contend') g += 0.07;
+  const giveback = Math.min(0.35, g);
+  const dead = releaseDeadMoney(league, p).reduce((a, d) => a + Math.round((d.amount * (1 - giveback)) / 10) * 10, 0);
+  return { giveback, owed, saved: owed - dead, dead };
+}
+
+/** Buy out one of the user's veterans: released at once (no waivers), with the dead money cut by what he gives back. */
+export function userBuyout(league: League, pid: number): { ok: boolean; reason: string } {
+  const p = league.players[pid];
+  if (league.fired) return { ok: false, reason: FIRED_REASON };
+  if (!p || p.tid !== league.userTid) return { ok: false, reason: 'Not on your team.' };
+  const blocked = releaseBlockedReason(league, p);
+  if (blocked) return { ok: false, reason: blocked };
+  const terms = buyoutTerms(league, p);
+  if (!terms) return { ok: false, reason: `${playerName(p)} isn't a buyout candidate: buyouts are for veterans (28+) with guaranteed money left.` };
+  const team = league.teams[p.tid];
+  releasePlayer(league, p, { news: false, giveback: terms.giveback });
+  addNews(league, {
+    kind: 'release',
+    text: `The ${team.name} bought out ${playerName(p)}, who gave back $${(terms.saved / 1000).toFixed(1)}M.`,
+    tids: [team.tid],
+    pids: [p.pid],
+  });
+  return {
+    ok: true,
+    reason: `${playerName(p)} takes the buyout: he gives back $${(terms.saved / 1000).toFixed(1)}M, and $${(terms.dead / 1000).toFixed(1)}M stays on your books.`,
+  };
+}
+
+/**
+ * After the trade deadline, rebuilding AI teams may buy out a veteran on an expiring deal (30+,
+ * OVR 70+) so he can join a contender, about half of them, but only from a roster of 15 so it
+ * stays at 14 or more until the weekly fill.
+ */
+export function aiBuyouts(league: League) {
+  for (const t of league.teams) {
+    if (t.tid === league.userTid || t.strategy !== 'rebuild') continue;
+    const roster = standardRoster(league, t.tid);
+    if (roster.length - 1 < 14) continue;
+    const vet = roster.filter((p) => age(league, p) >= 30 && contractExp(p.contract) === league.season && p.ovr >= 70 && buyoutTerms(league, p)).sort((a, b) => b.ovr - a.ovr)[0];
+    if (!vet || !new Rng(hashString(`${league.id}:${league.season}:${league.day}:buyout:${t.tid}`)).chance(0.5)) continue;
+    const terms = buyoutTerms(league, vet)!;
+    releasePlayer(league, vet, { news: false, giveback: terms.giveback });
+    addNews(league, { kind: 'release', text: `The ${t.name} bought out ${playerName(vet)}, who gave back $${(terms.saved / 1000).toFixed(1)}M.`, tids: [t.tid], pids: [vet.pid] });
+  }
 }
 
 // ---------------------------------------------------------------- two-way contracts

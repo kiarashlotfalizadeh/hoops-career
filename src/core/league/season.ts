@@ -35,8 +35,8 @@ import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, se
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
-import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { FIRED_REASON, askingContract, leaveTeam, releasePlayer, resolveOptions } from './contracts';
+import { FA_DAYS, aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, resolveBids, trimRosters } from './freeAgency';
+import { FIRED_REASON, aiBuyouts, askingContract, leaveTeam, releasePlayer, resolveOptions, resolveWaivers } from './contracts';
 import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
@@ -116,6 +116,8 @@ function periodic(league: League, rng: Rng) {
   }
   // front offices reassess as the record takes shape: a contender at 10-30 starts selling
   if (d === 30 || d === 60 || d === league.tradeDeadlineDay - 5) teamStrategyUpdate(league);
+  // the day after the deadline, rebuilders let some veterans go to contenders
+  if (d === league.tradeDeadlineDay + 1) aiBuyouts(league);
   aiToAiTrade(league, rng);
   aiProposeToUser(league, rng);
 }
@@ -214,6 +216,8 @@ export function advanceDay(league: League) {
   // "only playing 0 minutes", with a starting five he wasn't in)
   if (!league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
   league.day++;
+  // released players whose days on waivers are up are claimed or clear to free agency
+  resolveWaivers(league);
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
   else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);
@@ -444,24 +448,22 @@ export function startFreeAgency(league: League): boolean {
     trimRosters(league, (p) => releasePlayer(league, p, { news: false }), OFFSEASON_ROSTER_MAX);
     league.phase = 'freeAgency';
     league.faDay = 0;
-    // the market opens on June 30
+    // the market opens on June 30: the user gets the first look, and AI teams move from day 2
     league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 30));
-    faDay(league, rng, 1.2);
   });
   const cap = CAP_FOR(league, league.season + 1);
   const space = cap.salaryCap - payroll(league, league.userTid, league.season + 1);
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Free agency is open',
-    body: `You have ${space > 0 ? `$${(space / 1000).toFixed(1)}M in cap space` : 'no cap space (minimum contracts only)'} for next season. Top free agents sign quickly; offers at or above a player's asking price are accepted immediately.`,
+    body: `You have ${space > 0 ? `$${(space / 1000).toFixed(1)}M in cap space` : 'no cap space (minimum contracts only)'} for next season. You get the first look: AI teams start signing tomorrow. Top free agents weigh competing offers for a day or two; anyone else accepts an offer at or above his asking price on the spot.`,
     tone: 'neutral',
     link: '/free-agents',
   });
   return true;
 }
 
-/** Free agency lasts FA_DAYS days: opening day is day 1 (faDay 0), so the market closes at faDay FA_DAYS - 1. */
-export const FA_DAYS = 30;
+export { FA_DAYS };
 /** The free-agency day the market is on, 1 to FA_DAYS. */
 export const faDayNumber = (league: League) => Math.min(FA_DAYS, league.faDay + 1);
 /** Whether free agency has reached its last day (no more days to advance). */
@@ -474,7 +476,8 @@ export function faAdvance(league: League, days = 1) {
   withRng(league, (rng) => {
     for (let i = 0; i < n; i++) {
       league.day++;
-      faDay(league, rng);
+      // the opening rush comes the day after the user's first look
+      faDay(league, rng, league.faDay === 0 ? 1.2 : 1);
       league.faDay++;
     }
   });
@@ -484,6 +487,9 @@ export function newSeason(league: League): boolean {
   if (league.phase !== 'freeAgency' || league.fired) return false;
   // finish free agency quickly
   if (!faOver(league)) faAdvance(league, FA_DAYS);
+  // offers made on the last day are decided as the market closes
+  resolveBids(league);
+  delete league.faBids;
   const prevSeason = league.season;
   league.season++;
   league.phase = 'preseason';
