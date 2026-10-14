@@ -109,6 +109,7 @@ try {
 
   const routes = [
     '/',
+    '/preview',
     '/roster',
     '/rotation',
     '/tactics',

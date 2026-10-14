@@ -1,6 +1,6 @@
 // Running scheduled games and folding results into the league.
 
-import type { GameResult, League, Player, Rotation, ScheduledGame, Team, TeamSeason, TeamTotals } from '../types';
+import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
@@ -10,6 +10,7 @@ import { gameFinances, updateHype } from './finances';
 import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
 import { consumePlans, effectiveTactics, planFor } from './gamePlans';
+import { confStandings } from './standings';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -252,7 +253,17 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
   return res;
 }
 
+/** Where a team stands in its conference right now. */
+function standingLine(league: League, tid: number): StandingLine {
+  const row = confStandings(league, league.teams[tid].conf).find((r) => r.tid === tid)!;
+  return { rank: row.confRank, gb: row.gb, ...(row.clinched ? { clinched: row.clinched } : {}) };
+}
+
 function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameResult, rng: Rng) {
+  // the user's regular-season games keep where his team stood before and after, for the recap
+  // (taken while this game still counts as unplayed: a stored result isn't written again once saved)
+  const stakesTid = g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid) ? league.userTid : undefined;
+  const before = stakesTid !== undefined ? standingLine(league, stakesTid) : undefined;
   g.played = true;
   // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
   consumePlans(league, g);
@@ -356,6 +367,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   }
   league.games.push(res);
+  if (stakesTid !== undefined && before) res.stakes = { tid: stakesTid, before, after: standingLine(league, stakesTid) };
   // trim play-by-play from older user games
   if (userGame) {
     const userGames = league.games.filter((x) => x.pbp);

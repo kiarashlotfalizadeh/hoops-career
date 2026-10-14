@@ -9,6 +9,7 @@ import { teamRatings } from '../stats';
 import { Card, Empty } from '../components/ui';
 import { ordinal, roundName, useGamesByGid, useQueryParam } from './shared';
 import { standings, type StandingRow } from '../../core/league/standings';
+import { nextUserGame } from '../../core/analysis/preview';
 
 const TYPE_LABEL: Record<string, string> = { playin: 'Play-In', playoffs: 'Playoffs', allstar: 'All-Star' };
 const CUP_SHORT: Record<string, string> = { group: 'Cup', qf: 'Cup QF', sf: 'Cup SF', final: 'Cup Final' };
@@ -68,6 +69,8 @@ export function TeamScheduleList({
   const byGid = useGamesByGid(league);
   const [expanded, setExpanded] = useState(!collapse);
   const ranks = useLeagueMemo(() => new Map(standings(league).map((r) => [r.tid, r])), [league]);
+  // the user's next game opens its preview
+  const nextGid = useLeagueMemo(() => nextUserGame(league)?.gid, [league]);
   const rows = useLeagueMemo(() => {
     const list = league.schedule.filter((g) => g.home === tid || g.away === tid).sort((a, b) => a.day - b.day || a.gid - b.gid);
     let w = 0;
@@ -113,7 +116,7 @@ export function TeamScheduleList({
         const today = !r.g.played && r.g.day === league.day && (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs');
         const opp = league.teams[r.opp];
         const typeLabel = gameTag(league, r.g);
-        const to = r.res ? `/game/${r.g.gid}` : `/team/${r.opp}`;
+        const to = r.res ? `/game/${r.g.gid}` : r.g.gid === nextGid ? `/preview/${r.g.gid}` : `/team/${r.opp}`;
         return (
           <Fragment key={r.g.gid}>
             {showMonth && (
@@ -309,8 +312,10 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
     );
   }
   if (mine) {
+    // the user's next game opens its preview; a later one, Home
+    const next = !g.played && nextUserGame(league)?.gid === g.gid;
     return (
-      <Link to="/" className="lg-sb me">
+      <Link to={next ? `/preview/${g.gid}` : '/'} className="lg-sb me">
         {body}
       </Link>
     );

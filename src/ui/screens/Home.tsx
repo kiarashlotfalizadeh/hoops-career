@@ -18,6 +18,7 @@ import { f1, ordinal, playerSeason, rosterNames, signed, teamRatings } from '../
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
 import { clearPlan, planFor } from '../../core/league/gamePlans';
+import { countdownLabel, matchupPreview } from '../../core/analysis/preview';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -53,6 +54,8 @@ export default function Home() {
   const oppTid = next ? (next.home === league.userTid ? next.away : next.home) : undefined;
   const scout = useLeagueMemo(() => (oppTid !== undefined ? scoutTeam(league, oppTid) : null), [league, oppTid]);
   const plan = oppTid !== undefined && next ? planFor(league, oppTid, next) : null;
+  // countdown, back-to-backs, who's out, the season series and the playoff stakes (no lineups needed: the rotations aren't refreshed here)
+  const pv = useLeagueMemo(() => (next ? matchupPreview(league, next.gid) : null), [league, next]);
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid), [league]);
   const actions = flowActions(league);
   const unread = league.inbox.filter((m) => !m.read).slice(0, 3);
@@ -111,12 +114,17 @@ export default function Home() {
         <Card accent>
           <div className="row between">
             <span className="tag info">
-              {next.type === 'playoffs' ? 'Playoffs' : next.type === 'playin' ? 'Play-In' : next.cup === 'final' ? cup : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`}
+              {pv?.playoff
+                ? pv.playoff.tag
+                : next.type === 'playoffs'
+                  ? 'Playoffs'
+                  : next.type === 'playin'
+                    ? 'Play-In'
+                    : next.cup === 'final'
+                      ? cup
+                      : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`}
             </span>
-            <span className="small dim">
-              {fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-              {next.day === league.day ? ' · Today' : ''}
-            </span>
+            <span className="small dim">{fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
           </div>
           <div className="scorebug" style={{ marginTop: 12 }}>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
@@ -137,6 +145,15 @@ export default function Home() {
               </div>
             </div>
           </div>
+          {pv && (
+            <div className="chips" style={{ justifyContent: 'center', marginTop: 10 }}>
+              <span className="tag info">{countdownLabel(pv.days)}</span>
+              {(pv.playoff?.elimination || pv.playIn?.elimination) && <span className="tag bad">Elimination game</span>}
+              {pv.playoff?.clinch && <span className="tag good">A win takes the series</span>}
+              {pv.us.b2b && <span className="tag warn">{team.abbrev} back-to-back</span>}
+              {pv.them.b2b && <span className="tag warn">{league.teams[oppTid].abbrev} back-to-back</span>}
+            </div>
+          )}
           {next.seriesId &&
             (() => {
               const s = league.playoffs.find((x) => x.id === next.seriesId);
@@ -146,6 +163,46 @@ export default function Home() {
                 </div>
               ) : null;
             })()}
+          {pv && (
+            <div className="col small" style={{ marginTop: 10, gap: 3 }}>
+              {pv.them.won + pv.them.lost > 0 && (
+                <div className="dim2">
+                  {league.teams[oppTid].abbrev}:{' '}
+                  {Math.abs(pv.them.streak) > 1
+                    ? `${pv.them.streak > 0 ? 'won' : 'lost'} ${Math.abs(pv.them.streak)} straight`
+                    : `${pv.them.streak > 0 ? 'won' : 'lost'} their last game`}{' '}
+                  · {pv.them.lastTen} in their last {Math.min(10, pv.them.won + pv.them.lost)}
+                </div>
+              )}
+              {pv.series.games.length > 0 && (
+                <div className="dim2">
+                  Season series {pv.series.won}-{pv.series.lost} · last meeting{' '}
+                  <Link to={`/game/${pv.series.games[pv.series.games.length - 1].gid}`} className="bold" style={{ color: 'var(--accent-text)' }}>
+                    {pv.series.games[pv.series.games.length - 1].won ? 'W' : 'L'} {pv.series.games[pv.series.games.length - 1].us}-
+                    {pv.series.games[pv.series.games.length - 1].them}
+                  </Link>
+                </div>
+              )}
+              {[pv.us, pv.them].map((side) =>
+                side.out.length || side.resting.length ? (
+                  <div key={side.tid}>
+                    <span className="bold">{league.teams[side.tid].abbrev}</span>{' '}
+                    {side.out.length > 0 && (
+                      <>
+                        <span className="bad">out:</span> {side.out.map((p) => `${league.players[p.pid]?.lastName ?? p.name} (${p.games}g)`).join(', ')}
+                      </>
+                    )}
+                    {side.out.length > 0 && side.resting.length > 0 && ' · '}
+                    {side.resting.length > 0 && (
+                      <>
+                        <span className="warn">resting:</span> {side.resting.map((p) => league.players[p.pid]?.lastName ?? p.name).join(', ')}
+                      </>
+                    )}
+                  </div>
+                ) : null,
+              )}
+            </div>
+          )}
           {scout && (
             <div className="col" style={{ marginTop: 12, gap: 6 }}>
               <div className="small upper dim bold">Scouting report</div>
@@ -180,15 +237,21 @@ export default function Home() {
                   </div>
                 </div>
               ) : null}
-              <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650, alignSelf: 'flex-start' }}>
-                Build a game plan in the Tactics Lab →
-              </Link>
+              <div className="row wrap" style={{ gap: 14 }}>
+                <Link to={`/preview/${next.gid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                  Matchup preview →
+                </Link>
+                <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                  Build a game plan in the Tactics Lab →
+                </Link>
+              </div>
             </div>
           )}
           <div className="row" style={{ marginTop: 14 }}>
             {next.day === league.day ? (
               <>
-                <button className="btn primary grow" disabled={simming} onClick={() => nav('/live')}>
+                {/* the pre-game screen comes first (Settings), unless a game is under way */}
+                <button className="btn primary grow" disabled={simming} onClick={() => nav(inProgress || league.settings.pregame === false ? '/live' : `/preview/${next.gid}`)}>
                   <Eye size={18} /> {resume?.label ?? 'Watch & coach'}
                 </button>
                 <button className="btn grow" disabled={simming} onClick={() => void run({ id: 'quick', label: '', cmd: 'quickGame' })}>
@@ -196,9 +259,14 @@ export default function Home() {
                 </button>
               </>
             ) : (
-              <button className="btn primary grow" disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
-                <FastForward size={18} /> Sim to next game
-              </button>
+              <>
+                <button className="btn primary grow" disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
+                  <FastForward size={18} /> Sim to next game
+                </button>
+                <Link to={`/preview/${next.gid}`} className="btn">
+                  Preview
+                </Link>
+              </>
             )}
           </div>
           {resume?.sub && (

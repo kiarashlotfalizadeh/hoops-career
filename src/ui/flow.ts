@@ -27,6 +27,16 @@ export function stillAlive(league: League): boolean {
   return ts.playoffRound >= 1 && !league.playoffs.some((s) => s.winner !== undefined && s.winner !== league.userTid && (s.high === league.userTid || s.low === league.userTid));
 }
 
+/** "vs BOS (12-8)", "@ BOS (series 2-1)": the user's opponent in a game, with its record (or the series in the playoffs). */
+export function opponentText(league: League, g: ScheduledGame): string {
+  const home = g.home === league.userTid;
+  const opp = home ? g.away : g.home;
+  const s = g.type === 'playoffs' ? league.playoffs.find((x) => x.id === g.seriesId) : undefined;
+  const ts = league.teams[opp].seasons.find((x) => x.season === league.season);
+  const rec = s ? `series ${s.high === opp ? `${s.lowWins}-${s.highWins}` : `${s.highWins}-${s.lowWins}`}` : `${ts?.won ?? 0}-${ts?.lost ?? 0}`;
+  return `${home ? 'vs' : '@'} ${league.teams[opp].abbrev} (${rec})`;
+}
+
 /** `onLive`: the Live screen is open, so a game in progress is all the menu offers. */
 export function flowActions(league: League, opts: { onLive?: boolean } = {}): FlowAction[] {
   if (!league.fired) return phaseActions(league, opts);
@@ -74,7 +84,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${live.sim.T[live.userSide].score}-${live.sim.T[1 - live.userSide].score}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
-        a.push({ id: 'live', label: 'Watch & coach live', sub: `${when(league.day)}: your game is today`, primary: true, cmd: 'watchLive' });
+        a.push({ id: 'live', label: 'Watch & coach live', sub: `${opponentText(league, g)} · today`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Quick sim this game', cmd: 'quickGame' });
       } else if (out) {
         // "next game" would never come: it would sim the whole postseason anyway
@@ -86,7 +96,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
           undefined,
         );
         const sub = next
-          ? when(next.day)
+          ? `${when(next.day)} · ${opponentText(league, next)}`
           : league.phase === 'regular'
             ? 'Your regular season is over.'
             : league.phase === 'playin'
