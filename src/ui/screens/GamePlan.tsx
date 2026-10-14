@@ -274,6 +274,8 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
         </Card>
       )}
 
+      {complexity === 'expert' && <HackCard league={league} opp={opp} />}
+
       <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
     </main>
   );
@@ -362,6 +364,70 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
               ★ {data.star !== undefined ? 'The player their offense runs through, by the numbers.' : 'Their best shot creator, by the scouts.'}
             </div>
           )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** The free-throw percentage the engine shoots a player at (from his FT rating). */
+const ftPct = (ft: number) => Math.min(0.95, Math.max(0.3, 0.42 + 0.0052 * ft));
+
+/** Hack-a-player: their poor free-throw shooters to foul on purpose, and the quarter it starts (Expert). */
+function HackCard({ league, opp }: { league: League; opp: number }) {
+  const mutate = useStore.getState().mutate;
+  const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
+  const theirs = useLeagueMemo(() => projectedRotation(league, opp, 10), [league, opp]);
+  const names = rosterNames(theirs);
+  const rows = [...theirs].sort((a, b) => a.ratings.ft - b.ratings.ft).slice(0, 6);
+  const targets = eff.manage.hackTargets ?? [];
+  const fromQ = eff.manage.hackFromQ ?? 1;
+  const set = (pids: number[], q: number) =>
+    mutate((l) => {
+      if (!pids.length) {
+        removePlanItem(l, opp, 'hack');
+        return;
+      }
+      const who = pids.map((pid) => l.players[pid]?.lastName ?? '').join(', ');
+      setPlanItem(l, opp, { id: 'hack', label: `Hack-a-${who}${q > 1 ? ` from Q${q}` : ''}`, group: 'hack', patch: { manage: { hackTargets: pids, hackFromQ: q } } });
+    });
+  return (
+    <Card
+      title="Hack-a-player"
+      right={
+        <Help title="Hack-a-player">
+          Foul a poor free-throw shooter on purpose whenever he's on the floor, from the quarter you pick: two free throws instead of a normal possession (about 1.1 points). Never
+          in the last two minutes of a period, where it costs a free throw and the ball. Their staff benches a player hacked twice in a period when a reserve his size can come in.
+        </Help>
+      }
+    >
+      <div className="col" style={{ gap: 6 }}>
+        {rows.map((p) => {
+          const on = targets.includes(p.pid);
+          const pct = Math.round(ftPct(p.ratings.ft) * 100);
+          return (
+            <button
+              key={p.pid}
+              className={`card tight row ${on ? 'accent' : ''}`}
+              style={{ gap: 8 }}
+              aria-pressed={on}
+              onClick={() => set(on ? targets.filter((x) => x !== p.pid) : [...targets, p.pid], fromQ)}
+            >
+              <span className="bold grow" style={{ textAlign: 'left' }}>
+                {names(p.pid)}
+              </span>
+              <span className={`num small ${pct < 60 ? 'bad' : pct < 70 ? 'warn' : 'dim'}`}>FT {pct}%</span>
+              {on && <Tag tone="warn">Target</Tag>}
+            </button>
+          );
+        })}
+      </div>
+      {targets.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div className="tiny upper dim bold" style={{ marginBottom: 6 }}>
+            Starting
+          </div>
+          <Chips label="Hack from quarter" value={fromQ} onChange={(q: number) => set(targets, q)} options={[1, 2, 3, 4].map((q) => ({ id: q, label: `Q${q}` }))} />
         </div>
       )}
     </Card>
