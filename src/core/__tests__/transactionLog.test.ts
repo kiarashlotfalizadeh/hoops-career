@@ -70,21 +70,27 @@ describe('transaction log', () => {
     l.day = 30;
     const give = standardRoster(l, U)[0];
     const get = standardRoster(l, AI).slice(0, 2);
+    // the user's own first, and a second he got from team 5 earlier
     const pick = l.draftPicks.find((d) => d.tid === U && d.originalTid === U && d.round === 1)!;
-    const t = one(l, () => executeTrade(l, { a: { tid: U, pids: [give.pid], dpids: [pick.dpid] }, b: { tid: AI, pids: get.map((p) => p.pid), dpids: [] } }));
-    const label = `${pick.season} 1st (${l.teams[U].abbrev})`;
-    expect(pickLabel(l, pick)).toBe(label);
+    const via = l.draftPicks.find((d) => d.originalTid === 5 && d.round === 2)!;
+    via.tid = U;
+    const t = one(l, () => executeTrade(l, { a: { tid: U, pids: [give.pid], dpids: [pick.dpid, via.dpid] }, b: { tid: AI, pids: get.map((p) => p.pid), dpids: [] } }));
+    // each pick as the team that sent it held it: its own first plain, the other team's second with where it came from
+    const label = `${pick.season} 1st`;
+    const viaLabel = `${via.season} 2nd (${l.teams[5].abbrev})`;
+    expect(pickLabel(l, pick)).toBe(`${label} (${l.teams[U].abbrev})`);
     expect(t).toMatchObject({ kind: 'trade', season: l.season, day: 30, phase: 'regular', tids: [U, AI], user: true });
     expect(t.sides).toEqual([
-      { tid: U, players: [{ pid: give.pid, name: playerName(give) }], picks: [label] },
+      { tid: U, players: [{ pid: give.pid, name: playerName(give) }], picks: [label, viaLabel] },
       { tid: AI, players: get.map((p) => ({ pid: p.pid, name: playerName(p) })), picks: [] },
     ]);
     const [a, b] = get.map(playerName);
     const [ua, aa] = [l.teams[U].abbrev, l.teams[AI].abbrev];
-    expect(text(l, t, { tid: U })).toBe(`Acquired ${a} and ${b} from ${aa} for ${playerName(give)} and a ${label}`);
-    expect(text(l, t, { tid: AI })).toBe(`Acquired ${playerName(give)} and a ${label} from ${ua} for ${a} and ${b}`);
-    expect(text(l, t, { pid: give.pid })).toBe(`Acquired by ${aa} from ${ua} with a ${label} for ${a} and ${b}`);
-    expect(text(l, t, { pid: get[0].pid })).toBe(`Acquired by ${ua} from ${aa} with ${b} for ${playerName(give)} and a ${label}`);
+    const sent = `${playerName(give)}, a ${label} and a ${viaLabel}`;
+    expect(text(l, t, { tid: U })).toBe(`Acquired ${a} and ${b} from ${aa} for ${sent}`);
+    expect(text(l, t, { tid: AI })).toBe(`Acquired ${sent} from ${ua} for ${a} and ${b}`);
+    expect(text(l, t, { pid: give.pid })).toBe(`Acquired by ${aa} from ${ua} with a ${label} and a ${viaLabel} for ${a} and ${b}`);
+    expect(text(l, t, { pid: get[0].pid })).toBe(`Acquired by ${ua} from ${aa} with ${b} for ${sent}`);
     expect(tradesBetween(l, AI, U)).toEqual([t]);
     expect(teamTxns(l, AI)).toEqual([t]);
     expect(playerTxns(l, get[1].pid)).toEqual([t]);
@@ -101,10 +107,9 @@ describe('transaction log', () => {
     const get = standardRoster(l, AI)[0];
     const pick = l.draftPicks.find((d) => d.tid === AI && d.round === 2)!;
     const names = [playerName(give), playerName(get)];
-    const t = one(l, () => executeTrade(l, { a: { tid: U, pids: [give.pid], dpids: [] }, b: { tid: AI, pids: [get.pid], dpids: [pick.dpid] } }));
-    // (the pick as the user's team holds it now: AI's 2nd)
     const label = pickLabel(l, pick);
-    expect(label).toBe(`${pick.season} 2nd (${l.teams[AI].abbrev})`);
+    const t = one(l, () => executeTrade(l, { a: { tid: U, pids: [give.pid], dpids: [] }, b: { tid: AI, pids: [get.pid], dpids: [pick.dpid] } }));
+    expect(label).toBe(`${pick.season} 2nd`);
     const before = [text(l, t, { tid: U }), text(l, t, { tid: AI }), text(l, t, { pid: give.pid })];
     expect(before[0]).toBe(`Acquired ${names[1]} and a ${label} from ${l.teams[AI].abbrev} for ${names[0]}`);
     const signing = one(l, () => signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l).vetMin, 1));

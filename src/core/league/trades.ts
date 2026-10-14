@@ -659,6 +659,8 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
 }
 
 export function executeTrade(league: League, offer: TradeOffer) {
+  // (logged before anything moves: each pick is named as its sender held it, "2027 1st" for its own)
+  logTrade(league, [offer.a, offer.b], (dpid) => pickLabel(league, findPick(league, dpid)!));
   const move = (pids: number[], to: number) => {
     for (const pid of pids) {
       const p = league.players[pid];
@@ -695,7 +697,6 @@ export function executeTrade(league: League, offer: TradeOffer) {
     tids: [ta.tid, tb.tid],
     pids: [...offer.a.pids, ...offer.b.pids],
   });
-  logTrade(league, [offer.a, offer.b], (dpid) => pickLabel(league, findPick(league, dpid)!));
 }
 
 /** "2027 1st", "2027 2nd #59" once the order is set (overall number), "(BOS)" if acquired, and any protection. */
