@@ -410,6 +410,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   for (const d of dead) team.deadMoney.push({ pid: p.pid, name: playerName(p), ...d });
   const waive = league.phase === 'regular' && opts.giveback === undefined && dead.length > 0;
   const contract = p.contract;
+  const lock = p.tradeLock;
   p.tid = FREE_AGENT;
   p.contract = { start: league.season, salaries: [0] };
   leaveTeam(team, p.pid);
@@ -417,7 +418,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   // a free agent like any other: the trade-back rule and the trade lock went with the old contract
   delete p.tradedFrom;
   delete p.tradeLock;
-  if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead };
+  if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead, ...(lock ? { lock } : {}) };
   else delete p.waivers;
   p.asking = undefined;
   p.asking = askingContract(league, p);
@@ -483,6 +484,11 @@ function claimPlayer(league: League, p: Player, tid: number) {
   p.tid = tid;
   p.contract = w.contract;
   p.joinedSeason = league.season;
+  // the contract comes with its trade lock (a deal signed this season still can't be traded or
+  // extended yet), and a fresh start: whatever soured him on his old team stays there
+  if (w.lock) p.tradeLock = { ...w.lock };
+  p.mood.tradeRequest = false;
+  p.mood.score = Math.max(p.mood.score, 0);
   delete p.waivers;
   p.asking = undefined;
   p.faDays = undefined;
@@ -672,6 +678,8 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   if (exp < s) return { ok: false, reason: 'His contract is up. Re-sign him to a standard deal instead.' };
   const min = (season: number) => (p.experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
   p.contract = { start: s, salaries: Array.from({ length: exp - s + 1 }, (_, i) => min(s + i)), converted: true };
+  // like a minimum signing, it doesn't count against the user's pending free-agent offers (see slackForBids)
+  if (p.tid === league.userTid) for (const b of league.faBids ?? []) if (b.route === 'space' || b.route === 'mle') b.slack = (b.slack ?? 0) + p.contract.salaries[0];
   addNews(league, { kind: 'signing', text: `The ${league.teams[p.tid].name} converted ${playerName(p)} to a standard contract.`, tids: [p.tid], pids: [p.pid] });
   logMove(league, 'convert', p.tid, p, { amount: p.contract.salaries[0], years: p.contract.salaries.length });
   return { ok: true, reason: `${playerName(p)} now holds a standard roster spot.` };

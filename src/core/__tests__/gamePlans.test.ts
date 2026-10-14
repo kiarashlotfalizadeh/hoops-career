@@ -60,6 +60,14 @@ describe('game plans', () => {
     expect(planFor(l, opp)).toBeNull();
   });
 
+  it('a note keeps a plan alive when its last item goes', () => {
+    const l = testLeague();
+    setPlanItem(l, 3, { id: 'cov-hedge', label: 'Hedge', patch: { defense: { pnr: 'hedge' } } });
+    l.gamePlans![3].note = 'Their guards are slow';
+    removePlanItem(l, 3, 'cov-hedge');
+    expect(l.gamePlans?.[3]?.note).toBe('Their guards are slow');
+  });
+
   it('a season plan stays after the game', () => {
     const l = testLeague();
     toGameDay(l);

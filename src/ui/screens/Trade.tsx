@@ -39,6 +39,7 @@ import { TierLine, TradeNotes } from '../trade/common';
 import { CounterSheet } from '../trade/CounterSheet';
 import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
 import { RecentDeals } from '../league/MovesTab';
+import { continueDraft } from '../../core/league/season';
 
 interface Sel {
   pids: number[];
@@ -157,7 +158,11 @@ export default function Trade() {
       useStore.getState().toast(`${abbrev}: ${r.message}`, 'bad');
       return false;
     }
-    useStore.getState().mutate((l) => executeTrade(l, o));
+    useStore.getState().mutate((l) => {
+      executeTrade(l, o);
+      // a pick traded on draft night: the draft moves on to the next team that picks (or yours)
+      if (l.phase === 'draft') continueDraft(l);
+    });
     const names = o.b.pids.map((pid) => league.players[pid].lastName);
     const picks = o.b.dpids.length;
     const arrive = names.length ? ` Welcome ${names.join(', ')}: ${names.length === 1 ? 'he joins' : 'they join'} the end of your rotation.` : '';

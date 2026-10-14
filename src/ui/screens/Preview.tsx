@@ -580,7 +580,9 @@ function PlanCard({ league, game, opp }: { league: League; game: ScheduledGame; 
                   className="btn xs"
                   aria-label={`Add ${c.label} to the game plan`}
                   onClick={() => {
-                    useStore.getState().mutate((l) => setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, evidence: c.why }));
+                    useStore
+                      .getState()
+                      .mutate((l) => setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) }));
                     useStore.getState().toast(`Game plan vs ${t.abbrev}: ${c.label}`, 'good');
                   }}
                 >

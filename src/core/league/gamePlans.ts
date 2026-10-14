@@ -11,7 +11,7 @@ function liveSeries(league: League, opp: number) {
 }
 
 /** A plan still has something in it. */
-const hasContent = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0;
+const hasContent = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0 || !!p.note;
 
 /**
  * The plan that applies against `opp` (in `game`, when given): none once a series plan's series is

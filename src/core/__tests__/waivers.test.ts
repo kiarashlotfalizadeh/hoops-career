@@ -19,6 +19,8 @@ import {
   waiverOrder,
 } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
+import { takeOverTeam } from '../league/owner';
+import { extensionBlockedReason } from '../league/contracts';
 import { contractExp } from '../playerGen';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
@@ -92,6 +94,38 @@ describe('waivers', () => {
     expect(l.teams[claimer].rotation.order).toContain(p.pid);
     expect(deadFor(l, U, p.pid)).toBe(0);
     expect(l.inbox[0].subject).toMatch(/claimed off waivers/);
+  });
+
+  it("a claim takes over the contract's trade lock, and leaves his grievance with his old team", () => {
+    const l = league();
+    const vetMin = CAP_FOR(l).vetMin;
+    const p = shape(l, standardRoster(l, 5)[0], 74, 27, vetMin * 3, 1);
+    // signed this season: he can't be traded until the lock is up, nor extended this season
+    p.tradeLock = { season: l.season, day: l.day + 60 };
+    p.mood.tradeRequest = true;
+    p.mood.score = -7;
+    cutTo(l, U, 14);
+    record(l, U, 1);
+    releasePlayer(l, p);
+    expect(userClaim(l, p.pid).ok).toBe(true);
+    passDays(l, WAIVER_DAYS);
+    expect(p.tid).toBe(U);
+    expect(p.tradeLock).toEqual({ season: l.season, day: l.day + 60 - WAIVER_DAYS });
+    expect(extensionBlockedReason(l, p)).toMatch(/signed this deal this season/);
+    expect(p.mood.tradeRequest).toBe(false);
+    expect(p.mood.score).toBeGreaterThanOrEqual(0);
+  });
+
+  it("taking over another team leaves the old team's waiver claims (and free-agent offers) behind", () => {
+    const l = league();
+    const p = shape(l, standardRoster(l, 5)[0], 70, 26, CAP_FOR(l).vetMin, 2);
+    cutTo(l, U, 14);
+    releasePlayer(l, p);
+    expect(userClaim(l, p.pid).ok).toBe(true);
+    l.faBids = [{ pid: p.pid, amount: 1, years: 1, day: 0, decideDay: 1, route: 'space' }];
+    takeOverTeam(l, 7);
+    expect(p.waivers?.claim).toBeUndefined();
+    expect(l.faBids).toBeUndefined();
   });
 
   it('a contract nobody wants clears to free agency, and its dead money stays', () => {

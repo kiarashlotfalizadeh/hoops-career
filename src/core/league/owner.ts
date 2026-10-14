@@ -28,9 +28,14 @@ export function takeOverTeam(league: League, tid: number) {
   old.tactics = autoTactics({ ...old, tactics: defaultTactics(old.coach.offPhilosophy, old.coach.defPhilosophy) }, teamPlayers(league, old.tid), false);
   league.userTid = tid;
   league.fired = false;
-  // the old team's game plans and the old scouting department's board don't come along
+  // the old team's game plans and the old scouting department's board don't come along, and
+  // nor does its business: pending free-agent offers, waiver claims, trade offers and untouchables
   clearAllPlans(league);
   delete league.draftBoard;
+  delete league.faBids;
+  for (const p of Object.values(league.players)) if (p.waivers?.claim) delete p.waivers.claim;
+  delete league.proposals;
+  delete league.untouchable;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
   league.tenureStart = contractSeason(league);
 }
