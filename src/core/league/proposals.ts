@@ -143,11 +143,17 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
   league.nextProposalId = p.id + 1;
   league.proposals = [...open, p];
   const t = league.teams[p.tid];
-  const until = p.expires === league.day ? 'It stands until the pick is made.' : `It stands until ${fmtDate(league.season, p.expires)}.`;
+  const until =
+    p.kind === 'pick'
+      ? 'It stands until the pick is made.'
+      : p.expires === league.day
+        ? 'It stands until the end of today.'
+        : `It stands until ${fmtDate(league.season, p.expires)}.`;
+  const ask = p.offer.a.pids.length || p.offer.a.dpids.length ? `for ${assetText(league, p.offer.a)}` : 'and want nothing back';
   addInbox(league, {
     from: `${t.region} ${t.name} GM`,
     subject: pitch.subject,
-    body: `${p.note}\nWe'd send ${assetText(league, p.offer.b)} for ${assetText(league, p.offer.a)}. ${until}`,
+    body: `${p.note}\nWe'd send ${assetText(league, p.offer.b)} ${ask}. ${until}`,
     tone: 'neutral',
     link: '/trade?tab=offers',
     proposal: p.id,
