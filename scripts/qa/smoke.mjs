@@ -111,6 +111,7 @@ try {
     '/',
     '/roster',
     '/rotation',
+    '/lineups',
     '/tactics',
     '/lab',
     '/league',

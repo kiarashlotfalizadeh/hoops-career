@@ -27,6 +27,7 @@ const Home = lazyRetry(() => import('./screens/Home'));
 const Roster = lazyRetry(() => import('./screens/Roster'));
 const PlayerView = lazyRetry(() => import('./screens/PlayerView'));
 const Rotation = lazyRetry(() => import('./screens/Rotation'));
+const Lineups = lazyRetry(() => import('./screens/Lineups'));
 const Tactics = lazyRetry(() => import('./screens/Tactics'));
 const TacticsLab = lazyRetry(() => import('./screens/TacticsLab'));
 const Live = lazyRetry(() => import('./screens/Live'));
@@ -250,7 +251,7 @@ function TopBar() {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game'] },
-  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/player'] },
+  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player'] },
   { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab'] },
   { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
   { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
@@ -451,6 +452,7 @@ function GameShell() {
             <Route path="/roster" element={<Roster />} />
             <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
             <Route path="/rotation" element={<Rotation />} />
+            <Route path="/lineups" element={<Lineups />} />
             <Route path="/tactics" element={<Tactics />} />
             <Route path="/lab" element={<TacticsLab />} />
             {/* each visit sets up its own game: "Watch & coach live" from a finished game's card mounts a fresh one */}
