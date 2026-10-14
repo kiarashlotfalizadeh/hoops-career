@@ -1,8 +1,10 @@
 // Scouting numbers as the Scouting tab and the game plan screen show them: league ranks, play types
-// against the league, key players with on/off, and the user's meetings with the team.
+// against the league, key players with on/off, the user's meetings with the team and what its coach
+// has planned for the next one.
 import { Link } from 'react-router-dom';
 import type { League, Settings } from '../../core/types';
 import type { PlayTypeRow, Ranked, ScoutData, ScoutPlayer } from '../../core/analysis/scouting';
+import type { OppPlanItem } from '../../core/ai/opponentPlan';
 import { FINISH_LABEL } from '../../core/sim/log';
 import { IMPACT_TEXT, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { fmtDate } from '../../core/league/helpers';
@@ -163,6 +165,33 @@ export function HeadToHead({ league, d, complexity }: { league: League; d: Scout
           <div className="tiny dim">Points a game, from your side.</div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** "tonight", "tomorrow", "on Nov 3". */
+const gameDayWord = (league: League, day: number) =>
+  day <= league.day ? 'tonight' : day === league.day + 1 ? 'tomorrow' : `on ${fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+
+/**
+ * What the other coach has planned for his next game against you: "Expect from them tonight: hedges
+ * ball screens, denies Brunson the ball", and from Advanced coaching depth the numbers of yours each
+ * answers. Nothing when he hasn't game-planned for it.
+ */
+export function OppPlanNote({ league, items, day }: { league: League; items: readonly OppPlanItem[] | null | undefined; day: number }) {
+  if (!items?.length) return null;
+  const detail = league.settings.complexity !== 'simple';
+  return (
+    <div className="col" style={{ gap: 4 }}>
+      <div className="small">
+        <b>Expect from them {gameDayWord(league, day)}:</b> {items.map((it) => it.text).join(', ')}.
+      </div>
+      {detail &&
+        items.map((it) => (
+          <div key={it.id} className="tiny dim">
+            {it.why}
+          </div>
+        ))}
     </div>
   );
 }

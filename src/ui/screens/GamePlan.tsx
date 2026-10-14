@@ -14,7 +14,8 @@ import { DEF_PRESETS, OFF_PRESETS, STAR_PLAN_META } from '../../core/sim/tactics
 import { FINISH_LABEL } from '../../core/sim/log';
 import { Card, Chips, Empty, Help, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
-import { RankStrip, scoutSource } from '../components/scouting';
+import { OppPlanNote, RankStrip, scoutSource } from '../components/scouting';
+import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { MatchupPlanner } from '../components/MatchupPlanner';
 import { rosterNames } from '../stats';
 import '../components/scouting.css';
@@ -56,6 +57,11 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
   const data = useLeagueMemo(() => scoutData(league, opp), [league, opp]);
   const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
   const cands = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  // what their coach has planned for the next meeting (your counters read his usual tactics)
+  const theirPlan = useLeagueMemo(() => {
+    const g = nextMeeting(league, opp);
+    return g ? aiGamePlan(league, opp, league.userTid, g) : null;
+  }, [league, opp]);
   const stored = league.gamePlans?.[opp];
   const plan = planFor(league, opp);
   const next = meetings(league, opp);
@@ -113,6 +119,11 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
             )}
           </div>
         </div>
+        {theirPlan && next[0] && (
+          <div style={{ marginTop: 10 }}>
+            <OppPlanNote league={league} items={theirPlan.items} day={next[0].day} />
+          </div>
+        )}
         <Link to={`/team/${opp}?tab=scouting`} className="small row" style={{ gap: 2, marginTop: 10, color: 'var(--accent-text)', fontWeight: 650 }}>
           Full scouting report <ChevronRight size={15} />
         </Link>

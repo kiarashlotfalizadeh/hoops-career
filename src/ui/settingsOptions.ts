@@ -6,9 +6,17 @@ import type { Settings } from '../core/types';
 export const LIVE_SPEEDS: { id: number; label: string }[] = [1, 2, 4].map((id) => ({ id, label: `${id}×` }));
 
 export const DIFFICULTY: { id: Settings['difficulty']; label: string; help: string }[] = [
-  { id: 'casual', label: 'Casual', help: 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less.' },
-  { id: 'normal', label: 'Normal', help: 'Fair trades and market-rate contracts.' },
-  { id: 'hard', label: 'Hard', help: 'AI GMs want a 12% premium in trades, and free agents ask you for 12% more.' },
+  { id: 'casual', label: 'Casual', help: 'AI GMs accept trades about 12% below fair value, and free agents ask you for 10% less. Opposing coaches never game-plan against you.' },
+  {
+    id: 'normal',
+    label: 'Normal',
+    help: 'Fair trades and market-rate contracts. Opposing coaches game-plan against what your team does best in about half your games, the better coaches more often.',
+  },
+  {
+    id: 'hard',
+    label: 'Hard',
+    help: 'AI GMs want a 12% premium in trades, and free agents ask you for 12% more. Every opposing coach game-plans against what your team does best.',
+  },
 ];
 
 /** How much of the coaching controls the Tactics screens show. */

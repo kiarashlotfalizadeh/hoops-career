@@ -8,7 +8,8 @@ import { pickLabel } from '../../core/league/trades';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
 import { SCOUT_MIN_GAMES, scoutData } from '../../core/analysis/scouting';
-import { HeadToHead, KeyPlayers, PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
+import { HeadToHead, KeyPlayers, OppPlanNote, PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
+import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
@@ -618,6 +619,11 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
 function ScoutingTab({ league, tid }: { league: League; tid: number }) {
   const rep = useLeagueMemo(() => scoutTeam(league, tid), [league, tid]);
   const data = useLeagueMemo(() => scoutData(league, tid), [league, tid]);
+  // what their coach has planned for the next game against you, when he game-plans for it
+  const next = useLeagueMemo(() => {
+    const g = tid === league.userTid ? undefined : nextMeeting(league, tid);
+    return g ? { day: g.day, plan: aiGamePlan(league, tid, league.userTid, g) } : null;
+  }, [league, tid]);
   const [ptSide, setPtSide] = useState<'off' | 'def'>('off');
   const isUser = tid === league.userTid;
   const complexity = league.settings.complexity;
@@ -629,6 +635,11 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           {isUser ? 'How opponents see you' : 'Scouting report'}
         </div>
         <div style={{ marginTop: 6, fontSize: 15, lineHeight: 1.45 }}>{rep.summary}</div>
+        {next?.plan && (
+          <div style={{ marginTop: 10 }}>
+            <OppPlanNote league={league} items={next.plan.items} day={next.day} />
+          </div>
+        )}
         {!isUser && (
           <>
             <Link to={`/gameplan/${tid}`} className="btn primary sm" style={{ marginTop: 12 }}>
