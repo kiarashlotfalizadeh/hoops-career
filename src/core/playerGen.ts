@@ -256,15 +256,23 @@ export function playerAge(p: Pick<Player, 'bornYear'>, season: number) {
   return season - p.bornYear;
 }
 
+/** Salary for a season, a signed extension's included. */
 export function salaryFor(p: Pick<Player, 'contract'>, season: number): number {
   const c = p.contract;
   const i = season - c.start;
-  if (i < 0 || i >= c.salaries.length) return 0;
-  return c.salaries[i];
+  if (i < 0) return 0;
+  if (i < c.salaries.length) return c.salaries[i];
+  return c.next?.salaries[i - c.salaries.length] ?? 0;
 }
 
+/** Last season he is signed for, a signed extension's included. */
 export function contractExp(c: Contract): number {
-  return c.start + c.salaries.length - 1;
+  return c.start + c.salaries.length - 1 + (c.next?.salaries.length ?? 0);
+}
+
+/** First season of a signed extension (the season after the current deal's last), or null. */
+export function extensionStart(c: Contract): number | null {
+  return c.next ? c.start + c.salaries.length : null;
 }
 
 export function refreshPlayerDerived(p: Player, season: number, scale: OvrScale) {

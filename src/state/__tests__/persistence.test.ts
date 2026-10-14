@@ -6,6 +6,7 @@ import { deleteLeague, isLeague, listLeagues, loadLeague, migrate, onRemoteChang
 import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { FRANCHISES } from '../../core/teams';
+import { contractExp, salaryFor } from '../../core/playerGen';
 import type { League } from '../../core/types';
 import { testLeague, userGames } from './fixtures';
 
@@ -197,6 +198,20 @@ describe('reading a league', () => {
     expect(back.teams[0].colors).toEqual(real);
     expect(back.teams[1].colors).toEqual(FRANCHISES[1].colors);
     expect(back.teams[2].colors).toEqual(FRANCHISES[2].colors);
+  });
+
+  it('reads a save from before contract extensions: its contracts, without `next`, pay and run out as they did', () => {
+    const l = testLeague('before extensions');
+    const old = JSON.parse(JSON.stringify({ ...l, version: 2 })) as League;
+    for (const p of Object.values(old.players)) delete p.contract.next;
+    const back = migrate(old);
+    expect(back.version).toBe(SAVE_VERSION);
+    for (const p of Object.values(back.players).filter((x) => x.tid >= 0)) {
+      const c = p.contract;
+      expect(contractExp(c)).toBe(c.start + c.salaries.length - 1);
+      expect(salaryFor(p, c.start)).toBe(c.salaries[0]);
+      expect(salaryFor(p, contractExp(c) + 1)).toBe(0);
+    }
   });
 
   it('accepts real and fictional leagues, as saved or as backup files', () => {

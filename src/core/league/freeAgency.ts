@@ -1,6 +1,6 @@
 import type { League, Player, Team } from '../types';
 import { FREE_AGENT } from '../types';
-import { Rng } from '../random';
+import { Rng, hashString } from '../random';
 import { CAP } from '../constants';
 import { contractExp, playerAge } from '../playerGen';
 import {
@@ -23,6 +23,10 @@ import {
   MLE_YEARS,
   type Ask,
   askingContract,
+  extendContract,
+  extensionAsk,
+  extensionClosedReason,
+  extensionRefusal,
   leaveTeam,
   marketSalary,
   mleRoom,
@@ -45,11 +49,22 @@ export function expiringPlayers(league: League, tid: number): Player[] {
 }
 
 /**
+ * The payroll an AI team will go to for keeping a player worth `v`. It follows the strategy:
+ * contenders go a little past the tax, retooling teams stop halfway between cap and tax,
+ * rebuilders near the cap. A player worth 82+ stretches it to the tax (8% past it for a contender,
+ * or for anyone's franchise player at 86+).
+ */
+function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number): number {
+  if (v >= 86 || (v >= 82 && t.strategy === 'contend')) return cap.luxuryTax * 1.08;
+  if (t.strategy === 'contend') return cap.luxuryTax * 1.02;
+  if (v >= 82) return cap.luxuryTax;
+  return t.strategy === 'retool' ? (cap.salaryCap + cap.luxuryTax) / 2 : cap.salaryCap * 1.05;
+}
+
+/**
  * The expiring players an AI team would keep (if they agree, see `agrees`) and what each asks,
- * best first. Payroll budgets follow the strategy: contenders go a little past the tax, retooling
- * teams stop halfway between cap and tax, rebuilders near the cap. A player worth 82+ stretches
- * the budget to the tax (8% past it for a contender, or for anyone's franchise player at 86+).
- * Once 13 players are committed, only core players (the top 8) are kept.
+ * best first, within its payroll budget (see payrollBudget). Once 13 players are committed, only
+ * core players (the top 8) are kept.
  */
 function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = () => true): { p: Player; ask: Ask }[] {
   const next = league.season + 1;
@@ -63,16 +78,7 @@ function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = ()
     if (contractExp(p.contract) > league.season) continue;
     const v = valueScore(league, p);
     const ask = askingContract(league, p, t.tid);
-    const budget =
-      v >= 86 || (v >= 82 && t.strategy === 'contend')
-        ? cap.luxuryTax * 1.08
-        : t.strategy === 'contend'
-          ? cap.luxuryTax * 1.02
-          : v >= 82
-            ? cap.luxuryTax
-            : t.strategy === 'retool'
-              ? (cap.salaryCap + cap.luxuryTax) / 2
-              : cap.salaryCap * 1.05;
+    const budget = payrollBudget(cap, t, v);
     const worth = v >= 70 || (v >= 66 && committed < 11);
     const needed = core.has(p.pid) || committed < 13;
     // coming off a rookie deal he is a restricted free agent: only a trade request gets him out
@@ -92,6 +98,34 @@ export function aiResign(league: League, rng: Rng) {
     if (t.tid === league.userTid) continue;
     const plan = resignPlan(league, t, (p) => rng.chance(valueScore(league, p) >= 82 ? 0.95 : 0.85));
     for (const { p, ask } of plan) signPlayer(league, p, t.tid, ask.amount, ask.years, { start: league.season + 1 });
+  }
+}
+
+/** Share of AI players worth extending who get extended on opening night; the rest go through re-signing in the summer. */
+const AI_EXTENSION_SHARE = 0.6;
+
+/**
+ * Opening night: AI teams extend players worth 76+ in the final season of their deals who are
+ * willing (see extensionRefusal) and not past 35 by next season, best first, at their asking price
+ * within the payroll budget for next season that re-signing uses. About 60% are, by a roll per
+ * player and season that leaves the league's random stream alone.
+ */
+export function aiExtensions(league: League) {
+  const next = league.season + 1;
+  const cap = CAP_FOR(league, next);
+  for (const t of league.teams) {
+    if (t.tid === league.userTid) continue;
+    let pay = payroll(league, t.tid, next);
+    const candidates = teamPlayers(league, t.tid)
+      .filter((p) => valueScore(league, p) >= 76 && playerAge(p, next) <= 35 && !extensionClosedReason(league, p) && !extensionRefusal(league, p))
+      .sort((a, b) => valueScore(league, b) - valueScore(league, a));
+    for (const p of candidates) {
+      if (new Rng(hashString(`${league.id}:${league.season}:aiExtension:${p.pid}`)).next() >= AI_EXTENSION_SHARE) continue;
+      const ask = extensionAsk(league, p);
+      if (pay + ask.amount >= payrollBudget(cap, t, valueScore(league, p))) continue;
+      extendContract(league, p, ask.amount, ask.years);
+      pay += ask.amount;
+    }
   }
 }
 

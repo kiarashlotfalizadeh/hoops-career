@@ -4,9 +4,9 @@
 
 import type { League, Player, Team } from '../types';
 import { FREE_AGENT } from '../types';
-import { CAP, ROOKIE_SCALE } from '../constants';
-import { Rng, clamp } from '../random';
-import { contractExp, salaryFor } from '../playerGen';
+import { CAP, ROOKIE_SCALE, seasonLabel } from '../constants';
+import { Rng, clamp, hashString } from '../random';
+import { contractExp, extensionStart, salaryFor } from '../playerGen';
 import {
   CAP_FOR,
   addInbox,
@@ -76,13 +76,20 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
   if (s > 85) v *= 1 + (s - 85) * 0.05;
   // the part of this season he'll miss matters most to a team playing for now
   v *= 1 - injuryShare(league, p) * (strategy === 'contend' ? 0.55 : strategy === 'retool' ? 0.3 : 0.1);
-  // contract surplus/burden over the seasons still to be paid (next season's books in the offseason)
+  // contract surplus/burden season by season over up to four still to be paid (from next season's
+  // books in the offseason), a signed extension's included. A later salary counts in this season's
+  // money: the cap, and what he'd earn on the market, grow every season.
   const cs = contractSeason(league);
-  const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
-  const surplus = (marketSalary(league, p) - salaryFor(p, cs)) / 1000;
+  const exp = contractExp(p.contract);
+  const market = marketSalary(league, p);
   // an undecided team option (the last year) can be declined, so it never counts as a burden
-  const optionYear = teamOptionOpen(league, p) && yrs <= 4;
-  return v + surplus * (optionYear && surplus < 0 ? yrs - 1 : Math.min(yrs, 4)) * SURPLUS_VALUE[strategy];
+  const optionSeason = teamOptionOpen(league, p) ? exp : null;
+  let surplus = 0;
+  for (let s = cs; s < cs + Math.min(4, Math.max(1, exp - cs + 1)); s++) {
+    const x = (market - (salaryFor(p, s) * revenueScale(league, cs)) / revenueScale(league, s)) / 1000;
+    if (s !== optionSeason || x >= 0) surplus += x;
+  }
+  return v + surplus * SURPLUS_VALUE[strategy];
 }
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
@@ -491,4 +498,142 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
       link: '/office',
     });
   }
+}
+
+// ---------------------------------------------------------------- extensions
+
+/** Longest extension a player signs: five seasons coming off his rookie-scale deal, four for anyone else. */
+export const extensionMaxYears = (p: Player) => (rookieScaleDeal(p) ? 5 : 4);
+
+/** Phases extensions are signed in: from the re-signing period through the regular season. */
+const EXTENSION_PHASES: League['phase'][] = ['resign', 'freeAgency', 'preseason', 'regular'];
+
+/**
+ * Why no team could extend this player now, or null: only in the final season of a standard deal
+ * (next season's from the re-signing period until opening night) that he didn't sign this season,
+ * once any option on it is decided, never twice, and not while he wants out. Whether he'd talk is
+ * extensionRefusal's call.
+ */
+export function extensionClosedReason(league: League, p: Player): string | null {
+  if (!EXTENSION_PHASES.includes(league.phase))
+    return league.phase === 'playin' || league.phase === 'playoffs'
+      ? 'No extensions during the postseason: they reopen with the re-signing period after the draft.'
+      : 'Extensions reopen with the re-signing period after the draft.';
+  const c = p.contract;
+  if (p.tid < 0) return `${playerName(p)} isn't under contract.`;
+  if (c.twoWay) return "Two-way deals can't be extended: convert him to a standard contract first.";
+  const exp = contractExp(c);
+  if (c.next) return `${playerName(p)} is already extended through ${seasonLabel(exp)}.`;
+  const cs = contractSeason(league);
+  if (exp < cs) return 'His contract is up: re-sign him in the re-signing period instead.';
+  if (exp > cs) return `Extensions open in the final season of his deal (${seasonLabel(exp)}).`;
+  // a signing carries a trade lock for its first season; the seed's deals all start in the
+  // league's first season, but weren't signed in it
+  if (c.start === cs && p.tradeLock?.season === cs) return `${playerName(p)} signed this deal this season: it can't be extended.`;
+  if (pendingOption(league, p)) return `Decide his ${pendingOption(league, p)} option on ${seasonLabel(exp)} first.`;
+  if (p.mood.tradeRequest) return `${playerName(p)} wants a trade: he won't sign an extension.`;
+  return null;
+}
+
+/** Why the user can't extend this player now, or null (see extensionClosedReason; his answer is extensionRefusal's). */
+export function extensionBlockedReason(league: League, p: Player): string | null {
+  if (league.fired) return FIRED_REASON;
+  if (p.tid !== league.userTid) return 'Only your own players can be extended.';
+  return extensionClosedReason(league, p);
+}
+
+/**
+ * What he asks to extend: his market value in the money of the extension's first season (the cap
+ * grows every season), ~5% less for the security when he's coming off his rookie-scale deal or is
+ * 31 or older, 5% more for a young star (27 or under, worth 82+) who knows what he'd get, then
+ * moved by the difficulty and his liking for the team like any asking price. The length is the one
+ * he'd want on the market, at most extensionMaxYears. Between that season's minimum and max for
+ * his years in the league now (like a re-signing, the max doesn't count seasons still to play).
+ */
+export function extensionAsk(league: League, p: Player): Ask {
+  const start = contractExp(p.contract) + 1;
+  const cap = CAP_FOR(league, start);
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  const years = Math.min(extensionMaxYears(p), preferredYears(league, p));
+  let amount = (marketSalary(league, p) * revenueScale(league, start)) / revenueScale(league, contractSeason(league));
+  if (amount <= min) return { amount: min, years };
+  const a = age(league, p);
+  if (rookieScaleDeal(p) || a >= 31) amount *= 0.95;
+  else if (a <= 27 && valueScore(league, p) >= 82) amount *= 1.05;
+  const diff = league.settings.difficulty;
+  if (p.tid === league.userTid) amount *= diff === 'casual' ? 0.9 : diff === 'hard' ? 1.12 : 1;
+  if (p.tid >= 0) amount /= teamAppeal(league, p.tid, p);
+  return { amount: clamp(Math.round(amount / 50) * 50, min, cap.maxContract(p.experience)), years };
+}
+
+/**
+ * Why he won't extend at any price, or null. An unhappy player waits for the market, and so may a
+ * star (worth 80+) on a team he doesn't fancy (interest under 0.94: the less he likes it, the
+ * likelier) unless he's coming off his rookie-scale deal, when his team could match any offer. The
+ * star's call is one roll per contract season, so asking again gets the same answer until his
+ * interest changes.
+ */
+export function extensionRefusal(league: League, p: Player): string | null {
+  // (unhappy and furious moods: below "content")
+  if (p.mood.score < -2) return `${playerName(p)} is unhappy here: he won't talk about an extension.`;
+  if (p.tid < 0 || rookieScaleDeal(p) || valueScore(league, p) < 80) return null;
+  const appeal = teamAppeal(league, p.tid, p);
+  if (appeal >= 0.94) return null;
+  const roll = new Rng(hashString(`${league.id}:${contractSeason(league)}:extension:${p.pid}`)).next();
+  return roll < 0.5 + (0.94 - appeal) * 2.5 ? `${playerName(p)} wants to test free agency when his deal is up.` : null;
+}
+
+/** Would he sign this extension? As with willSign, each year away from the length he wants adds ~3% to his price. */
+export function willExtend(league: League, p: Player, amount: number, years: number): { ok: boolean; reason: string } {
+  const no = extensionRefusal(league, p);
+  if (no) return { ok: false, reason: no };
+  const maxYears = extensionMaxYears(p);
+  if (years < 1 || years > maxYears) return { ok: false, reason: `His extension can run 1 to ${maxYears} years.` };
+  const ask = extensionAsk(league, p);
+  const need = ask.amount * (1 + Math.abs(years - ask.years) * 0.03);
+  if (amount >= need - 1) return { ok: true, reason: 'Deal!' };
+  return {
+    ok: false,
+    reason: `Asking for about $${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're $${((need - amount) / 1000).toFixed(1)}M short).`,
+  };
+}
+
+/**
+ * Sign an extension: `years` seasons from the one after his deal ends, with 5% raises. Any option
+ * on the deal is picked up (it would read as the extension's last season), and like a signing he
+ * can't be traded until December 15, or three months on in season.
+ */
+export function extendContract(league: League, p: Player, amount: number, years: number) {
+  const start = contractExp(p.contract) + 1;
+  p.contract.next = { salaries: makeContract(league, amount, years, start, p.experience).salaries };
+  delete p.contract.option;
+  p.tradeLock = league.phase === 'regular' ? { season: league.season, day: Math.max(DEC_15, league.day + 90) } : { season: contractSeason(league), day: DEC_15 };
+  const team = league.teams[p.tid];
+  addNews(league, {
+    kind: 'signing',
+    text: `${playerName(p)} signed a ${years}-year, $${(p.contract.next.salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M extension with the ${team.region} ${team.name}.`,
+    tids: [p.tid],
+    pids: [p.pid],
+  });
+}
+
+/** The user extends one of his players (see extensionBlockedReason and willExtend). */
+export function userExtend(league: League, pid: number, amount: number, years: number): { ok: boolean; reason: string } {
+  const p = league.players[pid];
+  if (!p) return { ok: false, reason: 'Player not found.' };
+  const blocked = extensionBlockedReason(league, p);
+  if (blocked) return { ok: false, reason: blocked };
+  const res = willExtend(league, p, amount, years);
+  if (!res.ok) return res;
+  extendContract(league, p, amount, years);
+  const salaries = p.contract.next!.salaries;
+  const start = extensionStart(p.contract)!;
+  addInbox(league, {
+    from: 'Assistant GM',
+    subject: `${playerName(p)} signs a ${years}-year, $${(salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M extension`,
+    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at $${(salaries[0] / 1000).toFixed(1)}M with 5% annual raises, and counts against that season's cap; his current salary doesn't change.`,
+    tone: 'good',
+    link: `/player/${p.pid}`,
+  });
+  return { ok: true, reason: `${playerName(p)} signs his extension!` };
 }

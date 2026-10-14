@@ -58,6 +58,11 @@ export interface Contract {
   twoWay?: boolean;
   /** A two-way deal converted to a standard one: the same contract, not a new signing. */
   converted?: boolean;
+  /**
+   * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
+   * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
+   */
+  next?: { salaries: number[] };
 }
 
 export interface Injury {

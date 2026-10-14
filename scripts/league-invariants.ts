@@ -14,7 +14,7 @@ import { cupTables } from '../src/core/league/cup';
 import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
 import { validateTrade } from '../src/core/league/trades';
-import { contractExp, salaryFor } from '../src/core/playerGen';
+import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
 import type { League } from '../src/core/types';
@@ -79,6 +79,22 @@ function check() {
         bad('contract outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
       if ((ph === 'preseason' || ph === 'regular') && p.draft.round > 0 && p.draft.year === season - 1 && p.experience !== 0)
         bad('rookie experience != 0', `${nm(p.pid)} exp ${p.experience}`);
+    }
+    // a signed extension: a standard deal's, starting after this season (newSeason makes it the contract), within the min and max of its first season
+    const next = p.contract.next;
+    if (next) {
+      const start = extensionStart(p.contract)!;
+      const cap = H.CAP_FOR(L, start);
+      if (p.tid < 0 || p.contract.twoWay) bad('extension off a standard roster deal', `${nm(p.pid)} tid ${p.tid} ${JSON.stringify(p.contract)}`);
+      if (start <= season) bad('extension not taken over', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
+      if (
+        !next.salaries.length ||
+        next.salaries.length > 5 ||
+        next.salaries.some((x) => !(x > 0)) ||
+        next.salaries[0] > cap.maxContract(p.experience) + 10 ||
+        next.salaries[0] < cap.minContract - 1
+      )
+        bad('extension outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
     }
     if (p.tid === -1 && !(p.asking && p.asking.amount > 0)) bad('FA without asking price', nm(p.pid));
     // generated players get tendencies like the seed's calibrated ones (without them a star plays like a role player)
@@ -342,6 +358,17 @@ function fireAndMove() {
     bad('take-over', `${L.teams[old].abbrev} -> ${L.teams[to].abbrev}, coaching ${coached.join()}`);
 }
 
+/** Preseason: the user extends his best player in a final season who'll talk, at his asking price. */
+function extendBest() {
+  const p = H.teamPlayers(L, L.userTid)
+    .filter((x) => !C.extensionBlockedReason(L, x) && !C.extensionRefusal(L, x))
+    .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
+  if (!p) return;
+  const ask = C.extensionAsk(L, p);
+  const res = C.userExtend(L, p.pid, ask.amount, ask.years);
+  if (!res.ok || !p.contract.next) bad('extension at his ask refused', `${nm(p.pid)} ${res.reason}`);
+}
+
 function fixUserRoster() {
   const u = L.userTid;
   while (std(u).length > CAP.rosterMax) C.releasePlayer(L, std(u).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
@@ -357,10 +384,12 @@ function fixUserRoster() {
 function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
   for (let s = 0; s < n; s++) {
     fixUserRoster();
+    extendBest();
     check();
     const errs = S.startRegularSeason(L);
     if (errs.length) throw new Error(errs.join('; '));
     check();
+    const extended = Object.values(L.players).filter((p) => p.contract.next).length;
     checkOpeningNight();
     checkCalendar(!(opts.realCalendar && s === 0));
     // news is capped, so count trades by id as they appear
@@ -403,7 +432,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     check();
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
-      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
+      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, extensions ${extended}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
   }
 }
