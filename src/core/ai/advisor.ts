@@ -12,6 +12,7 @@ import { scoutData } from '../analysis/scouting';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
 import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
+import { defenseLabel, offenseLabel } from '../sim/playbooks';
 
 export interface Threat {
   pid: number;
@@ -58,9 +59,10 @@ const pct = (x: number) => Math.round(x);
 export function scoutTeam(league: League, tid: number): ScoutReport {
   const team = league.teams[tid];
   const { cs, creators, spacing, security } = readRotation(league, tid);
-  const off = OFF_PRESETS.find((x) => x.id === team.tactics.offPreset);
-  const def = DEF_PRESETS.find((x) => x.id === team.tactics.defPreset);
   const t = team.tactics;
+  // a playbook whose sliders have moved reads "Custom (Balanced base)", not the preset's name
+  const offName = offenseLabel(t);
+  const defName = defenseLabel(t);
   const shooters = [...cs].sort((a, b) => b.c.c3 - a.c.c3);
   const protector = [...cs].sort((a, b) => b.c.rimProt - a.c.rimProt)[0];
   const offense: string[] = [];
@@ -68,7 +70,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   // with enough games, what the numbers show comes first, then what the playbook and roster suggest
   const data = scoutData(league, tid);
   const weaknesses: string[] = data.enough ? [...data.exploits] : [];
-  offense.push(`Runs ${off?.name ?? 'a balanced attack'} at a ${t.offense.pace >= 65 ? 'fast' : t.offense.pace <= 35 ? 'slow' : 'moderate'} pace.`);
+  offense.push(`Runs ${offName} at a ${t.offense.pace >= 65 ? 'fast' : t.offense.pace <= 35 ? 'slow' : 'moderate'} pace.`);
   const topAct = (Object.entries(t.offense.actions) as [ActionType, number][]).sort((a, b) => b[1] - a[1])[0][0];
   offense.push(`Favorite action: ${ACTION_META[topAct].label}.`);
   if (t.offense.threePoint >= 70) offense.push('Lives behind the arc.');
@@ -78,8 +80,8 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   const scheme = SCHEME_META[t.defense.scheme].label;
   defense.push(
     man
-      ? `Plays ${def?.name ?? 'man-to-man'}: ${COVERAGE_META[t.defense.pnr].label.toLowerCase()} coverage on ball screens.`
-      : `Plays ${def && def.name !== scheme ? `${def.name} in a ${scheme}` : scheme}, so there is no ball-screen coverage to attack.`,
+      ? `Plays ${defName}: ${COVERAGE_META[t.defense.pnr].label.toLowerCase()} coverage on ball screens.`
+      : `Plays ${defName !== scheme ? `${defName} in a ${scheme}` : scheme}, so there is no ball-screen coverage to attack.`,
   );
   if (t.defense.press !== 'none') defense.push('Uses a full-court press, so secure ball handlers matter.');
   if (t.defense.help >= 65) defense.push('Helps aggressively off shooters into the paint.');
@@ -107,7 +109,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
     threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter (3PT ${pct(shooters[0].p.ratings.tp)}). Don't leave him open.` });
   if (protector && !threats.some((x) => x.pid === protector.p.pid))
     threats.push({ pid: protector.p.pid, name: playerName(protector.p), why: `Anchors the paint (rim protection ${pct(protector.c.rimProt)}).` });
-  const summary = `${team.region} ${team.name}: ${off?.name ?? 'Balanced'} offense, ${def?.name ?? 'man'} defense. Watch ${threats[0]?.name ?? 'their starters'}.`;
+  const summary = `${team.region} ${team.name}: ${offName} offense, ${defName} defense. Watch ${threats[0]?.name ?? 'their starters'}.`;
   return { tid, summary, offense, defense, threats, weaknesses };
 }
 

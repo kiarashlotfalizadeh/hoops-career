@@ -13,6 +13,7 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Ovr } from '../components/ui';
 import { STRATEGY_META, capSeason, fmtM, fmtMs } from './common';
+import { continueDraft } from '../../core/league/season';
 
 const KIND_LABEL: Record<Proposal['kind'], string> = { buy: 'Wants your player', sell: 'Selling', dump: 'Salary dump', pick: 'Wants your pick' };
 
@@ -58,6 +59,8 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
     let r = { ok: false, reason: '' };
     useStore.getState().mutate((l) => {
       r = acceptProposal(l, p.id);
+      // a pick traded on draft night: the draft moves on to the next team that picks (or yours)
+      if (r.ok && l.phase === 'draft') continueDraft(l);
     });
     useStore.getState().toast(r.reason, r.ok ? 'good' : 'bad');
   };

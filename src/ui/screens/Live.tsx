@@ -10,7 +10,7 @@ import { Card, Empty, PageHeader, Sheet } from '../components/ui';
 import { composites } from '../../core/ratings';
 import type { League, PbpEntry, Settings, Tactics } from '../../core/types';
 import type { PossLog } from '../../core/sim/log';
-import { buildSimInput } from '../../core/league/games';
+import { buildSimInput, userGameOnDay } from '../../core/league/games';
 import { planFor } from '../../core/league/gamePlans';
 import { cloneTactics } from '../../core/sim/tactics';
 import { keptTactics } from '../live/keep';
@@ -32,6 +32,7 @@ import { BoxPanel } from '../live/BoxPanel';
 import { SubsPanel } from '../live/SubsPanel';
 import { OppPlayer } from '../live/OppPlayer';
 import '../live/live.css';
+import { GameRecap } from '../components/GameRecap';
 
 const FEED_MAX = 80;
 /** Key plays mode: the pause between possessions it doesn't draw (at 1×). */
@@ -596,7 +597,11 @@ export default function Live() {
   const nextGame = async () => {
     if (nextAction?.sim) await useStore.getState().simulate(nextAction.sim);
     // left during the sim: don't set up a live game nobody is watching
-    if (mounted.current) start();
+    if (!mounted.current) return;
+    // with the pre-game screen on, game night starts with the matchup preview
+    const l = useStore.getState().league!;
+    if (l.settings.pregame !== false && userGameOnDay(l, l.day)) nav('/preview', { replace: true });
+    else start();
   };
 
   if (status === 'none') {
@@ -805,6 +810,7 @@ export default function Live() {
               </div>
             </Card>
           )}
+          {status === 'final' && result && <GameRecap res={result} league={league} />}
         </div>
         <div className="col" style={{ gap: 10 }}>
           {status !== 'simmed' && <div className="live-strip-side">{strip}</div>}

@@ -9,6 +9,7 @@ import { seasonLabel } from '../../core/constants';
 import { Card, Empty, PageHeader } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
 import { inAppPath } from '../nav';
+import { continueDraft } from '../../core/league/season';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
   Owner: Crown,
@@ -181,6 +182,8 @@ function OfferButtons({ league, id, onReview }: { league: League; id: number; on
     let r = { ok: false, reason: '' };
     useStore.getState().mutate((l) => {
       r = acceptProposal(l, id);
+      // a pick traded on draft night: the draft moves on to the next team that picks (or yours)
+      if (r.ok && l.phase === 'draft') continueDraft(l);
     });
     useStore.getState().toast(r.reason, r.ok ? 'good' : 'bad');
   };
