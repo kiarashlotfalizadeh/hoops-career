@@ -8,6 +8,7 @@ import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cl
 import { autoTactics } from '../../core/ai/coachAI';
 import { playbookLabel } from '../../core/sim/playbooks';
 import { PresetPicker } from '../components/PresetPicker';
+import { MyPlaybooksCard, PlaybookLine } from '../components/MyPlaybooks';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
@@ -74,7 +75,12 @@ export default function Tactics() {
     <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
       <PageHeader
         title="Tactics"
-        sub={`${playbookLabel(t)}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
+        sub={
+          <>
+            <PlaybookLine />
+            {`${playbookLabel(t)}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
+          </>
+        }
         right={
           <Link to="/lab" className="btn sm">
             <FlaskConical size={16} /> Lab
@@ -89,6 +95,8 @@ export default function Tactics() {
               const tm = l.teams[l.userTid];
               if (on) {
                 tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false);
+                // his refits make it his playbook, not a saved one
+                tm.tactics.playbook = null;
               } else tm.tactics.manual = true;
             })
           }
@@ -139,6 +147,7 @@ export default function Tactics() {
               />
             </Card>
           )}
+          <MyPlaybooksCard />
         </>
       )}
 

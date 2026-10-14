@@ -365,6 +365,30 @@ export interface Tactics {
   defPreset: string;
   /** If false the auto coach can retune tactics for roster fit. */
   manual: boolean;
+  /** The saved playbook (League.playbooks) these tactics were loaded from or saved as, if any. */
+  playbook?: { id: string; name: string } | null;
+}
+
+/**
+ * One of the coach's saved playbooks (League.playbooks, see src/core/sim/playbooks.ts): his tactics
+ * without the game-specific parts (matchups, the star target). Roles, shot freedom and screeners
+ * are kept by player and only come back for players still on the roster.
+ */
+export interface SavedPlaybook {
+  id: string;
+  name: string;
+  /** When it was saved or last overwritten. */
+  saved: { season: number; day: number };
+  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners'>;
+  defense: Omit<DefenseTactics, 'matchups' | 'starTarget'>;
+  manage: GameManagement;
+  offPreset: string;
+  defPreset: string;
+  roles?: Record<number, OffRole>;
+  freedom?: Record<number, ShotFreedom>;
+  screeners?: number[];
+  /** Other parts of the tactics (features newer than this type), kept as they were saved. */
+  extra?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------- teams
@@ -759,6 +783,8 @@ export interface League {
   startSeason: number;
   /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
   gamePlans?: Record<number, GamePlan>;
+  /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */
+  playbooks?: SavedPlaybook[];
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
