@@ -14,8 +14,8 @@ import type { Drawn } from './drawn';
 
 /**
  * The break between periods: the score by quarter, how the teams compare, who's scoring, your
- * players in foul or energy trouble, what has decided the game so far (with one-tap fixes) and
- * their play types running above this season's norm.
+ * players in foul or energy trouble, what has decided the game so far (with one-tap fixes), their
+ * play types running above this season's norm and the game plan their coach brought.
  */
 export function PeriodReport({
   league,
@@ -28,6 +28,7 @@ export function PeriodReport({
   colors,
   apply,
   onStart,
+  oppPlan,
 }: {
   league: League;
   view: Drawn;
@@ -42,6 +43,8 @@ export function PeriodReport({
   colors: [string, string];
   apply: (fn: (t: Tactics) => void) => void;
   onStart: () => void;
+  /** The game plan the other coach brought tonight, if he game-planned. */
+  oppPlan?: readonly { text: string }[];
 }) {
   const report = useMemo(() => buildGameReport(league, view.box, league.userTid, { partial: true, elapsed: view.elapsed, tactics }), [league, view, tactics]);
   const q = view.q;
@@ -147,6 +150,11 @@ export function PeriodReport({
                 </div>
               );
             })}
+          </div>
+        )}
+        {oppPlan && oppPlan.length > 0 && (
+          <div className="small">
+            <span className="dim2">Their game plan:</span> {oppPlan.map((x) => x.text).join(', ')}.
           </div>
         )}
         <div className="tiny dim">

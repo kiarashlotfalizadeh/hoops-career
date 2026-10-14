@@ -7,6 +7,7 @@ import type { Candidate, CandidateResult, LabSide, LabSummary } from '../../core
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
 import { counterCandidates, scoutTeam, tacticsWithCounter } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../../core/league/games';
+import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
@@ -44,11 +45,12 @@ function labGameType(league: League): GameType {
 /**
  * A lab side is built like a real game's: the game plan for this opponent on top of the tactics,
  * injured players kept on the roster so the engine hands their minutes down the bench, morale and
- * wear, rest, and an AI opponent's in-game adjustments.
+ * wear, rest, and an AI opponent's in-game adjustments, with the plan its coach brings to your next
+ * meeting if he game-plans for it.
  */
 function sideFor(league: League, tid: number, opp: number, tactics?: Tactics): LabSide {
   const view = tactics ? { ...league, teams: league.teams.map((t) => (t.tid === tid ? { ...t, tactics } : t)) } : league;
-  const input = buildSimInput(view, tid, league.day, labGameType(league), opp);
+  const input = buildSimInput(view, tid, league.day, labGameType(league), opp, nextMeeting(league, tid === league.userTid ? opp : tid));
   // (the season history is never read by a game: it stays out of the message to the worker)
   return { ...input, team: { ...input.team, seasons: [] } };
 }
@@ -107,6 +109,11 @@ export default function TacticsLab() {
   const user = league.userTid;
   const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
   const plan = planFor(league, opp);
+  // the plan their coach brings to your next meeting, which the lab plays as he will
+  const theirPlan = useLeagueMemo(() => {
+    const g = nextMeeting(league, opp);
+    return g ? aiGamePlan(league, opp, league.userTid, g) : null;
+  }, [league, opp]);
   const noBaseline = mode === 'compare' && !baseline;
 
   useEffect(() => {
@@ -234,6 +241,16 @@ export default function TacticsLab() {
             {plan.items.map((it) => (
               <Tag key={it.id} tone="info">
                 {it.label}
+              </Tag>
+            ))}
+          </div>
+        )}
+        {theirPlan && (
+          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+            <span className="small dim2">{plan ? 'So is their plan for your next game:' : `The ${oppTeam.abbrev} plan for your next game is included:`}</span>
+            {theirPlan.items.map((it) => (
+              <Tag key={it.id} tone="warn">
+                {it.text}
               </Tag>
             ))}
           </div>
