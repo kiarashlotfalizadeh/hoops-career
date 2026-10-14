@@ -75,7 +75,7 @@ export default function TacticsLab() {
   const [params] = useSearchParams();
   const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline(league) : null));
   useEffect(() => clearLabBaseline(), []);
-  const [mode, setMode] = useState<Mode>(baseline ? 'compare' : 'project');
+  const [mode, setMode] = useState<Mode>(baseline ? 'compare' : params.get('mode') === 'counters' ? 'counters' : 'project');
   // a link from before a team switch (or a hand-edited one) can name your own team or none: fall back to the next opponent
   const [opp, setOpp] = useState<number>(() => {
     const asked = Number(params.get('opp') ?? NaN);

@@ -486,3 +486,11 @@ export function matchupPreview(league: League, gid: number): MatchupPreview | nu
 export function countdownLabel(days: number) {
   return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
 }
+
+/** The user's next game: today's if there is one, else the first unplayed one ahead (none outside the season's games). */
+export function nextUserGame(league: League): ScheduledGame | undefined {
+  if (league.phase !== 'regular' && league.phase !== 'playin' && league.phase !== 'playoffs') return undefined;
+  return league.schedule
+    .filter((g) => !g.played && g.day >= league.day && (g.home === league.userTid || g.away === league.userTid))
+    .sort((a, b) => a.day - b.day || a.gid - b.gid)[0];
+}

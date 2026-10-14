@@ -197,6 +197,12 @@ export default function Settings() {
             label="Pause sims for big news"
             help="Long sims stop for a trade request, a month-long injury to one of your top six players, or an owner verdict. Routine news just lands in the inbox."
           />
+          <Toggle
+            on={st.pregame !== false}
+            onChange={(v) => mutate((l) => (l.settings.pregame = v))}
+            label="Pre-game screen"
+            help="Watch & coach on Home opens the matchup preview first: injuries, starting fives, their tendencies and your game plan. The Play menu's Watch & coach live always goes straight to the game."
+          />
         </div>
       </Card>
 
