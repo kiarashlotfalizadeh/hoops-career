@@ -1,11 +1,12 @@
 // Trades: validation (roster size, 125% salary matching when over the cap, cap holds, the Stepien
-// rule), AI valuation with team strategy and difficulty, a "what would make this work?" helper,
-// AI-to-AI deals and occasional AI-initiated offers.
+// rule), AI valuation with team strategy and difficulty, the reasons behind a verdict and the
+// counter-offers an AI team would take instead, a "what would make this work?" helper, value tiers
+// for the trade finder, AI-to-AI deals and occasional AI-initiated offers.
 
-import type { DraftPick, League, Player } from '../types';
+import type { DraftPick, League, Player, Pos } from '../types';
 import { CAP, seasonLabel } from '../constants';
 import { Rng, clamp } from '../random';
-import { contractExp, salaryFor } from '../playerGen';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
 import {
   CAP_FOR,
   TWO_WAY_MAX,
@@ -47,6 +48,62 @@ export interface TradeEval {
   valueOut: number;
   accept: boolean;
   message: string;
+  /** How the AI side's verdict adds up. */
+  parts: VerdictParts;
+  /** The reasons behind the verdict in plain English, the most important first (see tradeNotes). */
+  notes: TradeNote[];
+}
+
+/** A reason behind an AI verdict: `good` helps the deal, `bad` holds it back, `warn` is a caution for you, `info` worth knowing. */
+export interface TradeNote {
+  tone: 'good' | 'bad' | 'warn' | 'info';
+  text: string;
+}
+
+/** One asset in a deal as the judging team sees it. */
+export interface AssetView {
+  kind: 'player' | 'pick';
+  /** pid or dpid */
+  id: number;
+  /** What it counts for in the deal: the team's own view, kept near neutral (see lens). */
+  value: number;
+  /** League-neutral value. */
+  neutral: number;
+  /** The team's strategy's own view, before it is kept near neutral. */
+  own: number;
+  /** Changed hands this season, so it's worth its neutral value to everyone. */
+  flipped: boolean;
+}
+
+/** How one team's verdict on a deal adds up (see judge). */
+export interface VerdictParts {
+  incoming: AssetView[];
+  outgoing: AssetView[];
+  /** Incoming players' value after depth weighting, and the picks' after the pile discount. */
+  playersIn: number;
+  picksIn: number;
+  playersOut: number;
+  picksOut: number;
+  /** Value of the luxury tax and cap room the deal costs (negative: what it saves). */
+  money: number;
+  /** Salary coming in and going out, and cap payroll before and after the deal ($K). */
+  salaryIn: number;
+  salaryOut: number;
+  payBefore: number;
+  payAfter: number;
+  /** Luxury tax the deal adds to the bill ($K; negative: what it saves). */
+  taxCost: number;
+  /** Value of the players the team would have to waive to get down to 15 by opening night, and how many. */
+  cut: number;
+  cuts: number;
+  /** The difficulty's give: positive wants a premium, negative takes a little less than fair. */
+  slack: number;
+  /** More players coming in than going out, so each extra one counts for less; `depthLoss` is the value that took off. */
+  depthApplied: boolean;
+  depthLoss: number;
+  /** Incoming assets that changed hands this season: face value only. */
+  flippedIn: AssetView[];
+  tooManyFirsts: boolean;
 }
 
 const findPick = (league: League, dpid: number) => league.draftPicks.find((d) => d.dpid === dpid);
@@ -151,16 +208,31 @@ function tradedAway(league: League, a: Player | DraftPick, tid: number): NonNull
   return also.length ? { tid, season: league.season, also } : { tid, season: league.season };
 }
 
+/** A player as team `tid` sees him in a deal (with the user unless `aiDeal`). */
+function playerView(league: League, p: Player, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
+  const neutral = tradeValue(league, p, 'retool');
+  const strategy = league.teams[tid].strategy;
+  const own = strategy === 'retool' ? neutral : tradeValue(league, p, strategy);
+  const f = flipped(league, p);
+  return { kind: 'player', id: p.pid, value: f ? neutral : lens(own, neutral, incoming, aiDeal), neutral, own, flipped: f };
+}
+
+/** A draft pick as team `tid` sees it in a deal (with the user unless `aiDeal`). */
+function pickView(league: League, dp: DraftPick, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
+  const neutral = pickValue(league, dp);
+  const own = neutral * PICK_LENS[league.teams[tid].strategy];
+  const f = flipped(league, dp);
+  return { kind: 'pick', id: dp.dpid, value: f ? neutral : lens(own, neutral, incoming, aiDeal), neutral, own, flipped: f };
+}
+
 /** What team `tid` thinks a player is worth in a deal (with the user unless `aiDeal`). */
 export function playerValueFor(league: League, p: Player, tid: number, incoming: boolean, aiDeal = false): number {
-  const neutral = tradeValue(league, p, 'retool');
-  return flipped(league, p) ? neutral : lens(tradeValue(league, p, league.teams[tid].strategy), neutral, incoming, aiDeal);
+  return playerView(league, p, tid, incoming, aiDeal).value;
 }
 
 /** What team `tid` thinks a draft pick is worth in a deal (with the user unless `aiDeal`). */
 export function pickValueFor(league: League, dp: DraftPick, tid: number, incoming: boolean, aiDeal = false): number {
-  const neutral = pickValue(league, dp);
-  return flipped(league, dp) ? neutral : lens(neutral * PICK_LENS[league.teams[tid].strategy], neutral, incoming, aiDeal);
+  return pickView(league, dp, tid, incoming, aiDeal).value;
 }
 
 /** Each extra player in the bigger half of a deal counts for less: depth is worth less than talent. */
@@ -187,22 +259,24 @@ export function capSalary(league: League, pid: number, s = contractSeason(league
 
 const sideSalary = (league: League, side: TradeSide) => side.pids.reduce((a, pid) => a + capSalary(league, pid), 0);
 
-function moneyCost(league: League, tid: number, inSal: number, outSal: number): number {
+/** What a deal's salary does to a team's books: the value of the luxury tax and cap room it adds (or saves), and the dollars behind it. */
+function moneyCost(league: League, tid: number, inSal: number, outSal: number): { value: number; payBefore: number; payAfter: number; taxCost: number } {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
   const before = capPayroll(league, tid, s);
   const after = before + inSal - outSal;
   const tax = (x: number) => Math.max(0, x - cap.luxuryTax) * CAP.taxRate;
   const room = (x: number) => Math.max(0, cap.salaryCap - x);
-  return ((tax(after) - tax(before)) * TAX_VALUE + (room(before) - room(after)) * ROOM_VALUE) / 1000;
+  const taxCost = tax(after) - tax(before);
+  return { value: (taxCost * TAX_VALUE + (room(before) - room(after)) * ROOM_VALUE) / 1000, payBefore: before, payAfter: after, taxCost };
 }
 
-/** In the offseason a roster can run to 21 but only 15 make opening night: the value of the extra players a team would have to waive. */
-function cutCost(league: League, tid: number, out: number[], inc: number[]): number {
-  if (inSeason(league)) return 0;
+/** In the offseason a roster can run to 21 but only 15 make opening night: the value of the extra players a team would have to waive, and how many more it would be. */
+function cutCost(league: League, tid: number, out: number[], inc: number[]): { value: number; count: number } {
+  if (inSeason(league)) return { value: 0, count: 0 };
   const before = tradeRoster(league, tid);
   const after = [...before.filter((p) => !out.includes(p.pid)), ...inc.map((pid) => league.players[pid]).filter((p) => !p.contract.twoWay)];
-  if (after.length <= CAP.rosterMax) return 0;
+  if (after.length <= CAP.rosterMax) return { value: 0, count: 0 };
   const strategy = league.teams[tid].strategy;
   const waived = (roster: Player[]) =>
     roster
@@ -210,7 +284,7 @@ function cutCost(league: League, tid: number, out: number[], inc: number[]): num
       .sort((a, b) => a - b)
       .slice(0, Math.max(0, roster.length - CAP.rosterMax))
       .reduce((a, v) => a + v, 0);
-  return Math.max(0, waived(after) - waived(before));
+  return { value: Math.max(0, waived(after) - waived(before)), count: Math.max(0, after.length - Math.max(CAP.rosterMax, before.length)) };
 }
 
 interface Verdict {
@@ -219,6 +293,7 @@ interface Verdict {
   valueOut: number;
   accept: boolean;
   tooManyFirsts: boolean;
+  parts: VerdictParts;
 }
 
 /**
@@ -230,39 +305,60 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const mine = offer.a.tid === tid ? offer.a : offer.b;
   const other = mine === offer.a ? offer.b : offer.a;
   const aiDeal = offer.a.tid !== league.userTid && offer.b.tid !== league.userTid;
-  const players = (side: TradeSide, incoming: boolean, depth: boolean) =>
-    weighted(
-      side.pids.map((pid) => playerValueFor(league, league.players[pid], tid, incoming, aiDeal)),
-      depth ? DEPTH : null,
-    );
-  const picks = (side: TradeSide, incoming: boolean) =>
-    weighted(
-      side.dpids.flatMap((d) => {
-        const dp = findPick(league, d);
-        return dp ? [pickValueFor(league, dp, tid, incoming, aiDeal)] : [];
-      }),
-      incoming ? PICK_DEPTH : null,
-    );
-  const costs = moneyCost(league, tid, sideSalary(league, other), sideSalary(league, mine)) + cutCost(league, tid, mine.pids, other.pids);
-  const valueIn = players(other, true, other.pids.length > mine.pids.length) + picks(other, true) - costs;
-  const valueOut = players(mine, false, mine.pids.length > other.pids.length) + picks(mine, false);
+  const views = (side: TradeSide, incoming: boolean): AssetView[] => [
+    ...side.pids.map((pid) => playerView(league, league.players[pid], tid, incoming, aiDeal)),
+    ...side.dpids.flatMap((d) => {
+      const dp = findPick(league, d);
+      return dp ? [pickView(league, dp, tid, incoming, aiDeal)] : [];
+    }),
+  ];
+  const incoming = views(other, true);
+  const outgoing = views(mine, false);
+  const values = (xs: AssetView[], kind: AssetView['kind']) => xs.filter((x) => x.kind === kind).map((x) => x.value);
+  const depthApplied = other.pids.length > mine.pids.length;
+  const playersIn = weighted(values(incoming, 'player'), depthApplied ? DEPTH : null);
+  const picksIn = weighted(values(incoming, 'pick'), PICK_DEPTH);
+  const playersOut = weighted(values(outgoing, 'player'), mine.pids.length > other.pids.length ? DEPTH : null);
+  const picksOut = weighted(values(outgoing, 'pick'), null);
+  const salaryIn = sideSalary(league, other);
+  const salaryOut = sideSalary(league, mine);
+  const money = moneyCost(league, tid, salaryIn, salaryOut);
+  const cut = cutCost(league, tid, mine.pids, other.pids);
+  const valueIn = playersIn + picksIn - (money.value + cut.value);
+  const valueOut = playersOut + picksOut;
   let slack = (generosity - 1) * Math.abs(valueOut);
   if (generosity < 1) {
     // a casual GM's discount covers the other side's own assets, not ones it just traded for:
     // passed along from team to team, it compounded 12% a trade (an 84 became a 93 in three hops)
-    const assets = [
-      ...other.pids.map((pid) => ({ a: league.players[pid], v: Math.max(0, playerValueFor(league, league.players[pid], tid, true)) })),
-      ...other.dpids.flatMap((d) => {
-        const dp = findPick(league, d);
-        return dp ? [{ a: dp, v: pickValueFor(league, dp, tid, true) }] : [];
-      }),
-    ];
+    // (what a team takes in is valued the same in any deal: aiDeal only changes what it sends)
+    const assets = incoming.map((x) => ({ v: x.kind === 'player' ? Math.max(0, x.value) : x.value, flipped: x.flipped }));
     const total = assets.reduce((s, x) => s + x.v, 0);
-    if (total > 0) slack *= assets.reduce((s, x) => s + (flipped(league, x.a) ? 0 : x.v), 0) / total;
+    if (total > 0) slack *= assets.reduce((s, x) => s + (x.flipped ? 0 : x.v), 0) / total;
   }
   const delta = valueIn - valueOut - slack;
   const tooManyFirsts = mine.dpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
-  return { delta, valueIn, valueOut, accept: delta >= 0 && !tooManyFirsts, tooManyFirsts };
+  const parts: VerdictParts = {
+    incoming,
+    outgoing,
+    playersIn,
+    picksIn,
+    playersOut,
+    picksOut,
+    money: money.value,
+    salaryIn,
+    salaryOut,
+    payBefore: money.payBefore,
+    payAfter: money.payAfter,
+    taxCost: money.taxCost,
+    cut: cut.value,
+    cuts: cut.count,
+    slack,
+    depthApplied,
+    depthLoss: depthApplied ? weighted(values(incoming, 'player'), null) - playersIn : 0,
+    flippedIn: incoming.filter((x) => x.flipped),
+    tooManyFirsts,
+  };
+  return { delta, valueIn, valueOut, accept: delta >= 0 && !tooManyFirsts, tooManyFirsts, parts };
 }
 
 /** Would this team sign off on the deal (rules aside)? AI-to-AI deals need both teams' yes. */
@@ -432,14 +528,133 @@ function evaluate(league: League, offer: TradeOffer): TradeEval {
   const diff = league.settings.difficulty;
   // casual AIs accept slightly unfavorable deals; hard AIs want a premium
   const generosity = diff === 'casual' ? 0.88 : diff === 'hard' ? 1.12 : 1.0;
-  const { delta, valueIn, valueOut, accept: likes, tooManyFirsts } = judge(league, offer, offer.b.tid, generosity);
+  const { delta, valueIn, valueOut, accept: likes, tooManyFirsts, parts } = judge(league, offer, offer.b.tid, generosity);
   const accept = errors.length === 0 && likes;
   let message: string;
   if (errors.length) message = errors[0];
   else if (tooManyFirsts) message = `No team gives up more than ${MAX_FIRSTS_OUT} first-round picks in one deal.`;
   else if (accept) message = delta > Math.abs(valueOut) * 0.25 ? 'Deal! (They seem eager.)' : 'Deal!';
   else message = `${valueVerdict({ delta, valueOut }).label}.`;
-  return { ok: errors.length === 0, errors, delta, valueIn, valueOut, accept, message };
+  const ev = { ok: errors.length === 0, errors, delta, valueIn, valueOut, accept, message, parts };
+  return { ...ev, notes: tradeNotes(league, offer, ev) };
+}
+
+// ---------------------------------------------------------------- why: notes on a verdict
+
+const STRATEGY_NOUN: Record<Strategy, string> = { contend: 'contender', retool: 'retooling team', rebuild: 'rebuilder' };
+
+const fmtK = (k: number) => `$${(Math.abs(k) / 1000).toFixed(1)}M`;
+
+/**
+ * League-neutral value of what side A gives and gets, weighed the way an AI team weighs a deal:
+ * the bigger half's extra players count for less, and so does a pile of incoming picks.
+ */
+export function neutralBalance(parts: Pick<VerdictParts, 'incoming' | 'outgoing'>, offer: TradeOffer): { give: number; get: number } {
+  // parts are side B's view: what it takes in is what A gives
+  const sum = (xs: AssetView[], depth: boolean, incoming: boolean) =>
+    weighted(
+      xs.filter((x) => x.kind === 'player').map((x) => x.neutral),
+      depth ? DEPTH : null,
+    ) +
+    weighted(
+      xs.filter((x) => x.kind === 'pick').map((x) => x.neutral),
+      incoming ? PICK_DEPTH : null,
+    );
+  return {
+    give: sum(parts.incoming, offer.a.pids.length > offer.b.pids.length, false),
+    get: sum(parts.outgoing, offer.b.pids.length > offer.a.pids.length, true),
+  };
+}
+
+/**
+ * Short plain-English reasons behind side B's verdict, the ones that move it most first: its
+ * strategy's view of the players and picks coming in, the tax and the waivers the deal costs it,
+ * depth for talent, assets that changed hands this season, the two-firsts limit, the difficulty
+ * deciding a close call, and a warning when side A (you) gives up much more neutral value than it
+ * gets: the AI saying yes doesn't make it a good deal. Only what is true of this offer, and big
+ * enough to matter.
+ */
+export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval, 'delta' | 'valueIn' | 'valueOut' | 'accept' | 'parts'>): TradeNote[] {
+  const t = league.teams[offer.b.tid];
+  const x = ev.parts;
+  const notes: { tone: TradeNote['tone']; text: string; weight: number }[] = [];
+  const add = (tone: TradeNote['tone'], text: string, weight: number) => notes.push({ tone, text, weight });
+  // worth a mention: about 3% of the deal, and at least half a point of value (a 60 OVR is worth 1)
+  const scale = Math.max(Math.abs(ev.valueOut), Math.abs(ev.valueIn), x.playersIn + x.picksIn);
+  const matters = (v: number) => Math.abs(v) >= Math.max(0.5, 0.03 * scale);
+  const nameOf = (a: AssetView) => (a.kind === 'player' ? playerName(league.players[a.id]) : `the ${pickLabel(league, findPick(league, a.id)!)}`);
+
+  if (offer.a.tid === league.userTid) {
+    const { give, get } = neutralBalance(x, offer);
+    if (give - get >= Math.max(1, 0.25 * Math.max(0, get))) {
+      const ratio = give / get;
+      add(
+        'warn',
+        get <= 0
+          ? give > 0
+            ? "By neutral value you'd get nothing back for this"
+            : "By neutral value you'd take on a bigger burden than you send"
+          : ratio < 2
+            ? `By neutral value you'd give up about ${Math.round((ratio - 1) * 100)}% more than you get`
+            : ratio < 5
+              ? `By neutral value you'd give up about ${Math.round(ratio)} times what you get`
+              : "By neutral value you'd give up far more than you get",
+        2e9,
+      );
+    }
+  }
+  if (x.tooManyFirsts) add('bad', `No team gives up more than ${MAX_FIRSTS_OUT} first-round picks in one deal`, 1e9);
+
+  // the team's strategy, for what it takes in (what it sends never goes below neutral)
+  if (t.strategy !== 'retool') {
+    const noun = STRATEGY_NOUN[t.strategy];
+    for (const a of x.incoming) {
+      if (a.kind !== 'player' || a.flipped || !matters(a.value - a.neutral)) continue;
+      const p = league.players[a.id];
+      const who = `${playerName(p)} (${playerAge(p, league.season)})`;
+      if (a.value < a.neutral) add('bad', a.neutral > 0 ? `${who} is worth less to a ${noun}` : `${who}'s contract is a bigger burden to a ${noun}`, a.neutral - a.value);
+      else add('good', a.neutral > 0 ? `${who} is worth more to a ${noun}` : `${who}'s contract is less of a burden to a ${noun}`, a.value - a.neutral);
+    }
+    const picks = x.incoming.filter((a) => a.kind === 'pick' && !a.flipped);
+    const lift = picks.reduce((s, a) => s + a.value - a.neutral, 0);
+    if (picks.length && matters(lift)) add(lift > 0 ? 'good' : 'bad', lift > 0 ? 'Picks count extra for them' : "Picks don't help them win now", Math.abs(lift));
+  }
+
+  // face value for anything that changed hands this season: no strategy premium, no casual discount
+  const casual = league.settings.difficulty === 'casual';
+  const flips = x.flippedIn.filter((a) => matters(Math.max(0, Math.min(a.own, a.neutral * 1.15) - a.neutral) + (casual ? 0.12 * Math.max(0, a.neutral) : 0)));
+  if (flips.length) {
+    const names = flips.slice(0, 2).map(nameOf).join(' and ') + (flips.length > 2 ? ` and ${flips.length - 2} more` : '');
+    add(
+      'info',
+      `${names} changed hands this season: face value only`,
+      flips.reduce((s, a) => s + Math.abs(a.neutral) * 0.12, 0),
+    );
+  }
+
+  if (x.depthApplied && matters(x.depthLoss)) add('bad', "Depth doesn't add up to talent for them", x.depthLoss);
+  if (x.cuts > 0 && matters(x.cut)) add('bad', `They'd have to waive ${x.cuts === 1 ? 'a player' : `${x.cuts} players`} to get down to ${CAP.rosterMax}`, x.cut);
+
+  if (matters(x.money)) {
+    const net = x.salaryIn - x.salaryOut;
+    const tax = CAP_FOR(league, contractSeason(league)).luxuryTax;
+    if (x.money > 0)
+      add(
+        'bad',
+        x.taxCost > 0
+          ? `Taking on ${fmtK(net)} ${x.payBefore <= tax ? `puts them ${fmtK(x.payAfter - tax)} into the tax` : `takes them to ${fmtK(x.payAfter - tax)} over the tax line`}`
+          : `Taking on ${fmtK(net)} uses cap room they'd rather keep`,
+        x.money,
+      );
+    else add('good', x.taxCost < 0 ? `Shedding ${fmtK(net)} saves them ${fmtK(x.taxCost)} in luxury tax` : `Shedding ${fmtK(net)} frees up cap room for them`, -x.money);
+  }
+
+  // the difficulty decides a close call
+  const fair = ev.valueIn - ev.valueOut;
+  if (x.slack > 0 && fair >= 0 && ev.delta < 0) add('info', 'Fair value, but on hard they want a premium', x.slack);
+  if (x.slack < 0 && fair < 0 && ev.delta >= 0) add('info', 'A little under fair value: on casual they take it', -x.slack);
+
+  return notes.sort((a, b) => b.weight - a.weight).map(({ tone, text }) => ({ tone, text }));
 }
 
 export function executeTrade(league: League, offer: TradeOffer) {
@@ -565,6 +780,234 @@ function findWork(league: League, offer: TradeOffer): WorkResult {
     cur = (covering[0] && (covering[0].v <= need * 1.5 + 2 || !short.length) ? covering[0] : short[0]).next;
   }
   return evaluateTrade(league, cur).accept ? { offer: cur } : { offer: null, why: 'value' };
+}
+
+// ---------------------------------------------------------------- counter-offers
+
+/** A deal side B would take instead of the one it turned down: side A adds something, B keeps one of its assets, or B sends a bad contract along. */
+export interface CounterOffer {
+  offer: TradeOffer;
+  kind: 'add' | 'remove' | 'absorb';
+  label: string;
+}
+
+/**
+ * Up to `max` versions of a turned-down deal that side B would accept, the best for side A (by
+ * league-neutral value) first: what "what would make this work?" adds from A, the deal without
+ * one of B's assets, and B sending one of its bad contracts for A to absorb (the least burden that
+ * gets it done; else the worst one with whatever else A would have to add). Each one passes the
+ * rules and B's yes as it stands, and moves only assets each side owns. Nothing for a deal B
+ * already takes.
+ */
+export function counterOffers(league: League, offer: TradeOffer, max = 3): CounterOffer[] {
+  return withHoldsMemo(() => findCounters(league, offer, max));
+}
+
+function findCounters(league: League, offer: TradeOffer, max: number): CounterOffer[] {
+  const base = evaluateTrade(league, offer);
+  if (base.accept) return [];
+  const found: { c: CounterOffer; net: number }[] = [];
+  const seen = new Set<string>();
+  const sorted = (xs: number[]) => [...xs].sort((x, y) => x - y);
+  const consider = (o: TradeOffer, kind: CounterOffer['kind'], label: string) => {
+    const key = JSON.stringify([sorted(o.a.pids), sorted(o.a.dpids), sorted(o.b.pids), sorted(o.b.dpids)]);
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (validateTrade(league, o).length) return;
+    const ev = evaluateTrade(league, o);
+    if (!ev.accept) return;
+    const { give, get } = neutralBalance(ev.parts, o);
+    found.push({ c: { offer: o, kind, label }, net: get - give });
+  };
+  const assetName = (kind: 'player' | 'pick', id: number) => (kind === 'player' ? playerName(league.players[id]) : pickLabel(league, findPick(league, id)!));
+  const added = (from: TradeOffer, to: TradeOffer) => [
+    ...to.a.pids.filter((x) => !from.a.pids.includes(x)).map((x) => assetName('player', x)),
+    ...to.a.dpids.filter((x) => !from.a.dpids.includes(x)).map((x) => assetName('pick', x)),
+  ];
+
+  // what they'd need added from A
+  const work = findWork(league, offer);
+  if (work.offer) consider(work.offer, 'add', `Add ${added(offer, work.offer).join(' + ')}`);
+
+  // one of B's assets stays home (unless that leaves A giving something for nothing)
+  const without = (pids: number[], dpids: number[]): TradeOffer => ({ a: offer.a, b: { ...offer.b, pids, dpids } });
+  const aValue = neutralBalance(base.parts, offer).give;
+  const drops: [TradeOffer, string][] = [
+    ...offer.b.pids.map((pid): [TradeOffer, string] => [
+      without(
+        offer.b.pids.filter((x) => x !== pid),
+        offer.b.dpids,
+      ),
+      assetName('player', pid),
+    ]),
+    ...offer.b.dpids.map((d): [TradeOffer, string] => [
+      without(
+        offer.b.pids,
+        offer.b.dpids.filter((x) => x !== d),
+      ),
+      `the ${assetName('pick', d)}`,
+    ]),
+  ];
+  for (const [o, name] of drops) if (o.b.pids.length + o.b.dpids.length > 0 || aValue <= 0) consider(o, 'remove', `Without ${name}`);
+
+  // one of B's bad contracts comes along: the smallest burden that does it, else the worst one plus what A adds
+  const s = contractSeason(league);
+  const bad = standardRoster(league, offer.b.tid)
+    .filter((p) => !offer.b.pids.includes(p.pid) && !untradeable(league, p) && !tradedAwayBy(league, p, offer.a.tid))
+    .map((p) => ({ p, v: playerValueFor(league, p, offer.b.tid, false) }))
+    .filter((x) => x.v < 0)
+    .sort((x, y) => y.v - x.v);
+  const take = (p: Player) => `Take ${playerName(p)}'s contract (${fmtK(salaryFor(p, s))} thru ${seasonLabel(contractExp(p.contract))})`;
+  const withB = (p: Player): TradeOffer => ({ a: offer.a, b: { ...offer.b, pids: [...offer.b.pids, p.pid] } });
+  const n = found.length;
+  for (const { p } of bad) {
+    consider(withB(p), 'absorb', take(p));
+    if (found.length > n) break;
+  }
+  if (found.length === n && bad.length) {
+    const worst = bad[bad.length - 1].p;
+    const r = findWork(league, withB(worst));
+    if (r.offer) consider(r.offer, 'absorb', `${take(worst)}, add ${added(offer, r.offer).join(' + ')}`);
+  }
+
+  return found
+    .sort((x, y) => y.net - x.net)
+    .slice(0, max)
+    .map((x) => x.c);
+}
+
+// ---------------------------------------------------------------- trade finder
+
+export type ValueTier = 'Franchise' | 'All-Star' | 'Starter' | 'Rotation' | 'Depth' | 'Negative';
+
+/** Each tier's share of the league's rostered players, counted from the most valuable: about one franchise player for every two teams, five starters a team. */
+const TIER_SHARE: [ValueTier, number][] = [
+  ['Franchise', 0.03],
+  ['All-Star', 0.09],
+  ['Starter', 0.33],
+  ['Rotation', 0.6],
+];
+
+const tierCache = new WeakMap<League, { key: string; cuts: number[] }>();
+
+/**
+ * The neutral trade value that starts each tier (TIER_SHARE order), from everyone on a standard
+ * contract. Worked out once a day: every row of a roster asks, and a day's signings and trades
+ * barely move the league's percentiles.
+ */
+function tierCuts(league: League): number[] {
+  const key = `${league.season}:${league.phase}:${league.day}`;
+  const hit = tierCache.get(league);
+  if (hit?.key === key) return hit.cuts;
+  const values = Object.values(league.players)
+    .filter((p) => p.tid >= 0 && !p.contract.twoWay)
+    .map((p) => tradeValue(league, p))
+    .sort((a, b) => b - a);
+  const cuts = TIER_SHARE.map(([, share]) => (values.length ? values[Math.min(values.length - 1, Math.max(0, Math.ceil(values.length * share) - 1))] : Infinity));
+  tierCache.set(league, { key, cuts });
+  return cuts;
+}
+
+function tierOf(league: League, value: number): ValueTier {
+  if (value < 0) return 'Negative';
+  const cuts = tierCuts(league);
+  const i = cuts.findIndex((c) => value >= c);
+  return i < 0 ? 'Depth' : TIER_SHARE[i][0];
+}
+
+/**
+ * Where a player's league-neutral trade value ranks among everyone on a roster: Franchise, All-Star,
+ * Starter, Rotation or Depth, or Negative for a contract worth less than nothing. A label only: AI
+ * teams value deals as before.
+ */
+export function valueTier(league: League, p: Player): ValueTier {
+  return tierOf(league, tradeValue(league, p));
+}
+
+export type Availability = 'franchise' | 'block' | null;
+
+/**
+ * How gettable an AI team's player looks: 'franchise' for a young star it builds around (a
+ * franchise-tier player 27 or younger, an All-Star 25 or younger), 'block' for a player it would
+ * move (he asked for a trade, his contract is worth less than nothing, or he's a rebuilder's
+ * veteran of 72+ OVR aged 28 or more), null otherwise and for your own players. A label only.
+ */
+export function availability(league: League, p: Player): Availability {
+  return availabilityAt(league, p, tradeValue(league, p));
+}
+
+/** availability for a player whose neutral trade value is known. */
+function availabilityAt(league: League, p: Player, value: number): Availability {
+  if (p.tid < 0 || p.tid === league.userTid || !league.teams[p.tid]) return null;
+  if (p.mood.tradeRequest || value < 0) return 'block';
+  const a = playerAge(p, league.season);
+  const tier = tierOf(league, value);
+  if ((tier === 'Franchise' && a <= 27) || (tier === 'All-Star' && a <= 25)) return 'franchise';
+  if (league.teams[p.tid].strategy === 'rebuild' && p.ovr >= 72 && a >= 28) return 'block';
+  return null;
+}
+
+/** A player the trade finder lists. */
+export interface TradeTarget {
+  p: Player;
+  age: number;
+  /** League-neutral trade value. */
+  value: number;
+  tier: ValueTier;
+  avail: Availability;
+  /** Salary that counts in trades this contract season ($K; two-way pay doesn't). */
+  salary: number;
+}
+
+/** Everyone on an AI team who can be traded right now, for the trade finder. */
+export function tradeTargets(league: League): TradeTarget[] {
+  return Object.values(league.players)
+    .filter((p) => p.tid >= 0 && p.tid !== league.userTid && !untradeable(league, p))
+    .map((p) => {
+      const value = tradeValue(league, p);
+      return { p, age: playerAge(p, league.season), value, tier: tierOf(league, value), avail: availabilityAt(league, p, value), salary: capSalary(league, p.pid) };
+    });
+}
+
+export interface TargetFilter {
+  pos?: Pos | 'all';
+  minOvr?: number;
+  maxAge?: number;
+  /** $K */
+  maxSalary?: number;
+  /** Only players their team would move (availability 'block'). */
+  available?: boolean;
+  sort?: 'ovr' | 'value' | 'salary';
+}
+
+/** The trade finder's filters and sort (best first, the biggest salary first). */
+export function filterTargets(rows: TradeTarget[], f: TargetFilter): TradeTarget[] {
+  const key = { ovr: (x: TradeTarget) => x.p.ovr, value: (x: TradeTarget) => x.value, salary: (x: TradeTarget) => x.salary }[f.sort ?? 'value'];
+  return rows
+    .filter(
+      (x) =>
+        (!f.pos || f.pos === 'all' || x.p.pos === f.pos) &&
+        x.p.ovr >= (f.minOvr ?? 0) &&
+        x.age <= (f.maxAge ?? Infinity) &&
+        x.salary <= (f.maxSalary ?? Infinity) &&
+        (!f.available || x.avail === 'block'),
+    )
+    .sort((a, b) => key(b) - key(a) || b.value - a.value || a.p.pid - b.p.pid);
+}
+
+/**
+ * The most salary a team can take back in one deal right now, sending at most two of its
+ * tradeable contracts (as "what would make this work?" does to match salaries): what fits under
+ * the cap after they leave, or 125% of them plus $0.1M.
+ */
+export function maxTakeBack(league: League, tid: number): number {
+  const s = contractSeason(league);
+  const sals = standardRoster(league, tid)
+    .filter((p) => !untradeable(league, p))
+    .map((p) => capSalary(league, p.pid))
+    .sort((a, b) => b - a);
+  const out = (sals[0] ?? 0) + (sals[1] ?? 0);
+  return Math.max(CAP_FOR(league, s).salaryCap - capPayroll(league, tid, s) + out, out * CAP.tradeMatchPct + CAP.tradeMatchBuffer);
 }
 
 // ---------------------------------------------------------------- AI front offices
