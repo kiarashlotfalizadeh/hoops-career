@@ -26,6 +26,28 @@ const press = (t: Tactics, plan: Tactics, c: PillContext, id: string) => {
 };
 
 describe('live pills', () => {
+  it("count a game plan's Hack-a targets: shown on, and pressed off stops them (and the quarter they wait for) too", () => {
+    const t = defaultTactics();
+    t.manage.hackTargets = [2];
+    t.manage.hackFromQ = 3;
+    expect(livePills(t, t, ctx()).find((p) => p.id === 'hack')!.on).toBe(true);
+    const off = press(t, t, ctx(), 'hack');
+    expect(off.manage.hackTargets).toBeUndefined();
+    expect(off.manage.hackFromQ).toBeUndefined();
+    expect(off.manage.hackThreshold).toBe(0);
+    // a plan hacking someone who isn't on the floor: Stop the Hack-a is offered
+    const away = defaultTactics();
+    away.manage.hackTargets = [99];
+    const stop = livePills(away, away, ctx({ oppOn: [{ pid: 1, name: 'Shooter', ftPct: 0.88 }] })).find((p) => p.id === 'hack')!;
+    expect(stop.label).toBe('Stop the Hack-a');
+    // hacking from now on starts a plan's later quarter now
+    const later = defaultTactics();
+    later.manage.hackFromQ = 4;
+    const on = press(later, later, ctx({ q: 2 }), 'hack');
+    expect(on.manage.hackThreshold).toBe(hackThreshold(0.52));
+    expect(on.manage.hackFromQ).toBe(2);
+  });
+
   it('follow the coaching depth', () => {
     const t = defaultTactics();
     const simple = ids(t, ctx({ complexity: 'simple' }));

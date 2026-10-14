@@ -221,6 +221,27 @@ describe('engine tactics', () => {
       return sim;
     };
 
+    it('a call made with a timeout replaces the after-timeout play: "Timeout + Go for 3" goes for three even when the ATO is a post-up', () => {
+      let shots = 0;
+      let threes = 0;
+      for (let g = 0; g < 40; g++) {
+        const sim = new GameSim(side(14, { manage: { ato: 'post' } }), side(15), opts(1700 + g));
+        for (let i = 0; i < 30 + 3 * g && !sim.over; i++) sim.step();
+        sim.drainLogs();
+        if (!sim.callTimeout(0)) continue;
+        sim.callPlay(0, { kind: 'three' });
+        const q = (sim as unknown as In).q;
+        const l = nextTrip(sim, 0);
+        if (!l || l.q !== q) continue;
+        const shot = l.steps.find((s) => s.k === 'shot');
+        if (!shot) continue;
+        shots++;
+        if (shot.zone === 'c3' || shot.zone === 'ab3') threes++;
+      }
+      expect(shots).toBeGreaterThan(20);
+      expect(threes / shots).toBeGreaterThanOrEqual(0.85);
+    });
+
     it('goes for three on a "three" call, and runs a called isolation for the player it names', () => {
       let shots = 0;
       let threes = 0;

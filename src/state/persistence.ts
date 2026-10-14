@@ -319,6 +319,12 @@ function liveIntact(l: League, j: unknown): boolean {
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
   if ((j.keep !== undefined && !isTactics(j.keep)) || (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2))) return false;
+  const o = j.opp;
+  if (
+    o !== undefined &&
+    !(obj(o) && isTactics(o.tactics) && (o.plan === undefined || (obj(o.plan) && Array.isArray(o.plan.items) && o.plan.items.every((it) => obj(it) && obj(it.patch)))))
+  )
+    return false;
   if (!Array.isArray(j.ops) || j.ops.length > MAX_LIVE_OPS) return false;
   let at = 0;
   for (const o of j.ops as unknown[]) {

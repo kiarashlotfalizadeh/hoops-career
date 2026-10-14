@@ -3,6 +3,7 @@
 
 import type { GameResult, League, TacticImpact, Tactics, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
+import { hacks } from '../sim/tactics';
 import { wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
 
@@ -220,8 +221,8 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a strategy paid off${w}.` },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
-    advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt).',
-    uses: (t) => t.manage.hackThreshold > 0,
+    advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
+    uses: (t) => hacks(t.manage),
   },
 };
 

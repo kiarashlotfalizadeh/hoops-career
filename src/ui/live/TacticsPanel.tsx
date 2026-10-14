@@ -1,6 +1,6 @@
 import { Hand } from 'lucide-react';
 import type { DefScheme, PnrCoverage, PressMode, Settings, StarPlan, Tactics } from '../../core/types';
-import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, startHacking, stopHacking } from '../../core/sim/tactics';
 import { Chips, Segmented, Slider, Tag, Toggle } from '../components/ui';
 
 /**
@@ -18,6 +18,7 @@ export function TacticsPanel({
   myOn,
   guardOf,
   nameOf,
+  q,
 }: {
   /** What the team plays now. */
   tactics: Tactics;
@@ -32,6 +33,8 @@ export function TacticsPanel({
   /** Who guards one of their players now. */
   guardOf: (pid: number) => number | undefined;
   nameOf: (pid: number) => string;
+  /** The period: a threshold set now starts a game plan's later Hack-a quarter now. */
+  q: number;
 }) {
   const adv = complexity !== 'simple';
   const expert = complexity === 'expert';
@@ -209,9 +212,11 @@ export function TacticsPanel({
             value={t.manage.hackThreshold}
             min={0}
             max={65}
-            onChange={(x) => set((tt) => void (tt.manage.hackThreshold = x))}
+            onChange={(x) => set((tt) => (x === 0 ? stopHacking(tt.manage) : startHacking(tt.manage, x, q)))}
             format={(x) => (x === 0 ? 'Off' : `< ${x}% FT`)}
-            help="Intentionally foul their players who shoot below this from the line (not in the last 2 minutes of a period)."
+            help={`Intentionally foul their players who shoot below this from the line (not in the last 2 minutes of a period). Off also stops tonight's game-plan targets${
+              t.manage.hackTargets?.length ? ` (${t.manage.hackTargets.map(nameOf).join(', ')})` : ''
+            }.`}
           />
           <Toggle
             on={t.manage.autoTimeouts}

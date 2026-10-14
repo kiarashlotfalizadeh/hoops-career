@@ -12,6 +12,7 @@ import { cloneTactics } from '../core/sim/tactics';
 import { buildSimInput, ensureRotation, neutralSite, playGame, userGameOnDay } from '../core/league/games';
 import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
+import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
 
 /** Clutch time: the last five minutes of the fourth quarter. */
 export const CLUTCH_SEC = 300;
@@ -61,7 +62,13 @@ export class LiveGame {
     const seed = from ? from.seed : (league.rng ^ (game.gid * 2654435761)) >>> 0;
     const input = (tid: number, opp: number): SimTeamInput => {
       const base = buildSimInput(league, tid, game.day, game.type, opp, game);
-      if (tid !== league.userTid) return base;
+      if (tid !== league.userTid) {
+        // the other coach's tactics and game plan as they were at tip-off: a replay never draws them again
+        const o = from?.opp;
+        if (!o) return base;
+        const tactics = cloneTactics(o.tactics);
+        return { ...base, team: o.plan ? planTeam(league.teams[tid], tactics, structuredClone(o.plan)) : { ...league.teams[tid], tactics } };
+      }
       // the user coaches this one: the assistant's adjustments at breaks are for simmed games
       const u = from?.user;
       if (!u) return { ...base, adjust: false };
@@ -80,6 +87,8 @@ export class LiveGame {
     this.sim = new GameSim(sides[0], sides[1], { rng: new Rng(seed), type: game.type, record: true, keepShots: true, injuries, neutral: neutralSite(game) });
     this.planned = this.sim.baseTactics(this.userSide);
     const mine = sides[this.userSide];
+    const theirs = sides[1 - this.userSide];
+    const oppPlan = oppPlanIn(this.sim, (1 - this.userSide) as 0 | 1);
     this.journal = from ?? {
       gid: game.gid,
       tid: league.userTid,
@@ -92,6 +101,7 @@ export class LiveGame {
         rest: [...(mine.rest ?? [])],
         injuryMult: mine.injuryMult ?? 1,
       },
+      opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}) },
       steps: 0,
       q: this.sim.q,
       clock: this.sim.clock,

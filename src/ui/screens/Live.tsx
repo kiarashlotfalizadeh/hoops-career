@@ -255,6 +255,9 @@ export default function Live() {
       const seen = found.seen;
       if (seen && seen[0] !== now.seen[0]) {
         found.setTactics(now.tactics, true);
+        // with "Keep changes" on, the saved tactics already hold what was kept so far and now the
+        // edit made elsewhere too: tonight's changes count again from here
+        if (found.keep) found.setKeep(l.teams[l.userTid].tactics);
         notes.push('Your tactics changes are in effect.');
       }
       if (seen && seen[1] !== now.seen[1]) notes.push('Rotation changes apply from the next game.');
@@ -955,6 +958,7 @@ export default function Live() {
           myOn={me.on.map((p) => p.pid)}
           guardOf={(pid) => me.guardOf.get(pid)?.pid}
           nameOf={nameOf}
+          q={view.q}
         />
       </Sheet>
       <Sheet open={panel === 'stats'} onClose={() => setPanel('none')} title="Live box score">
@@ -970,7 +974,9 @@ export default function Live() {
         />
       </Sheet>
       <Sheet open={panel === 'player' && !!pickedOpp} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>
-        {pickedOpp && <OppPlayer p={pickedOpp} name={nameOf(pickedOpp.pid)} tactics={tactics} complexity={league.settings.complexity} clock={view.clock} apply={applyTactics} />}
+        {pickedOpp && (
+          <OppPlayer p={pickedOpp} name={nameOf(pickedOpp.pid)} tactics={tactics} complexity={league.settings.complexity} clock={view.clock} q={view.q} apply={applyTactics} />
+        )}
       </Sheet>
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">
         <div className="col" style={{ gap: 8 }}>

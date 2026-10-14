@@ -4,7 +4,7 @@
 import type { ActionType, League, Player, PnrCoverage, Tactics } from '../types';
 import type { FinishType } from '../sim/log';
 import { composites, ROLE_META } from '../ratings';
-import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics } from '../sim/tactics';
+import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, stopHacking } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
@@ -373,7 +373,7 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'physicality:o': { label: 'Less physical', apply: (t) => void (t.defense.physicality = 35) },
   'clean_defense:o': { label: 'More physical', apply: (t) => void (t.defense.physicality = 60) },
   'transition:d': { label: 'Push in transition', apply: (t) => void (t.offense.transition = 75) },
-  'hack:o': { label: 'Stop the Hack-a', apply: (t) => void (t.manage.hackThreshold = 0) },
+  'hack:o': { label: 'Stop the Hack-a', apply: (t) => stopHacking(t.manage) },
 };
 
 /**

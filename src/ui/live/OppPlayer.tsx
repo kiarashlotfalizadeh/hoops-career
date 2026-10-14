@@ -2,6 +2,7 @@ import type { Settings, Tactics } from '../../core/types';
 import { Kpi } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
 import { HACK_BELOW, hackThreshold } from './pills';
+import { hacks, startHacking, stopHacking } from '../../core/sim/tactics';
 
 /** One of their players on the floor: his line tonight, his free throws, and the shortcuts to go after him (or stop). */
 export function OppPlayer({
@@ -10,6 +11,7 @@ export function OppPlayer({
   tactics,
   complexity,
   clock,
+  q,
   apply,
 }: {
   p: DrawnPlayer;
@@ -18,10 +20,12 @@ export function OppPlayer({
   complexity: Settings['complexity'];
   /** Seconds left in the period (a hack isn't allowed in its last two minutes). */
   clock: number;
+  /** The period: hacking from now on starts a game plan's later Hack-a quarter now. */
+  q: number;
   apply: (fn: (t: Tactics) => void) => void;
 }) {
   const ft = Math.round(p.ftPct * 100);
-  const hacking = p.ftPct * 100 < tactics.manage.hackThreshold;
+  const hacking = hacks(tactics.manage, p);
   const target = tactics.defense.starTarget === p.pid ? tactics.defense.starPlan : 'none';
   return (
     <div className="col" style={{ gap: 12 }}>
@@ -42,12 +46,12 @@ export function OppPlayer({
         .
       </div>
       {hacking ? (
-        <button className="btn block" onClick={() => apply((t) => void (t.manage.hackThreshold = 0))}>
+        <button className="btn block" onClick={() => apply((t) => stopHacking(t.manage))}>
           Stop the Hack-a
         </button>
       ) : p.ftPct < HACK_BELOW ? (
         <>
-          <button className="btn primary block" onClick={() => apply((t) => void (t.manage.hackThreshold = hackThreshold(p.ftPct)))}>
+          <button className="btn primary block" onClick={() => apply((t) => startHacking(t.manage, hackThreshold(p.ftPct), q))}>
             Hack-a-{name}
           </button>
           <div className="tiny dim">

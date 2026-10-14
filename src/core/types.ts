@@ -1,6 +1,6 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
-
+import type { OppPlan } from './ai/opponentPlan';
 import type { PlayCall } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
@@ -978,6 +978,12 @@ export interface LiveJournal {
   injuries: boolean;
   /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk. */
   user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number };
+  /**
+   * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
+   * replay plays them as they were, whatever changed since (the difficulty, or the league's id on a
+   * backup imported as a copy).
+   */
+  opp?: { tactics: Tactics; plan?: OppPlan };
   /** Possessions played (engine steps) at the last checkpoint, and the period, clock and score (home, away) then: a replay must land on them. */
   steps: number;
   q: number;

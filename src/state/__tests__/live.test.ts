@@ -458,6 +458,30 @@ describe('a live game survives the app being closed (W12)', () => {
     expect(res).toEqual(lg.commit(l));
   });
 
+  it("picks the game up with the other coach's plan as it tipped off, after a difficulty change or under a new league id", async () => {
+    const l = testLeague('opp-plan-keep');
+    for (let i = 0; i < 12; i++) simDay(l);
+    l.settings.difficulty = 'hard';
+    toGameDay(l);
+    const lg = goLive(l);
+    const them = (1 - lg.userSide) as 0 | 1;
+    const plan = oppPlanIn(lg.sim, them);
+    expect(plan?.items.length).toBeGreaterThan(0);
+    lg.simTo('quarter');
+    for (let i = 0; i < 10; i++) lg.step();
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    // casual coaches never plan, and a backup imported as a copy gets a new id (plans are drawn from it)
+    back.settings.difficulty = 'casual';
+    back.id = `${back.id}-copy`;
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect(again.resumed).toBe('journal');
+    expect(oppPlanIn(again.sim, them)).toEqual(plan);
+    expect(again.sim.baseTactics(them)).toEqual(lg.sim.baseTactics(them));
+    expect(again.commit(back).oppPlan).toEqual(plan!.items.map((it) => it.text));
+  });
+
   it("reading a save drops a damaged journal, and one that isn't for the game still to play today", () => {
     const l = testLeague('read');
     toGameDay(l);

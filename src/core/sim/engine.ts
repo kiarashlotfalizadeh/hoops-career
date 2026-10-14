@@ -1448,6 +1448,8 @@ export class GameSim {
     let isoFor: SP | null = null;
     if (call) {
       off.call = null;
+      // a play called from the bench (after a timeout too) replaces the standing after-timeout play
+      first = null;
       if (this.cur) this.cur.call = { ...call, t: off.side };
       if (call.kind === 'three') late.need3 = this.go3 = true;
       else if (call.kind === 'two') {
@@ -1762,6 +1764,8 @@ export class GameSim {
       const emph = Math.pow(Math.max(1, a[act]) / 50, 1.4);
       return emph * off.cap[act];
     });
+    // a called three looks for the arc: no post-up (its shots are twos)
+    if (this.go3) ws[ACTION_LIST.indexOf('post')] *= 0.05;
     // crunch time: more of what the go-to player does best
     const go = this.goTo(off);
     if (go) {

@@ -3,7 +3,7 @@
 // sim.baseTactics → setTactics.
 
 import type { Settings, Tactics } from '../../core/types';
-import { cloneTactics } from '../../core/sim/tactics';
+import { cloneTactics, hacks, startHacking, stopHacking } from '../../core/sim/tactics';
 
 export interface Pill {
   id: string;
@@ -132,18 +132,19 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
   if (lvl >= 2) {
     // the worst free-throw shooter on the floor, while a hack is still legal this period (not in its last two minutes)
     const worst = [...ctx.oppOn].sort((a, b) => a.ftPct - b.ftPct)[0];
-    const hacking = t.manage.hackThreshold > 0;
+    // a game plan's targets count as much as the threshold: on shows what the defense does, and off stops all of it
+    const hacking = hacks(t.manage);
     if (worst && worst.ftPct < HACK_BELOW && ctx.clock >= 120) {
-      const on = worst.ftPct * 100 < t.manage.hackThreshold;
+      const on = hacks(t.manage, worst);
       out.push({
         id: 'hack',
         label: `Hack-a-${worst.name}`,
         on,
         help: `Foul ${worst.name} on purpose (${Math.round(worst.ftPct * 100)}% from the line) away from the ball.`,
-        apply: (x) => void (x.manage.hackThreshold = on ? 0 : hackThreshold(worst.ftPct)),
+        apply: (x) => (on ? stopHacking(x.manage) : startHacking(x.manage, hackThreshold(worst.ftPct), ctx.q)),
       });
     } else if (hacking)
-      out.push({ id: 'hack', label: 'Stop the Hack-a', on: true, help: 'No more intentional fouls on poor free-throw shooters.', apply: (x) => void (x.manage.hackThreshold = 0) });
+      out.push({ id: 'hack', label: 'Stop the Hack-a', on: true, help: 'No more intentional fouls on poor free-throw shooters.', apply: (x) => stopHacking(x.manage) });
     if (ctx.q >= 4) {
       out.push({
         id: 'trailing',

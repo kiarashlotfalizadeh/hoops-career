@@ -396,3 +396,29 @@ export function situationText(w: SituationTrigger): string {
   const text = parts.join(' · ');
   return text[0].toUpperCase() + text.slice(1);
 }
+
+// ---------------------------------------------------------------- hack-a-player
+
+/**
+ * Whether the defense fouls this player on purpose (when he's on the floor, from the plan's quarter):
+ * he's one of a game plan's targets, or below the free-throw threshold. Without a player, whether
+ * it hacks anyone at all.
+ */
+export function hacks(m: GameManagement, p?: { pid: number; ftPct: number }): boolean {
+  const targets = m.hackTargets ?? [];
+  if (!p) return m.hackThreshold > 0 || targets.length > 0;
+  return targets.includes(p.pid) || p.ftPct * 100 < m.hackThreshold;
+}
+
+/** No more intentional fouls: the threshold off, and a game plan's targets (and the quarter they started) cleared. */
+export function stopHacking(m: GameManagement) {
+  m.hackThreshold = 0;
+  delete m.hackTargets;
+  delete m.hackFromQ;
+}
+
+/** Hack from now on everyone under `threshold` from the line: a plan's later starting quarter moves up to quarter `q`. */
+export function startHacking(m: GameManagement, threshold: number, q: number) {
+  m.hackThreshold = threshold;
+  if ((m.hackFromQ ?? 1) > q) m.hackFromQ = q;
+}
