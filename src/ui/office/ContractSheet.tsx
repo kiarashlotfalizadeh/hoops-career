@@ -1,4 +1,5 @@
-// Contract offer / re-sign negotiation bottom sheet shared by Free Agents and Re-sign.
+// Contract offer / re-sign negotiation bottom sheet shared by Free Agents and Re-sign; its
+// extension mode (the Office, the player page and Re-sign) is in ExtendBody.tsx.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, CircleCheck, Minus, Plus, TriangleAlert } from 'lucide-react';
@@ -12,23 +13,24 @@ import { capHolds, resignRoster, signingClosedReason, userOffer, userResign } fr
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Help, Sheet } from '../components/ui';
 import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from './common';
+import { ExtendBody } from './ExtendBody';
 
-export type OfferMode = 'fa' | 'resign';
+export type OfferMode = 'fa' | 'resign' | 'extend';
 
 export function ContractSheet({ pid, mode, onClose }: { pid: number | null; mode: OfferMode; onClose: () => void }) {
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
   const valid = !!p && (mode === 'fa' ? p.tid === FREE_AGENT : p.tid === league.userTid);
   return (
-    <Sheet open={valid} onClose={onClose} label={p ? `${mode === 'fa' ? 'Offer to' : 'Re-sign'} ${playerName(p)}` : undefined}>
-      {valid && p && <OfferBody key={p.pid} p={p} mode={mode} onClose={onClose} />}
+    <Sheet open={valid} onClose={onClose} label={p ? `${mode === 'fa' ? 'Offer to' : mode === 'extend' ? 'Extend' : 'Re-sign'} ${playerName(p)}` : undefined}>
+      {valid && p && (mode === 'extend' ? <ExtendBody key={p.pid} p={p} onClose={onClose} /> : <OfferBody key={p.pid} p={p} mode={mode} onClose={onClose} />)}
     </Sheet>
   );
 }
 
 const STEP = 50;
 
-function OfferBody({ p, mode, onClose }: { p: Player; mode: OfferMode; onClose: () => void }) {
+function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, 'extend'>; onClose: () => void }) {
   const league = useLeague();
   const tid = league.userTid;
   const season = mode === 'resign' ? league.season + 1 : capSeason(league);

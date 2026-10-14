@@ -8,7 +8,7 @@ import { pickLabel } from '../../core/league/trades';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
@@ -404,10 +404,13 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
           // (an option year already under way was settled)
           const o = r.p ? openOption(league, r.p) : undefined;
           const opt = r.p && o && contractExp(r.p.contract) === cs + i ? (o === 'player' ? ' PO' : ' TO') : '';
+          // the first season of a signed extension
+          const ext = r.p && extensionStart(r.p.contract) === cs + i;
           return (
             <span className={!r.p || r.p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
               {fmtM(amt)}
               {opt && <span className="tiny warn">{opt}</span>}
+              {ext && <span className="tiny good"> EXT</span>}
             </span>
           );
         },
@@ -435,8 +438,8 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
       </div>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} onRow={(r) => nav(`/player/${r.pid}`)} />
       <div className="lg-note">
-        PO = player option, TO = team option on the final year.{twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from
-        released players counts toward payroll.
+        PO = player option, TO = team option on the final year, EXT = first season of a signed extension.
+        {twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from released players counts toward payroll.
       </div>
     </>
   );

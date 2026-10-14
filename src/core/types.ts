@@ -56,6 +56,13 @@ export interface Contract {
   option?: 'player' | 'team';
   /** Two-way deal: doesn't use a 15-man roster spot and is paid outside the cap and tax. */
   twoWay?: boolean;
+  /** A two-way deal converted to a standard one: the same contract, not a new signing. */
+  converted?: boolean;
+  /**
+   * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
+   * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
+   */
+  next?: { salaries: number[] };
 }
 
 export interface Injury {

@@ -7,7 +7,7 @@ import { Rng, clamp } from '../random';
 import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
-import { blankMood, playerAge } from '../playerGen';
+import { blankMood, contractExp, playerAge } from '../playerGen';
 import {
   CAP_FOR,
   OFFSEASON_ROSTER_MAX,
@@ -35,8 +35,8 @@ import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, se
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
-import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
-import { FIRED_REASON, askingContract, leaveTeam, releasePlayer, resolveOptions } from './contracts';
+import { aiExtensions, aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
+import { FIRED_REASON, askingContract, extensionAsk, extensionBlockedReason, extensionRefusal, leaveTeam, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
@@ -69,6 +69,7 @@ export function startRegularSeason(league: League): string[] {
   for (const t of league.teams) ensureRotation(league, t.tid);
   for (const t of league.teams) updateMorale(league, t.tid);
   for (const t of league.teams) if (t.tid !== league.userTid) t.budget.ticketPrice = aiTicketPrice(league, t);
+  aiExtensions(league);
   league.phase = 'regular';
   league.day = 0;
   addInbox(league, {
@@ -310,7 +311,7 @@ function retirements(league: League, rng: Rng) {
       else if (!playedThisSeason && a >= 27) prob = 0.25;
     }
     // players under contract rarely walk away
-    if (p.tid >= 0 && p.contract.start + p.contract.salaries.length - 1 > league.season) prob *= 0.25;
+    if (p.tid >= 0 && contractExp(p.contract) > league.season) prob *= 0.25;
     if (rng.chance(prob)) {
       const wasTid = p.tid;
       if (p.tid >= 0) leaveTeam(league.teams[p.tid], p.pid);
@@ -489,6 +490,11 @@ export function newSeason(league: League): boolean {
   league.season++;
   league.phase = 'preseason';
   league.day = 0;
+  // extensions start: the new deal replaces the one that ran out (no rookie scale, no option)
+  for (const p of Object.values(league.players)) {
+    const c = p.contract;
+    if (c.next && c.start + c.salaries.length <= league.season) p.contract = { start: c.start + c.salaries.length, salaries: c.next.salaries };
+  }
   league.games = league.games
     .filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid))
     .map((g) => ({ ...g, pbp: undefined, shots: undefined, lineups: undefined, flow: undefined, flowPeriods: undefined }));
@@ -557,7 +563,30 @@ export function newSeason(league: League): boolean {
   for (const p of prospects(league)) if (p.draft.year < league.season) delete league.players[p.pid];
   compactRetired(league);
   for (const p of Object.values(league.players)) refreshDerived(league, p);
+  extensionCandidatesMail(league);
   return true;
+}
+
+/** Preseason mail: the user's players in the final season of their deals who can be extended now, and what each asks. */
+function extensionCandidatesMail(league: League) {
+  const list = teamPlayers(league, league.userTid)
+    .filter((p) => !extensionBlockedReason(league, p))
+    .sort((a, b) => b.ovr - a.ovr);
+  if (!list.length) return;
+  const line = (p: Player) => {
+    const ask = extensionAsk(league, p);
+    return extensionRefusal(league, p) ?? `${playerName(p)} (${p.ovr}) asks about $${(ask.amount / 1000).toFixed(1)}M × ${ask.years} year${ask.years === 1 ? '' : 's'}.`;
+  };
+  addInbox(league, {
+    from: 'Assistant GM',
+    subject: 'Extension candidates',
+    body: `${list.length === 1 ? `${playerName(list[0])} is in the final season of his deal. Extend him` : `${list.length} of your players are in the final season of their deals. Extend them`} any time until the end of the regular season, before they reach free agency next summer:\n${list
+      .slice(0, 6)
+      .map(line)
+      .join('\n')}${list.length > 6 ? `\nand ${list.length - 6} more.` : ''}`,
+    tone: 'neutral',
+    link: '/resign',
+  });
 }
 
 /**
