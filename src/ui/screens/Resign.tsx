@@ -5,7 +5,7 @@ import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
 import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
-import { capHolds, expiringPlayers, renouncePlayer } from '../../core/league/freeAgency';
+import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
 import { startFreeAgency } from '../../core/league/season';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -66,9 +66,7 @@ function ResignPhase() {
   const holders = capHolds(league, tid);
   const holds = holders.reduce((a, h) => a + h.amount, 0);
   const ifAll = committed + holds;
-  const resigned = teamPlayers(league, tid)
-    .filter((p) => p.contract.start === next && !p.contract.rookie)
-    .sort((a, b) => b.ovr - a.ovr);
+  const resigned = signedThisSummer(league).sort((a, b) => b.ovr - a.ovr);
   const options = useLeagueMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   // standard roster spots only: two-way deals sit outside the 15
   const rosterNext = standardRoster(league, tid).length - expiring.filter((p) => !p.contract.twoWay).length;

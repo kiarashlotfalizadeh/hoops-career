@@ -258,7 +258,11 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   p.tid = tid;
   p.contract = makeContract(league, amount, years, opts.start ?? league.season, opts.twoWay ? undefined : p.experience);
   if (opts.twoWay) p.contract.twoWay = true;
-  if (prevTid !== tid) p.joinedSeason = league.season;
+  if (prevTid !== tid) {
+    p.joinedSeason = league.season;
+    // a new team: the trade-back rule was about his old one (a re-signing keeps it)
+    delete p.tradedFrom;
+  }
   // like the NBA's: no trading him until December 15 of his first season, or three months after
   // an in-season signing if that is later (otherwise a free agent could be signed and flipped for
   // more value); a summer or training-camp signing waits for December 15
@@ -382,7 +386,7 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   const exp = contractExp(p.contract);
   if (exp < s) return { ok: false, reason: 'His contract is up. Re-sign him to a standard deal instead.' };
   const min = (season: number) => (p.experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
-  p.contract = { start: s, salaries: Array.from({ length: exp - s + 1 }, (_, i) => min(s + i)) };
+  p.contract = { start: s, salaries: Array.from({ length: exp - s + 1 }, (_, i) => min(s + i)), converted: true };
   addNews(league, { kind: 'signing', text: `The ${league.teams[p.tid].name} converted ${playerName(p)} to a standard contract.`, tids: [p.tid], pids: [p.pid] });
   return { ok: true, reason: `${playerName(p)} now holds a standard roster spot.` };
 }

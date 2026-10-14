@@ -145,8 +145,21 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
   if (league.phase !== 'resign') return { ok: false, reason: 'Rights can be renounced during the re-signing period.' };
   if (!p || p.tid !== league.userTid || contractExp(p.contract) > league.season) return { ok: false, reason: 'Not one of your expiring players.' };
   leaveTeam(league.teams[p.tid], pid);
-  p.tid = FREE_AGENT;
+  toFreeAgent(league, p);
   return { ok: true, reason: `${playerName(p)} is renounced: he becomes a free agent when the market opens.` };
+}
+
+/**
+ * A player whose contract ran out joins the free agent pool like a released one: with an asking
+ * price and the price-cut clock, and without the trade-back rule and trade lock of his old deal.
+ */
+function toFreeAgent(league: League, p: Player) {
+  p.tid = FREE_AGENT;
+  delete p.tradedFrom;
+  delete p.tradeLock;
+  p.asking = undefined;
+  p.asking = askingContract(league, p);
+  p.faDays = FA_PRICE_CUT_DAYS;
 }
 
 /** Move all unsigned expiring players into the free agent pool. */
@@ -154,9 +167,10 @@ export function releaseExpiring(league: League) {
   for (const p of Object.values(league.players)) {
     if (p.tid >= 0 && contractExp(p.contract) <= league.season) {
       leaveTeam(league.teams[p.tid], p.pid);
-      p.tid = FREE_AGENT;
+      toFreeAgent(league, p);
     }
   }
+  // the market opens: every free agent's price starts again from his value
   for (const p of freeAgents(league)) {
     p.asking = undefined;
     p.asking = askingContract(league, p);
@@ -397,6 +411,13 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
   });
   return { ok: true, reason: `${playerName(p)} signs a two-way deal!` };
 }
+
+/**
+ * The user's new contracts this summer, re-signings and free agents (not draft picks' rookie deals,
+ * nor a two-way deal converted to a standard one: that's the same contract).
+ */
+export const signedThisSummer = (league: League) =>
+  teamPlayers(league, league.userTid).filter((p) => p.contract.start === league.season + 1 && !p.contract.rookie && !p.contract.converted);
 
 /** The user's standard players signed for next season: what the offseason limit counts while expiring deals are re-signed or let go. */
 export const resignRoster = (league: League) => standardRoster(league, league.userTid).filter((p) => contractExp(p.contract) > league.season).length;
