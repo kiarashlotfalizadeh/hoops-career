@@ -18,13 +18,13 @@ import {
   presetMatches,
   renamePlaybook,
   savePlaybook,
-  tacticsDiff,
+  tacticsChanges,
   toPlaybook,
 } from '../sim/playbooks';
-import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics } from '../sim/tactics';
+import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics, situationFromTemplate } from '../sim/tactics';
 import { teamPlayers } from '../league/helpers';
 import { takeOverTeam } from '../league/owner';
-import type { League, Tactics } from '../types';
+import type { League } from '../types';
 
 const tactics = (l: League) => l.teams[l.userTid].tactics;
 const roster = (l: League) => teamPlayers(l, l.userTid).map((p) => p.pid);
@@ -67,7 +67,7 @@ describe('saved playbooks', () => {
     t.manual = false;
     expect(applyPlaybook(l, pb.id)).toBe(true);
     const after = tactics(l);
-    expect(tacticsDiff(before, after)).toEqual([]);
+    expect(tacticsChanges(before, after)).toEqual([]);
     expect(after.offense.pace).toBe(80);
     expect(after.defense.pnr).toBe('hedge');
     expect(after.offense.roles[a]).toBe('creator');
@@ -213,17 +213,19 @@ describe('saved playbooks', () => {
 
   it('carries parts of the tactics it has no name for (newer features) through a save and a load', () => {
     const l = testLeague();
-    type More = Tactics & { situations?: { id: string }[]; manage: Tactics['manage'] & { goTo?: number } };
-    const t = tactics(l) as More;
-    t.situations = [{ id: 'protectLead' }];
-    t.manage.goTo = 5;
+    // situations and a go-to player are newer than the playbook format: they still come through
+    const t = tactics(l);
+    const [goTo, other] = roster(l);
+    const plan = situationFromTemplate('protectLead');
+    t.situations = [plan];
+    t.manage.goTo = goTo;
     const pb = toPlaybook(t, { id: 'x', name: 'X', saved });
     t.situations = [];
-    t.manage.goTo = 7;
-    expect(playbookDiff(t, pb, roster(l)).map(changeText)).toEqual(['Go to 7 → 5', 'Situations changed']);
-    const out = loadPlaybook(t, pb, roster(l)) as More;
-    expect(out.situations).toEqual([{ id: 'protectLead' }]);
-    expect(out.manage.goTo).toBe(5);
+    t.manage.goTo = other;
+    expect(playbookDiff(t, pb, roster(l)).map(changeText)).toEqual([`Go-to player #${other} → #${goTo}`, 'Situations changed']);
+    const out = loadPlaybook(t, pb, roster(l));
+    expect(out.situations).toEqual([plan]);
+    expect(out.manage.goTo).toBe(goTo);
     expect(out.situations).not.toBe(pb.extra!.situations);
   });
 

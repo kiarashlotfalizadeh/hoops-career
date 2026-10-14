@@ -16,6 +16,7 @@ import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed,
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 import { GameRecap } from '../components/GameRecap';
+import { AdjustmentsCard } from '../components/AdjustmentsCard';
 
 type Tab = 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 
@@ -120,6 +121,7 @@ export default function GameView() {
               <div className="tiny dim">Expected-point swings from the engine's tactical tracking and the four factors. Positive numbers favored your team.</div>
             </div>
           </Card>
+          <AdjustmentsCard g={g} league={league} />
           <Card title="Four factors" right={<span className="tiny dim">You · Them</span>}>
             <div className="col" style={{ gap: 10 }}>
               <CompareBar label="eFG%" a={report.fourFactors.user.efg * 100} b={report.fourFactors.opp.efg * 100} />

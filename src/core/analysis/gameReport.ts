@@ -104,6 +104,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Your zone is giving up corner threes. Go back to man-to-man against good shooting teams.',
     uses: (t) => t.defense.scheme !== 'man',
   },
+  'zone_3pt:d': { text: (X) => `${possessive(X)} 3-2 zone ran shooters off the three-point line.` },
   'zone_glass:o': {
     text: (X) => `${X} crashed the offensive glass against the zone.`,
     advice: 'Zones struggle to box out; play man against strong rebounding teams.',

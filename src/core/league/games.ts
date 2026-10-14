@@ -11,6 +11,7 @@ import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
 import { consumePlans, effectiveTactics, planFor } from './gamePlans';
 import { confStandings } from './standings';
+import { withoutCoachPlans } from '../sim/tactics';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -174,11 +175,18 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
   // practice intensity: intense camps build skills but add wear and injury risk
   const injuryMult = teamInjuryMult(team);
-  // opponent-specific game plan for the user's team
+  // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
   if (tid === league.userTid && opp !== undefined && planFor(league, opp, game)) {
-    return { team: { ...team, tactics: effectiveTactics(league, opp, game) }, players, perf, rest, injuryMult };
+    const tactics = effectiveTactics(league, opp, game);
+    return { team: { ...team, tactics }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts };
   }
-  return { team, players, perf, rest, injuryMult, adjust: tid !== league.userTid };
+  if (tid !== league.userTid) {
+    // an AI coach never plays the situational plans or crunch-time calls a user left on this team
+    const t = team.tactics;
+    const userPlans = t.situations || t.manage.goTo != null || t.manage.ato || t.manage.hackTargets || t.manage.hackFromQ !== undefined;
+    return { team: userPlans ? { ...team, tactics: withoutCoachPlans(t) } : team, players, perf, rest, injuryMult, adjust: true };
+  }
+  return { team, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {

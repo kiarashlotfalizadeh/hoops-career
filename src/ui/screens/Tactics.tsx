@@ -20,6 +20,8 @@ import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
+import { CrunchTimeCard } from '../tactics/CrunchTimeCard';
+import { SituationToggles, SituationsCard } from '../tactics/SituationsCard';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
 
@@ -56,6 +58,8 @@ export default function Tactics() {
   // a Play-menu sim's progress bar takes the same spot as the changes bar
   const simming = useStore((s) => !!s.sim);
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/tactics'), [league]);
+  // the go-to player is picked from the roster
+  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
 
   const edit = (fn: (t: TacticsT) => void) =>
     useStore.getState().mutate((l) => {
@@ -295,7 +299,7 @@ export default function Tactics() {
                 on={t.defense.switchOffBall}
                 onChange={(x) => edit((tt) => void (tt.defense.switchOffBall = x))}
                 label="Switch off-ball screens"
-                help="Neutralizes handoffs and movement shooters; can create mismatches."
+                help="Neutralizes handoffs and movement shooters, but a big switched onto a guard gets attacked off the dribble, and a guard switched onto a big gets posted up (and fouls)."
               />
             </div>
           </Card>
@@ -371,6 +375,9 @@ export default function Tactics() {
       {tab === 'roles' && <RolesTab />}
       {tab === 'insights' && <InsightsTab />}
       {tab === 'manage' && <ManageTab edit={edit} t={t} />}
+      {tab === 'manage' && <CrunchTimeCard t={t} edit={edit} players={players} />}
+      {tab === 'manage' && <SituationsCard t={t} edit={edit} />}
+      {tab === 'playbook' && complexity === 'advanced' && <SituationToggles t={t} edit={edit} />}
 
       {changed && !simming && (
         <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>

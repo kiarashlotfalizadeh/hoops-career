@@ -25,7 +25,7 @@ export function isKey(log: PossLog, ctx: KeyContext): boolean {
   if (log.clockEnd <= 24) return true;
   if ([0, 1].some((i) => ctx.runBefore[i] < 8 && ctx.runAfter[i] >= 8)) return true;
   if (log.steps.some((s) => s.k === 'timeout')) return true;
-  // an end-of-game play call (when the engine records them)
-  if ((log as PossLog & { call?: unknown }).call) return true;
+  // an end-of-game play call
+  if (log.call) return true;
   return ctx.event;
 }

@@ -4,7 +4,7 @@
 // roster, and the game-specific parts (matchups, the star target) are never saved. Also here: the
 // names the screens give a team's playbook, which say "Custom" once the sliders leave the preset.
 
-import { ACTIONS, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
+import { ACTIONS, type ActionType, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
 import { ROLE_META } from '../ratings';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META, type DefPreset, type OffPreset } from './tactics';
 
@@ -64,7 +64,8 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
     saved: { ...meta.saved },
     offense: omit(c.offense, ['roles', 'freedom', 'screeners']) as SavedPlaybook['offense'],
     defense: omit(c.defense, ['matchups', 'starTarget']) as SavedPlaybook['defense'],
-    manage: c.manage,
+    // hack-a-player targets are one opponent's players: they belong in game plans
+    manage: omit(c.manage, ['hackTargets', 'hackFromQ']) as SavedPlaybook['manage'],
     offPreset: c.offPreset,
     defPreset: c.defPreset,
     roles: c.offense.roles,
@@ -92,6 +93,8 @@ export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<num
   out.offense = { ...out.offense, ...src.offense, roles, freedom, screeners };
   out.defense = { ...out.defense, ...src.defense };
   out.manage = { ...out.manage, ...src.manage };
+  // a go-to player who has left stays with the current one
+  if (src.manage.goTo !== undefined && src.manage.goTo !== null && !on.has(src.manage.goTo)) out.manage.goTo = t.manage.goTo ?? null;
   Object.assign(out, omit(src.extra ?? {}, KNOWN));
   out.offPreset = src.offPreset;
   out.defPreset = src.defPreset;
@@ -147,9 +150,11 @@ const MANAGE_FIELDS: Field<string>[] = [
   ['timeoutRun', 'Timeout after a run of', (v) => `${v}-0`],
   ['foulTrouble', 'Foul trouble', (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1)],
   ['fatigueSub', 'Sub out tired players at', (v) => `${Math.round((v as number) * 100)}% energy`],
+  ['ato', 'After-timeout play', (v) => (v ? ACTION_META[v as ActionType].label : 'None')],
+  ['assistantAdjusts', 'Assistant adjusts in simmed games', onOff],
 ];
-/** Parts of the tactics that aren't settings to compare (game by game, or bookkeeping). */
-const NOT_COMPARED = new Set(['actions', 'roles', 'freedom', 'screeners', 'matchups', 'starTarget', ...KNOWN]);
+/** Parts of the tactics that aren't settings to compare (game by game, or bookkeeping; the go-to player is named below). */
+const NOT_COMPARED = new Set(['actions', 'roles', 'freedom', 'screeners', 'matchups', 'starTarget', 'goTo', 'hackTargets', 'hackFromQ', ...KNOWN]);
 
 /** "hackTargets" → "Hack targets", for settings this module doesn't know by name. */
 const humanize = (k: string) => {
@@ -164,7 +169,7 @@ const same = (x: unknown, y: unknown) => x === y || JSON.stringify(x) === JSON.s
  * the playbooks, every slider and switch, game management, roles, shot freedom and screeners.
  * Matchups and the star target are game by game and aren't compared.
  */
-export function tacticsDiff(a: Tactics, b: Tactics, nameOf: (pid: number) => string = (pid) => `#${pid}`): TacticsChange[] {
+export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => string = (pid) => `#${pid}`): TacticsChange[] {
   const out: TacticsChange[] = [];
   const add = (label: string, x: unknown, y: unknown, fmt: (v: unknown) => string = String) => {
     if (same(x, y)) return;
@@ -183,6 +188,8 @@ export function tacticsDiff(a: Tactics, b: Tactics, nameOf: (pid: number) => str
   for (const k of ACTIONS) add(ACTION_META[k].label, a.offense.actions[k], b.offense.actions[k], whole);
   section(a.defense as unknown as Record<string, unknown>, b.defense as unknown as Record<string, unknown>, DEFENSE_FIELDS);
   section(a.manage as unknown as Record<string, unknown>, b.manage as unknown as Record<string, unknown>, MANAGE_FIELDS);
+  const goTo = (v: number | null | undefined) => (v === null || v === undefined ? 'None' : nameOf(v));
+  if ((a.manage.goTo ?? null) !== (b.manage.goTo ?? null)) out.push({ label: 'Go-to player', from: goTo(a.manage.goTo), to: goTo(b.manage.goTo) });
   section(a as unknown as Record<string, unknown>, b as unknown as Record<string, unknown>, []);
   const pids = (x: Record<number, unknown>, y: Record<number, unknown>) => [...new Set([...Object.keys(x), ...Object.keys(y)])].map(Number);
   for (const pid of pids(a.offense.roles, b.offense.roles)) {
@@ -200,7 +207,7 @@ export function tacticsDiff(a: Tactics, b: Tactics, nameOf: (pid: number) => str
 
 /** What loading a playbook would change in tactics `t`, for a team with this roster ("Pace 62 → 80", "Coverage Drop → Hedge"). */
 export function playbookDiff(t: Tactics, pb: SavedPlaybook, roster: Iterable<number>, nameOf?: (pid: number) => string): TacticsChange[] {
-  return tacticsDiff(t, loadPlaybook(t, pb, roster), nameOf);
+  return tacticsChanges(t, loadPlaybook(t, pb, roster), nameOf);
 }
 
 // ---------------------------------------------------------------- the coach's library
@@ -288,5 +295,5 @@ export function playbookStatus(league: League, nameOf?: (pid: number) => string)
   const pb = findPlaybook(league, t.playbook?.id);
   if (!pb) return null;
   // what has changed since: the playbook as loaded now, against the tactics
-  return { pb, changes: tacticsDiff(loadPlaybook(t, pb, userRoster(league)), t, nameOf) };
+  return { pb, changes: tacticsChanges(loadPlaybook(t, pb, userRoster(league)), t, nameOf) };
 }

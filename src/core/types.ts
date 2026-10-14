@@ -375,6 +375,38 @@ export interface GameManagement {
   foulTrouble: 'loose' | 'standard' | 'strict';
   /** Fatigue (energy %) threshold below which a player is subbed if possible. */
   fatigueSub: number;
+  /** Crunch-time go-to player (pid): in the last two minutes of a close fourth quarter or overtime the ball finds him more. */
+  goTo?: number | null;
+  /** After-timeout play: the first action of the next half-court trip after one of your timeouts. */
+  ato?: ActionType | null;
+  /** Hack-a-player targets (opponent pids, for game plans): fouled intentionally while on the floor, whatever their free-throw percentage. */
+  hackTargets?: number[];
+  /** Quarter hack-a-player starts in, by threshold or target (default 1; overtime counts as the 4th). */
+  hackFromQ?: number;
+  /** The assistant adjusts at breaks in simmed games, as AI coaches do. */
+  assistantAdjusts?: boolean;
+}
+
+/** When a situational plan applies: every condition given must hold. Overtime counts as the 4th quarter. */
+export interface SituationTrigger {
+  fromQ?: number;
+  untilQ?: number;
+  /** At most this many seconds left in the period. */
+  maxClock?: number;
+  /** The team's lead (negative when trailing) is at least / at most this. */
+  minLead?: number;
+  maxLead?: number;
+  /** Only while the second unit plays: three or more of the five on the floor didn't start. */
+  benchUnit?: boolean;
+}
+
+/** A change of plan for a game situation ("protect a lead", "second unit"), applied on top of the base tactics. */
+export interface SituationalPlan {
+  id: string;
+  label: string;
+  enabled: boolean;
+  when: SituationTrigger;
+  patch: TacticsPatch;
 }
 
 export interface Rotation {
@@ -403,6 +435,8 @@ export interface Tactics {
   manual: boolean;
   /** The saved playbook (League.playbooks) these tactics were loaded from or saved as, if any. */
   playbook?: { id: string; name: string } | null;
+  /** Situational plans (at most four): the first enabled one whose trigger matches is played on top of the rest. */
+  situations?: SituationalPlan[];
 }
 
 /**

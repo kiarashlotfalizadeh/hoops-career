@@ -7,6 +7,7 @@ import { prepareLive, clearLive, playedElsewhere, CLUTCH_SEC, type LiveGame } fr
 import { buildScript, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
 import { Card, Empty, PageHeader, Sheet } from '../components/ui';
+import { LateGameCard } from '../live/LateGameCard';
 import { composites } from '../../core/ratings';
 import type { League, PbpEntry, Settings, Tactics } from '../../core/types';
 import type { PossLog } from '../../core/sim/log';
@@ -859,6 +860,7 @@ export default function Live() {
             </div>
           )}
 
+          {!over && <LateGameCard sim={sim} side={userSide} shown={ticker} quarter={quarter} logs={game.logs} drawing={!!script} nameOf={nameOf} timeout={() => callTimeout()} />}
           {!over && (
             <div className="grid4 live-ctl">
               <button

@@ -46,6 +46,8 @@ const all: [string, TacticsPatch, string[]][] = [
   ['pnr hedge', { defense: { pnr: 'hedge', switchOffBall: false } }, ['drop_', 'switch_', 'blitz_', 'hedge_', 'ice_']],
   ['pnr ice', { defense: { pnr: 'ice', switchOffBall: false } }, ['drop_', 'switch_', 'blitz_', 'hedge_', 'ice_']],
   ['zone23', { defense: { scheme: 'zone23' } }, ['zone_']],
+  ['zone32', { defense: { scheme: 'zone32' } }, ['zone_']],
+  ['switchOffBall', { defense: { switchOffBall: true } }, ['switch_', 'drop_']],
   ['star deny', { defense: { starPlan: 'deny' } }, ['star_deny']],
   ['star double', { defense: { starPlan: 'double' } }, ['star_double', 'double_kick']],
   ['pace 0', { offense: { pace: 0 } }, []],

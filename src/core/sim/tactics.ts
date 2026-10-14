@@ -1,4 +1,17 @@
-import type { ActionType, DefScheme, DefenseTactics, GameManagement, OffenseTactics, PnrCoverage, PressMode, StarPlan, Tactics, TacticsPatch } from '../types';
+import type {
+  ActionType,
+  DefScheme,
+  DefenseTactics,
+  GameManagement,
+  OffenseTactics,
+  PnrCoverage,
+  PressMode,
+  SituationTrigger,
+  SituationalPlan,
+  StarPlan,
+  Tactics,
+  TacticsPatch,
+} from '../types';
 import { clamp } from '../random';
 
 export interface OffPreset {
@@ -150,7 +163,7 @@ export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
   zone23: { label: '2-3 Zone', help: 'Protects the paint against drives, cuts and post-ups; vulnerable to open (often corner) threes and offensive boards.' },
   zone32: {
     label: '3-2 Zone',
-    help: 'Protects the paint like the 2-3 and runs shooters off the line, so ball movement finds fewer open threes; still weak on the offensive glass.',
+    help: 'Three defenders on the arc: ball movement finds far fewer open threes than against the 2-3, but the paint, post-ups, cuts and the offensive glass are softer. A choice against shooting teams, not against bigs and drivers.',
   },
 };
 
@@ -237,8 +250,26 @@ export function cloneTactics(t: Tactics): Tactics {
       screeners: [...t.offense.screeners],
     },
     defense: { ...t.defense, matchups: { ...t.defense.matchups } },
-    manage: { ...t.manage },
+    manage: t.manage.hackTargets ? { ...t.manage, hackTargets: [...t.manage.hackTargets] } : { ...t.manage },
+    ...(t.situations && { situations: t.situations.map(cloneSituation) }),
   };
+}
+
+/**
+ * The tactics without what only the user's bench uses: situational plans, the crunch-time go-to
+ * player and after-timeout play, hack targets and the assistant's adjustments. An AI coach who
+ * inherits a team (the user took over another) plays its playbook, not those.
+ */
+export function withoutCoachPlans(t: Tactics): Tactics {
+  const out = cloneTactics(t);
+  delete out.situations;
+  for (const k of ['goTo', 'ato', 'hackTargets', 'hackFromQ', 'assistantAdjusts'] as const) delete out.manage[k];
+  return out;
+}
+
+/** A copy of a situational plan that shares nothing with it (patches are plain data). */
+export function cloneSituation(s: SituationalPlan): SituationalPlan {
+  return { ...s, when: { ...s.when }, patch: JSON.parse(JSON.stringify(s.patch)) as TacticsPatch };
 }
 
 /** Tactics with a patch applied (a copy): fixed values first, then the relative nudges, kept within 0..100. */
@@ -286,10 +317,82 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   }
   if (Object.keys(defense).length) patch.defense = defense;
   const manage: Partial<GameManagement> = {};
-  for (const k of Object.keys(b.manage) as (keyof GameManagement)[]) if (a.manage[k] !== b.manage[k]) (manage as Record<string, unknown>)[k] = b.manage[k];
+  // hack-a-player targets name tonight's opponents, like the matchups
+  for (const k of Object.keys(b.manage) as (keyof GameManagement)[])
+    if (k !== 'hackTargets' && k !== 'hackFromQ' && !same(a.manage[k], b.manage[k])) (manage as Record<string, unknown>)[k] = structuredClone(b.manage[k]);
   if (Object.keys(manage).length) patch.manage = manage;
   return patch;
 }
 
 /** A patch changes nothing. */
 export const emptyPatch = (p: TacticsPatch) => !p.offense && !p.defense && !p.manage && !p.nudge;
+// ---------------------------------------------------------------- situations
+
+/** A team plays at most this many situational plans (the first enabled one that matches applies). */
+export const MAX_SITUATIONS = 4;
+
+export type SituationTemplate = 'protectLead' | 'chasing' | 'secondUnit' | 'closeQ';
+
+/** Ready-made situational plans: relative changes, so each builds on whatever playbook is in place. */
+export const SITUATION_TEMPLATES: Record<SituationTemplate, { label: string; help: string; when: SituationTrigger; patch: TacticsPatch }> = {
+  protectLead: {
+    label: 'Protect a lead',
+    help: 'Last five minutes of the 4th (and overtime), up 1 to 12: slow it down, keep bodies back, no gambles or cheap fouls.',
+    when: { fromQ: 4, maxClock: 300, minLead: 1, maxLead: 12 },
+    patch: { nudge: { offense: { pace: -25, transition: -20, crashBoards: -20 }, defense: { getBack: 20, pressure: -10, physicality: -10 } } },
+  },
+  chasing: {
+    label: 'Chasing late',
+    help: 'Last six minutes, down 6 to 18: push the pace, hunt threes, pressure the ball and press after makes.',
+    when: { fromQ: 4, maxClock: 360, minLead: -18, maxLead: -6 },
+    patch: { defense: { press: 'afterMade' }, nudge: { offense: { pace: 25, transition: 20, threePoint: 15 }, defense: { pressure: 20 } } },
+  },
+  secondUnit: {
+    label: 'Second unit',
+    help: 'While three or more reserves are on the floor: simpler sets (more pick-and-roll and ball movement, fewer isolations and post-ups) at a quicker pace.',
+    when: { benchUnit: true },
+    patch: { nudge: { offense: { pace: 10, transition: 10 }, actions: { pnr: 10, motion: 10, iso: -15, post: -10 } } },
+  },
+  closeQ: {
+    label: 'End of quarter',
+    help: 'Last 40 seconds of the 1st to 3rd quarters: hunt a mismatch for the last shots and avoid cheap fouls.',
+    when: { untilQ: 3, maxClock: 40 },
+    patch: { offense: { huntMismatch: true }, nudge: { actions: { iso: 20 }, defense: { physicality: -15 } } },
+  },
+};
+
+/** A new plan from a template, with an id not used yet in `existing`. */
+export function situationFromTemplate(key: SituationTemplate, existing: SituationalPlan[] = []): SituationalPlan {
+  const tpl = SITUATION_TEMPLATES[key];
+  let id: string = key;
+  for (let n = 2; existing.some((s) => s.id === id); n++) id = `${key}-${n}`;
+  return cloneSituation({ id, label: tpl.label, enabled: true, when: tpl.when, patch: tpl.patch });
+}
+
+const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+
+/** When a plan applies, in a few words: "Q4 & OT · last 5:00 · up 1-12", "Second unit on the floor". */
+export function situationText(w: SituationTrigger): string {
+  const parts: string[] = [];
+  const from = w.fromQ ?? 1;
+  const until = w.untilQ ?? 4;
+  if (from >= 4) parts.push('Q4 & OT');
+  else if (from === until) parts.push(`Q${from}`);
+  else if (until >= 4) {
+    if (from > 1) parts.push(`from Q${from}`);
+  } else parts.push(`Q${from}-Q${until}`);
+  if (w.maxClock !== undefined) parts.push(`last ${mmss(w.maxClock)}`);
+  const lo = w.minLead;
+  const hi = w.maxLead;
+  if (lo !== undefined && hi !== undefined) {
+    if (lo >= 1) parts.push(lo === hi ? `up ${lo}` : `up ${lo}-${hi}`);
+    else if (hi <= -1) parts.push(lo === hi ? `down ${-hi}` : `down ${-hi}-${-lo}`);
+    else if (lo === -hi) parts.push(hi === 0 ? 'tied' : `within ${hi}`);
+    else parts.push(`margin ${lo > 0 ? '+' : ''}${lo} to ${hi > 0 ? '+' : ''}${hi}`);
+  } else if (lo !== undefined) parts.push(lo >= 1 ? `up ${lo}+` : lo === 0 ? 'tied or ahead' : `down ${-lo} or better`);
+  else if (hi !== undefined) parts.push(hi <= -1 ? `down ${-hi}+` : hi === 0 ? 'tied or behind' : `up ${hi} or less`);
+  if (w.benchUnit) parts.push('second unit on the floor');
+  if (!parts.length) return 'Whole game';
+  const text = parts.join(' · ');
+  return text[0].toUpperCase() + text.slice(1);
+}
