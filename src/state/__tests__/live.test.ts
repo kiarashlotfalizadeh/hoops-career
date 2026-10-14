@@ -3,7 +3,7 @@
 // quarter skip stops at the break.
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
+import { CLUTCH_SEC, pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
 import { useStore } from '../store';
 import { flowActions } from '../../ui/flow';
 import { regularGamesLeft, simDay } from '../../core/league/season';
@@ -176,6 +176,75 @@ describe('live game', () => {
     lg.simTo('quarter');
     expect(lg.sim.q).toBe(2);
     expect(lg.sim.clock).toBeLessThanOrEqual(0.05);
+  });
+
+  it('skips to halftime and to clutch time, and plays nothing once past them', () => {
+    const l = testLeague('half');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('half');
+    expect([lg.sim.q, lg.sim.clock <= 0.05]).toEqual([2, true]);
+    // at halftime already: nothing more to play
+    expect(lg.simTo('half')).toEqual([]);
+    expect(lg.sim.q).toBe(2);
+    lg.simTo('clutch');
+    expect(lg.sim.q).toBe(4);
+    expect(lg.sim.clock).toBeLessThanOrEqual(CLUTCH_SEC);
+    // stopped on the possession that crossed 5:00
+    expect(lg.sim.clock).toBeGreaterThan(CLUTCH_SEC - 30);
+    expect(lg.simTo('clutch')).toEqual([]);
+    expect(lg.simTo('half')).toEqual([]);
+    lg.simTo('end');
+    expect(lg.over).toBe(true);
+  });
+
+  it('keeps the tactics it tipped off with (game plan included) for "Reset to game plan"', () => {
+    const l = testLeague('planned');
+    toGameDay(l);
+    const lg = goLive(l);
+    const tip = JSON.stringify(lg.planned);
+    const t = lg.sim.baseTactics(lg.userSide);
+    t.offense.pace = t.offense.pace > 50 ? 10 : 90;
+    lg.sim.setTactics(lg.userSide, t);
+    lg.simTo('quarter');
+    expect(JSON.stringify(lg.planned)).toBe(tip);
+    expect(lg.sim.baseTactics(lg.userSide).offense.pace).toBe(t.offense.pace);
+  });
+
+  it('describes a game at a break in the present tense, and a finished one as before', () => {
+    const l = testLeague('partial');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('half');
+    const half = buildGameReport(l, lg.sim.result(), l.userTid, { partial: true, elapsed: lg.sim.elapsed })!;
+    expect(half.headline).toMatch(/^Halftime: the .+ (lead|trail) the .+ \d+-\d+\.|^Halftime: the .+ and the .+ are tied at \d+\./);
+    expect(half.headline).not.toMatch(/ beat | fell to /);
+    if (/Biggest factor/.test(half.headline)) expect(half.headline).toContain('Biggest factor so far:');
+    for (const f of half.factors.filter((x) => x.category === 'stars')) expect(f.title).toMatch(/so far/);
+    lg.simTo('quarter');
+    expect(buildGameReport(l, lg.sim.result(), l.userTid, { partial: true })!.headline).toMatch(/^After Q3: /);
+    const res = lg.commit(l);
+    const full = buildGameReport(l, res)!;
+    expect(full.headline).toMatch(/^The .+ (beat|fell to) the .+ \d+-\d+/);
+    // the options only change a report that asks for them
+    expect(buildGameReport(l, res, l.userTid, { partial: false })).toEqual(full);
+    expect(full.factors.filter((f) => f.category === 'stars').every((f) => /erupted for (3[5-9]|[4-9]\d)/.test(f.title))).toBe(true);
+  });
+
+  it('measures a star line at a break against the time played', () => {
+    const l = testLeague('star');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    const res = lg.sim.result();
+    const mine = res.home.tid === l.userTid ? res.home : res.away;
+    const star = [...mine.players].sort((a, b) => b.pts - a.pts)[0];
+    // a quarter of a game: 35 points' pace is about 9 (never fewer than 8)
+    star.pts = Math.max(12, star.pts);
+    const q1 = buildGameReport(l, res, l.userTid, { partial: true })!;
+    const f = q1.factors.find((x) => x.category === 'stars' && x.title.startsWith(`${star.name} has ${star.pts} points so far`));
+    expect(f?.detail).toBe(`On pace for ${star.pts * 4}.`);
+    expect(buildGameReport(l, res)!.factors.some((x) => x.category === 'stars' && x.title.startsWith(star.name))).toBe(false);
   });
 
   it('the Play menu finishes a game in progress first', () => {

@@ -9,7 +9,7 @@ import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, off
 import { applyPatch, type Candidate } from './lab';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
-import { possessive } from '../analysis/gameReport';
+import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
 
 export interface Threat {
   pid: number;
@@ -237,6 +237,55 @@ export function liveCounter(ft: FinishType, t: Tactics): LiveCounter | undefined
   const after = cloneTactics(t);
   c.apply(after);
   return JSON.stringify(after) !== JSON.stringify(t) ? c : undefined;
+}
+
+/** The one-tap fix for each tactical edge an opponent can get on you, keyed like the engine's impact tags. */
+const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => void }> = {
+  'drop_pullup:o': { label: 'Switch to Hedge', apply: (t) => void (t.defense.pnr = 'hedge') },
+  'drop_pop:o': { label: 'Switch screens', apply: (t) => void (t.defense.pnr = 'switch') },
+  'drop_handoff:o': { label: 'Switch off-ball screens', apply: (t) => void (t.defense.switchOffBall = true) },
+  'switch_mismatch:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },
+  'hedge_roll:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },
+  'blitz_4v3:o': {
+    label: 'Stop trapping',
+    apply: (t) => {
+      if (t.defense.pnr === 'blitz') t.defense.pnr = 'hedge';
+      if (t.defense.starPlan === 'double') t.defense.starPlan = 'none';
+    },
+  },
+  'zone_3pt:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
+  'zone_glass:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
+  'help_kick:o': { label: 'Stay home', apply: (t) => void (t.defense.help = 35) },
+  'help_paint:o': { label: 'Pack the paint', apply: (t) => void (t.defense.help = 65) },
+  'pressure_to:o': { label: 'Pressure the ball', apply: (t) => void (t.defense.pressure = 65) },
+  'pressure_blowby:o': { label: 'Back off the ball', apply: (t) => void (t.defense.pressure = 35) },
+  'pressure_foul:o': { label: 'Back off the ball', apply: (t) => void (t.defense.pressure = 35) },
+  'press_break:o': { label: 'Call off the press', apply: (t) => void (t.defense.press = 'none') },
+  'crash_leak:o': { label: 'Crash less', apply: (t) => void (t.offense.crashBoards = 30) },
+  'getback:o': { label: 'Sprint back', apply: (t) => void (t.defense.getBack = 80) },
+  'double_kick:o': {
+    label: 'Stop doubling',
+    apply: (t) => {
+      if (t.defense.starPlan === 'double') t.defense.starPlan = 'none';
+      t.defense.help = Math.min(t.defense.help, 50);
+    },
+  },
+  'physicality:o': { label: 'Less physical', apply: (t) => void (t.defense.physicality = 35) },
+  'clean_defense:o': { label: 'More physical', apply: (t) => void (t.defense.physicality = 60) },
+  'transition:d': { label: 'Push in transition', apply: (t) => void (t.offense.transition = 75) },
+  'hack:o': { label: 'Stop the Hack-a', apply: (t) => void (t.manage.hackThreshold = 0) },
+};
+
+/**
+ * The live one-tap answer to a tactical edge against you (an impact key such as 'drop_pullup:o'):
+ * none when your tactics no longer use what caused it, so the button always takes it away.
+ */
+export function impactCounter(key: string, t: Tactics): LiveCounter | undefined {
+  const c = IMPACT_COUNTERS[key];
+  if (!c || !IMPACT_TEXT[key]?.uses?.(t)) return undefined;
+  const after = cloneTactics(t);
+  c.apply(after);
+  return JSON.stringify(after) !== JSON.stringify(t) ? { label: c.label, apply: c.apply } : undefined;
 }
 
 export interface Alert {
