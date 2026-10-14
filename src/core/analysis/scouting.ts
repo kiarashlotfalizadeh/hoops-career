@@ -186,34 +186,64 @@ function rankOf(values: number[], high: boolean): number[] {
 }
 
 function addPt(into: PT, from: PT | undefined) {
-  for (const [k, v] of Object.entries(from ?? {})) {
+  for (const k in from) {
+    const v = from[k];
     const e = (into[k] ??= { poss: 0, pts: 0 });
     e.poss += v.poss;
     e.pts += v.pts;
   }
 }
 
-function buildSeason(league: League, season: number): SeasonAgg {
-  const teams: TeamAgg[] = league.teams.map((t) => {
-    const ts = t.seasons.find((s) => s.season === season) ?? null;
-    return { ts, gp: ts ? ts.won + ts.lost : 0, off: {}, def: {}, ptGames: 0, rimA: 0 };
-  });
-  // play types come from the stored games: every game of this season, only the user's of earlier ones
-  const all: PT = {};
-  for (const g of league.games) {
+/** A season's play types summed from the stored games, by team, as far as `done` games into the list. */
+interface PlayTypeSums {
+  games: League['games'];
+  done: number;
+  off: PT[];
+  def: PT[];
+  ptGames: number[];
+  all: PT;
+}
+
+const ptCache = new WeakMap<League, Map<number, PlayTypeSums>>();
+
+/**
+ * Play types come from the stored games: every game of this season, only the user's of earlier ones.
+ * The list only grows within a season (a new season starts a new one), so each game is added once.
+ */
+function playTypeSums(league: League, season: number): PlayTypeSums {
+  let bySeason = ptCache.get(league);
+  if (!bySeason) ptCache.set(league, (bySeason = new Map()));
+  let st = bySeason.get(season);
+  const n = league.teams.length;
+  if (!st || st.games !== league.games || st.done > league.games.length) {
+    st = { games: league.games, done: 0, off: Array.from({ length: n }, () => ({})), def: Array.from({ length: n }, () => ({})), ptGames: new Array<number>(n).fill(0), all: {} };
+    bySeason.set(season, st);
+  }
+  for (let i = st.done; i < league.games.length; i++) {
+    const g = league.games[i];
     if (g.season !== season || g.type === 'allstar') continue;
     for (const [mine, opp] of [
       [g.home, g.away],
       [g.away, g.home],
     ]) {
-      const tm = teams[mine.tid];
-      if (!tm) continue;
-      tm.ptGames++;
-      addPt(tm.off, mine.playTypes);
-      addPt(tm.def, opp.playTypes);
-      addPt(all, mine.playTypes);
+      if (!(mine.tid >= 0 && mine.tid < n)) continue;
+      st.ptGames[mine.tid]++;
+      addPt(st.off[mine.tid], mine.playTypes);
+      addPt(st.def[mine.tid], opp.playTypes);
+      addPt(st.all, mine.playTypes);
     }
   }
+  st.done = league.games.length;
+  return st;
+}
+
+function buildSeason(league: League, season: number): SeasonAgg {
+  const sums = playTypeSums(league, season);
+  const all = sums.all;
+  const teams: TeamAgg[] = league.teams.map((t, tid) => {
+    const ts = t.seasons.find((s) => s.season === season) ?? null;
+    return { ts, gp: ts ? ts.won + ts.lost : 0, off: sums.off[tid], def: sums.def[tid], ptGames: sums.ptGames[tid], rimA: 0 };
+  });
   // shots at the rim are kept per player (the team totals don't split them by zone)
   for (const p of Object.values(league.players)) for (const s of p.stats) if (s.season === season && !s.playoffs && teams[s.tid]) teams[s.tid].rimA += s.rimA;
   // the league's points per play type, as playTypeBaselines reads them for the current season

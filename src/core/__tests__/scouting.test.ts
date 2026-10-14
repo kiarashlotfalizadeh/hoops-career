@@ -88,6 +88,19 @@ describe('scouting data', () => {
     expect(lines.reduce((a, s) => a + s.onPoss, 0)).toBe(5 * ts.poss);
   });
 
+  it('keeps up as games are played: the same numbers as counting them all again', () => {
+    scoutData(l, opp);
+    const played = l.games.length;
+    simDay(l);
+    simDay(l);
+    expect(l.games.length).toBeGreaterThan(played);
+    const now = scoutData(l, opp);
+    const fresh = scoutData(structuredClone(l), opp);
+    expect(now.playTypes).toEqual(fresh.playTypes);
+    expect(now.defPlayTypes).toEqual(fresh.defPlayTypes);
+    expect([now.pace, now.ortg, now.rimRate]).toEqual([fresh.pace, fresh.ortg, fresh.rimRate]);
+  });
+
   it("falls back to last season's numbers (labelled) until this season has enough games", () => {
     const m = playedLeague();
     const tid = scoutable(m, m.userTid + 1);
