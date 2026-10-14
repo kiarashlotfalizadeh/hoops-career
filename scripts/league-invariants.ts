@@ -137,6 +137,7 @@ function check() {
   if ((L.proposals?.length ?? 0) > P.MAX_OPEN || new Set(L.proposals?.map((p) => p.tid)).size !== (L.proposals?.length ?? 0))
     bad('too many trade offers', String(L.proposals?.length));
   for (const pid of L.untouchable ?? []) if (L.players[pid]?.tid !== L.userTid) bad('untouchable not on the user team', nm(pid));
+  checkTransactions();
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
   } catch (e) {
@@ -353,6 +354,20 @@ function checkLottery() {
   if (pct.some((x, i) => i > 0 && x < pct[i - 1] - 1e-9)) bad('second round not by record', pct.map((x) => x.toFixed(3)).join(','));
 }
 
+/** The transaction log: ids unique and increasing, real teams, a player on every move, and sides (one per team) on trades only. */
+function checkTransactions() {
+  let last = 0;
+  for (const t of L.transactions ?? []) {
+    if (!(t.id > last)) bad('transaction ids not increasing', `${last} then ${t.id}`);
+    last = Math.max(last, t.id);
+    if (!t.tids.length || t.tids.some((tid) => !L.teams[tid])) bad('transaction with a bad team', JSON.stringify(t));
+    if ((t.kind === 'trade') !== !!t.sides) bad('trade sides off a trade', JSON.stringify(t));
+    if (t.sides && t.sides.map((x) => x.tid).join() !== t.tids.join()) bad("trade sides don't match its teams", JSON.stringify(t));
+    if (t.kind !== 'trade' && (t.pid === undefined || !t.name)) bad('move without a player', JSON.stringify(t));
+  }
+  if (last && !((L.nextTxnId ?? 0) > last)) bad('transaction id reused', `next ${L.nextTxnId}, last ${last}`);
+}
+
 function checkOptions(user: boolean) {
   for (const p of Object.values(L.players)) if (C.pendingOption(L, p) && (user || p.tid !== L.userTid)) bad('undecided contract option', `${nm(p.pid)} ${p.contract.option}`);
 }
@@ -436,6 +451,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     let buyouts = 0;
     let claims = 0;
     let lastId = L.nextMsgId;
+    const firstTxn = L.nextTxnId ?? 1;
     for (let g = 0; L.phase === 'regular' && g < 400; g++) {
       const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from }));
       S.simDay(L);
@@ -465,6 +481,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     checkRegularSeasonOver();
     const offers = (L.nextProposalId ?? 1) - offers0;
     if (L.news.filter((x) => x.season === L.season && x.text.startsWith('Trade deadline recap')).length !== 1) bad('deadline recap not once', '');
+    const logged = (L.transactions ?? []).filter((t) => t.kind === 'trade' && t.id >= firstTxn).length;
+    if (logged !== trades) bad('trade missing from the transaction log', `${trades} made, ${logged} logged`);
     for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) S.simDay(L);
     check();
     checkSeasonEnd();
@@ -500,6 +518,12 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
+    );
+    const log = L.transactions ?? [];
+    const kinds = new Map<string, number>();
+    for (const t of log) kinds.set(t.kind, (kinds.get(t.kind) ?? 0) + 1);
+    console.log(
+      `   transaction log: ${log.length} (${[...kinds].map(([k, n]) => `${k} ${n}`).join(', ')}), ${(JSON.stringify(log).length / 1e3).toFixed(1)}KB, ${log.filter((t) => t.season === L.season - 1).length} from ${L.season - 1}`,
     );
   }
 }

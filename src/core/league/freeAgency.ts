@@ -48,6 +48,7 @@ import {
   wantsTwoWay,
   willSign,
 } from './contracts';
+import { logMove } from './transactions';
 
 /** Free agency lasts FA_DAYS days: opening day is day 1 (faDay 0), so the market closes at faDay FA_DAYS - 1. */
 export const FA_DAYS = 30;
@@ -186,6 +187,7 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Rights can be renounced during the re-signing period.' };
   if (!p || p.tid !== league.userTid || contractExp(p.contract) > league.season) return { ok: false, reason: 'Not one of your expiring players.' };
+  logMove(league, 'renounce', p.tid, p);
   leaveTeam(league.teams[p.tid], pid);
   toFreeAgent(league, p);
   return { ok: true, reason: `${playerName(p)} is renounced: he becomes a free agent when the market opens.` };

@@ -23,6 +23,7 @@ import {
   teamPlayers,
   winPct,
 } from './helpers';
+import { logMove } from './transactions';
 
 export type Strategy = Team['strategy'];
 
@@ -330,6 +331,10 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
       pids: [p.pid],
     });
   }
+  // the transaction log leaves out AI teams' roster filler: quiet fills (no news) and new minimum
+  // deals, camp bodies most of whom are cut on opening night
+  const filler = opts.news === false || (prevTid !== tid && p.contract.salaries[0] <= CAP_FOR(league, p.contract.start).vetMin + 10);
+  if (!filler || tid === league.userTid) logMove(league, prevTid === tid ? 'resign' : opts.twoWay ? 'twoWay' : 'sign', tid, p, { amount: p.contract.salaries[0], years });
 }
 
 /** Why a fired coach can't run his old team's roster (see owner.ts). */
@@ -418,6 +423,9 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   p.asking = askingContract(league, p);
   p.faDays = FA_PRICE_CUT_DAYS;
   if (opts.news !== false) addNews(league, { kind: 'release', text: `The ${team.name} ${waive ? 'waived' : 'released'} ${playerName(p)}.`, tids: [tid], pids: [p.pid] });
+  // (a buyout logs itself)
+  if ((opts.news !== false || tid === league.userTid) && opts.giveback === undefined)
+    logMove(league, waive ? 'waive' : 'release', tid, p, { amount: dead.reduce((a, d) => a + d.amount, 0) || undefined });
 }
 
 // ---------------------------------------------------------------- waivers
@@ -480,6 +488,7 @@ function claimPlayer(league: League, p: Player, tid: number) {
   p.faDays = undefined;
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
   addNews(league, { kind: 'signing', text: `The ${team.region} ${team.name} claimed ${playerName(p)} off waivers from the ${old.name}.`, tids: [tid, w.from], pids: [p.pid] });
+  logMove(league, 'claim', [tid, w.from], p, { amount: salaryFor(p, league.season), years: contractExp(p.contract) - league.season + 1 });
 }
 
 /**
@@ -603,6 +612,7 @@ export function userBuyout(league: League, pid: number): { ok: boolean; reason: 
     tids: [team.tid],
     pids: [p.pid],
   });
+  logMove(league, 'buyout', team.tid, p, { amount: terms.saved });
   return {
     ok: true,
     reason: `${playerName(p)} takes the buyout: he gives back $${(terms.saved / 1000).toFixed(1)}M, and $${(terms.dead / 1000).toFixed(1)}M stays on your books.`,
@@ -624,6 +634,7 @@ export function aiBuyouts(league: League) {
     const terms = buyoutTerms(league, vet)!;
     releasePlayer(league, vet, { news: false, giveback: terms.giveback });
     addNews(league, { kind: 'release', text: `The ${t.name} bought out ${playerName(vet)}, who gave back $${(terms.saved / 1000).toFixed(1)}M.`, tids: [t.tid], pids: [vet.pid] });
+    logMove(league, 'buyout', t.tid, vet, { amount: terms.saved });
   }
 }
 
@@ -662,6 +673,7 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   const min = (season: number) => (p.experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
   p.contract = { start: s, salaries: Array.from({ length: exp - s + 1 }, (_, i) => min(s + i)), converted: true };
   addNews(league, { kind: 'signing', text: `The ${league.teams[p.tid].name} converted ${playerName(p)} to a standard contract.`, tids: [p.tid], pids: [p.pid] });
+  logMove(league, 'convert', p.tid, p, { amount: p.contract.salaries[0], years: p.contract.salaries.length });
   return { ok: true, reason: `${playerName(p)} now holds a standard roster spot.` };
 }
 
@@ -698,6 +710,7 @@ export function decideTeamOption(league: League, pid: number, exercise: boolean)
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (league.phase !== 'resign') return { ok: false, reason: 'Options are decided during the re-signing period.' };
   if (!p || p.tid !== league.userTid || pendingOption(league, p) !== 'team') return { ok: false, reason: 'No pending team option.' };
+  logMove(league, 'option', p.tid, p, { amount: salaryFor(p, league.season + 1), note: exercise ? 'exercised' : 'declined' });
   if (exercise) exerciseOption(p);
   else {
     dropOptionYear(p);
@@ -717,25 +730,33 @@ export function decideTeamOption(league: League, pid: number, exercise: boolean)
 export function resolveOptions(league: League, rng: Rng, includeUser = false) {
   const optOuts: Player[] = [];
   const staffCalls: string[] = [];
+  // opt-outs that make the news
+  const newsworthy = (p: Player) => p.ovr >= 74 || salaryFor(p, league.season) >= 10_000;
   for (const p of Object.values(league.players)) {
     const kind = pendingOption(league, p);
     if (!kind) continue;
     const sal = salaryFor(p, league.season + 1);
+    const user = p.tid === league.userTid;
     if (kind === 'player') {
-      if (marketSalary(league, p) * rng.uniform(0.9, 1.1) > sal * 1.15) {
+      const out = marketSalary(league, p) * rng.uniform(0.9, 1.1) > sal * 1.15;
+      if (out) {
         dropOptionYear(p);
         optOuts.push(p);
       } else exerciseOption(p);
+      // the log has the user's players' calls and the opt-outs in the news
+      if (user || (out && newsworthy(p))) logMove(league, 'option', p.tid, p, { amount: sal, note: out ? 'opted out' : 'opted in' });
       continue;
     }
-    const user = p.tid === league.userTid;
     if (user && !includeUser) continue;
     const keep = teamOptionWorth(league, p);
     if (keep) exerciseOption(p);
     else dropOptionYear(p);
-    if (user) staffCalls.push(`${playerName(p)}: ${keep ? 'exercised' : 'declined'} ($${(sal / 1000).toFixed(1)}M)`);
+    if (user) {
+      staffCalls.push(`${playerName(p)}: ${keep ? 'exercised' : 'declined'} ($${(sal / 1000).toFixed(1)}M)`);
+      logMove(league, 'option', p.tid, p, { amount: sal, note: keep ? 'exercised' : 'declined' });
+    }
   }
-  const notable = optOuts.filter((p) => p.ovr >= 74 || salaryFor(p, league.season) >= 10_000).sort((a, b) => b.ovr - a.ovr);
+  const notable = optOuts.filter(newsworthy).sort((a, b) => b.ovr - a.ovr);
   if (notable.length) {
     addNews(league, {
       kind: 'general',
@@ -882,6 +903,7 @@ export function extendContract(league: League, p: Player, amount: number, years:
     tids: [p.tid],
     pids: [p.pid],
   });
+  logMove(league, 'extend', p.tid, p, { amount: p.contract.next.salaries[0], years });
 }
 
 /** The user extends one of his players (see extensionBlockedReason and willExtend). */

@@ -728,6 +728,46 @@ export interface NewsItem {
   pids: number[];
 }
 
+/** A kind of roster move in the transaction log. */
+export type TxnKind = 'trade' | 'sign' | 'resign' | 'extend' | 'release' | 'waive' | 'claim' | 'buyout' | 'twoWay' | 'convert' | 'renounce' | 'option' | 'draft';
+
+/** What one team sent in a trade, as it was: names and pick labels at the time. */
+export interface TxnSide {
+  tid: number;
+  players: { pid: number; name: string }[];
+  picks: string[];
+}
+
+/**
+ * One roster move in the transaction log (see src/core/league/transactions.ts). Names and pick
+ * labels are frozen when it happens, so it reads the same after the player retires and his record
+ * is compacted away, or the pick becomes a player.
+ */
+export interface Txn {
+  id: number;
+  season: number;
+  day: number;
+  phase: Phase;
+  kind: TxnKind;
+  /** The teams in it: the one that made the move first (a waiver claim: the claiming team, then the one that waived him). */
+  tids: number[];
+  /** Trades only: what each team sent. */
+  sides?: TxnSide[];
+  pid?: number;
+  name?: string;
+  /**
+   * $K: the first-year salary of a signing, re-signing, extension, two-way deal, conversion or
+   * claim (this season's); the dead money a release leaves; what a buyout gave back; the salary of
+   * an option year.
+   */
+  amount?: number;
+  years?: number;
+  /** An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option); a draft pick: its overall number ('#5'). */
+  note?: string;
+  /** The user's team was in it: kept for good, even after he moves on to another team. */
+  user?: true;
+}
+
 export interface InboxMessage {
   id: number;
   season: number;
@@ -873,6 +913,10 @@ export interface League {
   nextProposalId?: number;
   /** The user's players AI teams don't ask for (in offers, "what would make this work?" or counters). */
   untouchable?: number[];
+  /** The transaction log, oldest first: every trade and the user's moves for good, other teams' moves for two seasons (see pruneTransactions). */
+  transactions?: Txn[];
+  /** Id of the next transaction logged. */
+  nextTxnId?: number;
 }
 
 /** Post-game press conference answers: credit the group, praise the player of the game, challenge the effort (after a loss). */

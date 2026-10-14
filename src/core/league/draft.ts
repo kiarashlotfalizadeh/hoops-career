@@ -5,6 +5,7 @@ import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from
 import { composites, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
+import { logMove } from './transactions';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
 
@@ -226,6 +227,7 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
   team.rotation.order.push(p.pid);
   league.draftPicks = league.draftPicks.filter((d) => d.dpid !== dp.dpid);
   addNews(league, { kind: 'draft', text: `#${overall}: ${team.abbrev} select ${playerName(p)} (${p.pos}, ${p.college || p.country}).`, tids: [dp.tid], pids: [p.pid] });
+  if (dp.round === 1 || dp.tid === league.userTid) logMove(league, 'draft', dp.tid, p, { note: `#${overall}` });
 }
 
 /** AI selection: best player available with a nudge toward need. */

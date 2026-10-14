@@ -26,6 +26,7 @@ import {
 } from './helpers';
 import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
+import { logTrade } from './transactions';
 
 export interface TradeSide {
   tid: number;
@@ -657,6 +658,8 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
 }
 
 export function executeTrade(league: League, offer: TradeOffer) {
+  // (logged before anything moves: each pick is named as its sender held it, "2027 1st" for its own)
+  logTrade(league, [offer.a, offer.b], (dpid) => pickLabel(league, findPick(league, dpid)!));
   const move = (pids: number[], to: number) => {
     for (const pid of pids) {
       const p = league.players[pid];
