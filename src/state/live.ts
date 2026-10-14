@@ -1,13 +1,16 @@
 // Live game controller: plays the user's game possession by possession so the UI can
 // animate it and the user can coach (timeouts, subs, tactic changes) in real time.
 
-import type { GameResult, League, ScheduledGame } from '../core/types';
+import type { GameResult, League, ScheduledGame, Tactics } from '../core/types';
 import { GameSim } from '../core/sim/engine';
 import type { PossLog } from '../core/sim/log';
 import { Rng } from '../core/random';
 import { buildSimInput, ensureRotation, neutralSite, playGame, userGameOnDay } from '../core/league/games';
 import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
+
+/** Clutch time: the last five minutes of the fourth quarter. */
+export const CLUTCH_SEC = 300;
 
 export class LiveGame {
   sim: GameSim;
@@ -18,6 +21,11 @@ export class LiveGame {
   /** The league object and team the game was set up for: another league (or a reload of this one) or a switched team never resumes it. */
   readonly league: League;
   readonly userTid: number;
+  /**
+   * The user's tactics at tip-off (the saved tactics with tonight's game plan): what "Reset to game
+   * plan" goes back to, and what "Keep changes" measures the night's changes against.
+   */
+  planned: Tactics;
 
   constructor(league: League, game: ScheduledGame) {
     this.league = league;
@@ -35,6 +43,7 @@ export class LiveGame {
       injuries: league.settings.injuries,
       neutral: neutralSite(game),
     });
+    this.planned = this.sim.baseTactics(this.userSide);
   }
 
   get over() {
@@ -50,15 +59,22 @@ export class LiveGame {
     return l;
   }
 
-  /** Fast-forward to a condition (end of quarter / game). */
-  simTo(cond: 'quarter' | 'end'): PossLog[] {
+  /**
+   * Fast-forward to the end of the period ('quarter': from a break, the next one), halftime, clutch
+   * time (5:00 left in the fourth quarter) or the end of the game. Already past halftime or clutch
+   * time, nothing is played.
+   */
+  simTo(cond: 'quarter' | 'half' | 'clutch' | 'end'): PossLog[] {
     const out: PossLog[] = [];
+    const s = this.sim;
+    if ((cond === 'half' && (s.q > 2 || (s.q === 2 && s.clock <= 0.05))) || (cond === 'clutch' && s.q >= 4 && s.clock <= CLUTCH_SEC)) return out;
+    // stop at the buzzer: the next step() rolls straight into the next period and skips the break
+    const done = () => (cond === 'quarter' ? s.clock <= 0.05 : cond === 'half' ? s.q === 2 && s.clock <= 0.05 : cond === 'clutch' ? s.q >= 4 && s.clock <= CLUTCH_SEC : false);
     let guard = 0;
     // from a break, the skip covers the next period
     do {
       out.push(...this.step());
-      // stop at the buzzer: the next step() rolls straight into the next period and skips the break
-    } while (!this.sim.over && guard++ < 1000 && !(cond === 'quarter' && this.sim.clock <= 0.05));
+    } while (!s.over && guard++ < 1000 && !done());
     return out;
   }
 

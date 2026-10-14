@@ -261,3 +261,35 @@ export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
   // the patch's own objects (matchups, roles...) never end up shared with the tactics it made
   return cloneTactics(out);
 }
+
+/** Same value, objects (roles, freedom, screeners) compared by content. */
+const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && JSON.stringify(a) === JSON.stringify(b));
+
+/**
+ * What changed from `a` to `b`, as a patch of fixed values: applyPatch(a, tacticsDiff(a, b)) gives
+ * `b` back. Matchups and the star target name tonight's opponents, so they're never part of it, and
+ * the playbook labels and the manual flag aren't tactics a patch carries.
+ */
+export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
+  const patch: TacticsPatch = {};
+  const offense: NonNullable<TacticsPatch['offense']> = {};
+  for (const k of Object.keys(b.offense) as (keyof OffenseTactics)[]) {
+    if (k === 'actions' || same(a.offense[k], b.offense[k])) continue;
+    (offense as Record<string, unknown>)[k] = structuredClone(b.offense[k]);
+  }
+  for (const k of Object.keys(b.offense.actions) as ActionType[]) if (a.offense.actions[k] !== b.offense.actions[k]) (offense.actions ??= {})[k] = b.offense.actions[k];
+  if (Object.keys(offense).length) patch.offense = offense;
+  const defense: Partial<DefenseTactics> = {};
+  for (const k of Object.keys(b.defense) as (keyof DefenseTactics)[]) {
+    if (k === 'matchups' || k === 'starTarget' || same(a.defense[k], b.defense[k])) continue;
+    (defense as Record<string, unknown>)[k] = b.defense[k];
+  }
+  if (Object.keys(defense).length) patch.defense = defense;
+  const manage: Partial<GameManagement> = {};
+  for (const k of Object.keys(b.manage) as (keyof GameManagement)[]) if (a.manage[k] !== b.manage[k]) (manage as Record<string, unknown>)[k] = b.manage[k];
+  if (Object.keys(manage).length) patch.manage = manage;
+  return patch;
+}
+
+/** A patch changes nothing. */
+export const emptyPatch = (p: TacticsPatch) => !p.offense && !p.defense && !p.manage && !p.nudge;

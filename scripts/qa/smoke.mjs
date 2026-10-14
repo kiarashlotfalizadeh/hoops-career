@@ -88,7 +88,7 @@ try {
   await page
     .waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, tipoff, { timeout: 15_000 })
     .catch(() => fail.push(`live game clock never moved (${tipoff})`));
-  await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+  await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
   await page
     .locator('.sheet')
     .getByRole('button', { name: /Sim to final/ })

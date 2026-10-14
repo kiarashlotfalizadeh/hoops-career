@@ -188,7 +188,7 @@ if (stages.includes('mid')) {
       }
     }
     await phone
-      .getByRole('button', { name: 'Sim to final', exact: true })
+      .getByRole('button', { name: 'Skip ahead', exact: true })
       .click()
       .catch(() => {});
     await phone

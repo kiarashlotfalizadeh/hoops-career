@@ -79,7 +79,7 @@ await shot('19-live');
 await page.getByRole('button', { name: 'Adjust' }).click();
 await shot('20-live-plan');
 await page.keyboard.press('Escape');
-await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
 await page
   .locator('.sheet')
   .getByRole('button', { name: /Sim to final/ })

@@ -795,6 +795,10 @@ export interface Settings {
   complexity: 'simple' | 'advanced' | 'expert';
   /** Auto-play speed for live game. */
   liveSpeed: number;
+  /** Where a live game stops for a break with a period report (default 'quarters'). */
+  liveBreaks?: 'quarters' | 'half' | 'off';
+  /** Live games only draw the key plays, fast-forwarding the rest (default off). */
+  liveKeyPlays?: boolean;
   /** First-run guide dismissed. */
   onboarded?: boolean;
   /** Pause long sims for big news (default on). */

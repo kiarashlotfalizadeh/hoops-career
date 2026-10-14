@@ -1,0 +1,161 @@
+/* ------------------------------------------------------------------ live game: the on-court strip */
+.oc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.oc-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'num name pts'
+    'num meter pips';
+  column-gap: 6px;
+  row-gap: 3px;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: left;
+  color: var(--text);
+}
+.oc-row:hover {
+  border-color: var(--line-2);
+}
+.oc-num {
+  grid-area: num;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+}
+.oc-name {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.oc-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+.oc-pts {
+  grid-area: pts;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+}
+.oc-meter {
+  grid-area: meter;
+  height: 4px;
+}
+.oc-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.oc-pips {
+  grid-area: pips;
+  display: flex;
+  gap: 2px;
+}
+.oc-pips > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--surface-3);
+}
+.oc-pips > span.on {
+  background: var(--text-dim);
+}
+.oc-pips > span.warn {
+  background: var(--warn);
+}
+.oc-pips > span.bad {
+  background: var(--bad);
+}
+
+/* phones held sideways keep the court and the transport row in the sticky column: the strip goes beside it */
+.live-strip-side {
+  display: none;
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .live-strip-under {
+    display: none;
+  }
+  .live-strip-side {
+    display: block;
+  }
+}
+/* tablets: the court leaves room for the strip and the transport row in the sticky column */
+@media (min-width: 760px) and (min-height: 521px) {
+  .live-court {
+    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - 300px) * 50 / 47));
+    margin: 0 auto;
+  }
+}
+
+/* ------------------------------------------------------------------ live game: banners, pills, skip */
+.live-banner {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: calc(100% - 16px);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(6, 8, 12, 0.86);
+  border: 1px solid var(--line-2);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.live-banner.injury,
+.live-banner.foulout {
+  border-color: color-mix(in srgb, var(--bad) 65%, transparent);
+}
+.live-banner.adjust {
+  border-color: color-mix(in srgb, var(--info) 65%, transparent);
+}
+.live-pills .chip {
+  flex: none;
+}
+.live-context {
+  margin: -2px 0 4px;
+}
+.btn.live-skip {
+  height: auto;
+  min-height: 52px;
+  padding: 8px 14px;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+}
+/* the transport row (pause, speed, key plays, skip) stays one line on a 360px phone */
+.live-transport .btn.sm {
+  padding: 0 10px;
+  gap: 5px;
+}
+.live-transport .seg button {
+  padding: 0 9px;
+}
