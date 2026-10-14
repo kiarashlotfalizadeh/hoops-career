@@ -21,6 +21,8 @@ export interface LabRequest {
   patch?: TacticsPatch;
   /** The kind of game to play (regular season by default): playoff games shorten the assistants' rotations to eight. */
   type?: GameType;
+  /** Where the games are played: A at home every game, B at home, or a neutral floor. By default the sides take turns hosting. */
+  venue?: 'a' | 'b' | 'neutral';
 }
 
 export interface ShotProfile {
@@ -98,10 +100,10 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   for (let g = 0; g < req.games; g++) {
     // each game gets its own seed so two configurations can be compared game by game
     const rng = new Rng((req.seed + Math.imul(g + 1, 2654435761)) >>> 0);
-    const aHome = g % 2 === 0;
+    const aHome = req.venue === 'a' ? true : req.venue === 'b' ? false : g % 2 === 0;
     const A = { ...req.a, team: teamA };
     const B = { ...req.b, team: teamB };
-    const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: req.type ?? 'regular', injuries: false });
+    const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: req.type ?? 'regular', injuries: false, neutral: req.venue === 'neutral' });
     const res = sim.simToEnd();
     const a = aHome ? res.home : res.away;
     const b = aHome ? res.away : res.home;
