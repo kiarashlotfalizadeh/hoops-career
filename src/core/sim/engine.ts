@@ -32,6 +32,7 @@ import { GAME } from '../constants';
 import { buildMinutePlan, planInputs, planRoles } from './rotationPlan';
 import { FINISH_LABEL, type FinishType, type PossLog } from './log';
 import { cloneTactics } from './tactics';
+import { solveMatchups } from './matchups';
 
 // ---------------------------------------------------------------- tuning constants
 
@@ -354,17 +355,6 @@ interface ShotOpts {
 
 const ACTION_LIST: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
 
-/** All 120 orderings of five defenders. */
-const PERMS5: number[][] = (() => {
-  const out: number[][] = [];
-  const rec = (cur: number[], rest: number[]) => {
-    if (!rest.length) return void out.push(cur);
-    for (let i = 0; i < rest.length; i++) rec([...cur, rest[i]], [...rest.slice(0, i), ...rest.slice(i + 1)]);
-  };
-  rec([], [0, 1, 2, 3, 4]);
-  return out;
-})();
-
 /** Usage multiplier for a player's shot freedom: green light (1), normal (0) or limited (-1). */
 function freedomMult(fr: number) {
   return fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1;
@@ -636,33 +626,12 @@ export class GameSim {
       O.forEach((o, i) => def.guardOf.set(o.pid, D[i % D.length]));
       return;
     }
-    const manual = def.t.defense.matchups;
     // threat: how much the offense runs through him
-    const threat = O.map((o) => this.usageWeight(o, off, 'iso') + this.usageWeight(o, off, 'pnr'));
-    const maxThreat = Math.max(...threat) || 1;
-    // cost[i][j]: defender j guarding offensive player i
-    const cost: number[] = new Array(25);
-    for (let i = 0; i < 5; i++) {
-      const o = O[i];
-      const m = manual[o.pid];
-      for (let j = 0; j < 5; j++) {
-        const d = D[j];
-        let c = Math.abs(o.r.hgt - d.r.hgt) * 0.09;
-        const quality = o.big ? d.c.intDef : d.c.perDef;
-        c -= (threat[i] / maxThreat) * (quality - 50) * 0.06;
-        if (m !== undefined) c += m === d.pid ? -50 : 4;
-        cost[i * 5 + j] = c;
-      }
-    }
-    let best = PERMS5[0];
-    let bestCost = Infinity;
-    for (const p of PERMS5) {
-      const c = cost[p[0]] + cost[5 + p[1]] + cost[10 + p[2]] + cost[15 + p[3]] + cost[20 + p[4]];
-      if (c < bestCost) {
-        bestCost = c;
-        best = p;
-      }
-    }
+    const best = solveMatchups(
+      O.map((o) => ({ pid: o.pid, hgt: o.r.hgt, big: o.big, threat: this.usageWeight(o, off, 'iso') + this.usageWeight(o, off, 'pnr') })),
+      D.map((d) => ({ pid: d.pid, hgt: d.r.hgt, intDef: d.c.intDef, perDef: d.c.perDef })),
+      def.t.defense.matchups,
+    );
     O.forEach((o, i) => def.guardOf.set(o.pid, D[best[i]]));
   }
 

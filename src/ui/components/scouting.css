@@ -1,0 +1,82 @@
+/* Scouting numbers (Scouting tab, game plan screen) */
+.scout-ranks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 6px;
+}
+.scout-ranks > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.scout-ranks .k {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scout-ranks .v {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+  white-space: nowrap;
+}
+.scout-ranks .r {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* game plan: one of their players and who guards him */
+.gp-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  width: 100%;
+  text-align: left;
+}
+.gp-match + .gp-match {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.gp-notes {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.gp-note {
+  font-size: 12px;
+  font-weight: 600;
+}
+.gp-note.good {
+  color: var(--good);
+}
+.gp-note.warn {
+  color: var(--warn);
+}
+.gp-note.bad {
+  color: var(--bad);
+}
+.gp-note-input {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  padding: 10px 12px;
+  font-size: 16px;
+}
+.gp-note-input:focus {
+  border-color: var(--accent-text);
+}

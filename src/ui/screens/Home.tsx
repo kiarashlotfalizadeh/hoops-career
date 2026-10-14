@@ -244,8 +244,11 @@ export default function Home() {
                 <Link to={`/preview/${next.gid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
                   Matchup preview →
                 </Link>
+                <Link to={`/gameplan/${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                  Game plan vs {league.teams[oppTid].abbrev} →
+                </Link>
                 <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
-                  Build a game plan in the Tactics Lab →
+                  Test it in the Lab →
                 </Link>
               </div>
             </div>

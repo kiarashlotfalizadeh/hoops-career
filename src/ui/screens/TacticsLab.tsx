@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Beaker, Check, Play } from 'lucide-react';
+import { Beaker, Check, ChevronRight, Play } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { progressCallback, resetLab, withLab } from '../../state/labClient';
-import type { CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
+import type { Candidate, CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
-import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
+import { counterCandidates, scoutTeam, tacticsWithCounter } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../../core/league/games';
-import { planFor, setPlanItem } from '../../core/league/gamePlans';
+import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
@@ -17,7 +17,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
-import type { GameType, League, Tactics } from '../../core/types';
+import type { GameType, League, Tactics, TacticsPatch } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
 
@@ -60,6 +60,9 @@ function defaultOpponent(league: League): number {
   if (g) return g.home === league.userTid ? g.away : g.home;
   return league.userTid === 0 ? 1 : 0;
 }
+
+/** A patch that turns any tactics into `t` (the Lab applies it on top of the plan the side already plays). */
+const toTactics = (t: Tactics): TacticsPatch => ({ offense: { ...t.offense }, defense: { ...t.defense }, manage: { ...t.manage } });
 
 /** What a finished run was for: results only show, and only apply, for the matchup they simulated. */
 interface Run {
@@ -143,9 +146,13 @@ export default function TacticsLab() {
           const candidates = counterCandidates(league, user, opp);
           const n = Math.max(20, Math.round(games * 0.75));
           setTotal(n * (candidates.length + 1));
-          const out = await w.evaluate(sideFor(league, user, opp), b, candidates, n, seed, track(0), type);
+          // each counter plays as the plan would play it: in place of the plan's item in its group
+          const tested: Candidate[] = candidates.map((c) => ({ ...c, patch: toTactics(tacticsWithCounter(league, opp, c)) }));
+          const out = await w.evaluate(sideFor(league, user, opp), b, tested, n, seed, track(0), type);
+          const byId = new Map(candidates.map((c) => [c.id, c]));
           job.base = out.base;
-          job.cands = out.results;
+          // (what goes into the plan is the counter itself, relative to the playbook)
+          job.cands = out.results.map((r) => ({ ...r, patch: byId.get(r.id)!.patch }));
         }
       });
       if (mounted.current) setRun(job);
@@ -161,10 +168,9 @@ export default function TacticsLab() {
     useStore.getState().mutate((l) => {
       if (scope === 'always') {
         const tm = l.teams[l.userTid];
-        // a star target is this opponent's player: kept tactics go after each opponent's own star
-        const patch = c.patch?.defense ? { ...c.patch, defense: { ...c.patch.defense, starTarget: null } } : c.patch;
-        tm.tactics = { ...applyPatch(tm.tactics, patch), manual: true };
-      } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch });
+        // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
+        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch)), manual: true };
+      } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
     });
     setApplied((a) => [...a, `${vs}:${c.id}`]);
     useStore.getState().toast(scope === 'game' ? `Game plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Applied to your tactics: ${c.label}`, 'good');
@@ -232,6 +238,9 @@ export default function TacticsLab() {
             ))}
           </div>
         )}
+        <Link to={`/gameplan/${opp}`} className="small row" style={{ gap: 2, marginTop: 8, color: 'var(--accent-text)', fontWeight: 650 }}>
+          Game plan vs {oppTeam.abbrev} <ChevronRight size={15} />
+        </Link>
       </Card>
 
       <Segmented
@@ -342,6 +351,11 @@ export default function TacticsLab() {
                       </span>
                     </div>
                     <div className="small dim2">{c.why}</div>
+                    {c.evidence && (
+                      <div className="small" style={{ marginTop: 4 }}>
+                        <span className="good bold">By the numbers:</span> {c.evidence}
+                      </div>
+                    )}
                     <div className="row between" style={{ marginTop: 6 }}>
                       <span className="tiny dim">
                         range ± {f1(sig * c.se)} · win {p0(c.winPct)}

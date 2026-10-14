@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, ChevronRight, ClipboardList, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted, teamName } from '../../core/league/helpers';
 import { pickLabel } from '../../core/league/trades';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
+import { SCOUT_MIN_GAMES, scoutData } from '../../core/analysis/scouting';
+import { HeadToHead, KeyPlayers, PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
@@ -136,8 +138,8 @@ function Hero({ league, tid }: { league: League; tid: number }) {
           <Link to={`/trade?with=${tid}`} className="btn primary grow">
             <ArrowLeftRight size={17} /> Propose trade
           </Link>
-          <Link to={`/lab?opp=${tid}`} className="btn grow">
-            <FlaskConical size={17} /> Game plan
+          <Link to={`/gameplan/${tid}`} className="btn grow">
+            <ClipboardList size={17} /> Game plan
           </Link>
         </div>
       ) : (
@@ -613,7 +615,11 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
 
 function ScoutingTab({ league, tid }: { league: League; tid: number }) {
   const rep = useLeagueMemo(() => scoutTeam(league, tid), [league, tid]);
+  const data = useLeagueMemo(() => scoutData(league, tid), [league, tid]);
+  const [ptSide, setPtSide] = useState<'off' | 'def'>('off');
   const isUser = tid === league.userTid;
+  const complexity = league.settings.complexity;
+  const abbrev = league.teams[tid].abbrev;
   return (
     <>
       <Card accent>
@@ -622,11 +628,66 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
         </div>
         <div style={{ marginTop: 6, fontSize: 15, lineHeight: 1.45 }}>{rep.summary}</div>
         {!isUser && (
-          <Link to={`/lab?opp=${tid}`} className="lg-link small row" style={{ gap: 4, marginTop: 10 }}>
-            Test a game plan against them in the Tactics Lab <ChevronRight size={15} />
-          </Link>
+          <>
+            <Link to={`/gameplan/${tid}`} className="btn primary sm" style={{ marginTop: 12 }}>
+              <ClipboardList size={16} /> Game plan vs {abbrev}
+            </Link>
+            <Link to={`/lab?opp=${tid}`} className="lg-link small row" style={{ gap: 4, marginTop: 10 }}>
+              Test a game plan against them in the Tactics Lab <ChevronRight size={15} />
+            </Link>
+          </>
         )}
       </Card>
+      <Card
+        title={
+          <h3>
+            <BarChart3 size={14} style={{ verticalAlign: -2 }} /> By the numbers
+          </h3>
+        }
+        right={data.enough ? <span className="tiny dim">{scoutSource(data)}</span> : undefined}
+      >
+        {data.enough ? (
+          <div className="col" style={{ gap: 12 }}>
+            {data.lastSeason && <div className="small dim2">Too few games this season: these are last season&apos;s numbers.</div>}
+            <RankStrip d={data} complexity={complexity} />
+            {data.tendencies.length > 0 && (
+              <ul className="lg-bullets" style={{ ['--bul' as string]: 'var(--info)' }}>
+                {data.tendencies.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <div className="small dim">Not enough games yet: the numbers come in after {SCOUT_MIN_GAMES} games. Until then the report reads their playbook and roster.</div>
+        )}
+      </Card>
+      {data.enough && complexity !== 'simple' && data.playTypes.length > 0 && (
+        <Card
+          title="Play types"
+          right={
+            <span className="tiny dim">
+              {data.ptGames} game{data.ptGames === 1 ? '' : 's'}
+            </span>
+          }
+        >
+          <Segmented
+            label="Play types at which end"
+            value={ptSide}
+            onChange={setPtSide}
+            options={[
+              { id: 'off', label: 'Their offense' },
+              { id: 'def', label: 'Their defense' },
+            ]}
+          />
+          <div style={{ marginTop: 10 }}>
+            <PlayTypeTable rows={ptSide === 'off' ? data.playTypes : data.defPlayTypes} defense={ptSide === 'def'} complexity={complexity} />
+          </div>
+          <div className="tiny dim" style={{ marginTop: 6 }}>
+            Points per possession by how the possession finished, against the league&apos;s. {ptSide === 'off' ? 'Red: they score well.' : 'Red: they allow a lot.'}
+          </div>
+        </Card>
+      )}
       <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
         <Card
           title={
@@ -679,6 +740,16 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           </div>
         )}
       </Card>
+      {data.players.length > 0 && (
+        <Card title="Key players" right={<span className="tiny dim">{data.lastSeason ? `${seasonLabel(data.season)} numbers` : 'This season'}</span>}>
+          <KeyPlayers d={data} complexity={complexity} />
+          {data.players.some((p) => p.elsewhere) && (
+            <div className="tiny dim" style={{ marginTop: 6 }}>
+              Newcomers show their numbers from their last team, without on/off.
+            </div>
+          )}
+        </Card>
+      )}
       <Card
         title={
           <h3>
@@ -696,6 +767,11 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           </ul>
         )}
       </Card>
+      {!isUser && (
+        <Card title={`Head to head with ${abbrev}`}>
+          <HeadToHead league={league} d={data} complexity={complexity} />
+        </Card>
+      )}
     </>
   );
 }

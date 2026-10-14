@@ -118,6 +118,8 @@ try {
     '/league',
     '/league?tab=stats',
     '/team/5',
+    '/team/5?tab=scouting',
+    '/gameplan/5',
     '/office',
     '/trade',
     '/free-agents',
