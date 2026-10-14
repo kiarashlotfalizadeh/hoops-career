@@ -10,6 +10,7 @@ import { Card, Empty, PageHeader } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
 import { inAppPath } from '../nav';
 import { continueDraft } from '../../core/league/season';
+import { liveInProgress } from '../../state/live';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
   Owner: Crown,
@@ -166,7 +167,10 @@ export default function Inbox() {
 function useOfferError(league: League, id: number): string | null {
   return useLeagueMemo(() => {
     const p = openProposals(league).find((x) => x.id === id);
-    return p ? proposalError(league, p) : 'This offer is closed: it was taken, turned down or withdrawn, or it expired.';
+    if (!p) return 'This offer is closed: it was taken, turned down or withdrawn, or it expired.';
+    // as in the front office: the players in tonight's game stay with the team they're playing for
+    if (liveInProgress(league)) return 'Finish your live game first: trades wait until the game in progress is over.';
+    return proposalError(league, p);
   }, [league, id]);
 }
 
