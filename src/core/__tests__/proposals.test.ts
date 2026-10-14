@@ -29,7 +29,10 @@ import { DRAFT_PROSPECT } from '../types';
 const U = 0;
 
 function league(rngSeed = 5, userTid = U): League {
-  return createLeague({ name: `pr${rngSeed}`, userTid, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  const l = createLeague({ name: `pr${rngSeed}`, userTid, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  // offers and rumors draw on streams seeded by the league's id, which is made from the clock
+  l.id = `pr${rngSeed}`;
+  return l;
 }
 
 /** A league in its regular season, with the user's roster at 15. */
@@ -69,6 +72,18 @@ function offersThroughDeadline(l: League, check: (p: Proposal) => void): Proposa
     }
   }
   return made;
+}
+
+/** Days go by (offers made, the daily clean-up) until an open offer matches `want`. */
+function waitForOffer(l: League, want: (p: Proposal) => boolean = () => true): Proposal | undefined {
+  for (let d = l.day; d <= l.tradeDeadlineDay; d++) {
+    l.day = d;
+    cleanProposals(l);
+    aiProposals(l);
+    const p = openProposals(l).find(want);
+    if (p) return p;
+  }
+  return undefined;
 }
 
 describe('AI trade offers', () => {
@@ -114,7 +129,7 @@ describe('AI trade offers', () => {
 
   it('marking a player untouchable withdraws an offer for him, and the mark goes when he leaves', () => {
     const l = season(5);
-    const p = offersThroughDeadline(l, () => {}).find((x) => x.offer.a.pids.length && openProposals(l).includes(x));
+    const p = waitForOffer(l, (x) => x.offer.a.pids.length > 0);
     expect(p).toBeDefined();
     const pid = p!.offer.a.pids[0];
     setUntouchable(l, pid, true);
@@ -125,7 +140,7 @@ describe('AI trade offers', () => {
 
   it('expire after their last day', () => {
     const l = season(5);
-    const p = offersThroughDeadline(l, () => {}).find((x) => openProposals(l).includes(x))!;
+    const p = waitForOffer(l)!;
     expect(p).toBeDefined();
     l.day = p.expires;
     cleanProposals(l);
@@ -138,11 +153,9 @@ describe('AI trade offers', () => {
 
   it('accepting one goes through; a stale one fails cleanly and changes nothing', () => {
     const l = season(9);
-    offersThroughDeadline(l, () => {});
-    const open = openProposals(l);
-    expect(open.length).toBeGreaterThan(0);
+    const good = waitForOffer(l)!;
+    expect(good).toBeDefined();
     // one goes through: the user's assets move to the offering team
-    const good = open[open.length - 1];
     const r = acceptProposal(l, good.id);
     expect(r.ok).toBe(true);
     for (const pid of good.offer.a.pids) expect(l.players[pid].tid).toBe(good.tid);
@@ -150,8 +163,7 @@ describe('AI trade offers', () => {
     expect(openProposals(l)).not.toContain(good);
     // another goes stale: a player in it moves elsewhere first
     const l2 = season(5);
-    offersThroughDeadline(l2, () => {});
-    const stale = openProposals(l2).find((p) => p.offer.b.pids.length)!;
+    const stale = waitForOffer(l2, (p) => p.offer.b.pids.length > 0)!;
     expect(stale).toBeDefined();
     const moved = stale.offer.b.pids[0];
     const other = l2.teams.find((t) => t.tid !== U && t.tid !== stale.tid)!.tid;

@@ -323,6 +323,8 @@ describe('AI trade valuation', () => {
 
   it('only offers deals the offering AI accepts and the rules allow, each with its inbox message (T8)', () => {
     const l = league(9);
+    // offers draw on a stream seeded by the league's id, which is made from the clock
+    l.id = 'tx9';
     expect(startRegularSeason(l)).toEqual([]);
     let offers = 0;
     for (let d = 0; d <= l.tradeDeadlineDay; d++) {
