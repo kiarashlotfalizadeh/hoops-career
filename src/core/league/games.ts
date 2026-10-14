@@ -12,6 +12,7 @@ import { playerAge } from '../playerGen';
 import { consumePlans, effectiveTactics, planFor } from './gamePlans';
 import { confStandings } from './standings';
 import { withoutCoachPlans } from '../sim/tactics';
+import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -157,8 +158,18 @@ export function neutralSite(g: ScheduledGame) {
   return g.type === 'allstar' || g.cup === 'final';
 }
 
-/** A team's side of a game as the engine takes it. `game` picks out the playoff series a series game plan was made for. */
-export function buildSimInput(league: League, tid: number, day: number, type: ScheduledGame['type'], opp?: number, game?: Pick<ScheduledGame, 'seriesId'>): SimTeamInput {
+/**
+ * A team's side of a game as the engine takes it. `game` picks out the playoff series a series game
+ * plan was made for, and with its id and day, the game an AI coach game-plans for against the user.
+ */
+export function buildSimInput(
+  league: League,
+  tid: number,
+  day: number,
+  type: ScheduledGame['type'],
+  opp?: number,
+  game?: Pick<ScheduledGame, 'seriesId'> & Partial<Pick<ScheduledGame, 'gid' | 'day'>>,
+): SimTeamInput {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
   const rest: number[] = [];
@@ -184,7 +195,11 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
     // an AI coach never plays the situational plans or crunch-time calls a user left on this team
     const t = team.tactics;
     const userPlans = t.situations || t.manage.goTo != null || t.manage.ato || t.manage.hackTargets || t.manage.hackFromQ !== undefined;
-    return { team: userPlans ? { ...team, tactics: withoutCoachPlans(t) } : team, players, perf, rest, injuryMult, adjust: true };
+    const tactics = userPlans ? withoutCoachPlans(t) : t;
+    // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
+    const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
+    if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
+    return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
   }
   return { team, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts };
 }
@@ -373,6 +388,10 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.pbp;
     delete res.adjustments;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
+  } else {
+    // the game plan the other coach brought (kept before the first save: a stored result isn't written again)
+    const plan = oppPlanIn(sim, g.home === league.userTid ? 1 : 0);
+    if (plan) res.oppPlan = plan.items.map((it) => it.text);
   }
   league.games.push(res);
   if (stakesTid !== undefined && before) res.stakes = { tid: stakesTid, before, after: standingLine(league, stakesTid) };

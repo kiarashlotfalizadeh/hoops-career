@@ -690,6 +690,8 @@ export interface GameResult {
   pbp?: PbpEntry[];
   /** Coaches' in-game adjustments (user games only). */
   adjustments?: GameAdjustment[];
+  /** The other coach's game plan against the user's team, when he brought one (user games only): what he changed at tip-off, e.g. 'hedges ball screens'. */
+  oppPlan?: string[];
   /** Player of the game. */
   pog?: number;
   att?: number;
