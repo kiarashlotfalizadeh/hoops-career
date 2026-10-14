@@ -112,6 +112,7 @@ try {
     '/preview',
     '/roster',
     '/rotation',
+    '/lineups',
     '/tactics',
     '/lab',
     '/league',

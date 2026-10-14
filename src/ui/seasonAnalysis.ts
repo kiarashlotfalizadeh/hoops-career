@@ -2,38 +2,7 @@
 import type { League, Settings } from '../core/types';
 
 export { seasonPlayTypes, type PlayTypeAgg } from '../core/analysis/playTypes';
-
-export interface LineupAgg {
-  key: string;
-  pids: number[];
-  min: number;
-  poss: number;
-  ptsFor: number;
-  ptsAgainst: number;
-  net: number;
-}
-
-export function seasonLineups(league: League, tid = league.userTid): LineupAgg[] {
-  const m = new Map<string, LineupAgg>();
-  for (const g of league.games) {
-    if (g.season !== league.season || !g.lineups) continue;
-    const side = g.home.tid === tid ? 0 : g.away.tid === tid ? 1 : -1;
-    if (side < 0) continue;
-    for (const l of g.lineups) {
-      if (l.t !== side) continue;
-      const key = [...l.pids].sort((a, b) => a - b).join('-');
-      const e = m.get(key) ?? { key, pids: [...l.pids], min: 0, poss: 0, ptsFor: 0, ptsAgainst: 0, net: 0 };
-      e.min += l.sec / 60;
-      e.poss += l.poss;
-      e.ptsFor += l.ptsFor;
-      e.ptsAgainst += l.ptsAgainst;
-      m.set(key, e);
-    }
-  }
-  const out = [...m.values()];
-  for (const e of out) e.net = e.poss ? ((e.ptsFor - e.ptsAgainst) / e.poss) * 100 : 0;
-  return out.sort((a, b) => b.min - a.min);
-}
+export { seasonLineups, type LineupAgg } from '../core/analysis/lineups';
 
 /**
  * Expected points per game from each tracked tactical effect, split by who benefited, over the

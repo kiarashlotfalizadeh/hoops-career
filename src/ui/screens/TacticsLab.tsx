@@ -16,7 +16,7 @@ import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
-import { clearLabBaseline, takeLabBaseline } from './labBridge';
+import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
 import type { GameType, League, Tactics } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
@@ -74,6 +74,8 @@ export default function TacticsLab() {
   const league = useLeague();
   const [params] = useSearchParams();
   const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline(league) : null));
+  // a saved playbook (from Tactics' My playbooks) as the before side, instead of the tactics before an edit
+  const [baselineName] = useState(() => (params.get('compare') ? labBaselineName(league) : null));
   useEffect(() => clearLabBaseline(), []);
   const [mode, setMode] = useState<Mode>(baseline ? 'compare' : params.get('mode') === 'counters' ? 'counters' : 'project');
   // a link from before a team switch (or a hand-edited one) can name your own team or none: fall back to the next opponent
@@ -247,7 +249,9 @@ export default function TacticsLab() {
         {mode === 'project' && 'Your current game plan against this opponent: expected result, shot profile, play types and who gets the ball.'}
         {mode === 'compare' &&
           (baseline
-            ? 'Your tactics before vs after your latest edits, same opponent, same random draws.'
+            ? baselineName
+              ? `Your playbook "${baselineName}" (before) vs your current tactics (after), same opponent, same random draws.`
+              : 'Your tactics before vs after your latest edits, same opponent, same random draws.'
             : 'Compare plays your tactics from before and after an edit against the same games.')}
         {mode === 'counters' && 'The assistant drafts counters for this opponent and tests each one. Apply the ones that move the needle.'}
       </div>
