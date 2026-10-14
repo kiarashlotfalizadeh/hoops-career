@@ -396,8 +396,9 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
       title="Hack-a-player"
       right={
         <Help title="Hack-a-player">
-          Foul a poor free-throw shooter on purpose whenever he's on the floor, from the quarter you pick: two free throws instead of a normal possession (about 1.1 points). Never
-          in the last two minutes of a period, where it costs a free throw and the ball. Their staff benches a player hacked twice in a period when a reserve his size can come in.
+          Foul a poor free-throw shooter on purpose whenever he's on the floor, from the quarter you pick: two free throws for him instead of a normal possession, worth about 1.12
+          points, so it pays below about 56% from the line. Never in the last two minutes of a period, where it costs a free throw and the ball. Their staff benches a player hacked
+          twice in a period when a reserve his size can come in.
         </Help>
       }
     >
