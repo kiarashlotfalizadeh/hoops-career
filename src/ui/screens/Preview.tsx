@@ -400,12 +400,14 @@ function TendenciesCard({ league, s }: { league: League; s: SidePreview }) {
   const detail = league.settings.complexity !== 'simple';
   const pts = s.playTypes.slice(0, 5);
   const maxShare = Math.max(0.01, ...pts.map((x) => x.share));
+  // league ranks once they have played
+  const played = s.pace.rank > 0;
   return (
     <Card title={`How the ${t.name} play`}>
       <div className="col" style={{ gap: 8 }}>
         <div className="small dim2">
-          {s.offense.preset} at a {s.offense.pace >= 65 ? 'fast' : s.offense.pace <= 35 ? 'slow' : 'moderate'} pace: {rankText(s.pace)} in pace
-          {s.pace.rank ? ` (${f1(s.pace.v)})` : ''}, {rankText(s.threes)} in threes{s.threes.rank ? ` (${f1(s.threes.v)} a game)` : ''}.
+          {s.offense.preset} at a {s.offense.pace >= 65 ? 'fast' : s.offense.pace <= 35 ? 'slow' : 'moderate'} pace
+          {played ? `: ${rankText(s.pace)} in pace (${f1(s.pace.v)}), ${rankText(s.threes)} in threes (${f1(s.threes.v)} a game)` : ''}.
         </div>
         <div className="small dim2">
           Defense: {s.defense.preset} · {s.defense.scheme}
@@ -418,9 +420,11 @@ function TendenciesCard({ league, s }: { league: League; s: SidePreview }) {
             Coach {s.coach.name} adjusts {s.coach.adjusts} during games{detail ? ` (${p0(s.coach.chance)} chance at each break)` : ''}.
           </div>
         )}
-        <div className="small dim2">
-          Offense {rankText(s.ortg)} · defense {rankText(s.drtg)} · net {s.net.rank ? signed(s.net.v) : '—'} ({rankText(s.net)})
-        </div>
+        {played && (
+          <div className="small dim2">
+            Offense {rankText(s.ortg)} · defense {rankText(s.drtg)} · net {signed(s.net.v)} ({rankText(s.net)})
+          </div>
+        )}
         {detail && pts.length > 0 && (
           <div className="col" style={{ gap: 6, marginTop: 4 }}>
             <div className="row tiny dim upper bold">
