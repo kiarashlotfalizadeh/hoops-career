@@ -138,3 +138,34 @@ describe('the live court score', () => {
     expect(techs).toBeGreaterThan(0);
   });
 });
+
+describe('timeouts on the court', () => {
+  it('flash once, naming the team that called it', () => {
+    const s = buildScript(
+      log([
+        { k: 'timeout', t: 1 },
+        { k: 'advance', pid: 1 },
+      ]),
+      info,
+      undefined,
+      ['OKC', 'BOS'],
+    );
+    expect(s.frames.filter((f) => f.flash?.text.startsWith('TIMEOUT')).map((f) => f.flash!.text)).toEqual(['TIMEOUT BOS']);
+  });
+
+  it("name the caller of a real timeout: the engine's step says whose it was", () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
+    const sim = new GameSim(
+      { team: league.teams[0], players: teamPlayers(league, 0) },
+      { team: league.teams[1], players: teamPlayers(league, 1) },
+      { rng: new Rng(3), type: 'regular', record: true, injuries: false },
+    );
+    for (let i = 0; i < 10; i++) sim.step();
+    sim.drainLogs();
+    expect(sim.callTimeout(1)).toBe(true);
+    sim.step();
+    const [first] = sim.drainLogs();
+    const s = buildScript(first, info, undefined, [league.teams[0].abbrev, league.teams[1].abbrev]);
+    expect(s.frames.filter((f) => f.flash?.text.startsWith('TIMEOUT')).map((f) => f.flash!.text)).toEqual([`TIMEOUT ${league.teams[1].abbrev}`]);
+  });
+});
