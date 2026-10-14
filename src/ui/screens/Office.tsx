@@ -16,8 +16,8 @@ import {
   standardRoster,
   twoWayRoster,
 } from '../../core/league/helpers';
-import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, rookieScaleDeal, signingRoute, valueScore } from '../../core/league/contracts';
-import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
+import { MLE_PCT, askingContract, buyoutTerms, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, rookieScaleDeal, valueScore } from '../../core/league/contracts';
+import { capHolds, expiringPlayers, offerRoute, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
@@ -311,7 +311,7 @@ function Spotlight({ league }: { league: League }) {
     () =>
       league.phase === 'freeAgency' || league.phase === 'preseason'
         ? freeAgents(league)
-            .filter((p) => signingRoute(league, tid, askingContract(league, p, tid).amount, s0, p))
+            .filter((p) => offerRoute(league, p, askingContract(league, p, tid).amount, s0))
             .sort((a, b) => valueScore(league, b) - valueScore(league, a))
             .slice(0, league.phase === 'preseason' ? 3 : 5)
         : [],
@@ -697,6 +697,8 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const camp = nonGuaranteed(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
   const blocked = releaseBlockedReason(league, p);
+  // a veteran with guaranteed money left can be bought out instead (the Release confirmation offers it)
+  const buyout = buyoutTerms(league, p);
   const tooFew = !!blocked;
   const upNote = contractUpNote(league, p);
   const expiringNow = !!upNote;
@@ -782,7 +784,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
         !expiringNow && (
           <div className="tiny dim">
             {owed > 0
-              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}.`
+              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}${league.phase === 'regular' ? ', unless a team claims him off waivers' : ''}.${buyout ? ` A buyout would cut it to ${fmtM(buyout.dead)}.` : ''}`
               : p.contract.twoWay
                 ? 'Releasing him costs nothing: two-way pay sits outside the cap.'
                 : camp

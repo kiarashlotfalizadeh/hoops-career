@@ -9,7 +9,7 @@ import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
 import { playerName, standardRoster } from '../../core/league/helpers';
-import { nonGuaranteed, releaseDeadMoney, releasePlayer } from '../../core/league/contracts';
+import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releasePlayer, userBuyout } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { useStore } from '../../state/store';
@@ -259,23 +259,50 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
   const remaining = releaseDeadMoney(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
   const n = standardRoster(league, league.userTid).length;
+  // in the regular season, a release that leaves dead money goes through waivers first (see releasePlayer)
+  const waive = league.phase === 'regular' && owed > 0;
+  const buyout = buyoutTerms(league, p);
   const release = () => {
     const name = playerName(p);
     useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
-    useStore.getState().toast(`${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books.` : ''}`, 'neutral');
+    useStore
+      .getState()
+      .toast(
+        waive ? `${name} waived. ${fmtM(owed)} stays on your books unless a team claims him.` : `${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books.` : ''}`,
+        'neutral',
+      );
     onDone();
   };
+  const buyOut = () => {
+    let res = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      res = userBuyout(l, p.pid);
+    });
+    useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
+    if (res.ok) onDone();
+  };
+  // why he'd give back more than a little
+  const why = buyout
+    ? [
+        p.mood.tradeRequest ? 'he wants out' : p.mood.score <= -2 ? "he's unhappy" : '',
+        playerAge(p, league.season) >= 32 ? 'his age' : '',
+        league.teams[p.tid].strategy !== 'contend' ? "you're not contending" : '',
+      ].filter(Boolean)
+    : [];
   return (
     <>
       <p className="dim2" style={{ margin: 0 }}>
-        {playerName(p)} becomes a free agent immediately and can sign with any team.{' '}
+        {waive
+          ? `${playerName(p)} goes on waivers for ${WAIVER_DAYS} days, then becomes a free agent if no team claims him.`
+          : `${playerName(p)} becomes a free agent immediately and can sign with any team.`}{' '}
         {p.contract.twoWay ? (
           'Two-way pay sits outside the cap, so there is no dead money.'
         ) : nonGuaranteed(league, p) ? (
           "His minimum deal isn't guaranteed until opening night, so there is no dead money."
         ) : owed > 0 ? (
           <>
-            <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out.
+            <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out
+            {waive ? ', unless a team claims him off waivers and takes over his contract' : ''}.
           </>
         ) : (
           'Nothing is left to pay on his contract, so there is no dead money.'
@@ -294,6 +321,33 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
             <span className="bold">Dead money</span>
             <span className="num bold bad">{fmtM(owed)}</span>
           </div>
+        </div>
+      )}
+      {buyout && (
+        <div className="card tight col" style={{ gap: 8 }}>
+          <div className="row between" style={{ gap: 8 }}>
+            <span className="small bold">Or buy him out</span>
+            <span className="tag good">Gives back {Math.round(buyout.giveback * 100)}%</span>
+          </div>
+          <div className="small dim2">
+            He'd give back {fmtM(buyout.saved)} of the {fmtM(buyout.owed)} he's owed to be let go{why.length ? ` (${why.join(', ')})` : ''}, and becomes a free agent at once (no
+            waivers).
+          </div>
+          <div className="grid2">
+            <div>
+              <div className="tiny dim upper bold">Release</div>
+              <div className="fo-mid bad">{fmtM(buyout.owed)}</div>
+              <div className="tiny dim">dead money</div>
+            </div>
+            <div>
+              <div className="tiny dim upper bold">Buyout</div>
+              <div className="fo-mid warn">{fmtM(buyout.dead)}</div>
+              <div className="tiny dim">dead money</div>
+            </div>
+          </div>
+          <button className="btn block" onClick={buyOut}>
+            Buy out · save {fmtM(buyout.saved)}
+          </button>
         </div>
       )}
       {!p.contract.twoWay && n - 1 < CAP.rosterMin && (

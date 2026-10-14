@@ -504,9 +504,14 @@ export function faInterest(league: League, p: Player): FaOffer[] {
  * whether it wins (with no rival bids, only at his asking price), and about what would lead the
  * field (null when even the max wouldn't).
  */
-export function bidStanding(league: League, p: Player, amount: number, years: number): { offers: FaOffer[]; leads: boolean; toLead: number | null } {
+export function bidStanding(
+  league: League,
+  p: Player,
+  amount: number,
+  years: number,
+  offers: FaOffer[] = faInterest(league, p),
+): { offers: FaOffer[]; leads: boolean; toLead: number | null } {
   const tid = league.userTid;
-  const offers = faInterest(league, p);
   const prefs = playerPrefs(league, p);
   const best = offers[0];
   if (!best) {
@@ -626,7 +631,7 @@ function decideBid(league: League, b: FaBid) {
     addInbox(league, {
       from: 'Assistant GM',
       subject: `${name} signed with ${t.abbrev}`,
-      body: `${route ? `${name} took the ${t.region} ${t.name}'s offer over ours` : `Our offer to ${name} fell through: ${why}. He signed with the ${t.region} ${t.name}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}; ${PREF_LABEL[top]} matters most to him.` : ''}`,
+      body: `${route ? `${name} chose the ${t.region} ${t.name} over us` : `Our offer to ${name} fell through: ${why}. He signed with the ${t.region} ${t.name}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}; ${PREF_LABEL[top]} matters most to him.` : ''}`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });
