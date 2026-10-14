@@ -13,7 +13,7 @@ import type { League, PbpEntry, Settings, Tactics } from '../../core/types';
 import type { PossLog } from '../../core/sim/log';
 import { buildSimInput, userGameOnDay } from '../../core/league/games';
 import { planFor } from '../../core/league/gamePlans';
-import { cloneTactics } from '../../core/sim/tactics';
+import { hashString } from '../../core/random';
 import { keptTactics } from '../live/keep';
 import { fmtClock, pbpOpacity, periodLabel, rosterNames } from '../stats';
 import { jerseyColors, matchupColors } from '../teamColors';
@@ -49,18 +49,14 @@ type SkipTo = 'quarter' | 'half' | 'clutch' | 'end';
 /** Whether a period's buzzer stops for a break with the period report. */
 const breakAfter = (mode: NonNullable<Settings['liveBreaks']>, q: number) => (mode === 'quarters' ? true : mode === 'half' ? q === 2 : false);
 
-/** What the user's side of a live game was built from, to spot edits made away from /live. */
-interface Setup {
-  tactics: Tactics;
-  sig: string;
-  rotation: string;
-}
-const setups = new WeakMap<LiveGame, Setup>();
-
-function userSetup(league: League, lg: LiveGame): Setup {
+/**
+ * What the user's side of a live game would be built from now: its tactics (with the game plan),
+ * and hashes of them and of the rotation, to spot edits made away from /live (see LiveGame.seen).
+ */
+function userSetup(league: League, lg: LiveGame): { tactics: Tactics; seen: [number, number] } {
   const g = lg.game;
   const tactics = buildSimInput(league, league.userTid, g.day, g.type, lg.userSide === 0 ? g.away : g.home, g).team.tactics;
-  return { tactics, sig: JSON.stringify(tactics), rotation: JSON.stringify(league.teams[league.userTid].rotation) };
+  return { tactics, seen: [hashString(JSON.stringify(tactics)), hashString(JSON.stringify(league.teams[league.userTid].rotation))] };
 }
 
 export default function Live() {
@@ -99,10 +95,6 @@ export default function Live() {
   const [panel, setPanel] = useState<Panel>('none');
   // the player a tap on the strip picked: to come out (yours) or to look at (theirs)
   const [picked, setPicked] = useState<number | undefined>();
-  // "Keep changes after this game": kept while the adjustments sheet is closed, until the next game
-  const [persist, setPersist] = useState(false);
-  // the saved tactics as they were when it was turned on (see keep)
-  const keepBase = useRef<Tactics | null>(null);
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [resultGid, setResultGid] = useState<number | null>(null);
@@ -159,7 +151,7 @@ export default function Live() {
         side: lg.userSide,
         teams: [home, away],
         tactics: lg.sim.baseTactics(lg.userSide),
-        manualSubs: lg.sim.T[lg.userSide].manualSubs,
+        manualSubs: lg.manualSubs,
         atBreak,
         timeoutPending: toPending,
         events,
@@ -227,8 +219,6 @@ export default function Live() {
     setPaused(false);
     setDismissed([]);
     setPanel('none');
-    setPersist(false);
-    keepBase.current = null;
     setResultGid(null);
     setAnnounce('');
     if (!lg) {
@@ -254,26 +244,32 @@ export default function Live() {
 
   const start = useCallback(() => {
     let lg: LiveGame | null = null;
+    const notes: string[] = [];
     useStore.getState().mutate((l) => {
       lg = prepareLive(l);
-    });
-    const found = lg as LiveGame | null;
-    if (found && !found.committed) {
-      // resuming: Tactics or game-plan edits made away from this screen take over; the stint plan can't change mid-game
-      const l = useStore.getState().league!;
+      const found = lg as LiveGame | null;
+      if (!found || found.committed) return;
+      // resuming: Tactics or game-plan edits made away from this screen take over (and "Reset to game
+      // plan" goes back to them); the stint plan can't change mid-game
       const now = userSetup(l, found);
-      const seen = setups.get(found);
-      const notes: string[] = [];
-      if (seen && seen.sig !== now.sig) {
-        found.sim.setTactics(found.userSide, now.tactics);
-        // and "Reset to game plan" goes back to them
-        found.planned = now.tactics;
+      const seen = found.seen;
+      if (seen && seen[0] !== now.seen[0]) {
+        found.setTactics(now.tactics, true);
         notes.push('Your tactics changes are in effect.');
       }
-      if (seen && seen.rotation !== now.rotation) notes.push('Rotation changes apply from the next game.');
-      if (notes.length) useStore.getState().toast(notes.join(' '));
-      setups.set(found, now);
+      if (seen && seen[1] !== now.seen[1]) notes.push('Rotation changes apply from the next game.');
+      found.markSeen(now.seen);
+    });
+    const found = lg as LiveGame | null;
+    // the app was closed mid-game: say where it picked up (or that it couldn't)
+    if (found?.resumed) {
+      const s = found.sim;
+      if (found.resumed === 'journal')
+        useStore.getState().toast(`Picked up where you left off: ${s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : `${periodLabel(s.q)} ${fmtClock(s.clock)}`}.`);
+      else useStore.getState().toast("Your game in progress couldn't be picked up where you left off, so it starts again from tip-off.", 'bad');
+      found.resumed = undefined;
     }
+    if (notes.length) useStore.getState().toast(notes.join(' '));
     attach(found);
   }, [attach]);
 
@@ -356,6 +352,8 @@ export default function Live() {
   /** Stopped at a period's buzzer: the period report comes up, and the next period starts when the user resumes. */
   const enterBreak = useCallback(
     (lg: LiveGame) => {
+      // a break is a good moment to save where the game is (the app may be closed next)
+      useStore.getState().mutate(() => void lg.checkpoint());
       setScript(null);
       setAtBreak(true);
       setPaused(true);
@@ -473,7 +471,8 @@ export default function Live() {
       brokeAt.current = s.q;
       return enterBreak(lg);
     }
-    // clutch time: the court picks up from here
+    // clutch time: the court picks up from here (saved there, like a break)
+    useStore.getState().mutate(() => void lg.checkpoint());
     const [h, a] = s.T;
     if (to === 'clutch') setAnnounce(`Clutch time: ${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setAtBreak(false);
@@ -484,12 +483,29 @@ export default function Live() {
     if (atBreak) {
       setAtBreak(false);
       setPaused(false);
-    } else setPaused((p) => !p);
+      return;
+    }
+    // and so is a pause
+    const lg = liveRef.current;
+    if (!paused && lg) useStore.getState().mutate(() => void lg.checkpoint());
+    setPaused((p) => !p);
   };
+
+  /**
+   * Every coaching move goes through the game, into its journal, inside a league change: the save
+   * that follows keeps it, so the game survives the app being closed.
+   */
+  const coach = useCallback(<T,>(fn: (lg: LiveGame) => T): T | undefined => {
+    const lg = liveRef.current;
+    if (!lg) return undefined;
+    let out: T | undefined;
+    useStore.getState().mutate(() => void (out = fn(lg)));
+    return out as T | undefined;
+  }, []);
 
   const callTimeout = (reason?: string) => {
     const lg = liveRef.current;
-    if (!lg || lg.over || !lg.sim.callTimeout(userSide, reason)) return;
+    if (!lg || lg.over || !coach((g) => g.callTimeout(reason))) return;
     // the court flashes it as the next possession opens: the one possession still being drawn finishes first
     setToPending(true);
     setAnnounce(`Timeout ${lg.sim.T[userSide].team.abbrev}.`);
@@ -501,12 +517,14 @@ export default function Live() {
    * one back (or "Reset to game plan") takes it out of the saved tactics too.
    */
   const keep = (lg: LiveGame) => {
-    const base = keepBase.current;
+    const base = lg.keep;
     if (!base) return;
     const kept = keptTactics(base, lg.planned, lg.sim.baseTactics(lg.userSide));
-    useStore.getState().mutate((l) => void (l.teams[l.userTid].tactics = kept));
-    // this screen made the change: resuming later shouldn't treat it as an outside edit
-    setups.set(lg, userSetup(useStore.getState().league!, lg));
+    useStore.getState().mutate((l) => {
+      l.teams[l.userTid].tactics = kept;
+      // this screen made the change: resuming later shouldn't treat it as an outside edit
+      lg.markSeen(userSetup(l, lg).seen);
+    });
   };
 
   /** Every in-game tactics change goes through the tactics the coach set (never an in-game overlay on them). */
@@ -515,26 +533,29 @@ export default function Live() {
     if (!lg) return;
     const t = lg.sim.baseTactics(userSide);
     fn(t);
-    lg.sim.setTactics(userSide, t);
-    if (persist) keep(lg);
+    coach((g) => g.setTactics(t));
+    keep(lg);
     setTick((x) => x + 1);
   };
 
+  /** "Keep changes after this game" (kept with the game, so it's still on after the app was closed). */
   const setKeep = (on: boolean) => {
     const lg = liveRef.current;
-    setPersist(on);
     if (!lg) return;
     if (on) {
       // what was changed before it was turned on is kept too
-      keepBase.current = cloneTactics(useStore.getState().league!.teams[lg.userTid].tactics);
+      coach((g) => g.setKeep(useStore.getState().league!.teams[g.userTid].tactics));
       keep(lg);
-    } else if (keepBase.current) {
+    } else if (lg.keep) {
       // off again: the saved tactics go back to what they were
-      const base = keepBase.current;
-      keepBase.current = null;
-      useStore.getState().mutate((l) => void (l.teams[l.userTid].tactics = base));
-      setups.set(lg, userSetup(useStore.getState().league!, lg));
+      const base = lg.keep;
+      useStore.getState().mutate((l) => {
+        lg.setKeep(null);
+        l.teams[l.userTid].tactics = base;
+        lg.markSeen(userSetup(l, lg).seen);
+      });
     }
+    setTick((x) => x + 1);
   };
 
   const runAlert = (a: LiveAlert) => {
@@ -547,13 +568,14 @@ export default function Live() {
       setPicked(undefined);
       setPanel('subs');
     } else {
-      if (!lg.sim.substitute(userSide, act.out, act.in)) useStore.getState().toast(`${nameOf(act.in)} can't come in for ${nameOf(act.out)} right now.`, 'bad');
+      if (!coach((g) => g.substitute(act.out, act.in))) useStore.getState().toast(`${nameOf(act.in)} can't come in for ${nameOf(act.out)} right now.`, 'bad');
       setTick((x) => x + 1);
     }
     setDismissed((d) => [...d, a.id]);
   };
 
   const over = status !== 'live';
+  const persist = !!game?.keep;
   const tactics = useMemo(
     () => (game ? game.sim.baseTactics(game.userSide) : null),
     // the tactics change through this screen (tick) and at resume (game)
@@ -862,7 +884,20 @@ export default function Live() {
             </div>
           )}
 
-          {!over && <LateGameCard sim={sim} side={userSide} shown={ticker} quarter={quarter} logs={game.logs} drawing={!!script} nameOf={nameOf} timeout={() => callTimeout()} />}
+          {!over && (
+            <LateGameCard
+              side={userSide}
+              shown={ticker}
+              quarter={quarter}
+              logs={game.logs}
+              drawing={!!script}
+              nameOf={nameOf}
+              timeout={() => callTimeout()}
+              initialCall={game.pendingCall}
+              callPlay={(c) => !!coach((g) => g.callPlay(c))}
+              cancelPlay={() => coach((g) => g.cancelPlay())}
+            />
+          )}
           {!over && (
             <div className="grid4 live-ctl">
               <button
@@ -896,7 +931,17 @@ export default function Live() {
       </div>
 
       <Sheet open={panel === 'subs'} onClose={() => setPanel('none')} title="Substitutions">
-        <SubsPanel key={picked ?? -1} sim={sim} view={view} side={userSide} nameOf={nameOf} initialOut={picked} onChange={() => setTick((x) => x + 1)} />
+        <SubsPanel
+          key={picked ?? -1}
+          sim={sim}
+          view={view}
+          side={userSide}
+          nameOf={nameOf}
+          initialOut={picked}
+          substitute={(out, inn) => !!coach((g) => g.substitute(out, inn))}
+          setManualSubs={(on) => coach((g) => g.setManualSubs(on))}
+          onChange={() => setTick((x) => x + 1)}
+        />
       </Sheet>
       <Sheet open={panel === 'tactics'} onClose={() => setPanel('none')} title="In-game adjustments">
         <TacticsPanel

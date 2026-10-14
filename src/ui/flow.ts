@@ -1,7 +1,7 @@
 // Phase-aware "what can I do next" actions shared by the top-bar play button and Home.
 import type { League, ScheduledGame } from '../core/types';
 import { allStarStop, type SimTarget } from '../state/store';
-import { pendingLive } from '../state/live';
+import { liveInProgress } from '../state/live';
 import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
@@ -71,7 +71,8 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
     case 'playin':
     case 'playoffs': {
       // a live game in progress finishes from its current score before anything else is simmed
-      const live = pendingLive(league);
+      // (open in this session, or journaled in the save after the app was closed mid-game)
+      const live = liveInProgress(league);
       if (live && onLive) {
         a.push({ id: 'finish', label: 'Finish this game', sub: 'Sim the rest from the current score and open the box score.', primary: true, cmd: 'quickGame' });
         break;
@@ -80,8 +81,8 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       const when = (day: number) => fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' });
       const out = league.phase !== 'regular' && !stillAlive(league);
       if (live) {
-        const q = live.sim.clock <= 0.05 ? `End of ${periodLabel(live.sim.q)}` : periodLabel(live.sim.q);
-        a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${live.sim.T[live.userSide].score}-${live.sim.T[1 - live.userSide].score}`, primary: true, cmd: 'watchLive' });
+        const q = live.clock <= 0.05 ? `End of ${periodLabel(live.q)}` : periodLabel(live.q);
+        a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${live.score[0]}-${live.score[1]}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
         a.push({ id: 'live', label: 'Watch & coach live', sub: `${opponentText(league, g)} · today`, primary: true, cmd: 'watchLive' });

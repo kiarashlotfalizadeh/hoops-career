@@ -6,6 +6,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { GamePlanItem, GameResult, League } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
+import { MAX_STEPS } from './live';
 
 export interface LeagueMeta {
   id: string;
@@ -272,8 +273,60 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
   if (x.untouchable !== undefined) x.untouchable = Array.isArray(x.untouchable) ? x.untouchable.filter((pid) => num(pid) && !!x.players[pid]) : [];
   for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
+  // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
+  if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
   x.version = SAVE_VERSION;
   return x;
+}
+
+const int = (v: unknown): v is number => Number.isInteger(v);
+const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
+const numValues = (v: unknown) => obj(v) && Object.values(v).every(num);
+const isTactics = (t: unknown) => obj(t) && obj(t.offense) && obj(t.defense) && obj(t.manage);
+/** More moves than any coach makes in a game: a journal with more was crafted. */
+const MAX_LIVE_OPS = 5000;
+const PLAY_CALLS = new Set(['three', 'two', 'hold', 'foul', 'iso']);
+
+/** A journaled coaching move's arguments in shape. */
+function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
+  switch (op) {
+    case 'sub':
+      return int(a.out) && int(a.in);
+    case 'tactics':
+      return isTactics(a.tactics) && (a.plan === undefined || typeof a.plan === 'boolean');
+    case 'timeout':
+      return a.reason === undefined || (str(a.reason) && (a.reason as string).length <= 80);
+    case 'manualSubs':
+      return typeof a.on === 'boolean';
+    case 'call':
+      return obj(a.call) && PLAY_CALLS.has(a.call.kind as string) && (a.call.kind !== 'iso' || int(a.call.pid));
+    case 'cancelCall':
+      return true;
+  }
+  return false;
+}
+
+/**
+ * A live game's journal (League.live) in shape, for the user's game today that's still to be
+ * played. The save may have been crafted: whatever passes still has to play back to the score and
+ * clock it records before the game is picked up from it (see LiveGame.fromJournal).
+ */
+function liveIntact(l: League, j: unknown): boolean {
+  if (!obj(j) || !int(j.gid) || !int(j.tid) || !num(j.seed) || typeof j.injuries !== 'boolean') return false;
+  if (!int(j.steps) || j.steps < 0 || j.steps > MAX_STEPS || !int(j.q) || j.q < 1 || !num(j.clock) || !nums(j.score) || j.score.length !== 2) return false;
+  const u = j.user;
+  if (!obj(u) || !isTactics(u.tactics) || !numValues(u.perf) || !nums(u.rest) || !num(u.injuryMult)) return false;
+  const r = u.rotation;
+  if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
+  if ((j.keep !== undefined && !isTactics(j.keep)) || (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2))) return false;
+  if (!Array.isArray(j.ops) || j.ops.length > MAX_LIVE_OPS) return false;
+  let at = 0;
+  for (const o of j.ops as unknown[]) {
+    if (!obj(o) || !int(o.at) || o.at < at || o.at > j.steps || !obj(o.args) || !liveArgs(o.op, o.args)) return false;
+    at = o.at;
+  }
+  const g = l.schedule.find((x) => x.gid === j.gid);
+  return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
 }
 
 /** A stored trade offer with both sides in shape, and every player and pick in it still in the league. */

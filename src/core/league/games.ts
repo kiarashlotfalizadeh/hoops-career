@@ -273,6 +273,8 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
   if (g.cup) res.cup = g.cup;
   applyResult(league, g, sim, res, rng);
   league.rng = rng.state;
+  // a recorded game has nothing left to pick up, however it was finished (live, or simmed from the Play menu)
+  if (league.live?.gid === g.gid) delete league.live;
   return res;
 }
 

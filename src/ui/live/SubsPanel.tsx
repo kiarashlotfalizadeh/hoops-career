@@ -7,6 +7,7 @@ import { drawnPlayer, type Drawn } from './drawn';
 /**
  * Substitutions: who's on and off comes from the game itself (a sub has to be possible now), the
  * energy and fouls from the possession the court last drew. `initialOut` arrives picked to come out.
+ * The changes go through the live game (`substitute`, `setManualSubs`), which journals them.
  */
 export function SubsPanel({
   sim,
@@ -14,6 +15,8 @@ export function SubsPanel({
   side,
   nameOf,
   initialOut,
+  substitute,
+  setManualSubs,
   onChange,
 }: {
   sim: GameSim;
@@ -21,6 +24,9 @@ export function SubsPanel({
   side: 0 | 1;
   nameOf: (pid: number) => string;
   initialOut?: number;
+  /** Sub `inPid` in for `outPid`: false when that isn't possible right now. */
+  substitute: (outPid: number, inPid: number) => boolean;
+  setManualSubs: (on: boolean) => void;
   onChange: () => void;
 }) {
   const t = sim.T[side];
@@ -37,7 +43,7 @@ export function SubsPanel({
       <Toggle
         on={t.manualSubs}
         onChange={(v) => {
-          t.manualSubs = v;
+          setManualSubs(v);
           force((x) => x + 1);
           onChange();
         }}
@@ -74,7 +80,7 @@ export function SubsPanel({
               onClick={() => {
                 if (outPid === null) return;
                 // the game plays on while this sheet is open: the staff may have made a change first
-                if (!sim.substitute(side, outPid, p.pid)) {
+                if (!substitute(outPid, p.pid)) {
                   const why = !t.on.some((x) => x.pid === outPid)
                     ? `${nameOf(outPid)} is already on the bench.`
                     : p.on

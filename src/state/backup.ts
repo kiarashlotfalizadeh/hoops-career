@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import type { League } from '../core/types';
 import { listLeagues, loadRawLeague, migrate, SAVE_VERSION, saveLeague } from './persistence';
 import { useStore } from './store';
+import { checkpointLive } from './live';
 
 const NOT_A_BACKUP = 'That file is not a Hoops Career backup.';
 /** Well above any real league (ten seasons in, a backup is under 20 MB); reading more would just exhaust memory. */
@@ -54,6 +55,8 @@ async function deliver(json: string, name: string): Promise<boolean> {
 
 /** Hand the league to the user as a JSON file. Resolves false if they cancelled the share sheet. */
 export function exportLeague(league: League): Promise<boolean> {
+  // a live game in progress goes in as far as it has got, to be picked up there after an import
+  checkpointLive(league);
   // in this build's format, even before its first save writes the version (a new league starts at 1)
   return deliver(JSON.stringify({ ...league, version: SAVE_VERSION }), fileName(league.name, league.season));
 }

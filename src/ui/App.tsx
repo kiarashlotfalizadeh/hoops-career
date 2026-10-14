@@ -4,7 +4,7 @@ import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as Set
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
-import { pendingLive } from '../state/live';
+import { liveInProgress } from '../state/live';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
@@ -413,7 +413,7 @@ function ScrollTop() {
  */
 function OfficeGate({ children }: { children: ReactNode }) {
   const fired = useStore((s) => !!s.league?.fired);
-  const live = useStore((s) => !!s.league && !!pendingLive(s.league));
+  const live = useStore((s) => !!s.league && !!liveInProgress(s.league));
   const nav = useNavigate();
   if (!fired && !live) return <>{children}</>;
   return (
