@@ -108,7 +108,7 @@ function CounterCard({
         <Side title="You get" items={items(c.offer.b, base.b)} />
       </div>
       <div className="tiny dim num" style={{ marginTop: 6 }}>
-        Salary {fmtMs(info.inc - info.out)} · payroll after{' '}
+        Net salary {fmtMs(info.inc - info.out)} · payroll after{' '}
         <b style={{ color: info.after > cap.luxuryTax ? 'var(--bad)' : info.after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>{fmtM(info.after)}</b>
         {info.after > cap.luxuryTax ? ' (over the tax)' : info.after > cap.salaryCap ? ' (over the cap)' : ''}
       </div>
@@ -118,7 +118,7 @@ function CounterCard({
         </div>
       )}
       <div className="row" style={{ gap: 8, marginTop: 10 }}>
-        <button className="btn sm grow" onClick={() => onEdit(c.offer)}>
+        <button className="btn sm grow" onClick={() => onEdit(c.offer)} aria-label={`Edit in builder: ${c.label}`}>
           Edit in builder
         </button>
         <button className="btn sm good grow" onClick={() => onAccept(c.offer)} aria-label={`Accept: ${c.label}`}>
