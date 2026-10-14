@@ -9,6 +9,7 @@ import {
   MAX_FIRSTS_OUT,
   canMakeWork,
   capSalary,
+  counterOffers,
   evaluateTrade,
   executeTrade,
   makeItWork,
@@ -18,6 +19,7 @@ import {
   untradeable,
   validateTrade,
   valueVerdict,
+  type CounterOffer,
   type TradeEval,
   type TradeOffer,
 } from '../../core/league/trades';
@@ -28,6 +30,8 @@ import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '.
 import { STRATEGY_META, Callout, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { rosterNames } from '../stats';
+import { TradeNotes } from '../trade/common';
+import { CounterSheet } from '../trade/CounterSheet';
 
 interface Sel {
   pids: number[];
@@ -67,6 +71,8 @@ export default function Trade() {
   const [tab, setTab] = useState<'build' | 'block'>(init.shop !== null ? 'block' : 'build');
   const [shop, setShop] = useState<number | null>(init.shop);
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
+  // a turned-down deal and what they'd do instead
+  const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[] } | null>(null);
 
   // react to new deep links while already on the screen (e.g. from the inbox)
   const key = params.toString();
@@ -120,20 +126,43 @@ export default function Trade() {
     setGet(EMPTY);
   };
 
-  const propose = () => {
-    // judging a deal changes nothing: only an accepted one is saved
-    const r = evaluateTrade(league, offer);
+  /** Make a deal if they still take it (judging one changes nothing: only an accepted one is saved). */
+  const execute = (o: TradeOffer): boolean => {
+    const abbrev = league.teams[o.b.tid].abbrev;
+    const r = evaluateTrade(league, o);
     if (!r.accept) {
-      useStore.getState().toast(`${pt.abbrev}: ${r.message}`, 'bad');
-      return;
+      useStore.getState().toast(`${abbrev}: ${r.message}`, 'bad');
+      return false;
     }
-    useStore.getState().mutate((l) => executeTrade(l, offer));
-    const names = cleanGet.pids.map((pid) => league.players[pid].lastName);
-    const picks = cleanGet.dpids.length;
+    useStore.getState().mutate((l) => executeTrade(l, o));
+    const names = o.b.pids.map((pid) => league.players[pid].lastName);
+    const picks = o.b.dpids.length;
     const arrive = names.length ? ` Welcome ${names.join(', ')}: ${names.length === 1 ? 'he joins' : 'they join'} the end of your rotation.` : '';
     const got = picks ? ` You${names.length ? ' also' : ''} get ${picks === 1 ? 'a draft pick' : `${picks} draft picks`}.` : '';
-    useStore.getState().toast(`Trade done with ${pt.abbrev}!${arrive}${got}`, 'good');
+    useStore.getState().toast(`Trade done with ${abbrev}!${arrive}${got}`, 'good');
     reset();
+    return true;
+  };
+
+  const propose = () => {
+    const r = evaluateTrade(league, offer);
+    if (r.accept) {
+      execute(offer);
+      return;
+    }
+    // turned down: the versions they would take instead (worked out only now: it takes a moment)
+    const list = r.ok ? counterOffers(league, offer) : [];
+    if (list.length) setCounters({ base: offer, list });
+    else useStore.getState().toast(`${pt.abbrev}: ${r.message}`, 'bad');
+  };
+
+  const loadDeal = (o: TradeOffer) => {
+    setPartner(o.b.tid);
+    setGive({ pids: o.a.pids, dpids: o.a.dpids });
+    setGet({ pids: o.b.pids, dpids: o.b.dpids });
+    setSide('theirs');
+    setTab('build');
+    window.scrollTo({ top: 0, behavior: scrollBehavior() });
   };
 
   const whatWorks = () => {
@@ -203,6 +232,10 @@ export default function Trade() {
               waive to fit the roster count for nothing.
               {league.settings.difficulty === 'casual' ? ' On casual they take a little less than fair value, but not for players or picks you got in a trade this season.' : ''}
             </p>
+            <p style={{ margin: 0 }}>
+              <b>Negotiating.</b> Under the meter they tell you their main reasons, and warn you when you'd give up far more value than you get. When they say no to a proposal,
+              they offer the versions they would take: something more from you, one of their pieces left out, or one of their bad contracts for you to absorb.
+            </p>
           </Help>
         }
       />
@@ -265,6 +298,20 @@ export default function Trade() {
           }}
         />
       )}
+      <CounterSheet
+        league={league}
+        base={counters?.base ?? null}
+        counters={counters?.list ?? []}
+        onClose={() => setCounters(null)}
+        onAccept={(o) => {
+          setCounters(null);
+          execute(o);
+        }}
+        onEdit={(o) => {
+          setCounters(null);
+          loadDeal(o);
+        }}
+      />
     </main>
   );
 }
@@ -608,6 +655,12 @@ function Dock({
         <span>Close</span>
         <span>Deal!</span>
       </div>
+      {ev.notes.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {/* their two main reasons (one when a rule problem already needs the room) */}
+          <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />
+        </div>
+      )}
       <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
         <div>
           <div className="tiny dim upper bold">Salary</div>
