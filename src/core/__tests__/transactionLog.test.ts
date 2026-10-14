@@ -1,7 +1,8 @@
 // The transaction log (W7): every trade with both sides, and each signing, re-signing, extension,
 // release, waiver claim, buyout, two-way deal and conversion as one entry, with names and pick
-// labels frozen when it happens; AI teams' quiet roster fills stay out; a new season drops other
-// teams' old moves but keeps trades and the user's. Fictional leagues keep these fast.
+// labels frozen when it happens; AI teams' quiet roster fills and minimum deals stay out; a new
+// season drops other teams' old moves but keeps trades and the user's. Fictional leagues keep
+// these fast.
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
