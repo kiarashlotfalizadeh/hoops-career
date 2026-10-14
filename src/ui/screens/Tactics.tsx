@@ -4,19 +4,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
-import {
-  ACTION_META,
-  COVERAGE_META,
-  DEF_PRESETS,
-  OFF_PRESETS,
-  PRESS_META,
-  SCHEME_META,
-  STAR_PLAN_META,
-  applyDefPreset,
-  applyOffPreset,
-  cloneTactics,
-} from '../../core/sim/tactics';
-import { autoTactics, defPresetFit, fitRoster, fitScale, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
+import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
+import { autoTactics } from '../../core/ai/coachAI';
+import { playbookLabel } from '../../core/sim/playbooks';
+import { PresetPicker } from '../components/PresetPicker';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
@@ -29,11 +20,6 @@ import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
-
-function FitTag({ v }: { v: number }) {
-  const tone = v >= 88 ? 'good' : v >= 70 ? 'info' : v >= 58 ? 'warn' : 'bad';
-  return <Tag tone={tone}>Fit {v}</Tag>;
-}
 
 export default function Tactics() {
   const league = useLeague();
@@ -67,12 +53,6 @@ export default function Tactics() {
   const changed = snapshot.sig !== JSON.stringify(t);
   // a Play-menu sim's progress bar takes the same spot as the changes bar
   const simming = useStore((s) => !!s.sim);
-  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
-  // the roster as the assistant judges it (rankedPresets): a knock of five games or fewer doesn't swing the fits
-  const healthy = useMemo(() => fitRoster(players), [players]);
-  const prof = useMemo(() => rosterProfile(healthy), [healthy]);
-  const offFit = useMemo(() => fitScale(offPresetFit(prof)), [prof]);
-  const defFit = useMemo(() => fitScale(defPresetFit(prof)), [prof]);
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/tactics'), [league]);
 
   const edit = (fn: (t: TacticsT) => void) =>
@@ -94,7 +74,7 @@ export default function Tactics() {
     <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
       <PageHeader
         title="Tactics"
-        sub={`${OFF_PRESETS.find((x) => x.id === t.offPreset)?.name ?? 'Custom'} · ${DEF_PRESETS.find((x) => x.id === t.defPreset)?.name ?? 'Custom'}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
+        sub={`${playbookLabel(t)}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
         right={
           <Link to="/lab" className="btn sm">
             <FlaskConical size={16} /> Lab
@@ -138,74 +118,14 @@ export default function Tactics() {
             right={
               <Help title="Playbooks">
                 A playbook sets pace, shot profile and which actions you run. "Fit" scores how well your current roster suits it: creators, shooters, passers, bigs and athleticism.
-                You can fine-tune any playbook in the Offense tab.
+                Tap a fit score to see what it is made of. You can fine-tune any playbook in the Offense tab.
               </Help>
             }
           >
-            <div className="col grid-md2" style={{ gap: 8 }}>
-              {OFF_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  aria-pressed={t.offPreset === p.id}
-                  className="card tight"
-                  style={{
-                    textAlign: 'left',
-                    borderColor: t.offPreset === p.id ? 'var(--accent)' : undefined,
-                    background: t.offPreset === p.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined,
-                  }}
-                  onClick={() =>
-                    edit((tt) => {
-                      tt.offense = applyOffPreset(tt.offense, p.id);
-                      tt.offPreset = p.id;
-                    })
-                  }
-                >
-                  <div className="row between">
-                    <span className="bold">{p.name}</span>
-                    <FitTag v={offFit(p.id)} />
-                  </div>
-                  <div className="small dim2">
-                    {p.tagline}. {p.description}
-                  </div>
-                  <div className="tiny dim" style={{ marginTop: 4 }}>
-                    Best for: {p.bestFor}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <PresetPicker kind="off" />
           </Card>
           <Card title="Defensive identity">
-            <div className="col grid-md2" style={{ gap: 8 }}>
-              {DEF_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  aria-pressed={t.defPreset === p.id}
-                  className="card tight"
-                  style={{
-                    textAlign: 'left',
-                    borderColor: t.defPreset === p.id ? 'var(--accent)' : undefined,
-                    background: t.defPreset === p.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined,
-                  }}
-                  onClick={() =>
-                    edit((tt) => {
-                      tt.defense = applyDefPreset(tt.defense, p.id);
-                      tt.defPreset = p.id;
-                    })
-                  }
-                >
-                  <div className="row between">
-                    <span className="bold">{p.name}</span>
-                    <FitTag v={defFit(p.id)} />
-                  </div>
-                  <div className="small dim2">
-                    {p.tagline}. {p.description}
-                  </div>
-                  <div className="tiny dim" style={{ marginTop: 4 }}>
-                    Best for: {p.bestFor}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <PresetPicker kind="def" />
           </Card>
           {complexity === 'simple' && (
             <Card title="Tempo">
