@@ -3,9 +3,10 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useStore } from '../store';
-import { flowActions, type FlowAction } from '../../ui/flow';
-import { faAdvance, finishDraftPhase, newSeason, startDraft, startFreeAgency, startRegularSeason } from '../../core/league/season';
-import { fmtDate } from '../../core/league/helpers';
+import { flowActions, opponentText, type FlowAction } from '../../ui/flow';
+import { faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../../core/league/season';
+import { curTeamSeason, fmtDate } from '../../core/league/helpers';
+import { userGameOnDay } from '../../core/league/games';
 import { takeOverTeam } from '../../core/league/owner';
 import { validateTrade } from '../../core/league/trades';
 import type { League } from '../../core/types';
@@ -77,11 +78,28 @@ describe('Play menu', () => {
     }
   });
 
-  it('"Sim to next game" names the day of the next game, not today', () => {
+  it('"Sim to next game" names the day of the next game, not today, and the opponent', () => {
     const l = testLeague('next');
     while (flowActions(l)[0].id !== 'next') l.day++;
     const next = l.schedule.filter((g) => !g.played && g.day > l.day && (g.home === l.userTid || g.away === l.userTid)).sort((a, b) => a.day - b.day)[0];
-    expect(flowActions(l)[0].sub).toBe(fmtDate(l.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' }));
+    const home = next.home === l.userTid;
+    const opp = l.teams[home ? next.away : next.home].abbrev;
+    expect(flowActions(l)[0].sub).toBe(`${fmtDate(l.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })} · ${home ? 'vs' : '@'} ${opp} (0-0)`);
+  });
+
+  it('"Watch & coach live" names tonight\'s opponent and its record; in the playoffs, the series', () => {
+    const l = testLeague('tonight');
+    while (flowActions(l)[0].id !== 'live') simDay(l);
+    const g = userGameOnDay(l, l.day)!;
+    const home = g.home === l.userTid;
+    const opp = home ? g.away : g.home;
+    const ts = curTeamSeason(l, opp);
+    expect(flowActions(l)[0]).toMatchObject({ label: 'Watch & coach live', sub: `${home ? 'vs' : '@'} ${l.teams[opp].abbrev} (${ts.won}-${ts.lost}) · today` });
+    // a playoff game shows the series from the user's side
+    l.playoffs = [{ id: 'E1-0', round: 1, conf: 'E', high: opp, low: l.userTid, highSeed: 1, lowSeed: 8, highWins: 2, lowWins: 1 }];
+    g.type = 'playoffs';
+    g.seriesId = 'E1-0';
+    expect(opponentText(l, g)).toBe(`${home ? 'vs' : '@'} ${l.teams[opp].abbrev} (series 1-2)`);
   });
 
   it("a fired coach finds a new job before the league moves on, and can't trade for the old team", () => {
