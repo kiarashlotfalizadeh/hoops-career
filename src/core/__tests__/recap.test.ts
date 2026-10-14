@@ -69,6 +69,21 @@ describe('post-game quotes and the press conference', () => {
     expect(postGameQuotes(l, other)).toEqual([]);
   });
 
+  it('names the teammate hurt in the game, told apart from one with the same last name', () => {
+    const l = played('hurt', 10);
+    const g = structuredClone(userGames(l).at(-1)!);
+    const us = g.home.tid === l.userTid ? g.home : g.away;
+    const voice = postGameQuotes(l, g)[0].pid;
+    const other = us.players.find((b) => b.min > 0 && b.pid !== voice)!;
+    const p = l.players[other.pid];
+    const line = (who: string) => [{ q: 2, clock: 300, t: (us === g.home ? 0 : 1) as 0 | 1, text: `${who} ${p.lastName} is injured and leaves the game.`, hs: 0, as: 0 }];
+    g.pbp = line(`${p.firstName.slice(0, 3)}.`);
+    expect(postGameQuotes(l, g)[0].text).toContain(p.lastName);
+    // another player of that name (not ours) was the one hurt
+    g.pbp = line('Zz.');
+    expect(postGameQuotes(l, g)[0].text).not.toContain(p.lastName);
+  });
+
   it("the streak after a game matches the team's record after the latest one", () => {
     const l = played('streak', 25);
     const last = userGames(l)

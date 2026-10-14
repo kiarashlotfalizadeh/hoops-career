@@ -102,11 +102,23 @@ function upsetGap(league: League, res: GameResult): number {
   return rank(winner) - rank(loser);
 }
 
+/**
+ * Whether a play-by-play line ("Jal. Williams is injured and leaves the game.") names this player:
+ * teammates who share a last name are told apart by as much of the first name as it takes.
+ */
+function injuredIn(league: League, b: BoxLine, text: string) {
+  const p = league.players[b.pid];
+  const at = text.indexOf(`${p?.lastName ?? b.name} is injured and leaves the game.`);
+  if (at < 0) return false;
+  const first = text.slice(0, at).trim().replace(/\.$/, '');
+  return !first || !!p?.firstName.startsWith(first);
+}
+
 /** A player of ours hurt in this game: from the play-by-play, or (for the latest game) a fresh injury on someone who played. */
 function hurtInGame(league: League, res: GameResult, us: TeamBox): BoxLine | undefined {
   const played = us.players.filter((b) => b.min > 0);
   const named = res.pbp?.filter((e) => e.text.endsWith('is injured and leaves the game.'));
-  if (named?.length) return played.find((b) => named.some((e) => e.text.includes(`${lastName(league, b)} is injured`)));
+  if (named?.length) return played.find((b) => named.some((e) => injuredIn(league, b, e.text)));
   if (!isLatestUserGame(league, res)) return undefined;
   return played.find((b) => {
     const inj = league.players[b.pid]?.injury;

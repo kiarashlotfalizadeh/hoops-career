@@ -14,6 +14,7 @@ import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
 import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
+import { GameRecap } from '../components/GameRecap';
 
 type Tab = 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 
@@ -95,6 +96,7 @@ export default function GameView() {
         </div>
         <QuarterTable g={g} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
       </Card>
+      {userGame && <GameRecap res={g} league={league} report={report} />}
       {tabs.length > 1 && <Segmented value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
 
       {tab === 'report' && report && (
