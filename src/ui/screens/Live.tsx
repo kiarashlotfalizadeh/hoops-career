@@ -6,6 +6,7 @@ import { useLeague, useStore, useVersion } from '../../state/store';
 import { prepareLive, clearLive, playedElsewhere, type LiveGame } from '../../state/live';
 import { buildScript, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
+import { LateGameCard } from '../live/LateGameCard';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { composites } from '../../core/ratings';
@@ -612,6 +613,7 @@ export default function Live() {
             </div>
           ))}
 
+          {!over && <LateGameCard sim={sim} side={userSide} shown={ticker} quarter={quarter} logs={game.logs} drawing={!!script} nameOf={nameOf} timeout={() => callTimeout()} />}
           {!over && (
             <div className="grid4 live-ctl">
               <button className="btn sm" disabled={me.timeouts <= 0 || atBreak} onClick={() => callTimeout()} aria-label={`TO: call a timeout, ${me.timeouts} left`}>
@@ -880,7 +882,8 @@ function TacticsPanel({
   setPersist: (on: boolean) => void;
 }) {
   const [, force] = useState(0);
-  const t = live.sim.T[side].t;
+  // the base tactics edits go to, not a situational plan playing on top of them
+  const t = live.sim.baseTactics(side);
   const opp = live.sim.T[1 - side];
   const set = (fn: (t: Tactics) => void) => {
     apply(fn, persist);
