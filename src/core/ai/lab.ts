@@ -203,6 +203,8 @@ export interface Candidate {
   patch: TacticsPatch;
   /** Game-plan group: a counter replaces the plan's item in the same group (see GamePlanItem). */
   group?: string;
+  /** What in the scouting numbers backs it. */
+  evidence?: string;
 }
 
 export interface CandidateResult {
@@ -211,6 +213,7 @@ export interface CandidateResult {
   why: string;
   patch: TacticsPatch;
   group?: string;
+  evidence?: string;
   net: number;
   delta: number;
   se: number;
@@ -231,7 +234,7 @@ export function evaluateCandidates(
   const results = candidates.map((c) => {
     const r = runLab({ a, b, games, seed, type, patch: c.patch }, onGame);
     const { delta, se } = pairedDelta(base, r);
-    return { id: c.id, label: c.label, why: c.why, patch: c.patch, net: r.net, delta, se, winPct: r.winPct };
+    return { id: c.id, label: c.label, why: c.why, patch: c.patch, group: c.group, evidence: c.evidence, net: r.net, delta, se, winPct: r.winPct };
   });
   results.sort((x, y) => y.delta - x.delta);
   return { base, results };

@@ -7,6 +7,8 @@ import { composites, ROLE_META } from '../ratings';
 import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
+import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
+import { scoutData } from '../analysis/scouting';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
 import { possessive } from '../analysis/gameReport';
@@ -63,7 +65,9 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   const protector = [...cs].sort((a, b) => b.c.rimProt - a.c.rimProt)[0];
   const offense: string[] = [];
   const defense: string[] = [];
-  const weaknesses: string[] = [];
+  // with enough games, what the numbers show comes first, then what the playbook and roster suggest
+  const data = scoutData(league, tid);
+  const weaknesses: string[] = data.enough ? [...data.exploits] : [];
   offense.push(`Runs ${off?.name ?? 'a balanced attack'} at a ${t.offense.pace >= 65 ? 'fast' : t.offense.pace <= 35 ? 'slow' : 'moderate'} pace.`);
   const topAct = (Object.entries(t.offense.actions) as [ActionType, number][]).sort((a, b) => b[1] - a[1])[0][0];
   offense.push(`Favorite action: ${ACTION_META[topAct].label}.`);
@@ -81,7 +85,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (t.defense.help >= 65) defense.push('Helps aggressively off shooters into the paint.');
   if (t.defense.pressure >= 65) defense.push('Pressures the ball, which invites backdoor cuts and blow-bys.');
   if (spacing < CRAMPED_SPACING) weaknesses.push(`Poor spacing (${pct(spacing)}): pack the paint and dare them to shoot.`);
-  if (security < 52) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
+  if (security < 52 && !weaknesses.some((w) => w.startsWith('Loose with the ball'))) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
   if (man && t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
   // (a switch on a ball screen leaves him on a guard; switching off-ball screens doesn't)
@@ -107,104 +111,198 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   return { tid, summary, offense, defense, threats, weaknesses };
 }
 
-/** Heuristic counters for the lab to test against a specific opponent. */
+/**
+ * The user's tactics against `opp` if counter `c` went into the game plan, replacing the plan's item
+ * in its group (what the Lab tests and what Add on the game plan screen would play).
+ */
+export function tacticsWithCounter(league: League, opp: number, c: Pick<Candidate, 'id' | 'label' | 'group' | 'patch'>): Tactics {
+  const plan = planFor(league, opp);
+  const g = itemGroup(c);
+  const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== g), { id: c.id, label: c.label, group: c.group, patch: c.patch }];
+  const view: League = { ...league, gamePlans: { ...league.gamePlans, [opp]: { oppTid: opp, items, matchups: plan?.matchups } } };
+  return effectiveTactics(view, opp);
+}
+
+/**
+ * Counters for the lab to test against a specific opponent, drafted against the tactics the user
+ * plays them with now (the game plan for them included). Each names its game-plan group (a plan
+ * keeps one item per group), slider changes to actions and shot profile are relative so they build
+ * on whatever playbook is run, and counters the scouting numbers back carry that evidence and come
+ * first. A counter already in the plan, or one that would change nothing, isn't offered.
+ */
 export function counterCandidates(league: League, userTid: number, oppTid: number): Candidate[] {
   const opp = league.teams[oppTid];
-  const mine = league.teams[userTid];
   const { rot, creators, spacing, security } = readRotation(league, oppTid);
   const top = creators[0];
+  const forUser = userTid === league.userTid;
+  const plan = forUser ? planFor(league, oppTid) : null;
+  const cur = forUser ? effectiveTactics(league, oppTid) : cloneTactics(league.teams[userTid].tactics);
+  const data = scoutData(league, oppTid);
+  const backed = (id: string) => data.counters[id] !== undefined;
   const out: Candidate[] = [];
-  const cur = mine.tactics;
-  // coverages only apply in man-to-man, so from a zone each one is a change of scheme too
+  const add = (c: Candidate) => out.push({ ...c, ...(data.counters[c.id] ? { evidence: data.counters[c.id] } : {}) });
+  // coverages only apply in man-to-man, so from a zone each one is a change of scheme too (and a
+  // zone and a coverage share a group: a plan plays one or the other)
   const zone = cur.defense.scheme !== 'man';
-  const cov = (c: PnrCoverage, why: string) => {
-    if (zone || cur.defense.pnr !== c)
-      out.push({
+  const cov = (c: PnrCoverage, why: string, when: boolean) => {
+    if ((when || backed(`cov-${c}`)) && (zone || cur.defense.pnr !== c))
+      add({
         id: `cov-${c}`,
         label: `${COVERAGE_META[c].label} coverage`,
         why: zone ? `${why} You'd play man-to-man instead of your zone.` : why,
+        group: 'coverage',
         patch: { defense: { pnr: c, scheme: 'man', ...(c === 'switch' ? { switchOffBall: true } : {}) } },
       });
   };
   if (top) {
     const pull = (top.c.pu3 + top.c.midShot) / 2;
-    if (pull >= 60) cov('hedge', `${top.p.lastName} is a dangerous pull-up shooter; don't give him space.`);
-    if (pull >= 60) cov('ice', `Keep ${top.p.lastName} out of the middle and off pull-up threes.`);
-    if (top.c.passing < 55) cov('blitz', `${top.p.lastName} is a shaky passer; trap him and make others beat you.`);
-    else cov('drop', 'Protect the rim and live with contested pull-ups.');
-    cov('switch', 'Switch everything to take away ball screens and handoffs.');
-    if (cur.defense.starPlan !== 'double')
-      out.push({
-        id: 'star-double',
-        label: `Double-team ${top.p.lastName}`,
-        why: `Force the ${possessive(opp.name)} supporting cast to beat you.`,
-        patch: { defense: { starPlan: 'double', starTarget: top.p.pid } },
-      });
-    if (cur.defense.starPlan !== 'deny')
-      out.push({
-        id: 'star-deny',
-        label: `Deny ${top.p.lastName}`,
-        why: 'Keep the ball out of his hands without giving up 4-on-3s.',
-        patch: { defense: { starPlan: 'deny', starTarget: top.p.pid } },
-      });
+    cov('hedge', `${top.p.lastName} is a dangerous pull-up shooter; don't give him space.`, pull >= 60);
+    cov('ice', `Keep ${top.p.lastName} out of the middle and off pull-up threes.`, pull >= 60);
+    cov('blitz', `${top.p.lastName} is a shaky passer; trap him and make others beat you.`, top.c.passing < 55);
+    cov('drop', 'Protect the rim and live with contested pull-ups.', top.c.passing >= 55);
+    cov('switch', 'Switch everything to take away ball screens and handoffs.', true);
+    // the player the numbers say they run through, else their best creator
+    const star = (data.star !== undefined && league.players[data.star]) || top.p;
+    const plans = [
+      ['double', `Double-team ${star.lastName}`, `Force the ${possessive(opp.name)} supporting cast to beat you.`],
+      ['deny', `Deny ${star.lastName}`, 'Keep the ball out of his hands without giving up 4-on-3s.'],
+    ] as const;
+    for (const [sp, label, why] of plans)
+      if (cur.defense.starPlan !== sp || cur.defense.starTarget !== star.pid)
+        add({ id: `star-${sp}`, label, why, group: 'star', patch: { defense: { starPlan: sp, starTarget: star.pid } } });
   }
   // spacing as scouting reads it: a zone only against the cramped fifth it flags, packing the
-  // paint a little beyond that, staying home against about the best-spaced third
-  if (spacing < CRAMPED_SPACING + 4 && cur.defense.help < 70)
-    out.push({
+  // paint a little beyond that, staying home against about the best-spaced third; between those,
+  // the numbers decide (never both at once)
+  const packs = spacing < CRAMPED_SPACING + 4 || (spacing < 45 && backed('help-high') && !backed('help-low'));
+  const stays = spacing >= 45 || (!packs && backed('help-low'));
+  if (packs && cur.defense.help < 70)
+    add({
       id: 'help-high',
       label: 'Pack the paint',
-      why: `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}). Sag off and protect the rim.`,
+      why:
+        spacing < CRAMPED_SPACING + 4
+          ? `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}). Sag off and protect the rim.`
+          : `The ${opp.name} score inside. Sag off and protect the rim.`,
+      group: 'help',
       patch: { defense: { help: 78 } },
     });
-  if (spacing >= 45 && cur.defense.help > 40)
-    out.push({ id: 'help-low', label: 'Stay home on shooters', why: `The ${opp.name} space the floor well; don't over-help.`, patch: { defense: { help: 32 } } });
+  if (stays && cur.defense.help > 40)
+    add({
+      id: 'help-low',
+      label: 'Stay home on shooters',
+      why: spacing >= 45 ? `The ${opp.name} space the floor well; don't over-help.` : `The ${opp.name} make open threes pay; don't over-help.`,
+      group: 'help',
+      patch: { defense: { help: 32 } },
+    });
   if (spacing < CRAMPED_SPACING && cur.defense.scheme === 'man')
-    out.push({ id: 'zone', label: SCHEME_META.zone23.label, why: 'Dare a poor-shooting team to beat you from outside.', patch: { defense: { scheme: 'zone23' } } });
-  if (security < 55 && cur.defense.pressure < 70)
-    out.push({ id: 'pressure-up', label: 'Turn up the pressure', why: 'Their ball handlers are loose with it.', patch: { defense: { pressure: 82 } } });
-  // offensive counters
+    add({ id: 'zone', label: SCHEME_META.zone23.label, why: 'Dare a poor-shooting team to beat you from outside.', group: 'coverage', patch: { defense: { scheme: 'zone23' } } });
+  if ((security < 55 || backed('pressure-up')) && cur.defense.pressure < 70)
+    add({ id: 'pressure-up', label: 'Turn up the pressure', why: 'Their ball handlers are loose with it.', group: 'pressure', patch: { defense: { pressure: 82 } } });
+  if ((security < 52 || backed('press-on')) && cur.defense.press === 'none')
+    add({
+      id: 'press-on',
+      label: 'Press after makes',
+      why: 'Make their shaky handlers bring it up against full-court pressure (it costs your legs).',
+      group: 'press',
+      patch: { defense: { press: 'afterMade' } },
+    });
+  if (backed('getback') && cur.defense.getBack < 80)
+    add({ id: 'getback', label: 'Sprint back', why: `The ${opp.name} live in transition: get back before anyone crashes.`, group: 'getback', patch: { defense: { getBack: 85 } } });
+  if (backed('physicality-down') && cur.defense.physicality > 40)
+    add({
+      id: 'physicality-down',
+      label: 'Defend without fouling',
+      why: 'Keep them off the free-throw line: contest without reaching.',
+      group: 'physicality',
+      patch: { defense: { physicality: 35 } },
+    });
+  // offensive counters, as relative changes to the playbook (each in the group of its main action)
   const od = opp.tactics.defense;
   if (od.pnr === 'drop' && od.scheme === 'man')
-    out.push({
+    add({
       id: 'vs-drop',
       label: 'Attack the drop',
       why: 'Pull-up jumpers and handoffs beat drop coverage.',
-      patch: { offense: { actions: { ...cur.offense.actions, pnr: Math.min(100, cur.offense.actions.pnr + 20), handoff: Math.min(100, cur.offense.actions.handoff + 20) } } },
+      group: 'actions-pnr',
+      patch: { nudge: { actions: { pnr: 20, handoff: 20 } } },
+    });
+  else if (backed('vs-drop'))
+    out.push({
+      id: 'more-pnr',
+      label: 'More pick-and-roll',
+      why: 'Their ball-screen defense is leaking points: get your handlers into it.',
+      group: 'actions-pnr',
+      evidence: data.counters['vs-drop'],
+      patch: { nudge: { actions: { pnr: 20, handoff: 10 } } },
     });
   if (od.scheme === 'man' && (od.pnr === 'switch' || od.switchOffBall))
-    out.push({
+    add({
       id: 'vs-switch',
       label: 'Hunt mismatches',
       why: `They switch ${od.pnr !== 'switch' ? 'off-ball screens' : od.switchOffBall ? 'everything' : 'ball screens'}; isolate the weakest defender.`,
-      patch: {
-        offense: { huntMismatch: true, actions: { ...cur.offense.actions, iso: Math.min(100, cur.offense.actions.iso + 25), post: Math.min(100, cur.offense.actions.post + 15) } },
-      },
+      group: 'actions-iso',
+      patch: { offense: { huntMismatch: true }, nudge: { actions: { iso: 25, post: 15 } } },
     });
-  if (od.scheme !== 'man' || od.help >= 65)
-    out.push({
+  if (od.scheme !== 'man' || od.help >= 65 || backed('vs-pack'))
+    add({
       id: 'vs-pack',
       label: 'Spread & move',
-      why: 'Beat packed defenses with motion and threes.',
-      patch: { offense: { threePoint: Math.min(100, cur.offense.threePoint + 18), actions: { ...cur.offense.actions, motion: Math.min(100, cur.offense.actions.motion + 25) } } },
+      why: od.scheme !== 'man' || od.help >= 65 ? 'Beat packed defenses with motion and threes.' : 'Move the ball and let your shooters fire.',
+      group: 'actions-motion',
+      patch: { nudge: { offense: { threePoint: 18 }, actions: { motion: 25 } } },
     });
-  if (od.pressure >= 65)
-    out.push({
+  if (od.pressure >= 65 || backed('vs-pressure'))
+    add({
       id: 'vs-pressure',
       label: 'Backdoor & handoffs',
-      why: 'Punish their overplays with cuts.',
-      patch: { offense: { actions: { ...cur.offense.actions, motion: Math.min(100, cur.offense.actions.motion + 20), handoff: Math.min(100, cur.offense.actions.handoff + 15) } } },
+      why: od.pressure >= 65 ? 'Punish their overplays with cuts.' : 'Beat their aggressive hands with cuts and handoffs.',
+      group: 'actions-handoff',
+      patch: { nudge: { actions: { motion: 20, handoff: 15 } } },
     });
   const oppProfile = rosterProfile(rot);
-  if (oppProfile.rimProtection < 58)
-    out.push({ id: 'attack-rim', label: 'Attack the rim', why: 'No rim protector to worry about.', patch: { offense: { rimAttack: Math.min(100, cur.offense.rimAttack + 25) } } });
-  if (oppProfile.athleticism < 50 && cur.offense.pace < 70)
-    out.push({ id: 'pace-up', label: 'Push the pace', why: `The ${opp.name} are slow; run on them.`, patch: { offense: { pace: 78, transition: 85 } } });
-  if (oppProfile.size < 48 && cur.offense.crashBoards < 70)
-    out.push({ id: 'crash', label: 'Crash the glass', why: 'They are small; attack the offensive boards.', patch: { offense: { crashBoards: 78 } } });
-  // a counter that changes nothing (sliders already at the limit) isn't worth simulating
-  const same = JSON.stringify(cur);
-  return out.filter((c) => JSON.stringify(applyPatch(cur, c.patch)) !== same).slice(0, 9);
+  // a post-up only helps with someone to feed: a big (or a strong wing) who scores on the block
+  const poster = readRotation(league, userTid).cs.some((x) => x.c.postScore >= 58);
+  if (poster && (oppProfile.size < 48 || backed('post-up')))
+    add({
+      id: 'post-up',
+      label: 'Post them up',
+      why: oppProfile.size < 48 ? `The ${opp.name} are small: feed the block.` : 'Their post defense is giving up points: feed the block.',
+      group: 'actions-post',
+      patch: { nudge: { actions: { post: 25 } } },
+    });
+  if (oppProfile.rimProtection < 58 || backed('attack-rim'))
+    add({
+      id: 'attack-rim',
+      label: 'Attack the rim',
+      why: oppProfile.rimProtection < 58 ? 'No rim protector to worry about.' : 'Get downhill and draw fouls.',
+      group: 'rim',
+      patch: { nudge: { offense: { rimAttack: 25 } } },
+    });
+  if ((oppProfile.athleticism < 50 || backed('pace-up')) && cur.offense.pace < 70)
+    add({
+      id: 'pace-up',
+      label: 'Push the pace',
+      why: oppProfile.athleticism < 50 ? `The ${opp.name} are slow; run on them.` : `The ${opp.name} don't defend in transition; run on them.`,
+      group: 'pace',
+      patch: { offense: { pace: 78, transition: 85 } },
+    });
+  if ((oppProfile.size < 48 || backed('crash')) && cur.offense.crashBoards < 70)
+    add({
+      id: 'crash',
+      label: 'Crash the glass',
+      why: oppProfile.size < 48 ? 'They are small; attack the offensive boards.' : "They don't finish defensive possessions with the rebound.",
+      group: 'crash',
+      patch: { offense: { crashBoards: 78 } },
+    });
+  // a counter in the plan already, or one that changes nothing (sliders at the limit), isn't worth simulating
+  const inPlan = new Set(plan?.items.map((x) => x.id));
+  const now = JSON.stringify(cur);
+  const changes = (c: Candidate) => JSON.stringify(forUser ? tacticsWithCounter(league, oppTid, c) : applyPatch(cur, c.patch)) !== now;
+  return out
+    .filter((c) => !inPlan.has(c.id) && changes(c))
+    .sort((a, b) => Number(!!b.evidence) - Number(!!a.evidence))
+    .slice(0, 9);
 }
 
 export interface LiveCounter {
