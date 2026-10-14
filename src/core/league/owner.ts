@@ -2,6 +2,7 @@ import type { League } from '../types';
 import { clamp } from '../random';
 import { addInbox, contractSeason, curTeamSeason, revenueScale, winPct } from './helpers';
 import { profit } from './finances';
+import { clearAllPlans } from './gamePlans';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
 export function seasonsInCharge(league: League): number {
@@ -23,8 +24,8 @@ export function takeOverTeam(league: League, tid: number) {
   old.tactics.manual = false;
   league.userTid = tid;
   league.fired = false;
-  // the old team's game plan and the old scouting department's board don't come along
-  league.gamePlan = null;
+  // the old team's game plans and the old scouting department's board don't come along
+  clearAllPlans(league);
   delete league.draftBoard;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
   league.tenureStart = contractSeason(league);

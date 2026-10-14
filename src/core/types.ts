@@ -744,8 +744,8 @@ export interface League {
   draftBoard?: number[];
   /** Season the league was started. */
   startSeason: number;
-  /** Opponent-specific adjustments for the user's next game against that opponent. */
-  gamePlan?: GamePlan | null;
+  /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
+  gamePlans?: Record<number, GamePlan>;
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
@@ -813,9 +813,30 @@ export interface TacticsPatch {
   };
 }
 
+export interface GamePlanItem {
+  id: string;
+  label: string;
+  /** Items in the same group replace each other (one ball-screen coverage, one star plan...); defaults to the id. */
+  group?: string;
+  patch: TacticsPatch;
+  /** Why it's in the plan, from the scouting numbers. */
+  evidence?: string;
+}
+
+/** How long a game plan lasts: the next game against that opponent, the current playoff series, or the rest of the season. */
+export type PlanScope = 'next' | 'series' | 'season';
+
+/** The user's plan for one opponent (see src/core/league/gamePlans.ts). */
 export interface GamePlan {
   oppTid: number;
-  items: { id: string; label: string; patch: TacticsPatch }[];
+  items: GamePlanItem[];
+  /** Defaults to 'next'. */
+  scope?: PlanScope;
+  /** The playoff series a 'series' plan was made for. */
+  seriesId?: string;
+  /** Planned matchups against this opponent: their pid -> my defender pid. */
+  matchups?: Record<number, number>;
+  note?: string;
 }
 
 export const FREE_AGENT = -1;

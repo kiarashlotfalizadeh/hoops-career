@@ -668,6 +668,11 @@ export class GameSim {
 
   // ------------------------------------------------------------ public control API (live games)
 
+  /** A copy of the tactics the team on `side` plays from: what its coach set, to edit and hand back to setTactics. */
+  baseTactics(side: 0 | 1): Tactics {
+    return cloneTactics(this.T[side].t);
+  }
+
   setTactics(side: 0 | 1, tactics: Tactics) {
     const t = this.T[side];
     t.t = cloneTactics(tactics);

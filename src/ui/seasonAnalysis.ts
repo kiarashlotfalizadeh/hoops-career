@@ -1,6 +1,8 @@
 // Season-level aggregation of the user's stored games: lineups, play types, tactical effects.
 import type { League, Settings } from '../core/types';
 
+export { seasonPlayTypes, type PlayTypeAgg } from '../core/analysis/playTypes';
+
 export interface LineupAgg {
   key: string;
   pids: number[];
@@ -31,35 +33,6 @@ export function seasonLineups(league: League, tid = league.userTid): LineupAgg[]
   const out = [...m.values()];
   for (const e of out) e.net = e.poss ? ((e.ptsFor - e.ptsAgainst) / e.poss) * 100 : 0;
   return out.sort((a, b) => b.min - a.min);
-}
-
-export interface PlayTypeAgg {
-  key: string;
-  off: { poss: number; pts: number };
-  def: { poss: number; pts: number };
-}
-
-export function seasonPlayTypes(league: League, tid = league.userTid): PlayTypeAgg[] {
-  const m = new Map<string, PlayTypeAgg>();
-  for (const g of league.games) {
-    if (g.season !== league.season) continue;
-    const mine = g.home.tid === tid ? g.home : g.away.tid === tid ? g.away : null;
-    if (!mine) continue;
-    const opp = mine === g.home ? g.away : g.home;
-    for (const [k, v] of Object.entries(mine.playTypes)) {
-      const e = m.get(k) ?? { key: k, off: { poss: 0, pts: 0 }, def: { poss: 0, pts: 0 } };
-      e.off.poss += v.poss;
-      e.off.pts += v.pts;
-      m.set(k, e);
-    }
-    for (const [k, v] of Object.entries(opp.playTypes)) {
-      const e = m.get(k) ?? { key: k, off: { poss: 0, pts: 0 }, def: { poss: 0, pts: 0 } };
-      e.def.poss += v.poss;
-      e.def.pts += v.pts;
-      m.set(k, e);
-    }
-  }
-  return [...m.values()].sort((a, b) => b.off.poss + b.def.poss - (a.off.poss + a.def.poss));
 }
 
 /**

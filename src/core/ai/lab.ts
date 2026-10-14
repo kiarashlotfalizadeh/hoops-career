@@ -201,6 +201,8 @@ export interface Candidate {
   label: string;
   why: string;
   patch: TacticsPatch;
+  /** Game-plan group: a counter replaces the plan's item in the same group (see GamePlanItem). */
+  group?: string;
 }
 
 export interface CandidateResult {
@@ -208,6 +210,7 @@ export interface CandidateResult {
   label: string;
   why: string;
   patch: TacticsPatch;
+  group?: string;
   net: number;
   delta: number;
   se: number;

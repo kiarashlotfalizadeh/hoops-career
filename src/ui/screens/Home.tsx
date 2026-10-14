@@ -17,6 +17,7 @@ import { useFlowRunner } from '../useFlow';
 import { f1, ordinal, playerSeason, rosterNames, signed, teamRatings } from '../stats';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
+import { clearPlan, planFor } from '../../core/league/gamePlans';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -51,6 +52,7 @@ export default function Home() {
   const next = inSeason ? nextUserGame(league) : undefined;
   const oppTid = next ? (next.home === league.userTid ? next.away : next.home) : undefined;
   const scout = useLeagueMemo(() => (oppTid !== undefined ? scoutTeam(league, oppTid) : null), [league, oppTid]);
+  const plan = oppTid !== undefined && next ? planFor(league, oppTid, next) : null;
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid), [league]);
   const actions = flowActions(league);
   const unread = league.inbox.filter((m) => !m.read).slice(0, 3);
@@ -160,16 +162,17 @@ export default function Home() {
                   <span className="good">Attack:</span> {scout.weaknesses[0]}
                 </div>
               )}
-              {league.gamePlan && league.gamePlan.oppTid === oppTid && league.gamePlan.items.length > 0 ? (
+              {plan ? (
                 <div className="card tight" style={{ marginTop: 4 }}>
                   <div className="row between">
-                    <span className="small bold">Game plan for this opponent</span>
-                    <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.gamePlan = null))}>
+                    <span className="small bold">Game plan for this opponent{plan.scope === 'series' ? ' · this series' : plan.scope === 'season' ? ' · all season' : ''}</span>
+                    <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => clearPlan(l, oppTid))}>
                       Clear
                     </button>
                   </div>
                   <div className="chips" style={{ marginTop: 6 }}>
-                    {league.gamePlan.items.map((it) => (
+                    {plan.matchups && Object.keys(plan.matchups).length > 0 && <span className="tag info">Planned matchups</span>}
+                    {plan.items.map((it) => (
                       <span key={it.id} className="tag info">
                         {it.label}
                       </span>

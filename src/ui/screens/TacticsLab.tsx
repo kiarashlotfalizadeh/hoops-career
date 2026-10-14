@@ -7,10 +7,11 @@ import type { CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
 import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../../core/league/games';
+import { planFor, setPlanItem } from '../../core/league/gamePlans';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
-import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet, Spinner, Tag } from '../components/ui';
+import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Spinner, Tag } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
@@ -85,7 +86,6 @@ export default function TacticsLab() {
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(1);
   const [run, setRun] = useState<Run | null>(null);
-  const [replace, setReplace] = useState<CandidateResult | null>(null);
   const mounted = useRef(true);
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -101,7 +101,7 @@ export default function TacticsLab() {
   const [applied, setApplied] = useState<string[]>([]);
   const user = league.userTid;
   const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
-  const plan = league.gamePlan && league.gamePlan.oppTid === opp && league.gamePlan.items.length ? league.gamePlan : null;
+  const plan = planFor(league, opp);
   const noBaseline = mode === 'compare' && !baseline;
 
   useEffect(() => {
@@ -162,17 +162,11 @@ export default function TacticsLab() {
         // a star target is this opponent's player: kept tactics go after each opponent's own star
         const patch = c.patch?.defense ? { ...c.patch, defense: { ...c.patch.defense, starTarget: null } } : c.patch;
         tm.tactics = { ...applyPatch(tm.tactics, patch), manual: true };
-      } else {
-        const gp = l.gamePlan && l.gamePlan.oppTid === vs ? l.gamePlan : { oppTid: vs, items: [] };
-        gp.items = [...gp.items.filter((x) => x.id !== c.id), { id: c.id, label: c.label, patch: c.patch }];
-        l.gamePlan = gp;
-      }
+      } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch });
     });
     setApplied((a) => [...a, `${vs}:${c.id}`]);
     useStore.getState().toast(scope === 'game' ? `Game plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Applied to your tactics: ${c.label}`, 'good');
   };
-  // "Vs" keeps one plan: confirm before it replaces the one for a different opponent
-  const planOther = league.gamePlan && league.gamePlan.items.length && league.gamePlan.oppTid !== run?.opp ? league.gamePlan : null;
 
   // the teams keep their order (a tapped one doesn't jump under the finger): the one picked on arrival scrolls into view
   const picker = useRef<HTMLDivElement>(null);
@@ -354,7 +348,7 @@ export default function TacticsLab() {
                         </Tag>
                       ) : (
                         <div className="row" style={{ gap: 6 }}>
-                          <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => (planOther ? setReplace(c) : applyCand(c, 'game', shown.opp))}>
+                          <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c, 'game', shown.opp)}>
                             Vs {league.teams[shown.opp].abbrev}
                           </button>
                           <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
@@ -370,31 +364,6 @@ export default function TacticsLab() {
           </Card>
         </>
       )}
-
-      <Sheet open={!!replace && !!planOther} onClose={() => setReplace(null)} title="Replace your game plan?">
-        {replace && planOther && shown && (
-          <>
-            <p className="dim2">
-              You have a game plan for {league.teams[planOther.oppTid].abbrev} ({planOther.items.map((it) => it.label).join(', ')}). Only one plan is kept: this replaces it with{' '}
-              {replace.label} vs {league.teams[shown.opp].abbrev}.
-            </p>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn grow" onClick={() => setReplace(null)}>
-                Keep it
-              </button>
-              <button
-                className="btn primary grow"
-                onClick={() => {
-                  applyCand(replace, 'game', shown.opp);
-                  setReplace(null);
-                }}
-              >
-                Replace
-              </button>
-            </div>
-          </>
-        )}
-      </Sheet>
     </main>
   );
 }

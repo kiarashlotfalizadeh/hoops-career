@@ -3,7 +3,7 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import type { GameResult, League } from '../core/types';
+import type { GamePlanItem, GameResult, League } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
 
@@ -235,6 +235,22 @@ const isRoute = (s: unknown) => typeof s === 'string' && /^\/(?![/\\])/.test(s);
 const isColor = (s: unknown) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
 
 /**
+ * Version 2 kept one game plan (`gamePlan`, for the next game against one opponent); version 3
+ * keeps one per opponent. Version-2 plans also left tonight's opponent's matchups in the user's
+ * own tactics when live changes were kept: those name players of one opponent, so they go.
+ */
+function migrateGamePlan(x: League, fromV2: boolean) {
+  const user = x.teams[x.userTid];
+  if (fromV2 && user && obj(user.tactics) && obj(user.tactics.defense)) user.tactics.defense.matchups = {};
+  const old = (x as League & { gamePlan?: unknown }).gamePlan;
+  if (old === undefined) return;
+  delete (x as League & { gamePlan?: unknown }).gamePlan;
+  if (!obj(old) || !num(old.oppTid) || !Array.isArray(old.items) || !old.items.length || !x.teams[old.oppTid as number]) return;
+  const items = (old.items as unknown[]).filter((it): it is GamePlanItem => obj(it) && str(it.id) && str(it.label) && obj(it.patch));
+  if (items.length) x.gamePlans = { ...x.gamePlans, [old.oppTid as number]: { oppTid: old.oppTid as number, items, scope: 'next' } };
+}
+
+/**
  * Bring a league read from the device or a backup up to the current format. Refuses saves from a
  * newer version of the app (they may hold data this one would drop) and anything that isn't a league.
  */
@@ -250,6 +266,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   }
   // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
   // 2 → 3: new data is optional (absent in older saves); the steps below read old data into it
+  migrateGamePlan(x, !num(version) || (version as number) < 3);
   x.version = SAVE_VERSION;
   return x;
 }

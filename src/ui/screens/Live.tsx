@@ -10,7 +10,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, PageHeader, Segmented, Sheet, Slider, Tag, Toggle } from '../components/ui';
 import { composites } from '../../core/ratings';
 import type { BoxLine, DefScheme, GameResult, League, PbpEntry, PnrCoverage, PressMode, StarPlan, Tactics, Team } from '../../core/types';
-import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { buildSimInput } from '../../core/league/games';
@@ -22,6 +22,7 @@ import { adviceFor } from '../seasonAnalysis';
 import { jerseyColors } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
 import { LIVE_SPEEDS } from '../settingsOptions';
+import { playTypeBaselines, zScore } from '../../core/analysis/playTypes';
 
 /** A play type mid-sentence: "their isolation plays", "their P&R ball handler plays". */
 const playType = (ft: FinishType) => FINISH_LABEL[ft].replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase());
@@ -76,45 +77,8 @@ const setups = new WeakMap<LiveGame, Setup>();
 
 function userSetup(league: League, lg: LiveGame): Setup {
   const g = lg.game;
-  const tactics = buildSimInput(league, league.userTid, g.day, g.type, lg.userSide === 0 ? g.away : g.home).team.tactics;
+  const tactics = buildSimInput(league, league.userTid, g.day, g.type, lg.userSide === 0 ? g.away : g.home, g).team.tactics;
   return { tactics, sig: JSON.stringify(tactics), rotation: JSON.stringify(league.teams[league.userTid].rotation) };
-}
-
-/** Per-type points per possession across this season's stored games (both teams), with engine-typical fallbacks. */
-const DEFAULT_PPP: Record<string, number> = {
-  pnrBH: 0.85,
-  pnrRoll: 1.3,
-  iso: 0.95,
-  post: 1.0,
-  spotup: 1.05,
-  offscreen: 1.05,
-  handoff: 1.0,
-  cut: 1.35,
-  transition: 1.3,
-  putback: 1.4,
-  misc: 0.2,
-};
-function playTypeBaselines(league: League): Record<string, number> {
-  const sum: Record<string, { poss: number; pts: number }> = {};
-  for (const g of league.games) {
-    if (g.season !== league.season) continue;
-    for (const box of [g.home, g.away]) {
-      for (const [k, v] of Object.entries(box.playTypes ?? {})) {
-        const e = (sum[k] ??= { poss: 0, pts: 0 });
-        e.poss += v.poss;
-        e.pts += v.pts;
-      }
-    }
-  }
-  const out = { ...DEFAULT_PPP };
-  for (const [k, v] of Object.entries(sum)) if (v.poss >= 300) out[k] = v.pts / v.poss;
-  return out;
-}
-
-/** How unusual a play type's points are against its baseline, in standard errors (scores are mostly 2s and 3s). */
-function zScore(v: { poss: number; pts: number }, base: number) {
-  const sd = Math.sqrt(Math.max(0.5, 2.3 * base - base * base));
-  return (v.pts / v.poss - base) / (sd / Math.sqrt(v.poss));
 }
 
 export default function Live() {
@@ -375,15 +339,17 @@ export default function Live() {
   const applyTactics = (fn: (t: Tactics) => void, persist: boolean) => {
     const lg = liveRef.current;
     if (!lg) return;
-    const t = cloneTactics(lg.sim.T[userSide].t);
+    const t = lg.sim.baseTactics(userSide);
     fn(t);
     lg.sim.setTactics(userSide, t);
     if (persist) {
       useStore.getState().mutate((l) => {
         const tt = l.teams[l.userTid].tactics;
+        const matchups = tt.defense.matchups;
         fn(tt);
-        // a star target is one of tonight's opponents: the saved plan goes after each opponent's own star
+        // a star target and matchups name tonight's opponents: the kept tactics go after each opponent's own star
         tt.defense.starTarget = null;
+        tt.defense.matchups = matchups;
         tt.manual = true;
       });
       // this screen made the change: resuming later shouldn't treat it as an outside edit
