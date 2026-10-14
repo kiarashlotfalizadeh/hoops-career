@@ -183,6 +183,9 @@ export default function Home() {
               <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650, alignSelf: 'flex-start' }}>
                 Build a game plan in the Tactics Lab →
               </Link>
+              <Link to={`/gameplan/${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650, alignSelf: 'flex-start', marginTop: 8 }}>
+                Scouting, matchups and plan vs {league.teams[oppTid].abbrev} →
+              </Link>
             </div>
           )}
           <div className="row" style={{ marginTop: 14 }}>

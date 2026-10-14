@@ -21,6 +21,7 @@ import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
+import { UpcomingOpponents } from '../components/UpcomingOpponents';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
 import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
@@ -82,11 +83,11 @@ export default function Tactics() {
       tt.manual = true;
     });
 
-  // personnel hints
+  // personnel hints, for the five who start next: the first healthy ones in the depth chart
   const starters = team.rotation.order
-    .slice(0, 5)
     .map((pid) => league.players[pid])
-    .filter(Boolean);
+    .filter((p) => p && p.tid === team.tid && !p.injury)
+    .slice(0, 5);
   const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt)[0];
   const bigC = big ? composites(big.ratings) : null;
 
@@ -133,6 +134,7 @@ export default function Tactics() {
 
       {tab === 'playbook' && (
         <>
+          <UpcomingOpponents />
           <Card
             title="Offensive playbook"
             right={
@@ -417,7 +419,12 @@ export default function Tactics() {
           </Card>
           <Card
             title="Star plan"
-            right={<Help title="Star plan">Applies to the opponent's primary creator each game (you can target a specific player in the Tactics Lab and during live games).</Help>}
+            right={
+              <Help title="Star plan">
+                Applies to the opponent's primary creator each game. To go after a specific player, set a star plan in that opponent's game plan (from Upcoming opponents, or the
+                Game plan button on their Scouting tab), or change it during a live game.
+              </Help>
+            }
           >
             <Chips
               label="Star plan"

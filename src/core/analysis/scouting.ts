@@ -527,7 +527,7 @@ function read(league: League, d: ScoutData) {
     const gap = swing.on! - swing.off!;
     tendencies.push({
       text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${gap > 0 ? '+' : ''}${gap.toFixed(1)} net rating per 100 possessions on vs off.`,
-      weight: Math.abs(gap) / 6,
+      weight: Math.abs(gap) / 10,
     });
   }
 
