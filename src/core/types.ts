@@ -797,9 +797,25 @@ export interface CupState {
   mvp?: number;
 }
 
+/**
+ * A change to a team's tactics: fixed values (action weights one by one, so two patches that boost
+ * different actions both apply) and `nudge`, relative changes clamped to 0..100 and applied after
+ * them, so a counter like "more pick-and-roll" builds on whatever playbook it is applied to.
+ */
+export interface TacticsPatch {
+  offense?: Partial<Omit<OffenseTactics, 'actions'>> & { actions?: Partial<Record<ActionType, number>> };
+  defense?: Partial<DefenseTactics>;
+  manage?: Partial<GameManagement>;
+  nudge?: {
+    offense?: Partial<Record<'pace' | 'transition' | 'threePoint' | 'rimAttack' | 'crashBoards', number>>;
+    actions?: Partial<Record<ActionType, number>>;
+    defense?: Partial<Record<'help' | 'pressure' | 'getBack' | 'physicality', number>>;
+  };
+}
+
 export interface GamePlan {
   oppTid: number;
-  items: { id: string; label: string; patch: { offense?: Partial<OffenseTactics>; defense?: Partial<DefenseTactics>; manage?: Partial<GameManagement> } }[];
+  items: { id: string; label: string; patch: TacticsPatch }[];
 }
 
 export const FREE_AGENT = -1;

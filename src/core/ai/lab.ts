@@ -1,19 +1,16 @@
 // Tactics Lab: run batches of games between two configurations and summarize the result.
 // Pure and serializable so it can run in a Web Worker.
 
-import type { DefenseTactics, GameManagement, GameType, OffenseTactics, Tactics, Team, TeamBox } from '../types';
+import type { GameType, TacticsPatch, Team, TeamBox } from '../types';
 import { GameSim, type SimTeamInput } from '../sim/engine';
 import { Rng } from '../random';
-import { cloneTactics } from '../sim/tactics';
+import { applyPatch } from '../sim/tactics';
+
+export { applyPatch };
+export type { TacticsPatch };
 
 /** A side as real games build it (morale/wear, rest, injury risk), so Lab games play like them. */
 export type LabSide = SimTeamInput;
-
-export interface TacticsPatch {
-  offense?: Partial<OffenseTactics>;
-  defense?: Partial<DefenseTactics>;
-  manage?: Partial<GameManagement>;
-}
 
 export interface LabRequest {
   a: LabSide;
@@ -68,15 +65,6 @@ export function pairedDelta(base: LabSummary, alt: LabSummary): { delta: number;
   const sd = Math.sqrt(diffs.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, n - 1));
   const per100 = 100 / Math.max(1, (base.pace + alt.pace) / 2);
   return { delta: mean * per100, se: (sd / Math.sqrt(n)) * per100 };
-}
-
-export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
-  const out = cloneTactics(t);
-  if (!patch) return out;
-  if (patch.offense) out.offense = { ...out.offense, ...patch.offense, actions: { ...out.offense.actions, ...(patch.offense.actions ?? {}) } };
-  if (patch.defense) out.defense = { ...out.defense, ...patch.defense };
-  if (patch.manage) out.manage = { ...out.manage, ...patch.manage };
-  return out;
 }
 
 function profile(t: TeamBox, o: TeamBox, rimA: number): ShotProfile {

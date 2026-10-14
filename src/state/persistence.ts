@@ -249,6 +249,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     t.colors = [a, b, c];
   }
   // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
+  // 2 → 3: new data is optional (absent in older saves); the steps below read old data into it
   x.version = SAVE_VERSION;
   return x;
 }

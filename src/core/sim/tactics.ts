@@ -1,4 +1,5 @@
-import type { ActionType, DefScheme, DefenseTactics, GameManagement, OffenseTactics, PnrCoverage, PressMode, StarPlan, Tactics } from '../types';
+import type { ActionType, DefScheme, DefenseTactics, GameManagement, OffenseTactics, PnrCoverage, PressMode, StarPlan, Tactics, TacticsPatch } from '../types';
+import { clamp } from '../random';
 
 export interface OffPreset {
   id: string;
@@ -238,4 +239,25 @@ export function cloneTactics(t: Tactics): Tactics {
     defense: { ...t.defense, matchups: { ...t.defense.matchups } },
     manage: { ...t.manage },
   };
+}
+
+/** Tactics with a patch applied (a copy): fixed values first, then the relative nudges, kept within 0..100. */
+export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
+  const out = cloneTactics(t);
+  if (!patch) return out;
+  if (patch.offense) {
+    const { actions, ...rest } = patch.offense;
+    out.offense = { ...out.offense, ...rest, actions: { ...out.offense.actions } };
+    for (const [k, v] of Object.entries(actions ?? {}) as [ActionType, number | undefined][]) if (v !== undefined) out.offense.actions[k] = v;
+  }
+  if (patch.defense) out.defense = { ...out.defense, ...patch.defense };
+  if (patch.manage) out.manage = { ...out.manage, ...patch.manage };
+  const n = patch.nudge;
+  if (n) {
+    for (const [k, d] of Object.entries(n.offense ?? {}) as [keyof NonNullable<typeof n.offense>, number][]) out.offense[k] = clamp(out.offense[k] + d, 0, 100);
+    for (const [k, d] of Object.entries(n.actions ?? {}) as [ActionType, number][]) out.offense.actions[k] = clamp(out.offense.actions[k] + d, 0, 100);
+    for (const [k, d] of Object.entries(n.defense ?? {}) as [keyof NonNullable<typeof n.defense>, number][]) out.defense[k] = clamp(out.defense[k] + d, 0, 100);
+  }
+  // the patch's own objects (matchups, roles...) never end up shared with the tactics it made
+  return cloneTactics(out);
 }
