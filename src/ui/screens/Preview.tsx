@@ -91,7 +91,6 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
   const actions = flowActions(league);
   const resume = inProgress ? actions.find((a) => a.cmd === 'watchLive') : undefined;
   const finish = inProgress ? actions.find((a) => a.cmd === 'quickGame') : undefined;
-  const me = league.teams[league.userTid];
   const them = league.teams[opp];
 
   return (
@@ -121,7 +120,7 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
         </div>
         {pv.playoff && (
           <div className="center small dim2" style={{ marginTop: 8 }}>
-            {pv.playoff.label}: {me.abbrev} {pv.playoff.wins}-{pv.playoff.losses}
+            {pv.playoff.label}: {league.teams[pv.us.tid].abbrev} {pv.playoff.wins}-{pv.playoff.losses}
             {pv.playoff.homeCourt ? ' · home court' : ''}
           </div>
         )}
