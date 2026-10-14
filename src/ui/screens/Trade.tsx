@@ -7,6 +7,7 @@ import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, pla
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
+  availability,
   canMakeWork,
   capSalary,
   counterOffers,
@@ -18,6 +19,7 @@ import {
   tradeRoster,
   untradeable,
   validateTrade,
+  valueTier,
   valueVerdict,
   type CounterOffer,
   type TradeEval,
@@ -30,8 +32,9 @@ import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '.
 import { STRATEGY_META, Callout, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { rosterNames } from '../stats';
-import { TradeNotes } from '../trade/common';
+import { TierLine, TradeNotes } from '../trade/common';
 import { CounterSheet } from '../trade/CounterSheet';
+import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
 
 interface Sel {
   pids: number[];
@@ -68,11 +71,13 @@ export default function Trade() {
   const [partner, setPartner] = useState(init.partner);
   const [give, setGive] = useState<Sel>(init.give);
   const [get, setGet] = useState<Sel>(init.get);
-  const [tab, setTab] = useState<'build' | 'block'>(init.shop !== null ? 'block' : 'build');
+  const [tab, setTab] = useState<'build' | 'find' | 'block'>(init.shop !== null ? 'block' : 'build');
   const [shop, setShop] = useState<number | null>(init.shop);
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
-  // a turned-down deal and what they'd do instead
+  // a turned-down deal and what they'd do instead; the finder's filters and the ask it last loaded
   const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[] } | null>(null);
+  const [finder, setFinder] = useState<FinderState>(FINDER_DEFAULT);
+  const [ask, setAsk] = useState<Ask | null>(null);
 
   // react to new deep links while already on the screen (e.g. from the inbox)
   const key = params.toString();
@@ -88,6 +93,7 @@ export default function Trade() {
     setGet(r.get);
     setShop(r.shop);
     setTab(r.shop !== null ? 'block' : 'build');
+    setAsk(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -141,6 +147,7 @@ export default function Trade() {
     const got = picks ? ` You${names.length ? ' also' : ''} get ${picks === 1 ? 'a draft pick' : `${picks} draft picks`}.` : '';
     useStore.getState().toast(`Trade done with ${abbrev}!${arrive}${got}`, 'good');
     reset();
+    setAsk(null);
     return true;
   };
 
@@ -163,6 +170,15 @@ export default function Trade() {
     setSide('theirs');
     setTab('build');
     window.scrollTo({ top: 0, behavior: scrollBehavior() });
+  };
+
+  // a player tapped in the finder: his team in the builder, and what they'd want for him
+  const pickTarget = (pid: number) => {
+    const p = league.players[pid];
+    const want: TradeOffer = { a: { tid: user, pids: [], dpids: [] }, b: { tid: p.tid, pids: [pid], dpids: [] } };
+    const result = closed ? null : makeItWork(league, want);
+    loadDeal(result?.offer ?? want);
+    setAsk({ tid: p.tid, pid, result });
   };
 
   const whatWorks = () => {
@@ -251,7 +267,8 @@ export default function Trade() {
         value={tab}
         onChange={setTab}
         options={[
-          { id: 'build', label: 'Trade builder' },
+          { id: 'build', label: 'Build' },
+          { id: 'find', label: 'Find' },
           { id: 'block', label: 'Trading block' },
         ]}
       />
@@ -260,6 +277,7 @@ export default function Trade() {
         <>
           <TeamPicker league={league} partner={partner} onPick={pickPartner} />
           <PartnerCard league={league} tid={partner} season={s} />
+          {ask && ask.tid === partner && <AskCallout league={league} ask={ask} onClose={() => setAsk(null)} />}
           <DealCard league={league} partner={partner} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
           <div className="fo-only-sm">
             <Segmented
@@ -282,6 +300,8 @@ export default function Trade() {
           </div>
           <Dock league={league} offer={offer} ev={ev} empty={empty} season={s} onPropose={propose} onWork={whatWorks} />
         </>
+      ) : tab === 'find' ? (
+        <TradeFinder league={league} state={finder} onChange={setFinder} onPick={pickTarget} />
       ) : (
         <TradingBlock
           league={league}
@@ -541,6 +561,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
           {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''}
         </div>
+        <TierLine tier={valueTier(league, p)} avail={availability(league, p)} />
       </div>
       <div className="fo-money">
         <div className="a">{fmtM(salaryFor(p, season))}</div>

@@ -890,13 +890,19 @@ const TIER_SHARE: [ValueTier, number][] = [
 
 const tierCache = new WeakMap<League, { key: string; cuts: number[] }>();
 
-/** The neutral trade value that starts each tier (TIER_SHARE order), from everyone on a standard contract. */
+/**
+ * The neutral trade value that starts each tier (TIER_SHARE order), from everyone on a standard
+ * contract. Worked out once a day: every row of a roster asks, and a day's signings and trades
+ * barely move the league's percentiles.
+ */
 function tierCuts(league: League): number[] {
-  const players = Object.values(league.players).filter((p) => p.tid >= 0 && !p.contract.twoWay);
-  const key = `${league.season}:${league.phase}:${league.day}:${players.length}`;
+  const key = `${league.season}:${league.phase}:${league.day}`;
   const hit = tierCache.get(league);
   if (hit?.key === key) return hit.cuts;
-  const values = players.map((p) => tradeValue(league, p)).sort((a, b) => b - a);
+  const values = Object.values(league.players)
+    .filter((p) => p.tid >= 0 && !p.contract.twoWay)
+    .map((p) => tradeValue(league, p))
+    .sort((a, b) => b - a);
   const cuts = TIER_SHARE.map(([, share]) => (values.length ? values[Math.min(values.length - 1, Math.max(0, Math.ceil(values.length * share) - 1))] : Infinity));
   tierCache.set(league, { key, cuts });
   return cuts;
@@ -927,8 +933,12 @@ export type Availability = 'franchise' | 'block' | null;
  * veteran of 72+ OVR aged 28 or more), null otherwise and for your own players. A label only.
  */
 export function availability(league: League, p: Player): Availability {
+  return availabilityAt(league, p, tradeValue(league, p));
+}
+
+/** availability for a player whose neutral trade value is known. */
+function availabilityAt(league: League, p: Player, value: number): Availability {
   if (p.tid < 0 || p.tid === league.userTid || !league.teams[p.tid]) return null;
-  const value = tradeValue(league, p);
   if (p.mood.tradeRequest || value < 0) return 'block';
   const a = playerAge(p, league.season);
   const tier = tierOf(league, value);
@@ -955,7 +965,7 @@ export function tradeTargets(league: League): TradeTarget[] {
     .filter((p) => p.tid >= 0 && p.tid !== league.userTid && !untradeable(league, p))
     .map((p) => {
       const value = tradeValue(league, p);
-      return { p, age: playerAge(p, league.season), value, tier: tierOf(league, value), avail: availability(league, p), salary: capSalary(league, p.pid) };
+      return { p, age: playerAge(p, league.season), value, tier: tierOf(league, value), avail: availabilityAt(league, p, value), salary: capSalary(league, p.pid) };
     });
 }
 
