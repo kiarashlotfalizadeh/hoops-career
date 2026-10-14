@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
 import { LiveGame } from '../../state/live';
-import { setPlanItem } from '../league/gamePlans';
+import { persistableTactics, setPlanItem } from '../league/gamePlans';
 import { buildSimInput, playGame, userGameOnDay } from '../league/games';
 import { GameSim } from '../sim/engine';
 import { situationFromTemplate } from '../sim/tactics';
@@ -56,6 +56,8 @@ describe('game management', () => {
     expect(me.team.tactics.manage.hackTargets).toEqual([target]);
     expect(me.team.tactics.manage.hackFromQ).toBe(2);
     expect(l.teams[l.userTid].tactics.manage.hackTargets).toBeUndefined();
+    // tonight's targets never become the tactics kept for every game
+    expect(persistableTactics(me.team.tactics).manage.hackTargets).toBeUndefined();
     const them = buildSimInput(l, opp, g.day, g.type, l.userTid, g);
     const name = l.players[target].lastName;
     let hacks = 0;

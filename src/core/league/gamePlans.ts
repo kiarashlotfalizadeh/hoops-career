@@ -140,12 +140,13 @@ export function consumePlans(league: League, g: ScheduledGame) {
 }
 
 /**
- * Tactics the user keeps for every game: tonight's matchups and star target name this opponent's
- * players, so they stay in the game (or its plan) instead.
+ * Tactics the user keeps for every game: tonight's matchups, star target and hack-a-player targets
+ * name this opponent's players, so they stay in the game (or its plan) instead.
  */
 export function persistableTactics(t: Tactics): Tactics {
   const out = cloneTactics(t);
   out.defense.matchups = {};
   out.defense.starTarget = null;
+  delete out.manage.hackTargets;
   return out;
 }
