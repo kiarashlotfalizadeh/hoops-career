@@ -14,6 +14,7 @@ import { standings } from '../league/standings';
 import { seriesLabel } from '../league/playoffs';
 import { planFor } from '../league/gamePlans';
 import { scoutTeam } from '../ai/advisor';
+import { oppPlanIn, type OppPlanItem } from '../ai/opponentPlan';
 import { COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META } from '../sim/tactics';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { playTypeBaselines, seasonPlayTypes, zScore } from './playTypes';
@@ -176,6 +177,8 @@ export interface MatchupPreview {
   them: SidePreview;
   /** Their key players and who of ours guards them at tip-off. */
   threats: PreviewThreat[];
+  /** What their coach changes from his usual tactics for this game against the user's team, when he game-plans for it. */
+  oppPlan?: OppPlanItem[];
   series: SeasonSeries;
   playoff?: SeriesState;
   playIn?: PlayInState;
@@ -316,10 +319,11 @@ function side(
       };
     })
     .sort((a, b) => b.share - a.share);
-  // (the tactics the game starts with: the user's include his game plan for this opponent)
-  const t = st.t;
-  const man = t.defense.scheme === 'man';
+  // the user's tactics as the game starts them, his game plan for this opponent included; an AI
+  // team's usual ones, as its scouting reads them (a plan of its coach's for this game is listed apart)
   const isUser = tid === league.userTid;
+  const t = isUser ? st.t : team.tactics;
+  const man = t.defense.scheme === 'man';
   const chance = isUser ? 0 : 0.15 + 0.6 * (team.coach.tactics / 100);
   return {
     tid,
@@ -461,6 +465,8 @@ export function matchupPreview(league: League, gid: number): MatchupPreview | nu
   const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
   const edge = neutral ? 0 : usHome ? HOME_EDGE : -HOME_EDGE;
   const margin = projectMargin(netUs, netThem, pace, edge);
+  // the plan their coach brings to this game, as the game itself will set it up
+  const theirPlan = userGame ? oppPlanIn(sim, (1 - usSide) as 0 | 1) : undefined;
   return {
     gid: g.gid,
     day: g.day,
@@ -475,6 +481,7 @@ export function matchupPreview(league: League, gid: number): MatchupPreview | nu
     us,
     them,
     threats,
+    ...(theirPlan ? { oppPlan: theirPlan.items } : {}),
     series: seasonSeries(league, usTid, themTid, g.gid),
     playoff: seriesState(league, g, usTid),
     playIn: playInState(g),

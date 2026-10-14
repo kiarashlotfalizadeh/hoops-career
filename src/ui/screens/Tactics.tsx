@@ -630,7 +630,7 @@ function ManageTab({ t, edit }: { t: TacticsT; edit: (fn: (t: TacticsT) => void)
             on={t.manage.autoTimeouts}
             onChange={(x) => edit((tt) => void (tt.manage.autoTimeouts = x))}
             label="Auto timeouts to stop runs"
-            help="Timeouts restore a little energy and break the opponent's momentum."
+            help="A timeout rests legs (a little energy back) and resets the run, but it also gives their coach a chance to adjust."
           />
           <Slider
             label="Timeout after a run of"

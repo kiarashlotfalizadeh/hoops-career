@@ -241,6 +241,8 @@ export interface Waivers {
   dead: { season: number; amount: number }[];
   /** The user has put in a claim. */
   claim?: boolean;
+  /** His trade lock when he was waived: a claiming team takes it over with the contract. */
+  lock?: { season: number; day: number };
 }
 
 /** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
@@ -692,6 +694,8 @@ export interface GameResult {
   pbp?: PbpEntry[];
   /** Coaches' in-game adjustments (user games only). */
   adjustments?: GameAdjustment[];
+  /** The other coach's game plan against the user's team, when he brought one (user games only): what he changed at tip-off, e.g. 'hedges ball screens'. */
+  oppPlan?: string[];
   /** Player of the game. */
   pog?: number;
   att?: number;

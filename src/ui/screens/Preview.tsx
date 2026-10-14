@@ -17,6 +17,7 @@ import { hashString } from '../../core/random';
 import { countdownLabel, matchupPreview, nextUserGame, type MatchupPreview, type SidePreview } from '../../core/analysis/preview';
 import type { GameType, League, ScheduledGame } from '../../core/types';
 import { Bar, Card, Chips, Empty, Help, PageHeader, Spinner, Tag } from '../components/ui';
+import { OppPlanNote } from '../components/scouting';
 import { TeamLogo } from '../components/TeamLogo';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
@@ -191,7 +192,7 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
         </div>
       </Card>
 
-      <TendenciesCard league={league} s={pv.them} />
+      <TendenciesCard league={league} s={pv.them} pv={pv} />
 
       {pv.userGame && <MatchupsCard league={league} game={game} pv={pv} />}
 
@@ -395,7 +396,7 @@ function InjuryList({ league, s }: { league: League; s: SidePreview }) {
   );
 }
 
-function TendenciesCard({ league, s }: { league: League; s: SidePreview }) {
+function TendenciesCard({ league, s, pv }: { league: League; s: SidePreview; pv: MatchupPreview }) {
   const t = league.teams[s.tid];
   const detail = league.settings.complexity !== 'simple';
   const pts = s.playTypes.slice(0, 5);
@@ -420,6 +421,7 @@ function TendenciesCard({ league, s }: { league: League; s: SidePreview }) {
             Coach {s.coach.name} adjusts {s.coach.adjusts} during games{detail ? ` (${p0(s.coach.chance)} chance at each break)` : ''}.
           </div>
         )}
+        <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />
         {played && (
           <div className="small dim2">
             Offense {rankText(s.ortg)} · defense {rankText(s.drtg)} · net {signed(s.net.v)} ({rankText(s.net)})
@@ -580,7 +582,9 @@ function PlanCard({ league, game, opp }: { league: League; game: ScheduledGame; 
                   className="btn xs"
                   aria-label={`Add ${c.label} to the game plan`}
                   onClick={() => {
-                    useStore.getState().mutate((l) => setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, evidence: c.why }));
+                    useStore
+                      .getState()
+                      .mutate((l) => setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) }));
                     useStore.getState().toast(`Game plan vs ${t.abbrev}: ${c.label}`, 'good');
                   }}
                 >

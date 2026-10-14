@@ -28,6 +28,7 @@ import { createTicker, type Ticker } from '../live/ticker';
 import { ScoreBug, gameContext } from '../live/ScoreBug';
 import { HOT_STREAK, OnCourt } from '../live/OnCourt';
 import { PeriodReport } from '../live/PeriodReport';
+import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { TacticsPanel } from '../live/TacticsPanel';
 import { BoxPanel } from '../live/BoxPanel';
 import { SubsPanel } from '../live/SubsPanel';
@@ -850,6 +851,7 @@ export default function Live() {
               colors={barColors}
               apply={applyTactics}
               onStart={togglePause}
+              oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
             />
           )}
 
