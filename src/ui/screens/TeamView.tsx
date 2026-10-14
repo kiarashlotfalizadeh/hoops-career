@@ -18,10 +18,11 @@ import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
 import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickProjection, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
+import { MovesTab } from '../league/MovesTab';
 
-const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'history'] as const;
+const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'moves', 'history'] as const;
 type Tab = (typeof TABS)[number];
-const LABEL: Record<Tab, string> = { roster: 'Roster', tactics: 'Tactics', scouting: 'Scouting', schedule: 'Schedule', picks: 'Picks', history: 'History' };
+const LABEL: Record<Tab, string> = { roster: 'Roster', tactics: 'Tactics', scouting: 'Scouting', schedule: 'Schedule', picks: 'Picks', moves: 'Moves', history: 'History' };
 
 export default function TeamView() {
   const league = useLeague();
@@ -49,6 +50,7 @@ export default function TeamView() {
       {tab === 'scouting' && <ScoutingTab league={league} tid={tid} />}
       {tab === 'schedule' && <ScheduleTab league={league} tid={tid} />}
       {tab === 'picks' && <PicksTab league={league} tid={tid} />}
+      {tab === 'moves' && <MovesTab league={league} tid={tid} />}
       {tab === 'history' && <HistoryTab league={league} tid={tid} />}
     </main>
   );

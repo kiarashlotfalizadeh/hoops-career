@@ -21,6 +21,7 @@ import { untradeableReason } from '../../core/league/trades';
 import { pendingLive } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
+import { PlayerMoves } from '../league/MovesTab';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -444,6 +445,7 @@ export default function PlayerView() {
               <AccoladeChips p={p} max={Infinity} />
             </Card>
           )}
+          <PlayerMoves league={league} pid={p.pid} />
         </>
       )}
 

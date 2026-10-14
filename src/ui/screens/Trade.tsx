@@ -35,6 +35,7 @@ import { rosterNames } from '../stats';
 import { TierLine, TradeNotes } from '../trade/common';
 import { CounterSheet } from '../trade/CounterSheet';
 import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
+import { RecentDeals } from '../league/MovesTab';
 
 interface Sel {
   pids: number[];
@@ -396,6 +397,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
         {ts.won + ts.lost >= 10 ? ` Winning ${Math.round(winPct(ts) * 100)}% this season.` : ''}
         {holds > 0 ? ` Payroll includes ${fmtM(holds)} in cap holds for players they plan to re-sign.` : ''}
       </div>
+      <RecentDeals league={league} tid={tid} />
     </Card>
   );
 }
