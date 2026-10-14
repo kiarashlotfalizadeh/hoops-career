@@ -594,9 +594,22 @@ export interface GameResult {
   flowPeriods?: number[];
   /** Compact play-by-play for detailed (user) games. */
   pbp?: PbpEntry[];
+  /** Coaches' in-game adjustments (user games only). */
+  adjustments?: GameAdjustment[];
   /** Player of the game. */
   pog?: number;
   att?: number;
+}
+
+/** A coach's in-game change of plan (at a break or a timeout). */
+export interface GameAdjustment {
+  /** Team that adjusted: 0 home, 1 away. */
+  t: 0 | 1;
+  q: number;
+  /** Seconds left in the period. */
+  clock: number;
+  /** What changed, e.g. 'hedges ball screens instead of dropping'. */
+  text: string;
 }
 
 export interface PbpEntry {

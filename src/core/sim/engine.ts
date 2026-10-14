@@ -8,6 +8,7 @@
 import type {
   ActionType,
   BoxLine,
+  GameAdjustment,
   GameResult,
   GameType,
   LineupStat,
@@ -409,6 +410,10 @@ export class GameSim {
   private cur: PossLog | null = null;
   /** A timeout called between possessions: the court shows it as the next possession's first beat. */
   private timeoutStep = false;
+  /** The team that called it. */
+  private timeoutSide: 0 | 1 = 0;
+  /** Coaches' in-game adjustments so far, in order (recorded in every game, play-by-play or not). */
+  adjustments: GameAdjustment[] = [];
   private lastShooter: SP | null = null;
   private possPts = 0;
   private possCtxForTOPts: Ctx = 'start';
@@ -706,6 +711,7 @@ export class GameSim {
     this.T[1].run = 0;
     this.addPbp(side, `Timeout ${t.team.abbrev}${reason ? ` (${reason})` : ''}.`, 'timeout');
     this.timeoutStep = true;
+    this.timeoutSide = side;
     this.adjust(this.T[0]);
     this.adjust(this.T[1]);
     this.checkSubs(this.T[0], true);
@@ -768,6 +774,7 @@ export class GameSim {
     }
     if (!what) return;
     t.adjustedQ = this.q;
+    this.adjustments.push({ t: t.side, q: this.q, clock: Math.round(this.clock), text: what });
     this.addPbp(t.side, `${t.team.abbrev} adjusts: ${what}.`, 'other');
   }
 
@@ -1230,7 +1237,7 @@ export class GameSim {
         clockStart,
         clockEnd: clockStart,
         kind: 'half',
-        steps: this.timeoutStep ? [{ k: 'timeout' }] : [],
+        steps: this.timeoutStep ? [{ k: 'timeout', t: this.timeoutSide }] : [],
         pts: 0,
         score: [this.T[0].score, this.T[1].score],
         label: '',
@@ -3042,6 +3049,7 @@ export class GameSim {
       flow: this.flow,
       flowPeriods: this.flowPeriods,
       pbp: this.record ? this.pbp : undefined,
+      adjustments: this.adjustments.length ? this.adjustments.map((a) => ({ ...a })) : undefined,
       pog,
     };
   }

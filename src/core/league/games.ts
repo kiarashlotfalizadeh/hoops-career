@@ -352,6 +352,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.flow;
     delete res.flowPeriods;
     delete res.pbp;
+    delete res.adjustments;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   }
   league.games.push(res);

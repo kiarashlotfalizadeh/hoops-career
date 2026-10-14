@@ -51,6 +51,8 @@ export interface PossStep {
   f?: FinishType;
   /** For free throws: attempts (v counts the makes). */
   n?: number;
+  /** For timeouts: the team that called it (0 home, 1 away). */
+  t?: 0 | 1;
 }
 
 export interface PossLog {
