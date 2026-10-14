@@ -1,7 +1,7 @@
 import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, PenLine } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -11,15 +11,17 @@ import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
-import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, tradeClosedNote } from '../office/common';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
+import { ContractSheet } from '../office/ContractSheet';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import { askingContract, convertTwoWay, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
+import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
-import { pendingLive } from '../../state/live';
+import { liveInProgress } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
+import { PlayerMoves } from '../league/MovesTab';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -121,6 +123,7 @@ export default function PlayerView() {
   const [tab, setTab] = useQueryParam<Tab>('tab', 'overview', ['overview', 'ratings', 'stats', 'log', 'dev']);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
+  const [extending, setExtending] = useState(false);
   const [openRating, setOpenRating] = useState<string | null>(null);
   const pctile = useSkillPercentiles(league);
   if (!p) {
@@ -136,10 +139,14 @@ export default function PlayerView() {
   // a fired coach's old team isn't his to run
   const mine = p.tid === league.userTid && !league.fired;
   // a paused live game would record a moved player's line for his old team; a contract that's up is re-signed or let go, as in the Office
-  const busyWhy = pendingLive(league) ? 'Finish your live game first.' : null;
+  const busyWhy = liveInProgress(league) ? 'Finish your live game first.' : null;
   const upNote = contractUpNote(league, p);
   const tradeWhy = busyWhy ?? upNote ?? tradeClosedNote(league) ?? untradeableReason(league, p);
   const releaseWhy = busyWhy ?? upNote ?? releaseBlockedReason(league, p);
+  const extStart = extensionStart(p.contract);
+  // in the final season of a standard deal: extend him, or why not yet
+  const finalSeason = mine && !p.contract.twoWay && extStart === null && contractExp(p.contract) === capSeason(league);
+  const extendWhy = finalSeason ? (busyWhy ?? extensionBlockedReason(league, p)) : null;
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
   const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
@@ -336,13 +343,27 @@ export default function PlayerView() {
                     <span className="bold num">{fmtM(sal)}</span>
                   </div>
                   <div className="row between">
-                    <span className="dim2 small">Expires</span>
+                    <span className="dim2 small">{extStart !== null ? 'Current deal ends' : 'Expires'}</span>
                     <span className="num">
-                      {seasonLabel(contractExp(p.contract))}
+                      {seasonLabel(extStart !== null ? extStart - 1 : contractExp(p.contract))}
                       {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
                       {rookieScaleDeal(p) ? ' · rookie scale' : ''}
                     </span>
                   </div>
+                  {extStart !== null && (
+                    <>
+                      <div className="row between">
+                        <span className="small good bold">Extended through</span>
+                        <span className="num">{seasonLabel(contractExp(p.contract))}</span>
+                      </div>
+                      <div className="row between">
+                        <span className="dim2 small">Extension starts</span>
+                        <span className="num">
+                          {fmtM(salaryFor(p, extStart))} in {shortSeason(extStart)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
                   <div className="row between">
                     <span className="dim2 small">Market value</span>
@@ -352,10 +373,13 @@ export default function PlayerView() {
               ) : faAsk ? (
                 <div className="col" style={{ gap: 8 }}>
                   <div className="small dim2">
-                    Asking {fmtM(faAsk.amount)} × {faAsk.years} yr{faAsk.years === 1 ? '' : 's'} from you.
+                    {p.waivers
+                      ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
+                      : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                   </div>
-                  <Link className="btn sm primary" to="/free-agents">
-                    Make an offer
+                  {/* straight to his offer (or claim) sheet on the Free Agents screen */}
+                  <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
+                    {p.waivers ? 'Claim off waivers' : 'Make an offer'}
                   </Link>
                 </div>
               ) : p.tid === DRAFT_PROSPECT ? (
@@ -375,6 +399,11 @@ export default function PlayerView() {
                         <ArrowLeftRight size={14} /> Trade
                       </Link>
                     )}
+                    {finalSeason && (
+                      <button className="btn xs" disabled={!!extendWhy} onClick={() => setExtending(true)}>
+                        <PenLine size={14} /> Extend
+                      </button>
+                    )}
                     {p.contract.twoWay && (
                       <button
                         className="btn xs"
@@ -392,9 +421,9 @@ export default function PlayerView() {
                       Release
                     </button>
                   </div>
-                  {(tradeWhy || releaseWhy) && (
+                  {(tradeWhy || releaseWhy || extendWhy) && (
                     <div className="tiny dim" style={{ marginTop: 6 }}>
-                      {[...new Set([tradeWhy, releaseWhy])].filter(Boolean).join(' ')}
+                      {[...new Set([tradeWhy, releaseWhy, extendWhy])].filter(Boolean).join(' ')}
                     </div>
                   )}
                 </>
@@ -416,6 +445,7 @@ export default function PlayerView() {
               <AccoladeChips p={p} max={Infinity} />
             </Card>
           )}
+          <PlayerMoves league={league} pid={p.pid} />
         </>
       )}
 
@@ -479,6 +509,7 @@ export default function PlayerView() {
           <ReleaseConfirm league={league} p={p} onKeep={() => setConfirmRelease(false)} onDone={() => (setConfirmRelease(false), nav('/roster'))} />
         </div>
       </Sheet>
+      <ContractSheet pid={extending && mine ? p.pid : null} mode="extend" onClose={() => setExtending(false)} />
     </main>
   );
 }

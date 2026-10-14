@@ -1,5 +1,7 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
+import type { OppPlan } from './ai/opponentPlan';
+import type { PlayCall } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 export const POSITIONS: Pos[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -56,6 +58,13 @@ export interface Contract {
   option?: 'player' | 'team';
   /** Two-way deal: doesn't use a 15-man roster spot and is paid outside the cap and tax. */
   twoWay?: boolean;
+  /** A two-way deal converted to a standard one: the same contract, not a new signing. */
+  converted?: boolean;
+  /**
+   * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
+   * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
+   */
+  next?: { salaries: number[] };
 }
 
 export interface Injury {
@@ -217,6 +226,37 @@ export interface Player {
   asking?: { amount: number; years: number };
   /** Free-agency days left until his next price cut (see faDay). */
   faDays?: number;
+  /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
+  waivers?: Waivers;
+}
+
+export interface Waivers {
+  /** The team that released him. */
+  from: number;
+  /** Season day he clears waivers (and becomes a free agent) unless claimed. */
+  until: number;
+  /** The contract a claiming team takes over. */
+  contract: Contract;
+  /** The dead money the release left his old team, which a claim takes off its books. */
+  dead: { season: number; amount: number }[];
+  /** The user has put in a claim. */
+  claim?: boolean;
+  /** His trade lock when he was waived: a claiming team takes it over with the contract. */
+  lock?: { season: number; day: number };
+}
+
+/** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
+export interface FaBid {
+  pid: number;
+  amount: number;
+  years: number;
+  /** faDay it was made (a raised offer keeps the first one's day and decision day). */
+  day: number;
+  decideDay: number;
+  /** How it is paid for: cap space is held for it, the mid-level is reserved for it. */
+  route?: 'space' | 'mle' | 'min';
+  /** Salary the user signed over the cap (minimum and mid-level deals) while it was pending: those could have come after it, so they don't count against it. */
+  slack?: number;
 }
 
 export interface Tendencies {
@@ -339,6 +379,38 @@ export interface GameManagement {
   foulTrouble: 'loose' | 'standard' | 'strict';
   /** Fatigue (energy %) threshold below which a player is subbed if possible. */
   fatigueSub: number;
+  /** Crunch-time go-to player (pid): in the last two minutes of a close fourth quarter or overtime the ball finds him more. */
+  goTo?: number | null;
+  /** After-timeout play: the first action of the next half-court trip after one of your timeouts. */
+  ato?: ActionType | null;
+  /** Hack-a-player targets (opponent pids, for game plans): fouled intentionally while on the floor, whatever their free-throw percentage. */
+  hackTargets?: number[];
+  /** Quarter hack-a-player starts in, by threshold or target (default 1; overtime counts as the 4th). */
+  hackFromQ?: number;
+  /** The assistant adjusts at breaks in simmed games, as AI coaches do. */
+  assistantAdjusts?: boolean;
+}
+
+/** When a situational plan applies: every condition given must hold. Overtime counts as the 4th quarter. */
+export interface SituationTrigger {
+  fromQ?: number;
+  untilQ?: number;
+  /** At most this many seconds left in the period. */
+  maxClock?: number;
+  /** The team's lead (negative when trailing) is at least / at most this. */
+  minLead?: number;
+  maxLead?: number;
+  /** Only while the second unit plays: three or more of the five on the floor didn't start. */
+  benchUnit?: boolean;
+}
+
+/** A change of plan for a game situation ("protect a lead", "second unit"), applied on top of the base tactics. */
+export interface SituationalPlan {
+  id: string;
+  label: string;
+  enabled: boolean;
+  when: SituationTrigger;
+  patch: TacticsPatch;
 }
 
 export interface Rotation {
@@ -365,6 +437,32 @@ export interface Tactics {
   defPreset: string;
   /** If false the auto coach can retune tactics for roster fit. */
   manual: boolean;
+  /** The saved playbook (League.playbooks) these tactics were loaded from or saved as, if any. */
+  playbook?: { id: string; name: string } | null;
+  /** Situational plans (at most four): the first enabled one whose trigger matches is played on top of the rest. */
+  situations?: SituationalPlan[];
+}
+
+/**
+ * One of the coach's saved playbooks (League.playbooks, see src/core/sim/playbooks.ts): his tactics
+ * without the game-specific parts (matchups, the star target). Roles, shot freedom and screeners
+ * are kept by player and only come back for players still on the roster.
+ */
+export interface SavedPlaybook {
+  id: string;
+  name: string;
+  /** When it was saved or last overwritten. */
+  saved: { season: number; day: number };
+  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners'>;
+  defense: Omit<DefenseTactics, 'matchups' | 'starTarget'>;
+  manage: GameManagement;
+  offPreset: string;
+  defPreset: string;
+  roles?: Record<number, OffRole>;
+  freedom?: Record<number, ShotFreedom>;
+  screeners?: number[];
+  /** Other parts of the tactics (features newer than this type), kept as they were saved. */
+  extra?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------- teams
@@ -594,9 +692,33 @@ export interface GameResult {
   flowPeriods?: number[];
   /** Compact play-by-play for detailed (user) games. */
   pbp?: PbpEntry[];
+  /** Coaches' in-game adjustments (user games only). */
+  adjustments?: GameAdjustment[];
+  /** The other coach's game plan against the user's team, when he brought one (user games only): what he changed at tip-off, e.g. 'hedges ball screens'. */
+  oppPlan?: string[];
   /** Player of the game. */
   pog?: number;
   att?: number;
+  /** The user's regular-season games: where his team stood in its conference going in and coming out. */
+  stakes?: { tid: number; before: StandingLine; after: StandingLine };
+}
+
+/** A team's place in its conference: rank, games behind the leader, and a clinch mark (x playoffs, p play-in, e eliminated). */
+export interface StandingLine {
+  rank: number;
+  gb: number;
+  clinched?: 'x' | 'p' | 'e';
+}
+
+/** A coach's in-game change of plan (at a break or a timeout). */
+export interface GameAdjustment {
+  /** Team that adjusted: 0 home, 1 away. */
+  t: 0 | 1;
+  q: number;
+  /** Seconds left in the period. */
+  clock: number;
+  /** What changed, e.g. 'hedges ball screens instead of dropping'. */
+  text: string;
 }
 
 export interface PbpEntry {
@@ -639,10 +761,51 @@ export interface NewsItem {
   id: number;
   season: number;
   day: number;
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general';
+  /** 'rumor': who is listening on a player before the trade deadline, and who has called. */
+  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor';
   text: string;
   tids: number[];
   pids: number[];
+}
+
+/** A kind of roster move in the transaction log. */
+export type TxnKind = 'trade' | 'sign' | 'resign' | 'extend' | 'release' | 'waive' | 'claim' | 'buyout' | 'twoWay' | 'convert' | 'renounce' | 'option' | 'draft';
+
+/** What one team sent in a trade, as it was: names and pick labels at the time. */
+export interface TxnSide {
+  tid: number;
+  players: { pid: number; name: string }[];
+  picks: string[];
+}
+
+/**
+ * One roster move in the transaction log (see src/core/league/transactions.ts). Names and pick
+ * labels are frozen when it happens, so it reads the same after the player retires and his record
+ * is compacted away, or the pick becomes a player.
+ */
+export interface Txn {
+  id: number;
+  season: number;
+  day: number;
+  phase: Phase;
+  kind: TxnKind;
+  /** The teams in it: the one that made the move first (a waiver claim: the claiming team, then the one that waived him). */
+  tids: number[];
+  /** Trades only: what each team sent. */
+  sides?: TxnSide[];
+  pid?: number;
+  name?: string;
+  /**
+   * $K: the first-year salary of a signing, re-signing, extension, two-way deal, conversion or
+   * claim (this season's); the dead money a release leaves; what a buyout gave back; the salary of
+   * an option year.
+   */
+  amount?: number;
+  years?: number;
+  /** An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option); a draft pick: its overall number ('#5'). */
+  note?: string;
+  /** The user's team was in it: kept for good, even after he moves on to another team. */
+  user?: true;
 }
 
 export interface InboxMessage {
@@ -658,6 +821,27 @@ export interface InboxMessage {
   tone?: 'good' | 'bad' | 'neutral' | 'alert';
   /** Big news for the GM: long sims pause for it (trade requests, key long-term injuries, owner verdicts). */
   important?: boolean;
+  /** The AI trade offer (Proposal id) this message carries: the inbox offers Accept and Review while it stands. */
+  proposal?: number;
+}
+
+/**
+ * A trade an AI team offers the user. Side a of `offer` is the user's team, side b the AI team.
+ * 'buy': it wants one of the user's players; 'sell': a rebuilder offers a veteran; 'dump': a
+ * taxpayer attaches picks to a contract it wants off its books; 'pick': it wants the user's pick
+ * on draft night. The AI accepted it when it was made; it stands until `expires` (a day of
+ * `season`) or until it stops being valid.
+ */
+export interface Proposal {
+  id: number;
+  tid: number;
+  offer: { a: { tid: number; pids: number[]; dpids: number[] }; b: { tid: number; pids: number[]; dpids: number[] } };
+  kind: 'buy' | 'sell' | 'dump' | 'pick';
+  /** The AI GM's pitch. */
+  note: string;
+  season: number;
+  day: number;
+  expires: number;
 }
 
 export interface SeasonAwards {
@@ -691,10 +875,18 @@ export interface Settings {
   complexity: 'simple' | 'advanced' | 'expert';
   /** Auto-play speed for live game. */
   liveSpeed: number;
+  /** Where a live game stops for a break with a period report (default 'quarters'). */
+  liveBreaks?: 'quarters' | 'half' | 'off';
+  /** Live games only draw the key plays, fast-forwarding the rest (default off). */
+  liveKeyPlays?: boolean;
   /** First-run guide dismissed. */
   onboarded?: boolean;
   /** Pause long sims for big news (default on). */
   stopOnNews?: boolean;
+  /** Home's Watch & coach opens the pre-game screen first (default on). */
+  pregame?: boolean;
+  /** Draft night stops before every AI pick, so picks can be traded for on the clock (default off). */
+  draftPause?: boolean;
 }
 
 export interface League {
@@ -740,17 +932,84 @@ export interface League {
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;
+  /** The user's pending offers to top free agents (summer free agency only). */
+  faBids?: FaBid[];
   /** User's draft board ordering (pids). */
   draftBoard?: number[];
   /** Season the league was started. */
   startSeason: number;
-  /** Opponent-specific adjustments for the user's next game against that opponent. */
-  gamePlan?: GamePlan | null;
+  /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
+  gamePlans?: Record<number, GamePlan>;
+  /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */
+  playbooks?: SavedPlaybook[];
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
   cup?: CupState | null;
+  /** The user's latest post-game press conference: the game and the answer he gave (one per game). */
+  press?: { gid: number; choice: PressChoice };
+  /** AI trade offers to the user that are still open. */
+  proposals?: Proposal[];
+  nextProposalId?: number;
+  /** The user's players AI teams don't ask for (in offers, "what would make this work?" or counters). */
+  untouchable?: number[];
+  /** The transaction log, oldest first: every trade and the user's moves for good, other teams' moves for two seasons (see pruneTransactions). */
+  transactions?: Txn[];
+  /** Id of the next transaction logged. */
+  nextTxnId?: number;
+  /** The user's live game in progress, journaled as it's played so it survives the app being closed. */
+  live?: LiveJournal;
 }
+
+/**
+ * A live game in progress (League.live): enough to play it again exactly to where it was after the
+ * app was closed. The engine draws each possession from the game's seed and the possession counts,
+ * so the same start and the same coaching moves after the same number of possessions replay the
+ * same game. Everything here was read at tip-off: changes made since (to the rotation, the game
+ * plan, Settings) wait for the next game, as they do while the game stays open.
+ */
+export interface LiveJournal {
+  gid: number;
+  /** The user's team at tip-off. */
+  tid: number;
+  /** Seed of the game's random stream. */
+  seed: number;
+  /** Whether in-game injuries were on. */
+  injuries: boolean;
+  /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk. */
+  user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number };
+  /**
+   * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
+   * replay plays them as they were, whatever changed since (the difficulty, or the league's id on a
+   * backup imported as a copy).
+   */
+  opp?: { tactics: Tactics; plan?: OppPlan };
+  /** Possessions played (engine steps) at the last checkpoint, and the period, clock and score (home, away) then: a replay must land on them. */
+  steps: number;
+  q: number;
+  clock: number;
+  score: [number, number];
+  /** The user's coaching moves in order, each made after `at` possessions. */
+  ops: LiveOp[];
+  /** "Keep changes after this game" is on: the saved tactics as they were when it was turned on. */
+  keep?: Tactics;
+  /** Hashes of the user's tactics and rotation as the Live screen last saw them, to spot edits made away from it. */
+  seen?: [number, number];
+}
+
+/** A coaching move in a live game, on the user's side (see LiveJournal). */
+export type LiveOp = { at: number } & (
+  | { op: 'sub'; args: { out: number; in: number } }
+  /** `plan`: the new tactics are also what "Reset to game plan" goes back to (edits made away from the Live screen). */
+  | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean } }
+  | { op: 'timeout'; args: { reason?: string } }
+  | { op: 'manualSubs'; args: { on: boolean } }
+  | { op: 'call'; args: { call: PlayCall } }
+  | { op: 'cancelCall'; args: Record<string, never> }
+);
+
+/** Post-game press conference answers: credit the group, praise the player of the game, challenge the effort (after a loss). */
+export type PressChoice = 'group' | 'pog' | 'challenge';
 
 export interface CupGroup {
   /** 'East A' ... 'West C'. */
@@ -797,9 +1056,46 @@ export interface CupState {
   mvp?: number;
 }
 
+/**
+ * A change to a team's tactics: fixed values (action weights one by one, so two patches that boost
+ * different actions both apply) and `nudge`, relative changes clamped to 0..100 and applied after
+ * them, so a counter like "more pick-and-roll" builds on whatever playbook it is applied to.
+ */
+export interface TacticsPatch {
+  offense?: Partial<Omit<OffenseTactics, 'actions'>> & { actions?: Partial<Record<ActionType, number>> };
+  defense?: Partial<DefenseTactics>;
+  manage?: Partial<GameManagement>;
+  nudge?: {
+    offense?: Partial<Record<'pace' | 'transition' | 'threePoint' | 'rimAttack' | 'crashBoards', number>>;
+    actions?: Partial<Record<ActionType, number>>;
+    defense?: Partial<Record<'help' | 'pressure' | 'getBack' | 'physicality', number>>;
+  };
+}
+
+export interface GamePlanItem {
+  id: string;
+  label: string;
+  /** Items in the same group replace each other (one ball-screen coverage, one star plan...); defaults to the id. */
+  group?: string;
+  patch: TacticsPatch;
+  /** Why it's in the plan, from the scouting numbers. */
+  evidence?: string;
+}
+
+/** How long a game plan lasts: the next game against that opponent, the current playoff series, or the rest of the season. */
+export type PlanScope = 'next' | 'series' | 'season';
+
+/** The user's plan for one opponent (see src/core/league/gamePlans.ts). */
 export interface GamePlan {
   oppTid: number;
-  items: { id: string; label: string; patch: { offense?: Partial<OffenseTactics>; defense?: Partial<DefenseTactics>; manage?: Partial<GameManagement> } }[];
+  items: GamePlanItem[];
+  /** Defaults to 'next'. */
+  scope?: PlanScope;
+  /** The playoff series a 'series' plan was made for. */
+  seriesId?: string;
+  /** Planned matchups against this opponent: their pid -> my defender pid. */
+  matchups?: Record<number, number>;
+  note?: string;
 }
 
 export const FREE_AGENT = -1;

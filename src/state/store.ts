@@ -2,7 +2,7 @@ import { useMemo, type DependencyList } from 'react';
 import { create } from 'zustand';
 import type { League } from '../core/types';
 import { isQuotaError, loadLeague, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
-import { clearLive, pendingLive } from './live';
+import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
 import { simDay, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
@@ -198,7 +198,8 @@ export const useStore = create<AppState>((set, get) => ({
         });
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;
-    clearLive();
+    // (a live game in progress stays journaled in the league it was in, to pick up when it's opened again)
+    dropLive();
     // a sim still running on the old league sees the swap and stops
     // a league that was never saved (just created) counts as a change until its first save works
     set({ league: l, v: get().v + 1, sim: null, stopRequested: false, dirty: !!l && !onDevice(l), saveProblem: null });
@@ -230,7 +231,15 @@ export const useStore = create<AppState>((set, get) => ({
     if (!l) return Promise.resolve(true);
     return (saving = write(l).finally(() => (saving = null)));
   },
-  flush: () => (get().dirty ? get().save() : Promise.resolve(true)),
+  flush: () => {
+    const l = get().league;
+    // a live game plays on without a save every possession: where it has got to is a change now
+    if (l && checkpointLive(l)) {
+      changes++;
+      set({ dirty: true });
+    }
+    return get().dirty ? get().save() : Promise.resolve(true);
+  },
   saveBeforeLeaving: async () => (await get().flush()) || get().saveProblem?.kind === 'conflict',
   simulate: async (target) => {
     const l = get().league;
@@ -243,8 +252,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ sim: { label: 'Simulating', done: 0, total }, stopRequested: false });
     // a sim that throws falls back to the last save: make that the state it starts from
     await get().flush();
-    // a live game left mid-way finishes from its current score: re-simming it would record it twice
-    const live = pendingLive(l);
+    // a live game left mid-way finishes from its current score (picked up from its journal if the app
+    // was closed since): re-simming it would record it twice
+    const journaled = liveInProgress(l);
+    const live = resumeLive(l);
+    if (journaled && !live) get().toast("Your game in progress couldn't be picked up where you left off, so it was played from tip-off.", 'bad');
     let days = 0;
     // the day this sim left the league on: the Live screen can finish its game while the sim waits
     // (the save above, a frame), and a target that move reached needs no more days

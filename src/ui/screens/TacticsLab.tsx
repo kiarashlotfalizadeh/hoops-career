@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Beaker, Check, Play } from 'lucide-react';
+import { Beaker, Check, ChevronRight, Play } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { progressCallback, resetLab, withLab } from '../../state/labClient';
-import type { CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
+import type { Candidate, CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
-import { counterCandidates, scoutTeam } from '../../core/ai/advisor';
+import { counterCandidates, scoutTeam, tacticsWithCounter } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation, userGameOnDay } from '../../core/league/games';
+import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
+import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
-import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet, Spinner, Tag } from '../components/ui';
+import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Spinner, Tag } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
-import { clearLabBaseline, takeLabBaseline } from './labBridge';
-import type { GameType, League, Tactics } from '../../core/types';
+import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
+import type { GameType, League, Tactics, TacticsPatch } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
 
@@ -43,11 +45,12 @@ function labGameType(league: League): GameType {
 /**
  * A lab side is built like a real game's: the game plan for this opponent on top of the tactics,
  * injured players kept on the roster so the engine hands their minutes down the bench, morale and
- * wear, rest, and an AI opponent's in-game adjustments.
+ * wear, rest, and an AI opponent's in-game adjustments, with the plan its coach brings to your next
+ * meeting if he game-plans for it.
  */
 function sideFor(league: League, tid: number, opp: number, tactics?: Tactics): LabSide {
   const view = tactics ? { ...league, teams: league.teams.map((t) => (t.tid === tid ? { ...t, tactics } : t)) } : league;
-  const input = buildSimInput(view, tid, league.day, labGameType(league), opp);
+  const input = buildSimInput(view, tid, league.day, labGameType(league), opp, nextMeeting(league, tid === league.userTid ? opp : tid));
   // (the season history is never read by a game: it stays out of the message to the worker)
   return { ...input, team: { ...input.team, seasons: [] } };
 }
@@ -59,6 +62,9 @@ function defaultOpponent(league: League): number {
   if (g) return g.home === league.userTid ? g.away : g.home;
   return league.userTid === 0 ? 1 : 0;
 }
+
+/** A patch that turns any tactics into `t` (the Lab applies it on top of the plan the side already plays). */
+const toTactics = (t: Tactics): TacticsPatch => ({ offense: { ...t.offense }, defense: { ...t.defense }, manage: { ...t.manage } });
 
 /** What a finished run was for: results only show, and only apply, for the matchup they simulated. */
 interface Run {
@@ -73,8 +79,10 @@ export default function TacticsLab() {
   const league = useLeague();
   const [params] = useSearchParams();
   const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline(league) : null));
+  // a saved playbook (from Tactics' My playbooks) as the before side, instead of the tactics before an edit
+  const [baselineName] = useState(() => (params.get('compare') ? labBaselineName(league) : null));
   useEffect(() => clearLabBaseline(), []);
-  const [mode, setMode] = useState<Mode>(baseline ? 'compare' : 'project');
+  const [mode, setMode] = useState<Mode>(baseline ? 'compare' : params.get('mode') === 'counters' ? 'counters' : 'project');
   // a link from before a team switch (or a hand-edited one) can name your own team or none: fall back to the next opponent
   const [opp, setOpp] = useState<number>(() => {
     const asked = Number(params.get('opp') ?? NaN);
@@ -85,7 +93,6 @@ export default function TacticsLab() {
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(1);
   const [run, setRun] = useState<Run | null>(null);
-  const [replace, setReplace] = useState<CandidateResult | null>(null);
   const mounted = useRef(true);
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -101,7 +108,12 @@ export default function TacticsLab() {
   const [applied, setApplied] = useState<string[]>([]);
   const user = league.userTid;
   const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
-  const plan = league.gamePlan && league.gamePlan.oppTid === opp && league.gamePlan.items.length ? league.gamePlan : null;
+  const plan = planFor(league, opp);
+  // the plan their coach brings to your next meeting, which the lab plays as he will
+  const theirPlan = useLeagueMemo(() => {
+    const g = nextMeeting(league, opp);
+    return g ? aiGamePlan(league, opp, league.userTid, g) : null;
+  }, [league, opp]);
   const noBaseline = mode === 'compare' && !baseline;
 
   useEffect(() => {
@@ -141,9 +153,13 @@ export default function TacticsLab() {
           const candidates = counterCandidates(league, user, opp);
           const n = Math.max(20, Math.round(games * 0.75));
           setTotal(n * (candidates.length + 1));
-          const out = await w.evaluate(sideFor(league, user, opp), b, candidates, n, seed, track(0), type);
+          // each counter plays as the plan would play it: in place of the plan's item in its group
+          const tested: Candidate[] = candidates.map((c) => ({ ...c, patch: toTactics(tacticsWithCounter(league, opp, c)) }));
+          const out = await w.evaluate(sideFor(league, user, opp), b, tested, n, seed, track(0), type);
+          const byId = new Map(candidates.map((c) => [c.id, c]));
           job.base = out.base;
-          job.cands = out.results;
+          // (what goes into the plan is the counter itself, relative to the playbook)
+          job.cands = out.results.map((r) => ({ ...r, patch: byId.get(r.id)!.patch }));
         }
       });
       if (mounted.current) setRun(job);
@@ -159,20 +175,13 @@ export default function TacticsLab() {
     useStore.getState().mutate((l) => {
       if (scope === 'always') {
         const tm = l.teams[l.userTid];
-        // a star target is this opponent's player: kept tactics go after each opponent's own star
-        const patch = c.patch?.defense ? { ...c.patch, defense: { ...c.patch.defense, starTarget: null } } : c.patch;
-        tm.tactics = { ...applyPatch(tm.tactics, patch), manual: true };
-      } else {
-        const gp = l.gamePlan && l.gamePlan.oppTid === vs ? l.gamePlan : { oppTid: vs, items: [] };
-        gp.items = [...gp.items.filter((x) => x.id !== c.id), { id: c.id, label: c.label, patch: c.patch }];
-        l.gamePlan = gp;
-      }
+        // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
+        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch)), manual: true };
+      } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
     });
     setApplied((a) => [...a, `${vs}:${c.id}`]);
     useStore.getState().toast(scope === 'game' ? `Game plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Applied to your tactics: ${c.label}`, 'good');
   };
-  // "Vs" keeps one plan: confirm before it replaces the one for a different opponent
-  const planOther = league.gamePlan && league.gamePlan.items.length && league.gamePlan.oppTid !== run?.opp ? league.gamePlan : null;
 
   // the teams keep their order (a tapped one doesn't jump under the finger): the one picked on arrival scrolls into view
   const picker = useRef<HTMLDivElement>(null);
@@ -236,6 +245,19 @@ export default function TacticsLab() {
             ))}
           </div>
         )}
+        {theirPlan && (
+          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+            <span className="small dim2">{plan ? 'So is their plan for your next game:' : `The ${oppTeam.abbrev} plan for your next game is included:`}</span>
+            {theirPlan.items.map((it) => (
+              <Tag key={it.id} tone="warn">
+                {it.text}
+              </Tag>
+            ))}
+          </div>
+        )}
+        <Link to={`/gameplan/${opp}`} className="small row" style={{ gap: 2, marginTop: 8, color: 'var(--accent-text)', fontWeight: 650 }}>
+          Game plan vs {oppTeam.abbrev} <ChevronRight size={15} />
+        </Link>
       </Card>
 
       <Segmented
@@ -253,7 +275,9 @@ export default function TacticsLab() {
         {mode === 'project' && 'Your current game plan against this opponent: expected result, shot profile, play types and who gets the ball.'}
         {mode === 'compare' &&
           (baseline
-            ? 'Your tactics before vs after your latest edits, same opponent, same random draws.'
+            ? baselineName
+              ? `Your playbook "${baselineName}" (before) vs your current tactics (after), same opponent, same random draws.`
+              : 'Your tactics before vs after your latest edits, same opponent, same random draws.'
             : 'Compare plays your tactics from before and after an edit against the same games.')}
         {mode === 'counters' && 'The assistant drafts counters for this opponent and tests each one. Apply the ones that move the needle.'}
       </div>
@@ -344,6 +368,11 @@ export default function TacticsLab() {
                       </span>
                     </div>
                     <div className="small dim2">{c.why}</div>
+                    {c.evidence && (
+                      <div className="small" style={{ marginTop: 4 }}>
+                        <span className="good bold">By the numbers:</span> {c.evidence}
+                      </div>
+                    )}
                     <div className="row between" style={{ marginTop: 6 }}>
                       <span className="tiny dim">
                         range ± {f1(sig * c.se)} · win {p0(c.winPct)}
@@ -354,7 +383,7 @@ export default function TacticsLab() {
                         </Tag>
                       ) : (
                         <div className="row" style={{ gap: 6 }}>
-                          <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => (planOther ? setReplace(c) : applyCand(c, 'game', shown.opp))}>
+                          <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c, 'game', shown.opp)}>
                             Vs {league.teams[shown.opp].abbrev}
                           </button>
                           <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
@@ -370,31 +399,6 @@ export default function TacticsLab() {
           </Card>
         </>
       )}
-
-      <Sheet open={!!replace && !!planOther} onClose={() => setReplace(null)} title="Replace your game plan?">
-        {replace && planOther && shown && (
-          <>
-            <p className="dim2">
-              You have a game plan for {league.teams[planOther.oppTid].abbrev} ({planOther.items.map((it) => it.label).join(', ')}). Only one plan is kept: this replaces it with{' '}
-              {replace.label} vs {league.teams[shown.opp].abbrev}.
-            </p>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn grow" onClick={() => setReplace(null)}>
-                Keep it
-              </button>
-              <button
-                className="btn primary grow"
-                onClick={() => {
-                  applyCand(replace, 'game', shown.opp);
-                  setReplace(null);
-                }}
-              >
-                Replace
-              </button>
-            </div>
-          </>
-        )}
-      </Sheet>
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import { attrDisplay } from '../../core/ratings';
 import { Fragment, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
@@ -9,6 +10,7 @@ import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activa
 import type { League, Player, Rotation as RotationT } from '../../core/types';
 import { f1, gamesMemo, ordinal, playerSeason, rosterNames, signed, startingFive } from '../stats';
 import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
+import { swapSpots } from '../../core/analysis/lineups';
 
 export default function Rotation() {
   const league = useLeague();
@@ -279,17 +281,26 @@ function LineupsCard() {
   );
   // named from the lineups themselves: players traded or released since still read as themselves
   const names = rosterNames([...new Set(lineups.flatMap((l) => l.pids))].map((pid) => league.players[pid]).filter(Boolean));
-  if (!lineups.length) return null;
+  // the lineup screen also has last season's numbers (and on/off splits) before any five has played together this season
+  const lastSeason = league.teams[league.userTid].seasons.some((s) => s.season === league.season - 1 && s.poss > 0);
+  if (!lineups.length && !lastSeason) return null;
   return (
     <Card
       title="Lineups this season"
       right={
-        <Help title="Lineup net rating">
-          Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes.
-        </Help>
+        <div className="row" style={{ gap: 10 }}>
+          <Link className="card-link" to="/lineups" aria-label="All lineups, pairs, trios and on-off splits">
+            See all
+          </Link>
+          <Help title="Lineup net rating">
+            Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes. See all has every five,
+            the pairs and trios inside them and each player's on-off split, and can make a five your starters or closers.
+          </Help>
+        </div>
       }
     >
       <div className="col" style={{ gap: 8 }}>
+        {!lineups.length && <div className="small dim">No five has played 8 minutes together yet this season.</div>}
         {lineups.map((l) => (
           <div key={l.key} className="row small top">
             <span className={`num bold ${l.net >= 0 ? 'good' : 'bad'}`} style={{ width: 46 }}>
@@ -326,19 +337,8 @@ function EditPlayer({
   const m = rot.minutes[p.pid] ?? 0;
   const cap = rot.caps[p.pid] ?? 0;
   const at = order.indexOf(p.pid);
-  // one tap instead of a run of arrow taps: trade depth-chart spots with anyone
-  const swap = (other: number) =>
-    update((r) => {
-      const o = order.slice();
-      const j = o.indexOf(other);
-      if (at < 0 || j < 0) return;
-      [o[at], o[j]] = [o[j], o[at]];
-      r.order = o;
-      // the role moves with the spot: he takes the other player's minutes and vice versa
-      const mine = r.minutes[p.pid] ?? 0;
-      r.minutes[p.pid] = r.minutes[other] ?? 0;
-      r.minutes[other] = mine;
-    });
+  // one tap instead of a run of arrow taps: trade depth-chart spots (and minutes: the role moves with the spot) with anyone
+  const swap = (other: number) => update((r) => swapSpots(r, order, p.pid, other));
   return (
     <div className="col" style={{ gap: 16 }}>
       <div className="col" style={{ gap: 6 }}>

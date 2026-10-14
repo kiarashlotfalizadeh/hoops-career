@@ -1,14 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { AlertTriangle, ChevronRight, Eye, FastForward, Mail, Zap } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { pendingLive } from '../../state/live';
+import { liveInProgress } from '../../state/live';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
 import { normalizeLink } from '../league/shared';
 import { inAppPath } from '../nav';
 import { userGameOnDay } from '../../core/league/games';
 import { cupLabel } from '../../core/league/cup';
 import { confStandings } from '../../core/league/standings';
+import { openProposals } from '../../core/league/proposals';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Kpi, Ovr } from '../components/ui';
@@ -17,6 +18,8 @@ import { useFlowRunner } from '../useFlow';
 import { f1, ordinal, playerSeason, rosterNames, signed, teamRatings } from '../stats';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
+import { clearPlan, planFor } from '../../core/league/gamePlans';
+import { countdownLabel, matchupPreview } from '../../core/analysis/preview';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -51,9 +54,14 @@ export default function Home() {
   const next = inSeason ? nextUserGame(league) : undefined;
   const oppTid = next ? (next.home === league.userTid ? next.away : next.home) : undefined;
   const scout = useLeagueMemo(() => (oppTid !== undefined ? scoutTeam(league, oppTid) : null), [league, oppTid]);
+  const plan = oppTid !== undefined && next ? planFor(league, oppTid, next) : null;
+  // countdown, back-to-backs, who's out, the season series and the playoff stakes (no lineups needed: the rotations aren't refreshed here)
+  const pv = useLeagueMemo(() => (next ? matchupPreview(league, next.gid) : null), [league, next]);
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid), [league]);
   const actions = flowActions(league);
   const unread = league.inbox.filter((m) => !m.read).slice(0, 3);
+  // AI teams' open trade offers (each also in the inbox)
+  const offers = openProposals(league).length;
   const conf = useLeagueMemo(() => confStandings(league, team.conf), [league, team.conf]);
   const myRank = conf.findIndex((r) => r.tid === league.userTid);
   const nearby = conf.slice(Math.max(0, Math.min(myRank - 3, conf.length - 7)), Math.max(7, Math.min(conf.length, myRank + 4)));
@@ -81,8 +89,8 @@ export default function Home() {
   const played = ts.won + ts.lost > 0;
   const primary = actions.find((a) => a.primary);
   // a live game in progress resumes, or finishes from its current score, as the Play menu says
-  const live = next ? pendingLive(league) : null;
-  const inProgress = !!live && live.game.gid === next?.gid;
+  const live = next ? liveInProgress(league) : null;
+  const inProgress = !!live && live.gid === next?.gid;
   const resume = inProgress ? actions.find((a) => a.cmd === 'watchLive') : undefined;
   const finish = inProgress ? actions.find((a) => a.cmd === 'quickGame') : undefined;
   const cup = next ? cupLabel(league, next) : null;
@@ -109,12 +117,17 @@ export default function Home() {
         <Card accent>
           <div className="row between">
             <span className="tag info">
-              {next.type === 'playoffs' ? 'Playoffs' : next.type === 'playin' ? 'Play-In' : next.cup === 'final' ? cup : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`}
+              {pv?.playoff
+                ? pv.playoff.tag
+                : next.type === 'playoffs'
+                  ? 'Playoffs'
+                  : next.type === 'playin'
+                    ? 'Play-In'
+                    : next.cup === 'final'
+                      ? cup
+                      : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`}
             </span>
-            <span className="small dim">
-              {fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-              {next.day === league.day ? ' · Today' : ''}
-            </span>
+            <span className="small dim">{fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
           </div>
           <div className="scorebug" style={{ marginTop: 12 }}>
             <div className="col" style={{ alignItems: 'center', gap: 4 }}>
@@ -135,6 +148,15 @@ export default function Home() {
               </div>
             </div>
           </div>
+          {pv && (
+            <div className="chips" style={{ justifyContent: 'center', marginTop: 10 }}>
+              <span className="tag info">{countdownLabel(pv.days)}</span>
+              {(pv.playoff?.elimination || pv.playIn?.elimination) && <span className="tag bad">Elimination game</span>}
+              {pv.playoff?.clinch && <span className="tag good">A win takes the series</span>}
+              {pv.us.b2b && <span className="tag warn">{team.abbrev} back-to-back</span>}
+              {pv.them.b2b && <span className="tag warn">{league.teams[oppTid].abbrev} back-to-back</span>}
+            </div>
+          )}
           {next.seriesId &&
             (() => {
               const s = league.playoffs.find((x) => x.id === next.seriesId);
@@ -144,6 +166,46 @@ export default function Home() {
                 </div>
               ) : null;
             })()}
+          {pv && (
+            <div className="col small" style={{ marginTop: 10, gap: 3 }}>
+              {pv.them.won + pv.them.lost > 0 && (
+                <div className="dim2">
+                  {league.teams[oppTid].abbrev}:{' '}
+                  {Math.abs(pv.them.streak) > 1
+                    ? `${pv.them.streak > 0 ? 'won' : 'lost'} ${Math.abs(pv.them.streak)} straight`
+                    : `${pv.them.streak > 0 ? 'won' : 'lost'} their last game`}{' '}
+                  · {pv.them.lastTen} in their last {Math.min(10, pv.them.won + pv.them.lost)}
+                </div>
+              )}
+              {pv.series.games.length > 0 && (
+                <div className="dim2">
+                  Season series {pv.series.won}-{pv.series.lost} · last meeting{' '}
+                  <Link to={`/game/${pv.series.games[pv.series.games.length - 1].gid}`} className="bold" style={{ color: 'var(--accent-text)' }}>
+                    {pv.series.games[pv.series.games.length - 1].won ? 'W' : 'L'} {pv.series.games[pv.series.games.length - 1].us}-
+                    {pv.series.games[pv.series.games.length - 1].them}
+                  </Link>
+                </div>
+              )}
+              {[pv.us, pv.them].map((side) =>
+                side.out.length || side.resting.length ? (
+                  <div key={side.tid}>
+                    <span className="bold">{league.teams[side.tid].abbrev}</span>{' '}
+                    {side.out.length > 0 && (
+                      <>
+                        <span className="bad">out:</span> {side.out.map((p) => `${league.players[p.pid]?.lastName ?? p.name} (${p.games}g)`).join(', ')}
+                      </>
+                    )}
+                    {side.out.length > 0 && side.resting.length > 0 && ' · '}
+                    {side.resting.length > 0 && (
+                      <>
+                        <span className="warn">resting:</span> {side.resting.map((p) => league.players[p.pid]?.lastName ?? p.name).join(', ')}
+                      </>
+                    )}
+                  </div>
+                ) : null,
+              )}
+            </div>
+          )}
           {scout && (
             <div className="col" style={{ marginTop: 12, gap: 6 }}>
               <div className="small upper dim bold">Scouting report</div>
@@ -160,16 +222,17 @@ export default function Home() {
                   <span className="good">Attack:</span> {scout.weaknesses[0]}
                 </div>
               )}
-              {league.gamePlan && league.gamePlan.oppTid === oppTid && league.gamePlan.items.length > 0 ? (
+              {plan ? (
                 <div className="card tight" style={{ marginTop: 4 }}>
                   <div className="row between">
-                    <span className="small bold">Game plan for this opponent</span>
-                    <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.gamePlan = null))}>
+                    <span className="small bold">Game plan for this opponent{plan.scope === 'series' ? ' · this series' : plan.scope === 'season' ? ' · all season' : ''}</span>
+                    <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => clearPlan(l, oppTid))}>
                       Clear
                     </button>
                   </div>
                   <div className="chips" style={{ marginTop: 6 }}>
-                    {league.gamePlan.items.map((it) => (
+                    {plan.matchups && Object.keys(plan.matchups).length > 0 && <span className="tag info">Planned matchups</span>}
+                    {plan.items.map((it) => (
                       <span key={it.id} className="tag info">
                         {it.label}
                       </span>
@@ -177,15 +240,24 @@ export default function Home() {
                   </div>
                 </div>
               ) : null}
-              <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650, alignSelf: 'flex-start' }}>
-                Build a game plan in the Tactics Lab →
-              </Link>
+              <div className="row wrap" style={{ gap: 14 }}>
+                <Link to={`/preview/${next.gid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                  Matchup preview →
+                </Link>
+                <Link to={`/gameplan/${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                  Game plan vs {league.teams[oppTid].abbrev} →
+                </Link>
+                <Link to={`/lab?opp=${oppTid}`} className="small card-link" style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                  Test it in the Lab →
+                </Link>
+              </div>
             </div>
           )}
           <div className="row" style={{ marginTop: 14 }}>
             {next.day === league.day ? (
               <>
-                <button className="btn primary grow" disabled={simming} onClick={() => nav('/live')}>
+                {/* the pre-game screen comes first (Settings), unless a game is under way */}
+                <button className="btn primary grow" disabled={simming} onClick={() => nav(inProgress || league.settings.pregame === false ? '/live' : `/preview/${next.gid}`)}>
                   <Eye size={18} /> {resume?.label ?? 'Watch & coach'}
                 </button>
                 <button className="btn grow" disabled={simming} onClick={() => void run({ id: 'quick', label: '', cmd: 'quickGame' })}>
@@ -193,9 +265,14 @@ export default function Home() {
                 </button>
               </>
             ) : (
-              <button className="btn primary grow" disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
-                <FastForward size={18} /> Sim to next game
-              </button>
+              <>
+                <button className="btn primary grow" disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
+                  <FastForward size={18} /> Sim to next game
+                </button>
+                <Link to={`/preview/${next.gid}`} className="btn">
+                  Preview
+                </Link>
+              </>
             )}
           </div>
           {resume?.sub && (
@@ -228,6 +305,13 @@ export default function Home() {
               ))}
           </div>
         </Card>
+      )}
+
+      {offers > 0 && (
+        <Link to="/trade?tab=offers" className="chip on" style={{ alignSelf: 'flex-start' }}>
+          <Handshake size={14} /> {offers} trade offer{offers > 1 ? 's' : ''}
+          <ChevronRight size={14} className="dim" />
+        </Link>
       )}
 
       {inSeason && (

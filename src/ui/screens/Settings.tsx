@@ -178,6 +178,20 @@ export default function Settings() {
             <Chips label="Live game speed" value={st.liveSpeed || 1} onChange={(s) => mutate((l) => (l.settings.liveSpeed = s))} options={LIVE_SPEEDS} />
             <div className="small dim">Default playback speed when you watch and coach a game live.</div>
           </div>
+          <div className="col" style={{ gap: 8 }}>
+            <div className="bold">Live game breaks</div>
+            <Chips
+              label="Live game breaks"
+              value={st.liveBreaks ?? 'quarters'}
+              onChange={(b) => mutate((l) => (l.settings.liveBreaks = b))}
+              options={[
+                { id: 'quarters', label: 'Every quarter' },
+                { id: 'half', label: 'Halftime' },
+                { id: 'off', label: 'None' },
+              ]}
+            />
+            <div className="small dim">Where a live game stops for a break, with a report on the period and time to adjust.</div>
+          </div>
           <div className="divider" />
           <Toggle
             on={st.injuries}
@@ -196,6 +210,12 @@ export default function Settings() {
             onChange={(v) => mutate((l) => (l.settings.stopOnNews = v))}
             label="Pause sims for big news"
             help="Long sims stop for a trade request, a month-long injury to one of your top six players, or an owner verdict. Routine news just lands in the inbox."
+          />
+          <Toggle
+            on={st.pregame !== false}
+            onChange={(v) => mutate((l) => (l.settings.pregame = v))}
+            label="Pre-game screen"
+            help="Watch & coach on Home opens the matchup preview first: injuries, starting fives, their tendencies and your game plan. The Play menu's Watch & coach live always goes straight to the game."
           />
         </div>
       </Card>

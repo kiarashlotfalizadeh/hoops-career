@@ -4,7 +4,7 @@ import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as Set
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
-import { pendingLive } from '../state/live';
+import { liveInProgress } from '../state/live';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
@@ -27,10 +27,13 @@ const Home = lazyRetry(() => import('./screens/Home'));
 const Roster = lazyRetry(() => import('./screens/Roster'));
 const PlayerView = lazyRetry(() => import('./screens/PlayerView'));
 const Rotation = lazyRetry(() => import('./screens/Rotation'));
+const Lineups = lazyRetry(() => import('./screens/Lineups'));
 const Tactics = lazyRetry(() => import('./screens/Tactics'));
 const TacticsLab = lazyRetry(() => import('./screens/TacticsLab'));
+const GamePlan = lazyRetry(() => import('./screens/GamePlan'));
 const Live = lazyRetry(() => import('./screens/Live'));
 const GameView = lazyRetry(() => import('./screens/GameView'));
+const Preview = lazyRetry(() => import('./screens/Preview'));
 const LeagueHub = lazyRetry(() => import('./screens/LeagueHub'));
 const TeamView = lazyRetry(() => import('./screens/TeamView'));
 const Office = lazyRetry(() => import('./screens/Office'));
@@ -249,9 +252,9 @@ function TopBar() {
 }
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game'] },
-  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/player'] },
-  { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab'] },
+  { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game', '/preview'] },
+  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player'] },
+  { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab', '/gameplan'] },
   { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
   { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
 ];
@@ -410,7 +413,7 @@ function ScrollTop() {
  */
 function OfficeGate({ children }: { children: ReactNode }) {
   const fired = useStore((s) => !!s.league?.fired);
-  const live = useStore((s) => !!s.league && !!pendingLive(s.league));
+  const live = useStore((s) => !!s.league && !!liveInProgress(s.league));
   const nav = useNavigate();
   if (!fired && !live) return <>{children}</>;
   return (
@@ -451,11 +454,14 @@ function GameShell() {
             <Route path="/roster" element={<Roster />} />
             <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
             <Route path="/rotation" element={<Rotation />} />
+            <Route path="/lineups" element={<Lineups />} />
             <Route path="/tactics" element={<Tactics />} />
             <Route path="/lab" element={<TacticsLab />} />
+            <Route path="/gameplan/:tid" element={<GamePlan key={loc.pathname} />} />
             {/* each visit sets up its own game: "Watch & coach live" from a finished game's card mounts a fresh one */}
             <Route path="/live" element={<Live key={loc.key} />} />
             <Route path="/game/:gid" element={<GameView />} />
+            <Route path="/preview/:gid?" element={<Preview />} />
             <Route path="/league" element={<LeagueHub />} />
             <Route path="/league/:tab" element={<LeagueTabRedirect />} />
             <Route path="/team/:tid" element={<TeamView />} />

@@ -104,9 +104,10 @@ const FT_DEF: Pt[] = [
 /**
  * Keyframes for one possession. `before` is the score it started from: its log keeps only the score
  * it ended on and its own points, which leave out a technical free throw (a disqualified player
- * staying on), so working back from those is only right when no technical was made.
+ * staying on), so working back from those is only right when no technical was made. `teams` are the
+ * [home, away] abbreviations, to say whose timeout it is.
  */
-export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number]): Script {
+export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number], teams?: [string, string]): Script {
   const off = log.off;
   const oPids = log.on[off];
   const dPids = log.on[1 - off];
@@ -332,7 +333,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         break;
       }
       case 'timeout':
-        snap(500, { flash: { text: 'TIMEOUT', kind: 'info', x: 0, y: 26 } });
+        // the one flash a timeout gets, naming the team that called it
+        snap(900, { flash: { text: st.t !== undefined && teams ? `TIMEOUT ${teams[st.t]}` : 'TIMEOUT', kind: 'info', x: 0, y: 26 } });
         break;
       default:
         break;

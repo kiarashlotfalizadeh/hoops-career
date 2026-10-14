@@ -16,13 +16,24 @@ import {
   standardRoster,
   twoWayRoster,
 } from '../../core/league/helpers';
-import { MLE_PCT, askingContract, mleRoom, nonGuaranteed, releaseBlockedReason, releaseDeadMoney, rookieScaleDeal, signingRoute, valueScore } from '../../core/league/contracts';
-import { capHolds, expiringPlayers, signingClosedReason } from '../../core/league/freeAgency';
+import {
+  MLE_PCT,
+  askingContract,
+  buyoutTerms,
+  extensionBlockedReason,
+  mleRoom,
+  nonGuaranteed,
+  releaseBlockedReason,
+  releaseDeadMoney,
+  rookieScaleDeal,
+  valueScore,
+} from '../../core/league/contracts';
+import { capHolds, expiringPlayers, offerRoute, signingClosedReason } from '../../core/league/freeAgency';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
 import { untradeableReason } from '../../core/league/trades';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Help, Kpi, Ovr, PageHeader, Sheet } from '../components/ui';
@@ -44,7 +55,9 @@ import {
   shortSeason,
   tradeClosedNote,
 } from '../office/common';
+import { ContractSheet } from '../office/ContractSheet';
 import { overallPick } from '../league/shared';
+import { UntouchableToggle } from '../office/Untouchable';
 import { rosterNames } from '../stats';
 import { useFlowRunner } from '../useFlow';
 
@@ -78,11 +91,15 @@ export default function Office() {
   const mle = mleRoom(league, tid, s0);
   const inSeasonNow = rosterMaxNow(league) === CAP.rosterMax;
   const [sel, setSel] = useState<number | null>(null);
+  // the player whose extension is being negotiated (from his contract sheet)
+  const [ext, setExt] = useState<number | null>(null);
 
   const faCount = useLeagueMemo(() => freeAgents(league).length, [league]);
   const signingClosed = !!signingClosedReason(league);
   const myPicks = league.draftPicks.filter((d) => d.tid === tid);
   const expiring = league.phase === 'resign' ? expiringPlayers(league, tid) : [];
+  // players in the final season of their deals who can be extended now (see Re-sign)
+  const extendable = useLeagueMemo(() => teamPlayers(league, tid).filter((p) => !extensionBlockedReason(league, p)).length, [league, tid]);
   const inPost = league.phase === 'playin' || league.phase === 'playoffs';
   const pastDeadline = league.phase === 'regular' && league.day > league.tradeDeadlineDay;
   const tradeSub = inPost ? 'Frozen during the postseason' : pastDeadline ? 'Deadline passed' : (deadlineLabel(league) ?? 'Open for business');
@@ -113,12 +130,14 @@ export default function Office() {
           ? expiring.length
             ? `${expiring.length} expiring · negotiate now`
             : 'Nothing to re-sign'
-          : league.phase === 'freeAgency'
-            ? 'Closed until next summer'
-            : 'Opens after the draft',
+          : extendable > 0
+            ? `${extendable} can be extended now`
+            : league.phase === 'freeAgency'
+              ? 'Closed until next summer'
+              : 'Opens after the draft',
       color: 'var(--warn)',
       hot: league.phase === 'resign' && expiring.length > 0,
-      muted: league.phase !== 'resign',
+      muted: league.phase !== 'resign' && !extendable,
     },
     {
       to: '/draft',
@@ -289,7 +308,8 @@ export default function Office() {
 
       <ContractsTable league={league} onPick={setSel} />
 
-      <PlayerContractSheet pid={sel} onClose={() => setSel(null)} />
+      <PlayerContractSheet pid={sel} onClose={() => setSel(null)} onExtend={(pid) => (setSel(null), setExt(pid))} />
+      <ContractSheet pid={ext} mode="extend" onClose={() => setExt(null)} />
     </main>
   );
 }
@@ -311,7 +331,7 @@ function Spotlight({ league }: { league: League }) {
     () =>
       league.phase === 'freeAgency' || league.phase === 'preseason'
         ? freeAgents(league)
-            .filter((p) => signingRoute(league, tid, askingContract(league, p, tid).amount, s0, p))
+            .filter((p) => offerRoute(league, p, askingContract(league, p, tid).amount, s0))
             .sort((a, b) => valueScore(league, b) - valueScore(league, a))
             .slice(0, league.phase === 'preseason' ? 3 : 5)
         : [],
@@ -538,7 +558,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
             <p style={{ margin: 0 }}>Salaries for the next four seasons. New deals rise 5% a year, rookie-scale deals 4.5%.</p>
             <p style={{ margin: 0 }}>
               <span className="fo-opt">PO</span> player option and <span className="fo-opt team">TO</span> team option apply to the final season.{' '}
-              <span className="tag info">R</span> marks a rookie-scale deal.
+              <span className="tag info">R</span> marks a rookie-scale deal, <span className="fo-opt ext">EXT</span> the first season of a signed extension.
             </p>
             <p style={{ margin: 0 }}>
               <span className="tag">2W</span> two-way deals are paid outside the cap and the tax, so they're left out of the totals.
@@ -614,6 +634,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                         <td key={s} className={amt && !p.contract.twoWay ? '' : 'dim'}>
                           {amt ? m1(amt) : '—'}
                           {amt > 0 && s === exp && opt && <span className={`fo-opt ${opt === 'team' ? 'team' : ''}`}>{opt === 'team' ? 'TO' : 'PO'}</span>}
+                          {amt > 0 && s === extensionStart(p.contract) && <span className="fo-opt ext">EXT</span>}
                         </td>
                       );
                     })
@@ -677,18 +698,18 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
 
 // ------------------------------------------------------------------ player contract sheet + release
 
-function PlayerContractSheet({ pid, onClose }: { pid: number | null; onClose: () => void }) {
+function PlayerContractSheet({ pid, onClose, onExtend }: { pid: number | null; onClose: () => void; onExtend: (pid: number) => void }) {
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
   const open = !!p && p.tid === league.userTid;
   return (
     <Sheet open={open} onClose={onClose} label={p ? `${playerName(p)}: contract` : undefined}>
-      {open && p && <PlayerContractBody key={p.pid} p={p} onClose={onClose} />}
+      {open && p && <PlayerContractBody key={p.pid} p={p} onClose={onClose} onExtend={onExtend} />}
     </Sheet>
   );
 }
 
-function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) {
+function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () => void; onExtend: (pid: number) => void }) {
   const league = useLeague();
   const nav = useNavigate();
   const [confirm, setConfirm] = useState(false);
@@ -697,6 +718,8 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const camp = nonGuaranteed(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
   const blocked = releaseBlockedReason(league, p);
+  // a veteran with guaranteed money left can be bought out instead (the Release confirmation offers it)
+  const buyout = buyoutTerms(league, p);
   const tooFew = !!blocked;
   const upNote = contractUpNote(league, p);
   const expiringNow = !!upNote;
@@ -704,6 +727,10 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
   const noTrade = expiringNow ? null : (tradeClosedNote(league) ?? untradeableReason(league, p));
   const opt = openOption(league, p);
   const s0 = capSeason(league);
+  const extStart = extensionStart(p.contract);
+  // in the final season of a standard deal: extend him, or why not yet
+  const finalSeason = !p.contract.twoWay && !extStart && exp === s0;
+  const extWhy = finalSeason ? extensionBlockedReason(league, p) : null;
 
   if (confirm) {
     return (
@@ -738,21 +765,29 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
           </span>
         )}
         {p.mood.tradeRequest && <span className="tag bad">Wants a trade</span>}
+        {extStart !== null && <span className="tag good">Extended through {seasonLabel(exp)}</span>}
       </div>
       <div className="card tight">
-        {p.contract.salaries.map((amt, i) => {
-          const s = p.contract.start + i;
-          return (
-            <div key={s} className="row between small" style={{ padding: '3px 0', opacity: s < league.season ? 0.5 : 1 }}>
-              <span className="dim2">
-                {seasonLabel(s)}
-                {s === exp && opt ? <span className={`fo-opt ${opt === 'team' ? 'team' : ''}`}>{opt === 'team' ? 'TO' : 'PO'}</span> : null}
-              </span>
-              <span className="num bold">{fmtM(amt, 2)}</span>
-            </div>
-          );
-        })}
+        {/* every season he's signed for, a signed extension's included */}
+        {Array.from({ length: exp - p.contract.start + 1 }, (_, i) => p.contract.start + i).map((s) => (
+          <div key={s} className="row between small" style={{ padding: '3px 0', opacity: s < league.season ? 0.5 : 1 }}>
+            <span className="dim2">
+              {seasonLabel(s)}
+              {s === exp && opt ? <span className={`fo-opt ${opt === 'team' ? 'team' : ''}`}>{opt === 'team' ? 'TO' : 'PO'}</span> : null}
+              {extStart !== null && s >= extStart && <span className="fo-opt ext">EXT</span>}
+            </span>
+            <span className="num bold">{fmtM(salaryFor(p, s), 2)}</span>
+          </div>
+        ))}
       </div>
+      {finalSeason && (
+        <>
+          <button className="btn block" disabled={!!extWhy} onClick={() => onExtend(p.pid)}>
+            <PenLine size={16} /> Extend {p.lastName}
+          </button>
+          {extWhy && <div className="tiny dim">{extWhy}</div>}
+        </>
+      )}
       {upNote ? (
         <div className="fo-callout warn">
           <TriangleAlert size={18} className="warn" />
@@ -782,7 +817,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
         !expiringNow && (
           <div className="tiny dim">
             {owed > 0
-              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}.`
+              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}${league.phase === 'regular' ? ', unless a team claims him off waivers' : ''}.${buyout ? ` A buyout would cut it to ${fmtM(buyout.dead)}.` : ''}`
               : p.contract.twoWay
                 ? 'Releasing him costs nothing: two-way pay sits outside the cap.'
                 : camp
@@ -792,6 +827,7 @@ function PlayerContractBody({ p, onClose }: { p: Player; onClose: () => void }) 
         )
       )}
       {noTrade && <div className="tiny dim">{noTrade}</div>}
+      {!expiringNow && <UntouchableToggle league={league} p={p} />}
     </div>
   );
 }

@@ -1,7 +1,10 @@
 import type { League } from '../types';
 import { clamp } from '../random';
-import { addInbox, contractSeason, curTeamSeason, revenueScale, winPct } from './helpers';
+import { addInbox, contractSeason, curTeamSeason, revenueScale, teamPlayers, winPct } from './helpers';
 import { profit } from './finances';
+import { clearAllPlans } from './gamePlans';
+import { autoTactics } from '../ai/coachAI';
+import { defaultTactics } from '../sim/tactics';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
 export function seasonsInCharge(league: League): number {
@@ -20,12 +23,19 @@ export function takeOverTeam(league: League, tid: number) {
   nu.coach.name = league.coachName;
   old.coach.name = theirCoach;
   old.rotation.manual = false;
-  old.tactics.manual = false;
+  // the old team's new staff fits its own playbook from scratch: the user's custom one (late-game
+  // rules, roles, screeners, star plan) doesn't stay behind with the players
+  old.tactics = autoTactics({ ...old, tactics: defaultTactics(old.coach.offPhilosophy, old.coach.defPhilosophy) }, teamPlayers(league, old.tid), false);
   league.userTid = tid;
   league.fired = false;
-  // the old team's game plan and the old scouting department's board don't come along
-  league.gamePlan = null;
+  // the old team's game plans and the old scouting department's board don't come along, and
+  // nor does its business: pending free-agent offers, waiver claims, trade offers and untouchables
+  clearAllPlans(league);
   delete league.draftBoard;
+  delete league.faBids;
+  for (const p of Object.values(league.players)) if (p.waivers?.claim) delete p.waivers.claim;
+  delete league.proposals;
+  delete league.untouchable;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
   league.tenureStart = contractSeason(league);
 }

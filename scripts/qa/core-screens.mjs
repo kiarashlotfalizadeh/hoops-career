@@ -1,5 +1,5 @@
 // Drives the core coaching loop on a phone viewport and captures screenshots: tactics, rotation,
-// roster, the Lab (projection and counters), a live game and its report. Works on any build.
+// roster, the Lab (projection and counters), the pre-game screen, a live game and its report. Works on any build.
 // Usage: node scripts/qa/core-screens.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
@@ -66,13 +66,20 @@ await waitSim();
 await page.goto(`${base}/#/`);
 await page.waitForTimeout(500);
 await shot('18-home-gameday', true);
+// the pre-game screen for that game, with its 40-game simulation
+await page.goto(`${base}/#/preview`);
+await page.waitForTimeout(800);
+await shot('18b-preview', true);
+await page.getByRole('button', { name: /Simulate 40 games/ }).click();
+await page.waitForSelector('text=/won \\d+ of 40/', { timeout: 120000 });
+await shot('18c-preview-sim', true);
 await page.goto(`${base}/#/live`);
 await page.waitForTimeout(6000);
 await shot('19-live');
 await page.getByRole('button', { name: 'Adjust' }).click();
 await shot('20-live-plan');
 await page.keyboard.press('Escape');
-await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
 await page
   .locator('.sheet')
   .getByRole('button', { name: /Sim to final/ })

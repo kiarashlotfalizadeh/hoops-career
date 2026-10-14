@@ -6,6 +6,7 @@ import { deleteLeague, isLeague, listLeagues, loadLeague, migrate, onRemoteChang
 import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { FRANCHISES } from '../../core/teams';
+import { contractExp, salaryFor } from '../../core/playerGen';
 import type { League } from '../../core/types';
 import { testLeague, userGames } from './fixtures';
 
@@ -187,6 +188,39 @@ describe('reading a league', () => {
     expect(migrate(l).inbox.map((m) => m.link)).toEqual(['/roster', '/', '/trade?with=3', undefined, undefined, undefined, undefined, undefined]);
   });
 
+  it('keeps saves without trade offers as they are, and drops offers whose players or picks are gone', () => {
+    const l = testLeague('offers');
+    // a version-2 save has none of the fields
+    const plain = structuredClone(l);
+    delete plain.proposals;
+    delete plain.nextProposalId;
+    delete plain.untouchable;
+    for (const m of plain.inbox) delete m.proposal;
+    const old = structuredClone(plain);
+    expect(migrate(plain)).toEqual({ ...old, version: SAVE_VERSION });
+    const mine = l.teams[l.userTid];
+    const pid = Object.values(l.players).find((p) => p.tid === mine.tid)!.pid;
+    const theirs = Object.values(l.players).find((p) => p.tid === 3)!.pid;
+    const dp = l.draftPicks.find((d) => d.tid === 3)!.dpid;
+    const offer = (b: number[], dpids: number[]) => ({ a: { tid: l.userTid, pids: [pid], dpids: [] }, b: { tid: 3, pids: b, dpids } });
+    const base = { tid: 3, kind: 'buy' as const, note: '', season: l.season, day: 0, expires: 5 };
+    l.proposals = [
+      { ...base, id: 1, offer: offer([theirs], [dp]) },
+      { ...base, id: 2, offer: offer([999_999], []) },
+      { ...base, id: 3, offer: offer([], [999_999]) },
+      { ...base, id: 4, offer: null as never },
+    ];
+    l.untouchable = [pid, 999_999];
+    l.inbox[0].proposal = 'x' as never;
+    l.inbox[1].proposal = 1;
+    const once = migrate(l);
+    expect(once.proposals!.map((p) => p.id)).toEqual([1]);
+    expect(once.untouchable).toEqual([pid]);
+    expect([once.inbox[0].proposal, once.inbox[1].proposal]).toEqual([undefined, 1]);
+    // and again changes nothing
+    expect(migrate(structuredClone(once))).toEqual(once);
+  });
+
   it('keeps only #rrggbb team colours, which the screens put in styles as they are', () => {
     const l = testLeague('colours');
     const real = [...l.teams[0].colors];
@@ -197,6 +231,20 @@ describe('reading a league', () => {
     expect(back.teams[0].colors).toEqual(real);
     expect(back.teams[1].colors).toEqual(FRANCHISES[1].colors);
     expect(back.teams[2].colors).toEqual(FRANCHISES[2].colors);
+  });
+
+  it('reads a save from before contract extensions: its contracts, without `next`, pay and run out as they did', () => {
+    const l = testLeague('before extensions');
+    const old = JSON.parse(JSON.stringify({ ...l, version: 2 })) as League;
+    for (const p of Object.values(old.players)) delete p.contract.next;
+    const back = migrate(old);
+    expect(back.version).toBe(SAVE_VERSION);
+    for (const p of Object.values(back.players).filter((x) => x.tid >= 0)) {
+      const c = p.contract;
+      expect(contractExp(c)).toBe(c.start + c.salaries.length - 1);
+      expect(salaryFor(p, c.start)).toBe(c.salaries[0]);
+      expect(salaryFor(p, contractExp(c) + 1)).toBe(0);
+    }
   });
 
   it('accepts real and fictional leagues, as saved or as backup files', () => {

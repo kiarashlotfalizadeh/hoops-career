@@ -467,11 +467,13 @@ body:has(.simbar) .fo-dock {
 /* ------------------------------------------------------------ split layout (phone toggles, tablet side by side) */
 .fo-split {
   display: grid;
+  /* columns as wide as the screen allows, never their content's widest line (a long player line would push the page sideways) */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 @media (min-width: 760px) {
   .fo-split {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
   }
   .fo-only-sm {
@@ -526,6 +528,11 @@ table.stats.fo-contracts tr.clickable td {
 .fo-opt.team {
   background: color-mix(in srgb, var(--warn) 22%, transparent);
   color: var(--warn);
+}
+/* the seasons of a signed extension */
+.fo-opt.ext {
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+  color: var(--good);
 }
 
 /* ------------------------------------------------------------ draft */

@@ -328,14 +328,27 @@ export interface RosterProfile {
   depth: number; // ovr of 8th man relative to 1st
   steals: number;
   bigMobility: number;
+  /**
+   * The players behind each number, the one who drives it first: the best at it for a best-of (the
+   * two top creators for the gap; the 8th man, then the 1st, for depth), and the whole top eight,
+   * best first, for an average.
+   */
+  drivers: Record<ProfileKey, number[]>;
 }
+
+/** The roster qualities playbook fits are built from. */
+export type ProfileKey = Exclude<keyof RosterProfile, 'drivers'>;
 
 export function rosterProfile(players: Player[]): RosterProfile {
   const top = [...players].sort((a, b) => b.ovr - a.ovr).slice(0, 8);
   const cs = top.map((p) => ({ p, c: composites(p.ratings) }));
-  const creators = cs.map((x) => (x.c.pnrHandle + x.c.create) / 2).sort((a, b) => b - a);
+  type X = (typeof cs)[0];
+  const creation = (x: X) => (x.c.pnrHandle + x.c.create) / 2;
+  const creators = cs.map(creation).sort((a, b) => b - a);
   const bigs = cs.filter((x) => x.p.ratings.hgt >= 58);
-  const avg = (f: (x: (typeof cs)[0]) => number) => cs.reduce((a, x) => a + f(x), 0) / Math.max(1, cs.length);
+  const avg = (f: (x: X) => number) => cs.reduce((a, x) => a + f(x), 0) / Math.max(1, cs.length);
+  // players, best first by a quality
+  const by = (xs: X[], f: (x: X) => number) => [...xs].sort((a, b) => f(b) - f(a)).map((x) => x.p.pid);
   return {
     starCreator: creators[0] ?? 50,
     creatorGap: (creators[0] ?? 50) - (creators[1] ?? 50),
@@ -350,31 +363,78 @@ export function rosterProfile(players: Player[]): RosterProfile {
     depth: (top[7]?.ovr ?? 60) - (top[0]?.ovr ?? 70),
     steals: avg((x) => x.c.steal),
     bigMobility: bigs.length ? Math.max(...bigs.map((x) => x.p.ratings.spd)) : 50,
+    drivers: {
+      starCreator: by(cs, creation).slice(0, 1),
+      creatorGap: by(cs, creation).slice(0, 2),
+      shooting: by(cs, (x) => x.c.spacing),
+      passing: by(cs, (x) => x.c.passing),
+      bigPassing: by(bigs, (x) => x.c.passing).slice(0, 1),
+      postScoring: by(cs, (x) => x.c.postScore).slice(0, 1),
+      rimProtection: by(cs, (x) => x.c.rimProt).slice(0, 1),
+      athleticism: by(cs, (x) => (x.p.ratings.spd + x.p.ratings.ath) / 2),
+      size: by(cs, (x) => x.p.ratings.hgt),
+      perimeterD: by(cs, (x) => x.c.perDef),
+      depth: [top[7], top[0]].filter((p) => p).map((p) => p.pid),
+      steals: by(cs, (x) => x.c.steal),
+      bigMobility: by(bigs, (x) => x.p.ratings.spd).slice(0, 1),
+    },
   };
 }
 
-/** Score how well each offensive preset fits a roster (higher = better). */
-export function offPresetFit(pr: RosterProfile): Record<string, number> {
+/** One part of a playbook's fit: its starting score, or what one roster quality adds (or takes away). */
+export interface FitTerm {
+  /** The roster quality behind it; 'base' is the playbook's starting score. */
+  key: ProfileKey | 'base';
+  /** Fit points it adds (negative: takes away). A fit is exactly the sum of its terms. */
+  value: number;
+  /** Fit points per point more of the quality, from where it is now (0 for the base). */
+  weight: number;
+}
+
+const base = (value: number): FitTerm => ({ key: 'base', value, weight: 0 });
+const term = (key: ProfileKey, value: number, weight: number): FitTerm => ({ key, value, weight });
+// each term is its part of the formula as it was written, added in the same order, so the sums come
+// out the same to the last bit (a minus is the same addition of a negated part)
+const fitSum = (terms: Record<string, FitTerm[]>): Record<string, number> => Object.fromEntries(Object.entries(terms).map(([k, ts]) => [k, ts.reduce((a, x) => a + x.value, 0)]));
+
+/** What each offensive preset's fit is made of. */
+export function offPresetTerms(pr: RosterProfile): Record<string, FitTerm[]> {
   return {
-    balanced: 50,
-    helio: 40 + (pr.starCreator - 62) * 1.4 + pr.creatorGap * 0.8 + (pr.shooting - 50) * 0.4,
-    fiveOut: 40 + (pr.shooting - 47) * 1.3 + (pr.passing - 50) * 0.8 - pr.creatorGap * 0.3,
-    hub: 30 + (pr.bigPassing - 55) * 1.5 + (pr.passing - 50) * 0.4,
-    paceSpace: 40 + (pr.athleticism - 52) * 1.1 + (pr.shooting - 47) * 0.6 + pr.depth * 0.2,
-    grind: 27 + (pr.postScoring - 58) * 1.0 + (pr.size - 50) * 0.6 - (pr.shooting - 45) * 0.8,
+    balanced: [base(50)],
+    helio: [base(40), term('starCreator', (pr.starCreator - 62) * 1.4, 1.4), term('creatorGap', pr.creatorGap * 0.8, 0.8), term('shooting', (pr.shooting - 50) * 0.4, 0.4)],
+    fiveOut: [base(40), term('shooting', (pr.shooting - 47) * 1.3, 1.3), term('passing', (pr.passing - 50) * 0.8, 0.8), term('creatorGap', -(pr.creatorGap * 0.3), -0.3)],
+    hub: [base(30), term('bigPassing', (pr.bigPassing - 55) * 1.5, 1.5), term('passing', (pr.passing - 50) * 0.4, 0.4)],
+    paceSpace: [base(40), term('athleticism', (pr.athleticism - 52) * 1.1, 1.1), term('shooting', (pr.shooting - 47) * 0.6, 0.6), term('depth', pr.depth * 0.2, 0.2)],
+    grind: [base(27), term('postScoring', (pr.postScoring - 58) * 1.0, 1.0), term('size', (pr.size - 50) * 0.6, 0.6), term('shooting', -((pr.shooting - 45) * 0.8), -0.8)],
   };
+}
+
+/** What each defensive preset's fit is made of. */
+export function defPresetTerms(pr: RosterProfile): Record<string, FitTerm[]> {
+  return {
+    drop: [base(45), term('rimProtection', (pr.rimProtection - 60) * 1.2, 1.2), term('bigMobility', -((pr.bigMobility - 45) * 0.2), -0.2)],
+    // switching wants sizes near the middle: a bigger or a smaller lineup both cost
+    switch: [
+      base(35),
+      term('perimeterD', (pr.perimeterD - 52) * 1.0, 1.0),
+      term('bigMobility', (pr.bigMobility - 45) * 0.9, 0.9),
+      term('size', -(Math.abs(pr.size - 52) * 0.3), pr.size >= 52 ? -0.3 : 0.3),
+    ],
+    blitz: [base(34), term('steals', (pr.steals - 50) * 0.9, 0.9), term('athleticism', (pr.athleticism - 52) * 0.6, 0.6), term('bigMobility', (pr.bigMobility - 45) * 0.3, 0.3)],
+    ice: [base(42), term('perimeterD', (pr.perimeterD - 52) * 0.6, 0.6), term('rimProtection', (pr.rimProtection - 55) * 0.4, 0.4)],
+    hedge: [base(38), term('bigMobility', (pr.bigMobility - 45) * 1.0, 1.0), term('perimeterD', (pr.perimeterD - 50) * 0.3, 0.3)],
+    zone: [base(30), term('size', (pr.size - 52) * 0.7, 0.7), term('rimProtection', (pr.rimProtection - 60) * 0.6, 0.6), term('perimeterD', -((pr.perimeterD - 50) * 0.6), -0.6)],
+    chaos: [base(22), term('athleticism', (pr.athleticism - 55) * 0.8, 0.8), term('steals', (pr.steals - 52) * 0.8, 0.8), term('depth', pr.depth * 0.3, 0.3)],
+  };
+}
+
+/** Score how well each offensive preset fits a roster (higher = better): the sum of its terms. */
+export function offPresetFit(pr: RosterProfile): Record<string, number> {
+  return fitSum(offPresetTerms(pr));
 }
 
 export function defPresetFit(pr: RosterProfile): Record<string, number> {
-  return {
-    drop: 45 + (pr.rimProtection - 60) * 1.2 - (pr.bigMobility - 45) * 0.2,
-    switch: 35 + (pr.perimeterD - 52) * 1.0 + (pr.bigMobility - 45) * 0.9 - Math.abs(pr.size - 52) * 0.3,
-    blitz: 34 + (pr.steals - 50) * 0.9 + (pr.athleticism - 52) * 0.6 + (pr.bigMobility - 45) * 0.3,
-    ice: 42 + (pr.perimeterD - 52) * 0.6 + (pr.rimProtection - 55) * 0.4,
-    hedge: 38 + (pr.bigMobility - 45) * 1.0 + (pr.perimeterD - 50) * 0.3,
-    zone: 30 + (pr.size - 52) * 0.7 + (pr.rimProtection - 60) * 0.6 - (pr.perimeterD - 50) * 0.6,
-    chaos: 22 + (pr.athleticism - 55) * 0.8 + (pr.steals - 52) * 0.8 + pr.depth * 0.3,
-  };
+  return fitSum(defPresetTerms(pr));
 }
 
 const PHILOSOPHY_BIAS: Record<string, Record<string, number>> = {

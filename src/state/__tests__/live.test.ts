@@ -1,16 +1,19 @@
 // Regression tests for the live-game controller: a live game is recorded exactly once, in the
-// league that's open, however the user leaves it (Main menu, a reload, the Play menu), and the
-// quarter skip stops at the break.
+// league that's open, however the user leaves it (Main menu, a reload, the Play menu), the
+// quarter skip stops at the break, and a game in progress survives the app being closed (its
+// journal plays it back to where it was saved).
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
+import { CLUTCH_SEC, checkpointLive, clearLive, liveInProgress, pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
 import { useStore } from '../store';
+import { loadLeague, migrate } from '../persistence';
 import { flowActions } from '../../ui/flow';
 import { regularGamesLeft, simDay } from '../../core/league/season';
 import { releasePlayer, signPlayer } from '../../core/league/contracts';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { curTeamSeason } from '../../core/league/helpers';
-import type { League } from '../../core/types';
+import type { League, LiveJournal } from '../../core/types';
+import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { testLeague, toGameDay, userGames } from './fixtures';
 
 /** Open the league and start today's game the way the Live screen does. */
@@ -83,11 +86,12 @@ describe('live game', () => {
     expect(l.day).toBe(day + 1);
   });
 
-  it('a live game whose league went back to its last save (a sim error) is gone, and the save plays it from tip-off', async () => {
+  it('a live game whose league went back to its last save (a sim error) is gone, and the save picks it up where it was saved', async () => {
     const l = testLeague('reload');
     toGameDay(l);
     const lg = goLive(l);
     lg.simTo('quarter');
+    const q1 = [lg.sim.T[0].score, lg.sim.T[1].score];
     expect(playedElsewhere(lg, l)).toBeNull();
     // "Finish this game" from the Play menu throws halfway: the store opens the last save in its place
     lg.commit = () => {
@@ -100,7 +104,9 @@ describe('live game', () => {
     expect(playedElsewhere(lg, now)).toBe('gone');
     const again = prepareLive(now)!;
     expect(again.game.gid).toBe(lg.game.gid);
-    expect([again.sim.T[0].score, again.sim.T[1].score]).toEqual([0, 0]);
+    // the sim saved the league before it started: the game went into that save as far as the break
+    expect(again.resumed).toBe('journal');
+    expect([again.sim.q, again.sim.clock <= 0.05, [again.sim.T[0].score, again.sim.T[1].score]]).toEqual([1, true, q1]);
     expect(playedElsewhere(again, now)).toBeNull();
     expect(again.commit(now).gid).toBe(lg.game.gid);
     expect(playedElsewhere(again, now)).toBe(lg.game.gid);
@@ -178,6 +184,75 @@ describe('live game', () => {
     expect(lg.sim.clock).toBeLessThanOrEqual(0.05);
   });
 
+  it('skips to halftime and to clutch time, and plays nothing once past them', () => {
+    const l = testLeague('half');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('half');
+    expect([lg.sim.q, lg.sim.clock <= 0.05]).toEqual([2, true]);
+    // at halftime already: nothing more to play
+    expect(lg.simTo('half')).toEqual([]);
+    expect(lg.sim.q).toBe(2);
+    lg.simTo('clutch');
+    expect(lg.sim.q).toBe(4);
+    expect(lg.sim.clock).toBeLessThanOrEqual(CLUTCH_SEC);
+    // stopped on the possession that crossed 5:00
+    expect(lg.sim.clock).toBeGreaterThan(CLUTCH_SEC - 30);
+    expect(lg.simTo('clutch')).toEqual([]);
+    expect(lg.simTo('half')).toEqual([]);
+    lg.simTo('end');
+    expect(lg.over).toBe(true);
+  });
+
+  it('keeps the tactics it tipped off with (game plan included) for "Reset to game plan"', () => {
+    const l = testLeague('planned');
+    toGameDay(l);
+    const lg = goLive(l);
+    const tip = JSON.stringify(lg.planned);
+    const t = lg.sim.baseTactics(lg.userSide);
+    t.offense.pace = t.offense.pace > 50 ? 10 : 90;
+    lg.sim.setTactics(lg.userSide, t);
+    lg.simTo('quarter');
+    expect(JSON.stringify(lg.planned)).toBe(tip);
+    expect(lg.sim.baseTactics(lg.userSide).offense.pace).toBe(t.offense.pace);
+  });
+
+  it('describes a game at a break in the present tense, and a finished one as before', () => {
+    const l = testLeague('partial');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('half');
+    const half = buildGameReport(l, lg.sim.result(), l.userTid, { partial: true, elapsed: lg.sim.elapsed })!;
+    expect(half.headline).toMatch(/^Halftime: the .+ (lead|trail) the .+ \d+-\d+\.|^Halftime: the .+ and the .+ are tied at \d+\./);
+    expect(half.headline).not.toMatch(/ beat | fell to /);
+    if (/Biggest factor/.test(half.headline)) expect(half.headline).toContain('Biggest factor so far:');
+    for (const f of half.factors.filter((x) => x.category === 'stars')) expect(f.title).toMatch(/so far/);
+    lg.simTo('quarter');
+    expect(buildGameReport(l, lg.sim.result(), l.userTid, { partial: true })!.headline).toMatch(/^After Q3: /);
+    const res = lg.commit(l);
+    const full = buildGameReport(l, res)!;
+    expect(full.headline).toMatch(/^The .+ (beat|fell to) the .+ \d+-\d+/);
+    // the options only change a report that asks for them
+    expect(buildGameReport(l, res, l.userTid, { partial: false })).toEqual(full);
+    expect(full.factors.filter((f) => f.category === 'stars').every((f) => /erupted for (3[5-9]|[4-9]\d)/.test(f.title))).toBe(true);
+  });
+
+  it('measures a star line at a break against the time played', () => {
+    const l = testLeague('star');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    const res = lg.sim.result();
+    const mine = res.home.tid === l.userTid ? res.home : res.away;
+    const star = [...mine.players].sort((a, b) => b.pts - a.pts)[0];
+    // a quarter of a game: 35 points' pace is about 9 (never fewer than 8)
+    star.pts = Math.max(12, star.pts);
+    const q1 = buildGameReport(l, res, l.userTid, { partial: true })!;
+    const f = q1.factors.find((x) => x.category === 'stars' && x.title.startsWith(`${star.name} has ${star.pts} points so far`));
+    expect(f?.detail).toBe(`On pace for ${star.pts * 4}.`);
+    expect(buildGameReport(l, res)!.factors.some((x) => x.category === 'stars' && x.title.startsWith(star.name))).toBe(false);
+  });
+
   it('the Play menu finishes a game in progress first', () => {
     const l = testLeague('flow');
     toGameDay(l);
@@ -189,6 +264,257 @@ describe('live game', () => {
     const me = lg.sim.T[lg.userSide].score;
     expect(off[0].sub).toBe(`End of Q1 · ${me}-${lg.sim.T[1 - lg.userSide].score}`);
     expect(off.find((a) => a.id === 'quick')?.label).toBe('Finish this game');
+  });
+});
+
+/** Today's game with every kind of coaching move along the way, into the second half, with a play call still waiting. */
+function coachedGame(l: League): LiveGame {
+  const lg = goLive(l);
+  const play = (n: number) => {
+    for (let i = 0; i < n; i++) lg.step();
+  };
+  play(12);
+  const t = lg.sim.T[lg.userSide];
+  const out = t.on[0].pid;
+  expect(lg.substitute(out, t.players.find((p) => !p.on && p.out === 0)!.pid)).toBe(true);
+  play(20);
+  const tactics = lg.sim.baseTactics(lg.userSide);
+  tactics.offense.pace = tactics.offense.pace > 50 ? 15 : 90;
+  tactics.defense.pressure = 80;
+  lg.setTactics(tactics);
+  lg.setManualSubs(true);
+  play(25);
+  expect(lg.callTimeout('test')).toBe(true);
+  expect(lg.callPlay({ kind: 'three' })).toBe(true);
+  play(3);
+  lg.cancelPlay();
+  lg.setManualSubs(false);
+  expect(lg.callPlay({ kind: 'iso', pid: t.on[1].pid })).toBe(true);
+  lg.simTo('half');
+  play(7);
+  expect(lg.callPlay({ kind: 'hold' })).toBe(true);
+  return lg;
+}
+
+describe('a live game survives the app being closed (W12)', () => {
+  it('picks up where it was saved, with the same score, clock and box, and records the game it would have been', async () => {
+    const l = testLeague('journal');
+    toGameDay(l);
+    const lg = coachedGame(l);
+    lg.setKeep(l.teams[l.userTid].tactics);
+    lg.markSeen([1, 2]);
+    // the app is hidden (then closed): the store saves where the game is
+    await useStore.getState().flush();
+    expect(l.live).toMatchObject({ gid: lg.game.gid, tid: l.userTid, steps: lg.steps, q: lg.sim.q, clock: lg.sim.clock, score: [lg.sim.T[0].score, lg.sim.T[1].score] });
+    expect(l.live!.ops.map((o) => o.op)).toEqual(['sub', 'tactics', 'manualSubs', 'timeout', 'call', 'cancelCall', 'manualSubs', 'call', 'call']);
+    // opened again: the league as it was saved, and no game open in this session
+    const back = (await loadLeague(l.id))!;
+    useStore.getState().setLeague(back);
+    expect(pendingLive(back)).toBeNull();
+    const again = prepareLive(back)!;
+    expect(again).not.toBe(lg);
+    expect(again.resumed).toBe('journal');
+    expect([again.steps, again.sim.q, again.sim.clock, again.sim.T[0].score, again.sim.T[1].score]).toEqual([
+      lg.steps,
+      lg.sim.q,
+      lg.sim.clock,
+      lg.sim.T[0].score,
+      lg.sim.T[1].score,
+    ]);
+    expect(again.sim.result()).toEqual(lg.sim.result());
+    expect(again.logs).toEqual(lg.logs);
+    expect(again.sim.pbp).toEqual(lg.sim.pbp);
+    expect(again.planned).toEqual(lg.planned);
+    expect(again.sim.baseTactics(again.userSide)).toEqual(lg.sim.baseTactics(lg.userSide));
+    expect([again.manualSubs, again.pendingCall, again.sim.T[again.userSide].timeouts]).toEqual([lg.manualSubs, { kind: 'hold' }, lg.sim.T[lg.userSide].timeouts]);
+    expect([again.keep, again.seen]).toEqual([lg.keep, [1, 2]]);
+    // the rest of the game, and its record, are what the game left open would have had
+    const res = again.commit(back);
+    expect(res).toEqual(lg.commit(l));
+    expect([back.live, l.live, once(back, res.gid)]).toEqual([undefined, undefined, 1]);
+  });
+
+  it("starts the game over from tip-off when its journal doesn't play back to where it says", () => {
+    const l = testLeague('mismatch');
+    toGameDay(l);
+    const lg = coachedGame(l);
+    checkpointLive(l);
+    const damaged: [string, (j: LiveJournal) => void][] = [
+      ['another score', (j) => void (j.score = [j.score[0] + 2, j.score[1]])],
+      ['another clock', (j) => void (j.clock += 1)],
+      ['another seed', (j) => void (j.seed = (j.seed + 1) >>> 0)],
+      ['without its moves', (j) => void (j.ops = [])],
+      ['a move from later on', (j) => void (j.ops[0].at = j.steps + 5)],
+      ['tactics that are not tactics', (j) => void Object.assign(j.user, { tactics: {} })],
+      ['more possessions than the game has', (j) => void (j.steps = 900)],
+    ];
+    // (each a copy of the league as saved, opened with no game open in this session)
+    const copies = damaged.map(() => structuredClone(l));
+    clearLive();
+    damaged.forEach(([why, damage], i) => {
+      const copy = copies[i];
+      damage(copy.live!);
+      const again = prepareLive(copy)!;
+      expect(again.resumed, why).toBe('restarted');
+      expect([again.game.gid, again.steps, again.sim.q, again.sim.T[0].score + again.sim.T[1].score], why).toEqual([lg.game.gid, 0, 1, 0]);
+      // with a journal of its own, and the day's other games left as they were
+      expect(copy.live, why).toMatchObject({ gid: lg.game.gid, steps: 0, ops: [] });
+      expect([copy.games.length, once(copy, lg.game.gid)], why).toEqual([l.games.length, 0]);
+      clearLive();
+    });
+  });
+
+  it('a save made between checkpoints picks up from the last one, and every move is a checkpoint', () => {
+    const l = testLeague('between');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    checkpointLive(l);
+    const q1 = [lg.steps, lg.sim.clock, lg.sim.T[0].score, lg.sim.T[1].score];
+    // played on, but no break, pause or move yet when the league was saved
+    for (let i = 0; i < 9; i++) lg.step();
+    const copy = structuredClone(l);
+    lg.callTimeout();
+    expect(l.live!.steps).toBe(lg.steps);
+    clearLive();
+    const again = prepareLive(copy)!;
+    expect(again.resumed).toBe('journal');
+    expect([again.steps, again.sim.clock, again.sim.T[0].score, again.sim.T[1].score]).toEqual(q1);
+  });
+
+  it('ends the journal when the game is recorded or abandoned, but not when its league is closed', () => {
+    const l = testLeague('ends');
+    toGameDay(l);
+    const lg = goLive(l);
+    expect(l.live?.gid).toBe(lg.game.gid);
+    // Main menu (or another league): the game stays journaled in this one, to pick up when it's opened again
+    useStore.getState().setLeague(null);
+    expect(pendingLive(l)).toBeNull();
+    expect(l.live?.gid).toBe(lg.game.gid);
+    expect(goLive(l).resumed).toBe('journal');
+    clearLive();
+    expect([pendingLive(l), l.live, liveInProgress(l)]).toEqual([null, undefined, null]);
+    const fresh = prepareLive(l)!;
+    expect(fresh.resumed).toBeUndefined();
+    expect(l.live).toBe(fresh.journal);
+    fresh.commit(l);
+    expect(l.live).toBeUndefined();
+    // a game recorded without its controller (the Play menu's sims) ends its journal too
+    toGameDay(l);
+    const next = goLive(l);
+    useStore.getState().setLeague(null);
+    simDay(l);
+    expect(once(l, next.game.gid)).toBe(1);
+    expect(l.live).toBeUndefined();
+  });
+
+  it('a journaled game is in progress for the Play menu and the screens waiting on it, and "Finish this game" plays on from where it was', async () => {
+    const l = testLeague('menu-journal');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    const q1 = [lg.sim.T[0].score, lg.sim.T[1].score];
+    const me = lg.userSide;
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    useStore.getState().setLeague(back);
+    expect(pendingLive(back)).toBeNull();
+    expect(liveInProgress(back)).toEqual({ gid: lg.game.gid, q: 1, clock: lg.sim.clock, score: [q1[me], q1[1 - me]] });
+    const menu = flowActions(back);
+    expect(menu[0]).toMatchObject({ label: 'Resume live game', sub: `End of Q1 · ${q1[me]}-${q1[1 - me]}`, cmd: 'watchLive' });
+    expect(menu.find((a) => a.id === 'quick')?.label).toBe('Finish this game');
+    expect(flowActions(back, { onLive: true }).map((a) => a.label)).toEqual(['Finish this game']);
+    const day = back.day;
+    await useStore.getState().simulate({ kind: 'days', n: 1 });
+    expect(back.day).toBe(day + 1);
+    const res = userGames(back).at(-1)!;
+    expect(res.gid).toBe(lg.game.gid);
+    expect([res.home.quarters[0], res.away.quarters[0]]).toEqual(q1);
+    expect([once(back, res.gid), back.live, liveInProgress(back)]).toEqual([1, undefined, null]);
+  });
+
+  it("plays the other coach's game plan again, and the result keeps it, on hard", async () => {
+    const l = testLeague('opp-plan');
+    // a dozen days in, so the other coaches have games of yours to plan against; on hard, every one does
+    for (let i = 0; i < 12; i++) simDay(l);
+    l.settings.difficulty = 'hard';
+    toGameDay(l);
+    const lg = goLive(l);
+    const them = (1 - lg.userSide) as 0 | 1;
+    const plan = oppPlanIn(lg.sim, them);
+    expect(plan?.items.length).toBeGreaterThan(0);
+    lg.simTo('quarter');
+    lg.setManualSubs(true);
+    for (let i = 0; i < 15; i++) lg.step();
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect(again.resumed).toBe('journal');
+    expect(oppPlanIn(again.sim, them)).toEqual(plan);
+    expect(again.sim.baseTactics(them)).toEqual(lg.sim.baseTactics(them));
+    const res = again.commit(back);
+    expect(res.oppPlan).toEqual(plan!.items.map((it) => it.text));
+    expect(res).toEqual(lg.commit(l));
+  });
+
+  it("picks the game up with the other coach's plan as it tipped off, after a difficulty change or under a new league id", async () => {
+    const l = testLeague('opp-plan-keep');
+    for (let i = 0; i < 12; i++) simDay(l);
+    l.settings.difficulty = 'hard';
+    toGameDay(l);
+    const lg = goLive(l);
+    const them = (1 - lg.userSide) as 0 | 1;
+    const plan = oppPlanIn(lg.sim, them);
+    expect(plan?.items.length).toBeGreaterThan(0);
+    lg.simTo('quarter');
+    for (let i = 0; i < 10; i++) lg.step();
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    // casual coaches never plan, and a backup imported as a copy gets a new id (plans are drawn from it)
+    back.settings.difficulty = 'casual';
+    back.id = `${back.id}-copy`;
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect(again.resumed).toBe('journal');
+    expect(oppPlanIn(again.sim, them)).toEqual(plan);
+    expect(again.sim.baseTactics(them)).toEqual(lg.sim.baseTactics(them));
+    expect(again.commit(back).oppPlan).toEqual(plan!.items.map((it) => it.text));
+  });
+
+  it("reading a save drops a damaged journal, and one that isn't for the game still to play today", () => {
+    const l = testLeague('read');
+    toGameDay(l);
+    coachedGame(l);
+    checkpointLive(l);
+    const saved = JSON.parse(JSON.stringify(l)) as League;
+    expect(migrate(structuredClone(saved)).live).toEqual(saved.live);
+    const later = l.schedule.find((g) => g.day > l.day && (g.home === l.userTid || g.away === l.userTid))!;
+    const bad: [string, (j: LiveJournal) => void][] = [
+      ['no seed', (j) => void delete (j as Partial<LiveJournal>).seed],
+      ['negative steps', (j) => void (j.steps = -1)],
+      ['far too many steps', (j) => void (j.steps = 1e9)],
+      ['a score that is not two numbers', (j) => void Object.assign(j, { score: [1] })],
+      ['a rotation without its order', (j) => void delete (j.user.rotation as Partial<LiveJournal['user']['rotation']>).order],
+      ['tactics that are not tactics', (j) => void Object.assign(j.user, { tactics: 'x' })],
+      ['moves out of order', (j) => void j.ops.reverse()],
+      ['a move after the checkpoint', (j) => void (j.ops[j.ops.length - 1].at = j.steps + 1)],
+      ['an unknown move', (j) => void Object.assign(j.ops[0], { op: 'eject' })],
+      ['a sub without players', (j) => void Object.assign(j.ops[0], { args: {} })],
+      ['a play call that is not one', (j) => void Object.assign(j.ops.find((o) => o.op === 'call')!.args, { call: { kind: 'dunk' } })],
+      ['far too many moves', (j) => void (j.ops = Array.from({ length: 6000 }, () => ({ at: 0, op: 'cancelCall', args: {} })))],
+      ['a game already played', (j) => void (j.gid = l.games[0].gid)],
+      ["another day's game", (j) => void (j.gid = later.gid)],
+      ['another team', (j) => void (j.tid = (j.tid + 1) % l.teams.length)],
+    ];
+    for (const [why, damage] of bad) {
+      const x = structuredClone(saved);
+      damage(x.live!);
+      expect(migrate(x).live, why).toBeUndefined();
+    }
+    const x = structuredClone(saved) as unknown as Record<string, unknown>;
+    x.live = 'x';
+    expect(migrate(x).live).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 // Running scheduled games and folding results into the league.
 
-import type { GameResult, League, Player, Rotation, ScheduledGame, Team, TeamSeason, TeamTotals } from '../types';
+import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
@@ -9,7 +9,10 @@ import { applyInjury, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
-import { applyPatch } from '../ai/lab';
+import { consumePlans, effectiveTactics, planFor } from './gamePlans';
+import { confStandings } from './standings';
+import { withoutCoachPlans } from '../sim/tactics';
+import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -155,7 +158,18 @@ export function neutralSite(g: ScheduledGame) {
   return g.type === 'allstar' || g.cup === 'final';
 }
 
-export function buildSimInput(league: League, tid: number, day: number, type: ScheduledGame['type'], opp?: number): SimTeamInput {
+/**
+ * A team's side of a game as the engine takes it. `game` picks out the playoff series a series game
+ * plan was made for, and with its id and day, the game an AI coach game-plans for against the user.
+ */
+export function buildSimInput(
+  league: League,
+  tid: number,
+  day: number,
+  type: ScheduledGame['type'],
+  opp?: number,
+  game?: Pick<ScheduledGame, 'seriesId'> & Partial<Pick<ScheduledGame, 'gid' | 'day'>>,
+): SimTeamInput {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
   const rest: number[] = [];
@@ -172,14 +186,22 @@ export function buildSimInput(league: League, tid: number, day: number, type: Sc
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
   // practice intensity: intense camps build skills but add wear and injury risk
   const injuryMult = teamInjuryMult(team);
-  // opponent-specific game plan for the user's team
-  const plan = league.gamePlan;
-  if (tid === league.userTid && plan && opp !== undefined && plan.oppTid === opp && plan.items.length) {
-    let t = team.tactics;
-    for (const it of plan.items) t = applyPatch(t, it.patch);
-    return { team: { ...team, tactics: t }, players, perf, rest, injuryMult };
+  // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
+  if (tid === league.userTid && opp !== undefined && planFor(league, opp, game)) {
+    const tactics = effectiveTactics(league, opp, game);
+    return { team: { ...team, tactics }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts };
   }
-  return { team, players, perf, rest, injuryMult, adjust: tid !== league.userTid };
+  if (tid !== league.userTid) {
+    // an AI coach never plays the situational plans or crunch-time calls a user left on this team
+    const t = team.tactics;
+    const userPlans = t.situations || t.manage.goTo != null || t.manage.ato || t.manage.hackTargets || t.manage.hackFromQ !== undefined;
+    const tactics = userPlans ? withoutCoachPlans(t) : t;
+    // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
+    const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
+    if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
+    return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
+  }
+  return { team, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {
@@ -236,7 +258,7 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
   if (!sim) {
     ensureRotation(league, g.home);
     ensureRotation(league, g.away);
-    sim = new GameSim(buildSimInput(league, g.home, g.day, g.type, g.away), buildSimInput(league, g.away, g.day, g.type, g.home), {
+    sim = new GameSim(buildSimInput(league, g.home, g.day, g.type, g.away, g), buildSimInput(league, g.away, g.day, g.type, g.home, g), {
       rng,
       type: g.type,
       keepShots: userGame,
@@ -251,14 +273,25 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
   if (g.cup) res.cup = g.cup;
   applyResult(league, g, sim, res, rng);
   league.rng = rng.state;
+  // a recorded game has nothing left to pick up, however it was finished (live, or simmed from the Play menu)
+  if (league.live?.gid === g.gid) delete league.live;
   return res;
 }
 
+/** Where a team stands in its conference right now. */
+function standingLine(league: League, tid: number): StandingLine {
+  const row = confStandings(league, league.teams[tid].conf).find((r) => r.tid === tid)!;
+  return { rank: row.confRank, gb: row.gb, ...(row.clinched ? { clinched: row.clinched } : {}) };
+}
+
 function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameResult, rng: Rng) {
+  // the user's regular-season games keep where his team stood before and after, for the recap
+  // (taken while this game still counts as unplayed: a stored result isn't written again once saved)
+  const stakesTid = g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid) ? league.userTid : undefined;
+  const before = stakesTid !== undefined ? standingLine(league, stakesTid) : undefined;
   g.played = true;
-  // a game plan is used up once the user plays that opponent
-  if (league.gamePlan && (g.home === league.userTid || g.away === league.userTid) && (g.home === league.gamePlan.oppTid || g.away === league.gamePlan.oppTid))
-    league.gamePlan = null;
+  // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
+  consumePlans(league, g);
   const playoffs = g.type === 'playoffs';
   const home = league.teams[g.home];
   const away = league.teams[g.away];
@@ -355,9 +388,15 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.flow;
     delete res.flowPeriods;
     delete res.pbp;
+    delete res.adjustments;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
+  } else {
+    // the game plan the other coach brought (kept before the first save: a stored result isn't written again)
+    const plan = oppPlanIn(sim, g.home === league.userTid ? 1 : 0);
+    if (plan) res.oppPlan = plan.items.map((it) => it.text);
   }
   league.games.push(res);
+  if (stakesTid !== undefined && before) res.stakes = { tid: stakesTid, before, after: standingLine(league, stakesTid) };
   // trim play-by-play from older user games
   if (userGame) {
     const userGames = league.games.filter((x) => x.pbp);

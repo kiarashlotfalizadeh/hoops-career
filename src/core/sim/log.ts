@@ -51,7 +51,16 @@ export interface PossStep {
   f?: FinishType;
   /** For free throws: attempts (v counts the makes). */
   n?: number;
+  /** For timeouts: the team that called it (0 home, 1 away). */
+  t?: 0 | 1;
 }
+
+/**
+ * A play called from the bench in a live game: an offensive call (go for three, a quick two, run the
+ * clock for a last shot, an isolation for one player) is run on the side's next trip, "foul" on its
+ * next defensive one. Calls change what the team tries, never how well it executes.
+ */
+export type PlayCall = { kind: 'three' | 'two' | 'hold' | 'foul' } | { kind: 'iso'; pid: number };
 
 export interface PossLog {
   off: 0 | 1;
@@ -76,4 +85,8 @@ export interface PossLog {
   /** Defensive scheme in use (for drawing zones). */
   scheme: 'man' | 'zone23' | 'zone32';
   help: number;
+  /** A called play this possession ran, and the side that called it. */
+  call?: PlayCall & { t: 0 | 1 };
+  /** Each side's situational plan in effect ('' for none), when either has one. */
+  sit?: [string, string];
 }

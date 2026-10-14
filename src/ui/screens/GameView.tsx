@@ -7,6 +7,7 @@ import { buildGameReport } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart } from '../components/charts';
+import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
@@ -14,6 +15,8 @@ import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
 import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
+import { GameRecap } from '../components/GameRecap';
+import { AdjustmentsCard } from '../components/AdjustmentsCard';
 
 type Tab = 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 
@@ -50,18 +53,6 @@ export default function GameView() {
     : accentSide === 0
       ? ['var(--text-dim)', 'var(--accent)']
       : ['var(--accent)', 'var(--text-dim)'];
-  const comparison: { label: string; a: number; b: number; pct?: boolean }[] = [
-    { label: 'FG%', a: (g.away.t.fgm / Math.max(1, g.away.t.fga)) * 100, b: (g.home.t.fgm / Math.max(1, g.home.t.fga)) * 100, pct: true },
-    { label: '3P%', a: (g.away.t.tpm / Math.max(1, g.away.t.tpa)) * 100, b: (g.home.t.tpm / Math.max(1, g.home.t.tpa)) * 100, pct: true },
-    { label: 'Rebounds', a: g.away.t.orb + g.away.t.drb, b: g.home.t.orb + g.home.t.drb },
-    { label: 'Assists', a: g.away.t.ast, b: g.home.t.ast },
-    { label: 'Turnovers', a: g.away.t.tov, b: g.home.t.tov },
-    { label: 'Paint pts', a: g.away.extra.paint, b: g.home.extra.paint },
-    // quick-simmed games saved before fast breaks were tracked read 0-0
-    ...(g.away.extra.fastBreak || g.home.extra.fastBreak ? [{ label: 'Fast break', a: g.away.extra.fastBreak, b: g.home.extra.fastBreak }] : []),
-    { label: '2nd chance', a: g.away.extra.secondChance, b: g.home.extra.secondChance },
-    { label: 'Bench pts', a: g.away.extra.bench, b: g.home.extra.bench },
-  ];
   const flowColors = matchupColors(home.colors, away.colors);
   const typeLabel =
     cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular Season');
@@ -95,6 +86,7 @@ export default function GameView() {
         </div>
         <QuarterTable g={g} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
       </Card>
+      {userGame && <GameRecap res={g} league={league} report={report} />}
       {tabs.length > 1 && <Segmented value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
 
       {tab === 'report' && report && (
@@ -129,6 +121,7 @@ export default function GameView() {
               <div className="tiny dim">Expected-point swings from the engine's tactical tracking and the four factors. Positive numbers favored your team.</div>
             </div>
           </Card>
+          <AdjustmentsCard g={g} league={league} />
           <Card title="Four factors" right={<span className="tiny dim">You · Them</span>}>
             <div className="col" style={{ gap: 10 }}>
               <CompareBar label="eFG%" a={report.fourFactors.user.efg * 100} b={report.fourFactors.opp.efg * 100} />
@@ -229,20 +222,7 @@ export default function GameView() {
               </span>
             }
           >
-            <div className="col" style={{ gap: 10 }}>
-              {comparison.map((c) => (
-                <CompareBar
-                  key={c.label}
-                  label={c.label}
-                  a={c.a}
-                  b={c.b}
-                  fmt={c.pct ? undefined : (v) => String(v)}
-                  higherBetter={c.label !== 'Turnovers'}
-                  colorA={awayColor}
-                  colorB={homeColor}
-                />
-              ))}
-            </div>
+            <TeamComparison g={g} colors={[awayColor, homeColor]} />
           </Card>
         </>
       )}
@@ -354,37 +334,6 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
 function pppColor(ppp: number, poss: number) {
   if (!poss) return undefined;
   return ppp >= 1.2 ? 'var(--good)' : ppp < 0.9 ? 'var(--bad)' : undefined;
-}
-
-function QuarterTable({ g, abbrevs }: { g: GameResult; abbrevs: Record<number, string> }) {
-  const n = Math.max(g.home.quarters.length, g.away.quarters.length);
-  const label = (i: number) => (i < 4 ? `${i + 1}` : periodLabel(i + 1));
-  return (
-    <div className="tablewrap" style={{ marginTop: 12, background: 'transparent', border: 'none' }}>
-      <table className="stats">
-        <thead>
-          <tr>
-            <th className="l">Team</th>
-            {Array.from({ length: n }, (_, i) => (
-              <th key={i}>{label(i)}</th>
-            ))}
-            <th>T</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[g.away, g.home].map((t) => (
-            <tr key={t.tid}>
-              <td className="l bold">{abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}</td>
-              {Array.from({ length: n }, (_, i) => (
-                <td key={i}>{t.quarters[i] ?? '—'}</td>
-              ))}
-              <td className="bold">{t.pts}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 /** Collision-aware names for one side of a box score (current players by record, others by the stored name). */

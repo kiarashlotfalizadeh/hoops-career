@@ -1,14 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, ChevronRight, ClipboardList, FlaskConical, ShieldAlert, Swords, Target } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, ChevronRight, ClipboardList, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted, teamName } from '../../core/league/helpers';
 import { pickLabel } from '../../core/league/trades';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
+import { SCOUT_MIN_GAMES, scoutData } from '../../core/analysis/scouting';
+import { HeadToHead, KeyPlayers, OppPlanNote, PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
+import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
@@ -18,10 +21,11 @@ import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
 import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickProjection, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
+import { MovesTab } from '../league/MovesTab';
 
-const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'history'] as const;
+const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'moves', 'history'] as const;
 type Tab = (typeof TABS)[number];
-const LABEL: Record<Tab, string> = { roster: 'Roster', tactics: 'Tactics', scouting: 'Scouting', schedule: 'Schedule', picks: 'Picks', history: 'History' };
+const LABEL: Record<Tab, string> = { roster: 'Roster', tactics: 'Tactics', scouting: 'Scouting', schedule: 'Schedule', picks: 'Picks', moves: 'Moves', history: 'History' };
 
 export default function TeamView() {
   const league = useLeague();
@@ -49,6 +53,7 @@ export default function TeamView() {
       {tab === 'scouting' && <ScoutingTab league={league} tid={tid} />}
       {tab === 'schedule' && <ScheduleTab league={league} tid={tid} />}
       {tab === 'picks' && <PicksTab league={league} tid={tid} />}
+      {tab === 'moves' && <MovesTab league={league} tid={tid} />}
       {tab === 'history' && <HistoryTab league={league} tid={tid} />}
     </main>
   );
@@ -136,8 +141,8 @@ function Hero({ league, tid }: { league: League; tid: number }) {
           <Link to={`/trade?with=${tid}`} className="btn primary grow">
             <ArrowLeftRight size={17} /> Propose trade
           </Link>
-          <Link to={`/lab?opp=${tid}`} className="btn grow">
-            <FlaskConical size={17} /> Game plan
+          <Link to={`/gameplan/${tid}`} className="btn grow">
+            <ClipboardList size={17} /> Game plan
           </Link>
         </div>
       ) : (
@@ -404,10 +409,13 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
           // (an option year already under way was settled)
           const o = r.p ? openOption(league, r.p) : undefined;
           const opt = r.p && o && contractExp(r.p.contract) === cs + i ? (o === 'player' ? ' PO' : ' TO') : '';
+          // the first season of a signed extension
+          const ext = r.p && extensionStart(r.p.contract) === cs + i;
           return (
             <span className={!r.p || r.p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
               {fmtM(amt)}
               {opt && <span className="tiny warn">{opt}</span>}
+              {ext && <span className="tiny good"> EXT</span>}
             </span>
           );
         },
@@ -435,8 +443,8 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
       </div>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} onRow={(r) => nav(`/player/${r.pid}`)} />
       <div className="lg-note">
-        PO = player option, TO = team option on the final year.{twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from
-        released players counts toward payroll.
+        PO = player option, TO = team option on the final year, EXT = first season of a signed extension.
+        {twoWay ? ' 2W = two-way contract: paid, but not counted toward the cap, the tax or payroll.' : ''} Dead money from released players counts toward payroll.
       </div>
     </>
   );
@@ -610,7 +618,16 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
 
 function ScoutingTab({ league, tid }: { league: League; tid: number }) {
   const rep = useLeagueMemo(() => scoutTeam(league, tid), [league, tid]);
+  const data = useLeagueMemo(() => scoutData(league, tid), [league, tid]);
+  // what their coach has planned for the next game against you, when he game-plans for it
+  const next = useLeagueMemo(() => {
+    const g = tid === league.userTid ? undefined : nextMeeting(league, tid);
+    return g ? { day: g.day, plan: aiGamePlan(league, tid, league.userTid, g) } : null;
+  }, [league, tid]);
+  const [ptSide, setPtSide] = useState<'off' | 'def'>('off');
   const isUser = tid === league.userTid;
+  const complexity = league.settings.complexity;
+  const abbrev = league.teams[tid].abbrev;
   return (
     <>
       <Card accent>
@@ -618,12 +635,72 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           {isUser ? 'How opponents see you' : 'Scouting report'}
         </div>
         <div style={{ marginTop: 6, fontSize: 15, lineHeight: 1.45 }}>{rep.summary}</div>
+        {next?.plan && (
+          <div style={{ marginTop: 10 }}>
+            <OppPlanNote league={league} items={next.plan.items} day={next.day} />
+          </div>
+        )}
         {!isUser && (
-          <Link to={`/lab?opp=${tid}`} className="lg-link small row" style={{ gap: 4, marginTop: 10 }}>
-            Test a game plan against them in the Tactics Lab <ChevronRight size={15} />
-          </Link>
+          <>
+            <Link to={`/gameplan/${tid}`} className="btn primary sm" style={{ marginTop: 12 }}>
+              <ClipboardList size={16} /> Game plan vs {abbrev}
+            </Link>
+            <Link to={`/lab?opp=${tid}`} className="lg-link small row" style={{ gap: 4, marginTop: 10 }}>
+              Test a game plan against them in the Tactics Lab <ChevronRight size={15} />
+            </Link>
+          </>
         )}
       </Card>
+      <Card
+        title={
+          <h3>
+            <BarChart3 size={14} style={{ verticalAlign: -2 }} /> By the numbers
+          </h3>
+        }
+        right={data.enough ? <span className="tiny dim">{scoutSource(data)}</span> : undefined}
+      >
+        {data.enough ? (
+          <div className="col" style={{ gap: 12 }}>
+            {data.lastSeason && <div className="small dim2">Too few games this season: these are last season&apos;s numbers.</div>}
+            <RankStrip d={data} complexity={complexity} />
+            {data.tendencies.length > 0 && (
+              <ul className="lg-bullets" style={{ ['--bul' as string]: 'var(--info)' }}>
+                {data.tendencies.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <div className="small dim">Not enough games yet: the numbers come in after {SCOUT_MIN_GAMES} games. Until then the report reads their playbook and roster.</div>
+        )}
+      </Card>
+      {data.enough && complexity !== 'simple' && data.playTypes.length > 0 && (
+        <Card
+          title="Play types"
+          right={
+            <span className="tiny dim">
+              {data.ptGames} game{data.ptGames === 1 ? '' : 's'}
+            </span>
+          }
+        >
+          <Segmented
+            label="Play types at which end"
+            value={ptSide}
+            onChange={setPtSide}
+            options={[
+              { id: 'off', label: 'Their offense' },
+              { id: 'def', label: 'Their defense' },
+            ]}
+          />
+          <div style={{ marginTop: 10 }}>
+            <PlayTypeTable rows={ptSide === 'off' ? data.playTypes : data.defPlayTypes} defense={ptSide === 'def'} complexity={complexity} />
+          </div>
+          <div className="tiny dim" style={{ marginTop: 6 }}>
+            Points per possession by how the possession finished, against the league&apos;s. {ptSide === 'off' ? 'Red: they score well.' : 'Red: they allow a lot.'}
+          </div>
+        </Card>
+      )}
       <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
         <Card
           title={
@@ -676,6 +753,16 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           </div>
         )}
       </Card>
+      {data.players.length > 0 && (
+        <Card title="Key players" right={<span className="tiny dim">{data.lastSeason ? `${seasonLabel(data.season)} numbers` : 'This season'}</span>}>
+          <KeyPlayers d={data} complexity={complexity} />
+          {data.players.some((p) => p.elsewhere) && (
+            <div className="tiny dim" style={{ marginTop: 6 }}>
+              Newcomers show their numbers from their last team, without on/off.
+            </div>
+          )}
+        </Card>
+      )}
       <Card
         title={
           <h3>
@@ -693,6 +780,11 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           </ul>
         )}
       </Card>
+      {!isUser && (
+        <Card title={`Head to head with ${abbrev}`}>
+          <HeadToHead league={league} d={data} complexity={complexity} />
+        </Card>
+      )}
     </>
   );
 }

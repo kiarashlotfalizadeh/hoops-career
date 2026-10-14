@@ -1,6 +1,7 @@
 // Browser smoke test for CI: serves the production build, coaches the opening-night game live
 // and plays the opening week of the real league on a phone viewport, opens every main screen
-// (phone and tablet), runs the Tactics Lab's worker and round-trips a backup export/import.
+// (phone and tablet), runs the Tactics Lab's worker, round-trips a backup export/import and picks a
+// live game up after a reload.
 // Fails on any page error, console error or missing screen.
 // Usage: npm run build && npm run smoke (SMOKE_PORT picks the preview port, default 4179)
 import { spawn } from 'node:child_process';
@@ -88,7 +89,7 @@ try {
   await page
     .waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, tipoff, { timeout: 15_000 })
     .catch(() => fail.push(`live game clock never moved (${tipoff})`));
-  await page.getByRole('button', { name: 'Sim to final', exact: true }).click();
+  await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
   await page
     .locator('.sheet')
     .getByRole('button', { name: /Sim to final/ })
@@ -109,13 +110,17 @@ try {
 
   const routes = [
     '/',
+    '/preview',
     '/roster',
     '/rotation',
+    '/lineups',
     '/tactics',
     '/lab',
     '/league',
     '/league?tab=stats',
     '/team/5',
+    '/team/5?tab=scouting',
+    '/gameplan/5',
     '/office',
     '/trade',
     '/free-agents',
@@ -175,6 +180,33 @@ try {
   await page.goto(`${base}/#/start`);
   if (!(await page.getByText(/\(imported\)/).count())) fail.push('imported league not listed');
   step('exported and re-imported a backup');
+
+  // the app closed mid-game (a reload, last: a file input doesn't take a file after one): a pause
+  // saves where the game is, and the game picks up there instead of at tip-off
+  await page.goto(`${base}/#/`);
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  if (!(await watch.count())) {
+    await page
+      .locator('.sheet')
+      .getByRole('button', { name: /^Sim to next game/ })
+      .click();
+    await waitSim();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+  }
+  await watch.click();
+  const start = await bug.getAttribute('aria-label', { timeout: 15_000 });
+  await page.waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, start, { timeout: 15_000 }).catch(() => {});
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.waitForTimeout(2500);
+  const left = await bug.getAttribute('aria-label');
+  await page.reload();
+  await page
+    .getByText(/^Picked up where you left off/)
+    .waitFor({ timeout: 30_000 })
+    .then(
+      () => step(`picked a live game up after a reload (${left})`),
+      () => fail.push('a live game did not pick up where it was left after a reload'),
+    );
 } catch (e) {
   fail.push(`crash: ${e instanceof Error ? e.message : e}`);
 } finally {

@@ -1,19 +1,16 @@
 // Tactics Lab: run batches of games between two configurations and summarize the result.
 // Pure and serializable so it can run in a Web Worker.
 
-import type { DefenseTactics, GameManagement, GameType, OffenseTactics, Tactics, Team, TeamBox } from '../types';
+import type { GameType, TacticsPatch, Team, TeamBox } from '../types';
 import { GameSim, type SimTeamInput } from '../sim/engine';
 import { Rng } from '../random';
-import { cloneTactics } from '../sim/tactics';
+import { applyPatch } from '../sim/tactics';
+
+export { applyPatch };
+export type { TacticsPatch };
 
 /** A side as real games build it (morale/wear, rest, injury risk), so Lab games play like them. */
 export type LabSide = SimTeamInput;
-
-export interface TacticsPatch {
-  offense?: Partial<OffenseTactics>;
-  defense?: Partial<DefenseTactics>;
-  manage?: Partial<GameManagement>;
-}
 
 export interface LabRequest {
   a: LabSide;
@@ -24,6 +21,8 @@ export interface LabRequest {
   patch?: TacticsPatch;
   /** The kind of game to play (regular season by default): playoff games shorten the assistants' rotations to eight. */
   type?: GameType;
+  /** Where the games are played: A at home every game, B at home, or a neutral floor. By default the sides take turns hosting. */
+  venue?: 'a' | 'b' | 'neutral';
 }
 
 export interface ShotProfile {
@@ -70,15 +69,6 @@ export function pairedDelta(base: LabSummary, alt: LabSummary): { delta: number;
   return { delta: mean * per100, se: (sd / Math.sqrt(n)) * per100 };
 }
 
-export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
-  const out = cloneTactics(t);
-  if (!patch) return out;
-  if (patch.offense) out.offense = { ...out.offense, ...patch.offense, actions: { ...out.offense.actions, ...(patch.offense.actions ?? {}) } };
-  if (patch.defense) out.defense = { ...out.defense, ...patch.defense };
-  if (patch.manage) out.manage = { ...out.manage, ...patch.manage };
-  return out;
-}
-
 function profile(t: TeamBox, o: TeamBox, rimA: number): ShotProfile {
   const fga = Math.max(1, t.t.fga);
   return {
@@ -110,10 +100,10 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   for (let g = 0; g < req.games; g++) {
     // each game gets its own seed so two configurations can be compared game by game
     const rng = new Rng((req.seed + Math.imul(g + 1, 2654435761)) >>> 0);
-    const aHome = g % 2 === 0;
+    const aHome = req.venue === 'a' ? true : req.venue === 'b' ? false : g % 2 === 0;
     const A = { ...req.a, team: teamA };
     const B = { ...req.b, team: teamB };
-    const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: req.type ?? 'regular', injuries: false });
+    const sim = new GameSim(aHome ? A : B, aHome ? B : A, { rng, type: req.type ?? 'regular', injuries: false, neutral: req.venue === 'neutral' });
     const res = sim.simToEnd();
     const a = aHome ? res.home : res.away;
     const b = aHome ? res.away : res.home;
@@ -213,6 +203,10 @@ export interface Candidate {
   label: string;
   why: string;
   patch: TacticsPatch;
+  /** Game-plan group: a counter replaces the plan's item in the same group (see GamePlanItem). */
+  group?: string;
+  /** What in the scouting numbers backs it. */
+  evidence?: string;
 }
 
 export interface CandidateResult {
@@ -220,6 +214,8 @@ export interface CandidateResult {
   label: string;
   why: string;
   patch: TacticsPatch;
+  group?: string;
+  evidence?: string;
   net: number;
   delta: number;
   se: number;
@@ -240,7 +236,7 @@ export function evaluateCandidates(
   const results = candidates.map((c) => {
     const r = runLab({ a, b, games, seed, type, patch: c.patch }, onGame);
     const { delta, se } = pairedDelta(base, r);
-    return { id: c.id, label: c.label, why: c.why, patch: c.patch, net: r.net, delta, se, winPct: r.winPct };
+    return { id: c.id, label: c.label, why: c.why, patch: c.patch, group: c.group, evidence: c.evidence, net: r.net, delta, se, winPct: r.winPct };
   });
   results.sort((x, y) => y.delta - x.delta);
   return { base, results };

@@ -4,36 +4,26 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
-import {
-  ACTION_META,
-  COVERAGE_META,
-  DEF_PRESETS,
-  OFF_PRESETS,
-  PRESS_META,
-  SCHEME_META,
-  STAR_PLAN_META,
-  applyDefPreset,
-  applyOffPreset,
-  cloneTactics,
-} from '../../core/sim/tactics';
-import { autoTactics, defPresetFit, fitRoster, fitScale, offPresetFit, rosterProfile } from '../../core/ai/coachAI';
+import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
+import { autoTactics } from '../../core/ai/coachAI';
+import { playbookLabel } from '../../core/sim/playbooks';
+import { PresetPicker } from '../components/PresetPicker';
+import { MyPlaybooksCard, PlaybookLine } from '../components/MyPlaybooks';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
 import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
+import { UpcomingOpponents } from '../components/UpcomingOpponents';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
 import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
+import { CrunchTimeCard } from '../tactics/CrunchTimeCard';
+import { SituationToggles, SituationsCard } from '../tactics/SituationsCard';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
-
-function FitTag({ v }: { v: number }) {
-  const tone = v >= 88 ? 'good' : v >= 70 ? 'info' : v >= 58 ? 'warn' : 'bad';
-  return <Tag tone={tone}>Fit {v}</Tag>;
-}
 
 export default function Tactics() {
   const league = useLeague();
@@ -67,13 +57,9 @@ export default function Tactics() {
   const changed = snapshot.sig !== JSON.stringify(t);
   // a Play-menu sim's progress bar takes the same spot as the changes bar
   const simming = useStore((s) => !!s.sim);
-  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
-  // the roster as the assistant judges it (rankedPresets): a knock of five games or fewer doesn't swing the fits
-  const healthy = useMemo(() => fitRoster(players), [players]);
-  const prof = useMemo(() => rosterProfile(healthy), [healthy]);
-  const offFit = useMemo(() => fitScale(offPresetFit(prof)), [prof]);
-  const defFit = useMemo(() => fitScale(defPresetFit(prof)), [prof]);
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/tactics'), [league]);
+  // the go-to player is picked from the roster
+  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
 
   const edit = (fn: (t: TacticsT) => void) =>
     useStore.getState().mutate((l) => {
@@ -82,11 +68,11 @@ export default function Tactics() {
       tt.manual = true;
     });
 
-  // personnel hints
+  // personnel hints, for the five who start next: the first healthy ones in the depth chart
   const starters = team.rotation.order
-    .slice(0, 5)
     .map((pid) => league.players[pid])
-    .filter(Boolean);
+    .filter((p) => p && p.tid === team.tid && !p.injury)
+    .slice(0, 5);
   const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt)[0];
   const bigC = big ? composites(big.ratings) : null;
 
@@ -94,7 +80,12 @@ export default function Tactics() {
     <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
       <PageHeader
         title="Tactics"
-        sub={`${OFF_PRESETS.find((x) => x.id === t.offPreset)?.name ?? 'Custom'} · ${DEF_PRESETS.find((x) => x.id === t.defPreset)?.name ?? 'Custom'}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
+        sub={
+          <>
+            <PlaybookLine />
+            {`${playbookLabel(t)}${t.manual ? ' · Coach-managed' : ' · Assistant-managed'}`}
+          </>
+        }
         right={
           <Link to="/lab" className="btn sm">
             <FlaskConical size={16} /> Lab
@@ -109,6 +100,8 @@ export default function Tactics() {
               const tm = l.teams[l.userTid];
               if (on) {
                 tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false);
+                // his refits make it his playbook, not a saved one
+                tm.tactics.playbook = null;
               } else tm.tactics.manual = true;
             })
           }
@@ -133,79 +126,20 @@ export default function Tactics() {
 
       {tab === 'playbook' && (
         <>
+          <UpcomingOpponents />
           <Card
             title="Offensive playbook"
             right={
               <Help title="Playbooks">
                 A playbook sets pace, shot profile and which actions you run. "Fit" scores how well your current roster suits it: creators, shooters, passers, bigs and athleticism.
-                You can fine-tune any playbook in the Offense tab.
+                Tap a fit score to see what it is made of. You can fine-tune any playbook in the Offense tab.
               </Help>
             }
           >
-            <div className="col grid-md2" style={{ gap: 8 }}>
-              {OFF_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  aria-pressed={t.offPreset === p.id}
-                  className="card tight"
-                  style={{
-                    textAlign: 'left',
-                    borderColor: t.offPreset === p.id ? 'var(--accent)' : undefined,
-                    background: t.offPreset === p.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined,
-                  }}
-                  onClick={() =>
-                    edit((tt) => {
-                      tt.offense = applyOffPreset(tt.offense, p.id);
-                      tt.offPreset = p.id;
-                    })
-                  }
-                >
-                  <div className="row between">
-                    <span className="bold">{p.name}</span>
-                    <FitTag v={offFit(p.id)} />
-                  </div>
-                  <div className="small dim2">
-                    {p.tagline}. {p.description}
-                  </div>
-                  <div className="tiny dim" style={{ marginTop: 4 }}>
-                    Best for: {p.bestFor}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <PresetPicker kind="off" />
           </Card>
           <Card title="Defensive identity">
-            <div className="col grid-md2" style={{ gap: 8 }}>
-              {DEF_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  aria-pressed={t.defPreset === p.id}
-                  className="card tight"
-                  style={{
-                    textAlign: 'left',
-                    borderColor: t.defPreset === p.id ? 'var(--accent)' : undefined,
-                    background: t.defPreset === p.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined,
-                  }}
-                  onClick={() =>
-                    edit((tt) => {
-                      tt.defense = applyDefPreset(tt.defense, p.id);
-                      tt.defPreset = p.id;
-                    })
-                  }
-                >
-                  <div className="row between">
-                    <span className="bold">{p.name}</span>
-                    <FitTag v={defFit(p.id)} />
-                  </div>
-                  <div className="small dim2">
-                    {p.tagline}. {p.description}
-                  </div>
-                  <div className="tiny dim" style={{ marginTop: 4 }}>
-                    Best for: {p.bestFor}
-                  </div>
-                </button>
-              ))}
-            </div>
+            <PresetPicker kind="def" />
           </Card>
           {complexity === 'simple' && (
             <Card title="Tempo">
@@ -219,6 +153,7 @@ export default function Tactics() {
               />
             </Card>
           )}
+          <MyPlaybooksCard />
         </>
       )}
 
@@ -364,7 +299,7 @@ export default function Tactics() {
                 on={t.defense.switchOffBall}
                 onChange={(x) => edit((tt) => void (tt.defense.switchOffBall = x))}
                 label="Switch off-ball screens"
-                help="Neutralizes handoffs and movement shooters; can create mismatches."
+                help="Neutralizes handoffs and movement shooters, but a big switched onto a guard gets attacked off the dribble, and a guard switched onto a big gets posted up (and fouls)."
               />
             </div>
           </Card>
@@ -417,7 +352,12 @@ export default function Tactics() {
           </Card>
           <Card
             title="Star plan"
-            right={<Help title="Star plan">Applies to the opponent's primary creator each game (you can target a specific player in the Tactics Lab and during live games).</Help>}
+            right={
+              <Help title="Star plan">
+                Applies to the opponent's primary creator each game. To go after a specific player, set a star plan in that opponent's game plan (from Upcoming opponents, or the
+                Game plan button on their Scouting tab), or change it during a live game.
+              </Help>
+            }
           >
             <Chips
               label="Star plan"
@@ -435,6 +375,9 @@ export default function Tactics() {
       {tab === 'roles' && <RolesTab />}
       {tab === 'insights' && <InsightsTab />}
       {tab === 'manage' && <ManageTab edit={edit} t={t} />}
+      {tab === 'manage' && <CrunchTimeCard t={t} edit={edit} players={players} />}
+      {tab === 'manage' && <SituationsCard t={t} edit={edit} />}
+      {tab === 'playbook' && complexity === 'advanced' && <SituationToggles t={t} edit={edit} />}
 
       {changed && !simming && (
         <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
@@ -687,7 +630,7 @@ function ManageTab({ t, edit }: { t: TacticsT; edit: (fn: (t: TacticsT) => void)
             on={t.manage.autoTimeouts}
             onChange={(x) => edit((tt) => void (tt.manage.autoTimeouts = x))}
             label="Auto timeouts to stop runs"
-            help="Timeouts restore a little energy and break the opponent's momentum."
+            help="A timeout rests legs (a little energy back) and resets the run, but it also gives their coach a chance to adjust."
           />
           <Slider
             label="Timeout after a run of"

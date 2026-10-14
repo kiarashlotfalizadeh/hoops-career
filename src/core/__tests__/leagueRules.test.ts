@@ -838,11 +838,11 @@ describe('owner (L11, L19)', () => {
     ownerEvaluation(l);
     expect(l.ownerMood).toEqual(mood);
     expect(l.inbox.length).toBe(inbox);
-    l.gamePlan = { oppTid: 3, items: [] };
+    l.gamePlans = { 3: { oppTid: 3, items: [{ id: 'cov-hedge', label: 'Hedge', patch: { defense: { pnr: 'hedge' } } }] } };
     l.draftBoard = [1, 2, 3];
     takeOverTeam(l, aiTeam(l));
     expect(l.fired).toBe(false);
-    expect(l.gamePlan).toBeNull();
+    expect(l.gamePlans).toBeUndefined();
     expect(l.draftBoard).toBeUndefined();
   });
 });

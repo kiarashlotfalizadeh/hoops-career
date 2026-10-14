@@ -1,16 +1,32 @@
 import { useState } from 'react';
-import { CalendarDays, FastForward, Lock, Newspaper, SkipForward } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { CalendarDays, FastForward, Gavel, Lock, Newspaper, SkipForward } from 'lucide-react';
 import type { Player, Pos } from '../../core/types';
 import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, freeAgents, payroll, playerName, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
-import { MLE_PCT, MLE_YEARS, askingContract, mleRoom, signingRoute, teamAppeal, twoWaySalary, twoWayYears, valueScore, wantsTwoWay } from '../../core/league/contracts';
-import { capPayroll, signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
+import {
+  MLE_PCT,
+  MLE_YEARS,
+  WAIVER_DAYS,
+  askingContract,
+  claimBlockedReason,
+  onWaivers,
+  teamAppeal,
+  twoWaySalary,
+  twoWayYears,
+  userClaim,
+  valueScore,
+  waiverOrder,
+  waiverSalary,
+  wantsTwoWay,
+} from '../../core/league/contracts';
+import { bidHolds, capPayroll, offerRoute, signingClosedReason, userMleRoom, userTwoWayOffer, withdrawBid } from '../../core/league/freeAgency';
 import { FA_DAYS, faAdvance, faDayNumber, faOver } from '../../core/league/season';
-import { playerAge } from '../../core/playerGen';
+import { contractExp, playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet } from '../components/ui';
-import { Callout, OvrPot, appealInfo, capSeason, fmtM, playerMeta } from '../office/common';
+import { Callout, OvrPot, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
@@ -21,10 +37,12 @@ export default function FreeAgents() {
   const s = capSeason(league);
   const cap = CAP_FOR(league, s);
   const pay = payroll(league, tid, s);
-  // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet)
-  const holds = capPayroll(league, tid, s) - pay;
+  // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet),
+  // and in free agency so do the user's pending offers to top free agents
+  const bids = league.faBids ?? [];
+  const holds = capPayroll(league, tid, s) - pay + bidHolds(league);
   const space = cap.salaryCap - pay - holds;
-  const mle = mleRoom(league, tid, s);
+  const mle = userMleRoom(league, s);
   // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;
   const max = rosterMaxNow(league);
@@ -36,13 +54,30 @@ export default function FreeAgents() {
   const [onlySignable, setOnlySignable] = useState(false);
   const [twoWayMode, setTwoWayMode] = useState(false);
   const [limit, setLimit] = useState(40);
-  const [sel, setSel] = useState<number | null>(null);
+  // a player page's "Make an offer" opens his sheet here (?offer=pid)
+  const [params, setParams] = useSearchParams();
+  const linked = Number(params.get('offer'));
+  const [sel, setSel] = useState<number | null>(() => (league.players[linked] && !league.players[linked].waivers ? linked : null));
   const [twoWaySel, setTwoWaySel] = useState<number | null>(null);
+  const [waiverSel, setWaiverSel] = useState<number | null>(() => (league.players[linked]?.waivers ? linked : null));
+  const closeSheet = () => {
+    setSel(null);
+    setWaiverSel(null);
+    if (params.has('offer')) setParams({}, { replace: true });
+  };
+  const withdraw = (pid: number) => {
+    let res = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      res = withdrawBid(l, pid);
+    });
+    useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
+  };
   const fa = league.phase === 'freeAgency';
 
   const all = useLeagueMemo(
     () =>
-      freeAgents(league).map((p) => {
+      // players on waivers are listed too: they can be claimed, not signed
+      [...freeAgents(league), ...onWaivers(league)].map((p) => {
         const ask = askingContract(league, p, tid);
         return {
           p,
@@ -50,8 +85,8 @@ export default function FreeAgents() {
           appeal: teamAppeal(league, tid, p),
           val: valueScore(league, p),
           age: playerAge(p, league.season),
-          route: signingRoute(league, tid, ask.amount, s, p),
-          twoWay: wantsTwoWay(league, p, tid),
+          route: p.waivers ? null : offerRoute(league, p, ask.amount, s),
+          twoWay: !p.waivers && wantsTwoWay(league, p, tid),
         };
       }),
     [league, tid, s],
@@ -60,7 +95,7 @@ export default function FreeAgents() {
   // what the user could actually do today: the window is open and there's a spot to fill
   const canAdd = !closed && (twoWayMode ? tw < TWO_WAY_MAX : n < max);
   const rows = all
-    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!twoWayMode || r.twoWay) && (!onlySignable || (canAdd && (twoWayMode || r.route))))
+    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!twoWayMode || r.twoWay) && (!onlySignable || (!r.p.waivers && canAdd && (twoWayMode || r.route))))
     .sort((a, b) => {
       switch (sort) {
         case 'ovr':
@@ -80,6 +115,7 @@ export default function FreeAgents() {
   const over = faOver(league);
   const advance = async (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
+    const offered = bids.map((b) => b.pid);
     const from = faDayNumber(league) + 1;
     // behind the progress bar, like the Play menu's: a second tap while it runs is a no-op
     if (!(await useStore.getState().task('Free agency', (l) => faAdvance(l, days)))) return;
@@ -90,14 +126,23 @@ export default function FreeAgents() {
       .sort((a, b) => b.ovr - a.ovr);
     const day = faDayNumber(l);
     const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
+    // the players who decided on your offers lead (the details are in the inbox)
+    const decided = offered.filter((pid) => !l.faBids?.some((b) => b.pid === pid)).map((pid) => l.players[pid]);
+    const won = decided.some((p) => p?.tid === l.userTid);
+    const verdicts = decided
+      .filter(Boolean)
+      .map((p) => (p.tid === l.userTid ? `${p.lastName} chose you!` : p.tid >= 0 ? `${p.lastName} chose ${l.teams[p.tid].abbrev}.` : `${p.lastName} passed on your offer.`))
+      .join(' ');
     useStore.getState().toast(
-      signed.length
-        ? `${when}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
-            .slice(0, 2)
-            .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
-            .join(', ')}${signed.length > 2 ? '…' : ''}`
-        : `${when}: ${day > from ? 'a quiet week' : 'a quiet day'} on the market.`,
-      'neutral',
+      `${verdicts ? `${verdicts} ` : ''}${
+        signed.length
+          ? `${when}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
+              .slice(0, 2)
+              .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
+              .join(', ')}${signed.length > 2 ? '…' : ''}`
+          : `${when}: ${day > from ? 'a quiet week' : 'a quiet day'} on the market.`
+      }`,
+      won ? 'good' : 'neutral',
     );
   };
 
@@ -130,11 +175,21 @@ export default function FreeAgents() {
               {mle > 0 ? `You can use up to ${fmtM(mle)} now.` : "You can't use it right now (used this season, or it would take you over the tax)."}
             </p>
             <p style={{ margin: 0 }}>
-              <b>Asking price.</b> Offers at or above a player's ask are accepted on the spot. Interest in your team (winning, hype, market, playing time) moves his price.
+              <b>Asking price.</b> Offers at or above a player's ask are accepted on the spot. Interest in your team (winning, hype, market, playing time, each weighed by what
+              matters to him) moves his price.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Timing.</b> The summer market lasts {FA_DAYS} days. AI teams sign players every day, and stars go fast. Unsigned players cut their price every few days, and during
-              the season they are still available.
+              <b>Top free agents.</b> In the summer, players worth 78+ or asking 8% of the cap or more weigh offers: submit one (at least 90% of his ask) and a day or two later he
+              picks between yours and other teams' by the money against what he asks each team, how much he likes each team, and the years. Your pending offers hold their cap
+              space, mid-level and roster spot until he decides; raise or withdraw them any time.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Timing.</b> The summer market lasts {FA_DAYS} days, and you get the first look: AI teams start signing on day 2, and stars go fast. Unsigned players cut their
+              price every few days, and during the season they are still available.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Waivers.</b> A player released during the season with guaranteed money left spends {WAIVER_DAYS} days on waivers. Teams can claim him, the worst record first, and
+              take over his contract (with a roster spot, and cap space for this season's salary unless it's a minimum deal), which takes his dead money off his old team's books.
             </p>
             <p style={{ margin: 0 }}>
               <b>Roster.</b> Up to {OFFSEASON_ROSTER_MAX} players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
@@ -161,7 +216,17 @@ export default function FreeAgents() {
           k="Cap space"
           v={fmtM(space)}
           color={space > 0 ? 'var(--good)' : 'var(--warn)'}
-          sub={holds > 0 ? 'after cap holds' : space > 0 ? 'to spend' : mle > 0 ? 'min or mid-level' : 'min deals only'}
+          sub={
+            bids.some((b) => b.route === 'space')
+              ? 'after pending offers'
+              : holds > 0
+                ? 'after cap holds'
+                : space > 0
+                  ? 'to spend'
+                  : mle > 0
+                    ? 'min or mid-level'
+                    : 'min deals only'
+          }
         />
         <Kpi
           k="Roster"
@@ -191,6 +256,27 @@ export default function FreeAgents() {
           <div style={{ margin: '10px 0' }}>
             <Bar value={faDayNumber(league)} max={FA_DAYS} />
           </div>
+          {bids.length > 0 && (
+            <div className="col" style={{ gap: 6, marginBottom: 10 }}>
+              <div className="row tiny dim upper bold" style={{ gap: 6 }}>
+                <Gavel size={13} /> Your pending offers
+              </div>
+              {bids.map((b) => {
+                const bp = league.players[b.pid];
+                return (
+                  <div key={b.pid} className="row" style={{ gap: 8 }}>
+                    <button className="grow small" style={{ textAlign: 'left', minWidth: 0 }} aria-haspopup="dialog" onClick={() => setSel(b.pid)}>
+                      <b>{playerName(bp)}</b> · {b.years} yr{b.years > 1 ? 's' : ''} · {fmtM(b.amount)}
+                      <span className="dim"> · {b.decideDay > league.faDay ? `decides day ${b.decideDay + 1}` : 'decides at the close'}</span>
+                    </button>
+                    <button className="btn xs" aria-label={`Withdraw your offer to ${playerName(bp)}`} onClick={() => withdraw(b.pid)}>
+                      Withdraw
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {over ? (
             <div className="small dim2">The market is winding down. Start the new season from the Play button when your roster is set.</div>
           ) : (
@@ -269,21 +355,39 @@ export default function FreeAgents() {
           <div className="list wide2">
             {rows.slice(0, limit).map(({ p, ask, appeal, route }) => {
               const ai = appealInfo(appeal);
+              const bid = bids.find((b) => b.pid === p.pid);
+              const w = p.waivers;
               return (
-                <button key={p.pid} className="fo-prow" onClick={() => (twoWayMode ? setTwoWaySel(p.pid) : setSel(p.pid))}>
+                <button key={p.pid} className="fo-prow" onClick={() => (w ? setWaiverSel(p.pid) : twoWayMode ? setTwoWaySel(p.pid) : setSel(p.pid))}>
                   <OvrPot p={p} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row" style={{ gap: 6 }}>
                       <span className="fo-name">{playerName(p)}</span>
                       {p.injury && <span className="tag bad">INJ</span>}
                     </div>
+                    {(bid || w) && (
+                      <div className="row wrap" style={{ gap: 6, marginTop: 3 }}>
+                        {bid && <span className="tag info">Bidding · {bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}</span>}
+                        {w && (
+                          <span className="tag warn">
+                            On waivers · clears {w.until - league.day > 1 ? `in ${w.until - league.day} days` : 'tomorrow'}
+                            {w.claim ? ' · claim in' : ''}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
                     <div className="row" style={{ gap: 8, marginTop: 3 }}>
-                      <span className="tiny" style={{ color: ai.color, fontWeight: 650 }}>
-                        <span className="fo-dot" style={{ background: ai.color }} />
-                        {ai.label}
-                      </span>
-                      {twoWayMode ? (
+                      {/* (a claim takes over his contract: what he thinks of your team doesn't matter) */}
+                      {!w && (
+                        <span className="tiny" style={{ color: ai.color, fontWeight: 650 }}>
+                          <span className="fo-dot" style={{ background: ai.color }} />
+                          {ai.label}
+                        </span>
+                      )}
+                      {w ? (
+                        <span className="tiny dim">Claim his contract</span>
+                      ) : twoWayMode ? (
                         <span className="tiny good">Two-way</span>
                       ) : route === 'min' ? (
                         <span className="tiny good">Min deal</span>
@@ -298,7 +402,12 @@ export default function FreeAgents() {
                       )}
                     </div>
                   </div>
-                  {twoWayMode ? (
+                  {w ? (
+                    <div className="fo-money">
+                      <div className="a">{fmtM(waiverSalary(league, p))}</div>
+                      <div className="b">thru {shortSeason(contractExp(w.contract))}</div>
+                    </div>
+                  ) : twoWayMode ? (
                     <div className="fo-money">
                       <div className="a">{fmtM(twoWaySalary(league, s), 2)}</div>
                       <div className="b">
@@ -325,8 +434,9 @@ export default function FreeAgents() {
         </Card>
       )}
 
-      <ContractSheet pid={sel} mode="fa" onClose={() => setSel(null)} />
+      <ContractSheet pid={sel} mode="fa" onClose={closeSheet} />
       <TwoWaySheet p={twoWaySel !== null ? league.players[twoWaySel] : undefined} onClose={() => setTwoWaySel(null)} />
+      <WaiverSheet p={waiverSel !== null ? league.players[waiverSel] : undefined} onClose={closeSheet} />
     </main>
   );
 }
@@ -379,6 +489,74 @@ function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
             <button className="btn primary grow" disabled={!!blocked} onClick={offer}>
               Offer two-way deal
             </button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** A player on waivers: his contract, when he clears, where you stand in the waiver order, and your claim. */
+function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: () => void }) {
+  const league = useLeague();
+  const w = p?.waivers;
+  const open = !!p && !!w && p.tid === FREE_AGENT;
+  const tid = league.userTid;
+  const blocked = open ? claimBlockedReason(league, tid, p) : null;
+  const order = waiverOrder(league).filter((t) => t.tid !== w?.from);
+  const rank = order.findIndex((t) => t.tid === tid) + 1;
+  const days = w ? Math.max(0, w.until - league.day) : 0;
+  const claim = (on: boolean) => {
+    if (!p) return;
+    let res = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      res = userClaim(l, p.pid, on);
+    });
+    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Waiver claim">
+      {open && p && w && (
+        <div className="col" style={{ gap: 12 }}>
+          <div className="row" style={{ gap: 10 }}>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="fo-name">{playerName(p)}</div>
+              <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+            </div>
+            <OvrPot p={p} />
+          </div>
+          <div className="small dim2">
+            Released by the {league.teams[w.from].region} {league.teams[w.from].name}. He clears waivers {days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}; until
+            then any team can claim him and take over his contract, the worst record first. Unclaimed, he becomes a free agent.
+          </div>
+          <div className="card tight">
+            {w.contract.salaries.map((amt, i) => {
+              const season = w.contract.start + i;
+              return season < league.season ? null : (
+                <div key={season} className="row between small" style={{ padding: '3px 0' }}>
+                  <span className="dim2">{seasonLabel(season)}</span>
+                  <span className="num bold">{fmtM(amt, 2)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="small">
+            Your place in the waiver order: <b>#{rank}</b> of {order.length}
+          </div>
+          {blocked && !w.claim && <div className="small warn">{blocked}</div>}
+          <div className="row">
+            <button className="btn grow" onClick={onClose}>
+              Close
+            </button>
+            {w.claim ? (
+              <button className="btn grow" onClick={() => claim(false)}>
+                Withdraw claim
+              </button>
+            ) : (
+              <button className="btn primary grow" disabled={!!blocked} onClick={() => claim(true)}>
+                Put in a claim
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -3,7 +3,9 @@
 
 import type { GameResult, League, TacticImpact, Tactics, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
+import { hacks } from '../sim/tactics';
 import { wholeMinutes } from '../league/helpers';
+import { GAME } from '../constants';
 
 export interface Factor {
   title: string;
@@ -12,6 +14,8 @@ export interface Factor {
   pts: number;
   category: 'tactics' | 'shooting' | 'turnovers' | 'rebounding' | 'fouls' | 'pace' | 'fatigue' | 'stars';
   advice?: string;
+  /** The engine's impact key behind a tactical factor (e.g. 'drop_pullup:o'), for a one-tap counter. */
+  key?: string;
 }
 
 interface Tpl {
@@ -101,6 +105,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Your zone is giving up corner threes. Go back to man-to-man against good shooting teams.',
     uses: (t) => t.defense.scheme !== 'man',
   },
+  'zone_3pt:d': { text: (X) => `${possessive(X)} 3-2 zone ran shooters off the three-point line.` },
   'zone_glass:o': {
     text: (X) => `${X} crashed the offensive glass against the zone.`,
     advice: 'Zones struggle to box out; play man against strong rebounding teams.',
@@ -216,10 +221,16 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a strategy paid off${w}.` },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
-    advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt).',
-    uses: (t) => t.manage.hackThreshold > 0,
+    advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
+    uses: (t) => hacks(t.manage),
   },
 };
+
+/** "Halftime: the Thunder lead the Celtics 55-50. Biggest factor so far: …" (the factor that went the leader's way, the biggest one when tied). */
+function partialHeadline(us: string, them: string, a: number, b: number, periods: number, top?: string) {
+  const score = a === b ? `the ${us} and the ${them} are tied at ${a}` : `the ${us} ${a > b ? 'lead' : 'trail'} the ${them} ${Math.max(a, b)}-${Math.min(a, b)}`;
+  return `${breakLabel(periods)}: ${score}.${top ? ` Biggest factor so far: ${top}.` : ''}`;
+}
 
 /** Advice for the team an effect hurt, unless its tactics no longer use what caused it. */
 export function impactAdvice(key: string, hurt: Tactics): string | undefined {
@@ -255,7 +266,24 @@ export interface GameReport {
   grades: { pid: number; grade: string; note: string }[];
 }
 
-export function buildGameReport(league: League, res: GameResult, userTid = league.userTid): GameReport | null {
+export interface ReportOptions {
+  /** A game still being played, stopped at a break (the Live screen's period report): "so far" wording, star lines scaled to the time played. */
+  partial?: boolean;
+  /** Game seconds played so far (partial reports); defaults to the periods the box score has. */
+  elapsed?: number;
+  /** The tactics the user's team is playing with now, for advice (defaults to its saved tactics). */
+  tactics?: Tactics;
+}
+
+/** "Halftime", "After Q3", "End of regulation", "After OT": a break `periods` periods in. */
+function breakLabel(periods: number) {
+  if (periods === 2) return 'Halftime';
+  if (periods < 4) return `After Q${periods}`;
+  if (periods === 4) return 'End of regulation';
+  return periods === 5 ? 'After OT' : `After ${periods - 4}OT`;
+}
+
+export function buildGameReport(league: League, res: GameResult, userTid = league.userTid, opts: ReportOptions = {}): GameReport | null {
   const userSide: 0 | 1 = res.home.tid === userTid ? 0 : res.away.tid === userTid ? 1 : 0;
   const u = userSide === 0 ? res.home : res.away;
   const o = userSide === 0 ? res.away : res.home;
@@ -263,6 +291,10 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   const ot = league.teams[o.tid];
   const userWon = u.pts > o.pts;
   const factors: Factor[] = [];
+  const tactics = opts.tactics ?? ut.tactics;
+  const periods = Math.max(res.home.quarters.length, 1);
+  // the share of a full game played: star lines are measured against it
+  const played = opts.partial ? Math.min(1, (opts.elapsed ?? Math.min(periods, 4) * GAME.quarterSec) / (4 * GAME.quarterSec)) : 1;
 
   // tactical impacts
   for (const im of res.impacts ?? []) {
@@ -276,7 +308,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       detail: `Worth about ${im.pts.toFixed(1)} points over ${im.count} play${im.count === 1 ? '' : 's'}.`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
-      advice: benefitUser ? undefined : impactAdvice(im.key, ut.tactics),
+      advice: benefitUser ? undefined : impactAdvice(im.key, tactics),
+      key: im.key,
     });
   }
 
@@ -333,14 +366,22 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     [ot, o, -1],
   ] as const) {
     const star = [...box.players].sort((a, b) => b.pts - a.pts)[0];
-    if (star && star.pts >= 35) {
+    // 35 in a full game; at a break, the same pace (and never fewer than 8)
+    if (star && star.pts >= Math.max(8, 35 * played)) {
       factors.push({
-        title: `${star.name} erupted for ${star.pts} points (${star.fgm}/${star.fga} FG).`,
-        detail: `The ${side.name} rode their star.`,
-        pts: sign * (star.pts - 22) * 0.5,
+        title: opts.partial
+          ? `${star.name} has ${star.pts} points so far (${star.fgm}/${star.fga} FG).`
+          : `${star.name} erupted for ${star.pts} points (${star.fgm}/${star.fga} FG).`,
+        detail: opts.partial ? `On pace for ${Math.round(star.pts / played)}.` : `The ${side.name} rode their star.`,
+        pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
         // (not named: a Star plan goes after their primary creator, who isn't always the scorer)
-        advice: sign < 0 && ut.tactics.defense.starPlan === 'none' ? 'Next time try a Star plan (Defense): deny him the ball or double him.' : undefined,
+        advice:
+          sign < 0 && tactics.defense.starPlan === 'none'
+            ? opts.partial
+              ? 'Try a Star plan (Defense): deny him the ball or double him.'
+              : 'Next time try a Star plan (Defense): deny him the ball or double him.'
+            : undefined,
       });
     }
   }
@@ -414,7 +455,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   // "Turnover battle: NYK 18, CLE 11" reads "Turnover battle (NYK 18, CLE 11)" after the headline's own colon
   const topText = top?.title.replace(/\.$/, '').replace(/: (.+)$/, ' ($1)');
   const how = res.ot ? ` in ${res.ot > 1 ? `${res.ot}OT` : 'OT'}` : margin <= 3 ? ' in a nail-biter' : margin >= 20 ? ' in a rout' : '';
-  const headline = `The ${ut.name} ${userWon ? 'beat' : 'fell to'} the ${ot.name} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${how}.${topText ? ` Biggest factor: ${topText}.` : ''}`;
+  const headline = opts.partial
+    ? partialHeadline(ut.name, ot.name, u.pts, o.pts, periods, (u.pts === o.pts ? factors[0] : top)?.title.replace(/\.$/, '').replace(/: (.+)$/, ' ($1)'))
+    : `The ${ut.name} ${userWon ? 'beat' : 'fell to'} the ${ot.name} ${Math.max(u.pts, o.pts)}-${Math.min(u.pts, o.pts)}${how}.${topText ? ` Biggest factor: ${topText}.` : ''}`;
   return {
     headline,
     userWon,
