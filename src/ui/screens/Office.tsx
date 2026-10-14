@@ -57,6 +57,7 @@ import {
 } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { overallPick } from '../league/shared';
+import { UntouchableToggle } from '../office/Untouchable';
 import { rosterNames } from '../stats';
 import { useFlowRunner } from '../useFlow';
 
@@ -826,6 +827,7 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
         )
       )}
       {noTrade && <div className="tiny dim">{noTrade}</div>}
+      {!expiringNow && <UntouchableToggle league={league} p={p} />}
     </div>
   );
 }

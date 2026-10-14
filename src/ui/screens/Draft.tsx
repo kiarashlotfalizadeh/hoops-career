@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Bot, FastForward, Gavel, Play, Ticket } from 'lucide-react';
+import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Gavel, Play, SkipForward, Ticket } from 'lucide-react';
 import type { CombineResults, DraftPick, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
-import { pickLabel } from '../../core/league/trades';
-import { finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
+import { pickLabel, tradingClosedReason } from '../../core/league/trades';
+import { draftNextPick, finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
+import { draftProposals } from '../../core/league/proposals';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, type Col } from '../components/ui';
+import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, Toggle, type Col } from '../components/ui';
 import { OvrPot, SecTitle, ordinal } from '../office/common';
+import { PickTradeSheet } from '../office/PickTradeSheet';
+import { blockOffers } from '../office/tradeBlock';
 import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mine' | 'results';
@@ -48,6 +51,8 @@ export default function Draft() {
   const [detail, setDetail] = useState<number | null>(null);
   const [confirmPick, setConfirmPick] = useState<number | null>(null);
   const [confirmSim, setConfirmSim] = useState(false);
+  // the pick a trade sheet is open for
+  const [tradePick, setTradePick] = useState<number | null>(null);
   useEffect(() => setView(defaultView(league)), [league.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const user = league.userTid;
@@ -95,8 +100,26 @@ export default function Draft() {
   const simToMine = () => {
     useStore.getState().mutate((l) => {
       withRng(l, (rng) => draftUntilUser(l, rng));
+      // teams that want the pick call
+      draftProposals(l);
     });
   };
+
+  // the team on the clock makes its pick, and the draft stops again
+  const nextOne = () => {
+    let name = '';
+    useStore.getState().mutate((l) => {
+      const dp = nextPick(l);
+      if (!dp || !draftNextPick(l)) return;
+      const p = Object.values(l.players).find((x) => x.draft.year === l.season && x.draft.round === dp.round && x.draft.pick === dp.pick && x.tid >= 0);
+      if (p) name = `#${overallPick(l, dp.round, dp.pick!)}: ${l.teams[p.tid].abbrev} select ${playerName(p)}.`;
+    });
+    if (name) useStore.getState().toast(name, 'neutral');
+  };
+
+  const setPause = (on: boolean) => useStore.getState().mutate((l) => void (l.settings.draftPause = on));
+  // draft-day trades: before the draft and on the night (not once it's over)
+  const canTrade = (league.phase === 'draftLottery' || league.phase === 'draft') && !tradingClosedReason(league) && !league.fired;
 
   // the rest of the picks (the scouts make yours): the draft stays open until "Continue to re-signing"
   const simToEnd = () => {
@@ -151,7 +174,10 @@ export default function Draft() {
           league={league}
           hasPicks={myRemaining.length > 0}
           busy={busy}
+          canTrade={canTrade}
           onAuto={autoPick}
+          onNext={nextOne}
+          onTrade={setTradePick}
           onSimToMine={simToMine}
           onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : simToEnd())}
           onFinish={() => void finish()}
@@ -173,16 +199,30 @@ export default function Draft() {
         </Card>
       )}
 
+      {(league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
+        <Card className="tight">
+          <Toggle
+            on={!!league.settings.draftPause}
+            onChange={setPause}
+            label="Stop before every pick"
+            help="The draft waits before each team's pick, so you can trade for the pick on the clock. Off, it runs on to your next pick."
+          />
+        </Card>
+      )}
+
       {views.length > 1 && <Segmented value={view} onChange={setView} options={views} label="Draft sections" />}
 
-      {view === 'live' && league.phase === 'draft' && <LiveView league={league} cls={cls} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} />}
-      {view === 'lottery' && <LotteryView league={league} />}
+      {view === 'live' && league.phase === 'draft' && (
+        <LiveView league={league} cls={cls} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
+      )}
+      {view === 'lottery' && <LotteryView league={league} onTrade={canTrade ? setTradePick : undefined} />}
       {view === 'board' && <BoardList league={league} list={cls} onOpen={setDetail} onDraft={onClock ? setConfirmPick : undefined} />}
       {view === 'combine' && <CombineView league={league} list={cls} onOpen={setDetail} />}
       {view === 'mine' && <MyPicks league={league} />}
       {view === 'results' && <Results league={league} />}
 
       <ProspectSheet pid={detail} onClose={() => setDetail(null)} canDraft={onClock} onDraft={(pid) => setConfirmPick(pid)} />
+      <PickTradeSheet dpid={tradePick} onClose={() => setTradePick(null)} />
 
       <Sheet open={confirmPick !== null} onClose={() => setConfirmPick(null)} title="Make the pick?">
         {confirmPick !== null && league.players[confirmPick] && np && (
@@ -237,7 +277,10 @@ function OnTheClock({
   league,
   hasPicks,
   busy,
+  canTrade,
   onAuto,
+  onNext,
+  onTrade,
   onSimToMine,
   onSimToEnd,
   onFinish,
@@ -245,13 +288,23 @@ function OnTheClock({
   league: League;
   hasPicks: boolean;
   busy: boolean;
+  canTrade: boolean;
   onAuto: () => void;
+  onNext: () => void;
+  onTrade: (dpid: number) => void;
   onSimToMine: () => void;
   onSimToEnd: () => void;
   onFinish: () => void;
 }) {
   const np = nextPick(league);
   const user = league.userTid;
+  // on the clock: how many teams would trade up into the pick (each one's best package)
+  const onClock = np?.tid === user;
+  const clockPick = np?.dpid;
+  const offers = useLeagueMemo(
+    () => (onClock && canTrade && clockPick !== undefined ? blockOffers(league, { pids: [], dpids: [clockPick] }).length : 0),
+    [league, onClock, canTrade, clockPick],
+  );
   if (!np) {
     return (
       <Card accent className="fo-hero">
@@ -299,18 +352,35 @@ function OnTheClock({
               <FastForward size={16} /> Sim to end
             </button>
           </div>
-        </>
-      ) : (
-        <div className="row" style={{ marginTop: 12, gap: 8 }}>
-          {hasPicks && (
-            <button className="btn sm grow primary" onClick={onSimToMine}>
-              <Play size={15} fill="currentColor" /> Sim to my pick
+          {canTrade && (
+            <button className="btn sm block" style={{ marginTop: 8 }} disabled={!offers} onClick={() => onTrade(np.dpid)}>
+              <ArrowLeftRight size={15} /> Offers for this pick ({offers})
             </button>
           )}
-          <button className={`btn sm grow ${hasPicks ? 'ghost' : 'primary'}`} onClick={onSimToEnd}>
-            <FastForward size={16} /> Sim to end of draft
-          </button>
-        </div>
+        </>
+      ) : (
+        <>
+          <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
+            <button className="btn sm grow primary" onClick={onNext}>
+              <SkipForward size={15} /> Next pick
+            </button>
+            {hasPicks && (
+              <button className="btn sm grow" onClick={onSimToMine}>
+                <Play size={15} fill="currentColor" /> Sim to my pick
+              </button>
+            )}
+          </div>
+          <div className="row wrap" style={{ marginTop: 8, gap: 8 }}>
+            {canTrade && (
+              <button className="btn sm grow" onClick={() => onTrade(np.dpid)}>
+                <ArrowLeftRight size={15} /> Trade for #{overallPick(league, np.round, np.pick!)}
+              </button>
+            )}
+            <button className="btn sm grow ghost" onClick={onSimToEnd}>
+              <FastForward size={16} /> Sim to end of draft
+            </button>
+          </div>
+        </>
       )}
     </Card>
   );
@@ -322,7 +392,22 @@ function draftedThisYear(league: League): Player[] {
     .sort((a, b) => overallPick(league, a.draft.round, a.draft.pick) - overallPick(league, b.draft.round, b.draft.pick));
 }
 
-function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; cls: Player[]; onClock: boolean; onOpen: (pid: number) => void; onDraft: (pid: number) => void }) {
+function LiveView({
+  league,
+  cls,
+  onClock,
+  onOpen,
+  onDraft,
+  onTrade,
+}: {
+  league: League;
+  cls: Player[];
+  onClock: boolean;
+  onOpen: (pid: number) => void;
+  onDraft: (pid: number) => void;
+  /** Open the trade sheet for a pick (absent when trading is closed). */
+  onTrade?: (dpid: number) => void;
+}) {
   const [all, setAll] = useState(false);
   const order = draftOrder(league);
   const picks = useLeagueMemo(() => draftedThisYear(league).reverse(), [league]);
@@ -330,15 +415,32 @@ function LiveView({ league, cls, onClock, onOpen, onDraft }: { league: League; c
     <>
       {order.length > 1 && (
         <>
-          <SecTitle>Up next</SecTitle>
+          <SecTitle right={onTrade ? <span className="tiny dim">Tap a pick to trade for it</span> : undefined}>Up next</SecTitle>
           <div className="hscroll">
-            {order.slice(1, 13).map((d) => (
-              <div key={d.dpid} className={`fo-pickchip ${d.tid === league.userTid ? 'me' : ''}`}>
-                <span className="n">#{overallPick(league, d.round, d.pick!)}</span>
-                <TeamLogo tid={d.tid} size={26} />
-                <span className="tiny bold">{league.teams[d.tid].abbrev}</span>
-              </div>
-            ))}
+            {order.slice(1, 13).map((d) => {
+              const n = overallPick(league, d.round, d.pick!);
+              const body = (
+                <>
+                  <span className="n">#{n}</span>
+                  <TeamLogo tid={d.tid} size={26} />
+                  <span className="tiny bold">{league.teams[d.tid].abbrev}</span>
+                </>
+              );
+              return onTrade ? (
+                <button
+                  key={d.dpid}
+                  className={`fo-pickchip ${d.tid === league.userTid ? 'me' : ''}`}
+                  aria-label={d.tid === league.userTid ? `Offers for your pick #${n}` : `Trade for #${n} (${league.teams[d.tid].abbrev})`}
+                  onClick={() => onTrade(d.dpid)}
+                >
+                  {body}
+                </button>
+              ) : (
+                <div key={d.dpid} className={`fo-pickchip ${d.tid === league.userTid ? 'me' : ''}`}>
+                  {body}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
@@ -458,7 +560,7 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
 
 // ------------------------------------------------------------------ lottery
 
-function LotteryView({ league }: { league: League }) {
+function LotteryView({ league, onTrade }: { league: League; onTrade?: (dpid: number) => void }) {
   const order = draftOrder(league).filter((d) => d.round === 1 && (d.pick ?? 99) <= 14);
   if (!order.length) return <Empty>Lottery results will appear here after the playoffs.</Empty>;
   // the same pre-lottery order and chances the lottery used (tied teams split theirs)
@@ -467,7 +569,7 @@ function LotteryView({ league }: { league: League }) {
     <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
         <h3 style={{ fontSize: 14, color: 'var(--text-2)' }}>Lottery order</h3>
-        <span className="tiny dim">Pre-lottery odds for #1</span>
+        <span className="tiny dim">{onTrade ? 'Tap a pick to trade for it' : 'Pre-lottery odds for #1'}</span>
       </div>
       <div className="list">
         {order.map((d) => {
@@ -476,8 +578,15 @@ function LotteryView({ league }: { league: League }) {
           const ts = curTeamSeason(league, d.originalTid);
           const odds = (pre.get(d.originalTid)?.w ?? 0) / 10;
           const mine = d.tid === league.userTid;
+          // a row opens the trade sheet for its pick while trading is open
+          const Row = onTrade ? 'button' : 'div';
           return (
-            <div key={d.dpid} className="listrow" style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}>
+            <Row
+              key={d.dpid}
+              className="listrow"
+              style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined, width: '100%', textAlign: 'left' }}
+              onClick={onTrade ? () => onTrade(d.dpid) : undefined}
+            >
               <span className="fo-rank">{d.pick}</span>
               <TeamLogo tid={d.tid} size={32} />
               <div className="grow" style={{ minWidth: 0 }}>
@@ -493,7 +602,7 @@ function LotteryView({ league }: { league: League }) {
                 {move > 0 ? <ArrowUp size={14} /> : move < 0 ? <ArrowDown size={14} /> : null}
                 {move !== 0 ? Math.abs(move) : '—'}
               </span>
-            </div>
+            </Row>
           );
         })}
       </div>

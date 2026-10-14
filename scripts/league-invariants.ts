@@ -14,6 +14,7 @@ import { cupTables } from '../src/core/league/cup';
 import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
 import { validateTrade } from '../src/core/league/trades';
+import * as P from '../src/core/league/proposals';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
@@ -122,6 +123,20 @@ function check() {
     for (const r of [1, 2])
       for (let t = 0; t < 30; t++)
         if ((cnt.get(`${s}-${r}-${t}`) ?? 0) !== 1 && !(ph === 'draft' && s === season)) bad('pick count != 1', `${s} r${r} orig ${t}: ${cnt.get(`${s}-${r}-${t}`) ?? 0}`);
+  // AI trade offers: none outlives ten days, every asset is still with the team that would send it,
+  // and none asks for a player the user made untouchable (who must be on the user's team)
+  for (const p of L.proposals ?? []) {
+    if (p.season !== season || L.day - p.day > 10) bad('trade offer older than 10 days', `#${p.id} ${p.season} d${p.day}`);
+    for (const side of [p.offer.a, p.offer.b]) {
+      for (const pid of side.pids) if (L.players[pid]?.tid !== side.tid) bad('trade offer player not on his team', `#${p.id} ${nm(pid)}`);
+      for (const d of side.dpids) if (L.draftPicks.find((x) => x.dpid === d)?.tid !== side.tid) bad('trade offer pick not with its team', `#${p.id} pick ${d}`);
+    }
+    if (p.offer.a.tid !== L.userTid) bad('trade offer to another team', `#${p.id}`);
+    for (const pid of p.offer.a.pids) if (L.untouchable?.includes(pid)) bad('trade offer asks for an untouchable', `#${p.id} ${nm(pid)}`);
+  }
+  if ((L.proposals?.length ?? 0) > P.MAX_OPEN || new Set(L.proposals?.map((p) => p.tid)).size !== (L.proposals?.length ?? 0))
+    bad('too many trade offers', String(L.proposals?.length));
+  for (const pid of L.untouchable ?? []) if (L.players[pid]?.tid !== L.userTid) bad('untouchable not on the user team', nm(pid));
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
   } catch (e) {
@@ -404,14 +419,19 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
   for (let s = 0; s < n; s++) {
     fixUserRoster();
     extendBest();
+    // the user's best player is off the table: no offer may ask for him
+    const best = std(L.userTid).sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
+    if (best) P.setUntouchable(L, best.pid, true);
     check();
+    const offers0 = L.nextProposalId ?? 1;
     const errs = S.startRegularSeason(L);
     if (errs.length) throw new Error(errs.join('; '));
     check();
     const extended = Object.values(L.players).filter((p) => p.contract.next).length;
     checkOpeningNight();
     checkCalendar(!(opts.realCalendar && s === 0));
-    // news is capped, so count trades by id as they appear
+    let accepted = '';
+    // news is capped, so count trades by id as they appear (the deadline recap is a trade story too)
     let trades = 0;
     let buyouts = 0;
     let claims = 0;
@@ -419,7 +439,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     for (let g = 0; L.phase === 'regular' && g < 400; g++) {
       const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from }));
       S.simDay(L);
-      trades += L.news.filter((x) => x.kind === 'trade' && x.id >= lastId).length;
+      trades += L.news.filter((x) => x.kind === 'trade' && x.text.startsWith('Trade: ') && x.id >= lastId).length;
       buyouts += L.news.filter((x) => x.kind === 'release' && x.id >= lastId && x.text.includes('bought out')).length;
       lastId = L.nextMsgId;
       // a player can't be signed on waivers: one on a roster now was claimed, and took his dead money with him
@@ -428,11 +448,23 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         claims++;
         if (L.teams[w.from].deadMoney.some((d) => d.pid === w.pid && d.season >= L.season)) bad('dead money left for a claimed player', `${nm(w.pid)} ${L.teams[w.from].abbrev}`);
       }
+      // take the first offer that comes before the deadline: every open one must go through
+      const open = P.openProposals(L)[0];
+      if (!accepted && open && L.phase === 'regular' && L.day <= L.tradeDeadlineDay) {
+        const r = P.acceptProposal(L, open.id);
+        if (!r.ok) bad('open trade offer refused', `#${open.id} ${open.kind}: ${r.reason}`);
+        accepted = `${open.kind} with ${L.teams[open.tid].abbrev}`;
+        trades += L.news.filter((x) => x.kind === 'trade' && x.text.startsWith('Trade: ') && x.id >= lastId).length;
+        lastId = L.nextMsgId;
+        check();
+      }
       if (L.day % 30 === 0) check();
       if (L.day > 90 && L.phase === 'regular') checkClinch();
       if (L.day === L.allStarDay + 1 && L.phase === 'regular') checkAllStars();
     }
     checkRegularSeasonOver();
+    const offers = (L.nextProposalId ?? 1) - offers0;
+    if (L.news.filter((x) => x.season === L.season && x.text.startsWith('Trade deadline recap')).length !== 1) bad('deadline recap not once', '');
     for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) S.simDay(L);
     check();
     checkSeasonEnd();
@@ -467,7 +499,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     check();
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
-      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
+      `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
   }
 }

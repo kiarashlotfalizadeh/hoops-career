@@ -1,9 +1,10 @@
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Briefcase, CheckCheck, ClipboardList, Crown, Landmark, Mail, MailOpen, Stethoscope, Telescope, TrendingUp, type LucideIcon } from 'lucide-react';
-import type { InboxMessage } from '../../core/types';
+import { ArrowRight, Briefcase, Check, CheckCheck, ClipboardList, Crown, Landmark, Mail, MailOpen, Stethoscope, Telescope, TrendingUp, type LucideIcon } from 'lucide-react';
+import type { InboxMessage, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
+import { acceptProposal, openProposals, proposalError } from '../../core/league/proposals';
 import { seasonLabel } from '../../core/constants';
 import { Card, Empty, PageHeader } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
@@ -127,11 +128,16 @@ export default function Inbox() {
                       {paras.map((p, i) => (
                         <p key={i}>{p}</p>
                       ))}
-                      <div className="row" style={{ gap: 8, marginTop: 4 }}>
-                        {to && (
-                          <button className="btn sm primary" onClick={() => nav(to)}>
-                            Open <ArrowRight size={15} />
-                          </button>
+                      {m.proposal !== undefined && <OfferStatus league={league} id={m.proposal} />}
+                      <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
+                        {m.proposal !== undefined ? (
+                          <OfferButtons league={league} id={m.proposal} onReview={() => nav(`/trade?proposal=${m.proposal}`)} />
+                        ) : (
+                          to && (
+                            <button className="btn sm primary" onClick={() => nav(to)}>
+                              Open <ArrowRight size={15} />
+                            </button>
+                          )
                         )}
                         <button
                           className="btn sm ghost"
@@ -152,5 +158,40 @@ export default function Inbox() {
         </Card>
       )}
     </main>
+  );
+}
+
+/** Why an AI team's offer can't be taken now (closed, expired, rules), or null while it stands. */
+function useOfferError(league: League, id: number): string | null {
+  return useLeagueMemo(() => {
+    const p = openProposals(league).find((x) => x.id === id);
+    return p ? proposalError(league, p) : 'This offer is closed: it was taken, turned down or withdrawn, or it expired.';
+  }, [league, id]);
+}
+
+function OfferStatus({ league, id }: { league: League; id: number }) {
+  const err = useOfferError(league, id);
+  return err ? <p className="small warn">{err}</p> : null;
+}
+
+/** An AI team's offer, from its message: take it here, or review it in the trade builder. */
+function OfferButtons({ league, id, onReview }: { league: League; id: number; onReview: () => void }) {
+  const err = useOfferError(league, id);
+  const accept = () => {
+    let r = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      r = acceptProposal(l, id);
+    });
+    useStore.getState().toast(r.reason, r.ok ? 'good' : 'bad');
+  };
+  return (
+    <>
+      <button className="btn sm good" disabled={!!err} onClick={accept}>
+        <Check size={15} /> Accept
+      </button>
+      <button className="btn sm primary" disabled={!!err} onClick={onReview}>
+        Review <ArrowRight size={15} />
+      </button>
+    </>
   );
 }

@@ -15,7 +15,7 @@ import {
   evaluateTrade,
   filterTargets,
   maxTakeBack,
-  neutralBalance,
+  neutralSplit,
   tradeRoster,
   tradeTargets,
   untradeable,
@@ -206,7 +206,7 @@ describe('counter-offers', () => {
       if (c.kind !== 'add' && !c.label.includes(', add ')) {
         expect(c.offer.a).toEqual(o.a);
       }
-      const { give, get } = neutralBalance(ev.parts, c.offer);
+      const { give, get } = neutralSplit(ev.parts, c.offer);
       expect(get - give).toBeLessThanOrEqual(prev + 1e-9);
       prev = get - give;
       expect(c.label.length).toBeGreaterThan(0);

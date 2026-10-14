@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Check, Handshake, Info, Lock, RotateCcw, Ticket, X } from 'lucide-react';
+import { Ban, Check, Handshake, Info, Lock, LockKeyhole, RotateCcw, Ticket, X } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
@@ -31,6 +31,9 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '../components/ui';
 import { STRATEGY_META, Callout, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
+import { isUntouchable, openProposals } from '../../core/league/proposals';
+import { OffersTab } from '../office/OffersTab';
+import { UntouchableToggle } from '../office/Untouchable';
 import { rosterNames } from '../stats';
 import { TierLine, TradeNotes } from '../trade/common';
 import { CounterSheet } from '../trade/CounterSheet';
@@ -50,17 +53,30 @@ const ids = (s: string | null) =>
     : [];
 const toggle = (arr: number[], id: number) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
 
-function readParams(league: League, params: URLSearchParams) {
+type Tab = 'build' | 'find' | 'block' | 'offers';
+
+function readParams(league: League, params: URLSearchParams): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab } {
   const user = league.userTid;
+  // an AI team's offer (Review in the inbox) opens in the builder; once it's gone, the other offers show
+  const pr = params.get('proposal');
+  const offer = pr !== null ? openProposals(league).find((p) => p.id === Number(pr)) : undefined;
+  if (offer)
+    return {
+      partner: offer.tid,
+      give: { pids: [...offer.offer.a.pids], dpids: [...offer.offer.a.dpids] },
+      get: { pids: [...offer.offer.b.pids], dpids: [...offer.offer.b.dpids] },
+      shop: null,
+      tab: 'build',
+    };
   const w = params.get('with');
   const wt = w !== null ? Number(w) : NaN;
   const fallback = league.teams.find((t) => t.tid !== user)!.tid;
   const partner = Number.isFinite(wt) && league.teams[wt] && wt !== user ? wt : fallback;
-  const give = ids(params.get('give'));
-  const get = ids(params.get('get'));
+  const give: Sel = { pids: ids(params.get('give')), dpids: ids(params.get('givedp')) };
+  const get: Sel = { pids: ids(params.get('get')), dpids: ids(params.get('getdp')) };
   // "Trade him" from the contracts list opens the trading block for that player
-  const shop = w === null && give.length === 1 && !get.length ? give[0] : null;
-  return { partner, give: { pids: give, dpids: [] }, get: { pids: get, dpids: [] }, shop };
+  const shop = w === null && give.pids.length === 1 && !give.dpids.length && !get.pids.length && !get.dpids.length ? give.pids[0] : null;
+  return { partner, give, get, shop, tab: pr !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : 'build' };
 }
 
 export default function Trade() {
@@ -71,7 +87,7 @@ export default function Trade() {
   const [partner, setPartner] = useState(init.partner);
   const [give, setGive] = useState<Sel>(init.give);
   const [get, setGet] = useState<Sel>(init.get);
-  const [tab, setTab] = useState<'build' | 'find' | 'block'>(init.shop !== null ? 'block' : 'build');
+  const [tab, setTab] = useState<Tab>(init.tab);
   const [shop, setShop] = useState<number | null>(init.shop);
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
   // a turned-down deal and what they'd do instead; the finder's filters and the ask it last loaded
@@ -92,7 +108,7 @@ export default function Trade() {
     setGive(r.give);
     setGet(r.get);
     setShop(r.shop);
-    setTab(r.shop !== null ? 'block' : 'build');
+    setTab(r.tab);
     setAsk(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -270,10 +286,26 @@ export default function Trade() {
           { id: 'build', label: 'Build' },
           { id: 'find', label: 'Find' },
           { id: 'block', label: 'Trading block' },
+          { id: 'offers', label: `Offers${openProposals(league).length ? ` · ${openProposals(league).length}` : ''}` },
         ]}
       />
 
-      {tab === 'build' ? (
+      {tab === 'offers' && (
+        <OffersTab
+          league={league}
+          closed={closed}
+          onCounter={(o) => {
+            setPartner(o.b.tid);
+            setGive({ pids: o.a.pids, dpids: o.a.dpids });
+            setGet({ pids: o.b.pids, dpids: o.b.dpids });
+            setSide('theirs');
+            setTab('build');
+            window.scrollTo({ top: 0, behavior: scrollBehavior() });
+          }}
+        />
+      )}
+
+      {tab === 'offers' ? null : tab === 'build' ? (
         <>
           <TeamPicker league={league} partner={partner} onPick={pickPartner} />
           <PartnerCard league={league} tid={partner} season={s} />
@@ -774,10 +806,16 @@ function TradingBlock({
                 <Ovr v={p.ovr} size="sm" />
                 {p.lastName}
                 {lock && <Lock size={12} role="img" aria-label="can't be traded now" />}
+                {isUntouchable(league, p.pid) && <LockKeyhole size={12} role="img" aria-label="untouchable" style={{ color: 'var(--accent-text)' }} />}
               </button>
             );
           })}
         </div>
+        {target && (
+          <div style={{ marginTop: 10 }}>
+            <UntouchableToggle league={league} p={target} />
+          </div>
+        )}
       </Card>
       {closed ? (
         <Empty>Teams aren't taking calls until trading reopens.</Empty>
