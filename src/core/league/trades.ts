@@ -27,6 +27,7 @@ import {
 } from './helpers';
 import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
+import { logTrade } from './transactions';
 
 export interface TradeSide {
   tid: number;
@@ -694,6 +695,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
     tids: [ta.tid, tb.tid],
     pids: [...offer.a.pids, ...offer.b.pids],
   });
+  logTrade(league, [offer.a, offer.b], (dpid) => pickLabel(league, findPick(league, dpid)!));
 }
 
 /** "2027 1st", "2027 2nd #59" once the order is set (overall number), "(BOS)" if acquired, and any protection. */

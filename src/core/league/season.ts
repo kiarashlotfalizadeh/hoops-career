@@ -52,6 +52,7 @@ import { healOneGame } from './injuries';
 import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
 import { ownerEvaluation } from './owner';
 import { clearAllPlans } from './gamePlans';
+import { pruneTransactions } from './transactions';
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -520,6 +521,7 @@ export function newSeason(league: League): boolean {
   league.schedule = [];
   // game plans were for last season's opponents as they were
   clearAllPlans(league);
+  pruneTransactions(league);
   for (const t of league.teams) {
     t.hype = clamp(t.hype * 0.85 + 0.075, 0.05, 1);
     // ticket prices keep pace with league revenue (AI teams reprice at opening night)
