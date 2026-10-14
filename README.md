@@ -134,7 +134,7 @@ npm run season-test  # multi-season end-to-end run (-- [seasons] [--seed path/to
 npm run invariants   # five real-league seasons and two of a fictional league (whose coach is fired after the first and takes over another team) through every phase, asserting league invariants (also runs in CI)
 npm run real-check   # one real-league season vs real 2025-26 stats (env RNG=<seed>, TEAM=<abbrev> for one team's rotation)
 npm run build        # production PWA in dist/
-npm run smoke        # browser smoke test on the production build: phone + tablet screens, a live game, the Lab, a backup round trip (also runs in CI)
+npm run smoke        # browser smoke test on the production build: phone + tablet screens, a live game (and picking it up after a reload), the Lab, a backup round trip (also runs in CI)
 npx tsx scripts/tactic-sweep.ts  # what every tactic extreme is worth, in net rating, over real matchups
 ```
 
