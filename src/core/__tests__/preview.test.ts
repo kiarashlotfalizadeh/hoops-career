@@ -11,7 +11,7 @@ import { teamPlayers } from '../league/helpers';
 import { setPlanMatchup } from '../league/gamePlans';
 import { createLeague, defaultSettings } from '../league/create';
 import { runLab } from '../ai/lab';
-import type { League } from '../types';
+import type { League, ScheduledGame } from '../types';
 
 afterEach(() => clearLive());
 
@@ -125,6 +125,23 @@ describe('matchup preview', () => {
     expect(away.projection.edge).toBe(-HOME_EDGE);
     expect(home.projection.margin - away.projection.margin).toBeCloseTo(2 * HOME_EDGE, 6);
     expect(home.projection.win).toBeGreaterThan(away.projection.win);
+  });
+
+  it('playoff games carry the series: game number, elimination and clinch, and the tag Home shows', () => {
+    const l = testLeague('playoffs');
+    const opp = (l.userTid + 1) % 30;
+    l.playoffs = [{ id: 'E1-0', round: 1, conf: 'E', high: opp, low: l.userTid, highSeed: 1, lowSeed: 8, highWins: 3, lowWins: 1 }];
+    const g: ScheduledGame = { gid: l.nextGid++, day: l.day, home: opp, away: l.userTid, type: 'playoffs', seriesId: 'E1-0' };
+    l.schedule.push(g);
+    ensureRotation(l, opp);
+    ensureRotation(l, l.userTid);
+    expect(matchupPreview(l, g.gid)!.playoff).toMatchObject({ tag: 'R1 · Game 5', game: 5, wins: 1, losses: 3, elimination: true, clinch: false, homeCourt: false });
+    l.playoffs[0].lowWins = 3;
+    const pv = matchupPreview(l, g.gid)!;
+    expect(pv.playoff).toMatchObject({ tag: 'R1 · Game 7', elimination: true, clinch: true });
+    expect(pv.us.tid).toBe(l.userTid);
+    expect(pv.usHome).toBe(false);
+    expect(pv.projection.edge).toBe(-HOME_EDGE);
   });
 
   it('the Lab plays every game at A’s floor with venue a, and takes turns by default as before', () => {
