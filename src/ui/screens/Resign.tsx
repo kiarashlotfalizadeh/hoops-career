@@ -4,10 +4,19 @@ import { CalendarClock, CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
-import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
+import {
+  askingContract,
+  decideTeamOption,
+  extensionAsk,
+  extensionBlockedReason,
+  extensionRefusal,
+  pendingTeamOptions,
+  rookieScaleDeal,
+  teamOptionWorth,
+} from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
 import { startFreeAgency } from '../../core/league/season';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
@@ -68,6 +77,9 @@ function ResignPhase() {
   const ifAll = committed + holds;
   const resigned = signedThisSummer(league).sort((a, b) => b.ovr - a.ovr);
   const options = useLeagueMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
+  // in the final season of their deals next season (a rookie whose option was just exercised among them)
+  const extendable = useLeagueMemo(() => extendablePlayers(league), [league]);
+  const [ext, setExt] = useState<number | null>(null);
   // standard roster spots only: two-way deals sit outside the 15
   const rosterNext = standardRoster(league, tid).length - expiring.filter((p) => !p.contract.twoWay).length;
 
@@ -304,6 +316,20 @@ function ResignPhase() {
         </>
       )}
 
+      {extendable.length > 0 && (
+        <>
+          <SecTitle>Up after {seasonLabel(next)} · extend now</SecTitle>
+          <Card className="flush">
+            <div className="list">
+              {extendable.map((p) => (
+                <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />
+              ))}
+            </div>
+          </Card>
+          <div className="tiny dim">Their deals run through next season. An extension starts the season after, and can be signed any time until the end of the regular season.</div>
+        </>
+      )}
+
       <div className="fo-dock">
         <button className="btn primary block big" disabled={busy} onClick={() => (expiring.length || options.length ? setConfirm(true) : void openFA())}>
           <DoorOpen size={20} /> Done — open free agency
@@ -311,6 +337,7 @@ function ResignPhase() {
       </div>
 
       <ContractSheet pid={sel} mode="resign" onClose={() => setSel(null)} />
+      <ContractSheet pid={ext} mode="extend" onClose={() => setExt(null)} />
 
       <Sheet open={!!renounce} onClose={() => setRenounce(null)} title={renounce ? `Renounce ${renounce.lastName}?` : undefined}>
         {renounce && (
@@ -390,8 +417,53 @@ function ResignPhase() {
   );
 }
 
+/** The user's players who can be extended right now (in the final season of their deals), best first. */
+const extendablePlayers = (league: League) =>
+  teamPlayers(league, league.userTid)
+    .filter((p) => !extensionBlockedReason(league, p))
+    .sort((a, b) => b.ovr - a.ovr);
+
+/** A player who can be extended now: his salary, what an extension would cost (or that he won't talk), and the button. */
+function ExtendRow({ league, p, onExtend }: { league: League; p: Player; onExtend: (pid: number) => void }) {
+  const exp = contractExp(p.contract);
+  const ask = extensionAsk(league, p);
+  return (
+    <div className="col" style={{ gap: 6, padding: '10px 12px' }}>
+      <Link to={`/player/${p.pid}`} className="row" style={{ gap: 10, minWidth: 0 }}>
+        <OvrPot p={p} />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="fo-name">{playerName(p)}</div>
+          <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+          <div style={{ marginTop: 4 }}>
+            <MoodTag p={p} />
+          </div>
+        </div>
+        <div className="fo-money">
+          <div className="a">{fmtM(salaryFor(p, exp))}</div>
+          <div className="b">thru {shortSeason(exp)}</div>
+        </div>
+      </Link>
+      <div className="row" style={{ gap: 8 }}>
+        <div className="small dim2 grow" style={{ minWidth: 0 }}>
+          {extensionRefusal(league, p) ? (
+            <span className="warn">Won't extend now</span>
+          ) : (
+            <>
+              Extension: asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''}
+            </>
+          )}
+        </div>
+        <button className="btn sm primary" aria-label={`Extend ${playerName(p)}`} onClick={() => onExtend(p.pid)}>
+          <PenLine size={15} /> Extend
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function OffPhase({ league }: { league: League }) {
   const tid = league.userTid;
+  const [ext, setExt] = useState<number | null>(null);
   // during the lottery and the draft, the contracts up are this season's: the ones the coming re-sign period is for
   const s = league.phase === 'draftLottery' || league.phase === 'draft' ? league.season : capSeason(league);
   const list = useLeagueMemo(
@@ -401,16 +473,27 @@ function OffPhase({ league }: { league: League }) {
         .sort((a, b) => b.ovr - a.ovr),
     [league, tid, s],
   );
+  const canExtend = useLeagueMemo(() => new Set(extendablePlayers(league).map((p) => p.pid)), [league]);
+  // the ones already extended: their deals end after this season too, but they're staying
+  const extended = useLeagueMemo(
+    () =>
+      teamPlayers(league, tid)
+        .filter((p) => extensionStart(p.contract) === s + 1)
+        .sort((a, b) => b.ovr - a.ovr),
+    [league, tid, s],
+  );
   // two-way pay was never on the cap books (the committed figure beside it leaves it out too)
   const freed = list.reduce((a, p) => a + (p.contract.twoWay ? 0 : salaryFor(p, s)), 0);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
   const when =
     league.phase === 'freeAgency'
-      ? 'The re-sign period for this summer has closed. These contracts run out after next season.'
+      ? 'The re-sign period for this summer has closed. These contracts run out after next season: extend them now, or re-sign them next summer.'
       : league.phase === 'draft' || league.phase === 'draftLottery'
         ? 'The re-sign period opens right after the draft.'
-        : 'The re-sign period opens after the playoffs and the draft. Until then you can review who is up.';
+        : league.phase === 'preseason' || league.phase === 'regular'
+          ? 'The re-sign period opens after the playoffs and the draft. Until the end of the regular season you can extend these players instead.'
+          : 'The re-sign period opens after the playoffs and the draft. Until then you can review who is up.';
   return (
     <main className="page">
       <PageHeader title="Re-sign Players" sub={`Contracts expiring after ${seasonLabel(s)}`} back />
@@ -443,6 +526,7 @@ function OffPhase({ league }: { league: League }) {
         <Card className="flush">
           <div className="list">
             {list.map((p) => {
+              if (canExtend.has(p.pid)) return <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />;
               const ask = askingContract(league, p, tid);
               return (
                 <Link key={p.pid} to={`/player/${p.pid}`} className="fo-prow">
@@ -464,7 +548,36 @@ function OffPhase({ league }: { league: League }) {
           </div>
         </Card>
       )}
-      <div className="tiny dim">Projected asks use today's ratings and mood; both will change by the summer.</div>
+      <div className="tiny dim">
+        Projected asks use today's ratings and mood; both will change by the summer.{canExtend.size > 0 ? " An extension's ask is for the season after his deal ends." : ''}
+      </div>
+
+      {extended.length > 0 && (
+        <>
+          <SecTitle>Extended</SecTitle>
+          <Card className="flush">
+            <div className="list">
+              {extended.map((p) => (
+                <Link key={p.pid} to={`/player/${p.pid}`} className="listrow">
+                  <OvrPot p={p} showPot={false} />
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="fo-name small">{playerName(p)}</div>
+                    <div className="fo-meta tiny">
+                      {p.pos} · {playerAge(p, s + 1)} in {shortSeason(s + 1)}
+                    </div>
+                  </div>
+                  <div className="fo-money">
+                    <div className="a">{fmtM(salaryFor(p, s + 1))}</div>
+                    <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
+
+      <ContractSheet pid={ext} mode="extend" onClose={() => setExt(null)} />
     </main>
   );
 }

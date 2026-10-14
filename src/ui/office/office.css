@@ -527,6 +527,11 @@ table.stats.fo-contracts tr.clickable td {
   background: color-mix(in srgb, var(--warn) 22%, transparent);
   color: var(--warn);
 }
+/* the seasons of a signed extension */
+.fo-opt.ext {
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+  color: var(--good);
+}
 
 /* ------------------------------------------------------------ draft */
 .fo-rank {
