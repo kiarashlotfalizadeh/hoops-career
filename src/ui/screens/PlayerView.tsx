@@ -18,7 +18,7 @@ import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
 import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
-import { pendingLive } from '../../state/live';
+import { liveInProgress } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 import { PlayerMoves } from '../league/MovesTab';
@@ -139,7 +139,7 @@ export default function PlayerView() {
   // a fired coach's old team isn't his to run
   const mine = p.tid === league.userTid && !league.fired;
   // a paused live game would record a moved player's line for his old team; a contract that's up is re-signed or let go, as in the Office
-  const busyWhy = pendingLive(league) ? 'Finish your live game first.' : null;
+  const busyWhy = liveInProgress(league) ? 'Finish your live game first.' : null;
   const upNote = contractUpNote(league, p);
   const tradeWhy = busyWhy ?? upNote ?? tradeClosedNote(league) ?? untradeableReason(league, p);
   const releaseWhy = busyWhy ?? upNote ?? releaseBlockedReason(league, p);

@@ -7,7 +7,7 @@ import { useStore } from '../store';
 import { faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency } from '../../core/league/season';
 import { nextPick } from '../../core/league/draft';
 import { userGameOnDay } from '../../core/league/games';
-import { prepareLive } from '../live';
+import { checkpointLive, prepareLive } from '../live';
 import type { League } from '../../core/types';
 import { testLeague, toGameDay } from './fixtures';
 
@@ -65,10 +65,14 @@ describe('import', () => {
     toGameDay(l);
     useStore.getState().setLeague(l);
     useStore.getState().mutate((x) => void prepareLive(x)!.simTo('quarter'));
+    // (as Export does: the game in progress goes in as far as it has got)
+    checkpointLive(l);
     const live = await roundTrip();
     useStore.getState().setLeague(live);
     const lg = prepareLive(live)!;
     expect(lg.game.gid).toBe(userGameOnDay(l, l.day)!.gid);
+    // picked up at the end of the first quarter, where it was exported
+    expect([lg.resumed, lg.sim.q, lg.sim.clock <= 0.05, [lg.sim.T[0].score, lg.sim.T[1].score]]).toEqual(['journal', 1, true, l.live!.score]);
     lg.commit(live);
     expect(live.games.filter((g) => g.gid === lg.game.gid)).toHaveLength(1);
     expect(live.schedule.filter((g) => g.day < live.day && !g.played)).toEqual([]);

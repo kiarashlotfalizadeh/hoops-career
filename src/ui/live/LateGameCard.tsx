@@ -1,6 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
 import { Flag, X } from 'lucide-react';
-import type { GameSim } from '../../core/sim/engine';
 import type { PlayCall, PossLog } from '../../core/sim/log';
 
 /** The clock and score as the court shows them (the Live screen's ticker). */
@@ -19,7 +18,6 @@ const CALL_LABEL: Record<PlayCall['kind'], string> = { three: 'Go for 3', two: '
  * while `drawing`), never from the sim running ahead of it.
  */
 export function LateGameCard({
-  sim,
   side,
   shown,
   quarter,
@@ -27,8 +25,10 @@ export function LateGameCard({
   drawing,
   nameOf,
   timeout,
+  initialCall,
+  callPlay,
+  cancelPlay,
 }: {
-  sim: GameSim;
   side: 0 | 1;
   shown: Shown;
   quarter: number;
@@ -37,10 +37,15 @@ export function LateGameCard({
   nameOf: (pid: number) => string;
   /** Calls the user's timeout, as the TO button does. */
   timeout: () => void;
+  /** A call still waiting for its possession when the card comes up (a game picked up after the app was closed). */
+  initialCall?: PlayCall | null;
+  /** Call a play, or cancel it, through the live game (which journals it): false when the call can't be run. */
+  callPlay: (call: PlayCall) => boolean;
+  cancelPlay: () => void;
 }) {
   const { clock, score } = useSyncExternalStore(shown.subscribe, shown.get);
   // the call, its period, and how many possessions the court had drawn when it was made
-  const [called, setCalled] = useState<{ call: PlayCall; q: number; from: number } | null>(null);
+  const [called, setCalled] = useState<{ call: PlayCall; q: number; from: number } | null>(() => (initialCall ? { call: initialCall, q: quarter, from: logs.length } : null));
   const [withTimeout, setWithTimeout] = useState(false);
   const margin = score[side] - score[1 - side];
   // between periods there is nothing to call (a call never outlives its period), and the card is for close games only
@@ -53,10 +58,10 @@ export function LateGameCard({
   const call = (c: PlayCall) => {
     if (withTimeout) timeout();
     setWithTimeout(false);
-    if (sim.callPlay(side, c)) setCalled({ call: c, q: quarter, from: logs.length });
+    if (callPlay(c)) setCalled({ call: c, q: quarter, from: logs.length });
   };
   const cancel = () => {
-    sim.cancelPlay(side);
+    cancelPlay();
     setCalled(null);
   };
   const sit = drawn?.sit?.[side];

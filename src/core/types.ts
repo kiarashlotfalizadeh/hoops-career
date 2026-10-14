@@ -1,6 +1,8 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 
+import type { PlayCall } from './sim/log';
+
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 export const POSITIONS: Pos[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
@@ -951,7 +953,50 @@ export interface League {
   transactions?: Txn[];
   /** Id of the next transaction logged. */
   nextTxnId?: number;
+  /** The user's live game in progress, journaled as it's played so it survives the app being closed. */
+  live?: LiveJournal;
 }
+
+/**
+ * A live game in progress (League.live): enough to play it again exactly to where it was after the
+ * app was closed. The engine draws each possession from the game's seed and the possession counts,
+ * so the same start and the same coaching moves after the same number of possessions replay the
+ * same game. Everything here was read at tip-off: changes made since (to the rotation, the game
+ * plan, Settings) wait for the next game, as they do while the game stays open.
+ */
+export interface LiveJournal {
+  gid: number;
+  /** The user's team at tip-off. */
+  tid: number;
+  /** Seed of the game's random stream. */
+  seed: number;
+  /** Whether in-game injuries were on. */
+  injuries: boolean;
+  /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk. */
+  user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number };
+  /** Possessions played (engine steps) at the last checkpoint, and the period, clock and score (home, away) then: a replay must land on them. */
+  steps: number;
+  q: number;
+  clock: number;
+  score: [number, number];
+  /** The user's coaching moves in order, each made after `at` possessions. */
+  ops: LiveOp[];
+  /** "Keep changes after this game" is on: the saved tactics as they were when it was turned on. */
+  keep?: Tactics;
+  /** Hashes of the user's tactics and rotation as the Live screen last saw them, to spot edits made away from it. */
+  seen?: [number, number];
+}
+
+/** A coaching move in a live game, on the user's side (see LiveJournal). */
+export type LiveOp = { at: number } & (
+  | { op: 'sub'; args: { out: number; in: number } }
+  /** `plan`: the new tactics are also what "Reset to game plan" goes back to (edits made away from the Live screen). */
+  | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean } }
+  | { op: 'timeout'; args: { reason?: string } }
+  | { op: 'manualSubs'; args: { on: boolean } }
+  | { op: 'call'; args: { call: PlayCall } }
+  | { op: 'cancelCall'; args: Record<string, never> }
+);
 
 /** Post-game press conference answers: credit the group, praise the player of the game, challenge the effort (after a loss). */
 export type PressChoice = 'group' | 'pog' | 'challenge';

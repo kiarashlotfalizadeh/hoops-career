@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { pendingLive } from '../../state/live';
+import { liveInProgress } from '../../state/live';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
 import { normalizeLink } from '../league/shared';
 import { inAppPath } from '../nav';
@@ -89,8 +89,8 @@ export default function Home() {
   const played = ts.won + ts.lost > 0;
   const primary = actions.find((a) => a.primary);
   // a live game in progress resumes, or finishes from its current score, as the Play menu says
-  const live = next ? pendingLive(league) : null;
-  const inProgress = !!live && live.game.gid === next?.gid;
+  const live = next ? liveInProgress(league) : null;
+  const inProgress = !!live && live.gid === next?.gid;
   const resume = inProgress ? actions.find((a) => a.cmd === 'watchLive') : undefined;
   const finish = inProgress ? actions.find((a) => a.cmd === 'quickGame') : undefined;
   const cup = next ? cupLabel(league, next) : null;
