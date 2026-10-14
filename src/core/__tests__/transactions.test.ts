@@ -28,9 +28,9 @@ import {
   valueScore,
 } from '../league/contracts';
 import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
+import { aiProposals } from '../league/proposals';
 import {
   MAX_FIRSTS_OUT,
-  aiProposeToUser,
   aiToAiTrade,
   canMakeWork,
   capSalary,
@@ -321,18 +321,23 @@ describe('AI trade valuation', () => {
     }
   });
 
-  it('only pitches deals the pitching AI would accept (T8)', () => {
+  it('only offers deals the offering AI accepts and the rules allow, each with its inbox message (T8)', () => {
     const l = league(9);
     expect(startRegularSeason(l)).toEqual([]);
-    for (let i = 0; i < 400; i++) aiProposeToUser(l, new Rng(i + 1));
-    const pitches = l.inbox.filter((m) => m.link?.startsWith('/trade?with='));
-    expect(pitches.length).toBeGreaterThan(0);
-    for (const m of pitches) {
-      const q = new URLSearchParams(m.link!.split('?')[1]);
-      const ids = (k: string) => q.get(k)!.split(',').map(Number);
-      const o: TradeOffer = { a: { tid: U, pids: ids('give'), dpids: [] }, b: { tid: Number(q.get('with')), pids: ids('get'), dpids: [] } };
-      expect(evaluateTrade(l, o).accept).toBe(true);
+    let offers = 0;
+    for (let d = 0; d <= l.tradeDeadlineDay; d++) {
+      l.day = d;
+      aiProposals(l);
+      for (const p of l.proposals ?? []) {
+        expect(validateTrade(l, p.offer)).toEqual([]);
+        expect(evaluateTrade(l, p.offer).accept).toBe(true);
+        expect(l.inbox.some((m) => m.proposal === p.id)).toBe(true);
+        offers++;
+      }
+      // room for the next one
+      l.proposals = [];
     }
+    expect(offers).toBeGreaterThan(0);
   });
 
   it('"what would make this work?" fixes our salary matching first (UI2-1)', () => {

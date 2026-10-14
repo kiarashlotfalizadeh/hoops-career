@@ -187,6 +187,39 @@ describe('reading a league', () => {
     expect(migrate(l).inbox.map((m) => m.link)).toEqual(['/roster', '/', '/trade?with=3', undefined, undefined, undefined, undefined, undefined]);
   });
 
+  it('keeps saves without trade offers as they are, and drops offers whose players or picks are gone', () => {
+    const l = testLeague('offers');
+    // a version-2 save has none of the fields
+    const plain = structuredClone(l);
+    delete plain.proposals;
+    delete plain.nextProposalId;
+    delete plain.untouchable;
+    for (const m of plain.inbox) delete m.proposal;
+    const old = structuredClone(plain);
+    expect(migrate(plain)).toEqual({ ...old, version: SAVE_VERSION });
+    const mine = l.teams[l.userTid];
+    const pid = Object.values(l.players).find((p) => p.tid === mine.tid)!.pid;
+    const theirs = Object.values(l.players).find((p) => p.tid === 3)!.pid;
+    const dp = l.draftPicks.find((d) => d.tid === 3)!.dpid;
+    const offer = (b: number[], dpids: number[]) => ({ a: { tid: l.userTid, pids: [pid], dpids: [] }, b: { tid: 3, pids: b, dpids } });
+    const base = { tid: 3, kind: 'buy' as const, note: '', season: l.season, day: 0, expires: 5 };
+    l.proposals = [
+      { ...base, id: 1, offer: offer([theirs], [dp]) },
+      { ...base, id: 2, offer: offer([999_999], []) },
+      { ...base, id: 3, offer: offer([], [999_999]) },
+      { ...base, id: 4, offer: null as never },
+    ];
+    l.untouchable = [pid, 999_999];
+    l.inbox[0].proposal = 'x' as never;
+    l.inbox[1].proposal = 1;
+    const once = migrate(l);
+    expect(once.proposals!.map((p) => p.id)).toEqual([1]);
+    expect(once.untouchable).toEqual([pid]);
+    expect([once.inbox[0].proposal, once.inbox[1].proposal]).toEqual([undefined, 1]);
+    // and again changes nothing
+    expect(migrate(structuredClone(once))).toEqual(once);
+  });
+
   it('keeps only #rrggbb team colours, which the screens put in styles as they are', () => {
     const l = testLeague('colours');
     const real = [...l.teams[0].colors];

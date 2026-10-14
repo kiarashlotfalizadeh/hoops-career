@@ -340,6 +340,7 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean 
   p.tid = FREE_AGENT;
   p.contract = { start: league.season, salaries: [0] };
   leaveTeam(team, p.pid);
+  if (league.untouchable?.includes(p.pid)) league.untouchable = league.untouchable.filter((x) => x !== p.pid);
   // a free agent like any other: the trade-back rule and the trade lock went with the old contract
   delete p.tradedFrom;
   delete p.tradeLock;

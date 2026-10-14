@@ -38,7 +38,9 @@ import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraft
 import { aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, trimRosters } from './freeAgency';
 import { FIRED_REASON, askingContract, leaveTeam, releasePlayer, resolveOptions } from './contracts';
 import { healOneGame } from './injuries';
-import { aiProposeToUser, aiToAiTrade, teamStrategyUpdate } from './trades';
+import { aiToAiTrade, teamStrategyUpdate } from './trades';
+import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
+import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
 
 export function regularGamesLeft(league: League) {
@@ -77,6 +79,8 @@ export function startRegularSeason(league: League): string[] {
     tone: 'neutral',
     link: '/',
   });
+  cleanProposals(league);
+  openingProposal(league);
   return [];
 }
 
@@ -117,7 +121,8 @@ function periodic(league: League, rng: Rng) {
   // front offices reassess as the record takes shape: a contender at 10-30 starts selling
   if (d === 30 || d === 60 || d === league.tradeDeadlineDay - 5) teamStrategyUpdate(league);
   aiToAiTrade(league, rng);
-  aiProposeToUser(league, rng);
+  // (offers to the user draw on their own random stream)
+  aiProposals(league);
 }
 
 function playAllStarGame(league: League, rng: Rng) {
@@ -217,6 +222,9 @@ export function advanceDay(league: League) {
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
   else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);
+  // trade offers that expired or stopped being valid go, then the deadline's rumors, briefing and recap
+  cleanProposals(league);
+  deadlineDay(league);
 }
 
 function endRegularSeason(league: League) {
@@ -373,12 +381,24 @@ function endPlayoffs(league: League) {
 // league waits until he takes over another team. The summer has dates too, so offseason news and
 // mail carry the draft's and free agency's dates rather than Finals night.
 
+/**
+ * After a pick (or a trade) on draft night: the AI picks run until the user is on the clock again,
+ * unless the user stops the draft before every pick (settings.draftPause); then teams that want
+ * the user's first-rounder call.
+ */
+export function continueDraft(league: League) {
+  if (league.phase !== 'draft' || league.fired) return;
+  if (!league.settings.draftPause) withRng(league, (rng) => draftUntilUser(league, rng));
+  draftProposals(league);
+}
+
 export function startDraft(league: League): boolean {
   if (league.phase !== 'draftLottery' || league.fired) return false;
   league.phase = 'draft';
   // draft night: late June, or the day after a late Finals
   league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 25));
-  withRng(league, (rng) => draftUntilUser(league, rng));
+  cleanProposals(league);
+  continueDraft(league);
   return true;
 }
 
@@ -391,20 +411,34 @@ export function userDraftPick(league: League, pid: number): string | null {
   const p = league.players[pid];
   if (p?.tid !== DRAFT_PROSPECT || p.draft.year !== league.season) return `${p ? playerName(p) : 'That player'} is no longer on the board.`;
   draftPlayer(league, dp, pid);
-  withRng(league, (rng) => draftUntilUser(league, rng));
+  continueDraft(league);
   return null;
 }
 
-/** Let the staff make the user's current pick, then run AI picks until the user's next turn. */
+/** Let the staff make the user's current pick, then run AI picks until the user's next turn (or the next pick, with the draft paused). */
 export function autoDraftUserPick(league: League) {
   if (league.phase !== 'draft' || league.fired) return;
+  const dp = nextPick(league);
+  if (!dp || dp.tid !== league.userTid) return;
   withRng(league, (rng) => {
-    const dp = nextPick(league);
-    if (!dp || dp.tid !== league.userTid) return;
     const choice = aiChoose(league, dp.tid, rng);
     if (choice) draftPlayer(league, dp, choice.pid);
-    draftUntilUser(league, rng);
   });
+  continueDraft(league);
+}
+
+/** The AI team on the clock makes its pick: exactly one (false when it's the user's pick, or no draft is on). */
+export function draftNextPick(league: League): boolean {
+  if (league.phase !== 'draft' || league.fired) return false;
+  const dp = nextPick(league);
+  if (!dp || dp.tid === league.userTid) return false;
+  withRng(league, (rng) => {
+    const choice = aiChoose(league, dp.tid, rng);
+    if (choice) draftPlayer(league, dp, choice.pid);
+    else league.draftPicks = league.draftPicks.filter((d) => d.dpid !== dp.dpid);
+  });
+  draftProposals(league);
+  return true;
 }
 
 export function finishDraftPhase(league: League): boolean {
@@ -417,6 +451,7 @@ export function finishDraftPhase(league: League): boolean {
   });
   league.phase = 'resign';
   league.day++;
+  cleanProposals(league);
   const exp = expiringPlayers(league, league.userTid);
   for (const p of exp) {
     p.asking = askingContract(league, p, league.userTid);
@@ -457,6 +492,9 @@ export function startFreeAgency(league: League): boolean {
     tone: 'neutral',
     link: '/free-agents',
   });
+  cleanProposals(league);
+  // with room under the cap, taxpayers call to dump salary (with picks attached)
+  freeAgencyProposals(league);
   return true;
 }
 
@@ -478,6 +516,7 @@ export function faAdvance(league: League, days = 1) {
       league.faDay++;
     }
   });
+  cleanProposals(league);
 }
 
 export function newSeason(league: League): boolean {
@@ -554,6 +593,8 @@ export function newSeason(league: League): boolean {
   for (const p of prospects(league)) if (p.draft.year < league.season) delete league.players[p.pid];
   compactRetired(league);
   for (const p of Object.values(league.players)) refreshDerived(league, p);
+  // last season's offers are over
+  cleanProposals(league);
   return true;
 }
 

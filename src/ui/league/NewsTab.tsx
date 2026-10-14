@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeftRight, ChevronDown, Flame, HeartPulse, Hourglass, ListOrdered, Newspaper, PenLine, Trophy, UserMinus, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, Flame, HeartPulse, Hourglass, ListOrdered, Megaphone, Newspaper, PenLine, Trophy, UserMinus, type LucideIcon } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
@@ -13,6 +13,7 @@ type Kind = NewsItem['kind'];
 
 export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: string }> = {
   trade: { label: 'Trades', icon: ArrowLeftRight, color: 'var(--info)' },
+  rumor: { label: 'Rumors', icon: Megaphone, color: 'var(--warn)' },
   signing: { label: 'Signings', icon: PenLine, color: 'var(--good)' },
   release: { label: 'Releases', icon: UserMinus, color: 'var(--text-2)' },
   injury: { label: 'Injuries', icon: HeartPulse, color: 'var(--bad)' },
@@ -23,7 +24,7 @@ export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: s
   general: { label: 'General', icon: Newspaper, color: 'var(--text-2)' },
 };
 
-const ORDER: Kind[] = ['trade', 'signing', 'injury', 'award', 'draft', 'milestone', 'release', 'retire', 'general'];
+const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'award', 'draft', 'milestone', 'release', 'retire', 'general'];
 const PAGE = 50;
 
 export function NewsTab({ league }: { league: League }) {

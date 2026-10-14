@@ -250,8 +250,29 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   }
   // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
   // 2 → 3: new data is optional (absent in older saves); the steps below read old data into it
+  // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the
+  // inbox then says the offer is closed), and so is an untouchable mark on a player who is gone
+  if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
+  if (x.untouchable !== undefined) x.untouchable = Array.isArray(x.untouchable) ? x.untouchable.filter((pid) => num(pid) && !!x.players[pid]) : [];
+  for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** A stored trade offer with both sides in shape, and every player and pick in it still in the league. */
+function proposalIntact(l: League, p: unknown): boolean {
+  if (!obj(p) || !num(p.id) || !num(p.tid) || !num(p.season) || !num(p.expires) || !obj(p.offer)) return false;
+  const pick = new Set(l.draftPicks.map((d) => d.dpid));
+  return [p.offer.a, p.offer.b].every(
+    (s) =>
+      obj(s) &&
+      num(s.tid) &&
+      !!l.teams[s.tid as number] &&
+      Array.isArray(s.pids) &&
+      Array.isArray(s.dpids) &&
+      s.pids.every((pid) => num(pid) && !!l.players[pid as number]) &&
+      s.dpids.every((d) => num(d) && pick.has(d as number)),
+  );
 }
 
 function readAll(id: string) {

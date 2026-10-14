@@ -639,7 +639,8 @@ export interface NewsItem {
   id: number;
   season: number;
   day: number;
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general';
+  /** 'rumor': who is listening on a player before the trade deadline, and who has called. */
+  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor';
   text: string;
   tids: number[];
   pids: number[];
@@ -658,6 +659,27 @@ export interface InboxMessage {
   tone?: 'good' | 'bad' | 'neutral' | 'alert';
   /** Big news for the GM: long sims pause for it (trade requests, key long-term injuries, owner verdicts). */
   important?: boolean;
+  /** The AI trade offer (Proposal id) this message carries: the inbox offers Accept and Review while it stands. */
+  proposal?: number;
+}
+
+/**
+ * A trade an AI team offers the user. Side a of `offer` is the user's team, side b the AI team.
+ * 'buy': it wants one of the user's players; 'sell': a rebuilder offers a veteran; 'dump': a
+ * taxpayer attaches picks to a contract it wants off its books; 'pick': it wants the user's pick
+ * on draft night. The AI accepted it when it was made; it stands until `expires` (a day of
+ * `season`) or until it stops being valid.
+ */
+export interface Proposal {
+  id: number;
+  tid: number;
+  offer: { a: { tid: number; pids: number[]; dpids: number[] }; b: { tid: number; pids: number[]; dpids: number[] } };
+  kind: 'buy' | 'sell' | 'dump' | 'pick';
+  /** The AI GM's pitch. */
+  note: string;
+  season: number;
+  day: number;
+  expires: number;
 }
 
 export interface SeasonAwards {
@@ -695,6 +717,8 @@ export interface Settings {
   onboarded?: boolean;
   /** Pause long sims for big news (default on). */
   stopOnNews?: boolean;
+  /** Draft night stops before every AI pick, so picks can be traded for on the clock (default off). */
+  draftPause?: boolean;
 }
 
 export interface League {
@@ -750,6 +774,11 @@ export interface League {
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
   cup?: CupState | null;
+  /** AI trade offers to the user that are still open. */
+  proposals?: Proposal[];
+  nextProposalId?: number;
+  /** The user's players AI teams don't ask for (in offers, "what would make this work?" or counters). */
+  untouchable?: number[];
 }
 
 export interface CupGroup {
