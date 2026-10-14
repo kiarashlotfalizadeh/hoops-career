@@ -13,6 +13,7 @@ import { releasePlayer, signPlayer } from '../../core/league/contracts';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { curTeamSeason } from '../../core/league/helpers';
 import type { League, LiveJournal } from '../../core/types';
+import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { testLeague, toGameDay, userGames } from './fixtures';
 
 /** Open the league and start today's game the way the Live screen does. */
@@ -430,6 +431,31 @@ describe('a live game survives the app being closed (W12)', () => {
     expect(res.gid).toBe(lg.game.gid);
     expect([res.home.quarters[0], res.away.quarters[0]]).toEqual(q1);
     expect([once(back, res.gid), back.live, liveInProgress(back)]).toEqual([1, undefined, null]);
+  });
+
+  it("plays the other coach's game plan again, and the result keeps it, on hard", async () => {
+    const l = testLeague('opp-plan');
+    // a dozen days in, so the other coaches have games of yours to plan against; on hard, every one does
+    for (let i = 0; i < 12; i++) simDay(l);
+    l.settings.difficulty = 'hard';
+    toGameDay(l);
+    const lg = goLive(l);
+    const them = (1 - lg.userSide) as 0 | 1;
+    const plan = oppPlanIn(lg.sim, them);
+    expect(plan?.items.length).toBeGreaterThan(0);
+    lg.simTo('quarter');
+    lg.setManualSubs(true);
+    for (let i = 0; i < 15; i++) lg.step();
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect(again.resumed).toBe('journal');
+    expect(oppPlanIn(again.sim, them)).toEqual(plan);
+    expect(again.sim.baseTactics(them)).toEqual(lg.sim.baseTactics(them));
+    const res = again.commit(back);
+    expect(res.oppPlan).toEqual(plan!.items.map((it) => it.text));
+    expect(res).toEqual(lg.commit(l));
   });
 
   it("reading a save drops a damaged journal, and one that isn't for the game still to play today", () => {
