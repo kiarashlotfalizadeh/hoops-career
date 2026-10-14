@@ -599,6 +599,15 @@ export interface GameResult {
   /** Player of the game. */
   pog?: number;
   att?: number;
+  /** The user's regular-season games: where his team stood in its conference going in and coming out. */
+  stakes?: { tid: number; before: StandingLine; after: StandingLine };
+}
+
+/** A team's place in its conference: rank, games behind the leader, and a clinch mark (x playoffs, p play-in, e eliminated). */
+export interface StandingLine {
+  rank: number;
+  gb: number;
+  clinched?: 'x' | 'p' | 'e';
 }
 
 /** A coach's in-game change of plan (at a break or a timeout). */
@@ -708,6 +717,8 @@ export interface Settings {
   onboarded?: boolean;
   /** Pause long sims for big news (default on). */
   stopOnNews?: boolean;
+  /** Home's Watch & coach opens the pre-game screen first (default on). */
+  pregame?: boolean;
 }
 
 export interface League {
@@ -763,7 +774,12 @@ export interface League {
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
   cup?: CupState | null;
+  /** The user's latest post-game press conference: the game and the answer he gave (one per game). */
+  press?: { gid: number; choice: PressChoice };
 }
+
+/** Post-game press conference answers: credit the group, praise the player of the game, challenge the effort (after a loss). */
+export type PressChoice = 'group' | 'pog' | 'challenge';
 
 export interface CupGroup {
   /** 'East A' ... 'West C'. */
