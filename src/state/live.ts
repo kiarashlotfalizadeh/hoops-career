@@ -27,7 +27,9 @@ export class LiveGame {
     ensureRotation(league, game.home);
     ensureRotation(league, game.away);
     const rng = new Rng((league.rng ^ (game.gid * 2654435761)) >>> 0);
-    this.sim = new GameSim(buildSimInput(league, game.home, game.day, game.type, game.away, game), buildSimInput(league, game.away, game.day, game.type, game.home, game), {
+    // the user coaches this one: the assistant's adjustments at breaks are for simmed games
+    const input = (tid: number, opp: number) => ({ ...buildSimInput(league, tid, game.day, game.type, opp, game), ...(tid === league.userTid && { adjust: false }) });
+    this.sim = new GameSim(input(game.home, game.away), input(game.away, game.home), {
       rng,
       type: game.type,
       record: true,

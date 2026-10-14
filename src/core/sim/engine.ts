@@ -20,6 +20,7 @@ import type {
   Ratings,
   ShotRecord,
   ShotZone,
+  SituationalPlan,
   Tactics,
   TacticImpact,
   Team,
@@ -30,8 +31,8 @@ import { Rng, clamp } from '../random';
 import { archetype, composites, type Composites, ROLE_USAGE } from '../ratings';
 import { GAME } from '../constants';
 import { buildMinutePlan, planInputs, planRoles } from './rotationPlan';
-import { FINISH_LABEL, type FinishType, type PossLog } from './log';
-import { cloneTactics } from './tactics';
+import { FINISH_LABEL, type FinishType, type PlayCall, type PossLog } from './log';
+import { MAX_SITUATIONS, applyPatch, cloneTactics } from './tactics';
 
 // ---------------------------------------------------------------- tuning constants
 
@@ -123,7 +124,91 @@ export const K = {
   orbPts: 1.6,
   toPts: 1.45,
   runOutPts: 0.35,
+  /** Crunch time: how much more often the ball finds the go-to player, and how much more his best action is run. */
+  goToPick: 2.5,
+  goToAction: 1.6,
+  /** Chance an off-ball cross-screen against a switching defense leaves a big posting up a small (when the mismatch is there). */
+  crossSwitch: 0.12,
+  /** ...and the size edge (height rating, about 4.3 an inch) it takes. */
+  crossSize: 20,
+  /** A switched handoff: the matchup edge past which the offense goes after it, how fast its chance of doing so grows, and its cap. */
+  switchHuntFrom: 0.3,
+  switchHunt: 0.6,
+  switchHuntMax: 0.75,
+  /** The scramble a late switch leaves: openness for the mismatch it hands the offense. */
+  switchScramble: 0.15,
+  /** Shooting fouls on a switched post-up grow by one per this much size edge (height rating). */
+  mismatchFoul: 30,
+  /**
+   * Zone defenses by scheme: the edge each takes off the pick-and-roll handler, an isolation, a
+   * post-up and a drive (with their expected points for the zone_paint tags); the openness it
+   * leaves on kick-outs, pops and handoffs; motion's cuts (weight lost, openness lost), swings
+   * (weight multiplier, openness, the corner's share of them); and its offensive-board multiplier
+   * and tag. The 2-3 walls off the paint and leaves threes; the 3-2's three on the arc close out
+   * harder than man-to-man does (negative openness: the ball still swings, into contested threes)
+   * but leave the paint, the post, cutters and the glass softer.
+   */
+  zone: {
+    zone23: {
+      pnr: 0.3,
+      pnrTag: 0.3 * 0.1,
+      iso: 0.35,
+      isoTag: 0.035,
+      post: 0.25,
+      postTag: 0.025,
+      drive: 0.3,
+      kick: 0.2,
+      pop: 0.15,
+      handoff: 0.1,
+      cutW: 0.25,
+      cut: 0.2,
+      swingW: 1.35,
+      swing: 0.22,
+      corner: 0.45,
+      glass: 1.12,
+      glassTag: 0.12,
+    },
+    zone32: {
+      pnr: 0.1,
+      pnrTag: 0.01,
+      iso: 0.1,
+      isoTag: 0.01,
+      post: 0,
+      postTag: 0,
+      drive: 0.05,
+      kick: -0.6,
+      pop: -0.4,
+      handoff: -0.5,
+      cutW: 0.2,
+      cut: 0.06,
+      swingW: 1.5,
+      swing: -0.6,
+      corner: 0.15,
+      glass: 1.22,
+      glassTag: 0.22,
+    },
+  } as Record<'zone23' | 'zone32', ZoneK>,
 };
+
+interface ZoneK {
+  pnr: number;
+  pnrTag: number;
+  iso: number;
+  isoTag: number;
+  post: number;
+  postTag: number;
+  drive: number;
+  kick: number;
+  pop: number;
+  handoff: number;
+  cutW: number;
+  cut: number;
+  swingW: number;
+  swing: number;
+  corner: number;
+  glass: number;
+  glassTag: number;
+}
 
 /** Diagnostics for calibration scripts: made field goals and assisted makes by zone. */
 export const engineDiag = {
@@ -305,6 +390,16 @@ export interface ST {
   adjust: number;
   /** Period of the coach's last adjustment (one per period). */
   adjustedQ: number;
+  /** The tactics the coach set; `t` is what is played: these, with the situational plan in effect on top. */
+  base: Tactics;
+  /** The situational plan in effect. */
+  sit: { id: string; label: string } | null;
+  /** Times each player has been hacked this period. */
+  hacked: Map<number, number>;
+  /** A play called from the bench, waiting for its possession. */
+  call: PlayCall | null;
+  /** One of the team's timeouts was called: its next trip runs the after-timeout play. */
+  atoNext: boolean;
 }
 
 export interface SimTeamInput {
@@ -316,7 +411,7 @@ export interface SimTeamInput {
   perf?: Record<number, number>;
   /** Players held out (rest / coach decision). */
   rest?: number[];
-  /** An AI coach who may adjust the game plan at quarter breaks and timeouts (never the user's team). */
+  /** A coach (AI, or the user's assistant in simmed games) who may adjust the game plan at quarter breaks and timeouts. */
   adjust?: boolean;
 }
 
@@ -350,6 +445,8 @@ interface ShotOpts {
   tags?: [string, number][];
   pullup?: boolean;
   forcedFoulMult?: number;
+  /** The impact tag owed the fouls drawn above the shot's usual rate, and the multiplier that drew them. */
+  foulTag?: [string, number];
 }
 
 const ACTION_LIST: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
@@ -421,6 +518,10 @@ export class GameSim {
   private inTransition = false;
   /** Play type of the possession's latest shot. */
   private possFinish: FinishType = 'misc';
+  /** The player a called isolation is for: the next pickActor hands it to him. */
+  private calledActor: SP | null = null;
+  /** A called "go for three": every option that ends in a two is all but ruled out this trip. */
+  private go3 = false;
   /** Game seed: every random stream in the game derives from it. */
   private seed: number;
   /** Cosmetic draws (shot spots, play-by-play wording) never touch the simulation stream. */
@@ -562,6 +663,11 @@ export class GameSim {
       subLock: new Map(),
       adjust: input.adjust ? 0.15 + 0.6 * (input.team.coach.tactics / 100) : 0,
       adjustedQ: 0,
+      base: cloneTactics(tactics),
+      sit: null,
+      hacked: new Map(),
+      call: null,
+      atoNext: false,
     };
   }
 
@@ -675,17 +781,69 @@ export class GameSim {
 
   /** A copy of the tactics the team on `side` plays from: what its coach set, to edit and hand back to setTactics. */
   baseTactics(side: 0 | 1): Tactics {
-    return cloneTactics(this.T[side].t);
+    return cloneTactics(this.T[side].base);
   }
 
+  /** New base tactics for the team on `side`; a situational plan in effect stays on top of them. */
   setTactics(side: 0 | 1, tactics: Tactics) {
     const t = this.T[side];
-    t.t = cloneTactics(tactics);
+    t.base = cloneTactics(tactics);
+    this.situate(t, true);
+  }
+
+  /** The situational plan in effect for the team on `side`, if any. */
+  situation(side: 0 | 1): { id: string; label: string } | null {
+    const s = this.T[side].sit;
+    return s && { ...s };
+  }
+
+  /** Call a play from the bench (live games): it replaces any call still waiting, and is cleared at the end of the period. */
+  callPlay(side: 0 | 1, call: PlayCall): boolean {
+    const t = this.T[side];
+    if (call.kind === 'iso' && !t.byId.has(call.pid)) return false;
+    t.call = { ...call };
+    return true;
+  }
+
+  cancelPlay(side: 0 | 1) {
+    this.T[side].call = null;
+  }
+
+  /** The first enabled situational plan whose trigger matches the game right now. */
+  private situationFor(t: ST): SituationalPlan | null {
+    const plans = t.base.situations;
+    if (!plans?.length) return null;
+    const lead = t.score - this.T[1 - t.side].score;
+    // overtime counts as the 4th quarter
+    const q = Math.min(this.q, 4);
+    for (const s of plans.slice(0, MAX_SITUATIONS)) {
+      const w = s.when;
+      if (!s.enabled || q < (w.fromQ ?? 1) || q > (w.untilQ ?? 4)) continue;
+      if ((w.maxClock !== undefined && this.clock > w.maxClock) || (w.minLead !== undefined && lead < w.minLead) || (w.maxLead !== undefined && lead > w.maxLead)) continue;
+      if (w.benchUnit && t.on.filter((p) => !p.starter).length < 3) continue;
+      return s;
+    }
+    return null;
+  }
+
+  /**
+   * Plays the situational plan that fits the game now (base tactics with its patch on top), when it
+   * changes or `rebase` brings new base tactics. No random draws: a team without situational plans
+   * plays exactly as before.
+   */
+  private situate(t: ST, rebase = false) {
+    const plan = this.situationFor(t);
+    const changed = (plan?.id ?? '') !== (t.sit?.id ?? '');
+    if (!changed && !rebase) return;
+    const before = JSON.stringify(t.t.defense);
+    t.t = plan ? applyPatch(t.base, plan.patch) : cloneTactics(t.base);
+    t.sit = plan && { id: plan.id, label: plan.label };
     for (const p of t.players) {
       p.role = t.t.offense.roles[p.pid] ?? p.role;
       p.freedom = freedomMult(t.t.offense.freedom[p.pid] ?? 0);
     }
-    this.refreshMatchups();
+    if (rebase || JSON.stringify(t.t.defense) !== before) this.refreshMatchups();
+    if (changed) this.addPbp(t.side, plan ? `${t.team.abbrev} switches to its "${plan.label}" plan.` : `${t.team.abbrev} goes back to its base plan.`, 'other');
   }
 
   /** Manual substitution from the live game UI. */
@@ -712,6 +870,7 @@ export class GameSim {
     this.addPbp(side, `Timeout ${t.team.abbrev}${reason ? ` (${reason})` : ''}.`, 'timeout');
     this.timeoutStep = true;
     this.timeoutSide = side;
+    if (t.t.manage.ato) t.atoNext = true;
     this.adjust(this.T[0]);
     this.adjust(this.T[1]);
     this.checkSubs(this.T[0], true);
@@ -737,42 +896,49 @@ export class GameSim {
       const x = opp.pt[f];
       return x && x.poss >= 6 ? x.pts / x.poss : 0;
     };
+    // the change is decided on what is being played, and made to the base tactics too, so it
+    // outlasts a situational plan coming or going
     let what = '';
+    let change = (x: Tactics) => void x;
     if (d.scheme !== 'man') {
       if (rate('zone_3pt:o') + rate('zone_glass:o') >= 1) {
-        d.scheme = 'man';
+        change = (x) => void (x.defense.scheme = 'man');
         what = 'goes back to man-to-man';
       }
     } else if (d.pnr === 'drop' && (rate('drop_pullup:o') + rate('drop_pop:o') >= 0.8 || ppp('pnrBH') >= 1.15)) {
-      d.pnr = 'hedge';
+      change = (x) => void (x.defense.pnr = 'hedge');
       what = 'hedges ball screens instead of dropping';
     } else if (d.pnr === 'blitz' && rate('blitz_4v3:o') >= 0.6) {
-      d.pnr = 'hedge';
+      change = (x) => void (x.defense.pnr = 'hedge');
       what = 'stops blitzing ball screens';
     } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.8 || rate('hedge_roll:o') >= 0.6)) {
-      d.pnr = 'drop';
-      d.switchOffBall = false;
+      change = (x) => {
+        x.defense.pnr = 'drop';
+        x.defense.switchOffBall = false;
+      };
       what = 'drops the big on ball screens';
     }
     if (!what) {
       if (rate('help_kick:o') >= 0.6 && d.help > 30) {
-        d.help -= 15;
+        change = (x) => void (x.defense.help = Math.max(0, x.defense.help - 15));
         what = 'stays home on shooters';
       } else if (rate('help_paint:o') + rate('spacing:o') >= 0.6 && d.help < 75) {
-        d.help += 15;
+        change = (x) => void (x.defense.help = Math.min(100, x.defense.help + 15));
         what = 'packs the paint';
       } else if (rate('pressure_blowby:o') + rate('pressure_backdoor:o') + rate('pressure_foul:o') >= 0.5 && d.pressure > 35) {
-        d.pressure -= 15;
+        change = (x) => void (x.defense.pressure = Math.max(0, x.defense.pressure - 15));
         what = 'backs off the ball';
       } else if (rate('crash_leak:o') >= 0.5 && t.t.offense.crashBoards > 25) {
-        t.t.offense.crashBoards -= 20;
+        change = (x) => void (x.offense.crashBoards = Math.max(0, x.offense.crashBoards - 20));
         what = 'sends fewer players to the offensive glass';
       } else if (rate('getback:o') >= 0.4 && d.getBack < 80) {
-        d.getBack += 15;
+        change = (x) => void (x.defense.getBack = Math.min(100, x.defense.getBack + 15));
         what = 'sprints back in transition';
       }
     }
     if (!what) return;
+    change(t.t);
+    change(t.base);
     t.adjustedQ = this.q;
     this.adjustments.push({ t: t.side, q: this.q, clock: Math.round(this.clock), text: what });
     this.addPbp(t.side, `${t.team.abbrev} adjusts: ${what}.`, 'other');
@@ -832,6 +998,10 @@ export class GameSim {
       if (this.q === 4) t.timeouts = Math.min(t.timeouts, 4);
       if (this.q >= 5) t.timeouts = 2;
       for (const p of t.players) p.energy = Math.min(1, p.energy + (this.q === 3 ? 0.3 : 0.1));
+      // calls from the bench and the hack-a-player count are for one period
+      t.call = null;
+      t.atoNext = false;
+      t.hacked.clear();
     }
     // the break draws from its own stream, so the possessions around it stay paired in Lab comparisons
     this.rng = new Rng(mix(this.seed, 0x7ff00000 + this.q));
@@ -846,6 +1016,7 @@ export class GameSim {
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
     this.addPbp(-1, `Start of ${periodName(this.q)}.`, 'period');
+    for (const t of this.T) this.situate(t);
     return true;
   }
 
@@ -930,6 +1101,19 @@ export class GameSim {
       }
       return p;
     });
+    // hack-a-player: someone hacked twice this period sits for the rest of it (crunch time aside), when
+    // a teammate his size can come in
+    if (!crunch && t.hacked.size) {
+      desired = desired.map((p) => {
+        if ((t.hacked.get(p.pid) ?? 0) < 2) return p;
+        const alt = bench
+          .filter((b) => b.big === p.big && (t.hacked.get(b.pid) ?? 0) < 2 && (!playoffs || b.planMin > 0))
+          .sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
+        if (!alt) return p;
+        bench.splice(bench.indexOf(alt), 1);
+        return alt;
+      });
+    }
     // fill to five from the bench in depth order
     for (const p of bench) {
       if (desired.length >= 5) break;
@@ -950,6 +1134,7 @@ export class GameSim {
     if (this.q >= 4 && this.clock < 360) sig += 'c';
     // a blowout (or one getting back within reach) changes the lineup now, not at the next minute mark
     if (this.wantsGarbage(t)) sig += 'g';
+    for (const [pid, n] of t.hacked) if (n >= 2) sig += `h${pid}`;
     return sig;
   }
 
@@ -1126,6 +1311,14 @@ export class GameSim {
   }
 
   private pickActor(t: ST, action: ActionType | 'any', exclude?: SP): SP {
+    // a called isolation goes to the player it was called for
+    const called = this.calledActor;
+    this.calledActor = null;
+    if (called && called.on && t.on.includes(called) && called !== exclude) {
+      for (const p of t.on) p.b.tActs++;
+      called.b.acts++;
+      return called;
+    }
     const ws = t.on.map((p) => (p === exclude ? 0 : this.usageWeight(p, t, action)));
     // mismatch hunting: favor the player with the weakest defender
     if (t.t.offense.huntMismatch && (action === 'iso' || action === 'pnr')) {
@@ -1141,10 +1334,21 @@ export class GameSim {
       const i = t.on.indexOf(this.starTarget(def, t)!);
       if (i >= 0) ws[i] *= K.denyTouch;
     }
+    // crunch time: the ball finds the go-to player
+    const go = this.goTo(t);
+    if (go) ws[t.on.indexOf(go)] *= K.goToPick;
     const actor = t.on[this.rng.weighted(ws)];
     for (const p of t.on) p.b.tActs++;
     actor.b.acts++;
     return actor;
+  }
+
+  /** The go-to player, when he is on the floor in crunch time: the last two minutes of the 4th quarter or overtime, within five. */
+  private goTo(t: ST): SP | null {
+    const pid = t.t.manage.goTo;
+    if (pid == null || this.q < 4 || this.clock > 120 || Math.abs(t.score - this.T[1 - t.side].score) > 5) return null;
+    const p = t.byId.get(pid);
+    return p?.on ? p : null;
   }
 
   private starTarget(def: ST, off: ST): SP | null {
@@ -1219,10 +1423,14 @@ export class GameSim {
   // ------------------------------------------------------------ possession
 
   private possession() {
+    // a situational plan (protect a lead, the second unit...) starts or ends between possessions
+    this.situate(this.T[0]);
+    this.situate(this.T[1]);
     const o = this.poss;
     const off = this.T[o];
     const def = this.T[1 - o];
     let ctx = this.ctx;
+    this.go3 = false;
     this.possPts = 0;
     this.secondChance = false;
     this.inTransition = false;
@@ -1247,6 +1455,7 @@ export class GameSim {
         scheme: def.t.defense.scheme,
         help: def.t.defense.help,
       };
+      if (this.T[0].sit || this.T[1].sit) this.cur.sit = [this.T[0].sit?.label ?? '', this.T[1].sit?.label ?? ''];
     }
     this.timeoutStep = false;
     off.poss++;
@@ -1261,6 +1470,26 @@ export class GameSim {
 
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
+    // the after-timeout play is for this trip; a play called from the bench changes what the offense
+    // looks for (never how well it executes)
+    const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
+    off.atoNext = false;
+    const call = off.call && off.call.kind !== 'foul' ? off.call : null;
+    let first: ActionType | null = ato;
+    let isoFor: SP | null = null;
+    if (call) {
+      off.call = null;
+      if (this.cur) this.cur.call = { ...call, t: off.side };
+      if (call.kind === 'three') late.need3 = this.go3 = true;
+      else if (call.kind === 'two') {
+        late.need2 = true;
+        late.quick = true;
+      } else if (call.kind === 'hold') late.hold = true;
+      else if (call.kind === 'iso') {
+        first = 'iso';
+        isoFor = off.byId.get(call.pid) ?? null;
+      }
+    }
 
     // ---- full court press
     let pressBroken = false;
@@ -1285,6 +1514,8 @@ export class GameSim {
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
     if (late.hurry) transP *= 1.5;
+    // a set play is walked up and run in the half court
+    if (call?.kind === 'three' || call?.kind === 'iso') transP = 0;
 
     if (this.clock > 2 && this.rng.chance(clamp(transP, 0, 0.85))) {
       // each setting's share of the run-outs, at ~0.25-0.35 pts per run-out over a half-court trip
@@ -1321,7 +1552,7 @@ export class GameSim {
       this.clockOut(off);
       return;
     }
-    this.halfCourt(off, def, shotClock, late, paceF);
+    this.halfCourt(off, def, shotClock, late, paceF, first, isoFor);
   }
 
   /** The period runs out before the offense gets a shot off: the trip counts for its last shot, if it had one. */
@@ -1339,7 +1570,7 @@ export class GameSim {
     const diff = off.score - def.score;
     const final = this.q >= 4;
     const clock = this.clock;
-    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false };
+    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, need2: false };
     if (final && clock <= 26 && diff >= -2 && diff <= 0) res.hold = true;
     else if (!final && clock <= 24 && clock > 3) res.hold = true;
     else if (final && clock < 50 && diff > 0) res.milk = true;
@@ -1357,7 +1588,14 @@ export class GameSim {
     const defDiff = def.score - off.score;
     let fouled: SP | null = null;
     let tag = '';
-    if (final && def.t.manage.foulWhenTrailing && defDiff < 0) {
+    // "foul now", called from the bench: their worst free-throw shooter on the floor
+    if (def.call?.kind === 'foul' && clock > 0.3) {
+      if (this.cur) this.cur.call = { kind: 'foul', t: def.side };
+      def.call = null;
+      fouled = off.on.reduce((a, p) => (p.ftPct < a.ftPct ? p : a), off.on[0]);
+      tag = 'late_foul';
+    }
+    if (!fouled && final && def.t.manage.foulWhenTrailing && defDiff < 0) {
       const down = -defDiff;
       // only while there is time to score twice more after the free throws: down one or two, a foul
       // still buys a last shot; down three or more with seconds left it only pads the margin
@@ -1373,13 +1611,16 @@ export class GameSim {
       fouled = off.on[this.rng.weighted(ws)];
       tag = 'foul_up3';
     }
-    // NBA: an away-from-the-play foul in the last two minutes of any period costs a free throw and the ball
+    // NBA: an away-from-the-play foul in the last two minutes of any period costs a free throw and the
+    // ball; a game plan can name its targets (whatever they shoot) and the quarter it starts in
     const hack = def.t.manage.hackThreshold;
-    if (!fouled && hack > 0 && clock >= 120) {
-      const target = off.on.filter((p) => p.ftPct * 100 < hack).sort((a, b) => a.ftPct - b.ftPct)[0];
+    const targets = def.t.manage.hackTargets;
+    if (!fouled && (hack > 0 || targets?.length) && clock >= 120 && Math.min(this.q, 4) >= (def.t.manage.hackFromQ ?? 1)) {
+      const target = off.on.filter((p) => p.ftPct * 100 < hack || targets?.includes(p.pid)).sort((a, b) => a.ftPct - b.ftPct)[0];
       if (target && this.rng.chance(0.8)) {
         fouled = target;
         tag = 'hack';
+        off.hacked.set(target.pid, (off.hacked.get(target.pid) ?? 0) + 1);
       }
     }
     if (!fouled) return null;
@@ -1508,7 +1749,8 @@ export class GameSim {
 
   // ------------------------------------------------------------ half court
 
-  private halfCourt(off: ST, def: ST, shotClock: number, late: ReturnType<GameSim['lateMode']>, paceF: number) {
+  /** `first`: an action the trip opens with (an after-timeout play, a called isolation for `isoFor`). */
+  private halfCourt(off: ST, def: ST, shotClock: number, late: ReturnType<GameSim['lateMode']>, paceF: number, first: ActionType | null = null, isoFor: SP | null = null) {
     let carryOpen = 0;
     let ballFrom: SP | null = null;
     let forced = false;
@@ -1521,7 +1763,7 @@ export class GameSim {
       }
       const left = Math.min(shotClock, this.clock);
       forced = left <= 4.5 || n === 5;
-      const action = forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off);
+      const action = n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off);
       let dt = forced ? Math.max(0.5, left - this.rng.uniform(0.3, 1.5)) : K.actionTime * paceF * this.rng.uniform(0.6, 1.4);
       if (late.quick && n === 0) dt = Math.min(dt, 3.5);
       if (late.hurry) dt = Math.min(dt, 4);
@@ -1534,7 +1776,9 @@ export class GameSim {
       shotClock -= dt;
       const urgency = buzzer || forced ? -0.45 : 0;
       const ctxOpen = carryOpen + urgency;
+      if (n === 0 && isoFor) this.calledActor = isoFor;
       const res = this.runAction(action, off, def, ctxOpen, ballFrom, late, forced || buzzer);
+      this.calledActor = null;
       if (res === 'done') return;
       // continue: ball reversed, maybe with a small residual advantage
       carryOpen = res.carry;
@@ -1549,6 +1793,13 @@ export class GameSim {
       const emph = Math.pow(Math.max(1, a[act]) / 50, 1.4);
       return emph * off.cap[act];
     });
+    // crunch time: more of what the go-to player does best
+    const go = this.goTo(off);
+    if (go) {
+      const mine: ActionType[] = ['pnr', 'iso', 'post', 'handoff'];
+      const best = mine.reduce((b, act) => (this.usageWeight(go, off, act) > this.usageWeight(go, off, b) ? act : b), mine[0]);
+      ws[ACTION_LIST.indexOf(best)] *= K.goToAction;
+    }
     return ACTION_LIST[this.rng.weighted(ws)];
   }
 
@@ -1609,8 +1860,10 @@ export class GameSim {
   private pressure(def: ST) {
     return (def.t.defense.pressure - 50) / 50;
   }
-  private zone(def: ST) {
-    return def.t.defense.scheme !== 'man';
+  /** The zone the defense plays (its table in K.zone), or null for man-to-man. */
+  private zone(def: ST): ZoneK | null {
+    const s = def.t.defense.scheme;
+    return s === 'man' ? null : K.zone[s];
   }
   private prefs(off: ST, late: ReturnType<GameSim['lateMode']>) {
     const t3 = off.t.offense.threePoint / 100;
@@ -1623,8 +1876,11 @@ export class GameSim {
     } else if (late.hurry) {
       three *= 1.8;
       mid *= 0.5;
+    } else if (late.need2) {
+      three *= 0.1;
+      mid *= 0.5;
     }
-    return { three, mid, rim: late.need3 ? rim * 0.15 : rim };
+    return { three, mid, rim: late.need3 ? rim * 0.15 : late.need2 ? rim * 1.6 : rim };
   }
   /**
    * Second-half score effects: a big lead makes the leader ease off and the trailer play loose;
@@ -1801,13 +2057,13 @@ export class GameSim {
       rollOpen -= 0.1;
       tagsRoll.push(['ice_contain', -0.1]);
       toExtra += 0.006;
-    } else if (cov === 'zone') {
-      advH -= 0.3;
-      this.impact('zone_paint', def.side, 0.3 * 0.1);
-      kickOpen += 0.2;
-      tagsKick.push(['zone_3pt', 0.2]);
-      popOpen += 0.15;
-      tagsPop.push(['zone_3pt', 0.15]);
+    } else if (zone) {
+      advH -= zone.pnr;
+      this.impact('zone_paint', def.side, zone.pnrTag);
+      kickOpen += zone.kick;
+      tagsKick.push(['zone_3pt', zone.kick]);
+      popOpen += zone.pop;
+      tagsPop.push(['zone_3pt', zone.pop]);
     }
 
     // help defense / spacing on drives
@@ -1854,6 +2110,7 @@ export class GameSim {
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
     if (cov === 'blitz') opts[2] *= 0.3;
+    if (this.go3) opts[3] *= 0.05;
     const c = this.rng.weighted(opts);
     const advOpen = clamp(advH * 0.35, -0.6, 0.7);
     switch (c) {
@@ -1998,9 +2255,10 @@ export class GameSim {
       adv += blow;
       this.impact('pressure_blowby', off.side, blow * K.advPts.iso, A.pid);
     }
-    if (this.zone(def)) {
-      adv -= 0.35;
-      this.impact('zone_paint', def.side, 0.035, A.pid);
+    const zd = this.zone(def);
+    if (zd) {
+      adv -= zd.iso;
+      this.impact('zone_paint', def.side, zd.isoTag, A.pid);
     }
     // the Star plan doubles him; heavy help sends a second defender at anyone who beats his man
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
@@ -2029,6 +2287,7 @@ export class GameSim {
       Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + Math.max(0, help)),
       forced ? 0 : K.continueBase * (adv < -0.3 ? 1.4 : 0.5),
     ];
+    if (this.go3) opts[3] *= 0.05;
     const c = this.rng.weighted(opts);
     const advOpen = clamp(adv * 0.35, -0.7, 0.75);
     switch (c) {
@@ -2137,9 +2396,10 @@ export class GameSim {
     const help = this.help(def);
     let adv = (A.c.postScore * A.perf - D.c.intDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 80 + (A.r.hgt - D.r.hgt) / 70 + this.rng.normal(0, 0.55) + open;
     if (!fixed) adv -= this.denyCatch(def, off, A, 'post');
-    if (this.zone(def)) {
-      adv -= 0.25;
-      this.impact('zone_paint', def.side, 0.025, A.pid);
+    const zd = this.zone(def);
+    if (zd) {
+      adv -= zd.post;
+      this.impact('zone_paint', def.side, zd.postTag, A.pid);
     }
     if (fixed?.tag === 'mismatch_post') this.impact(fixed.tag, off.side, Math.max(0, (A.r.hgt - D.r.hgt) / 70) * K.advPts.post, A.pid);
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
@@ -2151,6 +2411,9 @@ export class GameSim {
       return 'done';
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
+    // a small switched onto a big can only hold his ground by fouling
+    const reach = fixed?.tag === 'switch_mismatch' ? 1 + Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul : 1;
+    const foulTag: [string, number] | undefined = reach > 1 ? ['switch_mismatch', reach] : undefined;
     const ss = this.selfShot(A);
     const opts = [
       Math.pow(A.c.close / 50, 2) * 1.1 * ss, // hook / short shot
@@ -2162,10 +2425,19 @@ export class GameSim {
     const c = this.rng.weighted(opts);
     switch (c) {
       case 0:
-        this.shoot(off, def, { shooter: A, zone: 'paint', open: advOpen - 0.05, contest: D, assister: entry, finish: 'post', forcedFoulMult: 1.3 });
+        this.shoot(off, def, { shooter: A, zone: 'paint', open: advOpen - 0.05, contest: D, assister: entry, finish: 'post', forcedFoulMult: 1.3 * reach, foulTag });
         return 'done';
       case 1:
-        this.shoot(off, def, { shooter: A, zone: 'rim', open: advOpen - 0.1, contest: this.rimContester(def, D), assister: entry, finish: 'post', forcedFoulMult: 1.25 });
+        this.shoot(off, def, {
+          shooter: A,
+          zone: 'rim',
+          open: advOpen - 0.1,
+          contest: this.rimContester(def, D),
+          assister: entry,
+          finish: 'post',
+          forcedFoulMult: 1.25 * reach,
+          foulTag,
+        });
         return 'done';
       case 2:
         this.shoot(off, def, { shooter: A, zone: 'mid', open: advOpen - 0.2, contest: D, assister: entry, finish: 'post' });
@@ -2211,18 +2483,37 @@ export class GameSim {
     let adv = (Sh.c.offBall * Sh.perf - (D.c.perDef * 0.6 + D.c.helpD * 0.4) * this.dq(D)) / 22 + (B.r.str + B.r.hgt - 100) / 200 + this.rng.normal(0, 0.55) + open;
     adv += this.blowBy(def, Sh, 'handoff') - this.denyCatch(def, off, Sh, 'handoff');
     const tags: [string, number][] = [];
-    const sw = !this.zone(def) && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall);
+    const zd = this.zone(def);
+    const sw = !zd && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall);
     if (sw) {
       adv -= 0.35;
       tags.push(['switch_deny', -0.35 * 0.35]);
     }
-    if (!sw && def.t.defense.pnr === 'drop' && !this.zone(def)) {
+    if (!sw && def.t.defense.pnr === 'drop' && !zd) {
       adv += 0.18;
       tags.push(['drop_handoff', 0.18 * 0.35]);
     }
-    if (this.zone(def)) {
-      adv += 0.1;
-      tags.push(['zone_3pt', 0.1 * 0.35]);
+    if (zd) {
+      adv += zd.handoff;
+      tags.push(['zone_3pt', zd.handoff * 0.35]);
+    }
+    // the switch puts the shooter's man on the hub and the hub's man on the shooter: a big switched
+    // onto a guard gets attacked off the dribble, a guard switched onto a big gets posted up
+    if (sw) {
+      const isoAdv = (Sh.c.create - dB.c.perDef * this.dq(dB)) / 20;
+      const postAdv = (B.c.postScore - D.c.intDef * this.dq(D)) / 20 + (B.r.hgt - D.r.hgt) / 50;
+      const edge = Math.max(isoAdv, postAdv);
+      if (edge > K.switchHuntFrom && this.rng.chance(clamp((edge - K.switchHuntFrom) * K.switchHunt, 0, K.switchHuntMax))) {
+        if (postAdv >= isoAdv && B.c.postScore > 50) {
+          const gain = ((dB.c.intDef * this.dq(dB) - D.c.intDef * this.dq(D)) / 20 + (dB.r.hgt - D.r.hgt) / 70) * K.advPts.post;
+          this.impact('switch_mismatch', off.side, gain, B.pid);
+          if (this.cur) this.cur.label = `Switch! ${B.name} posts up ${D.name}`;
+          this.passStep(Sh, B);
+          return this.post(off, def, open + K.switchScramble, forced, { actor: B, defender: D, tag: 'switch_mismatch', entry: Sh });
+        }
+        this.impact('switch_mismatch', off.side, ((D.c.perDef * this.dq(D) - dB.c.perDef * this.dq(dB)) / 20) * K.advPts.iso, Sh.pid);
+        return this.iso(off, def, open + K.switchScramble, late, forced, { actor: Sh, defender: dB, tag: 'switch_mismatch' });
+      }
     }
     const pTO = this.toChance(K.toBase * 0.7, B, def);
     if (this.rng.chance(pTO)) {
@@ -2237,6 +2528,7 @@ export class GameSim {
       Math.pow(B.c.roll / 50, 1.5) * Math.pow(Sh.c.passing / 50, 1.2) * 0.3,
       forced ? 0 : K.continueBase * (adv < 0 ? 1.4 : 0.6),
     ];
+    if (this.go3) opts[3] *= 0.05;
     const c = this.rng.weighted(opts);
     switch (c) {
       case 0:
@@ -2288,15 +2580,30 @@ export class GameSim {
       this.turnover(off, def, passer, this.stealBy(this.stealer(def), 0.6), 'spotup');
       return 'done';
     }
+    // a guard-to-big cross-screen against a switching defense now and then leaves the smallest
+    // defender on the best post scorer
+    if (sw) {
+      const P = off.on.filter((p) => p !== passer && p.big).sort((a, b) => b.c.postScore - a.c.postScore)[0];
+      const small = off.on.filter((p) => p !== P && p !== passer).sort((a, b) => a.r.hgt - b.r.hgt)[0];
+      const own = P && this.defOf(def, P);
+      const nd = small && this.defOf(def, small);
+      if (P && own && nd && nd !== own && P.c.postScore > 50 && P.r.hgt - nd.r.hgt >= K.crossSize && this.rng.chance(K.crossSwitch)) {
+        const gain = ((own.c.intDef * this.dq(own) - nd.c.intDef * this.dq(nd)) / 20 + (own.r.hgt - nd.r.hgt) / 70) * K.advPts.post;
+        this.impact('switch_mismatch', off.side, gain, P.pid);
+        if (this.cur) this.cur.label = `Switch! ${P.name} posts up ${nd.name}`;
+        this.passStep(passer, P);
+        return this.post(off, def, open + K.switchScramble, forced, { actor: P, defender: nd, tag: 'switch_mismatch', entry: passer });
+      }
+    }
     const cutters = off.on.filter((p) => p !== passer);
     const cutW = cutters.map((p) => (Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1)) / Math.sqrt(p.tcr));
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
     // backdoor cuts punish ball pressure / denial
     const backdoor = Math.max(0, pr) * 0.3;
-    const zoneCut = zone ? -0.25 : 0;
+    const zoneCut = zone ? -zone.cutW : 0;
     const opts = [
       (cutW.reduce((a, b) => a + b, 0) / 4) * 0.55 * (1 + backdoor + zoneCut) * pf.rim, // cut
-      Math.pow(off.spacing / 50, 1.2) * 0.9 * pf.three * (zone ? 1.35 : 1), // swing for spot-up 3
+      Math.pow(off.spacing / 50, 1.2) * 0.9 * pf.three * (zone ? zone.swingW : 1), // swing for spot-up 3
       0.55 * pf.rim * (1 + this.spacingBonus(off)), // drive & kick
       Math.pow(Math.max(...off.on.map((p) => p.c.midShot)) / 50, 2) * 0.25 * pf.mid, // flare/mid
       forced ? 0 : K.continueBase * (adv < 0 ? 1.5 : 0.7),
@@ -2309,9 +2616,9 @@ export class GameSim {
         this.passStep(passer, cutter);
         const tags: [string, number][] = [];
         if (backdoor > 0) tags.push(['pressure_backdoor', backdoor * 0.8]);
-        if (zone) tags.push(['zone_paint', -0.2]);
+        if (zone) tags.push(['zone_paint', -zone.cut]);
         const cd = this.defOf(def, cutter);
-        const o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -0.2 : 0);
+        const o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -zone.cut : 0);
         this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rimContester(def, cd), assister: passer, finish: 'cut', tags });
         return 'done';
       }
@@ -2321,9 +2628,8 @@ export class GameSim {
         const tags: [string, number][] = [];
         let o = advOpen + 0.05;
         if (zone) {
-          const zw = def.t.defense.scheme === 'zone23' ? 0.22 : 0.08;
-          o += zw;
-          tags.push(['zone_3pt', zw]);
+          o += zone.swing;
+          tags.push(['zone_3pt', zone.swing]);
         }
         if (help !== 0) {
           o += help * 0.15;
@@ -2332,7 +2638,7 @@ export class GameSim {
         const d = this.defOf(def, sh);
         this.spotUp(off, def, {
           shooter: sh,
-          zone: def.t.defense.scheme === 'zone23' && this.rng.chance(0.45) ? 'c3' : this.cornerOrWing(off, sh),
+          zone: zone && this.rng.chance(zone.corner) ? 'c3' : this.cornerOrWing(off, sh),
           open: o,
           contest: d,
           assister: passer,
@@ -2346,8 +2652,8 @@ export class GameSim {
         const dr = drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr)))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
-        const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -0.3 : 0);
-        if (this.rng.chance(clamp(0.45 + dr.c.passing / 200 + help * 0.15, 0.2, 0.8))) {
+        const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -zone.drive : 0);
+        if (this.go3 || this.rng.chance(clamp(0.45 + dr.c.passing / 200 + help * 0.15, 0.2, 0.8))) {
           // kick out after collapsing the defense
           const sh = this.kickTarget(off, dr);
           this.passStep(dr, sh);
@@ -2614,6 +2920,11 @@ export class GameSim {
       const extraFouls = pFoul - pFoul / (1 + 0.3 * phys);
       this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, extraFouls * foulGain - K.physContest * phys * value * (1 - pFoul), sh.pid);
     }
+    if (s.foulTag) {
+      const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
+      const foulGain = andOne * (value + 0.78) + (1 - andOne) * value * 0.78 - p * value;
+      this.impact(s.foulTag[0], off.side, (pFoul - pFoul / s.foulTag[1]) * foulGain, sh.pid);
+    }
     const fouled = this.rng.chance(pFoul);
     let made: boolean;
     if (fouled) made = this.rng.chance(p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25));
@@ -2711,7 +3022,8 @@ export class GameSim {
     const sh = s.shooter;
     const t3 = off.t.offense.threePoint / 100;
     const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
-    const wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
+    let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
+    if (this.go3) wDrive *= 0.05;
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
       return;
@@ -2828,9 +3140,10 @@ export class GameSim {
     if (ft) pOrb *= 0.5;
     // the tags count the boards a scheme adds at an average rate: half as many off a free throw
     const orbRate = K.orbBase * (ft ? 0.5 : 1);
-    if (this.zone(def)) {
-      pOrb *= 1.12;
-      this.impact('zone_glass', off.side, orbRate * 0.12 * K.orbPts);
+    const zd = this.zone(def);
+    if (zd) {
+      pOrb *= zd.glass;
+      this.impact('zone_glass', off.side, orbRate * zd.glassTag * K.orbPts);
     }
     if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts);
     pOrb = clamp(pOrb, 0.08, 0.45);
