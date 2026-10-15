@@ -133,7 +133,7 @@ The data scripts read a few environment variables: `HC_RAW_DIR` (where the raw d
 ```bash
 npm install          # Node 22.15 or newer
 npm run dev          # http://localhost:5173
-npm test             # vitest: engine, schedule, Cup, rotations, season loop, finances, transactions, lab, saves, Play menu, parsers
+npm test             # vitest: engine, schedule, Cup, rotations, season loop, finances, transactions, records, coaches, lab, saves, Play menu, parsers
 npm run typecheck
 npm run lint         # ESLint (TypeScript + React hooks rules)
 npm run format       # Prettier (format:check in CI)
@@ -167,7 +167,7 @@ Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir> [stages]` screensho
 ```
 src/core/          engine, ratings, tactics, league systems (pure TypeScript, no DOM)
   sim/             engine.ts, tactics.ts, rotationPlan.ts, log.ts
-  league/          season loop, schedule, playoffs, awards, draft, FA, trades, AI offers, game plans, transaction log, record book, coaching carousel, contracts, finances...
+  league/          season loop, schedule, playoffs, awards, All-Star Saturday, draft, FA, trades, AI offers, game plans, transaction log, record book, coaching carousel, retired numbers, contracts, finances...
   ai/              coachAI (auto rotations/tactics), advisor (scouting/alerts), lab (batch sims)
   analysis/        post-game report, scouting, matchup preview, keys to the game, highlights, play types, lineups, quotes and press conference
 src/state/         zustand store, IndexedDB persistence, live-game controller, lab worker client
