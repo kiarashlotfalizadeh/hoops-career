@@ -163,3 +163,25 @@ describe('broadcast graphics', () => {
     expect(with_({ pts: top.pts - 1, games: 5, career: false })?.kind).not.toBe('high');
   });
 });
+
+describe('record book graphics', () => {
+  it('a franchise or league scoring record broken goes up, the league one first; one within reach late is a watch', () => {
+    const { sim, views, logs } = playThrough(23);
+    const end = views[views.length - 1];
+    const top = [...end.box.home.players].sort((a, b) => b.pts - a.pts)[0];
+    expect(top.pts).toBeGreaterThan(10);
+    const at = (records: PlayerBefore['records']) =>
+      graphicCandidates(input(end, logs, { before: new Map([[top.pid, { records }]]) })).filter((g) => g.kind === 'record' || g.id.startsWith('rec-'));
+    // past the franchise's record but not the league's
+    expect(at({ team: top.pts - 1, teamName: 'Hawks', league: top.pts + 5, playoffs: false })).toEqual([
+      expect.objectContaining({ id: `rec-t-${top.pid}`, tag: 'Franchise record', text: `P${top.pid}: ${top.pts} points, a Hawks record` }),
+    ]);
+    // past both: only the league's is called
+    expect(at({ team: top.pts - 1, teamName: 'Hawks', league: top.pts - 1, playoffs: true }).map((g) => g.tag)).toEqual(['League playoff record']);
+    // short of it: nothing early, a watch in the fourth when it's a real record (40+)
+    const watch = at({ team: top.pts + 3, teamName: 'Hawks', league: 90, playoffs: false });
+    if (end.q >= 4 && top.pts + 3 >= 40) expect(watch.map((g) => g.kind)).toEqual(['watch']);
+    else expect(watch).toEqual([]);
+    expect(sim.over).toBe(true);
+  });
+});

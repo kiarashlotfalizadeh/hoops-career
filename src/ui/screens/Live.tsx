@@ -245,7 +245,7 @@ export default function Live() {
   const keys = useMemo(() => (game ? gameKeys(league, game.game) : []), [game]);
   // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const before = useMemo(() => (game ? playersBefore(league, game.sim) : new Map()), [game]);
+  const before = useMemo(() => (game ? playersBefore(league, game.sim, game.game.type) : new Map()), [game]);
   /** What the graphics read of the drawn game `v`. */
   const graphicInput = useCallback(
     (v: Drawn, lg: LiveGame): GraphicInput | null =>
