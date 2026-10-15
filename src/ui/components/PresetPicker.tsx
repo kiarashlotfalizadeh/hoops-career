@@ -181,7 +181,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
             <div key={p.id} style={{ position: 'relative' }}>
               <button
                 aria-pressed={on}
-                className="card tight"
+                className={`card tight preset${on ? ' on' : ''}`}
                 style={{
                   textAlign: 'left',
                   width: '100%',
@@ -209,7 +209,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
                 )}
               </button>
               <button
-                aria-label={`Why fit ${shown(p.id)} for ${p.name}`}
+                aria-label={`Fit ${shown(p.id)}: why, for ${p.name}`}
                 onClick={() => setWhy(p.id)}
                 style={{ position: 'absolute', top: 2, right: 2, padding: 8, borderRadius: 10 }}
               >

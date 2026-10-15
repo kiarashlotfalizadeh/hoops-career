@@ -55,7 +55,8 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
               key={r.pid}
               className="gp-match"
               onClick={() => setPick(r.pid)}
-              aria-label={`${names(r.pid)}: guarded by ${d ? names(d.pid) : 'nobody yet'}${r.planned !== null ? ', planned' : ", the staff's choice"}. Change`}
+              // named by what it shows: "82 Leonard SF · 6'6" · Starter, guarded by Caruso Staff"
+              aria-haspopup="dialog"
             >
               <div className="row" style={{ gap: 8, minWidth: 0 }}>
                 <Ovr v={p.ovr} size="sm" />
@@ -68,7 +69,8 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
               </div>
               <div className="row" style={{ gap: 6 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div className="small bold">{d ? names(d.pid) : '—'}</div>
+                  <span className="sr-only">{d ? ', guarded by ' : ', guarded by nobody yet'}</span>
+                  <div className="small bold">{d ? names(d.pid) : <span aria-hidden="true">—</span>}</div>
                   {r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff</span>}
                 </div>
                 <ChevronRight size={16} className="dim" />

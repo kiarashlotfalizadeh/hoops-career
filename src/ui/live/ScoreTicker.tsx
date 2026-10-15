@@ -55,24 +55,23 @@ export const ScoreTicker = memo(function ScoreTicker({
   const [h, a] = [league.teams[o.res.home.tid], league.teams[o.res.away.tid]];
   const lead = s.state === 'pre' ? -1 : s.score[0] > s.score[1] ? 0 : s.score[1] > s.score[0] ? 1 : -1;
   return (
-    <button
-      className="live-ticker"
-      onClick={onOpen}
-      aria-label={`Around the league: ${a.abbrev} ${s.score[1]}, ${h.abbrev} ${s.score[0]}, ${statusText(league, o, s)}. All scores`}
-    >
-      <span className="live-ticker-tag">{o.why ? '★' : 'NBA'}</span>
+    // named by what it shows ("NBA BKN 0 CHI 0 8:00 PM 2/5"), then where it goes; the spaces between the
+    // flex items only space the name out
+    <button className="live-ticker" onClick={onOpen} aria-haspopup="dialog">
+      <span className="live-ticker-tag">{o.why ? '★' : 'NBA'}</span>{' '}
       <span key={o.res.gid} className="live-ticker-game fade-in">
-        <span className={lead === 1 ? 'bold' : 'dim2'}>{a.abbrev}</span>
-        {s.state !== 'pre' && <b className="num">{s.score[1]}</b>}
-        <span className="dim">{s.state === 'pre' ? '@' : '·'}</span>
-        <span className={lead === 0 ? 'bold' : 'dim2'}>{h.abbrev}</span>
-        {s.state !== 'pre' && <b className="num">{s.score[0]}</b>}
-        <span className={`live-ticker-st${s.state === 'final' ? ' final' : ''}`}>{statusText(league, o, s)}</span>
+        <span className={lead === 1 ? 'bold' : 'dim2'}>{a.abbrev}</span> {s.state !== 'pre' && <b className="num">{s.score[1]}</b>}{' '}
+        <span className="dim" aria-hidden={s.state !== 'pre' || undefined}>
+          {s.state === 'pre' ? '@' : '·'}
+        </span>{' '}
+        <span className={lead === 0 ? 'bold' : 'dim2'}>{h.abbrev}</span> {s.state !== 'pre' && <b className="num">{s.score[0]}</b>}{' '}
+        <span className={`live-ticker-st${s.state === 'final' ? ' final' : ''}`}>{statusText(league, o, s)}</span>{' '}
         {o.why && <span className="live-ticker-why ellipsis">{o.why}</span>}
-      </span>
+      </span>{' '}
       <span className="live-ticker-n num">
         {k + 1}/{games.length}
       </span>
+      <span className="sr-only">. All scores around the league</span>
     </button>
   );
 });

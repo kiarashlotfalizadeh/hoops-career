@@ -74,11 +74,13 @@ function leagueRows(rows: StandingRow[]): StandingRow[] {
 
 const CLINCH_TEXT: Partial<Record<NonNullable<StandingRow['clinched']>, string>> = { x: 'clinched a playoff spot', p: 'clinched a play-in spot', e: 'eliminated' };
 
-/** A row read aloud: every column spelled out, whichever ones the screen shows. */
-function rowLabel(r: StandingRow, name: string, conf: boolean) {
-  if (r.won + r.lost === 0) return `${name}, 0-0`;
-  return [
-    name,
+/**
+ * A row read aloud after its rank and team as shown ("2 Spurs"): every column spelled out, whichever
+ * ones the screen shows (the columns themselves are hidden from screen readers).
+ */
+function rowDetails(r: StandingRow, conf: boolean) {
+  if (r.won + r.lost === 0) return ', 0-0';
+  const cols = [
     conf ? `${ordinal(r.confRank)} in the ${confName(r.conf)}` : `${ordinal(r.leagueRank)} in the league`,
     `${r.won}-${r.lost}`,
     r.gb ? `${r.gb} game${r.gb === 1 ? '' : 's'} back` : '',
@@ -89,9 +91,8 @@ function rowLabel(r: StandingRow, name: string, conf: boolean) {
     `${r.confRec} in the conference`,
     `${signed(r.diff)} points a game`,
     r.clinched ? CLINCH_TEXT[r.clinched] : '',
-  ]
-    .filter(Boolean)
-    .join(', ');
+  ];
+  return `, ${cols.filter(Boolean).join(', ')}`;
 }
 
 function StandingsTable({ league, rows, conf, cols }: { league: League; rows: StandingRow[]; conf: boolean; cols: Cols }) {
@@ -117,33 +118,51 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
         const me = r.tid === league.userTid;
         return (
           <Fragment key={r.tid}>
-            <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`} aria-label={rowLabel(r, `${t.region} ${t.name}`, conf)}>
-              <span className="rk">{r.won + r.lost === 0 ? '—' : conf ? r.confRank : r.leagueRank}</span>
-              <TeamLogo tid={r.tid} size={24} />
+            <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
+              <span className="rk">{r.won + r.lost === 0 ? <span aria-hidden="true">—</span> : conf ? r.confRank : r.leagueRank}</span>
+              <TeamLogo tid={r.tid} size={24} decorative />
               <span className="nm">
                 <span>
+                  {/* "Spurs" here, "SAS" where the split columns need the room: whichever shows names the row */}
                   <span className="nm-full">{t.name}</span>
                   <span className="nm-ab">{t.abbrev}</span>
                 </span>
-                {r.clinched && <span className={`lg-clinch ${r.clinched}`}>{r.clinched}</span>}
+                {r.clinched && (
+                  <span className={`lg-clinch ${r.clinched}`} aria-hidden="true">
+                    {r.clinched}
+                  </span>
+                )}
                 {!conf && (
-                  <span className="tiny dim" style={{ fontWeight: 600 }}>
+                  <span className="tiny dim" style={{ fontWeight: 600 }} aria-hidden="true">
                     {r.conf}
                   </span>
                 )}
+                <span className="sr-only">{rowDetails(r, conf)}</span>
               </span>
-              <span className="wl">
+              <span className="wl" aria-hidden="true">
                 {r.won}-{r.lost}
               </span>
-              <span className="c-basic dim2">{r.gb === 0 ? '—' : r.gb.toFixed(1)}</span>
-              <span className="c-basic dim2">{r.lastTen}</span>
-              <span className={`c-basic ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : 'dim'}`} style={{ fontWeight: 650 }}>
+              <span className="c-basic dim2" aria-hidden="true">
+                {r.gb === 0 ? '—' : r.gb.toFixed(1)}
+              </span>
+              <span className="c-basic dim2" aria-hidden="true">
+                {r.lastTen}
+              </span>
+              <span className={`c-basic ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : 'dim'}`} style={{ fontWeight: 650 }} aria-hidden="true">
                 {streakLabel(r.streak)}
               </span>
-              <span className="c-split dim2">{r.home}</span>
-              <span className="c-split dim2">{r.away}</span>
-              <span className="c-split dim2">{r.confRec}</span>
-              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : 'dim'}`}>{r.won + r.lost ? signed(r.diff) : '—'}</span>
+              <span className="c-split dim2" aria-hidden="true">
+                {r.home}
+              </span>
+              <span className="c-split dim2" aria-hidden="true">
+                {r.away}
+              </span>
+              <span className="c-split dim2" aria-hidden="true">
+                {r.confRec}
+              </span>
+              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : 'dim'}`} aria-hidden="true">
+                {r.won + r.lost ? signed(r.diff) : '—'}
+              </span>
             </Link>
             {cuts && i === 5 && rows.length > 6 && (
               <div className="lg-cut">

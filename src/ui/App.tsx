@@ -200,7 +200,8 @@ function TopBar() {
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
-        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')} aria-label={`${t.region} ${t.name}, ${ts.won}-${ts.lost}, ${status}. Home`}>
+        {/* named by what it shows ("OKC 47-13 Feb 27 · 1st West"), then the team and where it goes */}
+        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')}>
           <TeamLogo tid={t.tid} size={34} decorative />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
@@ -211,11 +212,16 @@ function TopBar() {
             </div>
             <div className="sub ellipsis">{status}</div>
           </div>
+          <span className="sr-only">
+            : {t.region} {t.name}. Home
+          </span>
         </button>
         <div className="grow" />
-        <button className="iconbtn" onClick={() => nav('/inbox')} aria-label={unread ? `Inbox, ${unread} unread` : 'Inbox'}>
-          <Bell size={20} />
+        {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
+        <button className="iconbtn" onClick={() => nav('/inbox')}>
+          <Bell size={20} aria-hidden="true" />
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
+          <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
         </button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
           <SettingsIcon size={20} />

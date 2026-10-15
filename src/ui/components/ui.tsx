@@ -68,6 +68,8 @@ export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastNa
   return (
     <div
       className={`avatar ${size}`}
+      // a monogram beside the name it stands for: nothing more for a screen reader to read
+      aria-hidden="true"
       // initials sit mid-gradient: dark on light team colours (Spurs silver), white on the rest
       style={{ background: `linear-gradient(140deg, ${c1}, ${shade(c1, -0.35)})`, boxShadow: `inset 0 0 0 2px ${c2}55`, color: inkOn(shade(c1, -0.175)) }}
     >
@@ -454,6 +456,9 @@ export interface Col<T> {
   asc?: boolean;
 }
 
+/** "Points per game" → "points per game" (an acronym like "TS%" stays as it is). */
+const lowerFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
+
 /** Sortable table. `limit` renders only the first rows of the sorted list, for long tables that page with "Show more". */
 export function StatTable<T>({
   rows,
@@ -496,9 +501,10 @@ export function StatTable<T>({
                 aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
                 onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left || c.asc ? 1 : -1 }))}
               >
-                <button type="button" className="th-sort" aria-label={`Sort by ${c.help ?? c.label}`} onClick={(e) => e.preventDefault()}>
+                {/* named by its visible label first ("PTS, sort by points per game"); the arrow is aria-sort's */}
+                <button type="button" className="th-sort" aria-label={`${c.label}, sort by ${lowerFirst(c.help ?? c.label)}`} onClick={(e) => e.preventDefault()}>
                   {c.label}
-                  {sort?.key === c.key ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
+                  {sort?.key === c.key && <span aria-hidden="true">{sort.dir === -1 ? ' ↓' : ' ↑'}</span>}
                 </button>
               </th>
             ))}

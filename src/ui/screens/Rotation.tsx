@@ -135,7 +135,8 @@ export default function Rotation() {
             return (
               <Fragment key={pid}>
                 {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
-                <div className="listrow" style={{ opacity: p.injury ? 0.55 : 1, background: startSet.has(pid) ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
+                {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
+                <div className="listrow" style={{ background: startSet.has(pid) ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
                   <div className="move-arrows">
                     <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0}>
                       <ArrowUp size={16} />
@@ -149,7 +150,8 @@ export default function Rotation() {
                     className="grow row"
                     role="button"
                     tabIndex={0}
-                    aria-label={`Edit ${p.firstName} ${p.lastName}: ${m} minutes`}
+                    aria-haspopup="dialog"
+                    // named by what it shows, his name first: "A. Mitchell Closer SG · … 28 minutes 82"
                     onClick={() => setEdit(pid)}
                     onKeyDown={activateOnKey(() => setEdit(pid))}
                     style={{ cursor: 'pointer', minWidth: 0 }}
@@ -157,10 +159,10 @@ export default function Rotation() {
                     <div className="grow" style={{ minWidth: 0 }}>
                       {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
                       <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
-                        <span className="bold ellipsis" style={{ minWidth: 0 }}>
+                        <span className="bold ellipsis" style={{ minWidth: 0, color: p.injury ? 'var(--text-2)' : undefined }}>
                           {fullNameOf(pid)}
                         </span>
-                        {p.injury && i < benchFrom && <Tag tone="bad">Out</Tag>}
+                        {p.injury && <Tag tone="bad">Out</Tag>}
                         {closers.includes(pid) && <Tag>Closer</Tag>}
                         {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
                       </div>
@@ -174,8 +176,9 @@ export default function Rotation() {
                       </div>
                     </div>
                     <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
-                      <span className="display num" style={{ fontSize: 22 }}>
+                      <span className="display num" style={{ fontSize: 22, color: p.injury ? 'var(--text-dim)' : undefined }}>
                         {m}
+                        <span className="sr-only"> minutes</span>
                       </span>
                       <Ovr v={p.ovr} size="sm" />
                     </div>
@@ -289,7 +292,7 @@ function LineupsCard() {
       title="Lineups this season"
       right={
         <div className="row" style={{ gap: 10 }}>
-          <Link className="card-link" to="/lineups" aria-label="All lineups, pairs, trios and on-off splits">
+          <Link className="card-link" to="/lineups" aria-label="See all lineups, pairs, trios and on-off splits">
             See all
           </Link>
           <Help title="Lineup net rating">

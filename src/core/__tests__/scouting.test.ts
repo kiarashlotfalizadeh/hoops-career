@@ -171,6 +171,16 @@ describe('scouting data', () => {
     expect(d.counters['cov-switch']).toMatch(/\(\+3\.0 points a game for them over 2 games\)\.$/);
   });
 
+  it('marks the NBA Cup final in the head-to-head: a neutral floor, nobody at home', () => {
+    const m = playedLeague(6);
+    const g = m.games.find((x) => x.home.tid === m.userTid || x.away.tid === m.userTid)!;
+    const opp = g.home.tid === m.userTid ? g.away.tid : g.home.tid;
+    g.cup = 'final';
+    const games = scoutData(m, opp).h2h.games;
+    expect(games.find((x) => x.gid === g.gid)?.cupFinal).toBe(true);
+    expect(games.filter((x) => x.gid !== g.gid).every((x) => x.cupFinal === undefined)).toBe(true);
+  });
+
   it("backs counters with evidence when their P&R ball handlers' numbers are inflated, and lists those first", () => {
     const m = playedLeague();
     const tid = scoutable(m, m.userTid + 5);

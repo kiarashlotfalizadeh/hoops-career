@@ -33,6 +33,11 @@ const NUDGE_LABEL: Record<string, string> = {
 
 /** What a plan changes, in a few words: "Pace −25 · Get back +20 · 3-2 Zone". */
 export function patchText(p: TacticsPatch): string {
+  const out = patchParts(p);
+  return out.length ? out.join(' · ') : 'No changes yet';
+}
+
+function patchParts(p: TacticsPatch): string[] {
   const out: string[] = [];
   const { actions, ...off } = p.offense ?? {};
   if (off.huntMismatch) out.push('Hunt mismatches');
@@ -46,7 +51,21 @@ export function patchText(p: TacticsPatch): string {
   const n = p.nudge ?? {};
   for (const [k, v] of [...Object.entries(n.offense ?? {}), ...Object.entries(n.defense ?? {})]) if (v) out.push(`${NUDGE_LABEL[k] ?? k} ${signed(v)}`);
   for (const [k, v] of Object.entries(n.actions ?? {})) if (v) out.push(`${ACTION_META[k as keyof typeof ACTION_META].label} ${signed(v)}`);
-  return out.length ? out.join(' · ') : 'No changes yet';
+  return out;
+}
+
+/** The plan editor's own controls: six relative sliders, the base scheme and the press. */
+const EDITOR_NUDGES = { offense: ['pace', 'threePoint', 'crashBoards'], defense: ['pressure', 'help', 'getBack'] } as const;
+
+/** A plan's changes the editor has no control for (a template's extras, kept as they are). */
+function extraPatch(p: TacticsPatch): TacticsPatch {
+  const defense = { ...p.defense };
+  delete defense.scheme;
+  delete defense.press;
+  const nudge = { ...p.nudge, offense: { ...p.nudge?.offense }, defense: { ...p.nudge?.defense } };
+  for (const k of EDITOR_NUDGES.offense) delete nudge.offense[k];
+  for (const k of EDITOR_NUDGES.defense) delete nudge.defense[k];
+  return { ...p, defense, nudge };
 }
 
 const plans = (t: Tactics) => t.situations ?? [];
@@ -195,6 +214,8 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
     />
   );
   const lead = (v: number | undefined, any: number) => (v === undefined ? any : v);
+  // only what the controls above don't show
+  const extras = patchParts(extraPatch(s.patch));
   return (
     <div className="col" style={{ gap: 16 }}>
       <label className="col" style={{ gap: 4 }}>
@@ -324,7 +345,7 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
           options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))]}
         />
       </div>
-      <div className="small dim">Also in this plan: {patchText(s.patch)}.</div>
+      {extras.length > 0 && <div className="small dim">Also in this plan: {extras.join(' · ')}.</div>}
       {ACTIONS.some((a) => s.patch.nudge?.actions?.[a]) && <div className="tiny dim">Action changes come from the template and stay as they are.</div>}
     </div>
   );

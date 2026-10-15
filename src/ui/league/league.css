@@ -970,6 +970,17 @@ a.bk-s:hover {
 .lg-sat-win {
   color: var(--tier-elite);
 }
+/* a contestant's name: the link reaches up and down the 36px row (its label keeps the ellipsis) */
+.lg-sat-who {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.lg-sat-who::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
 .lg-sat-dunks {
   display: grid;
   grid-template-columns: 34px 22px minmax(0, 1fr);
@@ -996,6 +1007,19 @@ a.bk-s:hover {
 }
 .lg-rec-row + .lg-rec-row {
   border-top: 1px solid var(--line);
+}
+/* Lineups: a unit or split over too few possessions to trust, greyed by colour (opacity took its
+   small text under 4.5:1) */
+.listrow.lu-faded {
+  color: var(--text-2);
+}
+.listrow.lu-faded .good,
+.listrow.lu-faded .bad {
+  color: var(--text-2);
+}
+/* a record line that links (to the player, or the team) is one tap target from edge to edge */
+a.lg-rec-row:active {
+  background: var(--surface-3);
 }
 .lg-race-row {
   display: grid;

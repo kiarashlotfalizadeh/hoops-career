@@ -38,7 +38,7 @@ export default function LeagueHub() {
         title="League"
         sub={`${seasonLabel(league.season)} · ${PHASE_LABEL[league.phase]}${inSeason ? ` · ${fmtDate(league.season, league.day)}` : ''}`}
         right={
-          <Link to="/history" className="btn sm ghost" aria-label="League history">
+          <Link to="/history" className="btn sm ghost" aria-label="History of the league">
             <HistoryIcon size={16} /> History
           </Link>
         }

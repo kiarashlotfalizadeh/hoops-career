@@ -163,7 +163,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
     >
       <div className="col" style={{ gap: 12 }}>
         {pogBox && (
-          <Link to={`/player/${pogBox.pid}`} className={`gd-pog ${pogMine ? 'mine' : ''}`} aria-label={`Player of the game: ${pogP ? playerName(pogP) : pogBox.name}`}>
+          // named by what it shows: "Player of the game · DET Jalen Duren 12 pts · …"
+          <Link to={`/player/${pogBox.pid}`} className={`gd-pog ${pogMine ? 'mine' : ''}`}>
             {pogP ? <Avatar p={pogP} /> : <TeamLogo tid={pogTeam?.tid ?? them.tid} size={40} decorative />}
             <div className="grow" style={{ minWidth: 0 }}>
               <div className="tiny dim upper bold">Player of the game{pogMine ? '' : ` · ${pogTeam?.abbrev ?? ''}`}</div>
@@ -334,12 +335,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
             {elsewhere.map((g) => {
               const hw = g.home.pts > g.away.pts;
               return (
-                <Link
-                  key={g.gid}
-                  to={`/game/${g.gid}`}
-                  className="gd-row small"
-                  aria-label={`${league.teams[g.away.tid].name} ${g.away.pts}, ${league.teams[g.home.tid].name} ${g.home.pts}`}
-                >
+                // named by what it shows: "MIA 120 @ DET 117 FINAL"
+                <Link key={g.gid} to={`/game/${g.gid}`} className="gd-row small">
                   <TeamLogo tid={g.away.tid} size={20} decorative />
                   <span className={`num ${hw ? 'dim' : 'bold'}`}>
                     {league.teams[g.away.tid].abbrev} {g.away.pts}

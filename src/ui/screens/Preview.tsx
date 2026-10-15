@@ -238,17 +238,11 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
               </button>
             </>
           ) : (
-            <button
-              className="btn primary"
-              style={{ gridColumn: 'span 2' }}
-              disabled={simming}
-              onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}
-              aria-label="Sim to next game"
-            >
+            <button className="btn primary" style={{ gridColumn: 'span 2' }} disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
               <FastForward size={17} /> Sim to game day
             </button>
           )}
-          <Link to={`/lab?opp=${opp}`} className="btn" aria-label={`Test a plan against the ${them.name} in the Tactics Lab`}>
+          <Link to={`/lab?opp=${opp}`} className="btn" aria-label={`Lab: test a plan against the ${them.name}`}>
             <Beaker size={17} /> Lab
           </Link>
         </div>

@@ -81,6 +81,8 @@ export interface HeadToHeadGame {
   us: number;
   them: number;
   home: boolean;
+  /** The NBA Cup final, on a neutral floor: neither side was at home. */
+  cupFinal?: boolean;
 }
 
 export interface ScoutEffect {
@@ -478,7 +480,7 @@ function headToHead(league: League, tid: number): ScoutData['h2h'] {
     if (!home && !(g.away.tid === me && g.home.tid === tid)) continue;
     const us = home ? g.home.pts : g.away.pts;
     const them = home ? g.away.pts : g.home.pts;
-    games.push({ gid: g.gid, season: g.season, day: g.day, won: us > them, us, them, home });
+    games.push({ gid: g.gid, season: g.season, day: g.day, won: us > them, us, them, home, ...(g.cup === 'final' ? { cupFinal: true } : {}) });
     if (!g.impacts) continue;
     tracked++;
     const side = home ? 0 : 1;
