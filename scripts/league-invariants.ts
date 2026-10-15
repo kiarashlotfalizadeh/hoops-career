@@ -172,6 +172,7 @@ function check() {
   checkTerms();
   checkTransactions();
   checkContracts();
+  checkRetiredNumbers();
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
   } catch (e) {
@@ -227,6 +228,30 @@ function checkCalendar(generated: boolean) {
     const d = date(g.day);
     const thanksgiving = d.getUTCMonth() === 10 && d.getUTCDay() === 4 && d.getUTCDate() >= 22 && d.getUTCDate() <= 28;
     if (generated && (thanksgiving || (d.getUTCMonth() === 11 && d.getUTCDate() === 24))) bad('game on a holiday', d.toISOString().slice(0, 10));
+  }
+}
+
+/** Who wore each retired number on its team when it went up (league, team and number -> pids): only they may wear it there, until they leave. */
+const keepers = new Map<string, Set<number>>();
+
+/**
+ * Retired numbers: once per legend on a team, his name and season on it, and nobody who joined the
+ * team since wears one (a player who wore it there when it went up keeps it until he leaves). A
+ * number is first seen at the check after the playoffs it was retired at, before anyone can join.
+ */
+function checkRetiredNumbers() {
+  for (const t of L.teams) {
+    const list = t.retired ?? [];
+    if (new Set(list.map((r) => r.pid)).size !== list.length) bad('number retired twice for a player', `${t.abbrev} ${JSON.stringify(list)}`);
+    const roster = H.teamPlayers(L, t.tid);
+    for (const r of list) {
+      if (!r.name || !(r.season <= L.season) || (L.players[r.pid] && L.players[r.pid].tid !== -3)) bad('retired number off', `${t.abbrev} ${JSON.stringify(r)}`);
+      const key = `${label}${t.tid}#${r.jersey}`;
+      if (!keepers.has(key)) keepers.set(key, new Set(roster.filter((p) => p.jersey === r.jersey).map((p) => p.pid)));
+      const kept = keepers.get(key)!;
+      for (const pid of kept) if (L.players[pid]?.tid !== t.tid) kept.delete(pid);
+      for (const p of roster) if (p.jersey === r.jersey && !kept.has(p.pid)) bad('newcomer wears a retired number', `${t.abbrev} #${r.jersey} (${r.name}): ${nm(p.pid)}`);
+    }
   }
 }
 
@@ -1034,6 +1059,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     console.log(
       `   record book: ${L.news.filter((n) => n.kind === 'record' && n.season === L.season - 1).length} record news in ${seasonLabel(L.season - 1)}, book ${(JSON.stringify(L.records ?? {}).length / 1000).toFixed(1)}KB, career highs ${highsKB.toFixed(1)}KB`,
     );
+    const raised = L.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.season === L.season - 1).map((r) => `${t.abbrev} #${r.jersey} ${r.name}`));
+    console.log(`   retired numbers: ${raised.length}${raised.length ? ` (${raised.join(', ')})` : ''}, ${L.teams.reduce((a, t) => a + (t.retired?.length ?? 0), 0)} in all`);
     const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
       `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,

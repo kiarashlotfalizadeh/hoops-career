@@ -1390,6 +1390,71 @@ a.bk-s:hover {
   background: color-mix(in srgb, var(--tier-elite) 20%, transparent);
   color: var(--tier-elite);
 }
+/* retired numbers: rafter banners in the team's colours (--bn, --bn-low, --bn-trim set inline), swallowtail at the foot */
+.lg-banners {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px 8px;
+  margin-top: 10px;
+}
+.lg-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 108px;
+  padding: 12px 6px 22px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--bn), var(--bn-low));
+  box-shadow:
+    inset 0 4px 0 var(--bn-trim),
+    inset 0 -1px 0 var(--bn-trim);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 12px), 0 100%);
+}
+/* the swallowtail clips an outside ring */
+.lg-banner:focus-visible {
+  outline-color: var(--bn-trim);
+  outline-offset: -4px;
+}
+.lg-banner .no {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.lg-banner .nm {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.lg-banner .yr {
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+.lg-banners.sm {
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 8px 6px;
+  margin-top: 0;
+}
+.lg-banners.sm .lg-banner {
+  min-height: 70px;
+  padding: 8px 4px 16px;
+  gap: 2px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 8px), 0 100%);
+}
+.lg-banners.sm .no {
+  font-size: 24px;
+}
+.lg-banners.sm .nm {
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 .lg-hist-row {
   display: grid;
   grid-template-columns: 86px minmax(0, 1fr);

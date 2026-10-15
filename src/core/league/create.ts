@@ -9,7 +9,8 @@ import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights }
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
-import { JERSEYS, ensureRotation } from './games';
+import { ensureRotation } from './games';
+import { JERSEYS } from './jerseys';
 import { updateMorale } from './morale';
 import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';

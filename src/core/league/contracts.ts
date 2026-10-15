@@ -27,6 +27,7 @@ import {
   teamPlayers,
   winPct,
 } from './helpers';
+import { numberTeam } from './jerseys';
 import { logMove } from './transactions';
 
 export type Strategy = Team['strategy'];
@@ -542,6 +543,8 @@ export function signPlayer(
   p.mood.tradeRequest = false;
   const team = league.teams[tid];
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
+  // a newcomer takes a number nobody there wears (nor has retired) now, not at the next game
+  numberTeam(league, tid);
   if (opts.news !== false) {
     const verb = own ? 're-signed with' : opts.twoWay ? 'signed a two-way deal with' : 'signed with';
     addNews(league, {
@@ -599,6 +602,8 @@ export function releaseDeadMoney(league: League, p: Player): { season: number; a
 
 /** A player leaves the team: out of its rotation (order, minutes, caps, closers, rest days) and its tactics' roles. */
 export function leaveTeam(team: Team, pid: number) {
+  // he's numbered there no more: back later, he's a newcomer (a retired number he wore stays retired)
+  if (team.numbered) team.numbered = team.numbered.filter((x) => x !== pid);
   const r = team.rotation;
   r.order = r.order.filter((x) => x !== pid);
   r.closers = r.closers.filter((x) => x !== pid);
@@ -774,6 +779,7 @@ function claimPlayer(league: League, p: Player, tid: number) {
   p.asking = undefined;
   p.faDays = undefined;
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
+  numberTeam(league, tid);
   addNews(league, { kind: 'signing', text: `The ${team.region} ${team.name} claimed ${playerName(p)} off waivers from the ${old.name}.`, tids: [tid, w.from], pids: [p.pid] });
   logMove(league, 'claim', [tid, w.from], p, { amount: salaryFor(p, league.season), years: contractExp(p.contract) - league.season + 1 });
 }

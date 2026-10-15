@@ -18,6 +18,7 @@ import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneS
 import { gameKeys, gradeKey } from '../analysis/keys';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
+import { numberTeam } from './jerseys';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -58,60 +59,6 @@ function benchTwoWays(rot: Rotation, players: Player[]) {
   rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 
-/** Numbers a newcomer picks from first (any free number from 0-99 after that). */
-export const JERSEYS = [
-  '0',
-  '1',
-  '2',
-  '3',
-  '4',
-  '5',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12',
-  '13',
-  '14',
-  '15',
-  '17',
-  '20',
-  '21',
-  '22',
-  '23',
-  '24',
-  '25',
-  '30',
-  '31',
-  '32',
-  '33',
-  '34',
-  '35',
-  '41',
-  '44',
-  '55',
-];
-
-/**
- * One number per player on a team: players who already wore theirs here keep them (then the
- * longest-serving), and a draftee, signing or trade arrival whose number is taken picks a free one.
- */
-function settleJerseys(players: Player[], incumbents: Set<number>) {
-  const order = [...players].sort((a, b) => Number(incumbents.has(b.pid)) - Number(incumbents.has(a.pid)) || a.joinedSeason - b.joinedSeason || a.pid - b.pid);
-  const used = new Set<string>();
-  for (const p of order) {
-    if (p.jersey && !used.has(p.jersey)) {
-      used.add(p.jersey);
-      continue;
-    }
-    let free = JERSEYS.filter((j) => !used.has(j));
-    if (!free.length) free = Array.from({ length: 100 }, (_, i) => String(i)).filter((j) => !used.has(j));
-    p.jersey = free[(Math.imul(p.pid, 0x9e3779b1) >>> 0) % free.length];
-    used.add(p.jersey);
-  }
-}
-
 function bestPresetsChanged(team: Team, players: Player[]): boolean {
   const best = rankedPresets(team, players);
   return best.off[0] !== team.tactics.offPreset || best.def[0] !== team.tactics.defPreset;
@@ -123,9 +70,7 @@ export function ensureRotation(league: League, tid: number) {
   const players = teamPlayers(league, tid);
   const pids = new Set(players.map((p) => p.pid));
   const rot = team.rotation;
-  // (arrivals are already in the rotation order: the incumbents are who was numbered at the last game)
-  settleJerseys(players, new Set(team.numbered ?? rot.order));
-  team.numbered = players.map((p) => p.pid);
+  numberTeam(league, tid, players);
   const stale = rot.order.some((pid) => !pids.has(pid)) || players.some((p) => !rot.order.includes(p.pid));
   const isUser = tid === league.userTid;
   if (!isUser || !rot.manual) {

@@ -249,6 +249,8 @@ export interface Player {
   tenDays?: { season: number; by: Record<number, number> };
   /** His regular-season career highs in this league (see records.ts): the whole career's when it's all on record. */
   highs?: Partial<Record<RecStat, HighRow>>;
+  /** The number he last wore for each team that numbered him (tid -> number), so a franchise retiring it after he moved on knows which (see jerseys.ts); dropped when he retires. */
+  jerseys?: Record<number, string>;
 }
 
 /** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
@@ -705,12 +707,25 @@ export interface Team {
   roomSeason?: number;
   /** Contract season the team last used its bi-annual exception (not two seasons running). */
   baeSeason?: number;
-  /** Players whose jersey numbers were settled at the team's last game: they keep them over arrivals. */
+  /** Players whose jersey numbers were settled at the team's last game or arrival (see numberTeam): they keep them over arrivals. */
   numbered?: number[];
+  /**
+   * Numbers the franchise retired for its legends, oldest first (see jerseys.ts): nobody who joins
+   * it wears one again. The name is frozen, so a banner reads the same after his record is gone.
+   */
+  retired?: RetiredNumber[];
   practice: 'light' | 'normal' | 'intense';
   timeoutsUsedThisGame?: number;
   /** Cash sent and received in trades in one contract season ($K), each held to CASH_PCT of the cap (see cashRoom). */
   cashTrades?: { season: number; sent: number; received: number };
+}
+
+/** A number a franchise retired: the legend who wore it there and the season he retired. */
+export interface RetiredNumber {
+  jersey: string;
+  pid: number;
+  name: string;
+  season: number;
 }
 
 export interface CoachProfile {

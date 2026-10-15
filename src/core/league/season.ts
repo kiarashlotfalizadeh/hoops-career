@@ -59,6 +59,7 @@ import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
 import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
+import { retireNumbers } from './jerseys';
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -364,6 +365,8 @@ function retirements(league: League, rng: Rng) {
         p.hof = true;
         p.awards.push({ season: league.season, type: 'Hall of Fame' });
       }
+      // the franchises he was a legend for retire his number
+      retireNumbers(league, p);
       // news: still a good player, or a decorated career (a few All-Star or All-NBA nods)
       if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
