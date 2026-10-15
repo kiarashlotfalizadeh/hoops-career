@@ -22,6 +22,8 @@ import { liveInProgress } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 import { PlayerMoves } from '../league/MovesTab';
+import { deadlineLabel } from '../../core/league/rfa';
+import { sheetTerms } from '../office/RfaPanel';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -161,7 +163,9 @@ export default function PlayerView() {
   const faAsk = p.tid === FREE_AGENT ? askingContract(league, p, league.userTid) : null;
   const status =
     p.tid === FREE_AGENT
-      ? 'Free agent'
+      ? p.rfa
+        ? 'Restricted free agent'
+        : 'Free agent'
       : p.tid === DRAFT_PROSPECT
         ? `${p.draft.year} draft prospect`
         : p.tid === RETIRED
@@ -365,6 +369,11 @@ export default function PlayerView() {
                     </>
                   )}
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
+                  {p.rfa && (
+                    <div className="small dim2">
+                      Qualifying offer extended ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): he becomes a restricted free agent when free agency opens.
+                    </div>
+                  )}
                   <div className="row between">
                     <span className="dim2 small">Market value</span>
                     <span className="num">{fmtM(marketSalary(league, p))}</span>
@@ -375,12 +384,20 @@ export default function PlayerView() {
                   <div className="small dim2">
                     {p.waivers
                       ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
-                      : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
+                      : p.rfa?.sheet
+                        ? `Restricted: he signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match it until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
+                        : p.rfa?.tid === league.userTid
+                          ? `Your restricted free agent: re-sign him with Bird rights (asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}), or match any offer sheet. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
+                          : p.rfa
+                            ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
+                            : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                   </div>
                   {/* straight to his offer (or claim) sheet on the Free Agents screen */}
-                  <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
-                    {p.waivers ? 'Claim off waivers' : 'Make an offer'}
-                  </Link>
+                  {!p.rfa?.sheet && (
+                    <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
+                      {p.waivers ? 'Claim off waivers' : p.rfa?.tid === league.userTid ? 'Re-sign' : p.rfa ? 'Offer sheet' : 'Make an offer'}
+                    </Link>
+                  )}
                 </div>
               ) : p.tid === DRAFT_PROSPECT ? (
                 <div className="small dim2">Eligible for the {p.draft.year} draft.</div>

@@ -20,6 +20,7 @@ import {
   MLE_PCT,
   askingContract,
   buyoutTerms,
+  capSpace,
   extensionBlockedReason,
   mleRoom,
   nonGuaranteed,
@@ -58,6 +59,8 @@ import {
 import { ContractSheet } from '../office/ContractSheet';
 import { overallPick } from '../league/shared';
 import { UntouchableToggle } from '../office/Untouchable';
+import { SheetDecision } from '../office/RfaPanel';
+import { pendingSheets, qualifyBlockedReason, restrictedFreeAgents } from '../../core/league/rfa';
 import { rosterNames } from '../stats';
 import { useFlowRunner } from '../useFlow';
 
@@ -179,6 +182,11 @@ export default function Office() {
               them), each one holds cap room at about his asking price.
             </p>
             <p style={{ margin: 0 }}>
+              <b>Restricted free agents.</b> A young player you extend a qualifying offer can still be re-signed in free agency, and you can match any offer sheet he signs. His cap
+              hold (the larger of the offer and his ask) stays on through free agency until he signs or you withdraw the offer; an offer sheet you sign holds its room until his
+              team decides.
+            </p>
+            <p style={{ margin: 0 }}>
               <b>Luxury tax ({fmtM(cap.luxuryTax)}).</b> Every dollar of payroll above the tax line costs {CAP.taxRate}× in tax at the end of the regular season.{' '}
               {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among the teams under the line.
             </p>
@@ -208,7 +216,8 @@ export default function Office() {
         </div>
         {holds > 0 && (
           <div className="tiny dim" style={{ marginTop: 4 }}>
-            Striped: {fmtM(holds)} in cap holds for your expiring players.
+            Striped: {fmtM(holds)} in cap holds for your{' '}
+            {league.phase === 'freeAgency' ? (pendingSheets(league, tid).length ? 'restricted free agents and offer sheets' : 'restricted free agents') : 'expiring players'}.
           </div>
         )}
         <div className="grid2" style={{ marginTop: 12 }}>
@@ -322,16 +331,18 @@ function Spotlight({ league }: { league: League }) {
   const busy = useStore((st) => !!st.sim);
   const tid = league.userTid;
   const s0 = capSeason(league);
-  const space = CAP_FOR(league, s0).salaryCap - payroll(league, tid, s0);
+  // (net of what the summer market holds: your restricted free agents' cap holds and your offer sheets)
+  const space = capSpace(league, tid, s0);
   const mle = mleRoom(league, tid, s0);
   const roster = standardRoster(league, tid).length;
   const full = roster >= rosterMaxNow(league);
-  // only players the team can actually pay: cap space, the mid-level or the minimum
+  // only players the team can actually pay: cap space, the mid-level or the minimum (your own
+  // restricted free agents have their own card, and one who signed an offer sheet waits on it)
   const topFAs = useLeagueMemo(
     () =>
       league.phase === 'freeAgency' || league.phase === 'preseason'
         ? freeAgents(league)
-            .filter((p) => offerRoute(league, p, askingContract(league, p, tid).amount, s0))
+            .filter((p) => p.rfa?.tid !== tid && !p.rfa?.sheet && offerRoute(league, p, askingContract(league, p, tid).amount, s0))
             .sort((a, b) => valueScore(league, b) - valueScore(league, a))
             .slice(0, league.phase === 'preseason' ? 3 : 5)
         : [],
@@ -379,13 +390,22 @@ function Spotlight({ league }: { league: League }) {
     }
     case 'resign': {
       const exp = expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
+      // young players who can be made restricted free agents, and those already qualified
+      const canQualify = exp.filter((p) => !p.rfa && !qualifyBlockedReason(league, p)).length;
+      const qualified = exp.filter((p) => p.rfa).length;
       return (
         <Card accent className="fo-hero">
           <div className="fo-eyebrow">Re-sign period</div>
           <div className="fo-mid" style={{ marginTop: 6 }}>
             {exp.length ? `${exp.length} contract${exp.length > 1 ? 's' : ''} expiring` : 'No expiring contracts'}
           </div>
-          <div className="small dim2">Re-sign your own players before free agency opens. Bird rights let you exceed the cap to keep them.</div>
+          <div className="small dim2">
+            Re-sign your own players before free agency opens. Bird rights let you exceed the cap to keep them.
+            {canQualify > 0
+              ? ` ${canQualify === 1 ? 'One young player' : `${canQualify} young players`} can get a qualifying offer, so you can match any offer sheet for ${canQualify === 1 ? 'him' : 'them'} in free agency.`
+              : ''}
+            {qualified > 0 ? ` ${qualified} qualified: restricted when the market opens.` : ''}
+          </div>
           {exp.length > 0 && (
             <div className="list" style={{ margin: '10px -14px 0' }}>
               {exp.slice(0, 3).map((p) => (
@@ -402,6 +422,7 @@ function Spotlight({ league }: { league: League }) {
     case 'freeAgency':
     case 'preseason': {
       const fa = league.phase === 'freeAgency';
+      const rfas = fa ? restrictedFreeAgents(league, tid) : [];
       return (
         <Card accent className="fo-hero">
           <div className="row between">
@@ -411,6 +432,25 @@ function Spotlight({ league }: { league: League }) {
           {full && (
             <div className="small bad" style={{ marginTop: 6 }}>
               Your roster is full ({roster}). Release or trade someone before signing anyone.
+            </div>
+          )}
+          {fa && rfas.length > 0 && (
+            <div className="col" style={{ gap: 8, marginTop: 8 }}>
+              {rfas
+                .filter((p) => p.rfa!.sheet)
+                .map((p) => (
+                  <SheetDecision key={p.pid} league={league} p={p} />
+                ))}
+              {rfas.some((p) => !p.rfa!.sheet) && (
+                <div className="small dim2">
+                  Restricted free agents:{' '}
+                  {rfas
+                    .filter((p) => !p.rfa!.sheet)
+                    .map((p) => p.lastName)
+                    .join(', ')}
+                  . Re-sign or match from Free Agents; unsigned at the close, each takes his qualifying offer.
+                </div>
+              )}
             </div>
           )}
           {!fa && (
@@ -564,7 +604,12 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
               <span className="tag">2W</span> two-way deals are paid outside the cap and the tax, so they're left out of the totals.
             </p>
             <p style={{ margin: 0 }}>Dead money is salary still owed to players you released. It counts against the cap until it runs out.</p>
-            {holds > 0 && <p style={{ margin: 0 }}>Cap holds: until free agency opens, your expiring players hold cap room at about their asking price.</p>}
+            {holds > 0 && (
+              <p style={{ margin: 0 }}>
+                Cap holds: until free agency opens, your expiring players hold cap room at about their asking price; through free agency, your restricted free agents and your
+                pending offer sheets do.
+              </p>
+            )}
           </Help>
         }
       >

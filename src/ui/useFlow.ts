@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../state/store';
 import type { FlowAction } from './flow';
 import type { League } from '../core/types';
-import { faAdvance, finishDraftPhase, newSeason, startDraft, startFreeAgency, startRegularSeason } from '../core/league/season';
+import { faAdvance, finishDraftPhase, newSeason, newSeasonBlockedReason, startDraft, startFreeAgency, startRegularSeason } from '../core/league/season';
 import { seasonLabel } from '../core/constants';
 
 export function useFlowRunner() {
@@ -63,11 +63,19 @@ export function useFlowRunner() {
       case 'faWeek':
         await task('Free Agency', (l) => faAdvance(l, 7));
         return;
-      case 'newSeason':
+      case 'newSeason': {
         if (!(await task('Training camp', newSeason))) return;
+        // finishing the market stops for an offer sheet on one of the user's restricted free agents
+        const blocked = !done && newSeasonBlockedReason(useStore.getState().league!);
+        if (blocked) {
+          st.toast(`Free agency stopped: ${blocked}`, 'bad');
+          nav('/free-agents');
+          return;
+        }
         if (done) st.toast(`Welcome to the ${seasonLabel(useStore.getState().league!.season)} season. Check the training camp report in your inbox.`, 'good');
         nav('/');
         return;
+      }
     }
   };
 }

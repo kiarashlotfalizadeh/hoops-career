@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarClock, CircleCheck, DoorOpen, PenLine } from 'lucide-react';
+import { CalendarClock, CircleCheck, DoorOpen, PenLine, ShieldCheck } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
@@ -22,6 +22,8 @@ import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
 import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
+import { QualifyRow } from '../office/RfaPanel';
+import { MATCH_DAYS, RFA_MAX_SERVICE, restrictedFreeAgents } from '../../core/league/rfa';
 
 export default function Resign() {
   const league = useLeague();
@@ -82,6 +84,9 @@ function ResignPhase() {
   const [ext, setExt] = useState<number | null>(null);
   // standard roster spots only: two-way deals sit outside the 15
   const rosterNext = standardRoster(league, tid).length - expiring.filter((p) => !p.contract.twoWay).length;
+  // who leaves as a restricted free agent (qualified) and who unrestricted when the market opens
+  const qualified = expiring.filter((p) => p.rfa).length;
+  const unrestricted = expiring.length - qualified;
 
   const doRenounce = (p: Player) => {
     let res = { ok: false, reason: '' };
@@ -127,10 +132,17 @@ function ResignPhase() {
             <p style={{ margin: 0 }}>
               <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
             </p>
-            <p style={{ margin: 0 }}>Anyone you don't re-sign becomes an unrestricted free agent when free agency opens. Other teams may sign him.</p>
+            <p style={{ margin: 0 }}>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens. Other teams may sign him.</p>
+            <p style={{ margin: 0 }}>
+              <b>Restricted free agents.</b> A first-round pick finishing his rookie-scale deal, or a player with {RFA_MAX_SERVICE} seasons or fewer in the league, can get a{' '}
+              <b>qualifying offer</b>: one season at 125% of his last salary (a rookie-scale pick: 130% for #1 up to 150% for #30), at least the minimum plus $0.2M. In free agency
+              you can still re-sign him, and when another team signs him to an offer sheet (2 to 5 years) you have {MATCH_DAYS} days to match it and keep him on exactly its terms.
+              Unsigned when the market closes, he plays a season on the qualifying offer and is unrestricted after it. You can withdraw the offer until he signs a sheet.
+            </p>
             <p style={{ margin: 0 }}>
               <b>Cap holds.</b> Until then, each expiring player counts against next season's cap at about his asking price, so you can't spend the same room twice (say, on salary
-              taken back in a trade). Renounce a player to clear his hold: he leaves for free agency.
+              taken back in a trade). Renounce a player to clear his hold: he leaves for free agency. A qualified player holds the larger of his offer and his ask, and keeps
+              holding it through free agency until he signs or you withdraw the offer.
             </p>
             <p style={{ margin: 0 }}>
               <b>Options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including rookie-scale
@@ -181,8 +193,9 @@ function ResignPhase() {
         )}
         {holders.length > 0 && (
           <div className="tiny dim" style={{ marginTop: 8 }}>
-            Striped: what the {holders.length} expiring player{holders.length === 1 ? '' : 's'} on standard deals would add at their current asks. Until free agency opens they hold
-            that cap room unless you renounce them; what's left after re-signing is yours to use in free agency.
+            Striped: what the {holders.length} expiring player{holders.length === 1 ? '' : 's'} on standard deals would add at their current asks (a qualified one at least his
+            offer). Until free agency opens they hold that cap room unless you renounce them, and a qualified one keeps holding it through free agency; what's left after re-signing
+            is yours to use in free agency.
           </div>
         )}
       </Card>
@@ -286,6 +299,7 @@ function ResignPhase() {
                   <PenLine size={15} /> Negotiate
                 </button>
               </div>
+              <QualifyRow league={league} p={p} />
             </Card>
           );
         })
@@ -343,9 +357,12 @@ function ResignPhase() {
         {renounce && (
           <div className="col" style={{ gap: 12 }}>
             <div className="dim2">
-              You give up {playerName(renounce)}'s Bird rights: he becomes a free agent when the market opens
-              {renounce.mood.tradeRequest || renounce.contract.twoWay ? '' : `, and his ${fmtM(asks.get(renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring
-              him back you'd have to outbid other teams with cap space.
+              You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he becomes an unrestricted free agent when the market
+              opens
+              {renounce.contract.twoWay || (renounce.mood.tradeRequest && !renounce.rfa)
+                ? ''
+                : `, and his ${fmtM(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}
+              . To bring him back you'd have to outbid other teams with cap space.
             </div>
             <div className="row">
               <button className="btn grow" onClick={() => setRenounce(null)}>
@@ -380,10 +397,17 @@ function ResignPhase() {
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} title="Open free agency?">
         <div className="col" style={{ gap: 12 }}>
-          {expiring.length > 0 && (
+          {unrestricted > 0 && (
             <div className="dim2">
-              {expiring.length} player{expiring.length > 1 ? 's' : ''} will become free agent{expiring.length > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have to
-              compete like everyone else, using cap space.
+              {unrestricted} player{unrestricted > 1 ? 's' : ''} will become unrestricted free agent{unrestricted > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have
+              to compete like everyone else, using cap space.
+            </div>
+          )}
+          {qualified > 0 && (
+            <div className="dim2">
+              {qualified === 1 ? 'One qualified player becomes a restricted free agent' : `${qualified} qualified players become restricted free agents`}: you can still re-sign{' '}
+              {qualified === 1 ? 'him' : 'them'}, and match any offer sheet within {MATCH_DAYS} days. {qualified === 1 ? 'His' : 'Their'} cap hold
+              {qualified === 1 ? ' stays' : 's stay'} on your books until {qualified === 1 ? 'he signs' : 'they sign'}.
             </div>
           )}
           {options.length > 0 && (
@@ -398,6 +422,7 @@ function ResignPhase() {
                 <div key={p.pid} className="row small" style={{ gap: 8 }}>
                   <OvrPot p={p} showPot={false} />
                   <span className="grow ellipsis bold">{playerName(p)}</span>
+                  {p.rfa && <span className="tag good">RFA</span>}
                   <span className="dim num">{fmtM(asks.get(p.pid)!.amount)}</span>
                 </div>
               ))}
@@ -484,6 +509,8 @@ function OffPhase({ league }: { league: League }) {
   );
   // two-way pay was never on the cap books (the committed figure beside it leaves it out too)
   const freed = list.reduce((a, p) => a + (p.contract.twoWay ? 0 : salaryFor(p, s)), 0);
+  // in free agency, last summer's qualified players are re-signed from the Free Agents screen
+  const rfas = useLeagueMemo(() => (league.phase === 'freeAgency' ? restrictedFreeAgents(league, tid) : []), [league, tid]);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
   const when =
@@ -508,6 +535,16 @@ function OffPhase({ league }: { league: League }) {
           </div>
         </div>
       </Card>
+
+      {rfas.length > 0 && (
+        <Callout icon={<ShieldCheck size={16} />}>
+          Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => p.lastName).join(', ')}) can still be re-signed with Bird rights until{' '}
+          {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet, and you can match any sheet.{' '}
+          <Link to="/free-agents" className="bold" style={{ color: 'var(--accent-text)' }}>
+            Free Agents
+          </Link>
+        </Callout>
+      )}
 
       <div className="grid2">
         <Kpi k={`Expiring ${shortSeason(s)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
