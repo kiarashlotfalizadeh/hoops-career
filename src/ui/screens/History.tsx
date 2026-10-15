@@ -8,12 +8,13 @@ import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Chips, Empty, Kpi, Ovr, PageHeader, Segmented } from '../components/ui';
 import { AccoladeChips, OutcomeTag, SectionLabel, accoladeScore, careerTotals, ordinal, seasonOutcome, seasonTeam, shortName, useQueryParam } from '../league/shared';
+import { RecordBook } from '../league/RecordBook';
 
-type View = 'franchise' | 'league' | 'hof';
+type View = 'franchise' | 'league' | 'records' | 'hof';
 
 export default function History() {
   const league = useLeague();
-  const [view, setView] = useQueryParam<View>('view', 'franchise', ['franchise', 'league', 'hof']);
+  const [view, setView] = useQueryParam<View>('view', 'franchise', ['franchise', 'league', 'records', 'hof']);
   return (
     <main className="page">
       <PageHeader title="History" sub={`${league.name} · since ${seasonLabel(league.startSeason)}`} back />
@@ -24,11 +25,13 @@ export default function History() {
         options={[
           { id: 'franchise', label: 'Franchise' },
           { id: 'league', label: 'League' },
+          { id: 'records', label: 'Records' },
           { id: 'hof', label: 'Hall of Fame' },
         ]}
       />
       {view === 'franchise' && <Franchise league={league} />}
       {view === 'league' && <LeagueHistory league={league} />}
+      {view === 'records' && <RecordBook league={league} />}
       {view === 'hof' && <HallOfFame league={league} />}
     </main>
   );

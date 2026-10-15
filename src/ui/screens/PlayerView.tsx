@@ -26,6 +26,9 @@ import { PlayerMoves } from '../league/MovesTab';
 import { deadlineLabel } from '../../core/league/rfa';
 import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
+import { REC_LABEL, REC_STATS } from '../../core/league/records';
+import { careerOnRecord } from '../../core/analysis/milestones';
+import { fmtDate } from '../../core/league/helpers';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -618,7 +621,41 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
       />
       {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
       <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those, +/- only for simulated seasons.</div>
+      {!po && <CareerHighs p={p} league={league} />}
     </>
+  );
+}
+
+/** His regular-season career highs: the whole career's when it's all in this league's book, otherwise since the book began. */
+function CareerHighs({ p, league }: { p: Player; league: League }) {
+  const highs = p.highs;
+  if (!highs || !Object.keys(highs).length) return null;
+  const since = league.records?.since ?? league.startSeason;
+  const first = Math.min(...p.stats.filter((s) => !s.real).map((s) => s.season));
+  const whole = !p.stats.some((s) => s.real) && careerOnRecord(p, league.season) && first >= since;
+  const stored = new Set(league.games.map((g) => g.gid));
+  return (
+    <Card title={whole ? 'Career highs' : `Highs since ${seasonLabel(since)}`}>
+      <div className="lg-team5">
+        {REC_STATS.filter((k) => highs[k]).map((k) => {
+          const h = highs[k]!;
+          const text = `vs ${league.teams[h.opp]?.abbrev ?? '?'} · ${fmtDate(h.season, h.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+          return (
+            <div key={k} className="lg-rec-row lbl">
+              <span className="small dim2">{REC_LABEL[k][0]}</span>
+              {stored.has(h.gid) ? (
+                <Link to={`/game/${h.gid}`} className="tiny dim ellipsis">
+                  {text}
+                </Link>
+              ) : (
+                <span className="tiny dim ellipsis">{text}</span>
+              )}
+              <span className="num bold">{h.v}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 

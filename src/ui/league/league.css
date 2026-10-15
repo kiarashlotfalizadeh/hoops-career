@@ -940,6 +940,22 @@ a.bk-s:hover {
 .lg-team5 .row5 + .row5 {
   border-top: 1px solid var(--line);
 }
+/* record book and career highs: rank (or the stat), who and when, the number */
+.lg-rec-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 3px 0;
+  font-size: 13.5px;
+}
+.lg-rec-row.lbl {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+}
+.lg-rec-row + .lg-rec-row {
+  border-top: 1px solid var(--line);
+}
 .lg-race-row {
   display: grid;
   grid-template-columns: 18px 40px minmax(0, 1fr) auto;

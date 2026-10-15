@@ -16,6 +16,7 @@ import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneStat } from '../analysis/milestones';
 import { gameKeys, gradeKey } from '../analysis/keys';
+import { recordGame, recordNews } from './records';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -443,6 +444,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   }
   notableNews(league, res);
   if (g.type === 'regular') milestoneNews(league, sim);
+  // the record book and career highs (results older than last season are pruned, so it's kept now)
+  recordNews(league, res, recordGame(league, res));
 }
 
 const STAT_NEWS: Record<MilestoneStat, string> = { pts: 'scored his', reb: 'grabbed his', ast: 'handed out his' };

@@ -6,6 +6,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
+import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { MAX_STEPS } from './live';
 
 export interface LeagueMeta {
@@ -373,8 +374,32 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
   }
   migrateContracts(x);
+  migrateRecords(x);
   x.version = SAVE_VERSION;
   return x;
+}
+
+/**
+ * The record book and career highs: a damaged book is read again from the results the save still
+ * has, as is a save's from before the book (see backfillRecords); damaged career highs go.
+ */
+function migrateRecords(x: League) {
+  if (x.records !== undefined && !recordsIntact(x, x.records)) delete x.records;
+  for (const p of Object.values(x.players))
+    if (p.highs !== undefined && !(obj(p.highs) && Object.entries(p.highs).every(([k, h]) => (REC_STATS as readonly string[]).includes(k) && highIntact(h)))) delete p.highs;
+  backfillRecords(x);
+}
+
+const highIntact = (h: unknown) => obj(h) && num(h.v) && int(h.season) && num(h.day) && int(h.opp) && int(h.gid);
+
+function recordsIntact(x: League, r: unknown): boolean {
+  const mark = (m: unknown, team: boolean) =>
+    highIntact(m) && obj(m) && int(m.tid) && !!x.teams[m.tid as number] && (team ? nums(m.score) && m.score.length === 2 : int(m.pid) && str(m.name));
+  const list = (keys: readonly string[], o: unknown, team: boolean) =>
+    obj(o) && Object.entries(o).every(([k, l]) => keys.includes(k) && Array.isArray(l) && l.length <= 10 && l.every((m) => mark(m, team)));
+  const shelf = (s: unknown) => obj(s) && list(REC_STATS, s.players, false) && list(TEAM_REC_STATS, s.teams, true);
+  const both = (b: unknown) => obj(b) && shelf(b.reg) && shelf(b.post);
+  return obj(r) && int(r.since) && both(r.league) && obj(r.teams) && Object.entries(r.teams).every(([tid, b]) => !!x.teams[Number(tid)] && both(b));
 }
 
 /** The latest live game's highlights, in shape for the court: possessions with their fives, steps and scores. */

@@ -1,6 +1,7 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
+import type { CareerHigh, RecStat, RecordBook } from './league/records';
 import type { PlayCall, PossLog } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
@@ -246,6 +247,8 @@ export interface Player {
   talks?: Talks;
   /** The 10-day contracts he has signed with one team this season: two at most (see tenDay.ts). */
   tenDays?: { tid: number; season: number; n: number };
+  /** His regular-season career highs in this league (see records.ts): the whole career's when it's all on record. */
+  highs?: Partial<Record<RecStat, CareerHigh>>;
 }
 
 /** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
@@ -971,7 +974,7 @@ export interface NewsItem {
   season: number;
   day: number;
   /** 'rumor': who is listening on a player before the trade deadline, and who has called. */
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor';
+  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record';
   text: string;
   tids: number[];
   pids: number[];
@@ -1223,6 +1226,8 @@ export interface League {
    * (see isQuestionable). Cleared when that game is played or its day has passed.
    */
   gameTime?: { gid: number; play: number[] };
+  /** The record book: the best single-game performances since the league began, the league's and each franchise's (see records.ts). */
+  records?: RecordBook;
 }
 
 /**
