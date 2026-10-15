@@ -7,7 +7,7 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { migrate } from '../../state/persistence';
 import { accoladeScore, accolades } from '../../ui/league/shared';
 import { hallOfFameScore, simDay } from '../league/season';
-import { selectAllStars } from '../league/awards';
+import { missesAllStarGame, selectAllStars } from '../league/awards';
 import { playerName, seasonTotals } from '../league/helpers';
 import {
   DUNK_FIELD,
@@ -41,7 +41,7 @@ const total = (ds: Dunk[] | undefined) => (ds ?? []).reduce((a, d) => a + d.scor
 const allDunks = (e: (typeof sat.dunk)[number]) => [...e.r1, ...(e.final ?? []), ...(e.r1Off ?? []), ...(e.finalOff ?? [])];
 
 describe('the fields', () => {
-  it('eight shooters and four dunkers, healthy and on a roster that morning, names and teams as they were', () => {
+  it('eight shooters and four dunkers, healthy (or with a knock that heals over the break) and on a roster that morning, names and teams as they were', () => {
     expect(sat.three).toHaveLength(THREE_FIELD);
     expect(sat.dunk).toHaveLength(DUNK_FIELD);
     for (const e of [...sat.three, ...sat.dunk]) {
@@ -49,7 +49,8 @@ describe('the fields', () => {
       expect(p.tid, e.name).toBeGreaterThanOrEqual(0);
       expect(e.tid).toBe(p.tid);
       expect(e.name).toBe(playerName(p));
-      expect(p.injury, e.name).toBeNull();
+      // the day heals a knock short enough to keep an All-Star his place before the contests
+      if (p.injury) expect(missesAllStarGame(p), e.name).toBe(false);
     }
     expect(new Set(sat.three.map((e) => e.pid)).size).toBe(THREE_FIELD);
     expect(new Set(sat.dunk.map((e) => e.pid)).size).toBe(DUNK_FIELD);
@@ -152,7 +153,11 @@ describe('its own random stream', () => {
     const a = structuredClone(before);
     const b = structuredClone(before);
     b.rng = (b.rng ^ 0x5bd1e995) >>> 0;
-    for (const l of [a, b]) selectAllStars(l);
+    for (const l of [a, b]) {
+      selectAllStars(l);
+      // as the day does: knocks short enough to keep an All-Star his place heal over the break
+      for (const p of Object.values(l.players)) if (p.tid >= 0 && p.injury && !missesAllStarGame(p)) p.injury = null;
+    }
     const rng = a.rng;
     allStarSaturday(a);
     expect(a.rng).toBe(rng);

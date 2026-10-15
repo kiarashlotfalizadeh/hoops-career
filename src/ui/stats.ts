@@ -75,6 +75,8 @@ export function perGame(s: PlayerStats | null | undefined): PerGame | null {
 }
 
 type Adv = NonNullable<PlayerStats['adv']>;
+/** The figures every imported row has (EPM only comes with seeds built with it). */
+type AdvKey = Exclude<keyof Adv, 'oepm' | 'depm' | 'epm'>;
 
 /**
  * A season's totals across all his teams, imported advanced numbers included: a player traded
@@ -88,13 +90,16 @@ export function seasonLine(p: Player, season: number, playoffs = false): PlayerS
   if (!rows.length) return t;
   // rates by minutes played, counts added up
   const min = rows.reduce((a, r) => a + r.min, 0);
-  const rate = (k: keyof Adv) => rows.reduce((a, r) => a + r.adv![k] * r.min, 0) / Math.max(1e-9, min);
-  const sum = (k: keyof Adv) => rows.reduce((a, r) => a + r.adv![k], 0);
-  const keys: (keyof Adv)[] = ['per', 'ts', 'usg', 'astPct', 'trbPct', 'stlPct', 'blkPct', 'tovPct', 'obpm', 'dbpm', 'bpm'];
+  const rate = (k: AdvKey) => rows.reduce((a, r) => a + r.adv![k] * r.min, 0) / Math.max(1e-9, min);
+  const sum = (k: AdvKey) => rows.reduce((a, r) => a + r.adv![k], 0);
+  const keys: AdvKey[] = ['per', 'ts', 'usg', 'astPct', 'trbPct', 'stlPct', 'blkPct', 'tovPct', 'obpm', 'dbpm', 'bpm'];
   const adv = Object.fromEntries(keys.map((k) => [k, rate(k)])) as Adv;
   adv.ws = sum('ws');
   adv.vorp = sum('vorp');
   adv.ws48 = min ? (adv.ws * 48) / min : 0;
+  // EPM is already the whole season's: every team row carries the same figure
+  const e = rows.find((r) => r.adv!.epm !== undefined)?.adv;
+  if (e) Object.assign(adv, { oepm: e.oepm, depm: e.depm, epm: e.epm });
   return { ...t, adv };
 }
 

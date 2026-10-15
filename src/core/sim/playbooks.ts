@@ -7,7 +7,19 @@
 
 import { ACTIONS, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
 import { ROLE_META } from '../ratings';
-import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META, type DefPreset, type OffPreset } from './tactics';
+import {
+  ACTION_META,
+  COVERAGE_META,
+  DEF_PRESETS,
+  OFF_PRESETS,
+  PRESS_META,
+  SCHEME_META,
+  STAR_PLAN_META,
+  levelName,
+  type DefPreset,
+  type LeveledTactic,
+  type OffPreset,
+} from './tactics';
 import { SETS, atoLabel, isSetId } from './sets';
 
 export const MAX_PLAYBOOKS = 12;
@@ -27,7 +39,7 @@ export function presetMatches(values: object, preset: OffPreset | DefPreset): bo
   );
 }
 
-/** The offense as the screens name it: the preset's name, or "Custom (Balanced base)" once its sliders have moved. */
+/** The offense as the screens name it: the preset's name, or "Custom (Balanced base)" once its settings have moved. */
 export function offenseLabel(t: { offense: object; offPreset: string }): string {
   const p = OFF_PRESETS.find((x) => x.id === t.offPreset);
   if (!p) return 'Custom';
@@ -127,16 +139,24 @@ const onOff = (v: unknown) => (v ? 'On' : 'Off');
 /** Settings this module doesn't know by name: switches read On/Off, numbers and words as they are. */
 const onOffOr = (v: unknown) => (typeof v === 'boolean' ? onOff(v) : String(v));
 const whole = (v: unknown) => String(Math.round(v as number));
+/** A 0-100 tactic by the setting the screens show ("Up-tempo"); two values that read as the same setting are told apart by number. */
+const LEVEL_FMT = new Set<(v: unknown) => string>();
+const level = (k: LeveledTactic) => {
+  const f = (v: unknown) => levelName(k, v as number);
+  LEVEL_FMT.add(f);
+  return f;
+};
+const ACTION_LEVEL = level('action');
 const presetName = (list: { id: string; name: string }[]) => (v: unknown) => list.find((p) => p.id === v)?.name ?? 'Custom';
 const FREEDOM_LABEL: Record<ShotFreedom, string> = { [-1]: 'Limited', 0: 'Normal', 1: 'Green light' };
 
 type Field<K> = [K, string, ((v: unknown) => string)?];
 const OFFENSE_FIELDS: Field<string>[] = [
-  ['pace', 'Pace', whole],
-  ['transition', 'Push in transition', whole],
-  ['threePoint', 'Three-point emphasis', whole],
-  ['rimAttack', 'Attack the rim', whole],
-  ['crashBoards', 'Crash the glass', whole],
+  ['pace', 'Pace', level('pace')],
+  ['transition', 'Push in transition', level('transition')],
+  ['threePoint', 'Three-point emphasis', level('threePoint')],
+  ['rimAttack', 'Attack the rim', level('rimAttack')],
+  ['crashBoards', 'Crash the glass', level('crashBoards')],
   ['huntMismatch', 'Hunt mismatches', onOff],
   ['hotHand', 'Feed the hot hand', onOff],
 ];
@@ -144,10 +164,10 @@ const DEFENSE_FIELDS: Field<string>[] = [
   ['scheme', 'Scheme', (v) => SCHEME_META[v as keyof typeof SCHEME_META]?.label ?? String(v)],
   ['pnr', 'Coverage', (v) => COVERAGE_META[v as keyof typeof COVERAGE_META]?.label ?? String(v)],
   ['switchOffBall', 'Switch off-ball screens', onOff],
-  ['help', 'Help defense', whole],
-  ['pressure', 'Ball pressure', whole],
-  ['physicality', 'Physicality', whole],
-  ['getBack', 'Transition defense', whole],
+  ['help', 'Help defense', level('help')],
+  ['pressure', 'Ball pressure', level('pressure')],
+  ['physicality', 'Physicality', level('physicality')],
+  ['getBack', 'Transition defense', level('getBack')],
   ['press', 'Full-court press', (v) => PRESS_META[v as keyof typeof PRESS_META]?.label ?? String(v)],
   ['starPlan', 'Star plan', (v) => STAR_PLAN_META[v as keyof typeof STAR_PLAN_META]?.label ?? String(v)],
 ];
@@ -194,13 +214,14 @@ const same = (x: unknown, y: unknown) => x === y || JSON.stringify(x) === JSON.s
 
 /**
  * Everything that differs between tactics `a` and `b`, in Tactics-screen terms, from `a` to `b`:
- * the playbooks, every slider and switch, game management, roles, shot freedom and screeners.
+ * the playbooks, every setting and switch, game management, roles, shot freedom and screeners.
  * Matchups and the star target are game by game and aren't compared.
  */
 export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => string = (pid) => `#${pid}`): TacticsChange[] {
   const out: TacticsChange[] = [];
   const add = (label: string, x: unknown, y: unknown, fmt: (v: unknown) => string = String) => {
     if (same(x, y)) return;
+    if (LEVEL_FMT.has(fmt) && typeof x === 'number' && typeof y === 'number' && fmt(x) === fmt(y)) fmt = whole;
     const prim = (v: unknown) => v === undefined || v === null || typeof v !== 'object';
     // (a switch that isn't there is off: the screens delete some when they're turned off)
     const shown = (v: unknown) => (v === undefined && fmt !== onOff ? '—' : fmt(v));
@@ -215,7 +236,7 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   add('Offensive playbook', a.offPreset, b.offPreset, presetName(OFF_PRESETS));
   add('Defensive identity', a.defPreset, b.defPreset, presetName(DEF_PRESETS));
   section(a.offense as unknown as Record<string, unknown>, b.offense as unknown as Record<string, unknown>, OFFENSE_FIELDS);
-  for (const k of ACTIONS) add(ACTION_META[k].label, a.offense.actions[k], b.offense.actions[k], whole);
+  for (const k of ACTIONS) add(ACTION_META[k].label, a.offense.actions[k], b.offense.actions[k], ACTION_LEVEL);
   section(a.defense as unknown as Record<string, unknown>, b.defense as unknown as Record<string, unknown>, DEFENSE_FIELDS);
   section(a.manage as unknown as Record<string, unknown>, b.manage as unknown as Record<string, unknown>, MANAGE_FIELDS);
   const goTo = (v: number | null | undefined) => (v === null || v === undefined ? 'None' : nameOf(v));
@@ -240,7 +261,7 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   return out;
 }
 
-/** What loading a playbook would change in tactics `t`, for a team with this roster ("Pace 62 → 80", "Coverage Drop → Hedge"). */
+/** What loading a playbook would change in tactics `t`, for a team with this roster ("Pace Balanced → Up-tempo", "Coverage Drop → Hedge"). */
 export function playbookDiff(t: Tactics, pb: SavedPlaybook, roster: Iterable<number>, nameOf?: (pid: number) => string): TacticsChange[] {
   return tacticsChanges(t, loadPlaybook(t, pb, roster), nameOf);
 }

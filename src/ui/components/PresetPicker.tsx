@@ -175,7 +175,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
       <div className="col grid-md2" style={{ gap: 8 }}>
         {presets.map((p) => {
           const on = cur === p.id;
-          // the sliders have moved since this preset was picked: tapping it again puts them back
+          // the settings have moved since this preset was picked: tapping it again puts them back
           const custom = on && !presetMatches(kind === 'off' ? t.offense : t.defense, p);
           return (
             <div key={p.id} style={{ position: 'relative' }}>
@@ -204,7 +204,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
                 </div>
                 {custom && (
                   <div className="tiny" style={{ marginTop: 4, color: 'var(--accent-text)' }}>
-                    Your sliders have moved from it: tap to put them back.
+                    Your settings have moved from it: tap to put them back.
                   </div>
                 )}
               </button>

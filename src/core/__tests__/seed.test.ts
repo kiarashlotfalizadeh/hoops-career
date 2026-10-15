@@ -27,13 +27,15 @@ describe.skipIf(!real)('real-player seed', () => {
     // efficient bench bigs no longer outrank stars
     const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
     if (kessler) expect(kessler.ovr).toBeLessThan(88);
-    // careers: experience never contradicts the seasons on record; an undrafted veteran already playing when the
-    // record begins isn't a third-year player; undrafted rookies are rookies; LeBron's draft is unknown
+    // careers: experience never contradicts the seasons on record; an undrafted veteran with no entry class on
+    // record who was already playing when the record begins isn't a third-year player (one whose class is known
+    // counts from it: Gillespie, Tshiebwe and Spencer came in for 2023-24); undrafted rookies are rookies; a seed
+    // without LeBron's draft has it unknown
     const firstRecord = Math.min(...players.flatMap((p) => p.stats.filter((s) => s.real).map((s) => s.season)));
     for (const p of players) {
       const seasons = [...new Set(p.stats.filter((s) => s.real && s.gp > 0).map((s) => s.season))];
       expect(p.experience).toBeGreaterThanOrEqual(seasons.length);
-      if (!p.draft.round && p.tid >= 0 && league.season - p.bornYear >= 27 && p.experience <= 3) expect(Math.min(...seasons)).toBeGreaterThan(firstRecord);
+      if (!p.draft.round && !p.draft.year && p.tid >= 0 && league.season - p.bornYear >= 27 && p.experience <= 3) expect(Math.min(...seasons)).toBeGreaterThan(firstRecord);
       if (p.draft.round === 2) expect(p.draft.pick).toBeLessThanOrEqual(30);
     }
     const vanVleet = players.find((p) => p.bbrefId === 'vanvlfr01');

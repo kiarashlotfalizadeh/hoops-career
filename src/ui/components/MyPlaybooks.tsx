@@ -247,7 +247,7 @@ export function MyPlaybooksCard() {
           <Help title="My playbooks">
             <p>Save your tactics as a playbook to come back to them: a playbook for the regular season, one for the playoffs, a small-ball set for when your center is hurt.</p>
             <p>
-              A playbook keeps the schemes, every slider and your game management. Roles, shot freedom and screeners are saved by player and only load for players still on your
+              A playbook keeps the schemes, every setting and your game management. Roles, shot freedom and screeners are saved by player and only load for players still on your
               roster. Matchups and star targets are game by game, so they aren't saved.
             </p>
             <p>Your playbooks are yours: they come with you if you take over another team.</p>

@@ -1,5 +1,6 @@
-// TEST UTILITY ONLY: writes Basketball-Reference-shaped HTML for a simulated fictional league
-// so the seed pipeline (parse → derive → calibrate) can be exercised end to end offline.
+// TEST UTILITY ONLY: writes Basketball-Reference-shaped HTML (and Dunks & Threes-shaped EPM
+// exports) for a simulated fictional league so the seed pipeline (parse → derive → calibrate)
+// can be exercised end to end offline.
 // Usage: tsx scripts/data/test/make-fixture.ts <outDir>
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +16,7 @@ if (!out) {
   console.error('Usage: tsx scripts/data/test/make-fixture.ts <outDir>');
   process.exit(1);
 }
-mkdirSync(out, { recursive: true });
+mkdirSync(join(out, 'epm'), { recursive: true });
 const league = createLeague({ name: 'fx', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed: null, rngSeed: 5 });
 const id = (pid: number) => `fx${String(pid).padStart(5, '0')}01`;
 const cell = (stat: string, v: string | number, extra = '') => `<td data-stat="${stat}"${extra}>${v}</td>`;
@@ -56,6 +57,8 @@ for (const season of [2024, 2025, 2026]) {
   }
   const pg: string[] = [];
   const adv: string[] = [];
+  // Dunks & Threes EPM export: NBA.com-style ids and tricodes, so the build matches it by name and team
+  const epm: string[] = ['season,seasontype,team_alias,team_alias_all,player_id,player_name,mp,off,def,tot'];
   for (const [pid, e] of acc) {
     const p = league.players[pid];
     const team = FRANCHISES[p.tid].bbref;
@@ -70,6 +73,15 @@ for (const season of [2024, 2025, 2026]) {
       `<tr>${name}${cell('team_name_abbr', team)}${cell('games', e.g)}${cell('mp', Math.round(mins))}${cell('per', 15)}${cell('ts_pct', (e.pts / (2 * (e.fga + 0.44 * e.fta) || 1)).toFixed(3))}${cell('usg_pct', usg.toFixed(1))}${cell('ast_pct', ((e.ast / mins) * 48 * 2.4).toFixed(1))}${cell('orb_pct', ((e.orb / mins) * 48 * 0.9).toFixed(1))}${cell('drb_pct', ((e.drb / mins) * 48 * 0.75).toFixed(1))}${cell('stl_pct', ((e.stl / mins) * 48 * 1.0).toFixed(1))}${cell('blk_pct', ((e.blk / mins) * 48 * 1.6).toFixed(1))}${cell('tov_pct', ((e.tov / Math.max(1, e.fga + 0.44 * e.fta + e.tov)) * 100).toFixed(1))}${cell('obpm', ((p.ovr - 72) / 4).toFixed(1))}${cell('dbpm', ((p.ratings.diq - 50) / 15).toFixed(1))}${cell('bpm', ((p.ovr - 72) / 3).toFixed(1))}${cell('ws', 2)}${cell('ws_per_48', 0.1)}${cell('vorp', ((p.ovr - 70) / 6).toFixed(1))}</tr>`,
     );
   }
+  for (const [pid, e] of acc) {
+    const p = league.players[pid];
+    const [off, def] = [(p.ovr - 72) / 4, (p.ratings.diq - 50) / 15];
+    const tri = FRANCHISES[p.tid].abbrev;
+    epm.push(
+      `${season},2,"${tri}","${tri}",${1_000_000 + pid},"${p.firstName} ${p.lastName}",${(e.sec / 60).toFixed(1)},${off.toFixed(3)},${def.toFixed(3)},${(off + def).toFixed(3)}`,
+    );
+  }
+  writeFileSync(join(out, 'epm', `dunksandthrees_${season}.csv`), epm.join('\n') + '\n');
   pg.push(`<tr class="norank"><th data-stat="ranker"></th><td data-stat="name_display">League Average</td>${cell('fga_per_g', 88)}</tr>`);
   writeFileSync(join(out, `per_game_${season}.html`), wrap('per_game_stats', pg));
   writeFileSync(join(out, `advanced_${season}.html`), wrap('advanced', adv));

@@ -139,6 +139,10 @@ export interface PlayerStats {
     dbpm: number;
     bpm: number;
     vorp: number;
+    /** Dunks & Threes EPM (offense, defense, total), the season's across his teams, for seeds built with it. */
+    oepm?: number;
+    depm?: number;
+    epm?: number;
   };
 }
 

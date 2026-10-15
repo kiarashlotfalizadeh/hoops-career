@@ -1,5 +1,5 @@
 // Saved playbooks: the coach's library of tactics, loaded onto whatever roster he has, and the
-// labels that say "Custom" once a preset's sliders have moved.
+// labels that say "Custom" once a preset's settings have moved.
 import { describe, expect, it } from 'vitest';
 import { testLeague } from '../../state/__tests__/fixtures';
 import {
@@ -225,7 +225,7 @@ describe('saved playbooks', () => {
     const lines = playbookDiff(cur, pb, roster(l), names).map(changeText);
     expect(lines).toEqual(
       expect.arrayContaining([
-        'Pace 62 → 80',
+        'Pace Balanced → Up-tempo',
         'Coverage Drop → Hedge',
         'Hunt mismatches Off → On',
         'Sub out tired players at 55% energy → 60% energy',
@@ -260,6 +260,7 @@ describe('saved playbooks', () => {
     tactics(l).offense.pace = 80;
     savePlaybook(l, 'Mine');
     expect(playbookStatus(l)?.changes).toEqual([]);
+    // both read as Up-tempo on the screens: the numbers tell them apart
     tactics(l).offense.pace = 70;
     expect(playbookStatus(l)?.changes.map(changeText)).toEqual(['Pace 80 → 70']);
     // a player who joins later isn't in the playbook: his role doesn't count as an edit

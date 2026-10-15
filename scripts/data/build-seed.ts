@@ -2,7 +2,8 @@
 //
 // Inputs: per-game + advanced tables for 2023-24, 2024-25, 2025-26; the current contracts
 // table (who plays where in 2026-27 and their salaries); team roster pages (height, weight,
-// birth date, jersey, country, college); draft pages (draft slot).
+// birth date, jersey, country, college); draft pages (draft slot); Dunks & Threes EPM exports
+// for the same seasons (data/epm/, see epm.ts).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
@@ -36,6 +37,7 @@ import { clamp } from '../../src/core/random';
 import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
+import { aggregateEpm, epmByBbref, epmFields, loadEpm, matchEpm, type EpmRow } from './epm';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const OUT = process.env.HC_SEED_OUT ?? join(process.cwd(), 'src', 'data', 'seed.json');
@@ -110,16 +112,17 @@ async function main() {
   for (const r of rosters) if (['PG', 'SG', 'SF', 'PF', 'C'].includes(r.posRaw)) rosterFive.set(r.id, r.posRaw);
   /** Players whose position is inferred from G/F/C + ratings (re-inferred after calibration). */
   const inferredPos = new Map<number, string>();
-  // a waived player's dead money is listed like a contract: drop rows under the minimum salary for
-  // players on no current-season roster page (two-way and minimum deals are on one)
+  // a waived player's dead money is listed like a contract (under the minimum, for a player on no
+  // current-season roster page; two-way and minimum deals are on one). Seeded as it stands: a new
+  // league books it as that team's dead money and makes him a free agent if he played in the
+  // seed's seasons (create.ts), so he never plays for the team paying him
   const current = new Set(rosters.filter((r) => r.season === SEED_SEASON).map((r) => r.id));
   const deadMoney = contracts.filter((c) => current.size > 0 && (c.salaries[0] ?? 0) < CAP.minContract && !current.has(c.id));
-  if (deadMoney.length) console.log(`  dead money, not seeded as contracts: ${deadMoney.map((c) => `${c.name} (${c.team} $${c.salaries[0] ?? 0}K)`).join(', ')}`);
-  const signed = contracts.filter((c) => !deadMoney.includes(c));
-  const contractById = new Map<string, ContractRow>(signed.map((c) => [c.id, c]));
+  if (deadMoney.length) console.log(`  dead money, booked as such by the game: ${deadMoney.map((c) => `${c.name} (${c.team} $${c.salaries[0] ?? 0}K)`).join(', ')}`);
+  const contractById = new Map<string, ContractRow>(contracts.map((c) => [c.id, c]));
 
   // universe: everyone under contract + recent rotation players who are unsigned
-  const ids = new Set<string>(signed.map((c) => c.id));
+  const ids = new Set<string>(contracts.map((c) => c.id));
   const fa = [...pgById.entries()]
     .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === SEED_SEASON - 1 && r.g * r.mp >= 250))
     .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === SEED_SEASON - 1 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
@@ -138,6 +141,20 @@ async function main() {
       perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })),
     );
   } else console.log('NBA.com play-by-play not found (npm run data:fetch-nba); using box scores only');
+
+  // Dunks & Threes EPM, matched through the play-by-play crosswalk's NBA.com ids
+  const epmRows = loadEpm();
+  const known = new Map<number, string>([...pbpById].map(([id, b]) => [b.nbaId, id]));
+  const epmById: Map<string, Map<number, EpmRow>> = epmRows.length
+    ? epmByBbref(
+        epmRows,
+        matchEpm(
+          epmRows,
+          perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })),
+          known,
+        ),
+      )
+    : new Map();
 
   // college production for rookies and recent draftees
   const college = await loadCollege(NBA_RAW);
@@ -166,6 +183,7 @@ async function main() {
     const a = forAgg.length ? aggregate(forAgg, advRows) : null;
     if (a) {
       a.pbp = pbpById.get(id);
+      a.epm = aggregateEpm([...(epmById.get(id)?.values() ?? [])]);
       aggs.set(id, a);
     }
   }
@@ -239,6 +257,8 @@ async function main() {
         const share = sp ? (r.fga * r.g) / Math.max(1, seasonFga(r.season)) : 0;
         const zn = (x: number) => Math.round(x * share);
         const a = (advById.get(id) ?? []).find((x) => x.season === r.season && x.team === r.team);
+        // EPM is a season's figure across his teams: each team row carries it
+        const e = epmById.get(id)?.get(r.season);
         const g = r.g;
         const t = (v: number) => Math.round(v * g);
         return {
@@ -290,6 +310,7 @@ async function main() {
                 dbpm: a.dbpm,
                 bpm: a.bpm,
                 vorp: a.vorp,
+                ...(e ? epmFields(e) : {}),
               }
             : undefined,
         };
@@ -348,7 +369,7 @@ async function main() {
   const seed: SeedData = {
     version: 1,
     generated: new Date().toISOString(),
-    source: `Basketball Reference: ${seasonLabel(STAT_SEASONS[0])} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced; current contracts`,
+    source: `Basketball Reference: ${seasonLabel(STAT_SEASONS[0])} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced; current contracts${epmById.size ? '; Dunks & Threes EPM' : ''}`,
     season: SEED_SEASON,
     players,
   };
@@ -438,6 +459,14 @@ async function main() {
         rr.map((x) => x.a!.pbp!.rapmO + x.a!.pbp!.rapmD),
       ).toFixed(3)} over ${rr.length} players`,
     );
+  const re = rows.filter((x) => x.a!.epm);
+  if (re.length)
+    console.log(
+      `OVR vs EPM correlation (1500+ min): ${pearson(
+        re.map((x) => x.ovr),
+        re.map((x) => x.a!.epm!.tot),
+      ).toFixed(3)} over ${re.length} players`,
+    );
   const top = [...players]
     .map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team }))
     .sort((a, b) => b.ovr - a.ovr)
@@ -458,6 +487,7 @@ async function main() {
         adv: a?.adv ?? null,
         per36: a?.per36 ?? null,
         rapm: a?.pbp ? { o: a.pbp.rapmO, d: a.pbp.rapmD, poss: a.pbp.rapmPoss } : null,
+        epm: a?.epm ?? null,
         ratings: p.ratings,
         tend: p.tend,
       };
