@@ -58,7 +58,7 @@ import { GameRecap } from '../components/GameRecap';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from '../live/graphics';
 import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
 import { winProb } from '../../core/analysis/winProb';
-import { pickHighlights } from '../live/highlights';
+import { pickHighlights } from '../../core/analysis/highlights';
 import { gameKeys } from '../../core/analysis/keys';
 import { otherGames } from '../live/scoreboard';
 import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
@@ -186,6 +186,8 @@ export default function Live() {
   opts.current = { keyPlays, breaks: league.settings.liveBreaks ?? 'quarters', speed, paused, dismissed };
 
   const userSide = game?.userSide ?? 0;
+  const userSideRef = useRef(userSide);
+  userSideRef.current = userSide;
   const home = game ? league.teams[game.game.home] : null;
   const away = game ? league.teams[game.game.away] : null;
   const colors = useMemo(() => (home && away ? jerseyColors(home.colors, away.colors) : null), [home, away]);
@@ -594,6 +596,8 @@ export default function Live() {
     }
     const sc = scriptRef.current;
     if (sc) lastDone.current = sc;
+    // a shot at the buzzer, felt as it drops (on a phone)
+    if (sc?.moment) haptic(sc.off === userSideRef.current ? 'success' : 'warning');
     if (sc?.moment && useStore.getState().league?.settings.liveReplays !== false) {
       setShow({ kind: 'auto', scripts: [{ ...sc }], i: 0 });
       return;
@@ -989,32 +993,19 @@ export default function Live() {
                   onTip={tipOff}
                 />
               )}
-              {show && (
-                <div className="live-show" role="status">
-                  {show.kind === 'reel' ? <Clapperboard size={13} /> : <RotateCcw size={13} />}
-                  <span>{show.kind === 'reel' ? `Highlights ${show.i + 1}/${show.scripts.length}` : 'Replay'}</span>
-                  {show.tags && <span className="live-show-tag">{show.tags[show.i]}</span>}
-                  <button
-                    className="live-show-x"
-                    aria-label={show.kind === 'reel' ? 'Stop the highlights' : 'Stop the replay'}
-                    onClick={() => {
-                      const kind = show.kind;
-                      setShow(null);
-                      if (kind === 'auto') nextRef.current();
-                    }}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              )}
               {atBreak && !over && !show && (
                 <div
                   className="col center fade-in live-break"
                   style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, background: 'rgba(6,8,12,0.62)' }}
                 >
                   <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase', color: '#fff' }}>
-                    {view.q === 2 ? 'Halftime' : `End of ${periodLabel(view.q)}`}
+                    {view.q >= 4 ? (view.q === 4 ? 'Overtime' : `Overtime ${view.q - 3}`) : view.q === 2 ? 'Halftime' : `End of ${periodLabel(view.q)}`}
                   </div>
+                  {view.q >= 4 && (
+                    <div className="bold" style={{ color: '#fff' }}>
+                      Tied at {view.sides[0].score} after {view.q === 4 ? 'regulation' : periodLabel(view.q)}
+                    </div>
+                  )}
                   <div className="small" style={{ maxWidth: 280, color: '#d6dbe3' }}>
                     The period report is with the coaching panels. Subs and adjustments you make now apply from the first possession of {periodLabel(view.q + 1)}.
                   </div>
@@ -1025,6 +1016,24 @@ export default function Live() {
               )}
               {(show || (!over && !atBreak && (script || ffing || graphic))) && (
                 <div className="live-lower">
+                  {show && (
+                    <div className="live-show" role="status">
+                      {show.kind === 'reel' ? <Clapperboard size={13} /> : <RotateCcw size={13} />}
+                      <span>{show.kind === 'reel' ? `Highlights ${show.i + 1}/${show.scripts.length}` : 'Replay'}</span>
+                      {show.tags && <span className="live-show-tag">{show.tags[show.i]}</span>}
+                      <button
+                        className="live-show-x"
+                        aria-label={show.kind === 'reel' ? 'Stop the highlights' : 'Stop the replay'}
+                        onClick={() => {
+                          const kind = show.kind;
+                          setShow(null);
+                          if (kind === 'auto') nextRef.current();
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                   {(drawing || ffing) && (
                     <div className="pill" aria-hidden="true" style={{ background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '100%' }}>
                       {drawing ? (
@@ -1224,7 +1233,7 @@ export default function Live() {
             </div>
           )}
 
-          {status !== 'simmed' && <Feed feed={feed} colors={colors} />}
+          {status !== 'simmed' && <Feed feed={feed} colors={colors} homeAbbrev={home.abbrev} awayAbbrev={away.abbrev} />}
         </div>
       </div>
 
@@ -1372,11 +1381,44 @@ function Caption({ script, beat }: { script: Script; beat: Beat }) {
 }
 
 /** The play-by-play only re-renders when new lines arrive, not on every animation frame. */
-const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEntry }[]; colors: [[string, string], [string, string]] }) {
+const Feed = memo(function Feed({
+  feed,
+  colors,
+  homeAbbrev,
+  awayAbbrev,
+}: {
+  feed: { i: number; e: PbpEntry }[];
+  colors: [[string, string], [string, string]];
+  homeAbbrev: string;
+  awayAbbrev: string;
+}) {
+  // everything, the scoring plays (with the period and timeout lines that frame them), or one team's
+  const [only, setOnly] = useState<'all' | 'score' | 0 | 1>('all');
+  const shown = feed.filter(({ e }) =>
+    only === 'all' ? true : only === 'score' ? e.kind === 'make' || e.kind === 'ft' || e.kind === 'period' : e.t === only || e.kind === 'period',
+  );
+  const opts: { id: typeof only; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'score', label: 'Scoring' },
+    { id: 1, label: awayAbbrev },
+    { id: 0, label: homeAbbrev },
+  ];
   return (
-    <Card title="Play-by-play">
+    <Card
+      title="Play-by-play"
+      right={
+        <div className="seg" role="group" aria-label="Show" style={{ flex: 'none' }}>
+          {opts.map((o) => (
+            <button key={String(o.id)} className={only === o.id ? 'on' : ''} aria-pressed={only === o.id} onClick={() => setOnly(o.id)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      }
+    >
       <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-        {feed.map(({ i, e }) => (
+        {shown.length === 0 && <div className="small dim">Nothing yet.</div>}
+        {shown.map(({ i, e }) => (
           <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
             <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
               {periodLabel(e.q)} {fmtClock(e.clock)}

@@ -13,6 +13,7 @@ import { buildSimInput, ensureRotation, neutralSite, playGame, tipoffEdge, userG
 import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
+import { reelOf } from '../core/analysis/highlights';
 
 /** Clutch time: the last five minutes of the fourth quarter. */
 export const CLUTCH_SEC = 300;
@@ -319,6 +320,10 @@ export class LiveGame {
     if (!this.sim.over) this.simTo('end');
     // (recording it ends its journal)
     const res = playGame(league, g, { sim: this.sim, edge: this.edge });
+    // its highlights stay with the save for its game report, until the next live game
+    const reel = reelOf(g.gid, this.logs, this.userSide);
+    if (reel.plays.length) league.reel = reel;
+    else delete league.reel;
     postGame(league, g, res.home.pts > res.away.pts);
     advanceDay(league);
     this.committed = res;

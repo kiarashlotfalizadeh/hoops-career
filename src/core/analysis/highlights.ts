@@ -3,7 +3,7 @@
 // the shot that won it most of all), a few of the other team's among them, shown in the order they
 // happened.
 
-import type { PossLog } from '../../core/sim/log';
+import type { PossLog } from '../sim/log';
 
 export interface Highlight {
   /** Index into the game's logs. */
@@ -78,4 +78,15 @@ export function pickHighlights(logs: PossLog[], userSide: 0 | 1, max = REEL_MAX)
     picked.push(h);
   }
   return picked.sort((a, b) => a.i - b.i);
+}
+
+/**
+ * The reel of a game played live, to keep in the save (League.reel): its highlights with the score
+ * each started from, without their play-by-play lines (the court doesn't read them).
+ */
+export function reelOf(gid: number, logs: PossLog[], userSide: 0 | 1): { gid: number; plays: { log: PossLog; before: [number, number] }[] } {
+  return {
+    gid,
+    plays: pickHighlights(logs, userSide).map((h) => ({ log: { ...logs[h.i], lines: [] }, before: h.i > 0 ? ([...logs[h.i - 1].score] as [number, number]) : [0, 0] })),
+  };
 }

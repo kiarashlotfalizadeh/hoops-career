@@ -16,6 +16,7 @@ import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed,
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 import { GameRecap } from '../components/GameRecap';
+import { HighlightsCard } from '../components/HighlightsCard';
 import { AdjustmentsCard } from '../components/AdjustmentsCard';
 import { biggestSwings, marginWords, playAt, swingWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { threeStars } from '../../core/analysis/quotes';
@@ -89,6 +90,7 @@ export default function GameView() {
         <QuarterTable g={g} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
       </Card>
       {userGame && <GameRecap res={g} league={league} report={report} />}
+      {userGame && league.reel?.gid === g.gid && <HighlightsCard league={league} res={g} />}
       {tabs.length > 1 && <Segmented value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
 
       {tab === 'report' && report && (

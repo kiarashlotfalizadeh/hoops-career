@@ -1,7 +1,7 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
-import type { PlayCall } from './sim/log';
+import type { PlayCall, PossLog } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 export const POSITIONS: Pos[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -1211,6 +1211,11 @@ export interface League {
   nextTxnId?: number;
   /** The user's live game in progress, journaled as it's played so it survives the app being closed. */
   live?: LiveJournal;
+  /**
+   * The highlights of the user's latest live game (`gid`): the possessions the reel shows, with the
+   * score each started from, kept so its game report can play them; the next live game replaces them.
+   */
+  reel?: { gid: number; plays: { log: PossLog; before: [number, number] }[] };
   /**
    * Game-time decisions for the user's next game (`gid`): questionable players he cleared to play
    * (see isQuestionable). Cleared when that game is played or its day has passed.

@@ -1,7 +1,7 @@
 // The night's highlights: the plays a broadcast would cut to, the late and decisive ones first.
 import { describe, expect, it } from 'vitest';
 import type { PossLog, PossStep } from '../../core/sim/log';
-import { pickHighlights, playValue } from '../live/highlights';
+import { pickHighlights, playValue } from '../../core/analysis/highlights';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
 import { GameSim } from '../../core/sim/engine';

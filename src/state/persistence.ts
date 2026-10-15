@@ -358,6 +358,8 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   for (const m of x.inbox) if (m.sheet !== undefined && !int(m.sheet)) delete m.sheet;
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
+  // the latest live game's highlights: a damaged reel goes (its report then has none)
+  if (x.reel !== undefined && !reelIntact(x.reel)) delete x.reel;
   migrateDealTerms(x);
   // game-time decisions in shape (whom they clear is checked again when the game is set up)
   if (x.gameTime !== undefined && !(obj(x.gameTime) && int(x.gameTime.gid) && nums(x.gameTime.play))) delete x.gameTime;
@@ -373,6 +375,30 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateContracts(x);
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** The latest live game's highlights, in shape for the court: possessions with their fives, steps and scores. */
+function reelIntact(reel: unknown): boolean {
+  if (!obj(reel) || !int(reel.gid) || !Array.isArray(reel.plays) || reel.plays.length > 12) return false;
+  return reel.plays.every((p) => {
+    if (!obj(p) || !obj(p.log) || !nums(p.before) || p.before.length !== 2) return false;
+    const l = p.log;
+    return (
+      (l.off === 0 || l.off === 1) &&
+      num(l.q) &&
+      num(l.clockStart) &&
+      num(l.clockEnd) &&
+      typeof l.label === 'string' &&
+      Array.isArray(l.steps) &&
+      l.steps.every((st) => obj(st) && typeof st.k === 'string') &&
+      Array.isArray(l.on) &&
+      l.on.length === 2 &&
+      l.on.every((five) => nums(five) && five.length === 5) &&
+      obj(l.guards) &&
+      nums(l.score) &&
+      l.score.length === 2
+    );
+  });
 }
 
 /** A result's keys to the game, in shape: a title and goal to show, a target, and a value and verdict that agree. */

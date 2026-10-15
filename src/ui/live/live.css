@@ -431,10 +431,9 @@
 }
 
 /* ------------------------------------------------------------------ live game: replays and the highlights reel */
+/* (in the backcourt over the play's call, clear of the basket the play goes to) */
 .live-show {
-  position: absolute;
-  top: 8px;
-  left: 8px;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -448,6 +447,10 @@
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+.live-show > span:first-of-type {
+  flex: none;
+  white-space: nowrap;
 }
 .live-show-tag {
   min-width: 0;

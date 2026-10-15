@@ -84,6 +84,14 @@ try {
     await page.getByRole('button', { name: 'Play', exact: true }).click();
   }
   await watch.click();
+  // the starting lineups go up first: tip it off
+  await page
+    .getByRole('button', { name: 'Tip off', exact: true })
+    .click({ timeout: 10_000 })
+    .then(
+      () => step('tipped off from the starting lineups'),
+      () => fail.push('no starting lineups before the tip'),
+    );
   const bug = page.locator('.live-bug');
   const tipoff = await bug.getAttribute('aria-label', { timeout: 15_000 });
   await page
@@ -194,6 +202,10 @@ try {
     await page.getByRole('button', { name: 'Play', exact: true }).click();
   }
   await watch.click();
+  await page
+    .getByRole('button', { name: 'Tip off', exact: true })
+    .click({ timeout: 10_000 })
+    .catch(() => {});
   const start = await bug.getAttribute('aria-label', { timeout: 15_000 });
   await page.waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, start, { timeout: 15_000 }).catch(() => {});
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
