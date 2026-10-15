@@ -59,6 +59,7 @@ import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from 
 import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
 import { winProb } from '../../core/analysis/winProb';
 import { pickHighlights } from '../live/highlights';
+import { gameKeys } from '../../core/analysis/keys';
 
 const FEED_MAX = 80;
 const NO_LOGS: PossLog[] = [];
@@ -227,6 +228,9 @@ export default function Live() {
     },
     [home, away, atBreak, toPending, events, nameOf, baselines, league.settings.complexity, subFor],
   );
+  // tonight's keys to the game, as the preview set them (from the games before today)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const keys = useMemo(() => (game ? gameKeys(league, game.game) : []), [game]);
   // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const before = useMemo(() => (game ? playersBefore(league, game.sim) : new Map()), [game]);
@@ -1179,6 +1183,7 @@ export default function Live() {
               onStart={togglePause}
               oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
               win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
+              keys={keys}
             />
           )}
 
@@ -1284,6 +1289,7 @@ export default function Live() {
           apply={applyTactics}
           calls={calls}
           onResume={resume}
+          keys={keys}
         />
       </Sheet>
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">

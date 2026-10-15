@@ -13,6 +13,8 @@ import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { wpText } from '../../core/analysis/winProb';
 import { readStatus } from './plays';
+import type { GameKey } from '../../core/analysis/keys';
+import { KeysLive, gameShare } from '../components/GameKeys';
 
 /**
  * The break between periods: your chance to win, the score by quarter, how the teams compare, who's
@@ -33,6 +35,7 @@ export function PeriodReport({
   onStart,
   oppPlan,
   win,
+  keys,
 }: {
   league: League;
   view: Drawn;
@@ -51,6 +54,8 @@ export function PeriodReport({
   oppPlan?: readonly { text: string }[];
   /** Your team's win probability now (absent when it's switched off). */
   win?: number;
+  /** Tonight's keys to the game. */
+  keys?: GameKey[];
 }) {
   const report = useMemo(() => buildGameReport(league, view.box, league.userTid, { partial: true, elapsed: view.elapsed, tactics }), [league, view, tactics]);
   const q = view.q;
@@ -93,6 +98,7 @@ export function PeriodReport({
           </div>
         )}
         <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+        {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, q)} />}
         <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov']} />
         <div className="col small" style={{ gap: 2 }}>
           <div>

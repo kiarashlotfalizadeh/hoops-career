@@ -364,6 +364,8 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // win-probability data of the user's games: a damaged list goes (the charts fall back as for older games)
   for (const g of x.games) {
     if (g.sets !== undefined && !setsIntact(g.sets)) delete g.sets;
+    // keys to the game: a damaged list goes (the recap then has none)
+    if (g.keys !== undefined && !keysIntact(g.keys)) delete g.keys;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
@@ -371,6 +373,24 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateContracts(x);
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** A result's keys to the game, in shape: a title and goal to show, a target, and a value and verdict that agree. */
+function keysIntact(keys: unknown): boolean {
+  return (
+    Array.isArray(keys) &&
+    keys.length <= 5 &&
+    keys.every(
+      (k) =>
+        obj(k) &&
+        typeof k.id === 'string' &&
+        typeof k.title === 'string' &&
+        typeof k.goal === 'string' &&
+        (k.dir === 'max' || k.dir === 'min') &&
+        num(k.target) &&
+        (k.value === null ? k.met === null : num(k.value) && typeof k.met === 'boolean'),
+    )
+  );
 }
 
 const TALK_KINDS = new Set(['fa', 'resign', 'extend']);

@@ -3,6 +3,7 @@
 // a comeback or a lead let slip), career milestones reached, quotes and the press conference, the
 // rest of the night's results that matter to you, and what's next. Takes a stored result, so the
 // report and the Live screen's final card can both show it.
+import { KeysGraded } from './GameKeys';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarDays, Mic, Trophy } from 'lucide-react';
@@ -268,6 +269,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
             </div>
           )}
         </div>
+
+        {res.keys && res.keys.length > 0 && <KeysGraded keys={res.keys} />}
 
         {quotes.length > 0 && (
           <div className="col" style={{ gap: 10 }}>

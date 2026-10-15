@@ -89,3 +89,19 @@
 body:has(.simbar) .gd-dock {
   bottom: calc(var(--nav-h) + var(--safe-b) + 76px);
 }
+
+/* keys to the game: the number before each */
+.gd-key-n {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
+  color: var(--accent-text);
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 13px;
+}

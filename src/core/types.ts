@@ -876,6 +876,26 @@ export interface GameResult {
   att?: number;
   /** The user's regular-season games: where his team stood in its conference going in and coming out. */
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
+  /** The user's games: the keys to the game set before it (see analysis/keys.ts) and how each went. */
+  keys?: KeyGrade[];
+}
+
+/** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */
+export type KeyStat = 'orb' | 'tov' | 'tpm' | 'fta' | 'fastBreak' | 'paint' | 'ast' | 'pts';
+
+/** One key to the game as it went (GameResult.keys). */
+export interface KeyGrade {
+  id: string;
+  /** "Keep them off the glass". */
+  title: string;
+  /** "Hold BOS to 10 offensive rebounds or fewer". */
+  goal: string;
+  dir: 'max' | 'min';
+  target: number;
+  /** The number on the night (null: the player it was about didn't play). */
+  value: number | null;
+  /** Null when it didn't apply. */
+  met: boolean | null;
 }
 
 /** One set's night (GameResult.sets): how often a side ran it, the points those possessions scored, and the run the defense was on it by. */

@@ -12,6 +12,8 @@ import { foulLimit, type LiveAlert } from './alerts';
 import type { Drawn } from './drawn';
 import { PlayPicker } from './PlayPicker';
 import { callLabel, type Calls } from './plays';
+import type { GameKey } from '../../core/analysis/keys';
+import { KeysLive, gameShare } from '../components/GameKeys';
 
 /**
  * The timeout huddle, while your timeout is taken (the court has caught up with the game and waits):
@@ -34,6 +36,7 @@ export function Huddle({
   apply,
   calls,
   onResume,
+  keys,
 }: {
   league: League;
   view: Drawn;
@@ -54,6 +57,8 @@ export function Huddle({
   apply: (fn: (t: Tactics) => void) => void;
   calls: Calls;
   onResume: () => void;
+  /** Tonight's keys to the game. */
+  keys?: GameKey[];
 }) {
   const [drawing, setDrawing] = useState(false);
   const me = view.sides[side];
@@ -118,6 +123,8 @@ export function Huddle({
           })
         )}
       </div>
+
+      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, view.q)} compact />}
 
       {suggestion && (
         <div className="row top" style={{ gap: 8 }}>
