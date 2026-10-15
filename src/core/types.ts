@@ -1113,6 +1113,12 @@ export interface Settings {
   draftPause?: boolean;
   /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */
   liveWinProb?: boolean;
+  /** Live games replay a shot at the buzzer and the one that wins the game, once, as it happens (default on). */
+  liveReplays?: boolean;
+  /** Live games open with the starting lineups on the court before the tip (default on). */
+  liveIntro?: boolean;
+  /** Live games show the night's other scores as they go (default on). */
+  liveScores?: boolean;
 }
 
 export interface League {

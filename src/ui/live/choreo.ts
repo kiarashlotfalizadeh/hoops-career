@@ -25,6 +25,12 @@ export interface Frame {
   ballZ?: number; // 0..1 arc height (shots)
   flash?: Flash;
   score?: [number, number];
+  /** What the court says once this frame is reached ('Holmgren screens for Mitchell'), carried on until the next one says something. */
+  cap?: string;
+  /** Who has the ball here: an index into [...oPids, ...dPids] (-1: nobody, it's in the air or loose). The court tags him with his name. */
+  hold?: number;
+  /** A shot landing: the net (a make) or the rim (a miss) reacts. */
+  fx?: 'make' | 'miss';
 }
 
 export interface Script {
@@ -36,9 +42,14 @@ export interface Script {
   clockStart: number;
   clockEnd: number;
   q: number;
+  /** The possession's big moment, if it had one: a shot at the buzzer, or one that won the game with it. */
+  moment?: 'buzzer' | 'winner';
 }
 
 const BASKET: Pt = { x: 0, y: 5.25 };
+
+/** How the captions say a ball-screen coverage: 'they drop', 'they switch'. */
+const COVER_VERB: Record<string, string> = { drop: 'drop', switch: 'switch', hedge: 'hedge', blitz: 'blitz him', ice: 'ice it' };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 interface PInfo {
@@ -131,7 +142,7 @@ const FT_DEF: Pt[] = [
  * staying on), so working back from those is only right when no technical was made. `teams` are the
  * [home, away] abbreviations, to say whose timeout it is.
  */
-export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number], teams?: [string, string]): Script {
+export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number], teams?: [string, string], name?: (pid: number) => string): Script {
   const off = log.off;
   const oPids = log.on[off];
   const dPids = log.on[1 - off];
@@ -172,9 +183,21 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
   dPids.forEach((pid, i) => d.set(pid, { ...defendSpot(pid, i), y: defendSpot(pid, i).y + 6 }));
   let ball: Pt = { ...o.get(holder)! };
   const frames: Frame[] = [];
-  const snap = (dur: number, extra: Partial<Frame> = {}) => {
-    frames.push({ dur, o: oPids.map((p) => ({ ...o.get(p)! })), d: dPids.map((p) => ({ ...d.get(p)! })), ball: { ...ball }, ...extra });
+  // who has the ball: whoever stands where it is (nobody while it's in the air or at the rim)
+  const holding = (): number => {
+    const at = (p: Pt | undefined) => !!p && Math.abs(p.x - ball.x) < 0.01 && Math.abs(p.y - ball.y) < 0.01;
+    const i = oPids.findIndex((p) => at(o.get(p)));
+    if (i >= 0) return i;
+    const j = dPids.findIndex((p) => at(d.get(p)));
+    return j >= 0 ? oPids.length + j : -1;
   };
+  const snap = (dur: number, extra: Partial<Frame> = {}) => {
+    frames.push({ dur, o: oPids.map((p) => ({ ...o.get(p)! })), d: dPids.map((p) => ({ ...d.get(p)! })), ball: { ...ball }, hold: holding(), ...extra });
+  };
+  // captions name the players (without names, the court shows the play's label throughout)
+  const N = (pid: number | undefined) => (pid === undefined || !name ? '' : name(pid));
+  const cap = (text: string) => (name ? { cap: text } : {});
+  const abbrev = (side: 0 | 1) => teams?.[side] ?? (side === 0 ? 'Home' : 'Away');
   const follow = () => {
     dPids.forEach((pid, i) => d.set(pid, defendSpot(pid, i)));
   };
@@ -184,19 +207,26 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
     if (pid === holder) ball = { ...o.get(pid)! };
   };
 
-  snap(0);
+  snap(0, name ? { cap: log.label } : {});
   // a set's off-ball screens, in order: where each sends its man depends on the set
   let pins = 0;
   // the score before this possession, so makes can tick it up
   const score: [number, number] = before ? [...before] : [log.score[0] - (off === 0 ? log.pts : 0), log.score[1] - (off === 1 ? log.pts : 0)];
+  // the possession's last shot, if it went in as the clock ran out: at the buzzer, and in the 4th or
+  // overtime from behind or level into the lead, the shot that won it
+  const lastShot = [...steps].reverse().find((st) => st.k === 'shot');
+  const buzzer = !!lastShot?.made && log.clockEnd <= 0.05;
+  let moment: Script['moment'];
+  let prev: PossStep | undefined;
 
   for (const st of steps) {
     stepFrames(st);
+    prev = st;
   }
   // a made technical free throw has no step of its own: the court ends on the scoreboard's score anyway
   if (score[0] !== log.score[0] || score[1] !== log.score[1]) snap(600, { flash: { text: 'TECH FT', kind: 'make', x: 0, y: 9 }, score: [...log.score] });
   if (!frames.length || frames.length === 1) snap(500);
-  return { off, oPids, dPids, frames, label: log.label, clockStart: log.clockStart, clockEnd: log.clockEnd, q: log.q };
+  return { off, oPids, dPids, frames, label: log.label, clockStart: log.clockStart, clockEnd: log.clockEnd, q: log.q, ...(moment && { moment }) };
 
   function stepFrames(st: PossStep) {
     switch (st.k) {
@@ -211,12 +241,12 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         }
         ball = { ...o.get(holder)! };
         follow();
-        snap(750);
+        snap(750, log.set ? cap(`${SETS[log.set.id].name} for ${N(log.set.pid)}`) : {});
         break;
       }
       case 'press': {
         dPids.forEach((pid, i) => d.set(pid, { x: (i - 2) * 9, y: 40 + (i % 2) * 3 }));
-        snap(450);
+        snap(450, cap(`${abbrev((1 - off) as 0 | 1)} press full court`));
         for (const pid of oPids) moveTo(pid, { x: spots.get(pid)!.x, y: spots.get(pid)!.y + 6 });
         follow();
         snap(700);
@@ -230,7 +260,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         });
         dPids.forEach((pid, i) => d.set(pid, { x: (i - 2) * 6, y: 18 + i * 3 }));
         ball = { ...o.get(holder)! };
-        snap(650);
+        snap(650, cap(`${N(holder)} pushes it in transition`));
         moveTo(holder, { x: 2, y: 16 });
         snap(450);
         break;
@@ -245,7 +275,10 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         moveTo(h, { x: hp.x - 4, y: hp.y - 6 });
         moveTo(scr, { x: hp.x + 1, y: 12 });
         follow();
-        snap(520, { flash: { text: log.coverage ? log.coverage.toUpperCase() : 'SCREEN', kind: 'info', x: hp.x, y: hp.y + 3 } });
+        snap(520, {
+          flash: { text: log.coverage ? log.coverage.toUpperCase() : 'SCREEN', kind: 'info', x: hp.x, y: hp.y + 3 },
+          ...cap(`${N(scr)} screens for ${N(h)}${log.coverage && log.coverage !== 'zone' ? `: they ${COVER_VERB[log.coverage]}` : ''}`),
+        });
         break;
       }
       case 'pin': {
@@ -317,8 +350,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         moveTo(cut, to);
         if (log.set?.id === 'postSplit') moveTo(scr, { x: -side * 18, y: 20 });
         follow();
-        const name = n === 0 && log.set ? SETS[log.set.id].short.toUpperCase() : 'SCREEN';
-        snap(480, { flash: { text: name, kind: 'info', x: at.x, y: at.y + 3 } });
+        const tag = n === 0 && log.set ? SETS[log.set.id].short.toUpperCase() : 'SCREEN';
+        snap(480, { flash: { text: tag, kind: 'info', x: at.x, y: at.y + 3 }, ...cap(`${N(scr)} screens for ${N(cut)}`) });
         break;
       }
       case 'trap': {
@@ -326,7 +359,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         const hp = o.get(h)!;
         const near = [...dPids].sort((a, b) => dist(d.get(a)!, hp) - dist(d.get(b)!, hp)).slice(0, 2);
         near.forEach((pid, i) => d.set(pid, { x: hp.x + (i ? 1.5 : -1.5), y: hp.y - 1.5 }));
-        snap(420, { flash: { text: 'TRAP', kind: 'info', x: hp.x, y: hp.y + 4 } });
+        snap(420, { flash: { text: 'TRAP', kind: 'info', x: hp.x, y: hp.y + 4 }, ...cap(`${N(h)} is trapped`) });
         break;
       }
       case 'drive': {
@@ -334,7 +367,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         const p = o.get(pid)!;
         moveTo(pid, { x: p.x * 0.35, y: 10 });
         follow();
-        snap(620);
+        snap(620, cap(`${N(pid)} drives`));
         break;
       }
       case 'post': {
@@ -342,14 +375,14 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         const side = (o.get(pid)!.x >= 0 ? 1 : -1) * 7;
         moveTo(pid, { x: side, y: 8 });
         follow();
-        snap(560);
+        snap(560, cap(`${N(pid)} posts up`));
         break;
       }
       case 'cut': {
         const pid = st.pid!;
         const p = o.get(pid)!;
         moveTo(pid, { x: Math.sign(p.x || 1) * 3, y: 7 });
-        snap(520);
+        snap(520, cap(`${N(pid)} cuts to the rim`));
         break;
       }
       case 'handoff': {
@@ -367,15 +400,16 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         ball = { ...o.get(sh)! };
         moveTo(sh, { x: side * 13, y: 25 });
         follow();
-        snap(380);
+        snap(380, cap(`${N(big)} hands off to ${N(sh)}`));
         break;
       }
       case 'pass': {
         const to = st.pid2!;
+        const from = st.pid ?? holder;
         holder = to;
         ball = { ...o.get(to)! };
         follow();
-        snap(360);
+        snap(360, cap(from !== to ? `${N(from)} finds ${N(to)}` : `${N(to)} has it`));
         break;
       }
       case 'shot': {
@@ -390,19 +424,33 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         const toRim = dist(target, BASKET);
         const [ux, uy] = toRim > 0.5 ? [(BASKET.x - target.x) / toRim, (BASKET.y - target.y) / toRim] : [0, -1];
         if (near !== undefined) d.set(near, { x: target.x + ux * 3, y: Math.max(0.5, target.y + uy * 3) });
-        snap(300);
+        const what = st.d ?? (st.v === 3 ? 'three' : 'jumper');
+        snap(300, cap(`${N(pid)}, ${what}…`));
         ball = { ...BASKET };
         const made = !!st.made;
+        const lead = score[off] - score[1 - off];
         if (made) score[off] += st.v ?? 2;
+        const now = score[off] - score[1 - off];
+        // in the last two minutes of the 4th or overtime, a make that changes who leads says so
+        const late = log.q >= 4 && log.clockEnd <= 120;
+        const swing =
+          made && late ? (lead <= 0 && now > 0 ? ` ${abbrev(off)} lead ${Math.max(...score)}-${Math.min(...score)}!` : lead < 0 && now === 0 ? ` Tied at ${score[0]}!` : '') : '';
+        const atBuzzer = buzzer && st === lastShot;
+        if (atBuzzer) moment = log.q >= 4 && lead <= 0 && now > 0 ? 'winner' : 'buzzer';
+        const flashText = atBuzzer ? (moment === 'winner' ? 'GAME WINNER' : 'BUZZER BEATER') : `+${st.v ?? 2}`;
         snap(st.zone === 'rim' ? 380 : 620, {
           ballZ: 1,
-          flash: made ? { text: `+${st.v ?? 2}`, kind: 'make', x: 0, y: 9 } : { text: 'MISS', kind: 'miss', x: 0, y: 9 },
+          fx: made ? 'make' : 'miss',
+          flash: made ? { text: flashText, kind: 'make', x: 0, y: 9 } : { text: 'MISS', kind: 'miss', x: 0, y: 9 },
           score: [...score] as [number, number],
+          ...cap(made ? `${N(pid)} ${what}: good!${st.pid2 !== undefined ? ` (${N(st.pid2)} assist)` : ''}${swing}` : `${N(pid)} misses the ${what}`),
         });
+        // at the buzzer, the court lingers on it
+        if (atBuzzer) snap(900);
         break;
       }
       case 'block': {
-        snap(260, { flash: { text: 'BLOCKED', kind: 'block', x: 0, y: 11 } });
+        snap(260, { flash: { text: 'BLOCKED', kind: 'block', x: 0, y: 11 }, ...cap(`Blocked by ${N(st.pid)}!`) });
         break;
       }
       case 'reb': {
@@ -415,7 +463,10 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         } else if (pid !== undefined && d.has(pid)) d.set(pid, pt);
         ball = { ...pt };
         const text = pid === undefined ? 'TEAM REBOUND' : o.has(pid) ? 'OFF. REBOUND' : 'REBOUND';
-        snap(420, { flash: { text, kind: 'info', x: pt.x, y: pt.y + 4 } });
+        snap(420, {
+          flash: { text, kind: 'info', x: pt.x, y: pt.y + 4 },
+          ...cap(pid === undefined ? `${abbrev(off)} keep it` : o.has(pid) ? `Offensive rebound, ${N(pid)}` : `${N(pid)} rebounds`),
+        });
         break;
       }
       case 'to':
@@ -424,11 +475,19 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         if (stl !== undefined && d.has(stl)) {
           ball = { ...d.get(stl)! };
         } else ball = { x: 25, y: ball.y };
-        snap(420, { flash: { text: st.k === 'steal' ? 'STEAL' : 'TURNOVER', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 } });
+        snap(420, {
+          flash: { text: st.k === 'steal' ? 'STEAL' : 'TURNOVER', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 },
+          ...cap(st.k === 'steal' && stl !== undefined ? `${N(stl)} steals it from ${N(st.pid)}!` : `Turnover, ${N(st.pid ?? holder)}`),
+        });
         break;
       }
       case 'foul': {
-        snap(380, { flash: { text: 'FOUL', kind: 'foul', x: ball.x, y: ball.y + 3 } });
+        // fouled on a make: and one
+        const andOne = prev?.k === 'shot' && !!prev.made;
+        snap(380, {
+          flash: { text: andOne ? 'AND ONE!' : 'FOUL', kind: andOne ? 'make' : 'foul', x: ball.x, y: ball.y + 3 },
+          ...cap(andOne ? `And one! Foul on ${N(st.pid)}` : `Foul on ${N(st.pid)}`),
+        });
         break;
       }
       case 'ft': {
@@ -446,12 +505,16 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
           ballZ: 1,
           flash: { text: st.n ? `${st.v ?? 0}/${st.n} FT` : `${st.v ?? 0} FT`, kind: (st.v ?? 0) > 0 ? 'make' : 'miss', x: 0, y: 9 },
           score: [...score] as [number, number],
+          ...cap(`${N(pid)} ${st.n ? `${st.v ?? 0} of ${st.n}` : `${st.v ?? 0}`} at the line`),
         });
         break;
       }
       case 'timeout':
         // the one flash a timeout gets, naming the team that called it
-        snap(900, { flash: { text: st.t !== undefined && teams ? `TIMEOUT ${teams[st.t]}` : 'TIMEOUT', kind: 'info', x: 0, y: 26 } });
+        snap(900, {
+          flash: { text: st.t !== undefined && teams ? `TIMEOUT ${teams[st.t]}` : 'TIMEOUT', kind: 'info', x: 0, y: 26 },
+          ...cap(st.t !== undefined ? `Timeout, ${abbrev(st.t)}` : 'Timeout'),
+        });
         break;
       default:
         break;
@@ -461,4 +524,13 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
 
 function dist(a: Pt, b: Pt) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** What the court says at frame `i`: the last caption reached, or the play's label before any (and without names). */
+export function captionAt(script: Script, i: number): string {
+  for (let j = Math.min(i, script.frames.length - 1); j >= 0; j--) {
+    const c = script.frames[j].cap;
+    if (c) return c;
+  }
+  return script.label;
 }

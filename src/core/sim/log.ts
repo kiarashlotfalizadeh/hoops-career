@@ -54,6 +54,8 @@ export interface PossStep {
   n?: number;
   /** For timeouts: the team that called it (0 home, 1 away). */
   t?: 0 | 1;
+  /** For shots: how the play-by-play calls it ('step-back three', 'driving layup'). */
+  d?: string;
 }
 
 /**

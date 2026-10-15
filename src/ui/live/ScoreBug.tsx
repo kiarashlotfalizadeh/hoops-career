@@ -74,18 +74,24 @@ export function ScoreBug({
   const side = (t: Team, s: Drawn['sides'][number], penalty: boolean, right: boolean) => (
     <div className={right ? 'right' : ''} style={{ minWidth: 0 }}>
       <div className="bold">{t.abbrev}</div>
-      <div className="tiny dim nowrap">TO {s.timeouts}</div>
-      {!over && (
-        <div className={`tiny nowrap ${penalty ? 'warn bold' : 'dim'}`} title={penalty ? 'In the penalty' : undefined}>
-          TF {s.fouls}
-        </div>
-      )}
+      <div className="tiny nowrap">
+        <span className="dim">TO {s.timeouts}</span>
+        {!over && (
+          <>
+            <span className="dim"> · </span>
+            <span className={penalty ? 'warn bold' : 'dim'} title={penalty ? 'In the penalty' : undefined}>
+              TF {s.fouls}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
   return (
     <div
-      className="card tight"
-      style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc)` }}
+      className="card tight live-bugcard"
+      // (on the page's own colour: on a phone the strip and the play-by-play scroll under it)
+      style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc), var(--bg)` }}
     >
       {context && <div className="tiny dim2 center ellipsis live-context">{context}</div>}
       <div

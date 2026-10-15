@@ -1,7 +1,7 @@
 // The live court's keyframes: players (1.45 ft circles) shouldn't be drawn on top of each other,
 // and its score follows the scoreboard.
 import { describe, expect, it } from 'vitest';
-import { buildScript, type Frame } from '../live/choreo';
+import { buildScript, captionAt, type Frame } from '../live/choreo';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
@@ -260,5 +260,125 @@ describe('timeouts on the court', () => {
     const [first] = sim.drainLogs();
     const s = buildScript(first, info, undefined, [league.teams[0].abbrev, league.teams[1].abbrev]);
     expect(s.frames.filter((f) => f.flash?.text.startsWith('TIMEOUT')).map((f) => f.flash!.text)).toEqual([`TIMEOUT ${league.teams[1].abbrev}`]);
+  });
+});
+
+describe("the court's captions", () => {
+  const names = (pid: number) => `P${pid}`;
+
+  it('call the play by name as the court reaches each beat, and the shot as the play-by-play does', () => {
+    const s = buildScript(
+      log([
+        { k: 'advance', pid: 1 },
+        { k: 'screen', pid: 5, pid2: 1 },
+        { k: 'pass', pid: 1, pid2: 3 },
+        { k: 'shot', pid: 3, x: 20, y: 12, zone: 'ab3', made: true, v: 3, pid2: 1, d: 'catch-and-shoot three' },
+      ]),
+      info,
+      [0, 0],
+      ['OKC', 'BOS'],
+      names,
+    );
+    const caps = s.frames.map((f) => f.cap).filter(Boolean);
+    expect(caps[0]).toBe('test');
+    expect(caps).toContain('P5 screens for P1');
+    expect(caps).toContain('P1 finds P3');
+    expect(caps).toContain('P3, catch-and-shoot three…');
+    expect(caps.at(-1)).toBe('P3 catch-and-shoot three: good! (P1 assist)');
+    // between captions the last one carries on; before any, the play's label
+    expect(captionAt(s, 0)).toBe('test');
+    expect(captionAt(s, s.frames.length - 1)).toBe('P3 catch-and-shoot three: good! (P1 assist)');
+  });
+
+  it('stay on the play label without names, and tag whoever has the ball', () => {
+    const s = buildScript(
+      log([
+        { k: 'advance', pid: 1 },
+        { k: 'pass', pid: 1, pid2: 2 },
+        { k: 'shot', pid: 2, x: 0, y: 6, zone: 'rim', made: false, v: 2 },
+        { k: 'reb', pid: 12 },
+      ]),
+      info,
+    );
+    expect(s.frames.every((f) => f.cap === undefined)).toBe(true);
+    expect(captionAt(s, 3)).toBe('test');
+    // the pass lands with P2 (offense index 1); the ball in the air is nobody's; the rebound is the defense's
+    const pass = s.frames.findIndex((f) => f.hold === 1);
+    expect(pass).toBeGreaterThan(0);
+    expect(s.frames.some((f) => f.ballZ && f.hold === -1)).toBe(true);
+    expect(s.frames.at(-1)!.hold).toBe(off.length + def.indexOf(12));
+    expect(s.frames.find((f) => f.ballZ)?.fx).toBe('miss');
+  });
+
+  it('call an and-one, and a make late in a close game that changes who leads', () => {
+    const late = {
+      ...log([
+        { k: 'advance', pid: 1 },
+        { k: 'shot', pid: 1, x: 0, y: 6, zone: 'rim', made: true, v: 2, d: 'driving layup' },
+        { k: 'foul', pid: 12, pid2: 1 },
+        { k: 'ft', pid: 1, v: 1, n: 1 },
+      ]),
+      q: 4,
+      clockStart: 40,
+      clockEnd: 31,
+      pts: 3,
+      score: [101, 100] as [number, number],
+    };
+    const s = buildScript(late, info, [98, 100], ['OKC', 'BOS'], names);
+    const caps = s.frames.map((f) => f.cap).filter(Boolean);
+    expect(caps).toContain('P1 driving layup: good! Tied at 100!');
+    expect(s.frames.some((f) => f.flash?.text === 'AND ONE!')).toBe(true);
+    expect(caps).toContain('And one! Foul on P12');
+    expect(s.moment).toBeUndefined();
+  });
+
+  it('mark a make as the clock runs out: at the buzzer, and the shot that wins it from behind in the 4th', () => {
+    const shot = (q: number, before: [number, number], v = 3) =>
+      buildScript(
+        {
+          ...log([
+            { k: 'advance', pid: 1 },
+            { k: 'shot', pid: 1, x: 0, y: 25, zone: 'ab3', made: true, v },
+          ]),
+          q,
+          clockStart: 6,
+          clockEnd: 0,
+          pts: v,
+          score: [before[0] + v, before[1]] as [number, number],
+        },
+        info,
+        before,
+        ['OKC', 'BOS'],
+        names,
+      );
+    expect(shot(2, [50, 40]).moment).toBe('buzzer');
+    const winner = shot(4, [99, 100]);
+    expect(winner.moment).toBe('winner');
+    expect(winner.frames.some((f) => f.flash?.text === 'GAME WINNER')).toBe(true);
+    // already ahead: a buzzer beater, not the winner
+    expect(shot(4, [104, 100]).moment).toBe('buzzer');
+    // a miss at the buzzer is no moment
+    const miss = buildScript({ ...log([{ k: 'shot', pid: 1, x: 0, y: 25, zone: 'ab3', made: false, v: 3 }]), clockEnd: 0 }, info);
+    expect(miss.moment).toBeUndefined();
+  });
+
+  it('name every player on a real game, and never leave a caption empty', () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
+    const sim = new GameSim(
+      { team: league.teams[2], players: teamPlayers(league, 2) },
+      { team: league.teams[3], players: teamPlayers(league, 3) },
+      { rng: new Rng(5), type: 'regular', record: true, injuries: false },
+    );
+    const nm = (pid: number) => league.players[pid].lastName;
+    let shots = 0;
+    while (!sim.over) {
+      sim.step();
+      for (const l of sim.drainLogs()) {
+        const s = buildScript(l, info, undefined, [league.teams[2].abbrev, league.teams[3].abbrev], nm);
+        for (const f of s.frames) if (f.cap !== undefined) expect(f.cap).not.toMatch(/^\s|undefined| {2}|^, |\bfor $/);
+        for (const st of l.steps) if (st.k === 'shot') shots += st.d ? 1 : 0;
+      }
+    }
+    expect(shots).toBeGreaterThan(100);
   });
 });

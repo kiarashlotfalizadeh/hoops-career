@@ -26,3 +26,22 @@ export function createTicker(clock: number, score: [number, number]) {
   };
 }
 export type Ticker = ReturnType<typeof createTicker>;
+
+/** The frame the court has reached in the possession it's drawing (see Court's onBeat): a store like the ticker's, so only the caption re-renders. */
+export function createBeat() {
+  let beat = 0;
+  const subs = new Set<() => void>();
+  return {
+    get: () => beat,
+    subscribe: (fn: () => void) => {
+      subs.add(fn);
+      return () => void subs.delete(fn);
+    },
+    set(i: number) {
+      if (i === beat) return;
+      beat = i;
+      subs.forEach((f) => f());
+    },
+  };
+}
+export type Beat = ReturnType<typeof createBeat>;
