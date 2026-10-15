@@ -22,6 +22,7 @@ import * as P from '../src/core/league/proposals';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
+import * as REC from '../src/core/league/records';
 import type { League, Player } from '../src/core/types';
 
 const [seasons, rngSeed, userTid, fictionalSeasons] = [5, 42, 19, 2].map((d, i) => Number(process.argv[i + 2] ?? d));
@@ -53,6 +54,23 @@ function check() {
   const season = L.season;
   const ph = L.phase;
   walk(L, 'league');
+  // the record book: every list best first and no longer than it keeps, a franchise's best never past the league's
+  const book = L.records;
+  if (book) {
+    for (const kind of ['reg', 'post'] as const) {
+      const shelves = [
+        { who: 'league', s: book.league[kind], keep: REC.KEEP.league[kind] },
+        ...Object.entries(book.teams).map(([tid, t]) => ({ who: tid, s: t[kind], keep: REC.KEEP.team[kind] })),
+      ];
+      for (const { who, s, keep } of shelves)
+        for (const [stat, list] of [...Object.entries(s.players), ...Object.entries(s.teams)] as [string, number[][]][]) {
+          if (list.length > keep || list.some((r, i) => i > 0 && r[0] > list[i - 1][0]))
+            bad('record book list out of order', `${who} ${kind} ${stat} ${JSON.stringify(list.map((r) => r[0]))}`);
+          const top = (book.league[kind].players as Record<string, number[][]>)[stat]?.[0]?.[0] ?? (book.league[kind].teams as Record<string, number[][]>)[stat]?.[0]?.[0];
+          if (who !== 'league' && list[0] && top !== undefined && list[0][0] > top) bad('franchise record past the league record', `${who} ${kind} ${stat}`);
+        }
+    }
+  }
   for (const t of L.teams) {
     const n = std(t.tid).length;
     const tw = H.twoWayRoster(L, t.tid).length;
@@ -1001,6 +1019,10 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
     console.log(`   restricted free agency: ${rfaLine}`);
+    const highsKB = Object.values(L.players).reduce((a, p) => a + (p.highs ? JSON.stringify(p.highs).length : 0), 0) / 1000;
+    console.log(
+      `   record book: ${L.news.filter((n) => n.kind === 'record' && n.season === L.season - 1).length} record news in ${seasonLabel(L.season - 1)}, book ${(JSON.stringify(L.records ?? {}).length / 1000).toFixed(1)}KB, career highs ${highsKB.toFixed(1)}KB`,
+    );
     const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
       `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,

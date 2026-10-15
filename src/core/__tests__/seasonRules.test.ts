@@ -8,6 +8,8 @@ import { curTeamSeason } from '../league/helpers';
 import { standings } from '../league/standings';
 import { runLottery } from '../league/draft';
 import { takeOverTeam } from '../league/owner';
+import { applyInjury } from '../league/injuries';
+import { ovrRaw, toDisplay } from '../ratings';
 import { simDay } from '../league/season';
 import { Rng } from '../random';
 import { testLeague } from '../../state/__tests__/fixtures';
@@ -89,5 +91,23 @@ describe('taking over another team', () => {
     expect(old.rotation.restB2B).toEqual([]);
     simDay(l);
     expect(old.rotation.caps).toEqual({});
+  });
+});
+
+describe('lasting injury damage', () => {
+  it('shows in his OVR at once', () => {
+    const l = fictional(11);
+    const rng = new Rng(5);
+    let hit = false;
+    for (const p of Object.values(l.players).filter((x) => x.tid >= 0)) {
+      const before = { ...p.ratings };
+      applyInjury(l, p, rng);
+      if (p.ratings.spd < before.spd) {
+        hit = true;
+        expect(p.ovr).toBe(toDisplay(ovrRaw(p.ratings), l.ovrScale));
+      }
+      p.injury = null;
+    }
+    expect(hit).toBe(true);
   });
 });
