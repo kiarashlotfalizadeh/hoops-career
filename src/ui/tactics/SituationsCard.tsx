@@ -145,7 +145,15 @@ export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
           </div>
         </div>
       </div>
-      <Sheet open={!!open} onClose={() => setEditing(null)} title={open ? `Plan: ${open.label}` : 'Plan'}>
+      <Sheet
+        open={!!open}
+        onClose={() => {
+          // a name cleared while typing comes back as "Plan"
+          if (open && !open.label.trim()) change(open.id, (p) => void (p.label = 'Plan'));
+          setEditing(null);
+        }}
+        title={open ? `Plan: ${open.label || 'Plan'}` : 'Plan'}
+      >
         {open && <SituationEditor s={open} change={(fn) => change(open.id, fn)} />}
       </Sheet>
     </Card>
@@ -191,15 +199,46 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
     <div className="col" style={{ gap: 16 }}>
       <label className="col" style={{ gap: 4 }}>
         <span className="small dim">Name</span>
-        <input className="input" value={s.label} maxLength={30} onChange={(e) => change((p) => void (p.label = e.target.value || 'Plan'))} />
+        <input
+          className="input"
+          value={s.label}
+          maxLength={30}
+          onChange={(e) => change((p) => void (p.label = e.target.value))}
+          onBlur={() => !s.label.trim() && change((p) => void (p.label = 'Plan'))}
+        />
       </label>
       <div className="small bold">When</div>
-      <Slider label="From" value={w.fromQ ?? 1} min={1} max={4} onChange={(v) => change((p) => setWhen(p, 'fromQ', v > 1 ? v : undefined))} format={q} />
-      <Slider label="Until" value={w.untilQ ?? 4} min={1} max={4} onChange={(v) => change((p) => setWhen(p, 'untilQ', v < 4 ? v : undefined))} format={q} />
+      {/* the quarters and the leads move together, so a plan can't be set to a situation that never comes */}
+      <Slider
+        label="From"
+        value={w.fromQ ?? 1}
+        min={1}
+        max={4}
+        onChange={(v) =>
+          change((p) => {
+            setWhen(p, 'fromQ', v > 1 ? v : undefined);
+            if (v > (p.when.untilQ ?? 4)) setWhen(p, 'untilQ', v < 4 ? v : undefined);
+          })
+        }
+        format={q}
+      />
+      <Slider
+        label="Until"
+        value={w.untilQ ?? 4}
+        min={1}
+        max={4}
+        onChange={(v) =>
+          change((p) => {
+            setWhen(p, 'untilQ', v < 4 ? v : undefined);
+            if (v < (p.when.fromQ ?? 1)) setWhen(p, 'fromQ', v > 1 ? v : undefined);
+          })
+        }
+        format={q}
+      />
       <Slider
         label="Time left in the period"
         value={w.maxClock ?? 720}
-        min={0}
+        min={15}
         max={720}
         step={15}
         onChange={(v) => change((p) => setWhen(p, 'maxClock', v < 720 ? v : undefined))}
@@ -210,7 +249,12 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
         value={lead(w.minLead, ANY_LO)}
         min={ANY_LO}
         max={30}
-        onChange={(v) => change((p) => setWhen(p, 'minLead', v > ANY_LO ? v : undefined))}
+        onChange={(v) =>
+          change((p) => {
+            setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
+            if (p.when.maxLead !== undefined && v > p.when.maxLead) setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
+          })
+        }
         format={(v) => (v <= ANY_LO ? 'Any' : signed(v))}
         help="Negative: trailing by at most that much."
       />
@@ -219,7 +263,12 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
         value={lead(w.maxLead, ANY_HI)}
         min={-30}
         max={ANY_HI}
-        onChange={(v) => change((p) => setWhen(p, 'maxLead', v < ANY_HI ? v : undefined))}
+        onChange={(v) =>
+          change((p) => {
+            setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
+            if (p.when.minLead !== undefined && v < p.when.minLead) setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
+          })
+        }
         format={(v) => (v >= ANY_HI ? 'Any' : signed(v))}
         help="Negative: trailing by at least that much."
       />

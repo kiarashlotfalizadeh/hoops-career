@@ -151,6 +151,10 @@ describe('engine tactics', () => {
       expect(situationText(situationFromTemplate('chasing').when)).toBe('Q4 & OT · last 6:00 · down 6-18');
       expect(situationText(situationFromTemplate('closeQ').when)).toBe('Q1-Q3 · last 0:40');
       expect(situationText({ benchUnit: true })).toBe('Second unit on the floor');
+      // a plan that can never apply says so instead of reading like the quarter it starts in
+      expect(situationText({ fromQ: 4, untilQ: 2 })).toMatch(/^Never/);
+      expect(situationText({ minLead: 5, maxLead: -3 })).toMatch(/^Never/);
+      expect(situationText({ maxClock: 0 })).toMatch(/^Never/);
       // the patch is a copy: editing a plan never edits the template
       a.patch.nudge!.offense!.pace = 0;
       expect(situationFromTemplate('protectLead').patch.nudge!.offense!.pace).toBe(-25);

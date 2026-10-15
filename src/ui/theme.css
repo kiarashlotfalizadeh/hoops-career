@@ -326,6 +326,15 @@ h3 {
   color: var(--text-dim);
   font-weight: 600;
 }
+/* a 360px phone: the status line under the team name ("Free Agency · day 12") gets the room it needs */
+@media (max-width: 380px) {
+  .topbar-inner {
+    gap: 6px;
+  }
+  .topbar .iconbtn {
+    width: 38px;
+  }
+}
 .iconbtn {
   width: 42px;
   height: 42px;

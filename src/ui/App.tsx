@@ -175,7 +175,7 @@ function statusLine(league: League): string {
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
-      return `Re-sign Period · ${league.season}`;
+      return `Re-signing · ${league.season}`;
     case 'freeAgency':
       return `Free Agency · day ${faDayNumber(league)}`;
     default:
@@ -262,7 +262,9 @@ const NAV_ITEMS = [
 /** Bottom tabs; sub-screens light up the section they belong to (and are its current page for screen readers). */
 function BottomNav() {
   const { pathname } = useLocation();
-  const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : pathname.startsWith(it.to))) ?? NAV_ITEMS.find((it) => it.also.some((p) => pathname.startsWith(p)));
+  // whole path segments: /gameplan/3 is Tactics', not a /game report's
+  const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+  const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : under(it.to))) ?? NAV_ITEMS.find((it) => it.also.some(under));
   return (
     <nav className="bottomnav" aria-label="Main">
       <div className="bottomnav-inner">

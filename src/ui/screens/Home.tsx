@@ -424,7 +424,8 @@ export default function Home() {
                 style={{ minHeight: 36, fontWeight: r.tid === league.userTid ? 750 : 500, color: r.tid === league.userTid ? 'var(--text)' : 'var(--text-2)' }}
               >
                 <span className="num dim" style={{ width: 18 }}>
-                  {r.confRank}
+                  {/* no ranks before anyone has played, as on the Standings tab */}
+                  {r.won + r.lost === 0 ? '—' : r.confRank}
                 </span>
                 <TeamLogo tid={r.tid} size={22} decorative />
                 <span className="grow">{league.teams[r.tid].name}</span>

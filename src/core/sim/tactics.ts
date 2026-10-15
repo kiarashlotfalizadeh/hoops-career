@@ -468,6 +468,9 @@ export function situationText(w: SituationTrigger): string {
   const parts: string[] = [];
   const from = w.fromQ ?? 1;
   const until = w.untilQ ?? 4;
+  // (the editor keeps these apart; a plan saved before it did would never apply, and says so)
+  if (from > until || (w.minLead !== undefined && w.maxLead !== undefined && w.minLead > w.maxLead) || (w.maxClock !== undefined && w.maxClock <= 0))
+    return "Never: these conditions can't all hold";
   if (from >= 4) parts.push('Q4 & OT');
   else if (from === until) parts.push(`Q${from}`);
   else if (until >= 4) {
