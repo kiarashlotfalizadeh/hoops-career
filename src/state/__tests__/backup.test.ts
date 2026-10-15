@@ -155,4 +155,27 @@ describe('export', () => {
     expect(await exportLeague(l)).toBe(true);
     expect(JSON.parse(await file!.text())).toMatchObject({ id: l.id, version: SAVE_VERSION });
   });
+
+  it('exporting the open league mid-game brings its save on the device as far as the file', async () => {
+    const l = testLeague('export live');
+    toGameDay(l);
+    useStore.getState().setLeague(l);
+    let lg: ReturnType<typeof prepareLive> = null;
+    useStore.getState().mutate((x) => void (lg = prepareLive(x)));
+    await useStore.getState().save();
+    // played on, with no break, pause or move to bring the journal up to date
+    for (let i = 0; i < 25; i++) lg!.step();
+    let file: Blob | undefined;
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    vi.stubGlobal('document', { createElement: () => ({ click() {}, remove() {} }), body: { appendChild() {} } });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      file = b as Blob;
+      return 'blob:backup';
+    });
+    expect(await exportLeague(l)).toBe(true);
+    expect((JSON.parse(await file!.text()) as League).live?.steps).toBe(lg!.steps);
+    // the app is then closed: what it saves on the way has the game where the file has it
+    await useStore.getState().flush();
+    expect((await loadLeague(l.id))!.live?.steps).toBe(lg!.steps);
+  });
 });

@@ -27,6 +27,7 @@ import {
 } from './helpers';
 import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, summerRoster, taxCapped, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
+import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
 
 export interface TradeSide {
@@ -1025,6 +1026,9 @@ export function executeTrade(league: League, offer: TradeOffer) {
   };
   move(offer.a.pids, offer.b.tid);
   move(offer.b.pids, offer.a.tid);
+  // the arrivals take numbers nobody there wears (nor has retired)
+  if (offer.b.pids.length) numberTeam(league, offer.a.tid);
+  if (offer.a.pids.length) numberTeam(league, offer.b.tid);
   movePicks(offer.a, offer.b.tid);
   movePicks(offer.b, offer.a.tid);
   for (const [side, to] of [

@@ -507,6 +507,10 @@ export interface ST {
   hacked: Map<number, number>;
   /** A play called from the bench, waiting for its possession. */
   call: PlayCall | null;
+  /** The period the call is for: the one it was made in, or the next when it was made at the buzzer (during the break). */
+  callQ: number;
+  /** A timeout asked for while the other side had a live ball (the reason given): taken at the next dead ball. */
+  toWait: string | null;
   /** One of the team's timeouts was called: its next trip runs the after-timeout play. */
   atoNext: boolean;
   /** Times each set has been run tonight: what the other defense has read of it. */
@@ -650,6 +654,8 @@ export class GameSim {
   private go3 = false;
   /** The defense fouled to give: this trip's first half-court action is an inbounds play. */
   private inbound = false;
+  /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
+  private sideOut = false;
   /** A set handed to the action about to run (it takes it: see takePlay). */
   private play: SetPlay | null = null;
   /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
@@ -808,6 +814,8 @@ export class GameSim {
       sit: null,
       hacked: new Map(),
       call: null,
+      callQ: 1,
+      toWait: null,
       atoNext: false,
       setRuns: new Map(),
     };
@@ -931,14 +939,23 @@ export class GameSim {
     return s && { ...s };
   }
 
-  /** Call a play from the bench (live games): it replaces any call still waiting, and is cleared at the end of the period. */
+  /**
+   * Call a play from the bench (live games): it replaces any call still waiting, and is cleared at the
+   * end of the period, unless it was made at the buzzer (during the break): then it's for the next one.
+   */
   callPlay(side: 0 | 1, call: PlayCall): boolean {
     const t = this.T[side];
     if (call.kind === 'iso' && !t.byId.has(call.pid)) return false;
     // a set for a player is run for him while he's on the floor (else for the best fit there)
     if (call.kind === 'set' && (!isSetId(call.set) || (call.pid != null && !t.byId.has(call.pid)))) return false;
     t.call = { ...call };
+    t.callQ = this.atBuzzer() ? this.q + 1 : this.q;
     return true;
+  }
+
+  /** The period has run out and the next one hasn't started (the sim is at a break, or at the final buzzer). */
+  atBuzzer(): boolean {
+    return this.clock <= 0.05;
   }
 
   cancelPlay(side: 0 | 1) {
@@ -1004,10 +1021,21 @@ export class GameSim {
     return true;
   }
 
+  /**
+   * A timeout for the team on `side`: false when it has none left, or the period has run out (the break
+   * is a stop of its own, and a timeout there would be charged for nothing). NBA: in a live ball only the
+   * team with the ball may call one, so one asked for while the other side has the ball after a steal or
+   * a defensive board waits for the next dead ball (see takeWaitingTimeouts); it counts as called.
+   */
   callTimeout(side: 0 | 1, reason = '') {
     const t = this.T[side];
     this.lateTimeouts();
-    if (t.timeouts <= 0) return false;
+    if (t.timeouts <= 0 || this.over || this.atBuzzer()) return false;
+    if (!this.mayCallTimeout(side)) {
+      t.toWait = reason;
+      return true;
+    }
+    t.toWait = null;
     t.timeouts--;
     for (const tm of this.T) for (const p of tm.players) p.energy = Math.min(1, p.energy + (p.on ? 0.05 : 0.02));
     this.T[0].run = 0;
@@ -1021,6 +1049,37 @@ export class GameSim {
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
     return true;
+  }
+
+  /** Whether the team on `side` may call a timeout now: in a dead ball, or with the ball in its hands. */
+  private mayCallTimeout(side: 0 | 1): boolean {
+    return this.poss === side || (this.ctx !== 'steal' && this.ctx !== 'dreb');
+  }
+
+  /** The team on `side` asked for a timeout that waits for the next dead ball. */
+  timeoutWaiting(side: 0 | 1): boolean {
+    return this.T[side].toWait !== null;
+  }
+
+  /** The side whose timeout opens the next possession (one taken since the last possession), or null. */
+  timeoutOpens(): 0 | 1 | null {
+    return this.timeoutStep ? this.timeoutSide : null;
+  }
+
+  /**
+   * After a possession: a timeout asked for during the other side's live ball is taken now, at the dead
+   * ball (or the change of possession) that ended it, unless the period ran out first.
+   */
+  private takeWaitingTimeouts() {
+    for (const t of this.T) {
+      if (t.toWait === null) continue;
+      const reason = t.toWait;
+      t.toWait = null;
+      if (this.atBuzzer()) continue;
+      // (none left by now, under the late-game limits: it isn't taken)
+      if (this.mayCallTimeout(t.side)) this.callTimeout(t.side, reason);
+      else t.toWait = reason;
+    }
   }
 
   /** Points the team on `side` has gained from an impact key (e.g. 'drop_pullup:o') so far, per 12 minutes played. */
@@ -1124,6 +1183,7 @@ export class GameSim {
     }
     this.autoTimeouts();
     this.possession();
+    this.takeWaitingTimeouts();
     return !this.over;
   }
 
@@ -1156,9 +1216,11 @@ export class GameSim {
       if (this.q === 4) t.timeouts = Math.min(t.timeouts, 4);
       if (this.q >= 5) t.timeouts = 2;
       for (const p of t.players) p.energy = Math.min(1, p.energy + (this.q === 3 ? 0.3 : 0.1));
-      // calls from the bench and the hack-a-player count are for one period
-      t.call = null;
+      // calls from the bench and the hack-a-player count are for one period (a call made at the
+      // buzzer is for the one starting now), and the break is the stop a waiting timeout was for
+      if (t.callQ !== this.q) t.call = null;
       t.atoNext = false;
+      t.toWait = null;
       t.hacked.clear();
     }
     // the break draws from its own stream, so the possessions around it stay paired in Lab comparisons
@@ -1357,7 +1419,8 @@ export class GameSim {
     this.lateTimeouts();
     for (const t of this.T) {
       const opp = this.T[1 - t.side];
-      if (!t.t.manage.autoTimeouts || t.manualSubs) continue;
+      // (in a live ball only the team with the ball may call one)
+      if (!t.t.manage.autoTimeouts || t.manualSubs || !this.mayCallTimeout(t.side)) continue;
       const late = this.q >= 4 && this.clock < 120;
       const reserve = late ? 0 : this.q >= 4 ? 1 : 2;
       if (opp.run >= t.t.manage.timeoutRun && t.timeouts > reserve) {
@@ -1688,6 +1751,7 @@ export class GameSim {
     let ctx = this.ctx;
     this.go3 = false;
     this.inbound = false;
+    this.sideOut = false;
     this.possPts = 0;
     this.secondChance = false;
     this.inTransition = false;
@@ -1696,6 +1760,9 @@ export class GameSim {
     this.possSet = null;
     this.possCtxForTOPts = ctx;
     const clockStart = this.clock;
+    // a timeout stops play: the trip out of it starts with an inbound, whatever the ball was doing
+    // before (a steal or a defensive board still counts as what the trip came from)
+    const outOfTimeout = this.timeoutStep;
     if (this.record) {
       this.cur = {
         off: o,
@@ -1726,14 +1793,22 @@ export class GameSim {
     // ---- end-of-game: intentional fouls by the defense (short of the penalty, a side out)
     const foul = this.intentionalFoul(off, def);
     if (foul === 'ft') return;
-    if (foul === 'sideout') ctx = 'deadTO';
+    // the shot clock runs from the inbound; a side-out foul stops it, and the inbound after it restarts
+    // it where it was, or at 14 if it was under that (NBA)
+    let shotFull = GAME.shotClock;
+    let shotFrom = clockStart;
+    if (foul === 'sideout') {
+      ctx = 'deadTO';
+      shotFull = Math.max(14, GAME.shotClock - (clockStart - this.clock));
+      shotFrom = this.clock;
+    }
 
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
     // the after-timeout play is for this trip; a play called from the bench changes what the offense
-    // looks for (never how well it executes)
+    // looks for (never how well it executes). Both wait for a trip that gets to the half court: a press
+    // turnover or a run-out leaves them for the next one
     const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
-    off.atoNext = false;
     const call = off.call && off.call.kind !== 'foul' ? off.call : null;
     // an after-timeout set is run for its player (the best fit when he's off the floor), and an
     // after-timeout isolation named for a player is a clear-out for him
@@ -1742,12 +1817,10 @@ export class GameSim {
     let first: ActionType | null = ato && !isSetId(ato) ? ato : null;
     let isoFor: SP | null = first === 'iso' && atoPid !== null ? (off.byId.get(atoPid) ?? null) : null;
     if (call) {
-      off.call = null;
       // a play called from the bench (after a timeout too) replaces the standing after-timeout play
       first = null;
       set = null;
       isoFor = null;
-      if (this.cur) this.cur.call = { ...call, t: off.side };
       if (call.kind === 'three') late.need3 = this.go3 = true;
       else if (call.kind === 'two') {
         late.need2 = true;
@@ -1762,7 +1835,7 @@ export class GameSim {
     // ---- full court press
     let pressBroken = false;
     const pressOn = def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'));
-    if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'start') && !late.hold) {
+    if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'start' || outOfTimeout) && !late.hold) {
       const res = this.press(off, def);
       if (res === 'to') return;
       pressBroken = res === 'broken';
@@ -1782,8 +1855,9 @@ export class GameSim {
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
     if (late.hurry) transP *= 1.5;
-    // a set play is walked up and run in the half court, and so is the inbounds play after a foul to give
-    if (call?.kind === 'three' || call?.kind === 'iso' || call?.kind === 'set' || this.inbound) transP = 0;
+    // a called play is walked up and run in the half court, and so is the inbounds play after a foul to
+    // give or a timeout
+    if (call || this.inbound || outOfTimeout) transP = 0;
 
     if (this.clock > 2 && this.rng.chance(clamp(transP, 0, 0.85))) {
       // each setting's share of the run-outs, at ~0.25-0.35 pts per run-out over a half-court trip
@@ -1796,9 +1870,15 @@ export class GameSim {
       return;
     }
 
-    // ---- half court
+    // ---- half court: the trip uses up the after-timeout play and the call from the bench
     if (this.cur) this.cur.kind = 'half';
-    let setup = (K.setup[ctx] ?? 4) * paceF * this.rng.uniform(0.75, 1.25);
+    off.atoNext = false;
+    if (call) {
+      off.call = null;
+      if (this.cur) this.cur.call = { ...call, t: off.side };
+    }
+    // (out of a timeout, the ball is inbounded and brought up, as after any dead ball)
+    let setup = (K.setup[outOfTimeout && (ctx === 'steal' || ctx === 'dreb') ? 'deadTO' : ctx] ?? 4) * paceF * this.rng.uniform(0.75, 1.25);
     if (late.milk) setup += 6;
     if (late.hold) {
       // run the clock down for a last shot
@@ -1810,8 +1890,8 @@ export class GameSim {
     // at the end of the game, a second is enough for a quick catch-and-shoot
     const chasing = this.q >= 4 && off.score <= def.score && off.score >= def.score - 3;
     if (!late.milk && this.clock >= (chasing ? 0.8 : 2.5) && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
-    // the shot clock started on the inbound: time spent breaking a press (or before a side-out foul) is gone
-    let shotClock = GAME.shotClock - (clockStart - this.clock);
+    // the shot clock started on the inbound: time spent breaking a press is gone
+    let shotClock = shotFull - (shotFrom - this.clock);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
     this.tick(setup);
@@ -2067,7 +2147,9 @@ export class GameSim {
     this.inbound = false;
     let ballFrom: SP | null = null;
     let forced = false;
-    for (let n = 0; n < 6; n++) {
+    // (rushed actions a side-out foul cut short, which don't count toward the trip's six)
+    let stops = 0;
+    for (let n = 0; n < 6 + stops; n++) {
       // a late lead with the shot clock off (it can't run out before the game clock): the clock dies with the ball
       if (late.milk && this.clock <= shotClock) this.tick(this.clock);
       if (this.clock <= 0.05) {
@@ -2075,7 +2157,7 @@ export class GameSim {
         return;
       }
       const left = Math.min(shotClock, this.clock);
-      forced = left <= 4.5 || n === 5;
+      forced = left <= 4.5 || n === 5 + stops;
       // the trip opens with its set: the one called, or now and then one of the package's when it's a
       // fresh trip with the time to run it and nothing else to do (no late-game situation)
       let play: SetPlay | null = null;
@@ -2109,6 +2191,13 @@ export class GameSim {
       this.calledActor = null;
       this.play = null;
       if (res === 'done') return;
+      // a side-out foul in the action: the shot clock restarts where it was, or at 14 if it was under
+      // that (NBA); a rushed action it cut short doesn't count toward the trip's six
+      if (this.sideOut) {
+        this.sideOut = false;
+        shotClock = Math.max(shotClock, 14);
+        if (forced || buzzer) stops++;
+      }
       // continue: ball reversed, maybe with a small residual advantage
       carryOpen = res.carry;
       ballFrom = res.ball;
@@ -2596,8 +2685,11 @@ export class GameSim {
       this.turnover(off, def, H, this.stealBy(onRoll ? dS : dH, 0.6), onRoll ? 'pnrRoll' : 'pnrBH');
       return 'done';
     }
-    // non-shooting foul; a defender who fouled out on it has been replaced
+    // non-shooting foul: free throws in the penalty, else a side out (the shot clock restarts at 14 or
+    // more: an action the shot clock was rushing is reset, any other plays on), with a defender who
+    // fouled out on it replaced
     if (this.nonShootingFoul(off, def, H, dH, 'pnrBH')) return 'done';
+    if (this.sideOut && forced) return { carry: 0, ball: H };
     if (!dH.on || !dS.on) {
       dH = this.defOf(def, H);
       dS = this.defOf(def, S);
@@ -2806,6 +2898,7 @@ export class GameSim {
       return 'done';
     }
     if (this.nonShootingFoul(off, def, A, D, finish)) return 'done';
+    if (this.sideOut && forced) return { carry: 0, ball: A };
     if (!D.on) D = this.defOf(def, A);
     const spacing = this.spacingBonus(off);
     const rimOpen = adv * 0.35 + spacing * 0.5 - help * 0.25;
@@ -3414,7 +3507,7 @@ export class GameSim {
 
   // ------------------------------------------------------------ events
 
-  /** Reach-in / off-ball foul on the handler: free throws in the penalty, else a side out (returns false). */
+  /** Reach-in / off-ball foul on the handler: free throws in the penalty (returns true), else a side out (sets sideOut). */
   private nonShootingFoul(off: ST, def: ST, handler: SP, defender: SP, finish: FinishType): boolean {
     const phys = (def.t.defense.physicality - 50) / 50;
     const pr = this.pressure(def);
@@ -3437,7 +3530,8 @@ export class GameSim {
       this.freeThrows(off, def, handler, 2, finish);
       return true;
     }
-    // side out: offense keeps the ball; treat as a fresh possession phase
+    // side out: offense keeps the ball, and the shot clock restarts at 14 or more (see halfCourt)
+    this.sideOut = true;
     return false;
   }
 
@@ -4107,7 +4201,8 @@ export class GameSim {
       ot: Math.max(0, this.q - 4),
       shots: this.shots,
       impacts: [...this.impacts.values()].filter((i) => i.pts >= 0.05).map((i) => ({ ...i, pts: Math.round(i.pts * 100) / 100 })),
-      lineups: [...this.lineups.values()].filter((l) => l.sec >= 60),
+      // every unit, however short its stints (the lineup lab's pairs and trios add them all up)
+      lineups: [...this.lineups.values()],
       flow: this.flow,
       flowPeriods: this.flowPeriods,
       flowT: this.flowT,

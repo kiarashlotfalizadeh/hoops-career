@@ -369,6 +369,13 @@ export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
   }
   if (patch.defense) out.defense = { ...out.defense, ...patch.defense };
   if (patch.manage) out.manage = { ...out.manage, ...patch.manage };
+  // a setting the patch takes off (undefined: how tacticsDiff carries a deleted key) is deleted, not left undefined
+  const parts: [object | undefined, object][] = [
+    [patch.offense, out.offense],
+    [patch.defense, out.defense],
+    [patch.manage, out.manage],
+  ];
+  for (const [from, to] of parts) for (const [k, v] of Object.entries(from ?? {})) if (v === undefined) delete (to as Record<string, unknown>)[k];
   const n = patch.nudge;
   if (n) {
     for (const [k, d] of Object.entries(n.offense ?? {}) as [keyof NonNullable<typeof n.offense>, number][]) out.offense[k] = clamp(out.offense[k] + d, 0, 100);
@@ -402,7 +409,8 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   for (const k of Object.keys(b.offense.actions) as ActionType[]) if (a.offense.actions[k] !== b.offense.actions[k]) (offense.actions ??= {})[k] = b.offense.actions[k];
   if (Object.keys(offense).length) patch.offense = offense;
   const defense: Partial<DefenseTactics> = {};
-  for (const k of Object.keys(b.defense) as (keyof DefenseTactics)[]) {
+  // (both sides' keys: a setting taken off, its key deleted, is a change too)
+  for (const k of new Set([...Object.keys(a.defense), ...Object.keys(b.defense)]) as Set<keyof DefenseTactics>) {
     // (a junk defense named for their players is tonight's too)
     if (GAME_DEFENSE.has(k) || same(a.defense[k], b.defense[k]) || (k === 'scheme' && namedJunk(b.defense))) continue;
     (defense as Record<string, unknown>)[k] = b.defense[k];
@@ -410,7 +418,7 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   if (Object.keys(defense).length) patch.defense = defense;
   const manage: Partial<GameManagement> = {};
   // hack-a-player targets name tonight's opponents, like the matchups
-  for (const k of Object.keys(b.manage) as (keyof GameManagement)[])
+  for (const k of new Set([...Object.keys(a.manage), ...Object.keys(b.manage)]) as Set<keyof GameManagement>)
     if (k !== 'hackTargets' && k !== 'hackFromQ' && !same(a.manage[k], b.manage[k])) (manage as Record<string, unknown>)[k] = structuredClone(b.manage[k]);
   if (Object.keys(manage).length) patch.manage = manage;
   return patch;
@@ -468,6 +476,9 @@ export function situationText(w: SituationTrigger): string {
   const parts: string[] = [];
   const from = w.fromQ ?? 1;
   const until = w.untilQ ?? 4;
+  // (the editor keeps these apart; a plan saved before it did would never apply, and says so)
+  if (from > until || (w.minLead !== undefined && w.maxLead !== undefined && w.minLead > w.maxLead) || (w.maxClock !== undefined && w.maxClock <= 0))
+    return "Never: these conditions can't all hold";
   if (from >= 4) parts.push('Q4 & OT');
   else if (from === until) parts.push(`Q${from}`);
   else if (until >= 4) {

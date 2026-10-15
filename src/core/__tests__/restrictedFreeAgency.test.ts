@@ -18,7 +18,7 @@ import {
   statsLine,
   teamPlayers,
 } from '../league/helpers';
-import { askingContract, capSpace, leaveTeam, makeContract, marketHolds, signPlayer, signingRoute, summerRoster, wantsTwoWay } from '../league/contracts';
+import { askingContract, capSpace, leaveTeam, makeContract, marketHolds, releasePlayer, signPlayer, signingRoute, summerRoster, wantsTwoWay } from '../league/contracts';
 import { contractExp } from '../playerGen';
 import { capHolds, capPayroll, fillRosters, marqueeFA, offerRoute, renouncePlayer, userBid, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
 import {
@@ -200,6 +200,17 @@ describe('qualifying offers', () => {
     expect(renouncePlayer(l, p.pid).ok).toBe(true);
     expect(p.rfa).toBeUndefined();
     expect(p.tid).toBe(FREE_AGENT);
+  });
+
+  it('a release takes his qualifying offer with it, as renouncing does: he is unrestricted, with no cap hold on the team that let him go', () => {
+    const { l, p } = resignPhase();
+    expect(userQualify(l, p.pid).ok).toBe(true);
+    releasePlayer(l, p, { news: false });
+    expect(p.tid).toBe(FREE_AGENT);
+    expect(p.rfa).toBeUndefined();
+    l.phase = 'freeAgency';
+    expect(restrictedFreeAgents(l, U)).toEqual([]);
+    expect(marketHolds(l, U, l.season + 1)).toEqual([]);
   });
 
   it('only in the re-sign period, only for eligible players of his own team; a player who asked out can still be qualified, and holds room', () => {

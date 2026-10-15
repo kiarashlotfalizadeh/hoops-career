@@ -49,6 +49,8 @@ export function BoxPanel({
   const away = league.teams[res.away.tid];
   const tb = team === 0 ? res.home : res.away;
   const min = wholeMinutes(tb.players);
+  // everyone who has played, and the five on the floor now (the starters at the opening tip)
+  const onFloor = new Set(view.sides[team].on);
   const pt = Object.entries(tb.playTypes).sort((a, b) => b[1].poss - a[1].poss);
   const drawnFlow = flow.slice(0, view.flowLen);
   const periods = Math.max(1, Math.min(view.q, flowPeriods.length));
@@ -76,7 +78,8 @@ export function BoxPanel({
               { id: '0', label: home.abbrev },
             ]}
           />
-          <div className="tablewrap">
+          {/* it scrolls sideways: focusable so a keyboard can scroll it */}
+          <div className="tablewrap" tabIndex={0} role="region" aria-label={`${(team === 0 ? home : away).name} box score`}>
             <table className="stats">
               <thead>
                 <tr>
@@ -94,7 +97,7 @@ export function BoxPanel({
               </thead>
               <tbody>
                 {tb.players
-                  .filter((p) => p.min > 0)
+                  .filter((p) => p.min > 0 || onFloor.has(p.pid))
                   .map((p) => (
                     <tr key={p.pid}>
                       <td className="l sticky">{nameOf(p.pid)}</td>

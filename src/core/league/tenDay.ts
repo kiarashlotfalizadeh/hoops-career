@@ -55,8 +55,8 @@ export function tenDaySpot(league: League, tid: number, exceptPid = -1): 'regula
   return n < CAP.rosterMax + hardship(league, tid).spots ? 'hardship' : null;
 }
 
-/** 10-day contracts he has signed with team `tid` this season. */
-export const tenDaysWith = (league: League, p: Player, tid: number) => (p.tenDays && p.tenDays.tid === tid && p.tenDays.season === league.season ? p.tenDays.n : 0);
+/** 10-day contracts he has signed with team `tid` this season (each team's are counted on their own: a stint elsewhere doesn't reset them). */
+export const tenDaysWith = (league: League, p: Player, tid: number) => (p.tenDays?.season === league.season ? (p.tenDays.by[tid] ?? 0) : 0);
 
 /** His minimum this season: the veteran minimum after three seasons. */
 const minFor = (league: League, p: Player) => (p.experience >= 3 ? CAP_FOR(league).vetMin : CAP_FOR(league).minContract);
@@ -135,7 +135,7 @@ function signTenDay(league: League, p: Player, tid: number) {
     if (spot === 'hardship') cur.hardship = true;
     else delete cur.hardship;
   } else signPlayer(league, p, tid, pay, 1, { news: false, log: false, tenDay: { until, ...(spot === 'hardship' ? { hardship: true } : {}) } });
-  p.tenDays = { tid, season: league.season, n };
+  p.tenDays = { season: league.season, by: { ...(p.tenDays?.season === league.season ? p.tenDays.by : {}), [tid]: n } };
   payTenDay(league, tid, pay);
   if (tid === league.userTid) logMove(league, 'tenDay', tid, p, { amount: pay, note: n >= 2 ? 'second' : spot === 'hardship' ? 'hardship' : undefined });
 }

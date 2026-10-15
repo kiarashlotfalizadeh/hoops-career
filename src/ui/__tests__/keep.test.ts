@@ -1,7 +1,7 @@
 // "Keep changes after this game": tonight's changes go into the saved tactics, the game plan for
 // tonight's opponent and tonight's matchups don't, and taking a change back takes it out again.
 import { describe, expect, it } from 'vitest';
-import { applyPatch, cloneTactics, defaultTactics } from '../../core/sim/tactics';
+import { applyPatch, cloneTactics, defaultTactics, tacticsDiff } from '../../core/sim/tactics';
 import { keptTactics } from '../live/keep';
 
 describe('kept tactics', () => {
@@ -29,6 +29,22 @@ describe('kept tactics', () => {
     const kept = keptTactics(saved, planned, now);
     expect(kept.defense.matchups).toEqual({ 40: 2 });
     expect([kept.defense.starPlan, kept.defense.starTarget]).toEqual(['deny', null]);
+  });
+
+  it('take off what was taken off tonight (a setting whose key the screens delete)', () => {
+    const plannedOn = cloneTactics(planned);
+    plannedOn.manage.atoPid = 7;
+    plannedOn.manage.assistantAdjusts = true;
+    const now = cloneTactics(plannedOn);
+    delete now.manage.atoPid;
+    delete now.manage.assistantAdjusts;
+    const savedOn = cloneTactics(saved);
+    Object.assign(savedOn.manage, { atoPid: 7, assistantAdjusts: true });
+    const kept = keptTactics(savedOn, plannedOn, now);
+    expect(kept.manage).not.toHaveProperty('atoPid');
+    expect(kept.manage).not.toHaveProperty('assistantAdjusts');
+    // the diff gives tonight's tactics back from the plan, as it says
+    expect(applyPatch(plannedOn, tacticsDiff(plannedOn, now))).toEqual(now);
   });
 
   it('go back to the saved tactics when tonight is back to the plan', () => {

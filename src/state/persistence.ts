@@ -3,9 +3,13 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense } from '../core/types';
+import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense, type Tactics } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
+import { defaultTactics } from '../core/sim/tactics';
 import { FRANCHISES } from '../core/teams';
+import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
+import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
+import { registryProblems, seedCoaches } from '../core/league/coaches';
 import { MAX_STEPS } from './live';
 
 export interface LeagueMeta {
@@ -215,9 +219,7 @@ export function isLeague(x: unknown): x is League {
     obj(l.settings) &&
     Array.isArray(l.teams) &&
     l.teams.length >= 2 &&
-    l.teams.every(
-      (t, i) => obj(t) && t.tid === i && str(t.abbrev) && str(t.region) && str(t.name) && Array.isArray(t.colors) && Array.isArray(t.seasons) && obj(t.rotation) && obj(t.tactics),
-    ) &&
+    l.teams.every((t, i) => obj(t) && t.tid === i && str(t.abbrev) && str(t.region) && str(t.name) && Array.isArray(t.colors) && Array.isArray(t.seasons) && obj(t.rotation)) &&
     !!l.teams[l.userTid as number] &&
     obj(l.players) &&
     Object.values(l.players).every((p) => obj(p) && num(p.pid) && num(p.tid) && str(p.firstName) && str(p.lastName) && obj(p.ratings) && Array.isArray(p.stats)) &&
@@ -307,6 +309,81 @@ function cleanTactics(t: unknown) {
   if (Array.isArray(t.situations)) for (const s of t.situations) if (obj(s) && obj(s.patch)) cleanTacticsParts(s.patch.offense, s.patch.defense, s.patch.manage, false);
 }
 
+/** The sliders the engine does its arithmetic with, by part of the tactics. */
+const OFFENSE_NUMS = ['pace', 'transition', 'threePoint', 'rimAttack', 'crashBoards'] as const;
+const DEFENSE_NUMS = ['help', 'pressure', 'getBack', 'physicality'] as const;
+const MANAGE_NUMS = ['hackThreshold', 'timeoutRun', 'fatigueSub'] as const;
+/** The optional settings each part may carry beyond the defaults' (checked by cleanTacticsParts, or below). */
+const OFFENSE_EXTRAS = ['huntTarget', 'sets'] as const;
+const DEFENSE_EXTRAS = ['chase', 'playerD'] as const;
+const MANAGE_EXTRAS = ['goTo', 'ato', 'atoPid', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
+
+const record = (v: unknown): v is Record<string, unknown> => obj(v) && !Array.isArray(v);
+const situationsIntact = (v: unknown) => v === undefined || (Array.isArray(v) && v.every((s) => obj(s) && obj(s.when) && obj(s.patch)));
+
+/**
+ * Whole tactics in the shape the engine and the screens read them: the three parts, the sliders as
+ * numbers, the action weights, roles, shot freedom and matchups as records, the screeners (and any
+ * hack-a targets) as lists of player ids, and situational plans with a trigger and a patch.
+ */
+function isTactics(t: unknown): t is Tactics {
+  if (!record(t) || !record(t.offense) || !record(t.defense) || !record(t.manage)) return false;
+  const { offense: o, defense: d, manage: m } = t;
+  return (
+    OFFENSE_NUMS.every((k) => num(o[k])) &&
+    record(o.actions) &&
+    ACTIONS.every((a) => num((o.actions as Record<string, unknown>)[a])) &&
+    record(o.roles) &&
+    record(o.freedom) &&
+    nums(o.screeners) &&
+    DEFENSE_NUMS.every((k) => num(d[k])) &&
+    record(d.matchups) &&
+    MANAGE_NUMS.every((k) => num(m[k])) &&
+    (m.hackTargets === undefined || nums(m.hackTargets)) &&
+    situationsIntact(t.situations)
+  );
+}
+
+/** A setting read from a save is the same kind of value as the default it stands in for. */
+function sameKind(was: unknown, v: unknown): boolean {
+  if (was === null) return v === null || int(v);
+  if (Array.isArray(was)) return nums(v);
+  if (typeof was === 'object') return record(v);
+  return typeof v === typeof was && (typeof v !== 'number' || num(v));
+}
+
+/** Copy into a default part each of its settings the save has in shape, and the optional ones it carries. */
+function keepSettings(into: object, from: unknown, extras: readonly string[]) {
+  if (!record(from)) return;
+  const to = into as Record<string, unknown>;
+  for (const k of Object.keys(to)) if (k !== 'actions' && sameKind(to[k], from[k])) to[k] = from[k];
+  for (const k of extras) if (from[k] !== undefined) to[k] = from[k];
+}
+
+/**
+ * Tactics that aren't in shape (see isTactics), rebuilt from the defaults with whatever settings of
+ * theirs still are: a damaged team plays on instead of crashing every game it's in. The roles the
+ * defaults lack are filled in before the team's next game (ensureRotation), its assistant refitting
+ * the playbook unless the coach set it by hand.
+ */
+function repairTactics(t: unknown): Tactics {
+  const src = record(t) ? t : {};
+  const out = defaultTactics(str(src.offPreset) ? (src.offPreset as string) : undefined, str(src.defPreset) ? (src.defPreset as string) : undefined);
+  keepSettings(out.offense, src.offense, OFFENSE_EXTRAS);
+  keepSettings(out.defense, src.defense, DEFENSE_EXTRAS);
+  keepSettings(out.manage, src.manage, MANAGE_EXTRAS);
+  const actions = record(src.offense) ? src.offense.actions : undefined;
+  if (record(actions)) for (const a of ACTIONS) if (num(actions[a])) out.offense.actions[a] = actions[a] as number;
+  if (out.manage.hackTargets !== undefined && !nums(out.manage.hackTargets)) delete out.manage.hackTargets;
+  if (typeof src.manual === 'boolean') out.manual = src.manual;
+  if (src.playbook === null || (record(src.playbook) && str(src.playbook.id) && str(src.playbook.name))) out.playbook = src.playbook as Tactics['playbook'];
+  if (Array.isArray(src.situations)) {
+    const kept = src.situations.filter((s) => obj(s) && obj(s.when) && obj(s.patch));
+    if (kept.length) out.situations = kept as Tactics['situations'];
+  }
+  return out;
+}
+
 /** Game plans' new parts: instructions by player, and their items' patches (see cleanTacticsParts). */
 function cleanGamePlans(x: League) {
   if (!obj(x.gamePlans)) {
@@ -343,8 +420,13 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateGamePlan(x, !num(version) || (version as number) < 3);
   // junk defenses, chase and hunt targets, instructions by player and the foul to give: a damaged
   // setting goes (an unknown scheme is man-to-man), in every team's tactics, the saved playbooks
-  // and the game plans; a live journal's tactics are checked with the journal below
-  for (const t of x.teams) cleanTactics(t.tactics);
+  // and the game plans; a live journal's tactics are checked with the journal below (one out of
+  // shape there drops the journal: its game starts over)
+  for (const t of x.teams) {
+    // tactics out of shape are rebuilt (see repairTactics), so one damaged team doesn't stop every game it's in
+    if (!isTactics(t.tactics)) t.tactics = repairTactics(t.tactics);
+    cleanTactics(t.tactics);
+  }
   if (Array.isArray(x.playbooks)) for (const pb of x.playbooks) if (obj(pb)) cleanTacticsParts(pb.offense, pb.defense, pb.manage, true);
   cleanGamePlans(x);
   // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the
@@ -368,13 +450,132 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (g.sets !== undefined && !setsIntact(g.sets)) delete g.sets;
     // keys to the game: a damaged list goes (the recap then has none)
     if (g.keys !== undefined && !keysIntact(g.keys)) delete g.keys;
+    // what the recap's quotes read: damaged, they go (the quotes read the play-by-play and the flow, as for older games)
+    if (g.hurt !== undefined && !(Array.isArray(g.hurt) && g.hurt.every(int))) delete g.hurt;
+    if (g.wpLow !== undefined && !(num(g.wpLow) && g.wpLow >= 0 && g.wpLow <= 1)) delete g.wpLow;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
   }
   migrateContracts(x);
+  migrateRecords(x);
+  // All-Star Saturday's results: a damaged set goes (the Awards tab then shows the All-Stars alone)
+  for (const a of x.awards) if (obj(a) && a.saturday !== undefined && !saturdayIntact(x, a.saturday)) delete a.saturday;
+  migrateNumbers(x);
+  migrateCoaches(x);
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** All-Star Saturday's results in shape: at most eight shooters and four dunkers, scores in range, each dunk with its name. */
+function saturdayIntact(x: League, s: unknown): boolean {
+  if (!obj(s) || !Array.isArray(s.three) || s.three.length > THREE_FIELD || !Array.isArray(s.dunk) || s.dunk.length > DUNK_FIELD) return false;
+  const who = (e: Record<string, unknown>) => int(e.pid) && str(e.name) && int(e.tid) && !!x.teams[e.tid as number];
+  const pts = (v: unknown, max: number) => int(v) && v >= 0 && v <= max;
+  const offs = (v: unknown) => v === undefined || (Array.isArray(v) && v.length <= 3 && v.every((n) => pts(n, 6)));
+  const dunk = (d: unknown) =>
+    obj(d) && int(d.score) && d.score >= 30 && d.score <= 50 && str(d.text) && (d.text as string).length <= 60 && (d.miss === undefined || d.miss === true);
+  const dunks = (v: unknown, n: number) => Array.isArray(v) && v.length <= n && v.every(dunk);
+  return (
+    s.three.every((e) => obj(e) && who(e) && pts(e.r1, 40) && (e.final === undefined || pts(e.final, 40)) && offs(e.r1Off) && offs(e.finalOff)) &&
+    s.dunk.every(
+      (e) =>
+        obj(e) &&
+        who(e) &&
+        dunks(e.r1, 2) &&
+        (e.final === undefined || dunks(e.final, 2)) &&
+        (e.r1Off === undefined || dunks(e.r1Off, 3)) &&
+        (e.finalOff === undefined || dunks(e.finalOff, 3)),
+    )
+  );
+}
+
+/**
+ * The record book and career highs: a damaged book is read again from the results the save still
+ * has, as is a save's from before the book (see backfillRecords); damaged career highs go.
+ */
+function migrateRecords(x: League) {
+  if (x.records !== undefined && !recordsIntact(x, x.records)) delete x.records;
+  for (const p of Object.values(x.players))
+    if (p.highs !== undefined && !(obj(p.highs) && Object.entries(p.highs).every(([k, h]) => (REC_STATS as readonly string[]).includes(k) && highIntact(h)))) delete p.highs;
+  backfillRecords(x);
+}
+
+/** A jersey number as the game hands them out: one or two digits (three only if a team ever ran out of them). */
+const isJersey = (v: unknown) => typeof v === 'string' && /^\d{1,3}$/.test(v);
+
+/**
+ * Retired numbers and the numbers players wore by team (both optional): a damaged entry goes. A
+ * retired number needs its number, a player id, a name and the season; a number by team needs a
+ * team in the league.
+ */
+function migrateNumbers(x: League) {
+  for (const t of x.teams) {
+    if (t.retired === undefined) continue;
+    t.retired = Array.isArray(t.retired) ? t.retired.filter((r) => obj(r) && isJersey(r.jersey) && int(r.pid) && str(r.name) && int(r.season)) : [];
+  }
+  for (const p of Object.values(x.players)) {
+    const j = p.jerseys as unknown;
+    if (j === undefined) continue;
+    if (!obj(j) || Array.isArray(j)) {
+      delete p.jerseys;
+      continue;
+    }
+    for (const [k, v] of Object.entries(j)) if (!int(Number(k)) || !x.teams[Number(k)] || !isJersey(v)) delete j[k];
+  }
+}
+
+/** A career high: [value, season, day, opponent, game id], all whole numbers. */
+const highIntact = (h: unknown) => Array.isArray(h) && h.length === 5 && h.every(int);
+
+function recordsIntact(x: League, r: unknown): boolean {
+  const tid = (v: unknown) => int(v) && !!x.teams[v];
+  // a player's night: [value, pid, team, opponent, season, day, game id] and his name once he's gone; a team's: [value, team, opponent, season, day, game id, its points, theirs]
+  const mark = (m: unknown) => Array.isArray(m) && (m.length === 7 || (m.length === 8 && str(m[7]))) && m.slice(0, 7).every(int) && tid(m[2]) && tid(m[3]);
+  const teamMark = (m: unknown) => Array.isArray(m) && m.length === 8 && m.every(int) && tid(m[1]) && tid(m[2]);
+  const list = (keys: readonly string[], o: unknown, ok: (m: unknown) => boolean) =>
+    obj(o) && Object.entries(o).every(([k, l]) => keys.includes(k) && Array.isArray(l) && l.length <= 10 && l.every(ok));
+  const shelf = (s: unknown) => obj(s) && list(REC_STATS, s.players, mark) && list(TEAM_REC_STATS, s.teams, teamMark);
+  const both = (b: unknown) => obj(b) && shelf(b.reg) && shelf(b.post);
+  return obj(r) && int(r.since) && both(r.league) && obj(r.teams) && Object.entries(r.teams).every(([tid, b]) => !!x.teams[Number(tid)] && both(b));
+}
+
+/**
+ * The coach registry: a damaged one (out of shape, or out of step with the teams' coaches: see
+ * registryProblems) is started again, as is a save's from before the registry: every team's coach
+ * from the league's first season, the user from his current job's (see seedCoaches). A team's coach
+ * out of shape gets a plain one first (the registry is built from them).
+ */
+function migrateCoaches(x: League) {
+  for (const t of x.teams)
+    if (!(obj(t.coach) && str(t.coach.name) && str(t.coach.offPhilosophy) && str(t.coach.defPhilosophy) && num(t.coach.development) && num(t.coach.tactics)))
+      t.coach = { name: `Coach ${t.abbrev}`, offPhilosophy: 'balanced', defPhilosophy: 'drop', development: 50, tactics: 50 };
+  if (x.coaches !== undefined && !coachesIntact(x, x.coaches)) delete x.coaches;
+  seedCoaches(x);
+}
+
+const pair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(int);
+
+function coachesIntact(x: League, reg: unknown): boolean {
+  const stint = (s: unknown) =>
+    obj(s) &&
+    int(s.tid) &&
+    !!x.teams[s.tid] &&
+    int(s.from) &&
+    (s.at === undefined || pair(s.at)) &&
+    (s.to === undefined || (obj(s.to) && int(s.to.season) && pair(s.to.wl) && (s.to.post === undefined || s.to.post === true)));
+  const coach = (r: unknown) =>
+    obj(r) &&
+    int(r.id) &&
+    str(r.name) &&
+    str(r.off) &&
+    str(r.def) &&
+    num(r.dev) &&
+    num(r.tac) &&
+    (r.user === undefined || r.user === true) &&
+    Array.isArray(r.stints) &&
+    r.stints.every(stint);
+  return Array.isArray(reg) && reg.every(coach) && registryProblems(x).length === 0;
 }
 
 /** The latest live game's highlights, in shape for the court: possessions with their fives, steps and scores. */
@@ -428,8 +629,9 @@ const OPTIONS = new Set(['player', 'team']);
  * damaged piece is dropped. Talks need a real team, season, kind and period, patience 0-5, a
  * counter with a positive salary for 1-5 years, and lost interest and a firm ask in range; a 10-day
  * contract is only kept on a rostered player in the regular season (without it, his one prorated
- * salary runs to the season's end like any deal); the 10-day count names a real team and one or two
- * contracts; a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
+ * salary runs to the season's end like any deal); the 10-day count holds one or two contracts for
+ * each real team (an older save's count, for the one team he last signed with, becomes that
+ * team's); a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
  * or an exception are whole numbers; and an inbox message's 10-day link is a player id.
  */
 function migrateContracts(x: League) {
@@ -456,7 +658,12 @@ function migrateContracts(x: League) {
       if (!ok) delete p.talks;
     }
     const n = p.tenDays as unknown;
-    if (n !== undefined && !(obj(n) && teamOk(n.tid) && int(n.season) && int(n.n) && n.n >= 1 && n.n <= 2)) delete p.tenDays;
+    if (n !== undefined) {
+      // (saves from before the count was kept by team held one team's: { tid, season, n })
+      if (obj(n) && n.by === undefined && teamOk(n.tid) && int(n.season) && int(n.n) && n.n >= 1 && n.n <= 2) p.tenDays = { season: n.season, by: { [n.tid as number]: n.n } };
+      else if (!(obj(n) && int(n.season) && obj(n.by) && !Array.isArray(n.by) && Object.entries(n.by).every(([tid, c]) => teamOk(Number(tid)) && int(c) && c >= 1 && c <= 2)))
+        delete p.tenDays;
+    }
     const td = p.contract?.tenDay as unknown;
     if (td !== undefined && !(obj(td) && int(td.until) && (td.hardship === undefined || td.hardship === true) && p.tid >= 0 && x.phase === 'regular')) delete p.contract.tenDay;
     if (p.waivers && Array.isArray(p.waivers.dead)) for (const d of p.waivers.dead) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
@@ -544,7 +751,6 @@ function migrateDealTerms(x: League) {
 const int = (v: unknown): v is number => Number.isInteger(v);
 const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const numValues = (v: unknown) => obj(v) && Object.values(v).every(num);
-const isTactics = (t: unknown) => obj(t) && obj(t.offense) && obj(t.defense) && obj(t.manage);
 /** More moves than any coach makes in a game: a journal with more was crafted. */
 const MAX_LIVE_OPS = 5000;
 const PLAY_CALLS = new Set(['three', 'two', 'hold', 'foul', 'iso', 'set']);
@@ -588,7 +794,9 @@ function liveIntact(l: League, j: unknown): boolean {
   if (j.edge !== undefined && !num(j.edge)) return false;
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
-  if ((j.keep !== undefined && !isTactics(j.keep)) || (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2))) return false;
+  if (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2)) return false;
+  // "Keep changes" with a base out of shape is turned off (the saved tactics already hold what it kept): the game goes on
+  if (j.keep !== undefined && !isTactics(j.keep)) delete j.keep;
   const o = j.opp;
   if (
     o !== undefined &&

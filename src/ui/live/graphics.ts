@@ -10,7 +10,7 @@ import { STAT_WORD, type MilestoneStat } from '../../core/analysis/milestones';
 import { periodLabel } from '../stats';
 import type { Drawn } from './drawn';
 
-export type GraphicKind = 'milestone' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team';
+export type GraphicKind = 'milestone' | 'record' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team';
 
 export interface Graphic {
   id: string;
@@ -29,6 +29,12 @@ export interface PlayerBefore {
   high?: { pts: number; games: number; career: boolean };
   /** Career regular-season totals, when his whole career is on record (see careerOnRecord). */
   career?: Record<MilestoneStat, number>;
+  /**
+   * The points records he's playing for tonight (see records.ts), once the book has a season behind
+   * it: his franchise's (named by its team name) and the league's, in tonight's book (regular season
+   * or playoffs).
+   */
+  records?: { team: number; teamName: string; league: number; playoffs: boolean };
 }
 
 export interface GraphicInput {
@@ -114,6 +120,34 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
               priority: 95,
             });
         }
+      }
+      // the record book: a franchise or league scoring record broken (any time), or one within reach late
+      const rec = before?.records;
+      if (rec) {
+        const post = rec.playoffs ? 'playoff ' : '';
+        if (b.pts > rec.league)
+          add({
+            id: `rec-l-${b.pid}`,
+            kind: 'record',
+            tag: `League ${post}record`,
+            text: `${name}: ${b.pts} points, the most in a ${post}game in league history`,
+            side,
+            priority: 98,
+          });
+        else if (b.pts > rec.team)
+          add({ id: `rec-t-${b.pid}`, kind: 'record', tag: 'Franchise record', text: `${name}: ${b.pts} points, a ${rec.teamName} ${post}record`, side, priority: 96 });
+        else if (q >= 4 && b.pts >= rec.team - 4 && rec.team >= 40)
+          add({
+            id: `rec-w-${b.pid}`,
+            kind: 'watch',
+            tag: 'Record watch',
+            text:
+              b.pts === rec.team
+                ? `${name}: ${b.pts} points, matching the ${rec.teamName} ${post}record`
+                : `${name}: ${b.pts} points, ${rec.team - b.pts} off the ${rec.teamName} ${post}record (${rec.team})`,
+            side,
+            priority: 57,
+          });
       }
       // a high: a new one any time, one within reach in the fourth quarter or overtime
       const high = before?.high;

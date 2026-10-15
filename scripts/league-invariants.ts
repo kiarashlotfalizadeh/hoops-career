@@ -19,9 +19,11 @@ import { takeOverTeam } from '../src/core/league/owner';
 import * as TR from '../src/core/league/trades';
 import * as MO from '../src/core/league/morale';
 import * as P from '../src/core/league/proposals';
+import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
+import * as REC from '../src/core/league/records';
 import type { League, Player } from '../src/core/types';
 
 const [seasons, rngSeed, userTid, fictionalSeasons] = [5, 42, 19, 2].map((d, i) => Number(process.argv[i + 2] ?? d));
@@ -53,6 +55,24 @@ function check() {
   const season = L.season;
   const ph = L.phase;
   walk(L, 'league');
+  // the record book: every list best first and no longer than it keeps, a franchise's best never past the league's
+  const book = L.records;
+  if (book) {
+    for (const kind of ['reg', 'post'] as const) {
+      const shelves = [
+        { who: 'league', s: book.league[kind], keep: REC.KEEP.league[kind] },
+        ...Object.entries(book.teams).map(([tid, t]) => ({ who: tid, s: t[kind], keep: REC.KEEP.team[kind] })),
+      ];
+      for (const { who, s, keep } of shelves)
+        for (const side of ['players', 'teams'] as const)
+          for (const [stat, list] of Object.entries(s[side]) as [string, number[][]][]) {
+            if (list.length > keep || list.some((r, i) => i > 0 && r[0] > list[i - 1][0]))
+              bad('record book list out of order', `${who} ${kind} ${side} ${stat} ${JSON.stringify(list.map((r) => r[0]))}`);
+            const top = (book.league[kind][side] as Record<string, number[][]>)[stat]?.[0]?.[0];
+            if (who !== 'league' && list[0] && top !== undefined && list[0][0] > top) bad('franchise record past the league record', `${who} ${kind} ${side} ${stat}`);
+          }
+    }
+  }
   for (const t of L.teams) {
     const n = std(t.tid).length;
     const tw = H.twoWayRoster(L, t.tid).length;
@@ -153,6 +173,9 @@ function check() {
   checkTerms();
   checkTransactions();
   checkContracts();
+  checkRetiredNumbers();
+  // the coach registry: one open job per team, held by its coach (the user's with his team), names unique
+  for (const p of registryProblems(L)) bad('coach registry', p);
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
   } catch (e) {
@@ -211,6 +234,30 @@ function checkCalendar(generated: boolean) {
   }
 }
 
+/** Who wore each retired number on its team when it went up (league, team and number -> pids): only they may wear it there, until they leave. */
+const keepers = new Map<string, Set<number>>();
+
+/**
+ * Retired numbers: once per legend on a team, his name and season on it, and nobody who joined the
+ * team since wears one (a player who wore it there when it went up keeps it until he leaves). A
+ * number is first seen at the check after the playoffs it was retired at, before anyone can join.
+ */
+function checkRetiredNumbers() {
+  for (const t of L.teams) {
+    const list = t.retired ?? [];
+    if (new Set(list.map((r) => r.pid)).size !== list.length) bad('number retired twice for a player', `${t.abbrev} ${JSON.stringify(list)}`);
+    const roster = H.teamPlayers(L, t.tid);
+    for (const r of list) {
+      if (!r.name || !(r.season <= L.season) || (L.players[r.pid] && L.players[r.pid].tid !== -3)) bad('retired number off', `${t.abbrev} ${JSON.stringify(r)}`);
+      const key = `${label}${t.tid}#${r.jersey}`;
+      if (!keepers.has(key)) keepers.set(key, new Set(roster.filter((p) => p.jersey === r.jersey).map((p) => p.pid)));
+      const kept = keepers.get(key)!;
+      for (const pid of kept) if (L.players[pid]?.tid !== t.tid) kept.delete(pid);
+      for (const p of roster) if (p.jersey === r.jersey && !kept.has(p.pid)) bad('newcomer wears a retired number', `${t.abbrev} #${r.jersey} (${r.name}): ${nm(p.pid)}`);
+    }
+  }
+}
+
 /** Opening night: everyone wears his own number, nobody active shares a name, no four games in five nights. */
 function checkOpeningNight() {
   for (const t of L.teams) {
@@ -227,7 +274,7 @@ function checkOpeningNight() {
 /**
  * The All-Star Game is over: four guards and six frontcourt players at least among each
  * conference's twelve, all from that conference, and a healthy replacement for each one an injury
- * keeps out more than two games.
+ * keeps out more than two games; and All-Star Saturday was held.
  */
 function checkAllStars() {
   const aw = L.awards.find((a) => a.season === L.season);
@@ -242,6 +289,16 @@ function checkAllStars() {
     if (subs.length !== picks.filter(missesAllStarGame).length || subs.some(missesAllStarGame))
       bad('All-Star replacements', `${conf}: ${picks.filter(missesAllStarGame).length} hurt, ${subs.length} replaced`);
   }
+  // All-Star Saturday: eight shooters and four dunkers, scores in range, the top three and two in the finals, the winners with the award
+  const sat = aw.saturday;
+  if (!sat || sat.three.length !== 8 || sat.dunk.length !== 4 || new Set(sat.three.map((e) => e.pid)).size !== 8 || new Set(sat.dunk.map((e) => e.pid)).size !== 4)
+    return bad('All-Star Saturday fields', `${sat?.three.length} shooters, ${sat?.dunk.length} dunkers`);
+  const dunks = sat.dunk.flatMap((e) => [...e.r1, ...(e.final ?? []), ...(e.r1Off ?? []), ...(e.finalOff ?? [])]);
+  const finalist = (i: number) => i < 3;
+  if (sat.three.some((e, i) => e.r1 < 0 || e.r1 > 40 || finalist(i) === (e.final === undefined)) || dunks.some((d) => d.score < 30 || d.score > 50 || !d.text))
+    bad('All-Star Saturday scores', JSON.stringify(sat));
+  const won = (pid: number, type: string) => L.players[pid]?.awards.some((a) => a.season === L.season && a.type === type);
+  if (!won(sat.three[0].pid, 'Three-Point Contest') || !won(sat.dunk[0].pid, 'Slam Dunk Contest')) bad('All-Star Saturday winner without the award', '');
 }
 
 /**
@@ -427,7 +484,7 @@ function checkContracts() {
     if (L.phase !== 'regular' || p.tid < 0) bad('10-day contract outside the regular season', `${nm(p.pid)} ${L.phase} tid ${p.tid}`);
     else if (!(td.until > L.day && td.until <= L.day + 2 * TD.TEN_DAYS && td.until <= L.regularSeasonDays + 1) || !(p.contract.salaries[0] > 0 && p.contract.salaries[0] < min))
       bad('10-day contract off its terms', `${nm(p.pid)} ${JSON.stringify(p.contract)} day ${L.day}`);
-    if (!p.tenDays || p.tenDays.tid !== p.tid || p.tenDays.season !== L.season || p.tenDays.n > TD.TEN_DAY_MAX)
+    if (!p.tenDays || p.tenDays.season !== L.season || !p.tenDays.by[p.tid] || Object.values(p.tenDays.by).some((n) => n > TD.TEN_DAY_MAX))
       bad('10-day count off', `${nm(p.pid)} ${JSON.stringify(p.tenDays)}`);
   }
   for (const t of L.teams) {
@@ -647,8 +704,19 @@ function fireAndMove() {
   const to = L.teams.filter((t) => t.tid !== old).sort((a, b) => H.winPct(H.curTeamSeason(L, a.tid)) - H.winPct(H.curTeamSeason(L, b.tid)))[0].tid;
   takeOverTeam(L, to);
   const coached = L.teams.filter((t) => t.coach.name === L.coachName).map((t) => t.tid);
-  if (L.fired || L.userTid !== to || coached.join() !== String(to) || L.teams[old].rotation.manual || L.teams[old].tactics.manual || L.tenureStart !== L.season + 1)
-    bad('take-over', `${L.teams[old].abbrev} -> ${L.teams[to].abbrev}, coaching ${coached.join()}`);
+  // his job with the new team starts next season, as his tenure does
+  const job = openStint(userCoach(L)!);
+  if (
+    L.fired ||
+    L.userTid !== to ||
+    coached.join() !== String(to) ||
+    L.teams[old].rotation.manual ||
+    L.teams[old].tactics.manual ||
+    L.tenureStart !== L.season + 1 ||
+    job?.tid !== to ||
+    job.from !== L.season + 1
+  )
+    bad('take-over', `${L.teams[old].abbrev} -> ${L.teams[to].abbrev}, coaching ${coached.join()}, job ${JSON.stringify(job)}`);
 }
 
 /** Preseason: the user extends his best player in a final season who'll talk, at his asking price. */
@@ -911,6 +979,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) S.simDay(L);
     check();
     checkSeasonEnd();
+    // the coaching carousel after the playoffs: AI coaches fired, and their replacements (first-time head coaches or former ones)
+    const carousel = L.news.filter((x) => x.kind === 'coach' && x.season === L.season);
+    const coachLine = `coaching changes ${carousel.filter((x) => / (fired|parted ways with) /.test(x.text)).length} (${carousel.filter((x) => x.text.includes('first-time')).length} first-time head coaches)`;
     const taxpayers = L.teams.filter((t) => H.curTeamSeason(L, t.tid).payroll > H.CAP_FOR(L).luxuryTax).length;
     // exceptions used in the season itself (the summer's are counted at the close of free agency)
     const inSeasonRoutes = routeUse(L.season);
@@ -1001,6 +1072,13 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
     console.log(`   restricted free agency: ${rfaLine}`);
+    const highsKB = Object.values(L.players).reduce((a, p) => a + (p.highs ? JSON.stringify(p.highs).length : 0), 0) / 1000;
+    console.log(
+      `   record book: ${L.news.filter((n) => n.kind === 'record' && n.season === L.season - 1).length} record news in ${seasonLabel(L.season - 1)}, book ${(JSON.stringify(L.records ?? {}).length / 1000).toFixed(1)}KB, career highs ${highsKB.toFixed(1)}KB`,
+    );
+    const raised = L.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.season === L.season - 1).map((r) => `${t.abbrev} #${r.jersey} ${r.name}`));
+    console.log(`   retired numbers: ${raised.length}${raised.length ? ` (${raised.join(', ')})` : ''}, ${L.teams.reduce((a, t) => a + (t.retired?.length ?? 0), 0)} in all`);
+    console.log(`   coaches: ${coachLine}, registry ${L.coaches?.length ?? 0} coaches, ${(JSON.stringify(L.coaches ?? []).length / 1e3).toFixed(1)}KB`);
     const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
       `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,

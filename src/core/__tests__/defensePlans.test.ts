@@ -75,6 +75,26 @@ describe('guarding their players', () => {
     for (const a of withGames.filter((x) => x.suggest)) expect(a.why).toMatch(/%|a game|\d/);
   });
 
+  it('quotes his three-point percentage only on enough threes to mean something', () => {
+    const lg = leagueAt('casual', 14);
+    const q = structuredClone(projectedRotation(lg, 3, 8).find((x) => (x.stats.find((s) => s.season === lg.season && s.tid === 3 && !s.playoffs)?.gp ?? 0) >= 5)!);
+    const s = q.stats.find((x) => x.season === lg.season && x.tid === 3 && !x.playoffs)!;
+    // a non-shooter who isn't a handler or a post scorer, and makes his free throws
+    Object.assign(q.ratings, { tp: 10, hnd: 35, pas: 40, post: 30, ins: 40, ft: 85 });
+    s.ftm = s.fta;
+    // one three in his games, and he made it
+    s.tpa = s.tpm = 1;
+    const one = guardAdvice(lg, q);
+    expect(one.suggest).toBe('sag');
+    expect(one.why).toBe(`Rarely shoots threes (1 three in his ${s.gp} games).`);
+    s.tpa = s.tpm = 0;
+    expect(guardAdvice(lg, q).why).toBe(`Doesn't shoot threes (no threes in his ${s.gp} games).`);
+    // enough of them to mean something: the percentage
+    s.tpa = 2 * s.gp;
+    s.tpm = Math.floor(s.tpa / 5);
+    expect(guardAdvice(lg, q).why).toMatch(/^Doesn't shoot threes \(\d+\.\d% from three on 2\.0 a game\)\.$/);
+  });
+
   it('picks their weakest perimeter defender to attack, and says when he isn’t much of a weak link', () => {
     const lg = testLeague();
     ensureRotation(lg, 3);
@@ -181,6 +201,40 @@ describe('counters and opposing plans', () => {
     }
     expect(hunts).toBeGreaterThan(3);
     expect(guards).toBeGreaterThan(0);
+  });
+
+  it('AI coaches don’t plan for a player of the user’s who rests tonight', () => {
+    const l = leagueAt('hard');
+    ensureRotation(l, l.userTid);
+    const rot = projectedRotation(l, l.userTid, 8);
+    const sieve = rot[1];
+    Object.assign(sieve.ratings, { perD: 5, spd: 15, diq: 15 });
+    const brick = rot[2];
+    Object.assign(brick.ratings, { tp: 5 });
+    for (const s of brick.stats) if (s.season === l.season) s.tpa = s.tpm = 0;
+    l.teams[l.userTid].rotation.restB2B = [sieve.pid, brick.pid];
+    // a night with no game the night before, then the same night as the second of a back-to-back
+    const me = l.userTid;
+    let day = l.day + 30;
+    while (l.schedule.some((g) => g.day === day - 1 && (g.home === me || g.away === me))) day++;
+    const targets = () => {
+      const named = new Set<number>();
+      for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== me)) {
+        Object.assign(l.teams[tid].tactics.defense, { scheme: 'man', pnr: 'drop' });
+        for (const it of aiGamePlan(l, tid, me, { gid: 90000 + tid, day })?.items ?? []) {
+          const d = it.patch.defense;
+          for (const pid of [it.patch.offense?.huntTarget, d?.starTarget, ...(d?.chase ?? []), ...Object.keys(d?.playerD ?? {}).map(Number)]) if (pid != null) named.add(pid);
+        }
+      }
+      return named;
+    };
+    const rested = targets();
+    expect(rested.has(sieve.pid) || rested.has(brick.pid)).toBe(true);
+    l.schedule.push({ gid: l.nextGid++, day: day - 1, home: me, away: (me + 1) % 30, type: 'regular', played: true });
+    const b2b = targets();
+    expect(b2b.has(sieve.pid)).toBe(false);
+    expect(b2b.has(brick.pid)).toBe(false);
+    expect(b2b.size).toBeGreaterThan(0);
   });
 
   it('a junk defense named for their players stays with that opponent: the Lab’s Always and Keep changes never make it the default', () => {

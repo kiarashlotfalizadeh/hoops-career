@@ -125,7 +125,8 @@ export function tacticsWithCounter(league: League, opp: number, c: Pick<Candidat
   const plan = planFor(league, opp);
   const g = itemGroup(c);
   const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== g), { id: c.id, label: c.label, group: c.group, patch: c.patch }];
-  const view: League = { ...league, gamePlans: { ...league.gamePlans, [opp]: { oppTid: opp, items, matchups: plan?.matchups } } };
+  // (the rest of the plan stays as it is: its matchups and how it guards their players)
+  const view: League = { ...league, gamePlans: { ...league.gamePlans, [opp]: { ...plan, oppTid: opp, items } } };
   return effectiveTactics(view, opp);
 }
 

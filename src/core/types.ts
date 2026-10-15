@@ -1,6 +1,8 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
+import type { CoachRecord } from './league/coaches';
+import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PlayCall, PossLog } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
@@ -244,8 +246,12 @@ export interface Player {
   rfa?: Rfa;
   /** His contract talks with the user's team (see negotiation.ts): cleared when he signs anywhere. */
   talks?: Talks;
-  /** The 10-day contracts he has signed with one team this season: two at most (see tenDay.ts). */
-  tenDays?: { tid: number; season: number; n: number };
+  /** The 10-day contracts he has signed this season, by team (tid -> count): two at most with each (see tenDay.ts). */
+  tenDays?: { season: number; by: Record<number, number> };
+  /** His regular-season career highs in this league (see records.ts): the whole career's when it's all on record. */
+  highs?: Partial<Record<RecStat, HighRow>>;
+  /** The number he last wore for each team that numbered him (tid -> number), so a franchise retiring it after he moved on knows which (see jerseys.ts); dropped when he retires. */
+  jerseys?: Record<number, string>;
 }
 
 /** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
@@ -702,12 +708,25 @@ export interface Team {
   roomSeason?: number;
   /** Contract season the team last used its bi-annual exception (not two seasons running). */
   baeSeason?: number;
-  /** Players whose jersey numbers were settled at the team's last game: they keep them over arrivals. */
+  /** Players whose jersey numbers were settled at the team's last game or arrival (see numberTeam): they keep them over arrivals. */
   numbered?: number[];
+  /**
+   * Numbers the franchise retired for its legends, oldest first (see jerseys.ts): nobody who joins
+   * it wears one again. The name is frozen, so a banner reads the same after his record is gone.
+   */
+  retired?: RetiredNumber[];
   practice: 'light' | 'normal' | 'intense';
   timeoutsUsedThisGame?: number;
   /** Cash sent and received in trades in one contract season ($K), each held to CASH_PCT of the cap (see cashRoom). */
   cashTrades?: { season: number; sent: number; received: number };
+}
+
+/** A number a franchise retired: the legend who wore it there and the season he retired. */
+export interface RetiredNumber {
+  jersey: string;
+  pid: number;
+  name: string;
+  season: number;
 }
 
 export interface CoachProfile {
@@ -878,6 +897,13 @@ export interface GameResult {
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
   /** The user's games: the keys to the game set before it (see analysis/keys.ts) and how each went. */
   keys?: KeyGrade[];
+  /**
+   * The user's games, for the recap's quotes (see recapFacts): his players hurt in it (empty: none),
+   * and the winner's lowest chance once it was under way, when that fell below his chance at tip-off.
+   * Older results have neither (the quotes read the play-by-play and the flow then).
+   */
+  hurt?: number[];
+  wpLow?: number;
 }
 
 /** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */
@@ -970,8 +996,8 @@ export interface NewsItem {
   id: number;
   season: number;
   day: number;
-  /** 'rumor': who is listening on a player before the trade deadline, and who has called. */
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor';
+  /** 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts). */
+  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record' | 'coach';
   text: string;
   tids: number[];
   pids: number[];
@@ -1108,9 +1134,42 @@ export interface SeasonAwards {
   allRookie: number[];
   allStars: { E: number[]; W: number[] };
   allStarMvp?: number;
+  /** All-Star Saturday's contests (see allStarSaturday.ts), each field in its final order: the winner first. */
+  saturday?: { three: ThreeShooter[]; dunk: Dunker[] };
   cupWinner?: number;
   cupRunnerUp?: number;
   cupMvp?: number;
+}
+
+/** A Three-Point Contest shooter's day: his name and team as they were, and his scores (0-40 a round). */
+export interface ThreeShooter {
+  pid: number;
+  name: string;
+  tid: number;
+  r1: number;
+  /** The final's score, for the three who reached it. */
+  final?: number;
+  /** Shoot-off racks (0-6 each) that broke a tie for a place in the final, or for the title. */
+  r1Off?: number[];
+  finalOff?: number[];
+}
+
+/** One dunk: five judges' 6-10s added up (30-50), what it was, and whether he finished it in his tries. */
+export interface Dunk {
+  score: number;
+  text: string;
+  miss?: true;
+}
+
+/** A Slam Dunk Contest dunker's day: two dunks in the first round, two more for the two who reached the final, and any dunk-offs. */
+export interface Dunker {
+  pid: number;
+  name: string;
+  tid: number;
+  r1: Dunk[];
+  final?: Dunk[];
+  r1Off?: Dunk[];
+  finalOff?: Dunk[];
 }
 
 export interface Settings {
@@ -1223,6 +1282,10 @@ export interface League {
    * (see isQuestionable). Cleared when that game is played or its day has passed.
    */
   gameTime?: { gid: number; play: number[] };
+  /** The record book: the best single-game performances since the league began, the league's and each franchise's (see records.ts). */
+  records?: RecordBook;
+  /** Every head coach the league has had, the user among them, with his jobs (see coaches.ts): the coaching carousel and coach histories. */
+  coaches?: CoachRecord[];
 }
 
 /**

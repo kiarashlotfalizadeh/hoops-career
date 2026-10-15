@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { simDay, startRegularSeason } from '../league/season';
 import { curTeamSeason, standardRoster } from '../league/helpers';
-import { releasePlayer } from '../league/contracts';
+import { releasePlayer, wantsOut } from '../league/contracts';
+import { renouncePlayer } from '../league/freeAgency';
 import { executeTrade } from '../league/trades';
 import {
   MEET_DAYS,
@@ -278,6 +279,22 @@ describe('meeting a player who wants out', () => {
     resolvePromises(l);
     expect(p.promise).toBeUndefined();
     expect(Object.values(l.players).every((x) => x.tid === U || !x.promise)).toBe(true);
+  });
+
+  it('a release or renounced rights end it at once, in the summer too: he goes to the market free of it, and of the meeting', () => {
+    const { l, p } = setup();
+    expect(meetPlayer(l, p.pid, 'role').ok).toBe(true);
+    expect(wantsOut(p)).toBe(true);
+    // the preseason: no daily check until opening night
+    l.phase = 'preseason';
+    releasePlayer(l, p, { news: false });
+    expect([p.promise, p.meeting, wantsOut(p)]).toEqual([undefined, undefined, false]);
+    const { l: l2, p: q } = setup(6);
+    expect(meetPlayer(l2, q.pid, 'role').ok).toBe(true);
+    l2.phase = 'resign';
+    q.contract = { start: l2.season - 1, salaries: [10_000, 10_000] };
+    expect(renouncePlayer(l2, q.pid).ok).toBe(true);
+    expect([q.promise, q.meeting, wantsOut(q)]).toEqual([undefined, undefined, false]);
   });
 
   it('runs through the daily loop: a bigger role kept with real games', () => {

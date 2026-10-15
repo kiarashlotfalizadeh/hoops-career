@@ -111,7 +111,8 @@ function ranker(league: League, season: number, all: Entry[]) {
   const pointDiff: Criterion = (e) => e.ts.ptsFor - e.ts.ptsAgainst;
   const rest = [divRecord, confRecord, vsPlayoff(true), vsPlayoff(false), pointDiff];
   const twoTeams = [h2h, divLeader, ...rest];
-  const multiTeams = [divLeader, h2h, ...rest];
+  // a tie of three or more skips the record against the other conference's playoff teams (a two-team step only)
+  const multiTeams = [divLeader, h2h, divRecord, confRecord, vsPlayoff(true), pointDiff];
 
   /** Split a sorted list into runs of equal score, ordering inside each run with `inner`. */
   function runs<T>(sorted: T[], score: (x: T) => number, inner: (run: T[]) => Entry[]): Entry[] {

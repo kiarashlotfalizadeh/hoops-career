@@ -216,12 +216,16 @@ export default function TacticsLab() {
                 onClick={() => setOpp(t.tid)}
                 disabled={busy}
                 aria-pressed={t.tid === opp}
-                aria-label={`${t.region} ${t.name}`}
                 className="col"
-                style={{ alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}
+                // (positioned: its screen-reader text stays inside the scroller instead of widening the page)
+                style={{ position: 'relative', alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}
               >
+                {/* named by the abbreviation it shows, then the team: "MEM, Memphis Grizzlies" */}
                 <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} decorative />
                 <span className="tiny bold">{t.abbrev}</span>
+                <span className="sr-only">
+                  , {t.region} {t.name}
+                </span>
               </button>
             ))}
         </div>

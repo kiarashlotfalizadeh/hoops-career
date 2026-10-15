@@ -26,6 +26,7 @@ const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
 const Home = lazyRetry(() => import('./screens/Home'));
 const Roster = lazyRetry(() => import('./screens/Roster'));
 const PlayerView = lazyRetry(() => import('./screens/PlayerView'));
+const Compare = lazyRetry(() => import('./screens/Compare'));
 const Rotation = lazyRetry(() => import('./screens/Rotation'));
 const Lineups = lazyRetry(() => import('./screens/Lineups'));
 const Tactics = lazyRetry(() => import('./screens/Tactics'));
@@ -175,7 +176,7 @@ function statusLine(league: League): string {
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
-      return `Re-sign Period · ${league.season}`;
+      return `Re-signing · ${league.season}`;
     case 'freeAgency':
       return `Free Agency · day ${faDayNumber(league)}`;
     default:
@@ -199,7 +200,8 @@ function TopBar() {
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
-        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')} aria-label={`${t.region} ${t.name}, ${ts.won}-${ts.lost}, ${status}. Home`}>
+        {/* named by what it shows ("OKC 47-13 Feb 27 · 1st West"), then the team and where it goes */}
+        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')}>
           <TeamLogo tid={t.tid} size={34} decorative />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
@@ -210,11 +212,16 @@ function TopBar() {
             </div>
             <div className="sub ellipsis">{status}</div>
           </div>
+          <span className="sr-only">
+            : {t.region} {t.name}. Home
+          </span>
         </button>
         <div className="grow" />
-        <button className="iconbtn" onClick={() => nav('/inbox')} aria-label={unread ? `Inbox, ${unread} unread` : 'Inbox'}>
-          <Bell size={20} />
+        {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
+        <button className="iconbtn" onClick={() => nav('/inbox')}>
+          <Bell size={20} aria-hidden="true" />
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
+          <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
         </button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
           <SettingsIcon size={20} />
@@ -253,7 +260,7 @@ function TopBar() {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game', '/preview'] },
-  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player'] },
+  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player', '/compare'] },
   { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab', '/gameplan'] },
   { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
   { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
@@ -262,7 +269,9 @@ const NAV_ITEMS = [
 /** Bottom tabs; sub-screens light up the section they belong to (and are its current page for screen readers). */
 function BottomNav() {
   const { pathname } = useLocation();
-  const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : pathname.startsWith(it.to))) ?? NAV_ITEMS.find((it) => it.also.some((p) => pathname.startsWith(p)));
+  // whole path segments: /gameplan/3 is Tactics', not a /game report's
+  const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+  const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : under(it.to))) ?? NAV_ITEMS.find((it) => it.also.some(under));
   return (
     <nav className="bottomnav" aria-label="Main">
       <div className="bottomnav-inner">
@@ -453,6 +462,7 @@ function GameShell() {
             <Route path="/" element={<Home />} />
             <Route path="/roster" element={<Roster />} />
             <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
+            <Route path="/compare" element={<Compare />} />
             <Route path="/rotation" element={<Rotation />} />
             <Route path="/lineups" element={<Lineups />} />
             <Route path="/tactics" element={<Tactics />} />

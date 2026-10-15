@@ -72,13 +72,37 @@ describe('engine defense', () => {
   describe('junk defenses', () => {
     it('a box-and-one takes the ball out of the chased star’s hands, but the others get more threes and the glass gets softer', () => {
       const helio = shaped(7, 'helio');
-      const [base, box] = paired(3, 7, helio, { defense: { scheme: 'box1', chase: [helio.star.pid] } }, 30, 100, [helio.star.pid]);
+      const box1: TacticsPatch = { defense: { scheme: 'box1', chase: [helio.star.pid] } };
+      const [base, box] = paired(3, 7, helio, box1, 30, 100, [helio.star.pid]);
       // his share of the possessions he plays drops by a fifth or more
       expect(usage(box)).toBeLessThan(usage(base) * 0.85);
       expect(box.tpa).toBeLessThan(base.tpa * 0.9);
-      // everyone else shoots more of the team's threes, and the offense rebounds more of its misses
-      expect((box.oppTpa - box.tpa) / (box.oppFga - box.fga)).toBeGreaterThan((base.oppTpa - base.tpa) / (base.oppFga - base.fga));
-      expect(box.orb / (box.orb + box.drb)).toBeGreaterThan(base.orb / (base.orb + base.drb));
+      // everyone else gets more threes (their share of the team's shots barely moves, as they take more twos too)
+      expect(box.oppTpa - box.tpa).toBeGreaterThan(base.oppTpa - base.tpa);
+      // and the offense gets more of its misses back. A game has too few boards to tell an 8% softer glass
+      // apart, so the same misses are rebounded many times over against each defense (the trip after the
+      // board left out)
+      const boards = (patch: TacticsPatch, n: number) => {
+        const sim = new GameSim(side(3, { ...patch, defense: { ...man.defense, ...patch.defense } }), side(7, undefined, helio.players, helio.tactics), opts(1)) as unknown as {
+          T: unknown[];
+          poss: number;
+          ctx: string;
+          continueAfterOrb(): void;
+          finishPoss(): void;
+          rebound(off: unknown, def: unknown, zone: string, blocked: boolean, ft: boolean): void;
+        };
+        sim.poss = 1;
+        sim.continueAfterOrb = () => {};
+        sim.finishPoss = () => {};
+        let orb = 0;
+        for (let i = 0; i < n; i++) {
+          sim.rebound(sim.T[1], sim.T[0], i % 3 ? 'ab3' : 'rim', false, false);
+          if (sim.ctx === 'orb') orb++;
+        }
+        return orb / n;
+      };
+      const [manOrb, boxOrb] = [boards(man, 20000), boards(box1, 20000)];
+      expect(boxOrb - manOrb).toBeGreaterThan(2 * Math.sqrt((manOrb * (1 - manOrb) + boxOrb * (1 - boxOrb)) / 20000));
       expect(box.impacts['box_chase:d']).toBeGreaterThan(0);
       expect(box.impacts['box_open:o']).toBeGreaterThan(0);
       expect(base.impacts['box_chase:d']).toBeUndefined();
@@ -306,31 +330,32 @@ describe('engine defense', () => {
 
   it('leaves games that use none of it exactly as they were', () => {
     // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
+    // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays)
     const expected: Record<string, number[][]> = {
       default: [
-        [135, 131, 97, 53, 17, 11, 16, 1],
+        [137, 136, 94, 49, 15, 17, 19, 1],
         [111, 97, 97, 19, 14, 32, 10, 0],
-        [116, 105, 100, 32, 13, 16, 8, 0],
+        [116, 106, 101, 32, 13, 16, 7, 0],
       ],
       zone23: [
         [117, 106, 78, 49, 11, 9, 15, 0],
         [118, 114, 80, 21, 6, 36, 13, 0],
-        [110, 108, 90, 39, 9, 20, 16, 0],
+        [115, 109, 91, 37, 9, 20, 15, 0],
       ],
       zone32: [
         [108, 105, 82, 33, 20, 18, 14, 0],
-        [109, 99, 84, 19, 8, 25, 12, 0],
-        [112, 104, 94, 28, 14, 21, 12, 0],
+        [108, 102, 84, 17, 9, 29, 10, 0],
+        [117, 103, 93, 32, 12, 21, 14, 0],
       ],
       double: [
         [101, 114, 83, 40, 13, 30, 19, 0],
-        [113, 104, 88, 24, 6, 16, 11, 0],
-        [126, 111, 96, 27, 15, 19, 12, 0],
+        [118, 104, 92, 24, 9, 16, 10, 0],
+        [126, 111, 96, 28, 15, 19, 12, 0],
       ],
       hunt: [
         [132, 119, 84, 47, 15, 10, 15, 0],
         [127, 103, 92, 19, 9, 27, 10, 0],
-        [116, 105, 101, 32, 14, 16, 8, 0],
+        [116, 106, 102, 32, 14, 16, 7, 0],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

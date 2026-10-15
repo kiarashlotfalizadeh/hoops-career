@@ -5,6 +5,7 @@ import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from
 import { composites, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
+import { numberTeam } from './jerseys';
 import { logMove, logSwap } from './transactions';
 import { pickLabel } from './trades';
 
@@ -110,16 +111,17 @@ export interface LotteryResult {
 
 /**
  * Every team, worst record first. Like the NBA, ties are broken by a random draw, seeded by the
- * league and season so the Draft screen shows the same pre-lottery order the lottery used.
+ * league and season so the Draft screen shows the same pre-lottery order the lottery used; in the
+ * second round teams on the same record pick in the reverse of that draw.
  */
-export function draftStandings(league: League): { tid: number; playoff: boolean }[] {
+export function draftStandings(league: League, round: 1 | 2 = 1): { tid: number; playoff: boolean }[] {
   const draw = (tid: number) => hashString(`${league.id}:${league.season}:${tid}`);
   return league.teams
     .map((t) => {
       const ts = curTeamSeason(league, t.tid);
       return { tid: t.tid, wp: winPct(ts), playoff: ts.playoffRound >= 1, draw: draw(t.tid) };
     })
-    .sort((a, b) => a.wp - b.wp || a.draw - b.draw)
+    .sort((a, b) => a.wp - b.wp || (round === 1 ? a.draw - b.draw : b.draw - a.draw))
     .map(({ tid, playoff }) => ({ tid, playoff }));
 }
 
@@ -152,8 +154,8 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   }
   const lotteryOrder = [...winners, ...remaining];
   const firstRound = [...lotteryOrder.map((x) => x.tid), ...playoff.map((r) => r.tid)];
-  // the second round has no lottery: straight reverse order of record across the whole league
-  const secondRound = recs.map((r) => r.tid);
+  // the second round has no lottery: straight reverse order of record across the whole league, ties the other way round
+  const secondRound = draftStandings(league, 2).map((r) => r.tid);
   const assign = (round: 1 | 2, order: number[]) => {
     order.forEach((origTid, i) => {
       const dp = league.draftPicks.find((d) => d.season === season && d.round === round && d.originalTid === origTid);
@@ -273,6 +275,7 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
   if (dp.tradedFrom) p.tradedFrom = dp.tradedFrom;
   const team = league.teams[dp.tid];
   team.rotation.order.push(p.pid);
+  numberTeam(league, dp.tid);
   league.draftPicks = league.draftPicks.filter((d) => d.dpid !== dp.dpid);
   addNews(league, { kind: 'draft', text: `#${overall}: ${team.abbrev} select ${playerName(p)} (${p.pos}, ${p.college || p.country}).`, tids: [dp.tid], pids: [p.pid] });
   if (dp.round === 1 || dp.tid === league.userTid) logMove(league, 'draft', dp.tid, p, { note: `#${overall}` });

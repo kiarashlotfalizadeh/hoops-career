@@ -27,10 +27,12 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
+import { freezeRecordNames } from './records';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
+import { allStarSaturday } from './allStarSaturday';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
@@ -55,8 +57,10 @@ import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openi
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
+import { coachingCarousel } from './coaches';
 import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
+import { retireNumbers } from './jerseys';
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -227,6 +231,10 @@ export function advanceDay(league: League) {
       periodic(league, rng);
       if (league.day === league.allStarDay) {
         selectAllStars(league);
+        // a knock short enough to keep an All-Star his place heals over the break, for everyone
+        for (const p of Object.values(league.players)) if (p.tid >= 0 && p.injury && !missesAllStarGame(p)) while (p.injury) healOneGame(league, p, rng);
+        // the Three-Point and Slam Dunk Contests, on a random stream of their own
+        allStarSaturday(league);
         playAllStarGame(league, rng);
       }
     }
@@ -358,6 +366,8 @@ function retirements(league: League, rng: Rng) {
         p.hof = true;
         p.awards.push({ season: league.season, type: 'Hall of Fame' });
       }
+      // the franchises he was a legend for retire his number
+      retireNumbers(league, p);
       // news: still a good player, or a decorated career (a few All-Star or All-NBA nods)
       if (p.ovr >= 76 || score >= 8 || wasTid === league.userTid) retiredNow.push(`${playerName(p)}${p.hof ? ' (Hall of Fame)' : ''}`);
     }
@@ -396,6 +406,8 @@ function endPlayoffs(league: League) {
     });
   }
   ownerEvaluation(league);
+  // AI owners review their coaches too (on a random stream of their own)
+  coachingCarousel(league);
   withRng(league, (rng) => {
     retirements(league, rng);
     league.phase = 'draftLottery';
@@ -588,7 +600,7 @@ export function newSeason(league: League): boolean {
   }
   league.games = league.games
     .filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid))
-    // (lineups stay, about 2 KB a game: the lineup screen looks back a season)
+    // (lineups stay, about 1.4 KB a game: the lineup screen looks back a season)
     .map((g) => ({ ...g, pbp: undefined, shots: undefined, flow: undefined, flowPeriods: undefined, flowT: undefined, flowPoss: undefined }));
   league.playIn = [];
   league.playoffs = [];
@@ -701,6 +713,8 @@ function compactRetired(league: League) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
     const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
     if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5))) {
+      // a night of his in the record book keeps his name
+      freezeRecordNames(league, p);
       delete league.players[p.pid];
       continue;
     }

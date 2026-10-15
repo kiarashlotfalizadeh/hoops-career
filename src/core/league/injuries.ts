@@ -1,6 +1,7 @@
 import type { Injury, League, Player } from '../types';
 import { Rng, clamp } from '../random';
 import { addInbox, addNews, age, playerName } from './helpers';
+import { refreshPlayerDerived } from '../playerGen';
 
 interface InjuryType {
   name: string;
@@ -77,6 +78,8 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
     p.ratings.spd = clamp(p.ratings.spd - hit, 1, 100);
     p.ratings.ath = clamp(p.ratings.ath - hit * 1.1, 1, 100);
     p.injuryProne = clamp(p.injuryProne + 0.1, 0, 1);
+    // his OVR shows it now, not at the next new season
+    refreshPlayerDerived(p, league.season, league.ovrScale);
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;

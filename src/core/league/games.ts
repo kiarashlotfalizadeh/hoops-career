@@ -16,6 +16,9 @@ import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneStat } from '../analysis/milestones';
 import { gameKeys, gradeKey } from '../analysis/keys';
+import { recapFacts } from '../analysis/quotes';
+import { recordGame, recordNews } from './records';
+import { numberTeam } from './jerseys';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -56,60 +59,6 @@ function benchTwoWays(rot: Rotation, players: Player[]) {
   rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 
-/** Numbers a newcomer picks from first (any free number from 0-99 after that). */
-export const JERSEYS = [
-  '0',
-  '1',
-  '2',
-  '3',
-  '4',
-  '5',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12',
-  '13',
-  '14',
-  '15',
-  '17',
-  '20',
-  '21',
-  '22',
-  '23',
-  '24',
-  '25',
-  '30',
-  '31',
-  '32',
-  '33',
-  '34',
-  '35',
-  '41',
-  '44',
-  '55',
-];
-
-/**
- * One number per player on a team: players who already wore theirs here keep them (then the
- * longest-serving), and a draftee, signing or trade arrival whose number is taken picks a free one.
- */
-function settleJerseys(players: Player[], incumbents: Set<number>) {
-  const order = [...players].sort((a, b) => Number(incumbents.has(b.pid)) - Number(incumbents.has(a.pid)) || a.joinedSeason - b.joinedSeason || a.pid - b.pid);
-  const used = new Set<string>();
-  for (const p of order) {
-    if (p.jersey && !used.has(p.jersey)) {
-      used.add(p.jersey);
-      continue;
-    }
-    let free = JERSEYS.filter((j) => !used.has(j));
-    if (!free.length) free = Array.from({ length: 100 }, (_, i) => String(i)).filter((j) => !used.has(j));
-    p.jersey = free[(Math.imul(p.pid, 0x9e3779b1) >>> 0) % free.length];
-    used.add(p.jersey);
-  }
-}
-
 function bestPresetsChanged(team: Team, players: Player[]): boolean {
   const best = rankedPresets(team, players);
   return best.off[0] !== team.tactics.offPreset || best.def[0] !== team.tactics.defPreset;
@@ -121,9 +70,7 @@ export function ensureRotation(league: League, tid: number) {
   const players = teamPlayers(league, tid);
   const pids = new Set(players.map((p) => p.pid));
   const rot = team.rotation;
-  // (arrivals are already in the rotation order: the incumbents are who was numbered at the last game)
-  settleJerseys(players, new Set(team.numbered ?? rot.order));
-  team.numbered = players.map((p) => p.pid);
+  numberTeam(league, tid, players);
   const stale = rot.order.some((pid) => !pids.has(pid)) || players.some((p) => !rot.order.includes(p.pid));
   const isUser = tid === league.userTid;
   if (!isUser || !rot.manual) {
@@ -325,6 +272,14 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   if (g.type !== 'allstar' && (g.home === league.userTid || g.away === league.userTid)) {
     const keys = gameKeys(league, g);
     if (keys.length) res.keys = keys.map((k) => gradeKey(k, res, g.home === league.userTid ? 0 : 1));
+    // and what its quotes read that the save doesn't keep for good (who got hurt, the winner's low point)
+    Object.assign(
+      res,
+      recapFacts(
+        res,
+        sim.injuries.filter((i) => i.tid === league.userTid).map((i) => i.pid),
+      ),
+    );
   }
   g.played = true;
   // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
@@ -430,9 +385,12 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.adjustments;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   } else {
+    const side = g.home === league.userTid ? 0 : 1;
     // the game plan the other coach brought (kept before the first save: a stored result isn't written again)
-    const plan = oppPlanIn(sim, g.home === league.userTid ? 1 : 0);
+    const plan = oppPlanIn(sim, (1 - side) as 0 | 1);
     if (plan) res.oppPlan = plan.items.map((it) => it.text);
+    // the lineup screen reads the user's own units, every one of them (the other side's aren't read)
+    if (res.lineups) res.lineups = res.lineups.filter((l) => l.t === side);
   }
   league.games.push(res);
   if (stakesTid !== undefined && before) res.stakes = { tid: stakesTid, before, after: standingLine(league, stakesTid) };
@@ -443,6 +401,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   }
   notableNews(league, res);
   if (g.type === 'regular') milestoneNews(league, sim);
+  // the record book and career highs (results older than last season are pruned, so it's kept now)
+  recordNews(league, res, recordGame(league, res));
 }
 
 const STAT_NEWS: Record<MilestoneStat, string> = { pts: 'scored his', reb: 'grabbed his', ast: 'handed out his' };

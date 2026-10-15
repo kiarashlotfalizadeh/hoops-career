@@ -6,7 +6,7 @@
 // They come only from games played before tonight's date: the preview (before the day's other
 // games), the live game (after them) and the result (recorded later still) all read the same keys.
 
-import type { GameResult, KeyGrade, KeyStat, League, ScheduledGame, TeamBox } from '../types';
+import type { GameResult, KeyGrade, KeyStat, League, ScheduledGame, TeamBox, TeamTotals } from '../types';
 import { playerName } from '../league/helpers';
 
 export interface GameKey {
@@ -87,13 +87,13 @@ interface SeasonAgg {
   scorers: Map<number, { pts: number; gp: number }>;
 }
 
-/** Per-game numbers from a season's regular-season games before `day` (all of them when undefined). */
-function aggregate(league: League, season: number, day: number | undefined, scorersOf: number): SeasonAgg {
+/** Per-game numbers from this season's regular-season games before `day`. */
+function aggregate(league: League, season: number, day: number, scorersOf: number): SeasonAgg {
   const sums = new Map<number, { gp: number; for: Record<string, number>; against: Record<string, number> }>();
   const scorers = new Map<number, { pts: number; gp: number }>();
   const blank = () => Object.fromEntries(TEAM_STATS.map((k) => [k, 0]));
   for (const g of league.games) {
-    if (g.season !== season || g.type !== 'regular' || (day !== undefined && g.day >= day)) continue;
+    if (g.season !== season || g.type !== 'regular' || g.day >= day) continue;
     for (const [me, them] of [
       [g.home, g.away],
       [g.away, g.home],
@@ -123,6 +123,34 @@ function aggregate(league: League, season: number, day: number | undefined, scor
   return { season, teams, scorers };
 }
 
+/**
+ * Per-game numbers from a past season's team totals and season lines: its stored results keep only
+ * the user's games (each opponent's meetings with him are no sample of its season), but every team's
+ * totals stay. They don't split out the paint or fast breaks, so those aren't read from them.
+ */
+function totalsAgg(league: League, season: number, scorersOf: number): SeasonAgg {
+  const teams = new Map<number, TeamAgg>();
+  for (const t of league.teams) {
+    const ts = t.seasons.find((s) => s.season === season);
+    const gp = ts ? ts.won + ts.lost : 0;
+    if (!ts || !gp) continue;
+    const per = (a: TeamTotals, b: TeamTotals) => ({
+      orb: a.orb + b.drb ? (100 * a.orb) / (a.orb + b.drb) : 0,
+      tov: a.tov / gp,
+      tpm: a.tpm / gp,
+      fta: a.fta / gp,
+      ast: a.ast / gp,
+      fastBreak: NaN,
+      paint: NaN,
+    });
+    teams.set(t.tid, { gp, for: per(ts.t, ts.o), against: per(ts.o, ts.t) });
+  }
+  const scorers = new Map<number, { pts: number; gp: number }>();
+  for (const p of Object.values(league.players))
+    for (const s of p.stats) if (s.season === season && s.tid === scorersOf && !s.playoffs && !s.real && s.gp > 0) scorers.set(p.pid, { pts: s.pts, gp: s.gp });
+  return { season, teams, scorers };
+}
+
 const ord = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 
 interface Candidate extends GameKey {
@@ -138,11 +166,11 @@ export function gameKeys(league: League, g: ScheduledGame): GameKey[] {
   const us = league.userTid;
   if (g.home !== us && g.away !== us) return [];
   const them = g.home === us ? g.away : g.home;
-  // this season's games before tonight; with too few, last season's; with none, the coach and the roster
+  // this season's games before tonight; with too few, last season's totals; with none (a new league), the coach and the roster
   let agg = aggregate(league, league.season, g.day, them);
   const enough = (a: SeasonAgg) => (a.teams.get(us)?.gp ?? 0) >= MIN_GAMES && (a.teams.get(them)?.gp ?? 0) >= MIN_GAMES;
   if (!enough(agg)) {
-    const prev = aggregate(league, league.season - 1, undefined, them);
+    const prev = totalsAgg(league, league.season - 1, them);
     agg = enough(prev) ? prev : agg;
   }
   const cands = enough(agg) ? fromNumbers(league, agg, us, them) : fromPriors(league, them);
@@ -191,7 +219,8 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
     const { mean, sd } = spread(signal, stat);
     const v = O[signal][stat];
     const z = (v - mean) / sd;
-    if (z < 0.6) return;
+    // (a number last season's totals don't have isn't read)
+    if (!(z >= 0.6)) return;
     // tonight's number if both play to form: the team's own and what the other one allows, halved
     const mine = side === 'us' ? U : O;
     const other = side === 'us' ? O : U;
@@ -261,7 +290,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
         id: 'star',
         title: `Make ${p.lastName} work`,
         goal: `Hold ${playerName(p)} to ${plural(target, 'pts')} or fewer`,
-        why: `He scores ${ppg.toFixed(1)} a game${label}, the most on his team.`,
+        why: label ? `He scored ${ppg.toFixed(1)} a game${label}, the most on his team.` : `He scores ${ppg.toFixed(1)} a game, the most on his team.`,
         side: 'them',
         stat: 'pts',
         pid: p.pid,

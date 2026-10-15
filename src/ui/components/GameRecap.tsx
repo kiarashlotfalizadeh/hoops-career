@@ -23,6 +23,7 @@ import {
 } from '../../core/analysis/quotes';
 import { COMEBACK_WP, playAt, swingWords, TURN_MIN, wpStory, wpText, type WpPoint } from '../../core/analysis/winProb';
 import { markText, milestonesIn } from '../../core/analysis/milestones';
+import { recordWhat, recordsHeld } from '../../core/league/records';
 import { seriesLabel } from '../../core/league/playoffs';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
@@ -68,6 +69,7 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
   const quotes = useMemo(() => (us ? postGameQuotes(league, res, rep) : []), [us, league, res, rep]);
   const story = useMemo(() => (us ? wpStory(res) : null), [us, res]);
   const marks = useMemo(() => (us ? milestonesIn(league, res) : []), [us, league, res]);
+  const records = useMemo(() => (us ? recordsHeld(league, res) : []), [us, league, res]);
   const [pressFx, setPressFx] = useState<string | null>(null);
   if (!us) return null;
   const them = us === res.home ? res.away : res.home;
@@ -161,7 +163,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
     >
       <div className="col" style={{ gap: 12 }}>
         {pogBox && (
-          <Link to={`/player/${pogBox.pid}`} className={`gd-pog ${pogMine ? 'mine' : ''}`} aria-label={`Player of the game: ${pogP ? playerName(pogP) : pogBox.name}`}>
+          // named by what it shows: "Player of the game · DET Jalen Duren 12 pts · …"
+          <Link to={`/player/${pogBox.pid}`} className={`gd-pog ${pogMine ? 'mine' : ''}`}>
             {pogP ? <Avatar p={pogP} /> : <TeamLogo tid={pogTeam?.tid ?? them.tid} size={40} decorative />}
             <div className="grow" style={{ minWidth: 0 }}>
               <div className="tiny dim upper bold">Player of the game{pogMine ? '' : ` · ${pogTeam?.abbrev ?? ''}`}</div>
@@ -254,6 +257,22 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
               </span>
             </div>
           )}
+          {records.length > 0 && (
+            <div className="gd-line small">
+              <span className="bold">Record:</span>
+              <span>
+                {records
+                  .slice(0, 2)
+                  .map((r) => {
+                    const who = r.pid !== undefined ? `${nameOf(r.pid, '')}'s` : `${league.teams[r.tid]?.abbrev ?? '?'}'s`;
+                    const whose = r.scope === 'league' ? 'league' : `${league.teams[r.tid]?.name ?? 'franchise'}`;
+                    const what = r.team && r.stat === 'margin' ? `${r.v}-point win` : recordWhat(r);
+                    return `${who} ${what}, a ${whose} ${r.book === 'post' ? 'playoff ' : ''}record`;
+                  })
+                  .join('; ')}
+              </span>
+            </div>
+          )}
           {playIn && (
             <div className="gd-line small">
               <span className="bold">Play-in:</span>
@@ -316,12 +335,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
             {elsewhere.map((g) => {
               const hw = g.home.pts > g.away.pts;
               return (
-                <Link
-                  key={g.gid}
-                  to={`/game/${g.gid}`}
-                  className="gd-row small"
-                  aria-label={`${league.teams[g.away.tid].name} ${g.away.pts}, ${league.teams[g.home.tid].name} ${g.home.pts}`}
-                >
+                // named by what it shows: "MIA 120 @ DET 117 FINAL"
+                <Link key={g.gid} to={`/game/${g.gid}`} className="gd-row small">
                   <TeamLogo tid={g.away.tid} size={20} decorative />
                   <span className={`num ${hw ? 'dim' : 'bold'}`}>
                     {league.teams[g.away.tid].abbrev} {g.away.pts}

@@ -4,12 +4,14 @@ import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { coachName, makeTeam } from '../teamFactory';
+import { seedCoaches } from './coaches';
 import { DEFAULT_SCALE, blankMood, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
-import { JERSEYS, ensureRotation } from './games';
+import { ensureRotation } from './games';
+import { JERSEYS } from './jerseys';
 import { updateMorale } from './morale';
 import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
@@ -255,6 +257,8 @@ export function createLeague(opts: CreateOpts): League {
     while (coaches.has(t.coach.name)) t.coach.name = coachName(coachRng);
     coaches.add(t.coach.name);
   }
+  // the coach registry starts with them, each in charge from the league's first season
+  seedCoaches(league);
 
   if (opts.seed && opts.seed.players.length) {
     // the first season the seed's stats cover

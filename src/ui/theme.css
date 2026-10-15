@@ -326,6 +326,15 @@ h3 {
   color: var(--text-dim);
   font-weight: 600;
 }
+/* a 360px phone: the status line under the team name ("Free Agency · day 12") gets the room it needs */
+@media (max-width: 380px) {
+  .topbar-inner {
+    gap: 6px;
+  }
+  .topbar .iconbtn {
+    width: 38px;
+  }
+}
 .iconbtn {
   width: 42px;
   height: 42px;
@@ -450,6 +459,19 @@ h3 {
   background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface-2)), var(--surface));
   /* dim text keeps 4.5:1 on a gold team's tint */
   --text-dim: var(--text-2);
+}
+/* the other surfaces tinted with the team's colour (your standings row, today's game, the chosen chip,
+   playbook, asset or player of the game): dim text and red figures lighter, so they keep 4.5:1 on any tint */
+.chip.on,
+table.stats tr.me,
+.lg-st-row.me,
+.lg-g-row.today,
+.bk-s.me,
+.fo-asset.on,
+.gd-pog.mine,
+.card.preset.on {
+  --text-dim: var(--text-2);
+  --bad: #ff7686;
 }
 .card.clickable:active {
   transform: scale(0.995);

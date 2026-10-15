@@ -1,11 +1,11 @@
-import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
+import { AccoladeChips, TabBar, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, MessageCircle, PenLine } from 'lucide-react';
-import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { ArrowLeftRight, MessageCircle, PenLine, Scale } from 'lucide-react';
+import { useLeague, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
-import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel, type Composites } from '../../core/ratings';
+import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel } from '../../core/ratings';
 import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, pct, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
@@ -26,53 +26,14 @@ import { PlayerMoves } from '../league/MovesTab';
 import { deadlineLabel } from '../../core/league/rfa';
 import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
+import { REC_LABEL, REC_STATS, careerHighOf } from '../../core/league/records';
+import { careerOnRecord } from '../../core/analysis/milestones';
+import { fmtDate } from '../../core/league/helpers';
+import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
+import { PlayerPicker } from '../components/PlayerPicker';
+import { compareHref } from '../compare';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
-
-interface SkillDef {
-  key: string;
-  label: string;
-  get: (c: Composites, p: Player) => number;
-  help: string;
-}
-
-const SKILLS: SkillDef[] = [
-  {
-    key: 'create',
-    label: 'Shot creation',
-    get: (c) => (c.create + c.pnrHandle) / 2,
-    help: 'Beating a defender and running pick-and-roll. Drives usage in pick-and-rolls and isolations.',
-  },
-  { key: 'three', label: 'Three-point shooting', get: (c) => (c.c3 + c.pu3) / 2, help: 'Catch-and-shoot and pull-up threes. Also creates spacing for teammates.' },
-  { key: 'mid', label: 'Mid-range', get: (c) => c.midShot, help: 'Pull-ups and floaters, the answer to drop coverage.' },
-  { key: 'rim', label: 'Finishing', get: (c) => c.rim, help: 'Converting at the rim through contact and rim protectors.' },
-  { key: 'pass', label: 'Playmaking', get: (c) => c.passing, help: 'Finding the open man: punishes blitzes, doubles and heavy help.' },
-  { key: 'sec', label: 'Ball security', get: (c) => c.ballSec, help: 'Avoiding turnovers under pressure and traps.' },
-  { key: 'perd', label: 'Perimeter defense', get: (c) => c.perDef, help: 'Containing guards and wings on the ball. Key for switching.' },
-  { key: 'intd', label: 'Interior defense', get: (c) => c.intDef, help: 'Holding position against post-ups and walling off drives.' },
-  { key: 'rimp', label: 'Rim protection', get: (c) => c.rimProt, help: 'Altering shots at the rim. Anchors drop coverage and zones.' },
-  { key: 'reb', label: 'Rebounding', get: (c) => (c.orb + c.drb) / 2, help: 'Securing boards on both ends.' },
-  { key: 'ath', label: 'Athleticism', get: (_c, p) => (p.ratings.spd + p.ratings.ath) / 2, help: 'Speed and explosiveness. Declines from the late 20s.' },
-];
-
-function useSkillPercentiles(league: League) {
-  return useLeagueMemo(() => {
-    const pool = Object.values(league.players).filter((p) => p.tid >= 0);
-    const sorted: Record<string, number[]> = {};
-    for (const s of SKILLS) sorted[s.key] = pool.map((p) => s.get(composites(p.ratings), p)).sort((a, b) => a - b);
-    return (key: string, val: number) => {
-      const arr = sorted[key];
-      let lo = 0;
-      let hi = arr.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (arr[mid] < val) lo = mid + 1;
-        else hi = mid;
-      }
-      return arr.length ? Math.min(99, Math.max(1, Math.round((lo / arr.length) * 100))) : 50;
-    };
-  }, [league]);
-}
 
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
 const AVERAGE_OVR = 74;
@@ -132,6 +93,7 @@ export default function PlayerView() {
   // the trade-request mail links here with ?meet=1
   const [params] = useSearchParams();
   const [meeting, setMeeting] = useState(() => params.get('meet') === '1');
+  const [comparing, setComparing] = useState(false);
   const pctile = useSkillPercentiles(league);
   if (!p) {
     return (
@@ -187,7 +149,17 @@ export default function PlayerView() {
 
   return (
     <main className="page">
-      <PageHeader title={p.lastName} sub={status} back backTo={mine ? '/roster' : team ? `/team/${team.tid}` : '/'} />
+      <PageHeader
+        title={p.lastName}
+        sub={status}
+        back
+        backTo={mine ? '/roster' : team ? `/team/${team.tid}` : '/'}
+        right={
+          <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setComparing(true)}>
+            <Scale size={16} /> Compare
+          </button>
+        }
+      />
       <Card accent>
         <div className="row top" style={{ gap: 14 }}>
           <Avatar p={p} size="lg" />
@@ -236,7 +208,7 @@ export default function PlayerView() {
         ) : null}
       </Card>
 
-      <Segmented
+      <TabBar
         value={tab}
         onChange={setTab}
         label="Player sections"
@@ -266,7 +238,7 @@ export default function PlayerView() {
                 return (
                   <div key={s.key} className="ratingrow" style={{ gridTemplateColumns: '128px 1fr 44px' }}>
                     <span className="dim2">{s.label}</span>
-                    <Bar value={pc} color={pc >= 85 ? 'var(--tier-elite)' : pc >= 65 ? 'var(--good)' : pc >= 35 ? 'var(--info)' : 'var(--bad)'} />
+                    <Bar value={pc} color={skillColor(pc)} />
                     <span className="num right small">
                       {pc}
                       <span className="dim tiny">{ordinalSuffix(pc)}</span>
@@ -559,6 +531,7 @@ export default function PlayerView() {
       <Sheet open={meeting && mine && (wantsMeeting(p) || !!p.promise)} onClose={() => setMeeting(false)} title={`Meet with ${p.lastName}`}>
         <MeetingPanel league={league} p={p} />
       </Sheet>
+      <PlayerPicker open={comparing} onClose={() => setComparing(false)} anchor={p} title={`Compare ${p.lastName} with…`} onPick={(other) => nav(compareHref(p.pid, other))} />
     </main>
   );
 }
@@ -618,7 +591,41 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
       />
       {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
       <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those, +/- only for simulated seasons.</div>
+      {!po && <CareerHighs p={p} league={league} />}
     </>
+  );
+}
+
+/** His regular-season career highs: the whole career's when it's all in this league's book, otherwise since the book began. */
+function CareerHighs({ p, league }: { p: Player; league: League }) {
+  const highs = p.highs;
+  if (!highs || !Object.keys(highs).length) return null;
+  const since = league.records?.since ?? league.startSeason;
+  const first = Math.min(...p.stats.filter((s) => !s.real).map((s) => s.season));
+  const whole = !p.stats.some((s) => s.real) && careerOnRecord(p, league.season) && first >= since;
+  const stored = new Set(league.games.map((g) => g.gid));
+  return (
+    <Card title={whole ? 'Career highs' : `Highs since ${seasonLabel(since)}`}>
+      <div className="lg-team5">
+        {REC_STATS.filter((k) => highs[k]).map((k) => {
+          const h = careerHighOf(p, k)!;
+          const text = `vs ${league.teams[h.opp]?.abbrev ?? '?'} · ${fmtDate(h.season, h.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+          return (
+            <div key={k} className="lg-rec-row lbl">
+              <span className="small dim2">{REC_LABEL[k][0]}</span>
+              {stored.has(h.gid) ? (
+                <Link to={`/game/${h.gid}`} className="tiny dim ellipsis">
+                  {text}
+                </Link>
+              ) : (
+                <span className="tiny dim ellipsis">{text}</span>
+              )}
+              <span className="num bold">{h.v}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 

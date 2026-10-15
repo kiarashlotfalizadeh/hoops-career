@@ -45,7 +45,7 @@ import {
   stretchDeadMoney,
   valueScore,
 } from '../../core/league/contracts';
-import { capHolds, expiringPlayers, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
+import { bidOnException, capHolds, expiringPlayers, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT } from '../../core/league/tenDay';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
@@ -374,10 +374,16 @@ function ExceptionsBlock({ league, season }: { league: League; season: number })
     .reverse()
     .map((k) => {
       const room = userExceptionRoom(league, k, season);
-      const bid = league.faBids?.find((b) => b.route === k);
+      const bid = bidOnException(league, k);
       const why =
         exceptionUsedReason(league, league.userTid, k, season) ??
-        (bid ? `Held for your pending offer to ${playerName(league.players[bid.pid])}.` : room <= 0 ? 'Only for a team under the tax line.' : null);
+        (bid
+          ? bid.route === k
+            ? `Held for your pending offer to ${playerName(league.players[bid.pid])}.`
+            : `Gone while your offer to ${playerName(league.players[bid.pid])} holds your cap space: a team that uses its space gets the room exception instead.`
+          : room <= 0
+            ? 'Only for a team under the tax line.'
+            : null);
       return { k, room, why, capped: room > 0 && room < exceptionAmount(league, k, season) };
     });
   return (

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { faAdvance, newSeason, startFreeAgency } from '../league/season';
 import { CAP_FOR, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, teamPlayers } from '../league/helpers';
-import { EVEN_PREFS, PREF_KEYS, askingContract, playerPrefs, signPlayer, teamAppeal } from '../league/contracts';
+import { EVEN_PREFS, PREF_KEYS, askingContract, capSpace, exceptionAmount, heldSalary, playerPrefs, signPlayer, teamAppeal } from '../league/contracts';
 import {
   FA_DAYS,
   bidFloor,
@@ -199,7 +199,8 @@ describe('competing offers for top free agents', () => {
     expect(roleAsk.amount).toBeGreaterThan(5_000);
     expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/after your pending offers/);
     expect(userOffer(l, role.pid, roleAsk.amount, roleAsk.years).ok).toBe(false);
-    // the mid-level: with it open, a third top player can lean on it, and then nothing else can
+    // the mid-level: while a's offer holds the cap space it's gone (using the space ends it, as a
+    // pending mid-level offer keeps the space shut)
     l.teams[U].mleSeason = undefined;
     const c = freeAgent(
       l,
@@ -207,17 +208,22 @@ describe('competing offers for top free agents', () => {
       78,
     );
     const cAsk = askingContract(l, c, U);
-    const mle = userMleRoom(l, s, c.pid);
     expect(marqueeFA(l, c)).toBe(true);
+    expect(userMleRoom(l, s, c.pid)).toBe(0);
+    expect(userBid(l, c.pid, cAsk.amount, cAsk.years).ok).toBe(false);
+    // over the cap with a's offer withdrawn, a third top player can lean on it, and then nothing else can
+    expect(withdrawBid(l, a.pid).ok).toBe(true);
+    l.teams[U].deadMoney.push({ pid: -4, name: 'w', season: s, amount: askA + 5_000 });
+    const mle = userMleRoom(l, s, c.pid);
     expect(mle).toBeGreaterThanOrEqual(bidFloor(l, c, cAsk.years));
     expect(userBid(l, c.pid, Math.min(mle, cAsk.amount), cAsk.years).ok).toBe(true);
     expect(pendingBid(l, c.pid)!.route).toBe('mle');
     expect(userMleRoom(l, s)).toBe(0);
-    expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/after your pending offers\. Over the cap you can offer his minimum \(\$[\d.]+M\)\.$/);
+    expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/Over the cap you can offer his minimum \(\$[\d.]+M\)\.$/);
     withdrawBid(l, c.pid);
     l.teams[U].mleSeason = s;
-    // withdrawn, a's room is free again
-    expect(withdrawBid(l, a.pid).ok).toBe(true);
+    l.teams[U].deadMoney.pop();
+    // with a's offer withdrawn, its room is free again
     expect(userOffer(l, role.pid, roleAsk.amount, roleAsk.years).ok).toBe(true);
     // roster spots: 20 signed and one pending offer fill the 21
     l.teams[U].deadMoney = [];
@@ -255,6 +261,94 @@ describe('competing offers for top free agents', () => {
     expect(payroll(l, U, s) + ask).toBeGreaterThan(CAP_FOR(l, s).salaryCap);
     resolveBids(l);
     expect(star.tid).toBe(U);
+  });
+
+  it('a pending offer on cap space ends the mid-level: no signing on it can land beside the space signing', () => {
+    const { l, s, cap, open } = summer();
+    const [star] = stars(l, 1);
+    open(U, 41, 0.5);
+    const ask = askingContract(l, star, U).amount;
+    l.teams[U].deadMoney.push({ pid: -2, name: 'y', season: s, amount: cap.salaryCap - payroll(l, U, s) - ask - 2_000 });
+    l.teams[U].mleSeason = undefined;
+    // a player the room exception can't pay but the mid-level could
+    const role = freeAgent(
+      l,
+      freeAgents(l).find((p) => p.pid !== star.pid)!,
+      76,
+    );
+    const roleAsk = askingContract(l, role, U);
+    expect(marqueeFA(l, role)).toBe(false);
+    expect(roleAsk.amount).toBeGreaterThan(exceptionAmount(l, 'room', s));
+    expect(roleAsk.amount).toBeLessThan(exceptionAmount(l, 'mle', s));
+    expect(userMleRoom(l, s, role.pid)).toBeGreaterThan(roleAsk.amount);
+    expect(bidAtAsk(l, star).ok).toBe(true);
+    expect(pendingBid(l, star.pid)!.route).toBe('space');
+    expect(userMleRoom(l, s, role.pid)).toBe(0);
+    const res = userOffer(l, role.pid, roleAsk.amount, Math.min(4, roleAsk.years));
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/uses your cap space, and a team that uses its space loses the mid-level/);
+    expect(role.tid).toBe(FREE_AGENT);
+    resolveBids(l);
+    expect(star.tid).toBe(U);
+    expect(l.teams[U]).toMatchObject({ spaceSeason: s, mleSeason: undefined });
+    expect(payroll(l, U, s)).toBeLessThanOrEqual(cap.salaryCap);
+  });
+
+  it('an exception signing counts against a pending offer on cap space; only a minimum signing could have come after it', () => {
+    const { l, s, cap, open } = summer();
+    const [star] = stars(l, 1);
+    open(U, 41, 0.5);
+    const ask = askingContract(l, star, U).amount;
+    l.teams[U].deadMoney.push({ pid: -2, name: 'y', season: s, amount: cap.salaryCap - payroll(l, U, s) - ask - 1_000 });
+    l.teams[U].baeSeason = undefined;
+    expect(bidAtAsk(l, star).ok).toBe(true);
+    const others = freeAgents(l).filter((p) => p.pid !== star.pid);
+    const bae = exceptionAmount(l, 'bae', s);
+    const cheap = others.find((p) => askingContract(l, p, U).amount <= CAP_FOR(l, s).vetMin)!;
+    const role = freeAgent(
+      l,
+      others.find((p) => p !== cheap)!,
+      70,
+    );
+    const roleAsk = askingContract(l, role, U);
+    expect(roleAsk.amount).toBeGreaterThan(1_000);
+    expect(roleAsk.amount * 1.1).toBeLessThanOrEqual(bae);
+    // (a bi-annual deal runs two years: his price for that length)
+    const years = Math.min(2, roleAsk.years);
+    expect(userOffer(l, role.pid, Math.min(bae, Math.ceil((roleAsk.amount * (1 + 0.03 * (roleAsk.years - years))) / 50) * 50), years).ok).toBe(true);
+    expect(l.teams[U].baeSeason).toBe(s);
+    expect(pendingBid(l, star.pid)!.slack).toBeUndefined();
+    const min = askingContract(l, cheap, U);
+    expect(userOffer(l, cheap.pid, min.amount, min.years).ok).toBe(true);
+    expect(pendingBid(l, star.pid)!.slack).toBe(cheap.contract.salaries[0]);
+  });
+
+  it("a contender's offer stays within the cap space its market holds leave, and wins only on a route it can pay with", () => {
+    const { l, s, cap, open } = summer();
+    open(U, 20, 0.1);
+    open(R, 60, 0.9);
+    l.teams[R].strategy = 'contend';
+    const [star] = stars(l, 1);
+    const askR = askingContract(l, star, R);
+    // space for his ask and 5% more, before a restricted free agent's cap hold of $1M
+    const more = Math.round((askR.amount * 1.05) / 50) * 50;
+    l.teams[R].deadMoney.push({ pid: -5, name: 'v', season: s, amount: cap.salaryCap - payroll(l, R, s) - more - 200 });
+    const rfa = freeAgents(l).find((p) => p.pid !== star.pid)!;
+    rfa.rfa = { tid: R, qo: 1_000, hold: 1_000 };
+    const space = capSpace(l, R, s);
+    expect(space).toBeGreaterThanOrEqual(askR.amount);
+    expect(space).toBeLessThan(more);
+    const [offer] = faInterest(l, star);
+    expect(offer).toMatchObject({ tid: R, route: 'space' });
+    expect(offer.amount).toBeGreaterThanOrEqual(askR.amount);
+    expect(offer.amount).toBeLessThanOrEqual(space);
+    // the user's floor loses to it, and R pays with its space
+    expect(userBid(l, star.pid, bidFloor(l, star, askR.years), askR.years).ok).toBe(true);
+    resolveBids(l);
+    expect(star.tid).toBe(R);
+    expect(star.contract.salaries[0]).toBe(offer.amount);
+    expect(l.teams[R].spaceSeason).toBe(s);
+    expect(payroll(l, R, s) + heldSalary(l, R, s)).toBeLessThanOrEqual(cap.salaryCap);
   });
 
   it("AI teams never sign a player weighing the user's offer before his decision day", () => {

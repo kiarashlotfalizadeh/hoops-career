@@ -172,7 +172,7 @@ export const PROJECTION_NOTE = 'Projected slots follow the current standings, wo
 export function pickProjection(league: League): (d: DraftPick) => number | undefined {
   const played = league.teams.some((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost > 0);
   const recs = draftStandings(league);
-  const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: recs };
+  const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: draftStandings(league, 2) };
   return (d) => (!played || d.pick || d.season !== league.season ? undefined : overallPick(league, d.round, order[d.round].findIndex((r) => r.tid === d.originalTid) + 1));
 }
 
@@ -207,7 +207,7 @@ export function careerTotals(p: Player, tid?: number) {
 }
 
 /** Accolade counts such as "2× MVP", ordered by prestige. */
-export function accolades(p: Player): { label: string; n: number; gold?: boolean }[] {
+export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number; gold?: boolean }[] {
   const count = (pred: (t: string) => boolean) => p.awards.filter((a) => pred(a.type)).length;
   const out: { label: string; n: number; gold?: boolean }[] = [
     { label: 'Champion', n: count((t) => t === 'Champion'), gold: true },
@@ -219,6 +219,8 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
     { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
+    { label: '3-Point Contest', n: count((t) => t === 'Three-Point Contest') },
+    { label: 'Dunk Contest', n: count((t) => t === 'Slam Dunk Contest') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },
     { label: '6MOY', n: count((t) => t === 'Sixth Man of the Year') },
@@ -227,6 +229,9 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
   ];
   return out.filter((x) => x.n > 0);
 }
+
+/** All-Star Saturday's contests: a token in a career's honours, never a reason on its own to remember one (see careerValue in History). */
+const CONTEST_AWARDS = new Set(['Three-Point Contest', 'Slam Dunk Contest']);
 
 export function accoladeScore(p: Player) {
   return p.awards.reduce(
@@ -248,7 +253,9 @@ export function accoladeScore(p: Player) {
                     ? 1
                     : a.type === 'Hall of Fame'
                       ? 0
-                      : 0.5),
+                      : CONTEST_AWARDS.has(a.type)
+                        ? 0.25
+                        : 0.5),
     0,
   );
 }

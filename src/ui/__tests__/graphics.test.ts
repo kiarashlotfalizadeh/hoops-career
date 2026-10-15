@@ -149,17 +149,42 @@ describe('broadcast graphics', () => {
     const { sim } = game(9);
     const logs: PossLog[] = [];
     let view = snapshot(sim);
-    while (!sim.over && !(view.q === 4 && view.clock < 600)) {
+    // late (the 4th quarter), with someone past the 20 points a season high needs to be worth a graphic
+    const topPts = (v: Drawn) => Math.max(...[...v.box.home.players, ...v.box.away.players].map((p) => p.pts));
+    while (!sim.over && !(view.q === 4 && view.clock < 600 && topPts(view) > 20)) {
       sim.step();
       logs.push(...sim.drainLogs());
       view = snapshot(sim);
     }
     const top = [...view.box.home.players, ...view.box.away.players].sort((a, b) => b.pts - a.pts)[0];
+    expect([view.q, top.pts > 20]).toEqual([4, true]);
     const with_ = (high: PlayerBefore['high']) => nextGraphic(input(view, logs, { before: new Map([[top.pid, { high }]]) }));
     expect(with_({ pts: top.pts + 2, games: 20, career: false })).toMatchObject({ kind: 'watch', text: `P${top.pid}: ${top.pts} points, 2 off his season high (${top.pts + 2})` });
-    if (top.pts > 20) expect(with_({ pts: 20, games: 20, career: false })).toMatchObject({ kind: 'high', text: `P${top.pid}: ${top.pts} points, past his season high of 20` });
+    expect(with_({ pts: 20, games: 20, career: false })).toMatchObject({ kind: 'high', text: `P${top.pid}: ${top.pts} points, past his season high of 20` });
     expect(with_({ pts: top.pts - 1, games: 20, career: true })?.tag).toBe('New career high');
     // too few games, or too low a high, says nothing
     expect(with_({ pts: top.pts - 1, games: 5, career: false })?.kind).not.toBe('high');
+  });
+});
+
+describe('record book graphics', () => {
+  it('a franchise or league scoring record broken goes up, the league one first; one within reach late is a watch', () => {
+    const { sim, views, logs } = playThrough(23);
+    const end = views[views.length - 1];
+    const top = [...end.box.home.players].sort((a, b) => b.pts - a.pts)[0];
+    expect(top.pts).toBeGreaterThan(10);
+    const at = (records: PlayerBefore['records']) =>
+      graphicCandidates(input(end, logs, { before: new Map([[top.pid, { records }]]) })).filter((g) => g.kind === 'record' || g.id.startsWith('rec-'));
+    // past the franchise's record but not the league's
+    expect(at({ team: top.pts - 1, teamName: 'Hawks', league: top.pts + 5, playoffs: false })).toEqual([
+      expect.objectContaining({ id: `rec-t-${top.pid}`, tag: 'Franchise record', text: `P${top.pid}: ${top.pts} points, a Hawks record` }),
+    ]);
+    // past both: only the league's is called
+    expect(at({ team: top.pts - 1, teamName: 'Hawks', league: top.pts - 1, playoffs: true }).map((g) => g.tag)).toEqual(['League playoff record']);
+    // short of it: nothing early, a watch in the fourth when it's a real record (40+)
+    const watch = at({ team: top.pts + 3, teamName: 'Hawks', league: 90, playoffs: false });
+    if (end.q >= 4 && top.pts + 3 >= 40) expect(watch.map((g) => g.kind)).toEqual(['watch']);
+    else expect(watch).toEqual([]);
+    expect(sim.over).toBe(true);
   });
 });
