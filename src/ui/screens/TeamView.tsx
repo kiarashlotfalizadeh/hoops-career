@@ -22,6 +22,7 @@ import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickPro
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
 import { MovesTab } from '../league/MovesTab';
+import { RetiredBanners } from '../league/RetiredBanners';
 
 const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'moves', 'history'] as const;
 type Tab = (typeof TABS)[number];
@@ -931,6 +932,11 @@ function HistoryTab({ league, tid }: { league: League; tid: number }) {
         <Kpi k="Playoffs" v={apps} />
         <Kpi k="Titles" v={titles} color={titles ? 'var(--tier-elite)' : undefined} />
       </div>
+      {(team.retired?.length ?? 0) > 0 && (
+        <Card title="Retired numbers">
+          <RetiredBanners league={league} tid={tid} small />
+        </Card>
+      )}
       <Card className="flush lg-flat">
         {seasons.map((s) => (
           <div key={s.season} className="lg-season">

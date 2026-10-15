@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Crown, Landmark, Trophy } from 'lucide-react';
+import { ChevronDown, Crown, Landmark, Shirt, Trophy } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { RETIRED } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -9,6 +9,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Chips, Empty, Kpi, Ovr, PageHeader, Segmented } from '../components/ui';
 import { AccoladeChips, OutcomeTag, SectionLabel, accoladeScore, careerTotals, ordinal, seasonOutcome, seasonTeam, shortName, useQueryParam } from '../league/shared';
 import { RecordBook } from '../league/RecordBook';
+import { RetiredBanners } from '../league/RetiredBanners';
 
 type View = 'franchise' | 'league' | 'records' | 'hof';
 
@@ -110,6 +111,14 @@ function Franchise({ league }: { league: League }) {
               </span>
             ))}
           </div>
+        </div>
+      )}
+      {(team.retired?.length ?? 0) > 0 && (
+        <div className="lg-champ">
+          <div className="kicker">
+            <Shirt size={12} style={{ verticalAlign: -1 }} /> Retired numbers
+          </div>
+          <RetiredBanners league={league} tid={tid} />
         </div>
       )}
       <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>

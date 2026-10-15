@@ -127,6 +127,19 @@ export function seasonTotals(p: Player, season: number, playoffs = false): Playe
   return t;
 }
 
+/**
+ * The team he finished a season with: the team of his last line of it (the regular season's, or with
+ * `playoffs` the postseason's), or null without one. Award records carry only the season, so this is
+ * the team an award was won with.
+ */
+export function seasonTid(p: Player, season: number, playoffs = false): number | null {
+  for (let i = p.stats.length - 1; i >= 0; i--) {
+    const s = p.stats[i];
+    if (s.season === season && s.playoffs === playoffs) return s.tid;
+  }
+  return null;
+}
+
 /** News items the save keeps, and how many of the latest injuries and big games always stay. */
 const NEWS_MAX = 400;
 const ROUTINE_KEEP = 100;

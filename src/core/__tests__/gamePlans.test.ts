@@ -18,6 +18,7 @@ import {
 import { buildSimInput, playGame, userGameOnDay } from '../league/games';
 import { migrate } from '../../state/persistence';
 import { teamPlayers } from '../league/helpers';
+import { emptyBook } from '../league/records';
 import type { League, PlayoffSeries } from '../types';
 
 const opponentOf = (l: League) => {
@@ -202,7 +203,7 @@ describe('game plans', () => {
     expect(out.gamePlans![5].items[1].patch).toEqual({ defense: {}, offense: {} });
     expect(out.gamePlans![5].playerD).toEqual({ 7: 'tight' });
     expect(out.gamePlans![6]).not.toHaveProperty('playerD');
-    // a save without any of it loads as it was
-    expect(migrate(structuredClone(l))).toEqual({ ...l, version: out.version });
+    // a save without any of it loads as it was (with the record book a league without one gets: no games, an empty one)
+    expect(migrate(structuredClone(l))).toEqual({ ...l, version: out.version, records: emptyBook(l.season) });
   });
 });
