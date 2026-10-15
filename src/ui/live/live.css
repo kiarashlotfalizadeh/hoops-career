@@ -159,3 +159,69 @@
 .live-transport .seg button {
   padding: 0 9px;
 }
+
+/* ------------------------------------------------------------------ live game: the play label and broadcast graphics, over the backcourt */
+.live-lower {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.live-l3 {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 100%;
+  padding: 5px 12px 6px 10px;
+  border-radius: 10px;
+  border-left: 4px solid var(--accent);
+  background: rgba(6, 8, 12, 0.88);
+  color: #fff;
+  box-shadow: var(--shadow);
+  animation: l3-in 0.3s ease;
+}
+.live-l3-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #c9d1dc;
+}
+.live-l3-text {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+@keyframes l3-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+/* the scorebug's win-probability bar: away on the left, home on the right, as the scores sit */
+.live-wp {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 62px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.live-wp > span:last-child {
+  text-align: right;
+}
+.live-wp-bar {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+}
+.live-wp-bar > span {
+  display: block;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}

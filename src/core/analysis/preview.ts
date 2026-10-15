@@ -6,6 +6,7 @@
 // the starters are the ones the real game will start.
 
 import type { GameType, League, Player, Pos, ScheduledGame, TeamSeason } from '../types';
+import type { Ranked } from './projection';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
 import { buildSimInput, neutralSite } from '../league/games';
@@ -13,32 +14,22 @@ import { playerName } from '../league/helpers';
 import { standings } from '../league/standings';
 import { seriesLabel } from '../league/playoffs';
 import { planFor } from '../league/gamePlans';
+import { clearedToPlay, isQuestionable } from '../league/injuries';
 import { scoutTeam } from '../ai/advisor';
 import { oppPlanIn, type OppPlanItem } from '../ai/opponentPlan';
 import { COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META } from '../sim/tactics';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { playTypeBaselines, seasonPlayTypes, zScore } from './playTypes';
+import { leagueRatings, projectGame, winChance } from './projection';
 
-/** Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated seasons, r ≈ 0.8). */
-export const TALENT_NET = 1.7;
-/** Games of this season's net rating that weigh as much as the talent prior (the blend predicts a season's final net best). */
-export const PRIOR_GAMES = 15;
-/** Points a home team gains in the engine (about 1.3, a 54% home win rate). */
-export const HOME_EDGE = 1.3;
-/** Spread of game margins for a given matchup (the engine's, like the NBA's, is near 13). */
-export const MARGIN_SD = 13;
+// (the projection lives in ./projection, which the game pipeline uses too)
+export { blendNet, HOME_EDGE, MARGIN_SD, PRIOR_GAMES, projectGame, projectMargin, TALENT_NET, winChance, type Ranked } from './projection';
 
 export interface PreviewPlayer {
   pid: number;
   name: string;
   pos: Pos;
   ovr: number;
-}
-
-/** A season number and where it ranks in the league (1 = best; 0 before the team has played). */
-export interface Ranked {
-  v: number;
-  rank: number;
 }
 
 export interface PlayTypeTendency {
@@ -74,8 +65,13 @@ export interface SidePreview {
   threes: Ranked;
   /** Second night of a back-to-back. */
   b2b: boolean;
-  /** Injured players, worst first. */
+  /** Injured players, worst first (the user's questionable ones for his next game are listed apart). */
   out: (PreviewPlayer & { injury: string; games: number })[];
+  /**
+   * The user's team, its next game: players one game from returning from a minor or moderate
+   * injury (see isQuestionable), who sit unless he clears them (`cleared`).
+   */
+  questionable: (PreviewPlayer & { injury: string; cleared: boolean })[];
   /** Healthy players held out to rest (back-to-backs). */
   resting: PreviewPlayer[];
   /** Healthy players with heavy legs (wear 55+), who play a little worse and get hurt more. */
@@ -189,65 +185,6 @@ const preview = (p: Player): PreviewPlayer => ({ pid: p.pid, name: playerName(p)
 
 const lastTenText = (ts: TeamSeason | undefined) => (ts ? `${ts.lastTen.filter((x) => x === 1).length}-${ts.lastTen.filter((x) => x === 0).length}` : '0-0');
 
-/** Standard normal CDF (Abramowitz & Stegun 7.1.26, error under 1.5e-7). */
-function phi(x: number) {
-  const z = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + 0.3275911 * z);
-  const erf = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
-  return x >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
-}
-
-/** Chance of winning a game projected at `margin` points. */
-export const winChance = (margin: number) => phi(margin / MARGIN_SD);
-
-/**
- * A team's net rating estimate: this season's per-100 net, weighted by games played against a
- * prior from tonight's rotation talent (`talent`: its minutes-weighted OVR above the league's).
- */
-export function blendNet(net: number, gp: number, talent: number) {
-  const w = gp / (gp + PRIOR_GAMES);
-  return w * net + (1 - w) * talent * TALENT_NET;
-}
-
-/** The projected margin for `us`: the net ratings' difference at the game's pace, plus home court (`edge`). */
-export function projectMargin(netUs: number, netThem: number, pace: number, edge: number) {
-  return ((netUs - netThem) * pace) / 100 + edge;
-}
-
-/** Season ratings of every team that has played, ranked. */
-function leagueRatings(league: League) {
-  const rows = league.teams.map((t) => {
-    const ts = t.seasons.find((s) => s.season === league.season);
-    const gp = ts ? ts.won + ts.lost : 0;
-    const ortg = ts?.poss ? (ts.ptsFor / ts.poss) * 100 : 0;
-    const drtg = ts?.oppPoss ? (ts.ptsAgainst / ts.oppPoss) * 100 : 0;
-    return { tid: t.tid, gp, ortg, drtg, net: ortg - drtg, pace: gp && ts ? ts.poss / gp : 0, threes: gp && ts ? ts.t.tpa / gp : 0 };
-  });
-  const played = rows.filter((r) => r.gp > 0);
-  const rank = (tid: number, key: 'ortg' | 'drtg' | 'net' | 'pace' | 'threes', higherFirst = true): Ranked => {
-    const r = rows[tid];
-    if (!r.gp) return { v: 0, rank: 0 };
-    const better = played.filter((o) => (higherFirst ? o[key] > r[key] : o[key] < r[key])).length;
-    return { v: r[key], rank: better + 1 };
-  };
-  return { rows, rank };
-}
-
-/** Minutes-weighted OVR of every team's healthy rotation, for the league average the talent prior is measured from. */
-function rotationTalent(league: League, tid: number) {
-  const rot = league.teams[tid].rotation;
-  let sum = 0;
-  let min = 0;
-  for (const pid of rot.order) {
-    const p = league.players[pid];
-    const m = rot.minutes[pid] ?? 0;
-    if (!p || p.tid !== tid || p.injury || m <= 0) continue;
-    sum += p.ovr * m;
-    min += m;
-  }
-  return min ? sum / min : 0;
-}
-
 function playedOn(league: League, tid: number, day: number) {
   return league.schedule.some((g) => g.day === day && (g.home === tid || g.away === tid));
 }
@@ -300,6 +237,10 @@ function side(
     return { ...preview(p), for: preview(stood) };
   });
   const injured = roster.filter((p) => p.injury && p.injury.gamesRemaining > 0);
+  // game-time decisions are the user's, for his next game
+  const decides = tid === league.userTid && nextUserGame(league)?.gid === g.gid;
+  const questionable = decides ? injured.filter(isQuestionable) : [];
+  const cleared = new Set(clearedToPlay(league, g.gid));
   const restSet = new Set(rest);
   // play types as the season's games show them, against the league's points per possession
   const base = playTypeBaselines(league);
@@ -340,7 +281,11 @@ function side(
     pace: ratings.rank(tid, 'pace'),
     threes: ratings.rank(tid, 'threes'),
     b2b: playedOn(league, tid, g.day - 1),
-    out: injured.sort((a, b) => b.ovr - a.ovr).map((p) => ({ ...preview(p), injury: p.injury!.type, games: p.injury!.gamesRemaining })),
+    out: injured
+      .filter((p) => !questionable.includes(p))
+      .sort((a, b) => b.ovr - a.ovr)
+      .map((p) => ({ ...preview(p), injury: p.injury!.type, games: p.injury!.gamesRemaining })),
+    questionable: questionable.sort((a, b) => b.ovr - a.ovr).map((p) => ({ ...preview(p), injury: p.injury!.type, cleared: cleared.has(p.pid) })),
     resting: roster.filter((p) => restSet.has(p.pid) && !injured.includes(p)).map(preview),
     worn: roster
       .filter((p) => p.wear >= 55 && !injured.includes(p))
@@ -447,24 +392,10 @@ export function matchupPreview(league: League, gid: number): MatchupPreview | nu
     return { pid: th.pid, name: th.name, why: th.why, guard: dp ? preview(dp) : null, planned: pp ? preview(pp) : null, starts: !!sp?.starter, resting: sp?.dnp === 'Rest' };
   });
   // projection: each side's net rating regressed toward tonight's rotation talent, at the two teams' pace
-  const avgTalent = league.teams.reduce((a, t) => a + rotationTalent(league, t.tid), 0) / Math.max(1, league.teams.length);
-  const tonight = (s: 0 | 1) => {
-    let sum = 0;
-    let min = 0;
-    for (const p of sim.T[s].players) {
-      if (p.out || !p.planMin) continue;
-      sum += (league.players[p.pid]?.ovr ?? 0) * p.planMin;
-      min += p.planMin;
-    }
-    return min ? sum / min - avgTalent : 0;
-  };
-  const est = (s: SidePreview, at: 0 | 1) => blendNet(s.net.v, s.won + s.lost, tonight(at));
-  const netUs = est(us, usSide);
-  const netThem = est(them, (1 - usSide) as 0 | 1);
-  const paces = [us, them].filter((x) => x.pace.rank).map((x) => x.pace.v);
-  const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
-  const edge = neutral ? 0 : usHome ? HOME_EDGE : -HOME_EDGE;
-  const margin = projectMargin(netUs, netThem, pace, edge);
+  const proj = projectGame(league, sim, neutral, ratings);
+  const [netUs, netThem] = usHome ? [proj.netHome, proj.netAway] : [proj.netAway, proj.netHome];
+  const edge = usHome ? proj.edge : -proj.edge;
+  const margin = usHome ? proj.margin : -proj.margin;
   // the plan their coach brings to this game, as the game itself will set it up
   const theirPlan = userGame ? oppPlanIn(sim, (1 - usSide) as 0 | 1) : undefined;
   return {

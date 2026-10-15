@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ShotRecord } from '../../core/types';
 import { periodLabel } from '../stats';
+import { wpText } from '../../core/analysis/winProb';
 
 /** Track an element's width so charts draw at their real size instead of a letterboxed 320px. */
 function useWidth(fallback = 320) {
@@ -135,6 +136,156 @@ export function FlowChart({
           -{max}
         </text>
       </svg>
+    </div>
+  );
+}
+
+/** The crosshair's readout, over the top of the chart (centred on the point, kept inside the card). */
+const TIP: React.CSSProperties = {
+  position: 'absolute',
+  top: -4,
+  transform: 'translateX(-50%)',
+  maxWidth: 220,
+  padding: '4px 8px',
+  borderRadius: 8,
+  background: 'var(--surface-3)',
+  border: '1px solid var(--line-2)',
+  boxShadow: 'var(--shadow)',
+  pointerEvents: 'none',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
+
+/** One point of a win-probability line: game seconds played, and one team's chance to win (0..1). */
+export interface WpChartPoint {
+  t: number;
+  wp: number;
+}
+
+/**
+ * A team's win probability over the game: 100% at the top, 50% across the middle, the area above it
+ * in that team's colour (`color`) and below it in the other's (`colorOther`), with period dividers
+ * at their game time (`periods`: each period's length in seconds, four quarters then any
+ * overtimes). `marks` number the biggest swings on the line. A crosshair follows the pointer (or the
+ * arrow keys) to the nearest point and `describe` says what was going on there.
+ */
+export function WinProbChart({
+  points,
+  periods,
+  color,
+  colorOther,
+  marks = [],
+  describe,
+  label,
+  height = 130,
+}: {
+  points: WpChartPoint[];
+  periods: number[];
+  color: string;
+  colorOther: string;
+  /** Points (indices into `points`) to mark, numbered from 1. */
+  marks?: number[];
+  describe: (i: number) => string;
+  /** What the chart shows, for screen readers. */
+  label: string;
+  height?: number;
+}) {
+  const [ref, w] = useWidth();
+  const clip = useId().replace(/:/g, '');
+  const [at, setAt] = useState<number | null>(null);
+  const h = height;
+  if (points.length < 2) return null;
+  const total = Math.max(
+    1,
+    periods.reduce((a, p) => a + p, 0),
+  );
+  // room on the left for the 100% / 50% / 0% ticks
+  const left = 30;
+  const x = (t: number) => left + (Math.min(total, Math.max(0, t)) / total) * (w - left - 4);
+  const y = (wp: number) => 6 + (1 - wp) * (h - 12);
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.wp).toFixed(1)}`).join(' ');
+  const end = x(points[points.length - 1].t);
+  const area = `${d} L${end.toFixed(1)},${y(0.5)} L${x(points[0].t).toFixed(1)},${y(0.5)} Z`;
+  const starts = periods.map((_, i) => x(periods.slice(0, i).reduce((a, p) => a + p, 0)));
+  const nearest = (px: number) => {
+    let best = 0;
+    for (let i = 1; i < points.length; i++) if (Math.abs(x(points[i].t) - px) < Math.abs(x(points[best].t) - px)) best = i;
+    return best;
+  };
+  const onPointer = (e: React.PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setAt(nearest(((e.clientX - r.left) / r.width) * w));
+  };
+  const shown = at !== null && at < points.length ? at : null;
+  const tipLeft = shown !== null ? Math.min(Math.max(x(points[shown].t), 110), w - 110) : 0;
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <svg
+        viewBox={`0 0 ${w} ${h + 16}`}
+        width="100%"
+        height={h + 16}
+        role="img"
+        aria-label={label}
+        tabIndex={0}
+        style={{ touchAction: 'pan-y' }}
+        onPointerMove={onPointer}
+        onPointerDown={onPointer}
+        onPointerLeave={(e) => e.pointerType === 'mouse' && setAt(null)}
+        onBlur={() => setAt(null)}
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          setAt((cur) => Math.max(0, Math.min(points.length - 1, (cur ?? points.length - 1) + (e.key === 'ArrowLeft' ? -1 : 1))));
+        }}
+      >
+        <defs>
+          <clipPath id={`${clip}-top`}>
+            <rect x="0" y="0" width={w} height={y(0.5)} />
+          </clipPath>
+          <clipPath id={`${clip}-bot`}>
+            <rect x="0" y={y(0.5)} width={w} height={h} />
+          </clipPath>
+        </defs>
+        {starts.map((sx, i) => (
+          <g key={i}>
+            {i > 0 && <line x1={sx} x2={sx} y1={0} y2={h} stroke="var(--line)" />}
+            <text x={(sx + (starts[i + 1] ?? w - 4)) / 2} y={h + 12} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+              {periodLabel(i + 1)}
+            </text>
+          </g>
+        ))}
+        <line x1={left} x2={w} y1={y(0.5)} y2={y(0.5)} stroke="var(--line-2)" />
+        {[1, 0.5, 0].map((v) => (
+          <text key={v} x={left - 4} y={y(v) + 3} textAnchor="end" fontSize="10" fill="var(--text-dim)">
+            {Math.round(v * 100)}%
+          </text>
+        ))}
+        <path d={area} fill={color} opacity={0.3} clipPath={`url(#${clip}-top)`} />
+        <path d={area} fill={colorOther} opacity={0.3} clipPath={`url(#${clip}-bot)`} />
+        <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {marks.map((i, k) =>
+          points[i] ? (
+            <g key={i}>
+              <circle cx={x(points[i].t)} cy={y(points[i].wp)} r={5} fill="var(--text)" stroke="var(--surface)" strokeWidth={2} />
+              <text x={x(points[i].t)} y={y(points[i].wp) + (points[i].wp > 0.5 ? 17 : -9)} textAnchor="middle" fontSize="10" fontWeight={700} fill="var(--text)">
+                {k + 1}
+              </text>
+            </g>
+          ) : null,
+        )}
+        {shown !== null && (
+          <g pointerEvents="none">
+            <line x1={x(points[shown].t)} x2={x(points[shown].t)} y1={0} y2={h} stroke="var(--text-dim)" />
+            <circle cx={x(points[shown].t)} cy={y(points[shown].wp)} r={4} fill="var(--text)" stroke="var(--surface)" strokeWidth={2} />
+          </g>
+        )}
+      </svg>
+      {shown !== null && (
+        <div className="small" style={{ ...TIP, left: tipLeft }} role="status">
+          <b className="num">{wpText(points[shown].wp)}</b> <span className="dim2">{describe(shown)}</span>
+        </div>
+      )}
     </div>
   );
 }

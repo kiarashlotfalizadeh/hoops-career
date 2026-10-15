@@ -46,6 +46,11 @@ export interface Drawn {
   clock: number;
   /** Game seconds played. */
   elapsed: number;
+  /**
+   * The side with the ball for the next possession (0 home, 1 away): the other team, after the
+   * possession just drawn; null at the end of a period (the next one starts by its own rule).
+   */
+  ball: 0 | 1 | null;
   /** [home, away]. */
   sides: [DrawnSide, DrawnSide];
   /** The tactical edges so far (copies). */
@@ -81,6 +86,8 @@ export function snapshot(sim: GameSim): Drawn {
     away: pt(res.away),
     flow: res.flow?.slice(),
     flowPeriods: res.flowPeriods?.slice(),
+    flowT: res.flowT?.slice(),
+    flowPoss: res.flowPoss?.slice(),
     shots: res.shots?.slice(),
     lineups: res.lineups?.map((l) => ({ ...l })),
     impacts: res.impacts?.map((im) => ({ ...im, players: { ...im.players } })),
@@ -117,6 +124,7 @@ export function snapshot(sim: GameSim): Drawn {
     q: sim.q,
     clock: sim.clock,
     elapsed: sim.elapsed,
+    ball: sim.clock <= 0.05 ? null : sim.poss,
     sides: [side(0), side(1)],
     impacts: [...sim.impacts.values()].map((im) => ({ ...im, players: { ...im.players } })),
     adjustments: sim.adjustments.length,

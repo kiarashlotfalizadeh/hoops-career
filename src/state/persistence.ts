@@ -281,6 +281,14 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
   migrateDealTerms(x);
+  // game-time decisions in shape (whom they clear is checked again when the game is set up)
+  if (x.gameTime !== undefined && !(obj(x.gameTime) && int(x.gameTime.gid) && nums(x.gameTime.play))) delete x.gameTime;
+  // win-probability data of the user's games: a damaged list goes (the charts fall back as for older games)
+  for (const g of x.games) {
+    if (g.edge !== undefined && !num(g.edge)) delete g.edge;
+    if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
+    if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
+  }
   x.version = SAVE_VERSION;
   return x;
 }
@@ -376,7 +384,8 @@ function liveIntact(l: League, j: unknown): boolean {
   if (!obj(j) || !int(j.gid) || !int(j.tid) || !num(j.seed) || typeof j.injuries !== 'boolean') return false;
   if (!int(j.steps) || j.steps < 0 || j.steps > MAX_STEPS || !int(j.q) || j.q < 1 || !num(j.clock) || !nums(j.score) || j.score.length !== 2) return false;
   const u = j.user;
-  if (!obj(u) || !isTactics(u.tactics) || !numValues(u.perf) || !nums(u.rest) || !num(u.injuryMult)) return false;
+  if (!obj(u) || !isTactics(u.tactics) || !numValues(u.perf) || !nums(u.rest) || !num(u.injuryMult) || (u.play !== undefined && !nums(u.play))) return false;
+  if (j.edge !== undefined && !num(j.edge)) return false;
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
   if ((j.keep !== undefined && !isTactics(j.keep)) || (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2))) return false;
