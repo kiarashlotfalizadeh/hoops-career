@@ -166,9 +166,14 @@ export class LiveGame {
     this.record({ op: 'tactics', args: { tactics: cloneTactics(tactics), ...(plan && { plan }) } });
   }
 
-  /** Call one of the user's timeouts: false when none is left. */
+  /** Call one of the user's timeouts: false when none is left or the period has run out (one asked for in the other side's live ball waits for the next dead ball). */
   callTimeout(reason?: string): boolean {
     return this.record({ op: 'timeout', args: reason ? { reason } : {} });
+  }
+
+  /** The user asked for a timeout while the other side had a live ball: it's taken at the next dead ball (see GameSim.callTimeout). */
+  get timeoutWaiting(): boolean {
+    return this.sim.timeoutWaiting(this.userSide);
   }
 
   /** Whether the user makes the substitutions (the staff calls no timeouts to stop runs then either). */

@@ -162,39 +162,46 @@ describe('engine tactics', () => {
   });
 
   describe('crunch time', () => {
-    /** Clutch field-goal attempts (last two minutes of the 4th or OT, within five) by `pid` and by his team. */
-    const clutch = (goTo: number | null, n: number) => {
+    /**
+     * How often the ball finds the star in crunch time (the last two minutes of the 4th or OT, within five):
+     * his share of the home side's isolations, ball screens, post-ups and handoffs run for a player, over
+     * `n` games. (His share of the clutch shots moves far less, by about a fifth: kick-outs, rolls, motion
+     * and the late-game fouls aren't his touches, and telling that apart takes thousands of games.)
+     */
+    const touches = (goTo: number | null, n: number) => {
       let his = 0;
       let all = 0;
       for (let g = 0; g < n; g++) {
-        const sim = new GameSim(side(10, { manage: { goTo } }), side(11), opts(900 + g));
-        sim.simToEnd();
-        let prev: [number, number] = [0, 0];
-        for (const l of sim.drainLogs()) {
-          if (l.off === 0 && l.q >= 4 && l.clockStart <= 120 && Math.abs(prev[0] - prev[1]) <= 5) {
-            for (const st of l.steps) {
-              if (st.k !== 'shot') continue;
-              all++;
-              if (st.pid === star) his++;
-            }
+        const sim = new GameSim(side(10, { manage: { goTo } }), side(11), opts(900 + g, false));
+        type Pick = (t: { side: number; score: number }, action: string, exclude?: unknown) => SP;
+        const s = sim as unknown as In & { pickActor: Pick };
+        const pick = s.pickActor.bind(s);
+        s.pickActor = (t, action, exclude) => {
+          const p = pick(t, action, exclude);
+          if (t.side === 0 && s.q >= 4 && s.clock <= 120 && Math.abs(t.score - s.T[1].score) <= 5) {
+            all++;
+            if (p.pid === star) his++;
           }
-          prev = l.score;
-        }
+          return p;
+        };
+        sim.simToEnd();
       }
-      return his / Math.max(1, all);
+      return { share: his / all, n: all };
     };
     const star = league.teams[10].rotation.order[2];
 
-    it('leaves the first three quarters alone and gets the go-to player more of the clutch shots', () => {
+    it('leaves the first three quarters alone and gets the go-to player the ball much more in crunch time', () => {
       for (let g = 0; g < 5; g++) {
         const a = new GameSim(side(10), side(11), opts(800 + g, false)).simToEnd();
         const b = new GameSim(side(10, { manage: { goTo: star } }), side(11), opts(800 + g, false)).simToEnd();
         expect(b.home.quarters.slice(0, 3)).toEqual(a.home.quarters.slice(0, 3));
         expect(b.away.quarters.slice(0, 3)).toEqual(a.away.quarters.slice(0, 3));
       }
-      const without = clutch(null, 60);
-      const withIt = clutch(star, 60);
-      expect(withIt).toBeGreaterThan(without * 1.4);
+      const without = touches(null, 600);
+      const withIt = touches(star, 600);
+      expect(Math.min(without.n, withIt.n)).toBeGreaterThan(400);
+      // about twice as often (a third player in the depth chart, who gets a seventh of them otherwise)
+      expect(withIt.share).toBeGreaterThan(without.share * 1.6);
     });
 
     it('runs the after-timeout play on the next half-court trip after its own timeout', () => {
@@ -296,7 +303,7 @@ describe('engine tactics', () => {
       }
     });
 
-    it('a call made and cancelled changes nothing, and a call never carries into the next period', () => {
+    it('a call made and cancelled changes nothing, and a call made in a period ends with it', () => {
       for (let g = 0; g < 3; g++) {
         const base = new GameSim(side(14), side(15), opts(1800 + g));
         const sim = new GameSim(side(14), side(15), opts(1800 + g));
@@ -308,15 +315,75 @@ describe('engine tactics', () => {
         sim.cancelPlay(0);
         expect(JSON.stringify(sim.simToEnd())).toBe(JSON.stringify(base.simToEnd()));
       }
-      const sim = new GameSim(side(14), side(15), opts(1900));
-      const s = sim as unknown as In;
-      while (s.clock > 0.05) sim.step();
-      sim.callPlay(0, { kind: 'three' });
-      sim.callPlay(1, { kind: 'foul' });
-      sim.drainLogs();
-      for (let i = 0; i < 30; i++) sim.step();
-      expect(sim.drainLogs().some((l) => l.call)).toBe(false);
-      expect(s.T[0].call).toBeNull();
+      // a call made with seconds left while the other side has the ball, that the period runs out on
+      let ended = 0;
+      for (let g = 0; g < 12; g++) {
+        const sim = new GameSim(side(14), side(15), opts(1900 + g));
+        const s = sim as unknown as In & { poss: number };
+        while (!sim.over && !(s.poss === 1 && s.q <= 3 && s.clock > 0.05 && s.clock < 4)) sim.step();
+        if (sim.over) continue;
+        sim.callPlay(0, { kind: 'three' });
+        const q = s.q;
+        sim.step();
+        if (s.q !== q || s.clock > 0.05) continue;
+        expect(s.T[0].call).toEqual({ kind: 'three' });
+        sim.drainLogs();
+        sim.step();
+        expect(s.T[0].call).toBeNull();
+        expect(sim.drainLogs().some((l) => l.call)).toBe(false);
+        ended++;
+      }
+      expect(ended).toBeGreaterThan(3);
+    });
+
+    it('a call made at the buzzer is for the next period: the first trips of it run it', () => {
+      for (let g = 0; g < 4; g++) {
+        const sim = new GameSim(side(14), side(15), opts(1950 + g));
+        const s = sim as unknown as In;
+        // the Live screen stops at the break with the game at the buzzer (the next step starts the next period)
+        while (s.clock > 0.05) sim.step();
+        const q = s.q;
+        sim.callPlay(0, { kind: 'three' });
+        sim.callPlay(1, { kind: 'foul' });
+        sim.drainLogs();
+        for (let i = 0; i < 6; i++) sim.step();
+        const logs = sim.drainLogs();
+        expect(logs.every((l) => l.q === q + 1)).toBe(true);
+        expect(logs.find((l) => l.off === 0 && l.kind === 'half')?.call).toEqual({ kind: 'three', t: 0 });
+        expect(logs.find((l) => l.off === 0)?.call).toEqual({ kind: 'foul', t: 1 });
+        expect([s.T[0].call, s.T[1].call]).toEqual([null, null]);
+      }
+    });
+
+    it('a call waits for a trip that gets to the half court: a press turnover leaves it for the next one', () => {
+      let kept = 0;
+      for (let g = 0; g < 40 && kept < 6; g++) {
+        const sim = new GameSim(side(14), side(15, { defense: { press: 'always', pressure: 90 } }), opts(2000 + g));
+        const s = sim as unknown as In & { poss: number };
+        for (let i = 0; i < 400 && !sim.over && kept < 6; i++) {
+          if (s.poss !== 0 || s.q > 3 || s.clock < 60 || s.T[0].call) {
+            sim.step();
+            continue;
+          }
+          sim.callPlay(0, { kind: 'set', set: 'horns' });
+          sim.drainLogs();
+          sim.step();
+          const l = sim.drainLogs().find((x) => x.off === 0)!;
+          if (l.kind !== 'press') {
+            // (free throws from a foul before any action keep it too)
+            if (l.kind !== 'ft') expect(s.T[0].call).toBeNull();
+            continue;
+          }
+          // the press forced a turnover before the set could be run: it's still called
+          expect(l.call).toBeUndefined();
+          expect(s.T[0].call).toEqual({ kind: 'set', set: 'horns' });
+          const next = nextTrip(sim, 0)!;
+          if (next.q !== l.q) break;
+          if (next.kind === 'half') expect([next.call, next.set?.id]).toEqual([{ kind: 'set', set: 'horns', t: 0 }, 'horns']);
+          kept++;
+        }
+      }
+      expect(kept).toBeGreaterThanOrEqual(6);
     });
   });
 
@@ -386,7 +453,8 @@ describe('engine tactics', () => {
         glass: 1.12,
         glassTag: 0.12,
       });
-      // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table
+      // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
+      // side-out fouls started restarting the shot clock at 14)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -394,10 +462,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [127, 120, 101, 95, 46, 30, 13, 11],
-        [113, 114, 91, 91, 45, 28, 10, 15],
-        [106, 119, 92, 91, 44, 38, 12, 8],
-        [113, 123, 86, 82, 36, 22, 11, 11],
+        [127, 115, 96, 93, 44, 29, 11, 11],
+        [119, 133, 91, 90, 43, 27, 11, 11],
+        [102, 120, 90, 91, 43, 38, 11, 8],
+        [112, 123, 86, 80, 32, 22, 13, 11],
       ]);
     });
 

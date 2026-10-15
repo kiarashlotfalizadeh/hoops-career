@@ -268,6 +268,107 @@ describe('engine rules', () => {
     expect(game.callTimeout(0)).toBe(false);
   });
 
+  it('stops play on a timeout: the trip out of it is an inbound, never a run-out, and opens with the after-timeout play', () => {
+    // timeouts called with the ball, between possessions, as the Live screen calls them (after steals and defensive boards too)
+    const from: Record<string, number> = {};
+    let trips = 0;
+    for (let g = 0; g < 40; g++) {
+      const sim = new GameSim(side(6, { manage: { ato: 'spain', autoTimeouts: false } }), side(7, { manage: { autoTimeouts: false } }), {
+        rng: new Rng(500 + g),
+        type: 'regular',
+        record: true,
+        injuries: false,
+      });
+      const s = sim as unknown as { poss: number; ctx: string; clock: number; T: { timeouts: number }[] };
+      let n = 0;
+      while (!sim.over) {
+        const ctx = s.ctx;
+        const called = s.poss === 0 && s.clock > 30 && s.T[0].timeouts > 2 && ++n % 5 === 0 && sim.callTimeout(0);
+        sim.step();
+        const l = sim.drainLogs()[0];
+        if (!called || !l) continue;
+        expect(l.steps[0]).toEqual({ k: 'timeout', t: 0 });
+        expect(l.kind, `out of a timeout after ${ctx}`).not.toBe('transition');
+        // (a trip that ends in free throws before any action keeps the play for the next one)
+        if (l.kind !== 'half') continue;
+        expect(l.set?.id, `the after-timeout set, after ${ctx}`).toBe('spain');
+        from[ctx] = (from[ctx] ?? 0) + 1;
+        trips++;
+      }
+    }
+    expect(trips).toBeGreaterThan(150);
+    expect(from.steal).toBeGreaterThan(5);
+    expect(from.dreb).toBeGreaterThan(20);
+  });
+
+  it('takes a timeout asked for during the other side’s live ball at the next dead ball, and lets the staff call one only when it may', () => {
+    type S = { poss: number; ctx: string; clock: number; T: { timeouts: number; run: number }[]; autoTimeouts(): void };
+    let waited = 0;
+    for (let g = 0; g < 12; g++) {
+      const quiet: TacticsPatch = { manage: { autoTimeouts: false } };
+      const sim = new GameSim(side(8, quiet), side(9, quiet), { rng: new Rng(700 + g), type: 'regular', record: true, injuries: false });
+      const s = sim as unknown as S;
+      // the other side has the ball after a steal or a defensive board: a live ball
+      while (!sim.over && !(s.poss === 1 && (s.ctx === 'steal' || s.ctx === 'dreb') && s.clock > 60)) sim.step();
+      if (sim.over) continue;
+      sim.drainLogs();
+      const left = s.T[0].timeouts;
+      expect(sim.callTimeout(0)).toBe(true);
+      expect([sim.timeoutWaiting(0), s.T[0].timeouts, sim.timeoutOpens()]).toEqual([true, left, null]);
+      sim.step();
+      // their trip plays on (a run-out off the steal included), and the timeout comes at the dead ball after it
+      const theirs = sim.drainLogs()[0];
+      expect(theirs.off).toBe(1);
+      expect(theirs.steps.some((st) => st.k === 'timeout')).toBe(false);
+      expect([sim.timeoutWaiting(0), s.T[0].timeouts, sim.timeoutOpens()]).toEqual([false, left - 1, 0]);
+      sim.step();
+      const mine = sim.drainLogs()[0];
+      expect([mine.off, mine.steps[0]]).toEqual([0, { k: 'timeout', t: 0 }]);
+      expect(mine.kind).not.toBe('transition');
+      waited++;
+    }
+    expect(waited).toBeGreaterThan(8);
+    // the staff stops a run only when it may: not while the other side has a live ball
+    const sim = new GameSim(side(8), side(9), { rng: new Rng(1), type: 'regular', injuries: false });
+    const s = sim as unknown as S;
+    s.T[1].run = 14;
+    s.ctx = 'dreb';
+    s.poss = 1;
+    s.autoTimeouts();
+    expect(s.T[0].timeouts).toBe(7);
+    s.poss = 0;
+    s.autoTimeouts();
+    expect(s.T[0].timeouts).toBe(6);
+  });
+
+  it('restarts the shot clock at 14 or more after a side-out foul', () => {
+    // trips from one inbound (no press, run-out or second chance) with a non-shooting foul that was only a side out
+    let sideOuts = 0;
+    let longer = 0;
+    for (let g = 0; g < 24; g++) {
+      const sim = new GameSim(side(10, { defense: { physicality: 90, pressure: 80 } }), side(11, { defense: { physicality: 90, pressure: 80 } }), {
+        rng: new Rng(900 + g),
+        type: 'regular',
+        record: true,
+        injuries: false,
+      });
+      sim.simToEnd();
+      for (const l of sim.drainLogs()) {
+        if (l.kind !== 'half' || l.steps.some((st) => st.k === 'reb' || st.k === 'block' || st.k === 'press' || st.k === 'timeout')) continue;
+        const i = l.steps.findIndex((st) => st.k === 'foul');
+        if (i < 0 || l.steps[i + 1]?.k === 'ft' || l.label === 'Intentional foul' || l.label.startsWith('Hack-a') || l.label === 'Foul to give') continue;
+        sideOuts++;
+        const used = l.clockStart - l.clockEnd;
+        // the 24 seconds it had, and at most 14 more for each stop (with the game clock still running)
+        expect(used).toBeLessThan(GAME.shotClock + 14 * l.steps.filter((st) => st.k === 'foul').length + 1e-6);
+        if (used > GAME.shotClock + 0.5) longer++;
+      }
+    }
+    expect(sideOuts).toBeGreaterThan(100);
+    // without the reset no such trip could last past 24 seconds
+    expect(longer).toBeGreaterThan(5);
+  });
+
   it('awards free throws only in the penalty, with the two-minute rule in every period and four fouls in overtime', () => {
     const sim = new GameSim(side(0), side(1), { rng: new Rng(1), type: 'regular', injuries: false }) as unknown as Internals;
     const t = sim.T[1];

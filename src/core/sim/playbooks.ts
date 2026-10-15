@@ -59,16 +59,18 @@ function omit<T extends object>(o: T, keys: string[]): Partial<T> {
 /** A playbook of tactics `t` (a deep copy: later edits to either leave the other alone). */
 export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' | 'saved'>): SavedPlaybook {
   const c = structuredClone(t);
-  const extra = Object.fromEntries(Object.entries(omit(c, KNOWN)).filter(([, v]) => v !== undefined));
+  // the screens keep "no set package", "no situational plans" and "the assistant doesn't adjust" as no
+  // key at all: a playbook says so outright, so loading it takes them off (see loadPlaybook)
+  const extra = { ...Object.fromEntries(Object.entries(omit(c, KNOWN)).filter(([, v]) => v !== undefined)), situations: c.situations ?? [] };
   return {
     id: meta.id,
     name: meta.name,
     saved: { ...meta.saved },
     // (the hunt, chase targets and instructions by player name one night's opponents, like the matchups)
-    offense: omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget']) as SavedPlaybook['offense'],
+    offense: { ...omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget']), sets: c.offense.sets ?? [] } as SavedPlaybook['offense'],
     defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD']) as SavedPlaybook['defense'],
     // hack-a-player targets are one opponent's players: they belong in game plans
-    manage: omit(c.manage, ['hackTargets', 'hackFromQ']) as SavedPlaybook['manage'],
+    manage: { ...omit(c.manage, ['hackTargets', 'hackFromQ']), assistantAdjusts: !!c.manage.assistantAdjusts } as SavedPlaybook['manage'],
     offPreset: c.offPreset,
     defPreset: c.defPreset,
     roles: c.offense.roles,
@@ -100,6 +102,11 @@ export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<num
   if (src.manage.goTo !== undefined && src.manage.goTo !== null && !on.has(src.manage.goTo)) out.manage.goTo = t.manage.goTo ?? null;
   if (src.manage.atoPid !== undefined && src.manage.atoPid !== null && !on.has(src.manage.atoPid)) out.manage.atoPid = t.manage.atoPid ?? null;
   Object.assign(out, omit(src.extra ?? {}, KNOWN));
+  // what a playbook saved off (no set package, no situational plans, no assistant adjusting) is taken
+  // off: the screens keep it as no key at all (a playbook from before it said so leaves them as they are)
+  if (src.offense.sets?.length === 0) delete out.offense.sets;
+  if (Array.isArray(src.extra?.situations) && !src.extra.situations.length) delete out.situations;
+  if (src.manage.assistantAdjusts === false) delete out.manage.assistantAdjusts;
   out.offPreset = src.offPreset;
   out.defPreset = src.defPreset;
   out.playbook = { id: pb.id, name: pb.name };
@@ -195,7 +202,9 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   const add = (label: string, x: unknown, y: unknown, fmt: (v: unknown) => string = String) => {
     if (same(x, y)) return;
     const prim = (v: unknown) => v === undefined || v === null || typeof v !== 'object';
-    out.push(prim(x) && prim(y) ? { label, from: x === undefined ? '—' : fmt(x), to: y === undefined ? '—' : fmt(y) } : { label, from: '', to: '' });
+    // (a switch that isn't there is off: the screens delete some when they're turned off)
+    const shown = (v: unknown) => (v === undefined && fmt !== onOff ? '—' : fmt(v));
+    out.push(prim(x) && prim(y) ? { label, from: shown(x), to: shown(y) } : { label, from: '', to: '' });
   };
   // known fields in screen order, then any others in that part of the tactics
   const section = (x: Record<string, unknown>, y: Record<string, unknown>, fields: Field<string>[]) => {
