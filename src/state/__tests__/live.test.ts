@@ -13,6 +13,7 @@ import { releasePlayer, signPlayer } from '../../core/league/contracts';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { curTeamSeason } from '../../core/league/helpers';
 import type { League, LiveJournal } from '../../core/types';
+import type { PossLog } from '../../core/sim/log';
 import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { testLeague, toGameDay, userGames } from './fixtures';
 
@@ -332,6 +333,69 @@ describe('a live game survives the app being closed (W12)', () => {
     const res = again.commit(back);
     expect(res).toEqual(lg.commit(l));
     expect([back.live, l.live, once(back, res.gid)]).toEqual([undefined, undefined, 1]);
+  });
+
+  it('takes a timeout asked for in their live ball at the next dead ball, and plays it back from the journal', async () => {
+    const l = testLeague('waitTO');
+    toGameDay(l);
+    const lg = goLive(l);
+    const s = lg.sim as unknown as { poss: number; ctx: string; clock: number };
+    const me = lg.userSide;
+    // they have the ball after a steal or a defensive board
+    while (!lg.over && !(s.poss !== me && (s.ctx === 'steal' || s.ctx === 'dreb') && s.clock > 60)) lg.step();
+    const left = lg.sim.T[me].timeouts;
+    expect(lg.callTimeout('test')).toBe(true);
+    expect([lg.timeoutWaiting, lg.sim.T[me].timeouts]).toEqual([true, left]);
+    // their trip plays on; the timeout comes at the dead ball after it, and opens ours (the huddle's cue)
+    const [theirs] = lg.step();
+    expect(theirs.off).not.toBe(me);
+    expect(theirs.steps.some((st) => st.k === 'timeout' && st.t === me)).toBe(false);
+    expect([lg.timeoutWaiting, lg.sim.T[me].timeouts, lg.sim.timeoutOpens()]).toEqual([false, left - 1, me]);
+    const [mine] = lg.step();
+    expect([mine.off, mine.steps[0], mine.kind === 'transition']).toEqual([me, { k: 'timeout', t: me }, false]);
+    // asked for again and saved while it waits: the journal plays it back the same
+    while (!lg.over && !(s.poss !== me && (s.ctx === 'steal' || s.ctx === 'dreb') && s.clock > 60 && lg.sim.T[me].timeouts > 1)) lg.step();
+    expect(lg.callTimeout()).toBe(true);
+    expect(lg.timeoutWaiting).toBe(true);
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect(again.resumed).toBe('journal');
+    expect([again.timeoutWaiting, again.sim.T[me].timeouts]).toEqual([true, lg.sim.T[me].timeouts]);
+    for (let i = 0; i < 3; i++) expect(again.step()).toEqual(lg.step());
+    expect(again.sim.result()).toEqual(lg.sim.result());
+  });
+
+  it('keeps a call made at the buzzer for the next period, refuses a timeout there, and plays both back from the journal', async () => {
+    const l = testLeague('buzzer');
+    toGameDay(l);
+    const lg = goLive(l);
+    const me = lg.userSide;
+    // the Live screen stops at the end of the first quarter: the sim is at the buzzer
+    lg.simTo('quarter');
+    expect([lg.sim.q, lg.sim.clock <= 0.05]).toEqual([1, true]);
+    const left = lg.sim.T[me].timeouts;
+    expect(lg.callTimeout()).toBe(false);
+    expect(lg.sim.T[me].timeouts).toBe(left);
+    expect(lg.callPlay({ kind: 'set', set: 'horns' })).toBe(true);
+    await useStore.getState().flush();
+    const back = (await loadLeague(l.id))!;
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect(again.resumed).toBe('journal');
+    expect(again.pendingCall).toEqual({ kind: 'set', set: 'horns' });
+    // the second quarter's first half-court trip of ours runs it, the same in both
+    let ran: PossLog | undefined;
+    for (let i = 0; i < 12 && !ran; i++) {
+      const logs = lg.step();
+      expect(again.step()).toEqual(logs);
+      ran = logs.find((x) => x.off === me && x.kind === 'half');
+    }
+    expect(ran?.q).toBe(2);
+    expect(ran?.call).toEqual({ kind: 'set', set: 'horns', t: me });
+    expect([lg.pendingCall, again.pendingCall]).toEqual([null, null]);
+    expect(again.sim.T[me].timeouts).toBe(left);
   });
 
   it("starts the game over from tip-off when its journal doesn't play back to where it says", () => {

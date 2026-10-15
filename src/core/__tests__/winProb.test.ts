@@ -146,7 +146,9 @@ describe('win probability from engine games', () => {
   it('is calibrated: better than the margin alone, and about as often right as it says', () => {
     const l = testLeague('wp', 5);
     const games: (Pick<GameResult, 'flow' | 'flowPeriods' | 'flowT' | 'flowPoss' | 'edge' | 'type'> & { won: number })[] = [];
-    while (games.length < 160) {
+    // (a game's states all share its result, so a band's reliability rests on the games in it, not its
+    // states: 160 games left a band about 0.035 off by chance alone, half the limit below)
+    while (games.length < 400) {
       for (const g of gamesOnDay(l, l.day)) {
         ensureRotation(l, g.home);
         ensureRotation(l, g.away);
@@ -185,7 +187,7 @@ describe('win probability from engine games', () => {
       const did = band.reduce((a, x) => a + x.y, 0) / band.length;
       expect(Math.abs(said - did)).toBeLessThan(0.07);
     }
-  });
+  }, 120_000);
 });
 
 describe('swing words', () => {

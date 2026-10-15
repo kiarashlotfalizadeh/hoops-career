@@ -19,7 +19,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { useLeague, useStore, useVersion } from '../../state/store';
-import { prepareLive, clearLive, playedElsewhere, CLUTCH_SEC, type LiveGame } from '../../state/live';
+import { prepareLive, clearLive, playedElsewhere, type LiveGame } from '../../state/live';
+import { skipChoices, type SkipTo } from '../live/skip';
 import { buildScript, captionAt, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
 import { Card, Empty, PageHeader, Sheet, Toggle, scrollBehavior } from '../components/ui';
@@ -74,7 +75,6 @@ const BANNER_MS = 3200;
 type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
 /** 'player': one of theirs; 'mine': one of yours; 'huddle': your timeout, while it's taken. */
 type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player' | 'mine' | 'plays' | 'huddle' | 'scores';
-type SkipTo = 'quarter' | 'half' | 'clutch' | 'end';
 /**
  * Something the court shows in place of the game for a moment: a replay (asked for, or the automatic
  * one of a shot at the buzzer) or the night's highlights after the final. The possession it
@@ -124,7 +124,10 @@ export default function Live() {
   const [graphic, setGraphic] = useState<Graphic | null>(null);
   // graphics shown so far tonight, when the last went up, and whether this game was picked up part-way (see takeView)
   const gfx = useRef({ shown: new Set<string>(), last: null as number | null, seed: false });
-  /** A timeout the user called that the court hasn't shown yet (it opens the next possession). */
+  /**
+   * A timeout the user called that the court hasn't shown yet (it opens the next possession), or one
+   * waiting for the next dead ball (asked for while the other side had a live ball: see GameSim.callTimeout).
+   */
   const [toPending, setToPending] = useState(false);
   /** The user called a timeout: once the court gets to it, the game waits in the huddle. */
   const huddleNext = useRef(false);
@@ -226,7 +229,8 @@ export default function Live() {
         tactics: lg.sim.baseTactics(lg.userSide),
         manualSubs: lg.manualSubs,
         atBreak,
-        timeoutPending: toPending,
+        // (the sim runs a possession ahead: at the period's buzzer, while its last possession is drawn, no timeout can be called)
+        timeoutPending: toPending || lg.sim.atBuzzer(),
         events,
         names: nameOf,
         baselines,
@@ -531,17 +535,22 @@ export default function Live() {
       const basket = lines.find((e) => e.kind === 'make' || e.kind === 'ft');
       setAnnounce(`${basket ? `${basket.text} ` : ''}${lg.sim.T[1].team.abbrev} ${shown[1]}, ${lg.sim.T[0].team.abbrev} ${shown[0]}.`);
     }
-    // a timeout called while the last possession was drawn opens the next one
-    setToPending(false);
+    // a timeout called while the last possession was drawn opens the next one (one waiting for a dead
+    // ball stays called until the possession that brings it has been drawn)
+    setToPending(lg.timeoutWaiting);
     const v = takeView(lg);
     const s = lg.sim;
-    // the court has got to the user's timeout: the game waits in the huddle (the sim is no longer ahead)
-    if (huddleNext.current && !lg.over) {
+    if (huddleNext.current && !lg.over && !lg.timeoutWaiting) {
       huddleNext.current = false;
-      setScript(null);
-      setPaused(true);
-      setPanel('huddle');
-      return;
+      // the court has got to the user's timeout: the game waits in the huddle (the sim is no longer ahead)
+      if (s.timeoutOpens() === lg.userSide) {
+        setScript(null);
+        setPaused(true);
+        setPanel('huddle');
+        return;
+      }
+      // (a timeout waiting for a dead ball when the period ran out isn't taken: the break is the stop)
+      setAnnounce("The period ended before your timeout could be taken: it wasn't charged.");
     }
     if (!lg.over && s.clock <= 0.05) {
       // a decided game ends at the buzzer: no break before an overtime that won't be played
@@ -716,10 +725,15 @@ export default function Live() {
     const lg = liveRef.current;
     if (!lg || lg.over || !coach((g) => g.callTimeout(reason))) return;
     // the court flashes it as the next possession opens: the one possession still being drawn finishes
-    // first, and then the huddle comes up
+    // first, and then the huddle comes up. In the other side's live ball (a steal or a defensive board)
+    // it's taken at the next dead ball, and the huddle waits for that
     setToPending(true);
     huddleNext.current = true;
-    setAnnounce(`Timeout ${lg.sim.T[userSide].team.abbrev}.`);
+    const abbrev = lg.sim.T[userSide].team.abbrev;
+    if (lg.timeoutWaiting) {
+      setAnnounce(`Timeout ${abbrev} at the next dead ball.`);
+      useStore.getState().toast('Timeout at the next dead ball: they have the ball.');
+    } else setAnnounce(`Timeout ${abbrev}.`);
     setTick((x) => x + 1);
   };
 
@@ -903,13 +917,10 @@ export default function Live() {
   const canReplay = status === 'live' && !show && !!lastDone.current && paused;
   // (only worked out once the game is over)
   const reelSize = status === 'final' ? pickHighlights(game.logs, game.userSide).length : 0;
-  const skipTo: { id: SkipTo; label: string; sub: string }[] = [
-    { id: 'quarter', label: `End of ${periodLabel(atBreak ? view.q + 1 : view.q)}`, sub: 'Stops at the break with the period report.' },
-    // (from the first quarter's break, the end of the next quarter is halftime)
-    ...(view.q === 1 && !atBreak ? [{ id: 'half' as SkipTo, label: 'Halftime', sub: 'Plays through the second quarter too.' }] : []),
-    ...(view.q < 4 || (view.q === 4 && view.clock > CLUTCH_SEC) ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: '5:00 left in the fourth quarter.' }] : []),
-    { id: 'end', label: 'Sim to final', sub: 'The rest plays out instantly with your current plan and rotation.' },
-  ];
+  // (the period being played, as the scorebug shows it: the drawn view still reads the one before on a period's first possession)
+  const skipTo = skipChoices(atBreak ? view.q + 1 : quarter, atBreak, sim);
+  // the sim is at the period's buzzer while the court draws its last possession: no timeout then (the break is the stop)
+  const buzzer = sim.atBuzzer() && !over;
   const strip = (
     <OnCourt
       view={view}
@@ -1135,9 +1146,17 @@ export default function Live() {
               <button
                 className="btn sm"
                 // (nothing to stop before the opening tip)
-                disabled={me.timeouts <= 0 || atBreak || toPending || intro}
+                disabled={me.timeouts <= 0 || atBreak || toPending || intro || buzzer}
                 onClick={() => callTimeout()}
-                aria-label={toPending ? 'TO: timeout called, the court shows it next' : `TO: call a timeout, ${view.sides[userSide].timeouts} left`}
+                aria-label={
+                  toPending
+                    ? game.timeoutWaiting
+                      ? 'TO: timeout called, taken at the next dead ball'
+                      : 'TO: timeout called, the court shows it next'
+                    : buzzer
+                      ? 'TO: the period is ending'
+                      : `TO: call a timeout, ${view.sides[userSide].timeouts} left`
+                }
               >
                 <Timer size={16} /> TO
                 <span className="live-dock-n num" aria-hidden="true">

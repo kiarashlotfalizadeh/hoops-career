@@ -81,7 +81,7 @@ export interface AlertInput {
   tactics: Tactics;
   manualSubs: boolean;
   atBreak: boolean;
-  /** The user called a timeout the court hasn't shown yet. */
+  /** The user called a timeout the court hasn't shown yet, or none can be called now (the game is at the period's buzzer). */
   timeoutPending: boolean;
   events: LiveEvent[];
   names: (pid: number) => string;

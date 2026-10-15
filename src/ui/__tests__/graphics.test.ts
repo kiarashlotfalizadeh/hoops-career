@@ -149,15 +149,18 @@ describe('broadcast graphics', () => {
     const { sim } = game(9);
     const logs: PossLog[] = [];
     let view = snapshot(sim);
-    while (!sim.over && !(view.q === 4 && view.clock < 600)) {
+    // late (the 4th quarter), with someone past the 20 points a season high needs to be worth a graphic
+    const topPts = (v: Drawn) => Math.max(...[...v.box.home.players, ...v.box.away.players].map((p) => p.pts));
+    while (!sim.over && !(view.q === 4 && view.clock < 600 && topPts(view) > 20)) {
       sim.step();
       logs.push(...sim.drainLogs());
       view = snapshot(sim);
     }
     const top = [...view.box.home.players, ...view.box.away.players].sort((a, b) => b.pts - a.pts)[0];
+    expect([view.q, top.pts > 20]).toEqual([4, true]);
     const with_ = (high: PlayerBefore['high']) => nextGraphic(input(view, logs, { before: new Map([[top.pid, { high }]]) }));
     expect(with_({ pts: top.pts + 2, games: 20, career: false })).toMatchObject({ kind: 'watch', text: `P${top.pid}: ${top.pts} points, 2 off his season high (${top.pts + 2})` });
-    if (top.pts > 20) expect(with_({ pts: 20, games: 20, career: false })).toMatchObject({ kind: 'high', text: `P${top.pid}: ${top.pts} points, past his season high of 20` });
+    expect(with_({ pts: 20, games: 20, career: false })).toMatchObject({ kind: 'high', text: `P${top.pid}: ${top.pts} points, past his season high of 20` });
     expect(with_({ pts: top.pts - 1, games: 20, career: true })?.tag).toBe('New career high');
     // too few games, or too low a high, says nothing
     expect(with_({ pts: top.pts - 1, games: 5, career: false })?.kind).not.toBe('high');

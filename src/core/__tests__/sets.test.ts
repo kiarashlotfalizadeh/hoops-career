@@ -329,17 +329,18 @@ describe('sets in the engine', () => {
 
   it('plays games with no sets exactly as before: AI teams never run one, and an empty package draws nothing', () => {
     // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
-    // and a coached side with an after-timeout action, a go-to player and every call there was)
+    // and a coached side with an after-timeout action, a go-to player and every call there was), taken again
+    // when side-out fouls started restarting the shot clock and timeouts started stopping play
     const expected = {
       ai: [
-        [135, 131, 97, 53, 17, 11, 16, 1],
+        [137, 136, 94, 49, 15, 17, 19, 1],
         [111, 97, 97, 19, 14, 32, 10, 0],
-        [116, 105, 100, 32, 13, 16, 8, 0],
+        [116, 106, 101, 32, 13, 16, 7, 0],
       ],
       coached: [
-        [134, 100, 84, 23, 10, 17, 17, 0],
+        [142, 104, 81, 20, 9, 20, 17, 0],
         [123, 121, 95, 35, 12, 25, 17, 0],
-        [116, 136, 84, 43, 12, 36, 17, 0],
+        [111, 133, 72, 28, 9, 46, 17, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];
@@ -396,7 +397,7 @@ describe('sets in the engine', () => {
       const q = inn(sim).q;
       if (!sim.callTimeout(0)) continue;
       if (g % 2) sim.callPlay(0, { kind: 'three' });
-      // the trip out of the timeout (a run-out spends it like any after-timeout play)
+      // the trip out of the timeout (an inbound: no run-out), after the other side's when it had a live ball
       let l: PossLog | undefined;
       for (let i = 0; i < 6 && !l; i++) {
         sim.step();

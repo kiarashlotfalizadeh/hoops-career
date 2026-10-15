@@ -272,6 +272,57 @@ describe('saved playbooks', () => {
   });
 });
 
+describe('saved playbooks: what was off when saved', () => {
+  it('takes off a set package, situational plans and the assistant a playbook was saved without, and says so', () => {
+    const l = testLeague();
+    const t = tactics(l);
+    // the screens keep these as no key at all when they're empty or off
+    delete t.offense.sets;
+    delete t.situations;
+    delete t.manage.assistantAdjusts;
+    expect(savePlaybook(l, 'Plain')).toBeNull();
+    const pb = l.playbooks![0];
+    t.offense.sets = ['spain', 'horns'];
+    t.situations = [situationFromTemplate('chasing')];
+    t.manage.assistantAdjusts = true;
+    // what loading would change, and the header's "edited"
+    const lines = ['Assistant adjusts in simmed games On → Off', 'Set package Spain, Horns → None', 'Situations changed'];
+    expect(playbookDiff(t, pb, roster(l)).map(changeText)).toEqual(expect.arrayContaining(lines));
+    expect(playbookStatus(l)?.changes.map(changeText)).toEqual(
+      expect.arrayContaining(['Assistant adjusts in simmed games Off → On', 'Set package None → Spain, Horns', 'Situations changed']),
+    );
+    expect(applyPlaybook(l, pb.id)).toBe(true);
+    // taken off the way the screens take them off: no empty values left behind
+    const out = tactics(l);
+    expect(out.offense).not.toHaveProperty('sets');
+    expect(out).not.toHaveProperty('situations');
+    expect(out.manage).not.toHaveProperty('assistantAdjusts');
+    expect(playbookStatus(l)?.changes).toEqual([]);
+    // and one saved with them on puts them back
+    out.offense.sets = ['floppy'];
+    out.manage.assistantAdjusts = true;
+    expect(savePlaybook(l, 'Busy')).toBeNull();
+    delete out.offense.sets;
+    delete out.manage.assistantAdjusts;
+    const busy = loadPlaybook(out, l.playbooks![1], roster(l));
+    expect([busy.offense.sets, busy.manage.assistantAdjusts]).toEqual([['floppy'], true]);
+  });
+
+  it('leaves them as they are when loading a playbook saved before it said so', () => {
+    const l = testLeague();
+    const t = tactics(l);
+    const pb = toPlaybook(t, { id: 'old', name: 'Old', saved });
+    // (a playbook from before: none of the three named)
+    delete (pb.offense as { sets?: unknown }).sets;
+    delete pb.extra!.situations;
+    delete (pb.manage as { assistantAdjusts?: unknown }).assistantAdjusts;
+    t.offense.sets = ['hammer'];
+    t.manage.assistantAdjusts = true;
+    const out = loadPlaybook(t, pb, roster(l));
+    expect([out.offense.sets, out.manage.assistantAdjusts]).toEqual([['hammer'], true]);
+  });
+});
+
 describe('preset labels', () => {
   it('a preset matches right after it is picked and not after a slider moves', () => {
     const l = testLeague();
