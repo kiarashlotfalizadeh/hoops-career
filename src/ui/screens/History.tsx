@@ -174,7 +174,9 @@ function Franchise({ league }: { league: League }) {
 // ---------------------------------------------------------------- league
 
 function LeagueHistory({ league }: { league: League }) {
-  const list = [...league.awards].filter((a) => a.champion !== undefined || a.mvp !== undefined || a.cupWinner !== undefined).sort((a, b) => b.season - a.season);
+  const list = [...league.awards]
+    .filter((a) => a.champion !== undefined || a.mvp !== undefined || a.cupWinner !== undefined || a.saturday !== undefined)
+    .sort((a, b) => b.season - a.season);
   if (!list.length) {
     return (
       <Card>
@@ -254,6 +256,8 @@ function LeagueHistory({ league }: { league: League }) {
                   </Link>
                 );
               })}
+            {a.saturday?.three[0] && <ContestRow league={league} k="3-Point" e={a.saturday.three[0]} />}
+            {a.saturday?.dunk[0] && <ContestRow league={league} k="Slam Dunk" e={a.saturday.dunk[0]} />}
           </Card>
         );
       })}
@@ -261,18 +265,39 @@ function LeagueHistory({ league }: { league: League }) {
   );
 }
 
+/** An All-Star Saturday winner, by his name and team that day (linked while he's still in the save). */
+function ContestRow({ league, k, e }: { league: League; k: string; e: { pid: number; name: string; tid: number } }) {
+  const inner = (
+    <>
+      <span className="k">{k}</span>
+      <span className="row" style={{ gap: 8, minWidth: 0 }}>
+        <span className="bold ellipsis">{e.name}</span>
+        <TeamLogo tid={e.tid} size={18} />
+      </span>
+    </>
+  );
+  return league.players[e.pid] ? (
+    <Link to={`/player/${e.pid}`} className="lg-hist-row">
+      {inner}
+    </Link>
+  ) : (
+    <div className="lg-hist-row">{inner}</div>
+  );
+}
+
 // ---------------------------------------------------------------- hall of fame
 
 /**
- * Is a retiree worth remembering, and how much: honours won in this league, or a long or productive
- * career. Imported veterans have only their last real seasons on record, so their years in the NBA
- * and those seasons' win shares count too.
+ * Is a retiree worth remembering, and how much: honours won in this league (a single All-Star
+ * Saturday contest isn't enough on its own), or a long or productive career. Imported veterans have
+ * only their last real seasons on record, so their years in the NBA and those seasons' win shares
+ * count too.
  */
 function careerValue(p: Player) {
   const c = careerTotals(p);
   const ws = p.stats.reduce((s, x) => s + (!x.playoffs && x.adv ? x.adv.ws : 0), 0);
   const honours = accoladeScore(p);
-  const notable = honours > 0 || p.experience >= 12 || c.gp >= 600 || c.pts >= 10000 || ws >= 15;
+  const notable = honours >= 0.5 || p.experience >= 12 || c.gp >= 600 || c.pts >= 10000 || ws >= 15;
   return { notable, score: honours + c.pts / 2000 + p.experience / 3 + ws / 4 };
 }
 

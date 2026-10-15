@@ -204,7 +204,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
   ];
 
   // a stat he has never put up in a game the book counts is a high of 0; no highs at all, no games
-  const highs = REC_STATS.map((k) => row(`hi-${k}`, REC_LABEL[k][0], (p) => (p.highs && Object.keys(p.highs).length ? (p.highs[k]?.v ?? 0) : null), 'high', 'int'));
+  const highs = REC_STATS.map((k) => row(`hi-${k}`, REC_LABEL[k][0], (p) => (p.highs && Object.keys(p.highs).length ? (p.highs[k]?.[0] ?? 0) : null), 'high', 'int'));
 
   // the honors either has, in the league history's order (read off both players' awards at once);
   // none counts as 0 against the other's

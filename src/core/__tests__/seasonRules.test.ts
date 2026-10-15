@@ -65,7 +65,9 @@ describe('the All-Star break', () => {
     // (the break moved up: 15 games in, enough for All-Star candidates)
     while (l.day < 32) simDay(l);
     l.allStarDay = l.day;
-    const pool = Object.values(l.players).filter((p) => p.tid >= 0 && !p.injury);
+    // (the break moved onto a game day: a longer injury on a team that plays still heals a game, so it's one that doesn't)
+    const playing = new Set(l.schedule.filter((g) => g.day === l.day).flatMap((g) => [g.home, g.away]));
+    const pool = Object.values(l.players).filter((p) => p.tid >= 0 && !p.injury && !playing.has(p.tid));
     const knocked = pool.slice(0, 5);
     for (const p of knocked) p.injury = { type: 'Sprained Ankle', gamesRemaining: 2, gamesTotal: 2, severity: 'minor' };
     const longer = pool[5];

@@ -246,7 +246,7 @@ function checkOpeningNight() {
 /**
  * The All-Star Game is over: four guards and six frontcourt players at least among each
  * conference's twelve, all from that conference, and a healthy replacement for each one an injury
- * keeps out more than two games.
+ * keeps out more than two games; and All-Star Saturday was held.
  */
 function checkAllStars() {
   const aw = L.awards.find((a) => a.season === L.season);
@@ -261,6 +261,16 @@ function checkAllStars() {
     if (subs.length !== picks.filter(missesAllStarGame).length || subs.some(missesAllStarGame))
       bad('All-Star replacements', `${conf}: ${picks.filter(missesAllStarGame).length} hurt, ${subs.length} replaced`);
   }
+  // All-Star Saturday: eight shooters and four dunkers, scores in range, the top three and two in the finals, the winners with the award
+  const sat = aw.saturday;
+  if (!sat || sat.three.length !== 8 || sat.dunk.length !== 4 || new Set(sat.three.map((e) => e.pid)).size !== 8 || new Set(sat.dunk.map((e) => e.pid)).size !== 4)
+    return bad('All-Star Saturday fields', `${sat?.three.length} shooters, ${sat?.dunk.length} dunkers`);
+  const dunks = sat.dunk.flatMap((e) => [...e.r1, ...(e.final ?? []), ...(e.r1Off ?? []), ...(e.finalOff ?? [])]);
+  const finalist = (i: number) => i < 3;
+  if (sat.three.some((e, i) => e.r1 < 0 || e.r1 > 40 || finalist(i) === (e.final === undefined)) || dunks.some((d) => d.score < 30 || d.score > 50 || !d.text))
+    bad('All-Star Saturday scores', JSON.stringify(sat));
+  const won = (pid: number, type: string) => L.players[pid]?.awards.some((a) => a.season === L.season && a.type === type);
+  if (!won(sat.three[0].pid, 'Three-Point Contest') || !won(sat.dunk[0].pid, 'Slam Dunk Contest')) bad('All-Star Saturday winner without the award', '');
 }
 
 /**

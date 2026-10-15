@@ -10,6 +10,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Card, Empty } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { CupBanner } from './CupTab';
+import { AllStarSaturday } from './AllStarSaturday';
 import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
@@ -87,6 +88,7 @@ export function AwardsTab({ league }: { league: League }) {
       {decided && aw && <MajorAwards league={league} aw={aw} />}
       {decided && aw && <Teams league={league} aw={aw} />}
       {aw && aw.allStars.E.length > 0 && <AllStars league={league} aw={aw} />}
+      {aw?.saturday && <AllStarSaturday league={league} aw={aw} />}
     </>
   );
 }

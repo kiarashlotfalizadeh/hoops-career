@@ -171,12 +171,12 @@ describe('compareSections', () => {
   it('reads career highs as 0 for a stat he never put up, and "—" for a player with no games in the book', () => {
     const l = league();
     const [a, b] = two(l);
-    const h = { season: l.season, day: 3, opp: 1, gid: 7 };
-    a.highs = { pts: { v: 41, ...h }, blk: { v: 4, ...h } };
+    const h = (v: number): [number, number, number, number, number] => [v, l.season, 3, 1, 7];
+    a.highs = { pts: h(41), blk: h(4) };
     const highs = () => compareSections(l, a, b, skillPercentiles(l)).find((s) => s.id === 'highs')!.rows;
     expect(highs().map((r) => r.key)).toEqual(REC_STATS.map((k) => `hi-${k}`));
     expect(highs().every((r) => r.b === null && rowView(r).win === null)).toBe(true);
-    b.highs = { pts: { v: 33, ...h } };
+    b.highs = { pts: h(33) };
     const blk = highs().find((r) => r.key === 'hi-blk')!;
     expect([blk.a, blk.b, rowView(blk).win]).toEqual([4, 0, 'a']);
   });

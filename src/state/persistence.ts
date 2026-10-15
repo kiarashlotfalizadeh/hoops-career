@@ -7,6 +7,7 @@ import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type 
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
+import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
 import { MAX_STEPS } from './live';
 
 export interface LeagueMeta {
@@ -375,8 +376,33 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   }
   migrateContracts(x);
   migrateRecords(x);
+  // All-Star Saturday's results: a damaged set goes (the Awards tab then shows the All-Stars alone)
+  for (const a of x.awards) if (obj(a) && a.saturday !== undefined && !saturdayIntact(x, a.saturday)) delete a.saturday;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** All-Star Saturday's results in shape: at most eight shooters and four dunkers, scores in range, each dunk with its name. */
+function saturdayIntact(x: League, s: unknown): boolean {
+  if (!obj(s) || !Array.isArray(s.three) || s.three.length > THREE_FIELD || !Array.isArray(s.dunk) || s.dunk.length > DUNK_FIELD) return false;
+  const who = (e: Record<string, unknown>) => int(e.pid) && str(e.name) && int(e.tid) && !!x.teams[e.tid as number];
+  const pts = (v: unknown, max: number) => int(v) && v >= 0 && v <= max;
+  const offs = (v: unknown) => v === undefined || (Array.isArray(v) && v.length <= 3 && v.every((n) => pts(n, 6)));
+  const dunk = (d: unknown) =>
+    obj(d) && int(d.score) && d.score >= 30 && d.score <= 50 && str(d.text) && (d.text as string).length <= 60 && (d.miss === undefined || d.miss === true);
+  const dunks = (v: unknown, n: number) => Array.isArray(v) && v.length <= n && v.every(dunk);
+  return (
+    s.three.every((e) => obj(e) && who(e) && pts(e.r1, 40) && (e.final === undefined || pts(e.final, 40)) && offs(e.r1Off) && offs(e.finalOff)) &&
+    s.dunk.every(
+      (e) =>
+        obj(e) &&
+        who(e) &&
+        dunks(e.r1, 2) &&
+        (e.final === undefined || dunks(e.final, 2)) &&
+        (e.r1Off === undefined || dunks(e.r1Off, 3)) &&
+        (e.finalOff === undefined || dunks(e.finalOff, 3)),
+    )
+  );
 }
 
 /**
