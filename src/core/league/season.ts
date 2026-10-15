@@ -29,7 +29,7 @@ import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
-import { updateMorale } from './morale';
+import { resolvePromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
@@ -86,6 +86,8 @@ export function startRegularSeason(league: League): string[] {
   aiExtensions(league);
   league.phase = 'regular';
   league.day = 0;
+  // a trade promised over the summer is due by opening night
+  resolvePromises(league);
   addInbox(league, {
     from: 'Assistant Coach',
     subject: 'Opening night',
@@ -237,6 +239,8 @@ export function advanceDay(league: League) {
   league.day++;
   // released players whose days on waivers are up are claimed or clear to free agency
   resolveWaivers(league);
+  // promises to the user's players that are due (a bigger role, a trade by the deadline, patience)
+  resolvePromises(league);
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
   else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);

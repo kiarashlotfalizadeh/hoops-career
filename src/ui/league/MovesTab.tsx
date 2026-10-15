@@ -19,6 +19,8 @@ type Filter = 'all' | Group;
 
 const GROUP: Record<TxnKind, Group> = {
   trade: 'trade',
+  // an exercised pick swap: picks changing hands, as in a trade
+  swap: 'trade',
   sign: 'signing',
   resign: 'signing',
   extend: 'signing',
