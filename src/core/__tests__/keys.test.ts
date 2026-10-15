@@ -74,6 +74,24 @@ describe('keys to the game', () => {
     expect(grade).toMatchObject({ value: null, met: null });
   });
 
+  it('read the offensive glass as a share of the misses, never decided before the end', () => {
+    const box = (orb: number, drb: number) => ({ t: { orb, drb }, players: [] });
+    const res = { home: box(9, 30), away: box(12, 36) } as unknown as GameResult;
+    // the user is home: his 9 offensive rebounds of the 9 + 36 chances on his misses
+    expect(keyValue({ side: 'us', stat: 'orb' }, res, 0)).toBe(20);
+    expect(keyValue({ side: 'them', stat: 'orb' }, res, 0)).toBe(29);
+    const glass = { dir: 'max' as const, target: 27, stat: 'orb' as const };
+    expect(keyState(glass, 29, 0.25, false)).toBe('behind');
+    expect(keyState(glass, 25, 0.25, false)).toBe('on');
+    expect(keyState(glass, 29, 1, true)).toBe('missed');
+    const grade = gradeKey(
+      { id: 'glass', title: 'Keep them off the glass', goal: 'Hold BOS to 27% of their misses or fewer', why: '', side: 'them', stat: 'orb', dir: 'max', target: 27 },
+      res,
+      0,
+    );
+    expect(grade).toMatchObject({ value: 29, met: false, pct: true });
+  });
+
   it('a damaged list in a save goes', () => {
     const l = testLeague('keys-save');
     for (let i = 0; i < 6; i++) simDay(l);

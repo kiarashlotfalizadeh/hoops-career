@@ -2,7 +2,7 @@
 // at the breaks and in the huddle, and graded with the result.
 import { Check, KeyRound, X } from 'lucide-react';
 import type { GameResult, KeyGrade } from '../../core/types';
-import { keyState, keyValue, type GameKey, type KeyState } from '../../core/analysis/keys';
+import { isRate, keyState, keyValue, type GameKey, type KeyState } from '../../core/analysis/keys';
 
 const STATE_TAG: Record<KeyState, { text: string; tone: string }> = {
   met: { text: 'Done', tone: 'good' },
@@ -50,13 +50,18 @@ export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[];
         const v = keyValue(k, box, side);
         const st = keyState(k, v, share, false);
         const tag = STATE_TAG[st];
-        const pace = v !== null && share > 0.05 && share < 1 && st !== 'met' && st !== 'missed' ? Math.round(v / share) : null;
+        const rate = isRate(k.stat);
+        // a share of the misses has no pace: it is what it is so far
+        const pace = !rate && v !== null && share > 0.05 && share < 1 && st !== 'met' && st !== 'missed' ? Math.round(v / share) : null;
+        const u = rate ? '%' : '';
         return (
           <div key={k.id} className="row top small" style={{ gap: 8 }}>
             <div className="grow" style={{ minWidth: 0 }}>
               <b>{k.title}</b>{' '}
               <span className="dim2">
-                {v ?? 0} so far{pace !== null ? `, on pace for ${pace}` : ''} · {k.dir === 'max' ? '≤' : '≥'} {k.target}
+                {v ?? 0}
+                {u} so far{pace !== null ? `, on pace for ${pace}` : ''} · {k.dir === 'max' ? '≤' : '≥'} {k.target}
+                {u}
               </span>
             </div>
             <span className={`tag ${tag.tone}`} style={{ flex: 'none' }}>
@@ -96,7 +101,7 @@ export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
             <div>
               <b>{k.title}</b> <span className="dim2">· {k.goal.replace(/^./, (c) => c.toLowerCase())}</span>
             </div>
-            <div className="tiny dim">{k.value === null ? 'He sat out.' : `${k.value} on the night.`}</div>
+            <div className="tiny dim">{k.value === null ? 'He sat out.' : `${k.value}${k.pct ? '%' : ''} on the night.`}</div>
           </div>
         </div>
       ))}

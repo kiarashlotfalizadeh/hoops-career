@@ -27,11 +27,17 @@ export interface GameKey {
   target: number;
 }
 
+/**
+ * The offensive glass is read as a share of the misses (a team that misses more gets more chances,
+ * so a count would grow as it loses); every other number is a count for the game.
+ */
+export const isRate = (stat: KeyStat) => stat === 'orb';
+
 /** Games a team needs before its own numbers are read (otherwise last season's, or what its coach and roster suggest). */
 const MIN_GAMES = 5;
 
 /** League per-team-game numbers to fall back on with no games to read (the engine plays to the 2025-26 NBA's). */
-const LEAGUE_DEFAULT: Record<Exclude<KeyStat, 'pts'>, number> = { orb: 10.8, tov: 14.2, tpm: 13.5, fta: 21.7, fastBreak: 14.5, paint: 48, ast: 27 };
+const LEAGUE_DEFAULT: Record<Exclude<KeyStat, 'pts'>, number> = { orb: 27, tov: 14.2, tpm: 13.5, fta: 21.7, fastBreak: 14.5, paint: 48, ast: 27 };
 
 const STAT_WORDS: Record<KeyStat, [string, string]> = {
   orb: ['offensive rebound', 'offensive rebounds'],
@@ -46,9 +52,13 @@ const STAT_WORDS: Record<KeyStat, [string, string]> = {
 
 const plural = (n: number, stat: KeyStat) => `${n} ${STAT_WORDS[stat][n === 1 ? 0 : 1]}`;
 
-/** A team's number in one box score. */
-function boxStat(b: TeamBox, stat: Exclude<KeyStat, 'pts'>): number {
+/** A team's number in one box score (`other`: the other team's, for a share of the misses). */
+function boxStat(b: TeamBox, stat: Exclude<KeyStat, 'pts'>, other: TeamBox): number {
   switch (stat) {
+    case 'orb': {
+      const chances = b.t.orb + other.t.drb;
+      return chances ? (100 * b.t.orb) / chances : 0;
+    }
     case 'fastBreak':
       return b.extra.fastBreak;
     case 'paint':
@@ -57,6 +67,9 @@ function boxStat(b: TeamBox, stat: Exclude<KeyStat, 'pts'>): number {
       return b.t[stat];
   }
 }
+
+/** The goal for a share of the misses: "Hold BOS to 27% of their misses or fewer", "Grab 30% of your misses". */
+const glassGoal = (dir: 'max' | 'min', who: string, target: number) => (dir === 'max' ? `Hold ${who} to ${target}% of their misses or fewer` : `Grab ${target}% of your misses`);
 
 const TEAM_STATS: Exclude<KeyStat, 'pts'>[] = ['orb', 'tov', 'tpm', 'fta', 'fastBreak', 'paint', 'ast'];
 
@@ -88,8 +101,8 @@ function aggregate(league: League, season: number, day: number | undefined, scor
       const s = sums.get(me.tid) ?? { gp: 0, for: blank(), against: blank() };
       s.gp++;
       for (const k of TEAM_STATS) {
-        s.for[k] += boxStat(me, k);
-        s.against[k] += boxStat(them, k);
+        s.for[k] += boxStat(me, k, them);
+        s.against[k] += boxStat(them, k, me);
       }
       sums.set(me.tid, s);
       if (me.tid === scorersOf)
@@ -185,11 +198,17 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
     const expect = (mine.for[stat] + other.against[stat]) / 2;
     const target = dir === 'max' ? Math.max(0, Math.floor(expect)) : Math.ceil(expect);
     const who = side === 'us' ? 'your team' : abbrev;
-    const goal = dir === 'max' ? `Hold ${who} to ${plural(target, stat)} or fewer` : `${side === 'us' ? 'Get' : 'Force'} ${plural(target, stat)}`;
+    const goal = isRate(stat)
+      ? glassGoal(dir, who, target)
+      : dir === 'max'
+        ? side === 'us'
+          ? `Keep it to ${plural(target, stat)} or fewer`
+          : `Hold ${who} to ${plural(target, stat)} or fewer`
+        : `${side === 'us' ? 'Get' : 'Force'} ${plural(target, stat)}`;
     out.push({
       id,
       title,
-      goal: side === 'us' && dir === 'max' ? `Keep it to ${plural(target, stat)} or fewer` : goal,
+      goal,
       why: why(v.toFixed(1), `${ord(rank(O, signal, stat))} of ${n}${label}`),
       side,
       stat,
@@ -199,14 +218,14 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
     });
   };
   // what they do best, to take away
-  add('glass', 'Keep them off the glass', 'them', 'orb', 'max', 'for', (v, r) => `They grab ${v} offensive rebounds a game, ${r}.`);
+  add('glass', 'Keep them off the glass', 'them', 'orb', 'max', 'for', (v, r) => `They rebound ${v}% of their misses, ${r}.`);
   add('arc', 'Run them off the line', 'them', 'tpm', 'max', 'for', (v, r) => `They make ${v} threes a game, ${r}.`);
   add('line', 'Defend without fouling', 'them', 'fta', 'max', 'for', (v, r) => `They shoot ${v} free throws a game, ${r}.`);
   add('getback', 'Get back in transition', 'them', 'fastBreak', 'max', 'for', (v, r) => `They score ${v} fast-break points a game, ${r}.`);
   add('paint', 'Protect the paint', 'them', 'paint', 'max', 'for', (v, r) => `They score ${v} points in the paint a game, ${r}.`);
   // what their defense does to teams, to beat or go after
   add('ball', 'Take care of the ball', 'us', 'tov', 'max', 'against', (v, r) => `Their defense forces ${v} turnovers a game, ${r}.`);
-  add('crash', 'Crash the offensive glass', 'us', 'orb', 'min', 'against', (v, r) => `They give up ${v} offensive rebounds a game, ${r}.`);
+  add('crash', 'Crash the offensive glass', 'us', 'orb', 'min', 'against', (v, r) => `Teams rebound ${v}% of their misses against them, ${r}.`);
   add('attack', 'Get to the line', 'us', 'fta', 'min', 'against', (v, r) => `They put teams on the line ${v} times a game, ${r}.`);
   add('fly', 'Let it fly', 'us', 'tpm', 'min', 'against', (v, r) => `They give up ${v} threes a game, ${r}.`);
   // their own loose handling
@@ -275,7 +294,17 @@ function fromPriors(league: League, them: number): Candidate[] {
   const out: Candidate[] = [];
   const hold = (id: string, title: string, stat: Exclude<KeyStat, 'pts'>, why: string, z: number, by = 1.08) => {
     const target = Math.floor(D[stat] * by);
-    out.push({ id, title, goal: `Hold ${abbrev} to ${plural(target, stat)} or fewer`, why, side: 'them', stat, dir: 'max', target, z });
+    out.push({
+      id,
+      title,
+      goal: isRate(stat) ? glassGoal('max', abbrev, target) : `Hold ${abbrev} to ${plural(target, stat)} or fewer`,
+      why,
+      side: 'them',
+      stat,
+      dir: 'max',
+      target,
+      z,
+    });
   };
   if (t.offense.crashBoards >= 60) hold('glass', 'Keep them off the glass', 'orb', 'Their coach sends players to the offensive glass.', (t.offense.crashBoards - 50) / 20);
   if (t.offense.threePoint >= 60) hold('arc', 'Run them off the line', 'tpm', 'Their coach wants threes and shots at the rim.', (t.offense.threePoint - 50) / 20);
@@ -333,7 +362,7 @@ function fromPriors(league: League, them: number): Candidate[] {
   out.push({
     id: 'crash',
     title: 'Win the second chances',
-    goal: `Get ${plural(Math.ceil(D.orb), 'orb')}`,
+    goal: glassGoal('min', 'your team', Math.ceil(D.orb)),
     why: 'Extra possessions decide close games.',
     side: 'us',
     stat: 'orb',
@@ -351,7 +380,9 @@ export function keyValue(key: Pick<GameKey, 'side' | 'stat' | 'pid'>, res: Pick<
     const line = box.players.find((b) => b.pid === key.pid);
     return line && line.min > 0 ? line.pts : null;
   }
-  return boxStat(box, key.stat);
+  // (a share of the misses as a whole percentage)
+  const v = boxStat(box, key.stat, box === res.home ? res.away : res.home);
+  return isRate(key.stat) ? Math.round(v) : v;
 }
 
 export type KeyState = 'met' | 'missed' | 'on' | 'behind' | 'void';
@@ -361,8 +392,13 @@ export type KeyState = 'met' | 'missed' | 'on' | 'behind' | 'void';
  * or while the game goes on, decided already (a max key gone past, a min key reached) or on pace
  * (`on`, `behind`) for a full game at the rate so far (`share`: the part of the game played, 0..1).
  */
-export function keyState(key: Pick<GameKey, 'dir' | 'target'>, value: number | null, share: number, final: boolean): KeyState {
+export function keyState(key: Pick<GameKey, 'dir' | 'target'> & { stat?: KeyStat }, value: number | null, share: number, final: boolean): KeyState {
   if (value === null) return final ? 'void' : 'on';
+  // a share of the misses is never decided before the end: on track while it's on the right side
+  if (key.stat && isRate(key.stat)) {
+    const ok = key.dir === 'max' ? value <= key.target : value >= key.target;
+    return final ? (ok ? 'met' : 'missed') : ok ? 'on' : 'behind';
+  }
   if (key.dir === 'max') {
     if (value > key.target) return 'missed';
     if (final) return 'met';
@@ -377,5 +413,14 @@ export function keyState(key: Pick<GameKey, 'dir' | 'target'>, value: number | n
 export function gradeKey(key: GameKey, res: Pick<GameResult, 'home' | 'away'>, userSide: 0 | 1): KeyGrade {
   const value = keyValue(key, res, userSide);
   const state = keyState(key, value, 1, true);
-  return { id: key.id, title: key.title, goal: key.goal, dir: key.dir, target: key.target, value, met: state === 'void' ? null : state === 'met' };
+  return {
+    id: key.id,
+    title: key.title,
+    goal: key.goal,
+    dir: key.dir,
+    target: key.target,
+    value,
+    met: state === 'void' ? null : state === 'met',
+    ...(isRate(key.stat) && { pct: true as const }),
+  };
 }

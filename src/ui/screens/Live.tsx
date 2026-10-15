@@ -1134,7 +1134,8 @@ export default function Live() {
             <div className={`grid4 live-ctl live-dock${playsOn ? ' five' : ''}`} role="group" aria-label="Coaching">
               <button
                 className="btn sm"
-                disabled={me.timeouts <= 0 || atBreak || toPending}
+                // (nothing to stop before the opening tip)
+                disabled={me.timeouts <= 0 || atBreak || toPending || intro}
                 onClick={() => callTimeout()}
                 aria-label={toPending ? 'TO: timeout called, the court shows it next' : `TO: call a timeout, ${view.sides[userSide].timeouts} left`}
               >

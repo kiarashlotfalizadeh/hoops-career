@@ -896,6 +896,8 @@ export interface KeyGrade {
   value: number | null;
   /** Null when it didn't apply. */
   met: boolean | null;
+  /** The number is a percentage (a share of the misses on the offensive glass). */
+  pct?: true;
 }
 
 /** One set's night (GameResult.sets): how often a side ran it, the points those possessions scored, and the run the defense was on it by. */
