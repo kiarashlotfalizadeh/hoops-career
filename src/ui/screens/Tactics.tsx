@@ -23,6 +23,7 @@ import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/g
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
 import { CrunchTimeCard } from '../tactics/CrunchTimeCard';
+import { SetPackageCard } from '../tactics/SetPackageCard';
 import { SituationToggles, SituationsCard } from '../tactics/SituationsCard';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
@@ -213,6 +214,7 @@ export default function Tactics() {
               ))}
             </div>
           </Card>
+          <SetPackageCard t={t} edit={edit} players={players} />
           <Card title="Shot profile">
             <div className="col" style={{ gap: 16 }}>
               <Slider

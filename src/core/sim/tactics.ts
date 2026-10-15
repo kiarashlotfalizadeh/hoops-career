@@ -288,6 +288,7 @@ export function cloneTactics(t: Tactics): Tactics {
       roles: { ...t.offense.roles },
       freedom: { ...t.offense.freedom },
       screeners: [...t.offense.screeners],
+      ...(t.offense.sets && { sets: [...t.offense.sets] }),
     },
     defense: {
       ...t.defense,
@@ -301,7 +302,7 @@ export function cloneTactics(t: Tactics): Tactics {
 }
 
 /** The coach-only management settings an AI coach never plays (see withoutCoachPlans). */
-const COACH_MANAGE = ['goTo', 'ato', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
+const COACH_MANAGE = ['goTo', 'ato', 'atoPid', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
 
 /** Whether tactics carry anything only the user's bench uses (see withoutCoachPlans). */
 export function hasCoachPlans(t: Tactics): boolean {
@@ -309,6 +310,7 @@ export function hasCoachPlans(t: Tactics): boolean {
     !!t.situations ||
     COACH_MANAGE.some((k) => t.manage[k] !== undefined && t.manage[k] !== null && t.manage[k] !== false) ||
     t.offense.huntTarget != null ||
+    t.offense.sets !== undefined ||
     t.defense.chase !== undefined ||
     t.defense.playerD !== undefined
   );
@@ -316,14 +318,15 @@ export function hasCoachPlans(t: Tactics): boolean {
 
 /**
  * The tactics without what only the user's bench uses: situational plans, the crunch-time go-to
- * player and after-timeout play, hack targets, the foul to give, the assistant's adjustments, and
- * the game-specific hunt target, chase targets and instructions on tonight's opponents. An AI coach
- * who inherits a team (the user took over another) plays its playbook, not those.
+ * player and after-timeout play, hack targets, the foul to give, the assistant's adjustments, the set
+ * package, and the game-specific hunt target, chase targets and instructions on tonight's opponents.
+ * An AI coach who inherits a team (the user took over another) plays its playbook, not those.
  */
 export function withoutCoachPlans(t: Tactics): Tactics {
   const out = cloneTactics(t);
   delete out.situations;
   for (const k of COACH_MANAGE) delete out.manage[k];
+  delete out.offense.sets;
   delete out.offense.huntTarget;
   delete out.defense.chase;
   delete out.defense.playerD;
@@ -383,7 +386,8 @@ const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && JS
 export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   const patch: TacticsPatch = {};
   const offense: NonNullable<TacticsPatch['offense']> = {};
-  for (const k of Object.keys(b.offense) as (keyof OffenseTactics)[]) {
+  // (both sides' keys: a set package taken off is a change too)
+  for (const k of new Set([...Object.keys(a.offense), ...Object.keys(b.offense)]) as Set<keyof OffenseTactics>) {
     if (k === 'actions' || k === 'huntTarget' || same(a.offense[k], b.offense[k])) continue;
     (offense as Record<string, unknown>)[k] = structuredClone(b.offense[k]);
   }
@@ -428,7 +432,7 @@ export const SITUATION_TEMPLATES: Record<SituationTemplate, { label: string; hel
   },
   secondUnit: {
     label: 'Second unit',
-    help: 'While three or more reserves are on the floor: simpler sets (more pick-and-roll and ball movement, fewer isolations and post-ups) at a quicker pace.',
+    help: 'While three or more reserves are on the floor: a simpler offense (more pick-and-roll and ball movement, fewer isolations and post-ups) at a quicker pace.',
     when: { benchUnit: true },
     patch: { nudge: { offense: { pace: 10, transition: 10 }, actions: { pnr: 10, motion: 10, iso: -15, post: -10 } } },
   },

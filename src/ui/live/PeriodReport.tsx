@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Lightbulb, Play } from 'lucide-react';
 import type { League, Tactics, Team } from '../../core/types';
-import { buildGameReport } from '../../core/analysis/gameReport';
+import { buildGameReport, setLineText, setLines } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
@@ -12,11 +12,13 @@ import { adviceFor } from '../seasonAnalysis';
 import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { wpText } from '../../core/analysis/winProb';
+import { readStatus } from './plays';
 
 /**
  * The break between periods: your chance to win, the score by quarter, how the teams compare, who's
  * scoring, your players in foul or energy trouble, what has decided the game so far (with one-tap
- * fixes), their play types running above this season's norm and the game plan their coach brought.
+ * fixes), their play types running above this season's norm, your sets so far (and the ones their defense
+ * is on) and the game plan their coach brought.
  */
 export function PeriodReport({
   league,
@@ -72,6 +74,8 @@ export function PeriodReport({
       .map((p) => `${names(p.pid)} ${p.pts}`)
       .join(', ') || '—';
   const factors = (report?.factors ?? []).slice(0, 3);
+  // your sets (and clear-outs) run so far, and the ones their defense is reading
+  const sets = setLines(view.box, side);
   const hot = Object.entries(them.pt)
     .filter(([k, v]) => k !== 'misc' && baselines[k] !== undefined && v.poss >= 6 && zScore(v, baselines[k]) > 1.5)
     .sort((a, b) => zScore(b[1], baselines[b[0]]) - zScore(a[1], baselines[a[0]]))
@@ -159,6 +163,22 @@ export function PeriodReport({
                       {c.label}
                     </button>
                   )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {sets.length > 0 && (
+          <div className="col" style={{ gap: 4 }}>
+            <div className="tiny dim upper bold">Your sets so far</div>
+            {sets.map((s) => {
+              const read = s.id === 'iso' ? null : readStatus(me, s.id);
+              return (
+                <div key={s.id} className="row small" style={{ gap: 8 }}>
+                  <span className="grow">
+                    {s.name} <span className="dim">· {setLineText({ ...s, readAt: undefined })}</span>
+                  </span>
+                  {read?.onIt && <span className="tag bad">They're on it</span>}
                 </div>
               );
             })}

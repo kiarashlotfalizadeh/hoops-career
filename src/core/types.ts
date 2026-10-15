@@ -381,6 +381,13 @@ export type StarPlan = 'none' | 'deny' | 'double';
 export type PlayerDefense = 'under' | 'tight' | 'sag' | 'body';
 export const PLAYER_DEFENSES: PlayerDefense[] = ['under', 'tight', 'sag', 'body'];
 
+/**
+ * A named offensive set (see src/core/sim/sets.ts): a specific way of running one of the engine's
+ * actions for one player and one look. The clear-out isolation is the isolation call, not one of these.
+ */
+export type SetId = 'spain' | 'horns' | 'floppy' | 'elevator' | 'hammer' | 'chicago' | 'postSplit';
+export const SET_IDS: SetId[] = ['spain', 'horns', 'floppy', 'elevator', 'hammer', 'chicago', 'postSplit'];
+
 export interface OffenseTactics {
   /** 0..100: 0 = grind every possession, 100 = run-and-gun. */
   pace: number;
@@ -407,6 +414,11 @@ export interface OffenseTactics {
   freedom: Record<number, ShotFreedom>;
   /** Preferred PnR screeners, in order (empty = auto). */
   screeners: number[];
+  /**
+   * The set package (the user's only, at most four): the half court mixes these sets in now and then
+   * when the players on the floor fit them. AI coaches run none.
+   */
+  sets?: SetId[];
 }
 
 export interface DefenseTactics {
@@ -460,8 +472,10 @@ export interface GameManagement {
   fatigueSub: number;
   /** Crunch-time go-to player (pid): in the last two minutes of a close fourth quarter or overtime the ball finds him more. */
   goTo?: number | null;
-  /** After-timeout play: the first action of the next half-court trip after one of your timeouts. */
-  ato?: ActionType | null;
+  /** After-timeout play: the first action (or a set) of the next half-court trip after one of your timeouts. */
+  ato?: ActionType | SetId | null;
+  /** The player the after-timeout set (or isolation) is run for; absent or off the floor: the best fit there. */
+  atoPid?: number | null;
   /** Hack-a-player targets (opponent pids, for game plans): fouled intentionally while on the floor, whatever their free-throw percentage. */
   hackTargets?: number[];
   /** Quarter hack-a-player starts in, by threshold or target (default 1; overtime counts as the 4th). */
@@ -799,9 +813,23 @@ export interface GameResult {
   oppPlan?: string[];
   /** Player of the game. */
   pog?: number;
+  /** The sets each side ran (and clear-out isolations called), when any were: only the user's team runs them. */
+  sets?: SetStat[];
   att?: number;
   /** The user's regular-season games: where his team stood in its conference going in and coming out. */
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
+}
+
+/** One set's night (GameResult.sets): how often a side ran it, the points those possessions scored, and the run the defense was on it by. */
+export interface SetStat {
+  /** 0 home, 1 away. */
+  t: 0 | 1;
+  /** A set, or 'iso' for clear-out isolations called for a player. */
+  id: SetId | 'iso';
+  runs: number;
+  pts: number;
+  /** The run on which the defense's read had taken a real share of its look away (see READ_ON_IT in sets.ts), if it got there. */
+  readAt?: number;
 }
 
 /** A team's place in its conference: rank, games behind the leader, and a clinch mark (x playoffs, p play-in, e eliminated). */

@@ -3,6 +3,7 @@
 // basket at (0, 5.25). The offense always attacks the basket at the top of the screen.
 
 import type { PossLog, PossStep } from '../../core/sim/log';
+import { SETS } from '../../core/sim/sets';
 
 export interface Pt {
   x: number;
@@ -184,6 +185,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
   };
 
   snap(0);
+  // a set's off-ball screens, in order: where each sends its man depends on the set
+  let pins = 0;
   // the score before this possession, so makes can tick it up
   const score: [number, number] = before ? [...before] : [log.score[0] - (off === 0 ? log.pts : 0), log.score[1] - (off === 1 ? log.pts : 0)];
 
@@ -200,6 +203,12 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
       case 'advance': {
         for (const pid of oPids) moveTo(pid, spots.get(pid)!);
         holder = st.pid ?? holder;
+        // Horns: the big it's run for and the other big set up at the elbows
+        if (log.set?.id === 'horns') {
+          const other = oInfo.filter((p) => p.pid !== log.set!.pid && p.pid !== holder).sort((a, b) => b.hgt - a.hgt)[0];
+          moveTo(log.set.pid, { x: -6, y: 19.5 });
+          if (other) moveTo(other.pid, { x: 6, y: 19.5 });
+        }
         ball = { ...o.get(holder)! };
         follow();
         snap(750);
@@ -237,6 +246,79 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         moveTo(scr, { x: hp.x + 1, y: 12 });
         follow();
         snap(520, { flash: { text: log.coverage ? log.coverage.toUpperCase() : 'SCREEN', kind: 'info', x: hp.x, y: hp.y + 3 } });
+        break;
+      }
+      case 'pin': {
+        // an off-ball screen: the screener gets to his spot, then his man comes off it
+        const scr = st.pid!;
+        const cut = st.pid2!;
+        const sp = o.get(scr);
+        const cp = o.get(cut);
+        if (!sp || !cp) break;
+        const n = pins++;
+        const side = cp.x >= 0 ? 1 : -1;
+        let at: Pt;
+        let to: Pt;
+        switch (log.set?.id) {
+          case 'floppy':
+            // from the baseline under the basket, past a screen on one block, off the stagger on the
+            // other side and out to that wing
+            // (the stagger on the left, up the lane line from where a big posts)
+            if (n === 0) {
+              moveTo(cut, { x: 4.5, y: 2 });
+              at = { x: 6.5, y: 8.5 };
+              to = { x: 4.5, y: 2 };
+            } else {
+              at = { x: -6, y: 10.5 };
+              to = { x: -16.5, y: 20.5 };
+            }
+            break;
+          case 'elevator':
+            // two screeners side by side at the top of the key; he comes up between them, the passer
+            // swinging out to the wing to find him
+            if (n === 0) {
+              if (holder !== cut && holder !== scr) moveTo(holder, { x: 16.5, y: 21 });
+              moveTo(cut, { x: 0, y: 13 });
+              at = { x: -1.6, y: 23 };
+              to = { x: 0, y: 13 };
+            } else {
+              at = { x: 1.6, y: 23 };
+              to = { x: 0, y: 26 };
+            }
+            break;
+          case 'chicago':
+            // a pin-down on the block, and he curls up toward the handoff
+            moveTo(cut, { x: side * 9, y: 6 });
+            at = { x: side * 8.5, y: 11 };
+            to = { x: side * 12, y: 22 };
+            break;
+          case 'hammer':
+            // the hammer screen on the help defender frees his corner
+            at = { x: side * 9, y: 7 };
+            to = { x: side * 22, y: 3 };
+            break;
+          case 'spain':
+            // a back screen on the roll man's defender as he dives
+            at = { x: cp.x - 1.6, y: cp.y + 1.4 };
+            to = { x: cp.x * 0.3, y: 7.5 };
+            break;
+          case 'postSplit':
+            // the split: one screens for the other, who cuts (the screener flares)
+            at = { x: cp.x + side * -2, y: cp.y };
+            to = { x: cp.x * 0.5, y: cp.y - 4 };
+            break;
+          default:
+            at = { x: cp.x - side * 2, y: cp.y - 1.5 };
+            to = { x: side * 16.5, y: 21 };
+        }
+        moveTo(scr, at);
+        follow();
+        snap(420);
+        moveTo(cut, to);
+        if (log.set?.id === 'postSplit') moveTo(scr, { x: -side * 18, y: 20 });
+        follow();
+        const name = n === 0 && log.set ? SETS[log.set.id].short.toUpperCase() : 'SCREEN';
+        snap(480, { flash: { text: name, kind: 'info', x: at.x, y: at.y + 3 } });
         break;
       }
       case 'trap': {

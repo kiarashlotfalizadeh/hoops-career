@@ -11,6 +11,7 @@ import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
+import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Spinner, Tag } from '../components/ui';
 import { CompareBar } from '../components/charts';
@@ -18,7 +19,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
-import type { GameType, League, Tactics, TacticsPatch } from '../../core/types';
+import type { GameType, League, SetId, Tactics, TacticsPatch } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
 
@@ -542,6 +543,8 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
       .filter(Boolean),
   );
   const keys = Array.from(new Set([...Object.keys(before.playTypes), ...Object.keys(after.playTypes)]));
+  // (summaries from before sets have none)
+  const setKeys = Array.from(new Set([...Object.keys(before.sets ?? {}), ...Object.keys(after.sets ?? {})]));
   const players = Object.keys(after.players)
     .map(Number)
     .map((pid) => ({ p: league.players[pid], a: after.players[pid], b: before.players[pid] }))
@@ -597,6 +600,31 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
           })}
         </div>
       </Card>
+      {setKeys.length > 0 && (
+        <Card title="Sets" right={<span className="tiny dim">runs a game · points per possession</span>}>
+          <div className="col" style={{ gap: 6 }}>
+            {setKeys.map((k) => {
+              const b = before.sets?.[k];
+              const a = after.sets?.[k];
+              const ppp = (x?: { runs: number; pts: number }) => (x?.runs ? (x.pts / x.runs).toFixed(2) : '—');
+              return (
+                <div key={k} className="row small">
+                  <span className="grow">{k === 'iso' ? CLEAR_OUT.name : SETS[k as SetId].name}</span>
+                  <span className="dim num" style={{ width: 92, textAlign: 'right' }}>
+                    {f1(b?.runs ?? 0)} → {f1(a?.runs ?? 0)}
+                  </span>
+                  <span className="num" style={{ width: 92, textAlign: 'right' }}>
+                    {ppp(b)} → {ppp(a)}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="tiny dim">
+              The possessions each set opened. A set package's sets run now and then, for players who fit them; their defense reads each one a little better every run.
+            </div>
+          </div>
+        </Card>
+      )}
       <Card title="Touches">
         <div className="col" style={{ gap: 6 }}>
           {players.map(({ p, a, b }) => (

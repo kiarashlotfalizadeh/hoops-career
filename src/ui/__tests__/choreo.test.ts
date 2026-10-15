@@ -96,6 +96,79 @@ describe('live court choreography', () => {
   });
 });
 
+describe('sets on the court', () => {
+  it("draws a set's off-ball screens: its name on the first, its man where the set sends him", () => {
+    // Floppy for 3: from under the basket off the stagger (4 and 5) to the wing, then the pass from 1
+    const floppy = buildScript(
+      {
+        ...log([
+          { k: 'advance', pid: 1 },
+          { k: 'pin', pid: 4, pid2: 3 },
+          { k: 'pin', pid: 5, pid2: 3 },
+          { k: 'pass', pid: 1, pid2: 3 },
+        ]),
+        set: { id: 'floppy', pid: 3, n: 1 },
+      },
+      info,
+    );
+    expect(floppy.frames.filter((f) => f.flash?.text === 'FLOPPY')).toHaveLength(1);
+    const end = floppy.frames.at(-1)!;
+    const shooter = end.o[off.indexOf(3)];
+    expect(Math.abs(shooter.x)).toBeGreaterThan(12);
+    expect(shooter.y).toBeGreaterThan(15);
+    // the ball found him
+    expect(Math.hypot(end.ball.x - shooter.x, end.ball.y - shooter.y)).toBeLessThan(0.01);
+    // Elevator: the doors are side by side at the top of the key, and he comes up between them
+    const elevator = buildScript(
+      {
+        ...log([
+          { k: 'advance', pid: 1 },
+          { k: 'pin', pid: 4, pid2: 3 },
+          { k: 'pin', pid: 5, pid2: 3 },
+        ]),
+        set: { id: 'elevator', pid: 3, n: 1 },
+      },
+      info,
+    );
+    const e = elevator.frames.at(-1)!;
+    const [s, d1, d2] = [e.o[off.indexOf(3)], e.o[off.indexOf(4)], e.o[off.indexOf(5)]];
+    expect(Math.abs(s.x)).toBeLessThan(1);
+    expect(Math.min(d1.x, d2.x)).toBeLessThan(s.x);
+    expect(Math.max(d1.x, d2.x)).toBeGreaterThan(s.x);
+    for (const f of [...floppy.frames, ...elevator.frames]) expect(closest(f)).toBeGreaterThan(1.2);
+    // Horns: the two bigs set up at the elbows
+    const horns = buildScript({ ...log([{ k: 'advance', pid: 1 }]), set: { id: 'horns', pid: 5, n: 1 } }, info);
+    const h = horns.frames.at(-1)!;
+    const elbows = off
+      .filter((pid) => pid !== 1)
+      .map((pid) => h.o[off.indexOf(pid)])
+      .filter((p) => Math.abs(Math.abs(p.x) - 6) < 0.01 && Math.abs(p.y - 19.5) < 0.01);
+    expect(elbows).toHaveLength(2);
+  });
+
+  it('draws the sets a real game runs without breaking the court', () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
+    const tactics = { ...league.teams[4].tactics, offense: { ...league.teams[4].tactics.offense, sets: ['floppy', 'spain', 'hammer', 'postSplit'] as const } };
+    const sim = new GameSim(
+      { team: { ...league.teams[4], tactics: { ...tactics, offense: { ...tactics.offense, sets: [...tactics.offense.sets] } } }, players: teamPlayers(league, 4) },
+      { team: league.teams[9], players: teamPlayers(league, 9) },
+      { rng: new Rng(11), type: 'regular', record: true, injuries: false },
+    );
+    let sets = 0;
+    while (!sim.over) {
+      sim.step();
+      for (const l of sim.drainLogs()) {
+        const s = buildScript(l, info);
+        if (!l.set) continue;
+        sets++;
+        expect(s.label.length).toBeGreaterThan(3);
+        for (const f of s.frames) for (const p of [...f.o, ...f.d, f.ball]) expect(Math.abs(p.x) <= 25 && p.y >= 0 && p.y <= 47).toBe(true);
+      }
+    }
+    expect(sets).toBeGreaterThan(4);
+  });
+});
+
 describe('the live court score', () => {
   const scores = (s: ReturnType<typeof buildScript>) => s.frames.filter((f) => f.score).map((f) => f.score);
 
