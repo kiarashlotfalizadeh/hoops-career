@@ -1,17 +1,19 @@
 // What an AI coach prepares for a game against the user's team: at most two changes to his usual
 // tactics that answer what the user's team does best (a hot pick-and-roll, its shooting, its
-// running game, the player it runs its offense through...). Whether he prepares one depends on the
+// running game, the player it runs its offense through...) or where it's weak (a starter to guard
+// a particular way, a poor perimeter defender to attack). Whether he prepares one depends on the
 // difficulty and his tactics rating, rolled from the game's id, never the league's random stream.
 // What goes in it is read from the user's stored games before game day only, so the plan for a
 // game reads the same in the preview, the Lab and the game itself, whatever else is played that
 // day. AI-vs-AI games never get one, so the league's numbers are unchanged.
 
 import type { GameSim } from '../sim/engine';
-import type { League, Player, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
+import type { League, Player, PlayerDefense, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES } from '../analysis/scouting';
+import { guardingPlan, huntPick } from '../analysis/guarding';
 import { playerName, seasonTotals, teamPlayers } from '../league/helpers';
 import { defPresetFit, rosterProfile } from './coachAI';
 
@@ -251,6 +253,14 @@ export function leagueThreePct(league: League): number {
 
 const COVERAGE_TEXT: Partial<Record<PnrCoverage, string>> = { hedge: 'hedges ball screens', ice: 'ices ball screens', drop: 'drops the big on ball screens' };
 
+/** A guarding instruction as the coach's plan reads ("goes under screens on Brunson"). */
+const GUARD_TEXT: Record<PlayerDefense, (name: string) => string> = {
+  under: (n) => `goes under screens on ${n}`,
+  tight: (n) => `runs ${n} off the three-point line`,
+  sag: (n) => `sags off ${n}`,
+  body: (n) => `gets physical with ${n}`,
+};
+
 /** Everything the coach could plan against the user's team tonight, each weighted by how strong the numbers behind it are. */
 function candidates(league: League, aiTid: number, base: Tactics, userTid: number, day: number): Cand[] {
   const out: Cand[] = [];
@@ -354,6 +364,39 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         why: `Opponents score ${ppp(trD.ppp)} points per possession in transition against you (league ${ppp(trD.base)}).`,
         patch: { offense: { transition: 80 } },
         w: trD.z,
+      });
+  }
+  // ---- the user's weakest perimeter defender, when he gives up a lot to the rest of the rotation:
+  // isolations, post-ups and ball screens at the man he guards (it costs them some ball movement)
+  const hunt = huntPick(league, userTid);
+  const victim = hunt?.worth ? league.players[hunt.pid] : undefined;
+  if (hunt && victim && base.offense.huntTarget == null)
+    out.push({
+      id: 'hunt',
+      group: 'hunt',
+      text: `attacks ${lastName(victim)} on defense`,
+      why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, the rest of your rotation at ${hunt.teamPerDef}.`,
+      patch: { offense: { huntTarget: hunt.pid } },
+      w: (hunt.teamPerDef - hunt.perDef) / 4,
+    });
+  // ---- how to guard one of the user's regulars (his top seven, who play the minutes worth a plan):
+  // the read the user's own staff makes on an opponent
+  // (go under on a handler who can't shoot off the dribble, top-lock a shooter who can't drive, sag
+  // off a non-shooter, get physical with a poor free-throw shooter inside); a man-to-man thing
+  if (d.scheme === 'man' && !d.playerD) {
+    const read = guardingPlan(league, userTid)
+      .slice(0, 7)
+      .find((a) => a.suggest && (a.suggest !== 'under' || (d.pnr !== 'switch' && d.pnr !== 'blitz')));
+    const who = read && league.players[read.pid];
+    if (read?.suggest && who)
+      out.push({
+        id: `guard-${read.suggest}`,
+        group: 'guard',
+        text: GUARD_TEXT[read.suggest](lastName(who)),
+        why: `${playerName(who)}: ${read.why}`,
+        patch: { defense: { playerD: { [who.pid]: read.suggest } } },
+        // a small edge (see the README's numbers): the plan's second item at most, unless nothing else stands out
+        w: 1.2,
       });
   }
   // ---- the player the user's offense runs through: doubled when he carries it, denied the ball otherwise

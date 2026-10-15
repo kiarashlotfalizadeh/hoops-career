@@ -139,6 +139,45 @@ describe('counters and opposing plans', () => {
     expect([ai.manage.foulToGive, ai.offense.huntTarget, ai.defense.chase, ai.defense.playerD]).toEqual([undefined, undefined, undefined, undefined]);
   });
 
+  it('AI coaches can attack the user’s weakest perimeter defender and plan how to guard one of his regulars, and play it in the game', () => {
+    const l = leagueAt('hard');
+    ensureRotation(l, l.userTid);
+    const rot = projectedRotation(l, l.userTid, 8);
+    const sieve = rot[1];
+    Object.assign(sieve.ratings, { perD: 5, spd: 15, diq: 15 });
+    // and a starter who doesn't shoot threes, in his ratings and his games
+    const brick = rot[2];
+    Object.assign(brick.ratings, { tp: 5 });
+    for (const s of brick.stats) if (s.season === l.season) s.tpa = s.tpm = 0;
+    let hunts = 0;
+    let guards = 0;
+    for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== l.userTid)) {
+      const g = nextMeeting(l, tid);
+      if (!g) continue;
+      l.teams[tid].tactics.defense.scheme = 'man';
+      l.teams[tid].tactics.defense.pnr = 'drop';
+      const plan = aiGamePlan(l, tid, l.userTid, g);
+      const t = () => buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics;
+      const hunt = plan?.items.find((it) => it.id === 'hunt');
+      if (hunt) {
+        hunts++;
+        expect(hunt.text).toBe(`attacks ${sieve.lastName} on defense`);
+        expect(hunt.why).toMatch(/defends the perimeter at \d+, the rest of your rotation at \d+\./);
+        expect(t().offense.huntTarget).toBe(sieve.pid);
+      }
+      const guard = plan?.items.find((it) => it.group === 'guard');
+      if (guard) {
+        guards++;
+        const [pid, how] = Object.entries(guard.patch.defense!.playerD!)[0];
+        expect(rot.slice(0, 7).map((p) => p.pid)).toContain(Number(pid));
+        expect(guard.id).toBe(`guard-${how}`);
+        expect(t().defense.playerD).toEqual({ [pid]: how });
+      }
+    }
+    expect(hunts).toBeGreaterThan(3);
+    expect(guards).toBeGreaterThan(0);
+  });
+
   it('the live one-tap fixes take a junk defense, an instruction or a hunt away', () => {
     const t = defaultTactics();
     t.defense.scheme = 'tri2';
