@@ -60,6 +60,8 @@ import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
 import { winProb } from '../../core/analysis/winProb';
 import { pickHighlights } from '../live/highlights';
 import { gameKeys } from '../../core/analysis/keys';
+import { otherGames } from '../live/scoreboard';
+import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
 
 const FEED_MAX = 80;
 const NO_LOGS: PossLog[] = [];
@@ -70,7 +72,7 @@ const BANNER_MS = 3200;
 
 type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
 /** 'player': one of theirs; 'mine': one of yours; 'huddle': your timeout, while it's taken. */
-type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player' | 'mine' | 'plays' | 'huddle';
+type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player' | 'mine' | 'plays' | 'huddle' | 'scores';
 type SkipTo = 'quarter' | 'half' | 'clutch' | 'end';
 /**
  * Something the court shows in place of the game for a moment: a replay (asked for, or the automatic
@@ -228,6 +230,10 @@ export default function Live() {
     },
     [home, away, atBreak, toPending, events, nameOf, baselines, league.settings.complexity, subFor],
   );
+  // the night's other games (played before this one: see prepareLive), for the bottom line
+  const showScores = league.settings.liveScores !== false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const others = useMemo(() => (game && showScores ? otherGames(league, game.game.gid, game.game.day, league.userTid) : []), [game, showScores]);
   // tonight's keys to the game, as the preview set them (from the games before today)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const keys = useMemo(() => (game ? gameKeys(league, game.game) : []), [game]);
@@ -931,7 +937,9 @@ export default function Live() {
         <div className="col live-left" style={{ gap: 10 }}>
           {/* the scorebug and the court: on a phone they stay at the top while the rest scrolls under them */}
           <div className="live-stage" ref={stageRef}>
-            <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome} />
+            <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome}>
+              {others.length > 0 && status !== 'simmed' && <ScoreTicker league={league} games={others} elapsed={view.elapsed} done={over} onOpen={() => setPanel('scores')} />}
+            </ScoreBug>
             <div className="live-court">
               <Court
                 script={drawing}
@@ -1291,6 +1299,9 @@ export default function Live() {
           onResume={resume}
           keys={keys}
         />
+      </Sheet>
+      <Sheet open={panel === 'scores'} onClose={() => setPanel('none')} title="Around the league">
+        <ScoresSheet league={league} games={others} elapsed={view.elapsed} done={over} />
       </Sheet>
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">
         <div className="col" style={{ gap: 8 }}>

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { TeamLogo } from '../components/TeamLogo';
@@ -46,6 +46,7 @@ export function ScoreBug({
   ot,
   context,
   wpHome,
+  children,
 }: {
   ticker: Ticker;
   view: Drawn;
@@ -57,6 +58,8 @@ export function ScoreBug({
   context?: string;
   /** The home team's win probability, from the drawn game (undefined: not shown). */
   wpHome?: number;
+  /** A bottom line under it (the night's other scores). */
+  children?: ReactNode;
 }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
@@ -141,6 +144,7 @@ export function ScoreBug({
           </span>
         </div>
       )}
+      {children}
     </div>
   );
 }
