@@ -145,6 +145,8 @@ describe('win probability from engine games', () => {
 
   it('is calibrated: better than the margin alone, and about as often right as it says', () => {
     const l = testLeague('wp', 5);
+    // the opponents' game plans draw on the league id, which reads the clock: pinned, the same 400 games every run
+    l.id = 'lg_wp';
     const games: (Pick<GameResult, 'flow' | 'flowPeriods' | 'flowT' | 'flowPoss' | 'edge' | 'type'> & { won: number })[] = [];
     // (a game's states all share its result, so a band's reliability rests on the games in it, not its
     // states: 160 games left a band about 0.035 off by chance alone, half the limit below)
