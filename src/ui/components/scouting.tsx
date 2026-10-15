@@ -137,15 +137,11 @@ export function HeadToHead({ league, d, complexity }: { league: League; d: Scout
       </div>
       <div className="col" style={{ gap: 6 }}>
         {[...d.h2h.games].reverse().map((g) => (
-          <Link
-            key={g.gid}
-            to={`/game/${g.gid}`}
-            className="row between small"
-            style={{ gap: 8 }}
-            aria-label={`${g.won ? 'Won' : 'Lost'} ${g.us}-${g.them}, ${fmtDate(g.season, g.day)}`}
-          >
+          <Link key={g.gid} to={`/game/${g.gid}`} className="row between small" style={{ gap: 8 }}>
             <span className="dim2">
-              {fmtDate(g.season, g.day, { month: 'short', day: 'numeric', year: g.season === league.season ? undefined : 'numeric' })} · {g.home ? 'vs' : '@'} {opp.abbrev}
+              {fmtDate(g.season, g.day, { month: 'short', day: 'numeric', year: g.season === league.season ? undefined : 'numeric' })} ·{' '}
+              {/* the Cup final is on a neutral floor: nobody's home */}
+              {g.cupFinal ? `vs ${opp.abbrev} · Cup final` : `${g.home ? 'vs' : '@'} ${opp.abbrev}`}
             </span>
             <span className={`bold num ${g.won ? 'good' : 'bad'}`}>
               {g.won ? 'W' : 'L'} {g.us}-{g.them}

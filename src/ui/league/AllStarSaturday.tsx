@@ -20,7 +20,8 @@ function Who({ league, e, win }: { league: League; e: { pid: number; name: strin
     <span className="row" style={{ gap: 6, minWidth: 0 }}>
       <TeamLogo tid={e.tid} size={16} />
       {league.players[e.pid] ? (
-        <Link to={`/player/${e.pid}`} className="ellipsis" style={{ minWidth: 0 }}>
+        // the link's ::after takes taps across the row's height (league.css .lg-sat-who)
+        <Link to={`/player/${e.pid}`} className="lg-sat-who">
           {label}
         </Link>
       ) : (

@@ -211,10 +211,9 @@ function TieCard({ league, tie }: { league: League; tie?: Tie }) {
   }
   const me = tie.high === league.userTid || tie.low === league.userTid;
   const line = (tid: number, seed: number, pts: number | undefined) => (
+    // (the spaces between the grid cells only space out what a screen reader reads: "1 LAL 127")
     <div className={`bk-t ${tie.winner === undefined ? '' : tie.winner === tid ? 'win' : 'lose'}`}>
-      <span className="sd">{tie.round === 'final' ? '' : seed}</span>
-      <TeamLogo tid={tid} size={18} />
-      <span className="ellipsis">{league.teams[tid].abbrev}</span>
+      <span className="sd">{tie.round === 'final' ? '' : seed}</span> <TeamLogo tid={tid} size={18} decorative /> <span className="ellipsis">{league.teams[tid].abbrev}</span>{' '}
       <span className="w">{pts ?? ''}</span>
     </div>
   );
@@ -226,8 +225,10 @@ function TieCard({ league, tie }: { league: League; tie?: Tie }) {
   );
   const label = `${league.teams[tie.low].abbrev} at ${league.teams[tie.high].abbrev}${tie.day !== undefined ? `, ${fmtDate(league.season, tie.day)}` : ''}`;
   return tie.winner !== undefined && tie.gid !== undefined ? (
-    <Link to={`/game/${tie.gid}`} className={`bk-s cup-tie ${me ? 'me' : ''}`} aria-label={`Box score: ${label}`}>
+    // named by what it shows, then where it goes: "1 LAL 127 4 SAS 142. Box score, LAL at SAS, Dec 5"
+    <Link to={`/game/${tie.gid}`} className={`bk-s cup-tie ${me ? 'me' : ''}`}>
       {body}
+      <span className="sr-only">. Box score, {label}</span>
     </Link>
   ) : (
     <div className={`bk-s cup-tie ${me ? 'me' : ''}`} title={label}>
@@ -311,8 +312,9 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
       right={<span className="small dim">{final?.winner !== undefined ? 'Final' : `${fmtDate(league.season, cup.finalDay)} · neutral floor`}</span>}
     >
       {final?.winner !== undefined ? (
-        <Link to={`/game/${final.gid}`} aria-label="Championship box score" style={{ display: 'block', color: 'inherit' }}>
+        <Link to={`/game/${final.gid}`} style={{ display: 'block', color: 'inherit', position: 'relative' }}>
           {body}
+          <span className="sr-only">. Championship box score</span>
         </Link>
       ) : (
         body

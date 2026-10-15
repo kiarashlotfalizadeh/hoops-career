@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
-import type { League } from '../../core/types';
+import type { League, Player } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
@@ -32,8 +32,8 @@ import {
 } from '../../core/league/records';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, Empty, Segmented } from '../components/ui';
-import { f1, p1 } from '../stats';
-import { SectionLabel, shortName, useQueryParam } from './shared';
+import { f1, p1, rosterNames } from '../stats';
+import { SectionLabel, useQueryParam } from './shared';
 
 type Part = 'game' | 'season' | 'career';
 type GameKey = RecStat | `team-${TeamRecStat}`;
@@ -113,33 +113,31 @@ export function RecordBook({ league }: { league: League }) {
   );
 }
 
-function PlayerName({ league, pid, name }: { league: League; pid: number; name?: string }) {
-  const p = league.players[pid];
-  const label = p ? shortName(p) : (name ?? 'Unknown');
-  return p ? (
-    <Link to={`/player/${pid}`} className="bold ellipsis">
-      {label}
-    </Link>
-  ) : (
-    <span className="bold ellipsis">{label}</span>
+/**
+ * Names for the players a list shows ("S. Gilgeous-Alexander"), with as much of the first name as it
+ * takes to tell two of them apart ("Jal. Williams", "Jay. Williams"), as on the roster. A player
+ * gone from the save keeps the name the book froze for him.
+ */
+function listNames(league: League, pids: number[]): (pid: number, frozen?: string) => string {
+  const name = rosterNames(
+    pids.map((pid) => league.players[pid]).filter((p): p is Player => !!p),
+    { initial: true },
   );
+  return (pid, frozen) => (league.players[pid] ? name(pid) : (frozen ?? 'Unknown'));
 }
 
-function When({ league, m }: { league: League; m: { season: number; day: number; gid: number; opp: number } }) {
-  const stored = league.games.some((g) => g.gid === m.gid && g.season === m.season);
-  const text = `vs ${league.teams[m.opp]?.abbrev ?? '?'} · ${fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  return stored ? (
-    <Link to={`/game/${m.gid}`} className="tiny dim ellipsis">
-      {text}
-    </Link>
-  ) : (
-    <span className="tiny dim ellipsis">{text}</span>
-  );
-}
-
-function Row({ i, children, value }: { i: number; children: ReactNode; value: ReactNode }) {
+function When({ league, m }: { league: League; m: { season: number; day: number; opp: number } }) {
   return (
-    <div className="lg-rec-row">
+    <span className="tiny dim ellipsis">
+      vs {league.teams[m.opp]?.abbrev ?? '?'} · {fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}
+    </span>
+  );
+}
+
+/** One line of the book; the whole line is the link (to the player, or the team for a team's mark). */
+function Row({ i, to, children, value }: { i: number; to?: string; children: ReactNode; value: ReactNode }) {
+  const cells = (
+    <>
       <span className="tiny dim bold" style={{ textAlign: 'right' }}>
         {i + 1}
       </span>
@@ -147,7 +145,14 @@ function Row({ i, children, value }: { i: number; children: ReactNode; value: Re
         {children}
       </span>
       <span className="num bold">{value}</span>
-    </div>
+    </>
+  );
+  return to ? (
+    <Link to={to} className="lg-rec-row">
+      {cells}
+    </Link>
+  ) : (
+    <div className="lg-rec-row">{cells}</div>
   );
 }
 
@@ -159,6 +164,10 @@ function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid
     ? (shelf?.teams[stat.slice(5) as TeamRecStat] ?? []).map(teamMark)
     : (shelf?.players[stat as RecStat] ?? []).map((r) => gameMark(league, r));
   const keep = tid !== undefined ? KEEP.team[kind] : KEEP.league[kind];
+  const name = listNames(
+    league,
+    list.flatMap((m) => ('pid' in m ? [m.pid] : [])),
+  );
   return (
     <>
       <Chips value={stat} onChange={setStat} options={GAME_KEYS.map((k) => ({ id: k, label: GAME_SHORT[k] }))} />
@@ -172,15 +181,15 @@ function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid
           <div className="lg-team5">
             {list.map((m, i) =>
               'pid' in m ? (
-                <Row key={`${m.gid}-${m.pid}`} i={i} value={m.v}>
+                <Row key={`${m.gid}-${m.pid}`} i={i} to={league.players[m.pid] ? `/player/${m.pid}` : undefined} value={m.v}>
                   <span className="row" style={{ gap: 6, minWidth: 0 }}>
                     <TeamLogo tid={m.tid} size={16} />
-                    <PlayerName league={league} pid={m.pid} name={m.name} />
+                    <span className="bold ellipsis">{name(m.pid, m.name)}</span>
                   </span>
                   <When league={league} m={m} />
                 </Row>
               ) : (
-                <Row key={`${m.gid}-${m.tid}`} i={i} value={stat === 'team-margin' ? `+${m.v}` : m.v}>
+                <Row key={`${m.gid}-${m.tid}`} i={i} to={league.teams[m.tid] ? `/team/${m.tid}` : undefined} value={stat === 'team-margin' ? `+${m.v}` : m.v}>
                   <span className="row" style={{ gap: 6, minWidth: 0 }}>
                     <TeamLogo tid={m.tid} size={16} />
                     <span className="bold ellipsis">
@@ -220,6 +229,10 @@ function SeasonRecords({
 }) {
   const rows = useLeagueMemo(() => seasonRecords(league, stat, { tid, playoffs }), [league, stat, tid, playoffs]);
   const teamRows = useLeagueMemo(() => (playoffs ? [] : teamSeasonRecords(league, teamStat, { tid })), [league, teamStat, tid, playoffs]);
+  const name = listNames(
+    league,
+    rows.map((r) => r.pid),
+  );
   return (
     <>
       <Chips value={stat} onChange={setStat} options={SEASON_STATS.map((k) => ({ id: k, label: SEASON_SHORT[k] }))} />
@@ -229,26 +242,17 @@ function SeasonRecords({
           <Empty>No qualifying seasons yet. Per-game and percentage records need 70% of the team's games (and 300 field goals, 82 threes or 125 free throws made).</Empty>
         ) : (
           <div className="lg-team5">
-            {rows.map((r, i) => {
-              const p = league.players[r.pid];
-              return (
-                <Row key={`${r.pid}-${r.season}`} i={i} value={fmtSeason(stat, r.v)}>
-                  <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <TeamLogo tid={r.tid} size={16} />
-                    {p ? (
-                      <Link to={`/player/${p.pid}`} className="bold ellipsis">
-                        {shortName(p)}
-                      </Link>
-                    ) : (
-                      <span className="bold ellipsis">Unknown</span>
-                    )}
-                  </span>
-                  <span className="tiny dim ellipsis">
-                    {seasonLabel(r.season)} · {r.gp} games{r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
-                  </span>
-                </Row>
-              );
-            })}
+            {rows.map((r, i) => (
+              <Row key={`${r.pid}-${r.season}`} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={fmtSeason(stat, r.v)}>
+                <span className="row" style={{ gap: 6, minWidth: 0 }}>
+                  <TeamLogo tid={r.tid} size={16} />
+                  <span className="bold ellipsis">{name(r.pid)}</span>
+                </span>
+                <span className="tiny dim ellipsis">
+                  {seasonLabel(r.season)} · {r.gp} games{r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
+                </span>
+              </Row>
+            ))}
           </div>
         )}
       </Card>
@@ -262,12 +266,12 @@ function SeasonRecords({
             ) : (
               <div className="lg-team5">
                 {teamRows.map((r, i) => (
-                  <Row key={`${r.tid}-${r.season}`} i={i} value={fmtTeam(teamStat, r.v) || `${r.won}-${r.lost}`}>
+                  <Row key={`${r.tid}-${r.season}`} i={i} to={`/team/${r.tid}`} value={fmtTeam(teamStat, r.v) || `${r.won}-${r.lost}`}>
                     <span className="row" style={{ gap: 6, minWidth: 0 }}>
                       <TeamLogo tid={r.tid} size={16} />
-                      <Link to={`/team/${r.tid}`} className="bold ellipsis">
+                      <span className="bold ellipsis">
                         {league.teams[r.tid].region} {league.teams[r.tid].name}
-                      </Link>
+                      </span>
                     </span>
                     <span className="tiny dim ellipsis">
                       {seasonLabel(r.season)}
@@ -286,6 +290,10 @@ function SeasonRecords({
 
 function CareerRecords({ league, tid, playoffs, stat, setStat }: { league: League; tid?: number; playoffs: boolean; stat: CareerStat; setStat: (s: CareerStat) => void }) {
   const rows = useLeagueMemo(() => careerLeaders(league, stat, { tid, playoffs }), [league, stat, tid, playoffs]);
+  const name = listNames(
+    league,
+    rows.map((r) => r.pid),
+  );
   return (
     <>
       <Chips value={stat} onChange={setStat} options={CAREER_STATS.map((k) => ({ id: k, label: CAREER_LABEL[k] }))} />
@@ -297,24 +305,15 @@ function CareerRecords({ league, tid, playoffs, stat, setStat }: { league: Leagu
           <Empty>No games recorded yet.</Empty>
         ) : (
           <div className="lg-team5">
-            {rows.map((r, i) => {
-              const p = league.players[r.pid];
-              return (
-                <Row key={r.pid} i={i} value={Math.round(r.v).toLocaleString('en-US')}>
-                  {p ? (
-                    <Link to={`/player/${p.pid}`} className="bold ellipsis">
-                      {shortName(p)}
-                    </Link>
-                  ) : (
-                    <span className="bold ellipsis">Unknown</span>
-                  )}
-                  <span className="tiny dim ellipsis">
-                    {r.seasons} season{r.seasons === 1 ? '' : 's'}
-                    {r.active ? '' : ' · retired'}
-                  </span>
-                </Row>
-              );
-            })}
+            {rows.map((r, i) => (
+              <Row key={r.pid} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={Math.round(r.v).toLocaleString('en-US')}>
+                <span className="bold ellipsis">{name(r.pid)}</span>
+                <span className="tiny dim ellipsis">
+                  {r.seasons} season{r.seasons === 1 ? '' : 's'}
+                  {r.active ? '' : ' · retired'}
+                </span>
+              </Row>
+            ))}
           </div>
         )}
       </Card>

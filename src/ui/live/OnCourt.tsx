@@ -57,20 +57,22 @@ export const OnCourt = memo(function OnCourt({
           const hot = p.streak >= HOT_STREAK;
           const cold = !hot && isCold(p);
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
-          const label = `${names(pid)}: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
+          // named by what it shows, number and name first ("7 Holmgren"), then the rest for a screen reader
+          const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
           return (
             <button
               key={pid}
               className="oc-row"
               onClick={() => onTap(pid, mine)}
-              aria-label={label}
+              aria-haspopup="dialog"
               title={hot ? `${p.streak} straight makes` : cold ? `${p.fgm}/${p.fga} FG` : undefined}
             >
               <span className="oc-num" style={{ background: info[s].kit[0], color: inkOn(info[s].kit[0]), borderColor: info[s].kit[1] }}>
                 {jersey(pid)}
-              </span>
+              </span>{' '}
               <span className="oc-name">
                 <span className="ellipsis">{names(pid)}</span>
+                <span className="sr-only">{more}</span>
                 {hot && (
                   <span className="warn oc-mark" aria-hidden="true">
                     <Flame size={12} />

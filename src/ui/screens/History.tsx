@@ -6,8 +6,9 @@ import { RETIRED } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Card, Chips, Empty, Kpi, Ovr, PageHeader, Segmented } from '../components/ui';
-import { AccoladeChips, OutcomeTag, SectionLabel, accoladeScore, careerTotals, ordinal, seasonOutcome, seasonTeam, shortName, useQueryParam } from '../league/shared';
+import { Avatar, Card, Chips, Empty, Kpi, Ovr, PageHeader } from '../components/ui';
+import { AccoladeChips, OutcomeTag, SectionLabel, TabBar, accoladeScore, careerTotals, ordinal, seasonOutcome, seasonTeam, useQueryParam } from '../league/shared';
+import { rosterNames } from '../stats';
 import { RecordBook } from '../league/RecordBook';
 import { RetiredBanners } from '../league/RetiredBanners';
 import { CoachesView } from '../league/Coaches';
@@ -20,7 +21,7 @@ export default function History() {
   return (
     <main className="page">
       <PageHeader title="History" sub={`${league.name} · since ${seasonLabel(league.startSeason)}`} back />
-      <Segmented
+      <TabBar
         label="History sections"
         value={view}
         onChange={setView}
@@ -70,6 +71,11 @@ function Franchise({ league }: { league: League }) {
     return rows;
   }, [league, tid]);
   const top = [...leaders].sort((a, b) => b[cat] - a[cat]).slice(0, 8);
+  // teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on the roster
+  const name = rosterNames(
+    top.map((r) => r.p),
+    { initial: true },
+  );
 
   return (
     <>
@@ -165,7 +171,7 @@ function Franchise({ league }: { league: League }) {
                       {i + 1}
                     </span>
                     <span className="ellipsis">
-                      <span className="bold">{shortName(r.p)}</span>{' '}
+                      <span className="bold">{name(r.p.pid)}</span>{' '}
                       <span className="tiny dim">
                         {r.seasons} season{r.seasons === 1 ? '' : 's'}
                         {r.p.tid === tid ? ' · active' : r.p.tid === RETIRED ? ' · retired' : ''}

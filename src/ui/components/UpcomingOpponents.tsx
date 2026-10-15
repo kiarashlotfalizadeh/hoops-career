@@ -54,13 +54,7 @@ export function UpcomingOpponents() {
                 .join(' · ')
             : '';
           return (
-            <Link
-              key={opp}
-              to={`/gameplan/${opp}`}
-              className="card tight row"
-              style={{ gap: 10 }}
-              aria-label={`Game plan ${g.home === league.userTid ? 'vs' : 'at'} ${t.region} ${t.name}, ${fmtDate(league.season, g.day)}: ${plan ? status : 'no plan yet'}`}
-            >
+            <Link key={opp} to={`/gameplan/${opp}`} className="card tight row" style={{ gap: 10 }}>
               <TeamLogo tid={opp} size={32} decorative />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="bold ellipsis">
@@ -82,6 +76,7 @@ export function UpcomingOpponents() {
               ) : (
                 <span className="tiny dim">No plan</span>
               )}
+              <span className="sr-only">. Open the game plan</span>
               <ChevronRight size={16} className="dim" />
             </Link>
           );

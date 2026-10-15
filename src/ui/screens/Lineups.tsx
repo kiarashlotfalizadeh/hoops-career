@@ -218,7 +218,7 @@ export default function Lineups() {
           <div className="list">
             {view === 'onoff'
               ? shownSplits.slice(0, limit).map((r) => (
-                  <div key={r.pid} className="listrow" style={{ opacity: lowSplit(r) ? 0.55 : 1 }}>
+                  <div key={r.pid} className={`listrow ${lowSplit(r) ? 'lu-faded' : ''}`}>
                     <div className="grow" style={{ minWidth: 0 }}>
                       <div className="small bold ellipsis">{fullName(r.pid)}</div>
                       <div className="tiny dim num">
@@ -239,15 +239,15 @@ export default function Lineups() {
                   return (
                     <div
                       key={u.key}
-                      className={`listrow ${five ? 'clickable' : ''}`}
-                      style={{ opacity: lowUnit(u) ? 0.55 : 1 }}
+                      className={`listrow ${five ? 'clickable' : ''} ${lowUnit(u) ? 'lu-faded' : ''}`}
                       {...(five
                         ? {
                             role: 'button',
                             tabIndex: 0,
                             onClick: open,
                             onKeyDown: activateOnKey(open),
-                            'aria-label': `${ordered(u.pids).map(fullName).join(', ')}: net ${signed(u.net)}`,
+                            // named by what it shows: the five, then minutes, possessions and net
+                            'aria-haspopup': 'dialog' as const,
                           }
                         : {})}
                     >

@@ -1,4 +1,4 @@
-import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
+import { AccoladeChips, TabBar, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight, MessageCircle, PenLine, Scale } from 'lucide-react';
@@ -208,7 +208,7 @@ export default function PlayerView() {
         ) : null}
       </Card>
 
-      <Segmented
+      <TabBar
         value={tab}
         onChange={setTab}
         label="Player sections"

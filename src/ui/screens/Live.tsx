@@ -1091,7 +1091,7 @@ export default function Live() {
                   <button
                     className="live-mini-btn num"
                     onClick={() => pickSpeed(LIVE_SPEEDS[(LIVE_SPEEDS.findIndex((x) => x.id === speed) + 1) % LIVE_SPEEDS.length].id)}
-                    aria-label={`Speed ${speed}×: tap for ${LIVE_SPEEDS[(LIVE_SPEEDS.findIndex((x) => x.id === speed) + 1) % LIVE_SPEEDS.length].label}`}
+                    aria-label={`${speed}× speed: tap for ${LIVE_SPEEDS[(LIVE_SPEEDS.findIndex((x) => x.id === speed) + 1) % LIVE_SPEEDS.length].label}`}
                   >
                     {speed}×
                   </button>
@@ -1167,19 +1167,17 @@ export default function Live() {
                 // (nothing to stop before the opening tip)
                 disabled={me.timeouts <= 0 || atBreak || toPending || intro || buzzer}
                 onClick={() => callTimeout()}
-                aria-label={
-                  toPending
-                    ? game.timeoutWaiting
-                      ? 'TO: timeout called, taken at the next dead ball'
-                      : 'TO: timeout called, the court shows it next'
-                    : buzzer
-                      ? 'TO: the period is ending'
-                      : `TO: call a timeout, ${view.sides[userSide].timeouts} left`
-                }
               >
-                <Timer size={16} /> TO
-                <span className="live-dock-n num" aria-hidden="true">
-                  {view.sides[userSide].timeouts}
+                {/* named by what it shows, "TO 7", then the state: "TO 7 left: call a timeout" */}
+                <Timer size={16} /> TO <span className="live-dock-n num">{view.sides[userSide].timeouts}</span>
+                <span className="sr-only">
+                  {toPending
+                    ? game.timeoutWaiting
+                      ? ' left: timeout called, taken at the next dead ball'
+                      : ' left: timeout called, the court shows it next'
+                    : buzzer
+                      ? ' left: the period is ending'
+                      : ' left: call a timeout'}
                 </span>
               </button>
               <button

@@ -93,6 +93,7 @@ export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
           <span
             className={k.met === null ? 'dim' : k.met ? 'good' : 'bad'}
             style={{ flex: 'none', marginTop: 1 }}
+            role="img"
             aria-label={k.met === null ? 'Did not apply' : k.met ? 'Met' : 'Missed'}
           >
             {k.met === null ? '—' : k.met ? <Check size={15} /> : <X size={15} />}
