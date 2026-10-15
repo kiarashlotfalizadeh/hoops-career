@@ -11,6 +11,7 @@ import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
 import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
+import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Spinner, Tag } from '../components/ui';
 import { CompareBar } from '../components/charts';
@@ -18,7 +19,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
-import type { GameType, League, Tactics, TacticsPatch } from '../../core/types';
+import type { GameType, League, SetId, Tactics, TacticsPatch } from '../../core/types';
 
 type Mode = 'project' | 'compare' | 'counters';
 
@@ -176,7 +177,7 @@ export default function TacticsLab() {
       if (scope === 'always') {
         const tm = l.teams[l.userTid];
         // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
-        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch)), manual: true };
+        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
       } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
     });
     setApplied((a) => [...a, `${vs}:${c.id}`]);
@@ -359,6 +360,9 @@ export default function TacticsLab() {
                 const sig = familySigmas(all.length);
                 const good = c.delta > sig * c.se;
                 const bad = c.delta < -sig * c.se;
+                // a counter that only names their players (attacking one defender) has nothing to keep for every game
+                const mine = league.teams[league.userTid].tactics;
+                const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
                 return (
                   <div key={c.id} className="card tight" style={{ borderColor: good ? 'color-mix(in srgb, var(--good) 45%, transparent)' : undefined }}>
                     <div className="row between">
@@ -386,9 +390,11 @@ export default function TacticsLab() {
                           <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c, 'game', shown.opp)}>
                             Vs {league.teams[shown.opp].abbrev}
                           </button>
-                          <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
-                            Always
-                          </button>
+                          {always && (
+                            <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
+                              Always
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -537,6 +543,8 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
       .filter(Boolean),
   );
   const keys = Array.from(new Set([...Object.keys(before.playTypes), ...Object.keys(after.playTypes)]));
+  // (summaries from before sets have none)
+  const setKeys = Array.from(new Set([...Object.keys(before.sets ?? {}), ...Object.keys(after.sets ?? {})]));
   const players = Object.keys(after.players)
     .map(Number)
     .map((pid) => ({ p: league.players[pid], a: after.players[pid], b: before.players[pid] }))
@@ -592,6 +600,31 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
           })}
         </div>
       </Card>
+      {setKeys.length > 0 && (
+        <Card title="Sets" right={<span className="tiny dim">runs a game · points per possession</span>}>
+          <div className="col" style={{ gap: 6 }}>
+            {setKeys.map((k) => {
+              const b = before.sets?.[k];
+              const a = after.sets?.[k];
+              const ppp = (x?: { runs: number; pts: number }) => (x?.runs ? (x.pts / x.runs).toFixed(2) : '—');
+              return (
+                <div key={k} className="row small">
+                  <span className="grow">{k === 'iso' ? CLEAR_OUT.name : SETS[k as SetId].name}</span>
+                  <span className="dim num" style={{ width: 92, textAlign: 'right' }}>
+                    {f1(b?.runs ?? 0)} → {f1(a?.runs ?? 0)}
+                  </span>
+                  <span className="num" style={{ width: 92, textAlign: 'right' }}>
+                    {ppp(b)} → {ppp(a)}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="tiny dim">
+              The possessions each set opened. A set package's sets run now and then, for players who fit them; their defense reads each one a little better every run.
+            </div>
+          </div>
+        </Card>
+      )}
       <Card title="Touches">
         <div className="col" style={{ gap: 6 }}>
           {players.map(({ p, a, b }) => (

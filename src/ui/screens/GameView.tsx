@@ -3,10 +3,10 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Lightbulb } from 'lucide-react';
 import { useLeague } from '../../state/store';
-import { buildGameReport } from '../../core/analysis/gameReport';
+import { buildGameReport, setLineText } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
-import { CompareBar, FlowChart, ShotChart } from '../components/charts';
+import { CompareBar, FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
@@ -17,6 +17,8 @@ import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 import { GameRecap } from '../components/GameRecap';
 import { AdjustmentsCard } from '../components/AdjustmentsCard';
+import { biggestSwings, marginWords, playAt, swingWords, wpSeries, wpText } from '../../core/analysis/winProb';
+import { threeStars } from '../../core/analysis/quotes';
 
 type Tab = 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 
@@ -150,6 +152,23 @@ export default function GameView() {
               ))}
             </div>
           </Card>
+          {report.sets.length > 0 && (
+            <Card title="Sets" right={<span className="tiny dim">runs · points per possession</span>}>
+              <div className="col" style={{ gap: 6 }}>
+                {report.sets.map((s) => (
+                  <div key={s.id} className="row small" style={{ gap: 8 }}>
+                    <span className="grow">{s.name}</span>
+                    <span className="num dim2" style={{ textAlign: 'right' }}>
+                      {setLineText(s)}
+                    </span>
+                  </div>
+                ))}
+                <div className="tiny dim">
+                  The possessions each set opened, second chances included. Read by: the run by which their defense had taken a good part of its look away.
+                </div>
+              </div>
+            </Card>
+          )}
           <div className="md-grid2">
             <Card title="Player grades">
               <div className="col" style={{ gap: 6 }}>
@@ -212,6 +231,8 @@ export default function GameView() {
 
       {tab === 'box' && (
         <>
+          {/* (a game of yours has them in its recap) */}
+          {!userGame && <StarsCard g={g} league={league} />}
           <BoxTable box={g.away} title={`${away.region} ${away.name}`} pog={g.pog} league={league} />
           <BoxTable box={g.home} title={`${home.region} ${home.name}`} pog={g.pog} league={league} />
           <Card
@@ -257,19 +278,21 @@ export default function GameView() {
         </div>
       )}
 
+      {tab === 'flow' && g.flow && <WinProbCard g={g} league={league} side={accentSide} kits={flowColors} />}
       {tab === 'flow' && g.flow && (
         <Card
           title="Score margin"
           right={
             <span className="tiny dim">
-              {home.abbrev} above · {away.abbrev} below
+              {/* (your team above in your games, as the win probability is) */}
+              {(userGame ? accentSide : 0) === 0 ? `${home.abbrev} above · ${away.abbrev} below` : `${away.abbrev} above · ${home.abbrev} below`}
             </span>
           }
         >
           <FlowChart
-            flow={g.flow}
-            colorA={flowColors[0]}
-            colorB={flowColors[1]}
+            flow={userGame && accentSide === 1 ? g.flow.map((m) => -m) : g.flow}
+            colorA={flowColors[userGame ? accentSide : 0]}
+            colorB={flowColors[userGame ? 1 - accentSide : 1]}
             periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]}
             periodStarts={g.flowPeriods}
             height={150}
@@ -282,6 +305,93 @@ export default function GameView() {
 
       {tab === 'pbp' && g.pbp && <PlayByPlay pbp={g.pbp} />}
     </main>
+  );
+}
+
+/** The three stars, both teams: the player of the game first, then the next two by game score. */
+function StarsCard({ g, league }: { g: GameResult; league: League }) {
+  const stars = threeStars(g);
+  if (!stars.length) return null;
+  return (
+    <Card title="Three stars">
+      <div className="col" style={{ gap: 0 }}>
+        {stars.map(({ line, tid }, k) => (
+          <Link key={line.pid} to={`/player/${line.pid}`} className="row small" style={{ minHeight: 36, gap: 8 }}>
+            <span className={`tag ${k === 0 ? 'warn' : ''}`} style={{ flex: 'none' }}>
+              {['1st', '2nd', '3rd'][k]} star
+            </span>
+            <b className="grow ellipsis">{league.players[line.pid] ? `${league.players[line.pid].firstName} ${league.players[line.pid].lastName}` : line.name}</b>
+            <span className="dim" style={{ flex: 'none' }}>
+              {league.teams[tid]?.abbrev}
+            </span>
+            <span className="num dim2 nowrap">
+              {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast
+            </span>
+          </Link>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Win probability over the game, from `side`'s view, with the three biggest swings marked and
+ * named (the play itself while the play-by-play is kept, else what it did to the score).
+ */
+function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League; side: 0 | 1; kits: [string, string] }) {
+  const series = useMemo(() => wpSeries(g), [g]);
+  if (!series || series.length < 3) return null;
+  const abbrevs = [league.teams[g.home.tid].abbrev, league.teams[g.away.tid].abbrev] as const;
+  const me = abbrevs[side];
+  const mine = (v: number) => (side === 0 ? v : 1 - v);
+  const pct = wpText;
+  // numbered in the order they happened
+  const swings = biggestSwings(series, 3).sort((a, b) => a.at - b.at);
+  const say = (at: number) => {
+    const p = series[at];
+    const prev = series[at - 1];
+    // from the side it went for
+    const gainer: 0 | 1 = p.wp >= prev.wp ? 0 : 1;
+    const m = (x: number) => (gainer === 0 ? x : -x);
+    const play = playAt(g, p);
+    return `${periodLabel(p.q)} ${fmtClock(p.clock)} · ${play ? play.text.replace(/\.$/, '') : `${abbrevs[gainer]} ${swingWords(m(prev.margin), m(p.margin))}`}`;
+  };
+  return (
+    <Card title="Win probability" right={<span className="tiny dim">{me} above 50%</span>}>
+      <WinProbChart
+        points={series.map((p) => ({ t: p.t, wp: mine(p.wp) }))}
+        periods={[...Array(4).fill(GAME.quarterSec), ...Array(g.ot).fill(GAME.otSec)]}
+        color={kits[side]}
+        colorOther={kits[1 - side]}
+        marks={swings.map((x) => x.at)}
+        describe={(i) => {
+          const p = series[i];
+          return p.i < 0 ? 'Tip-off' : `${periodLabel(p.q)} ${fmtClock(p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
+        }}
+        label={`${me} win probability over the game: ${pct(mine(series[0].wp))} at tip-off${swings.length ? `; biggest swings: ${swings.map((x) => `${say(x.at)}, ${pct(mine(x.from))} to ${pct(mine(x.to))}`).join('; ')}` : ''}`}
+        height={140}
+      />
+      <div className="col" style={{ gap: 6, marginTop: 10 }}>
+        <div className="tiny dim upper bold">Biggest swings</div>
+        {swings.length === 0 && <div className="small dim2">No possession moved it 5 points or more.</div>}
+        {swings.map((x, k) => (
+          <div key={x.at} className="row top small" style={{ gap: 8 }}>
+            <span className="bold num" style={{ width: 14, flex: 'none' }}>
+              {k + 1}
+            </span>
+            <span className="grow dim2">{say(x.at)}</span>
+            <span className="num nowrap">
+              {pct(mine(x.from))} → <b>{pct(mine(x.to))}</b>
+            </span>
+          </div>
+        ))}
+        <div className="tiny dim">
+          {me} {pct(mine(series[0].wp))} to win at tip-off{g.edge === undefined ? ' (home court alone: this game kept no projection)' : ', from the pre-game projection'}. After
+          each possession: the score, the time left{g.flowPoss ? ', who has the ball' : ''} and that projection.
+          {g.flowT ? '' : " Possession times weren't kept for this game, so they are spread evenly over each period."}
+        </div>
+      </div>
+    </Card>
   );
 }
 

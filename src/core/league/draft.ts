@@ -5,7 +5,8 @@ import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from
 import { composites, shiftToOvr } from '../ratings';
 import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
-import { logMove } from './transactions';
+import { logMove, logSwap } from './transactions';
+import { pickLabel } from './trades';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
 
@@ -174,6 +175,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
     });
   };
   assign(1, firstRound);
+  resolveSwaps(league, season);
   assign(2, secondRound);
   const result: LotteryResult = {
     order: lotteryOrder.map((x, i) => ({ tid: x.tid, odds: x.w / 10, pick: i + 1, pre: x.pre })),
@@ -198,6 +200,52 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
     });
   }
   return result;
+}
+
+/**
+ * This draft's pick swaps, once the first round's order is set: the team holding a first with a
+ * swap right takes the other first instead when that one landed higher (the two picks change
+ * owners), otherwise it keeps its own; either way the right is used up. A swap made is news and goes
+ * in the transaction log; the user hears about any swap his team was in.
+ */
+export function resolveSwaps(league: League, season: number) {
+  for (const right of league.draftPicks.filter((d) => d.season === season && d.round === 1 && d.swap !== undefined)) {
+    const subject = league.draftPicks.find((d) => d.dpid === right.swap);
+    delete right.swap;
+    if (!subject || right.pick === undefined || subject.pick === undefined || right.tid === subject.tid) continue;
+    const up = league.teams[right.tid];
+    const down = league.teams[subject.tid];
+    // the slot of the pick subject to the swap, and of the one holding the right
+    const [theirs, ours] = [subject.pick, right.pick];
+    const used = theirs < ours;
+    if (used) {
+      // labels as each team held its pick, before they change hands
+      logSwap(league, up.tid, pickLabel(league, right), down.tid, pickLabel(league, subject));
+      [right.tid, subject.tid] = [down.tid, up.tid];
+      addNews(league, {
+        kind: 'draft',
+        text: `Pick swap: the ${up.region} ${up.name} use their swap right with the ${down.region} ${down.name} and pick #${theirs} instead of #${ours}.`,
+        tids: [up.tid, down.tid],
+        pids: [],
+      });
+    }
+    const userUp = up.tid === league.userTid;
+    if (!userUp && down.tid !== league.userTid) continue;
+    const them = (userUp ? down : up).abbrev;
+    addInbox(league, {
+      from: 'Scouting Department',
+      subject: used ? (userUp ? `Pick swap: we move up to #${theirs}` : `Pick swap: ${them} take our #${theirs}`) : `Pick swap with ${them} not used`,
+      body: used
+        ? userUp
+          ? `Our swap right paid off: ${them}'s pick landed #${theirs}, ahead of ours at #${ours}, so the two picks change hands. We pick at #${theirs}.`
+          : `${them} held the right to swap firsts with us, and our pick landed #${theirs}, ahead of theirs at #${ours}: they take it, and we pick at #${ours}.`
+        : userUp
+          ? `${them}'s pick landed #${theirs}, behind ours at #${ours}: the swap right lapses and we keep ours.`
+          : `Our pick landed #${theirs}, behind ${them}'s at #${ours}: their swap right lapses and we keep ours.`,
+      tone: used ? (userUp ? 'good' : 'bad') : 'neutral',
+      link: '/draft',
+    });
+  }
 }
 
 export function draftOrder(league: League): DraftPick[] {

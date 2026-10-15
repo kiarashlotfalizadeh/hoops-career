@@ -9,14 +9,14 @@ export interface KeyContext {
   runBefore: [number, number];
   /** And after it. */
   runAfter: [number, number];
-  /** Something the assistant or a banner will bring up came out of it (an injury, a foul-out, a new alert, a coach's adjustment). */
+  /** Something the assistant, a banner or a broadcast graphic will bring up came out of it (an injury, a foul-out, a new alert, a coach's adjustment, a milestone or a big night). */
   event: boolean;
 }
 
 /**
  * Whether a possession is worth drawing: crunch time of a close game (the last five minutes of the
  * fourth quarter within ten), overtime, the last 24 seconds of a period, a run reaching 8-0, a
- * timeout, a play call, or anything that raises an alert.
+ * timeout, a play call, or anything that raises an alert or puts up a graphic.
  */
 export function isKey(log: PossLog, ctx: KeyContext): boolean {
   const margin = Math.abs(log.score[0] - log.score[1]);

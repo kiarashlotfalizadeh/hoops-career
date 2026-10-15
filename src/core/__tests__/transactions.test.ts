@@ -686,6 +686,7 @@ describe('free agency', () => {
     const s = contractSeason(l);
     const cap = CAP_FOR(l, s);
     l.teams[U].mleSeason = s;
+    l.teams[U].baeSeason = s;
     expect(signingRoute(l, U, cap.minContract, s, { experience: 1 })).toBe('min');
     expect(signingRoute(l, U, cap.vetMin, s, { experience: 1 })).toBeNull();
     expect(signingRoute(l, U, cap.vetMin, s, { experience: 5 })).toBe('min');
@@ -795,6 +796,7 @@ describe('free agency', () => {
     for (const t of l.teams) {
       overCap(l, t.tid);
       t.mleSeason = s;
+      t.baeSeason = s;
     }
     // one team has cap space but a full roster he wouldn't crack
     const rich = l.teams[AI];

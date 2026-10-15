@@ -1,9 +1,10 @@
 // Post-game "why" report: turns engine impact tags, four factors, play types, runs and
 // lineups into ranked, plain-language factors with concrete advice.
 
-import type { GameResult, League, TacticImpact, Tactics, TeamBox } from '../types';
+import type { GameResult, League, PlayerDefense, SetId, TacticImpact, Tactics, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
-import { hacks } from '../sim/tactics';
+import { hacks, isJunk } from '../sim/tactics';
+import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
 import { wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
 
@@ -28,6 +29,8 @@ interface Tpl {
 }
 
 const dropping = (t: Tactics) => t.defense.scheme === 'man' && t.defense.pnr === 'drop';
+/** Whether the tactics give this instruction on any of tonight's opponents. */
+const instructs = (t: Tactics, d: PlayerDefense) => Object.values(t.defense.playerD ?? {}).includes(d);
 
 /** Team nicknames are plural, so their possessive drops the extra s: "the Celtics" → "the Celtics'", "your team" → "your team's". */
 export const possessive = (x: string) => (x.endsWith('s') ? `${x}'` : `${x}'s`);
@@ -218,12 +221,116 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Game Mgmt) to sub tired players out sooner; heavy minutes cost shooting.',
     cat: 'fatigue',
   },
+  'box_chase:d': {
+    text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, late catches, few clean looks${w}.`,
+    advice:
+      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Offense > Motion & Cuts, Handoffs & Screens).',
+    uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
+  },
+  'box_open:o': {
+    text: (X, _Y, w) => `${X} found open threes and gaps against the junk defense${w}.`,
+    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Defense > Base scheme).',
+    uses: (t) => isJunk(t.defense.scheme),
+  },
+  'box_beat:o': {
+    text: (X, _Y, w) => `${possessive(X)} chased player beat a defender caught high, on the catch and backdoor${w}.`,
+    advice: 'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Defense > Base scheme).',
+    uses: (t) => isJunk(t.defense.scheme),
+  },
+  'pd_under:o': {
+    text: (X, _Y, w) => `${X} made you pay for going under screens with pull-up jumpers${w}.`,
+    advice: 'Stop going under on a handler who can shoot off the dribble (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'under'),
+  },
+  'pd_under:d': { text: (X, _Y, w) => `${X} went under screens and kept the handler out of the paint${w}.` },
+  'pd_tight:o': {
+    text: (X, _Y, w) => `${X} beat your top-locks with drives and back-cuts${w}.`,
+    advice: 'Stop running a shooter off the line when he can put it on the floor (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'tight'),
+  },
+  'pd_tight:d': { text: (X, _Y, w) => `${X} ran their shooters off the three-point line${w}.` },
+  'pd_sag:o': {
+    text: (X, _Y, w) => `${X} made you pay for sagging off them with open kick-out shots${w}.`,
+    advice: 'Stop sagging off a player who makes open threes (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'sag'),
+  },
+  'pd_sag:d': { text: (X) => `${X} sagged off non-shooters and walled off the rim.` },
+  'pd_body:o': {
+    text: (X, _Y, w) => `${X} drew fouls against your physical defense${w}.`,
+    advice: 'Stop getting physical with a player who draws fouls and makes his free throws (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'body'),
+    cat: 'fouls',
+  },
+  'pd_body:d': { text: (X, _Y, w) => `${possessive(X)} physical defense made post-ups and drives hard work${w}.` },
+  'hunt:o': {
+    text: (X, _Y, w) => `${X} hunted a weak link in the defense with isolations and ball screens${w}.`,
+    advice: 'Hide the defender they hunt on their weakest scorer (Matchups), or sub him out.',
+  },
+  'hunt:d': {
+    text: (_X, Y) => `${possessive(Y)} hunt for one defender cost them ball movement and good looks.`,
+    advice: 'Hunting one defender costs ball movement: keep it for a real weak link, or stop the hunt (Game plan > Attack).',
+    uses: (t) => t.offense.huntTarget != null,
+  },
+  'foul_give:d': { text: (X) => `${possessive(X)} fouls to give broke up last-shot plays.` },
+  'foul_give:o': {
+    text: (X, _Y, w) => `${X} got free throws when a foul to give came on the shot${w}.`,
+    advice: 'A foul to give has to come before the shot: turn it off if it keeps sending them to the line (Game Mgmt).',
+    uses: (t) => !!t.manage.foulToGive,
+    cat: 'fouls',
+  },
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a strategy paid off${w}.` },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
     advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
     uses: (t) => hacks(t.manage),
   },
+};
+
+/** A set's edge against the defense it met (X the offense when it paid, the defense when it didn't), and what the defense's reads took back. */
+const SET_TEXT: Record<SetId, { o: Tpl['text']; d: Tpl['text'] }> = {
+  spain: {
+    o: (X, _Y, w) => `${X} freed the roll man with Spain pick-and-rolls${w}.`,
+    d: (X, _Y, w) => `${possessive(X)} defense left Spain's back screen nothing to hit${w}.`,
+  },
+  horns: {
+    o: (X, _Y, w) => `${X} found elbow handoffs and pick-and-pops out of Horns${w}.`,
+    d: (X, _Y, w) => `${X} sat on the elbows and took Horns away${w}.`,
+  },
+  floppy: {
+    o: (X, _Y, w) => `${possessive(X)} shooters came off Floppy screens open${w}.`,
+    d: (X, _Y, w) => `${X} switched Floppy's screens and took the shooter's look away${w}.`,
+  },
+  elevator: {
+    o: (X, _Y, w) => `${X} got shooters open through the elevator doors${w}.`,
+    d: (X, _Y, w) => `${X} kept the shooter out of the elevator doors${w}.`,
+  },
+  hammer: {
+    o: (X, _Y, w) => `${X} found the corner three off Hammer drives${w}.`,
+    d: (X, _Y, w) => `${X} stayed home on the corner and beat the hammer screen${w}.`,
+  },
+  chicago: {
+    o: (X, _Y, w) => `${X} ran Chicago, a pin-down into a handoff, for open looks${w}.`,
+    d: (X, _Y, w) => `${X} took away Chicago's pin-down and handoff${w}.`,
+  },
+  postSplit: {
+    o: (X, _Y, w) => `${X} split cutters around the post for easy looks${w}.`,
+    d: (X, _Y, w) => `${X} took away the cutters splitting around the post${w}.`,
+  },
+};
+
+for (const id of SET_IDS) {
+  IMPACT_TEXT[`set_${id}:o`] = { text: SET_TEXT[id].o };
+  IMPACT_TEXT[`set_${id}:d`] = {
+    text: SET_TEXT[id].d,
+    advice: `${SETS[id].name} doesn't work against this defense: take it out of your set package (Offense > Set package), or call something else.`,
+    uses: (t) => !!t.offense.sets?.includes(id),
+  };
+}
+// (a read always pays the defense)
+IMPACT_TEXT['set_read:d'] = {
+  text: (X, _Y, w) => `${X} read the sets they kept seeing: their looks came up covered and their passes got jumped${w}.`,
+  advice:
+    "Call each set a few times a game, not every trip: the more a defense sees one, the less open its look (better coaches read them faster). Your package drops a set once they're on it; a call runs it anyway.",
 };
 
 /** "Halftime: the Thunder lead the Celtics 55-50. Biggest factor so far: …" (the factor that went the leader's way, the biggest one when tied). */
@@ -264,6 +371,34 @@ export interface GameReport {
   runs: { side: 'user' | 'opp'; pts: number; startIdx: number; endIdx: number; text: string }[];
   lineups: { pids: number[]; min: number; pm: number; netRtg: number }[];
   grades: { pid: number; grade: string; note: string }[];
+  /** The user's sets (and clear-out isolations) run, most run first. */
+  sets: SetLine[];
+}
+
+/** One set's night for a side: "Elevator: 3 runs, 0.67 PPP, read by the 3rd". */
+export interface SetLine {
+  id: SetId | 'iso';
+  name: string;
+  runs: number;
+  pts: number;
+  ppp: number;
+  /** The run the defense was on it by, if it got there. */
+  readAt?: number;
+}
+
+const nth = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? `${n}st` : n % 10 === 2 && n % 100 !== 12 ? `${n}nd` : n % 10 === 3 && n % 100 !== 13 ? `${n}rd` : `${n}th`);
+
+/** The sets side `side` ran in a game (or so far), most run first. */
+export function setLines(res: Pick<GameResult, 'sets'>, side: 0 | 1): SetLine[] {
+  return (res.sets ?? [])
+    .filter((x) => x.t === side)
+    .map((x) => ({ id: x.id, name: x.id === 'iso' ? CLEAR_OUT.name : SETS[x.id].name, runs: x.runs, pts: x.pts, ppp: x.pts / x.runs, ...(x.readAt ? { readAt: x.readAt } : {}) }))
+    .sort((a, b) => b.runs - a.runs || b.pts - a.pts);
+}
+
+/** "3 runs, 0.67 PPP, read by the 3rd". */
+export function setLineText(l: SetLine): string {
+  return `${l.runs} run${l.runs === 1 ? '' : 's'}, ${l.ppp.toFixed(2)} PPP${l.readAt ? `, read by the ${nth(l.readAt)}` : ''}`;
 }
 
 export interface ReportOptions {
@@ -467,5 +602,6 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     runs: runs.sort((a, b) => b.pts - a.pts).slice(0, 4),
     lineups: lineups.slice(0, 6),
     grades,
+    sets: setLines(res, userSide),
   };
 }

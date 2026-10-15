@@ -1,10 +1,11 @@
 // The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
 // in a worker), and alerts about rotation/tactics issues on your own team.
 
-import type { ActionType, League, Player, PnrCoverage, Tactics } from '../types';
+import type { ActionType, League, Player, PlayerDefense, PnrCoverage, SetId, Tactics } from '../types';
+import { SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { composites, ROLE_META } from '../ratings';
-import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, stopHacking } from '../sim/tactics';
+import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
@@ -12,7 +13,10 @@ import { scoutData } from '../analysis/scouting';
 import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
 import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
+import { castThrees, leagueThreePct } from './opponentPlan';
+import { huntPick } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
+import { SETS } from '../sim/sets';
 
 export interface Threat {
   pid: number;
@@ -151,7 +155,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       add({
         id: `cov-${c}`,
         label: `${COVERAGE_META[c].label} coverage`,
-        why: zone ? `${why} You'd play man-to-man instead of your zone.` : why,
+        why: zone ? `${why} You'd play man-to-man instead of your ${isJunk(cur.defense.scheme) ? SCHEME_META[cur.defense.scheme].label.toLowerCase() : 'zone'}.` : why,
         group: 'coverage',
         patch: { defense: { pnr: c, scheme: 'man', ...(c === 'switch' ? { switchOffBall: true } : {}) } },
       });
@@ -199,6 +203,33 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     });
   if (spacing < CRAMPED_SPACING && cur.defense.scheme === 'man')
     add({ id: 'zone', label: SCHEME_META.zone23.label, why: 'Dare a poor-shooting team to beat you from outside.', group: 'coverage', patch: { defense: { scheme: 'zone23' } } });
+  // junk defenses: their offense runs through one or two players (by the numbers) and everyone else
+  // shoots threes worse than the league
+  const heavy = data.enough ? data.players.filter((p) => !p.elsewhere && p.min >= 20).sort((a, b) => b.usg - a.usg) : [];
+  const lgTp = leagueThreePct(league);
+  for (const [n, scheme, id] of [
+    [1, 'box1', 'box-1'],
+    [2, 'tri2', 'tri-2'],
+  ] as const) {
+    const chased = heavy.slice(0, n);
+    if (chased.length < n || chased[0].usg < 0.28 || (n === 2 && chased[1].usg < 0.25)) continue;
+    const cast = castThrees(
+      league,
+      oppTid,
+      chased.map((p) => p.pid),
+    );
+    if (!cast || !(lgTp - cast.pct >= 0.02)) continue;
+    const names = chased.map((p) => league.players[p.pid]?.lastName ?? p.name);
+    if (cur.defense.scheme === scheme && JSON.stringify(cur.defense.chase ?? []) === JSON.stringify(chased.map((p) => p.pid))) continue;
+    out.push({
+      id,
+      label: `${SCHEME_META[scheme].label} on ${names.join(' and ')}`,
+      why: `Face-guard ${names.join(' and ')} with ${n === 2 ? 'two of your best perimeter defenders' : 'one of your best perimeter defenders'} and zone the rest: their shooters can't make the open threes it leaves. You play man-to-man while ${n === 2 ? 'neither is' : "he isn't"} on the floor.`,
+      group: 'coverage',
+      evidence: `${chased.map((p) => `${p.name} uses ${Math.round(p.usg * 100)}% of their possessions`).join(', ')}; the rest make ${(cast.pct * 100).toFixed(1)}% of their threes (league ${(lgTp * 100).toFixed(1)}%).`,
+      patch: { defense: { scheme, chase: chased.map((p) => p.pid) } },
+    });
+  }
   if ((security < 55 || backed('pressure-up')) && cur.defense.pressure < 70)
     add({ id: 'pressure-up', label: 'Turn up the pressure', why: 'Their ball handlers are loose with it.', group: 'pressure', patch: { defense: { pressure: 82 } } });
   if ((security < 52 || backed('press-on')) && cur.defense.press === 'none')
@@ -262,6 +293,18 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       group: 'actions-handoff',
       patch: { nudge: { actions: { motion: 20, handoff: 15 } } },
     });
+  // a real weak link on the perimeter: attack the man he guards
+  const hunt = huntPick(league, oppTid);
+  if (hunt?.worth && cur.offense.huntTarget !== hunt.pid) {
+    const who = league.players[hunt.pid]?.lastName ?? '';
+    add({
+      id: 'hunt',
+      label: `Attack ${who}`,
+      why: `${who} is their weakest perimeter defender (${hunt.perDef}, their rotation ${hunt.teamPerDef}): run isolations and ball screens at the man he guards. It costs some ball movement.`,
+      group: 'hunt',
+      patch: { offense: { huntTarget: hunt.pid } },
+    });
+  }
   const oppProfile = rosterProfile(rot);
   // a post-up only helps with someone to feed: a big (or a strong wing) who scores on the block
   const poster = readRotation(league, userTid).cs.some((x) => x.c.postScore >= 58);
@@ -374,7 +417,39 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'clean_defense:o': { label: 'More physical', apply: (t) => void (t.defense.physicality = 60) },
   'transition:d': { label: 'Push in transition', apply: (t) => void (t.offense.transition = 75) },
   'hack:o': { label: 'Stop the Hack-a', apply: (t) => stopHacking(t.manage) },
+  'box_open:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
+  'box_beat:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
+  'box_chase:d': {
+    label: 'Move the ball',
+    apply: (t) => {
+      t.offense.actions.motion = Math.max(t.offense.actions.motion, 75);
+      t.offense.actions.handoff = Math.max(t.offense.actions.handoff, 65);
+    },
+  },
+  'pd_under:o': { label: 'Stop going under', apply: (t) => dropInstruction(t, 'under') },
+  'pd_tight:o': { label: 'Stop top-locking', apply: (t) => dropInstruction(t, 'tight') },
+  'pd_sag:o': { label: 'Stop sagging off', apply: (t) => dropInstruction(t, 'sag') },
+  'pd_body:o': { label: 'Less physical', apply: (t) => dropInstruction(t, 'body') },
+  'hunt:d': { label: 'Stop the hunt', apply: (t) => void (t.offense.huntTarget = null) },
+  'foul_give:o': { label: 'No foul to give', apply: (t) => void (t.manage.foulToGive = false) },
+  // a set the defense takes away comes out of the package
+  ...Object.fromEntries(SET_IDS.map((id) => [`set_${id}:d`, { label: `Drop ${SETS[id].short}`, apply: (t: Tactics) => dropSet(t, id) }])),
 };
+
+/** Take a set out of the package (the package goes when it's empty). */
+function dropSet(t: Tactics, id: SetId) {
+  const left = (t.offense.sets ?? []).filter((x) => x !== id);
+  if (left.length) t.offense.sets = left;
+  else delete t.offense.sets;
+}
+
+/** Take one kind of instruction off every opponent it's on. */
+function dropInstruction(t: Tactics, d: PlayerDefense) {
+  const pd = t.defense.playerD;
+  if (!pd) return;
+  for (const [pid, x] of Object.entries(pd)) if (x === d) delete pd[+pid];
+  if (!Object.keys(pd).length) delete t.defense.playerD;
+}
 
 /**
  * The live one-tap answer to a tactical edge against you (an impact key such as 'drop_pullup:o'):

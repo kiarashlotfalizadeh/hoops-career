@@ -221,6 +221,90 @@ describe('reading a league', () => {
     expect(migrate(structuredClone(once))).toEqual(once);
   });
 
+  it('keeps sound pick swaps, cash in trades and promises to players, and drops damaged ones', () => {
+    const l = testLeague('terms');
+    // a save from before them comes through as it was
+    const before = structuredClone(l);
+    expect(migrate(structuredClone(l))).toEqual({ ...before, version: SAVE_VERSION });
+    const first = (tid: number, season: number) => l.draftPicks.find((d) => d.originalTid === tid && d.season === season && d.round === 1)!;
+    const y = l.season + 1;
+    // sound: 0's first may swap for 1's; damaged: a swap to a missing pick, to a second-rounder, to another
+    // draft, a second right on 1's first, and a chain through a pick that is itself subject to one
+    first(0, y).swap = first(1, y).dpid;
+    first(2, y).swap = 999_999;
+    first(3, y).swap = l.draftPicks.find((d) => d.originalTid === 4 && d.season === y && d.round === 2)!.dpid;
+    first(5, y).swap = first(6, y + 1).dpid;
+    first(7, y).swap = first(1, y).dpid;
+    first(8, y).swap = first(0, y).dpid;
+    l.teams[0].cashTrades = { season: l.season, sent: 2_500, received: 0 };
+    l.teams[1].cashTrades = { season: l.season, sent: -5, received: 0 };
+    (l.teams[2] as { cashTrades?: unknown }).cashTrades = 'lots';
+    l.teams[1].seasons[0].cashIn = 2_500;
+    (l.teams[3].seasons[0] as { cashIn?: unknown }).cashIn = 'x';
+    const [a, b, c, d] = Object.values(l.players).filter((p) => p.tid === l.userTid);
+    a.promise = { kind: 'role', tid: l.userTid, season: l.season, day: 3, request: true, minutes: 30 };
+    a.meeting = { season: l.season, day: 3 };
+    b.promise = { kind: 'trade', tid: l.userTid, season: l.season, day: 3, request: true } as never;
+    c.promise = { kind: 'bribe', tid: l.userTid, season: l.season, day: 3, request: true } as never;
+    c.meeting = { season: l.season, day: 'soon' } as never;
+    d.meeting = { season: l.season, day: 4, broken: l.season };
+    l.transactions = [
+      {
+        id: 1,
+        season: l.season,
+        day: 1,
+        phase: 'regular',
+        kind: 'trade',
+        tids: [0, 1],
+        sides: [
+          { tid: 0, players: [], picks: [], cash: 2_500, swaps: [y] },
+          { tid: 1, players: [], picks: [], cash: 'x' as never, swaps: ['y'] as never },
+        ],
+      },
+    ];
+    const back = migrate(l);
+    expect(back.draftPicks.filter((p) => p.swap !== undefined).map((p) => [p.originalTid, p.swap])).toEqual([[0, first(1, y).dpid]]);
+    expect(back.teams.slice(0, 3).map((t) => t.cashTrades)).toEqual([{ season: l.season, sent: 2_500, received: 0 }, undefined, undefined]);
+    expect([back.teams[1].seasons[0].cashIn, back.teams[3].seasons[0].cashIn]).toEqual([2_500, undefined]);
+    expect([a.promise?.kind, b.promise, c.promise, c.meeting, d.meeting?.broken]).toEqual(['role', undefined, undefined, undefined, l.season]);
+    expect(back.transactions![0].sides).toEqual([
+      { tid: 0, players: [], picks: [], cash: 2_500, swaps: [y] },
+      { tid: 1, players: [], picks: [] },
+    ]);
+    // and again changes nothing
+    expect(migrate(structuredClone(back))).toEqual(back);
+  });
+
+  it('keeps restricted free agency in shape: damaged rights or offer sheets, or ones out of their phase, are dropped, and so are inbox links that aren’t a player', () => {
+    const l = testLeague('rfa');
+    l.phase = 'freeAgency';
+    const [a, b, c, d] = Object.values(l.players).filter((p) => p.tid === -1);
+    const rostered = Object.values(l.players).find((p) => p.tid === 3)!;
+    const sheet = { tid: 4, amount: 9_000, years: 3, route: 'space' as const, day: 2, until: 3 };
+    a.rfa = { tid: 3, qo: 5_000, hold: 9_000, sheet };
+    b.rfa = { tid: 3, qo: 5_000, hold: 9_000, sheet: { ...sheet, years: 9 } };
+    c.rfa = { tid: 999, qo: 5_000, sheet };
+    d.rfa = { tid: 3, qo: -1 };
+    rostered.rfa = { tid: 3, qo: 5_000 };
+    l.inbox[0].sheet = 'x' as never;
+    l.inbox[1].sheet = a.pid;
+    const once = migrate(l);
+    const by = (pid: number) => once.players[pid].rfa;
+    expect(by(a.pid)).toEqual({ tid: 3, qo: 5_000, hold: 9_000, sheet });
+    expect(by(b.pid)).toEqual({ tid: 3, qo: 5_000, hold: 9_000 });
+    expect([by(c.pid), by(d.pid), by(rostered.pid)]).toEqual([undefined, undefined, undefined]);
+    expect([once.inbox[0].sheet, once.inbox[1].sheet]).toEqual([undefined, a.pid]);
+    expect(migrate(structuredClone(once))).toEqual(once);
+    // nothing of it outlives the summer, nor does an offer sheet before free agency
+    const later = structuredClone(once);
+    later.phase = 'preseason';
+    expect(Object.values(migrate(later).players).some((p) => p.rfa)).toBe(false);
+    const resign = structuredClone(once);
+    resign.phase = 'resign';
+    resign.players[rostered.pid].rfa = { tid: 3, qo: 5_000, sheet };
+    expect(migrate(resign).players[rostered.pid].rfa).toEqual({ tid: 3, qo: 5_000 });
+  });
+
   it('keeps only #rrggbb team colours, which the screens put in styles as they are', () => {
     const l = testLeague('colours');
     const real = [...l.teams[0].colors];

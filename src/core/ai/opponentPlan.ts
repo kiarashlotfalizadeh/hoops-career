@@ -1,17 +1,19 @@
 // What an AI coach prepares for a game against the user's team: at most two changes to his usual
 // tactics that answer what the user's team does best (a hot pick-and-roll, its shooting, its
-// running game, the player it runs its offense through...). Whether he prepares one depends on the
+// running game, the player it runs its offense through...) or where it's weak (a starter to guard
+// a particular way, a poor perimeter defender to attack). Whether he prepares one depends on the
 // difficulty and his tactics rating, rolled from the game's id, never the league's random stream.
 // What goes in it is read from the user's stored games before game day only, so the plan for a
 // game reads the same in the preview, the Lab and the game itself, whatever else is played that
 // day. AI-vs-AI games never get one, so the league's numbers are unchanged.
 
 import type { GameSim } from '../sim/engine';
-import type { League, Player, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
+import type { League, Player, PlayerDefense, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES } from '../analysis/scouting';
+import { guardingPlan, huntPick } from '../analysis/guarding';
 import { playerName, seasonTotals, teamPlayers } from '../league/helpers';
 import { defPresetFit, rosterProfile } from './coachAI';
 
@@ -212,7 +214,52 @@ function userStar(league: League, userTid: number, day: number) {
 
 const lastName = (p: Player) => p.lastName || p.firstName;
 
+/**
+ * The three-point shooting of a team's players other than its star(s): what a junk defense dares.
+ * Their regular-season lines with the team this season once it has played five games, else each
+ * one's last season; null without 150 attempts to go on.
+ */
+export function castThrees(league: League, tid: number, stars: number | number[]): { tpa: number; pct: number } | null {
+  const skip = new Set(Array.isArray(stars) ? stars : [stars]);
+  const ts = league.teams[tid].seasons.find((s) => s.season === league.season);
+  const now = !!ts && ts.won + ts.lost >= SCOUT_MIN_GAMES;
+  let tpa = 0;
+  let tpm = 0;
+  for (const pl of teamPlayers(league, tid)) {
+    if (skip.has(pl.pid)) continue;
+    const s = now ? pl.stats.find((x) => x.season === league.season && x.tid === tid && !x.playoffs) : seasonTotals(pl, league.season - 1);
+    if (!s) continue;
+    tpa += s.tpa;
+    tpm += s.tpm;
+  }
+  return tpa >= 150 ? { tpa, pct: tpm / tpa } : null;
+}
+
+/** The league's three-point percentage this regular season (last season's until 2,000 attempts are in), NaN without either. */
+export function leagueThreePct(league: League): number {
+  for (const season of [league.season, league.season - 1]) {
+    let tpa = 0;
+    let tpm = 0;
+    for (const t of league.teams) {
+      const ts = t.seasons.find((x) => x.season === season);
+      if (!ts) continue;
+      tpa += ts.t.tpa;
+      tpm += ts.t.tpm;
+    }
+    if (tpa >= 2000) return tpm / tpa;
+  }
+  return NaN;
+}
+
 const COVERAGE_TEXT: Partial<Record<PnrCoverage, string>> = { hedge: 'hedges ball screens', ice: 'ices ball screens', drop: 'drops the big on ball screens' };
+
+/** A guarding instruction as the coach's plan reads ("goes under screens on Brunson"). */
+const GUARD_TEXT: Record<PlayerDefense, (name: string) => string> = {
+  under: (n) => `goes under screens on ${n}`,
+  tight: (n) => `runs ${n} off the three-point line`,
+  sag: (n) => `sags off ${n}`,
+  body: (n) => `gets physical with ${n}`,
+};
 
 /** Everything the coach could plan against the user's team tonight, each weighted by how strong the numbers behind it are. */
 function candidates(league: League, aiTid: number, base: Tactics, userTid: number, day: number): Cand[] {
@@ -319,8 +366,53 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         w: trD.z,
       });
   }
+  // ---- the user's weakest perimeter defender, when he gives up a lot to the rest of the rotation:
+  // isolations, post-ups and ball screens at the man he guards (it costs them some ball movement)
+  const hunt = huntPick(league, userTid);
+  const victim = hunt?.worth ? league.players[hunt.pid] : undefined;
+  if (hunt && victim && base.offense.huntTarget == null)
+    out.push({
+      id: 'hunt',
+      group: 'hunt',
+      text: `attacks ${lastName(victim)} on defense`,
+      why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, the rest of your rotation at ${hunt.teamPerDef}.`,
+      patch: { offense: { huntTarget: hunt.pid } },
+      w: (hunt.teamPerDef - hunt.perDef) / 4,
+    });
+  // ---- how to guard one of the user's regulars (his top seven, who play the minutes worth a plan):
+  // the read the user's own staff makes on an opponent
+  // (go under on a handler who can't shoot off the dribble, top-lock a shooter who can't drive, sag
+  // off a non-shooter, get physical with a poor free-throw shooter inside); a man-to-man thing
+  if (d.scheme === 'man' && !d.playerD) {
+    const read = guardingPlan(league, userTid)
+      .slice(0, 7)
+      .find((a) => a.suggest && (a.suggest !== 'under' || (d.pnr !== 'switch' && d.pnr !== 'blitz')));
+    const who = read && league.players[read.pid];
+    if (read?.suggest && who)
+      out.push({
+        id: `guard-${read.suggest}`,
+        group: 'guard',
+        text: GUARD_TEXT[read.suggest](lastName(who)),
+        why: `${playerName(who)}: ${read.why}`,
+        patch: { defense: { playerD: { [who.pid]: read.suggest } } },
+        // a small edge (see the README's numbers): the plan's second item at most, unless nothing else stands out
+        w: 1.2,
+      });
+  }
   // ---- the player the user's offense runs through: doubled when he carries it, denied the ball otherwise
   const star = userStar(league, userTid, day);
+  // ...or chased in a box-and-one when the players around him don't make their threes
+  const cast = star && p ? castThrees(league, userTid, star.p.pid) : null;
+  const lgTp = p ? div(p.lg.tpm, p.lg.tpa) : NaN;
+  if (star && star.usg >= 0.28 && cast && lgTp - cast.pct >= 0.02 && d.scheme === 'man')
+    out.push({
+      id: 'box1',
+      group: 'star',
+      text: `plays a box-and-one on ${lastName(star.p)}`,
+      why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions, and the rest of your team makes ${pct1(cast.pct)} of its threes (league ${pct1(lgTp)}).`,
+      patch: { defense: { scheme: 'box1', chase: [star.p.pid] } },
+      w: 1.5 + (star.usg - 0.28) * 25 + (lgTp - cast.pct) / 0.01,
+    });
   if (star && star.usg >= 0.28 && d.starPlan === 'none') {
     const iso = p ? ptRead(p, p.off, 'iso') : null;
     const spot = p ? ptRead(p, p.off, 'spotup') : null;

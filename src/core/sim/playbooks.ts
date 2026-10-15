@@ -1,12 +1,14 @@
 // The coach's saved playbooks (League.playbooks): his own library of tactics, which goes with him
-// when he takes over another team. A playbook keeps the schemes, sliders and game management;
+// when he takes over another team. A playbook keeps the schemes, sliders, set package and game management;
 // roles, shot freedom and screeners are kept by player and only come back for players still on the
-// roster, and the game-specific parts (matchups, the star target) are never saved. Also here: the
-// names the screens give a team's playbook, which say "Custom" once the sliders leave the preset.
+// roster, and the game-specific parts (matchups, the star, chase and hunt targets, instructions by
+// player, hack-a targets) are never saved. Also here: the names the screens give a team's playbook,
+// which say "Custom" once the sliders leave the preset.
 
-import { ACTIONS, type ActionType, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
+import { ACTIONS, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
 import { ROLE_META } from '../ratings';
 import { ACTION_META, COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META, STAR_PLAN_META, type DefPreset, type OffPreset } from './tactics';
+import { SETS, atoLabel, isSetId } from './sets';
 
 export const MAX_PLAYBOOKS = 12;
 export const PLAYBOOK_NAME_MAX = 30;
@@ -62,8 +64,9 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
     id: meta.id,
     name: meta.name,
     saved: { ...meta.saved },
-    offense: omit(c.offense, ['roles', 'freedom', 'screeners']) as SavedPlaybook['offense'],
-    defense: omit(c.defense, ['matchups', 'starTarget']) as SavedPlaybook['defense'],
+    // (the hunt, chase targets and instructions by player name one night's opponents, like the matchups)
+    offense: omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget']) as SavedPlaybook['offense'],
+    defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD']) as SavedPlaybook['defense'],
     // hack-a-player targets are one opponent's players: they belong in game plans
     manage: omit(c.manage, ['hackTargets', 'hackFromQ']) as SavedPlaybook['manage'],
     offPreset: c.offPreset,
@@ -78,7 +81,7 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
 /**
  * Tactics `t` with a playbook loaded, for a team whose roster is `roster` (pids): its roles, shot
  * freedom and screeners apply to players still on it (the others keep theirs), and tonight's
- * matchups and star target stay. Fields newer than the playbook keep their current values. The
+ * matchups, star, chase and hunt targets and instructions by player stay. Fields newer than the playbook keep their current values. The
  * result shares no objects with the playbook or with `t`, and is the coach's (manual).
  */
 export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<number>): Tactics {
@@ -93,8 +96,9 @@ export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<num
   out.offense = { ...out.offense, ...src.offense, roles, freedom, screeners };
   out.defense = { ...out.defense, ...src.defense };
   out.manage = { ...out.manage, ...src.manage };
-  // a go-to player who has left stays with the current one
+  // a go-to player (or the player of the after-timeout play) who has left stays with the current one
   if (src.manage.goTo !== undefined && src.manage.goTo !== null && !on.has(src.manage.goTo)) out.manage.goTo = t.manage.goTo ?? null;
+  if (src.manage.atoPid !== undefined && src.manage.atoPid !== null && !on.has(src.manage.atoPid)) out.manage.atoPid = t.manage.atoPid ?? null;
   Object.assign(out, omit(src.extra ?? {}, KNOWN));
   out.offPreset = src.offPreset;
   out.defPreset = src.defPreset;
@@ -146,15 +150,32 @@ const MANAGE_FIELDS: Field<string>[] = [
   ['twoForOne', 'Go for 2-for-1', onOff],
   ['garbageTime', 'Rest starters in blowouts', onOff],
   ['hackThreshold', 'Hack-a-player', (v) => (v ? `< ${v}% FT` : 'Off')],
+  ['foulToGive', 'Foul to give', onOff],
   ['autoTimeouts', 'Auto timeouts', onOff],
   ['timeoutRun', 'Timeout after a run of', (v) => `${v}-0`],
   ['foulTrouble', 'Foul trouble', (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1)],
   ['fatigueSub', 'Sub out tired players at', (v) => `${Math.round((v as number) * 100)}% energy`],
-  ['ato', 'After-timeout play', (v) => (v ? ACTION_META[v as ActionType].label : 'None')],
+  ['ato', 'After-timeout play', (v) => atoLabel(v as string | null, (a) => ACTION_META[a].label)],
   ['assistantAdjusts', 'Assistant adjusts in simmed games', onOff],
 ];
 /** Parts of the tactics that aren't settings to compare (game by game, or bookkeeping; the go-to player is named below). */
-const NOT_COMPARED = new Set(['actions', 'roles', 'freedom', 'screeners', 'matchups', 'starTarget', 'goTo', 'hackTargets', 'hackFromQ', ...KNOWN]);
+const NOT_COMPARED = new Set([
+  'actions',
+  'roles',
+  'freedom',
+  'screeners',
+  'matchups',
+  'starTarget',
+  'chase',
+  'playerD',
+  'huntTarget',
+  'sets',
+  'goTo',
+  'atoPid',
+  'hackTargets',
+  'hackFromQ',
+  ...KNOWN,
+]);
 
 /** "hackTargets" → "Hack targets", for settings this module doesn't know by name. */
 const humanize = (k: string) => {
@@ -190,6 +211,11 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   section(a.manage as unknown as Record<string, unknown>, b.manage as unknown as Record<string, unknown>, MANAGE_FIELDS);
   const goTo = (v: number | null | undefined) => (v === null || v === undefined ? 'None' : nameOf(v));
   if ((a.manage.goTo ?? null) !== (b.manage.goTo ?? null)) out.push({ label: 'Go-to player', from: goTo(a.manage.goTo), to: goTo(b.manage.goTo) });
+  // the player the after-timeout play is run for (the best fit when none is named)
+  const atoFor = (v: number | null | undefined) => (v === null || v === undefined ? 'Best fit' : nameOf(v));
+  if ((a.manage.atoPid ?? null) !== (b.manage.atoPid ?? null)) out.push({ label: 'After-timeout play for', from: atoFor(a.manage.atoPid), to: atoFor(b.manage.atoPid) });
+  const pkg = (v: unknown) => (Array.isArray(v) && v.length ? v.map((id) => (isSetId(id) ? SETS[id].short : String(id))).join(', ') : 'None');
+  if (!same(a.offense.sets ?? [], b.offense.sets ?? [])) out.push({ label: 'Set package', from: pkg(a.offense.sets), to: pkg(b.offense.sets) });
   section(a as unknown as Record<string, unknown>, b as unknown as Record<string, unknown>, []);
   const pids = (x: Record<number, unknown>, y: Record<number, unknown>) => [...new Set([...Object.keys(x), ...Object.keys(y)])].map(Number);
   for (const pid of pids(a.offense.roles, b.offense.roles)) {

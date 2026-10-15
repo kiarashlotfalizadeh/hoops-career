@@ -60,6 +60,14 @@ export interface Contract {
   twoWay?: boolean;
   /** A two-way deal converted to a standard one: the same contract, not a new signing. */
   converted?: boolean;
+  /** A qualifying offer he took at the close of free agency: when it runs out he is unrestricted (see rfa.ts). */
+  qualifying?: boolean;
+  /**
+   * A 10-day contract (see tenDay.ts): its one salary is the minimum prorated for its days, paid when
+   * he signs; it ends by itself when season day `until` begins. `hardship`: signed beyond 15 players
+   * under the hardship exception.
+   */
+  tenDay?: { until: number; hardship?: boolean };
   /**
    * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
    * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
@@ -228,6 +236,102 @@ export interface Player {
   faDays?: number;
   /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
   waivers?: Waivers;
+  /** What the GM promised him at their last meeting, while it's open (the user's players only; see meetPlayer in morale.ts). */
+  promise?: PlayerPromise;
+  /** His last meeting with the GM (one every MEET_DAYS days), and the season a promise to him was broken: he takes no more that season. */
+  meeting?: { season: number; day: number; broken?: number };
+  /** Restricted free agency: his team extended a qualifying offer as his deal ran out, so it can match any offer sheet he signs (see rfa.ts). */
+  rfa?: Rfa;
+  /** His contract talks with the user's team (see negotiation.ts): cleared when he signs anywhere. */
+  talks?: Talks;
+  /** The 10-day contracts he has signed with one team this season: two at most (see tenDay.ts). */
+  tenDays?: { tid: number; season: number; n: number };
+}
+
+/** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
+export interface TalkTerms {
+  amount: number;
+  years: number;
+  option?: 'player' | 'team';
+}
+
+/**
+ * The user's contract talks with one player (see src/core/league/negotiation.ts): his ask is open,
+ * his walk-away price isn't. Offers below it get a counter and cost patience; out of patience, talks
+ * break down for a while (in the re-sign period his ask goes up instead).
+ */
+export interface Talks {
+  /** The user's team when they started. */
+  tid: number;
+  /** The contract season they're about (next season's from the draft through free agency). */
+  season: number;
+  /** A contract as a free agent or an offer sheet ('fa'), re-signing his own player ('resign'), or an extension ('extend'). */
+  kind: 'fa' | 'resign' | 'extend';
+  /** The stretch of the calendar they're in: patience and his counter start over in the next one. */
+  period: 'resign' | 'fa' | 'season';
+  /** Offers below his price he'll still hear before he breaks off talks. */
+  patience: number;
+  /** His standing counter-offer: an offer on exactly these terms, for at least this much, signs him. */
+  counter?: TalkTerms;
+  /** Lowballs he has heard (offers under 85% of his ask for the terms). */
+  lowballs?: number;
+  /** Interest in the team lost to lowballs: comes off his appeal (see teamAppeal) for the season. */
+  sour?: number;
+  /** Talks broke down: he hears no offer before this season and day (the next season's day 0: the rest of the summer). */
+  closed?: { season: number; day: number };
+  /** Re-sign period, talks broke down: his ask went up by this factor and he takes nothing less. */
+  firm?: number;
+}
+
+/**
+ * A promise the GM made to one of his players who asked for a trade or is unhappy (see meetPlayer):
+ * 'role' a bigger role (he holds off and is judged on his minutes over his next ROLE_GAMES games),
+ * 'trade' to move him (by this season's deadline, or by next opening night), 'patience' he agreed
+ * to hold off for PATIENCE_GAMES team games.
+ */
+export interface PlayerPromise {
+  kind: 'role' | 'trade' | 'patience';
+  /** His team when it was made: a trade or a release ends it. */
+  tid: number;
+  season: number;
+  day: number;
+  /** He had asked for a trade when it was made (a role or patience promise puts the request on hold). */
+  request: boolean;
+  /** Role: the minutes a night he expects by the end of it. */
+  minutes?: number;
+  /** Trade: judged the day after this season's deadline, or on next season's opening night. */
+  by?: 'deadline' | 'opening';
+}
+
+/**
+ * A restricted free agent's rights (see src/core/league/rfa.ts). Set when his team extends the
+ * qualifying offer in the re-sign period (he is still on its roster then); from the day free
+ * agency opens he is a free agent until he re-signs, signs an offer sheet that isn't matched, or
+ * takes the qualifying offer as the market closes.
+ */
+export interface Rfa {
+  /** The team holding his rights: it can re-sign him with Bird rights or match an offer sheet. */
+  tid: number;
+  /** The qualifying offer: one season at this salary ($K, next season's money). */
+  qo: number;
+  /** His cap hold on that team from the day the market opens (the larger of the QO and his asking price then) until he signs or the QO is withdrawn. */
+  hold?: number;
+  /** An offer sheet he signed with another team, waiting for his team's decision. */
+  sheet?: OfferSheet;
+}
+
+/** Another team's offer sheet for a restricted free agent: his team matches it and keeps him on exactly these terms, or he joins that team on them. */
+export interface OfferSheet {
+  /** The team that signed him to it. */
+  tid: number;
+  /** First-season salary ($K, next season's money; the usual 5% raises follow) and length: 2-5 seasons, no options. */
+  amount: number;
+  years: number;
+  /** How the offering team pays for it: its cap space or exception stays held for it until his team decides. */
+  route: SigningRoute;
+  /** The free-agency day (faDay) it was signed on, and the last one his team can match on: unmatched at the end of that day, he joins the other team. */
+  day: number;
+  until: number;
 }
 
 export interface Waivers {
@@ -237,13 +341,20 @@ export interface Waivers {
   until: number;
   /** The contract a claiming team takes over. */
   contract: Contract;
-  /** The dead money the release left his old team, which a claim takes off its books. */
-  dead: { season: number; amount: number }[];
+  /** The dead money the release left his old team (stretched or not), which a claim takes off its books. */
+  dead: { season: number; amount: number; stretched?: true }[];
   /** The user has put in a claim. */
   claim?: boolean;
   /** His trade lock when he was waived: a claiming team takes it over with the contract. */
   lock?: { season: number; day: number };
 }
+
+/**
+ * How a team pays a free agent: his minimum, cap space, or an exception over the cap: the mid-level,
+ * the room exception (instead of the mid-level, once a team has used cap space that season) or the
+ * bi-annual (see contracts.ts).
+ */
+export type SigningRoute = 'min' | 'space' | 'mle' | 'room' | 'bae';
 
 /** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
 export interface FaBid {
@@ -253,8 +364,8 @@ export interface FaBid {
   /** faDay it was made (a raised offer keeps the first one's day and decision day). */
   day: number;
   decideDay: number;
-  /** How it is paid for: cap space is held for it, the mid-level is reserved for it. */
-  route?: 'space' | 'mle' | 'min';
+  /** How it is paid for: cap space is held for it, an exception (mid-level, room or bi-annual) is reserved for it. */
+  route?: SigningRoute;
   /** Salary the user signed over the cap (minimum and mid-level deals) while it was pending: those could have come after it, so they don't count against it. */
   slack?: number;
 }
@@ -311,9 +422,23 @@ export type ActionType = 'pnr' | 'iso' | 'post' | 'handoff' | 'motion';
 export const ACTIONS: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
 
 export type PnrCoverage = 'drop' | 'switch' | 'hedge' | 'blitz' | 'ice';
-export type DefScheme = 'man' | 'zone23' | 'zone32';
+/** Man-to-man, the zones, and the junk defenses: box-and-one (four in a 2-2 zone, one chaser) and triangle-and-two (three in a zone, two chasers). */
+export type DefScheme = 'man' | 'zone23' | 'zone32' | 'box1' | 'tri2';
 export type PressMode = 'none' | 'afterMade' | 'always';
 export type StarPlan = 'none' | 'deny' | 'double';
+/**
+ * A scouting-report instruction for guarding one opponent: go under screens on him, run him off
+ * the line (top-lock), sag off him into the paint, or get physical with him.
+ */
+export type PlayerDefense = 'under' | 'tight' | 'sag' | 'body';
+export const PLAYER_DEFENSES: PlayerDefense[] = ['under', 'tight', 'sag', 'body'];
+
+/**
+ * A named offensive set (see src/core/sim/sets.ts): a specific way of running one of the engine's
+ * actions for one player and one look. The clear-out isolation is the isolation call, not one of these.
+ */
+export type SetId = 'spain' | 'horns' | 'floppy' | 'elevator' | 'hammer' | 'chicago' | 'postSplit';
+export const SET_IDS: SetId[] = ['spain', 'horns', 'floppy', 'elevator', 'hammer', 'chicago', 'postSplit'];
 
 export interface OffenseTactics {
   /** 0..100: 0 = grind every possession, 100 = run-and-gun. */
@@ -330,12 +455,22 @@ export interface OffenseTactics {
   crashBoards: number;
   /** Hunt the weakest defender with isolations/PnR. */
   huntMismatch: boolean;
+  /**
+   * Attack one of tonight's opponents (pid, game-specific): while he's on the floor the offense runs
+   * its isolations, post-ups and ball screens at the player he guards, at some cost in ball movement.
+   */
+  huntTarget?: number | null;
   /** Feed whoever is hot. */
   hotHand: boolean;
   roles: Record<number, OffRole>;
   freedom: Record<number, ShotFreedom>;
   /** Preferred PnR screeners, in order (empty = auto). */
   screeners: number[];
+  /**
+   * The set package (the user's only, at most four): the half court mixes these sets in now and then
+   * when the players on the floor fit them. AI coaches run none.
+   */
+  sets?: SetId[];
 }
 
 export interface DefenseTactics {
@@ -358,6 +493,14 @@ export interface DefenseTactics {
   matchups: Record<number, number>;
   /** 0..100 foul aggressiveness (physicality). */
   physicality: number;
+  /**
+   * Junk defenses: the opponents the chasers face-guard, in order (game-specific). A box-and-one
+   * chases the first, a triangle-and-two the first two; anyone missing (none named, or on the bench)
+   * is their main creator on the floor, picked as the star plan picks one.
+   */
+  chase?: number[];
+  /** Scouting-report instructions by opponent pid (game-specific). */
+  playerD?: Record<number, PlayerDefense>;
 }
 
 export interface GameManagement {
@@ -381,14 +524,22 @@ export interface GameManagement {
   fatigueSub: number;
   /** Crunch-time go-to player (pid): in the last two minutes of a close fourth quarter or overtime the ball finds him more. */
   goTo?: number | null;
-  /** After-timeout play: the first action of the next half-court trip after one of your timeouts. */
-  ato?: ActionType | null;
+  /** After-timeout play: the first action (or a set) of the next half-court trip after one of your timeouts. */
+  ato?: ActionType | SetId | null;
+  /** The player the after-timeout set (or isolation) is run for; absent or off the floor: the best fit there. */
+  atoPid?: number | null;
   /** Hack-a-player targets (opponent pids, for game plans): fouled intentionally while on the floor, whatever their free-throw percentage. */
   hackTargets?: number[];
   /** Quarter hack-a-player starts in, by threshold or target (default 1; overtime counts as the 4th). */
   hackFromQ?: number;
   /** The assistant adjusts at breaks in simmed games, as AI coaches do. */
   assistantAdjusts?: boolean;
+  /**
+   * Foul to give: when they have the ball for a period's last shot (3 to 8 seconds left; in the 4th
+   * quarter and overtime only when tied or up by three or less) and a foul won't put them in the
+   * bonus, foul at once so they inbound with less time. Off unless the coach turns it on.
+   */
+  foulToGive?: boolean;
 }
 
 /** When a situational plan applies: every condition given must hold. Overtime counts as the 4th quarter. */
@@ -453,8 +604,8 @@ export interface SavedPlaybook {
   name: string;
   /** When it was saved or last overwritten. */
   saved: { season: number; day: number };
-  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners'>;
-  defense: Omit<DefenseTactics, 'matchups' | 'starTarget'>;
+  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners' | 'huntTarget'>;
+  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'playerD'>;
   manage: GameManagement;
   offPreset: string;
   defPreset: string;
@@ -491,6 +642,8 @@ export interface TeamSeason {
   attendance: number;
   pop: number;
   playIn?: boolean;
+  /** Cash received in trades this season ($K): booked as revenue, but not local revenue that revenue sharing evens out. */
+  cashIn?: number;
   /** Team totals for advanced team stats. */
   t: TeamTotals;
   o: TeamTotals; // opponent totals
@@ -539,14 +692,22 @@ export interface Team {
   /** Coach personality bias for AI tactics. */
   coach: CoachProfile;
   seasons: TeamSeason[];
-  /** Dead money from released players: season -> amount. */
-  deadMoney: { pid: number; name: string; season: number; amount: number }[];
+  /** Dead money from released players: season -> amount (`stretched`: spread by the stretch provision, see stretchDeadMoney). */
+  deadMoney: { pid: number; name: string; season: number; amount: number; stretched?: true }[];
   /** Contract season the team last used its mid-level exception. */
   mleSeason?: number;
+  /** Contract season the team last signed a free agent with cap space: no mid-level that season, the room exception instead. */
+  spaceSeason?: number;
+  /** Contract season the team last used its room exception. */
+  roomSeason?: number;
+  /** Contract season the team last used its bi-annual exception (not two seasons running). */
+  baeSeason?: number;
   /** Players whose jersey numbers were settled at the team's last game: they keep them over arrivals. */
   numbered?: number[];
   practice: 'light' | 'normal' | 'intense';
   timeoutsUsedThisGame?: number;
+  /** Cash sent and received in trades in one contract season ($K), each held to CASH_PCT of the cap (see cashRoom). */
+  cashTrades?: { season: number; sent: number; received: number };
 }
 
 export interface CoachProfile {
@@ -571,6 +732,12 @@ export interface DraftPick {
   protection?: number;
   /** The team that last traded it away, and when (`also`: the others that traded it away that season): it can't go back to them that season. */
   tradedFrom?: { tid: number; season: number; also?: number[] };
+  /**
+   * A swap right riding on this first: the dpid of another team's first in the same draft that its
+   * holder may take instead, if that one lands higher (that pick is "subject to a swap"). It goes
+   * with this pick when it's traded and is settled when the lottery sets the order (see resolveSwaps).
+   */
+  swap?: number;
 }
 
 // ---------------------------------------------------------------- games
@@ -690,6 +857,12 @@ export interface GameResult {
   flow?: number[];
   /** Index into flow where each period (Q1, Q2, ..., OT) starts. */
   flowPeriods?: number[];
+  /** Game seconds played at each flow sample (games kept in detail; absent in older saves): the win-probability chart's clock. */
+  flowT?: number[];
+  /** The side (0 home, 1 away) with the first possession of each period, in flowPeriods order: possessions alternate within a period. */
+  flowPoss?: (0 | 1)[];
+  /** The user's games: the projected home margin at tip-off (the preview's projection, home court included), which win probability starts from. */
+  edge?: number;
   /** Compact play-by-play for detailed (user) games. */
   pbp?: PbpEntry[];
   /** Coaches' in-game adjustments (user games only). */
@@ -698,9 +871,23 @@ export interface GameResult {
   oppPlan?: string[];
   /** Player of the game. */
   pog?: number;
+  /** The sets each side ran (and clear-out isolations called), when any were: only the user's team runs them. */
+  sets?: SetStat[];
   att?: number;
   /** The user's regular-season games: where his team stood in its conference going in and coming out. */
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
+}
+
+/** One set's night (GameResult.sets): how often a side ran it, the points those possessions scored, and the run the defense was on it by. */
+export interface SetStat {
+  /** 0 home, 1 away. */
+  t: 0 | 1;
+  /** A set, or 'iso' for clear-out isolations called for a player. */
+  id: SetId | 'iso';
+  runs: number;
+  pts: number;
+  /** The run on which the defense's read had taken a real share of its look away (see READ_ON_IT in sets.ts), if it got there. */
+  readAt?: number;
 }
 
 /** A team's place in its conference: rank, games behind the leader, and a clinch mark (x playoffs, p play-in, e eliminated). */
@@ -768,14 +955,41 @@ export interface NewsItem {
   pids: number[];
 }
 
-/** A kind of roster move in the transaction log. */
-export type TxnKind = 'trade' | 'sign' | 'resign' | 'extend' | 'release' | 'waive' | 'claim' | 'buyout' | 'twoWay' | 'convert' | 'renounce' | 'option' | 'draft';
+/**
+ * A kind of roster move in the transaction log. 'swap': a pick swap exercised when the lottery set
+ * the order. Restricted free agency: 'qualify' (a qualifying offer extended, withdrawn or taken),
+ * 'offerSheet' (signed with another team) and 'match' (his team matched it, or declined and he
+ * joined the other team). 'tenDay': a 10-day contract signed (or, for the user's team, ended).
+ */
+export type TxnKind =
+  | 'trade'
+  | 'swap'
+  | 'sign'
+  | 'resign'
+  | 'extend'
+  | 'release'
+  | 'waive'
+  | 'claim'
+  | 'buyout'
+  | 'twoWay'
+  | 'convert'
+  | 'renounce'
+  | 'option'
+  | 'draft'
+  | 'qualify'
+  | 'offerSheet'
+  | 'match'
+  | 'tenDay';
 
-/** What one team sent in a trade, as it was: names and pick labels at the time. */
+/** What one team sent in a trade (or gave up in an exercised swap), as it was: names and pick labels at the time. */
 export interface TxnSide {
   tid: number;
   players: { pid: number; name: string }[];
   picks: string[];
+  /** Drafts in which it gave the other team the right to swap first-round picks. */
+  swaps?: number[];
+  /** Cash it sent ($K). */
+  cash?: number;
 }
 
 /**
@@ -796,13 +1010,19 @@ export interface Txn {
   pid?: number;
   name?: string;
   /**
-   * $K: the first-year salary of a signing, re-signing, extension, two-way deal, conversion or
-   * claim (this season's); the dead money a release leaves; what a buyout gave back; the salary of
-   * an option year.
+   * $K: the first-year salary of a signing, re-signing, extension, two-way deal, conversion,
+   * claim, offer sheet or match (this season's); the dead money a release leaves; what a buyout
+   * gave back; the salary of an option year or a qualifying offer.
    */
   amount?: number;
   years?: number;
-  /** An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option); a draft pick: its overall number ('#5'). */
+  /**
+   * An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option);
+   * a draft pick: its overall number ('#5'); a qualifying offer: 'extended' / 'withdrawn' /
+   * 'accepted'; a match (tids: his team, then the offering team): 'matched' / 'declined'; a
+   * release, waiver or buyout: 'stretched' (`years`: the seasons its dead money is spread over); a
+   * 10-day contract: 'second' (his second with the team), 'hardship', 'ended'.
+   */
   note?: string;
   /** The user's team was in it: kept for good, even after he moves on to another team. */
   user?: true;
@@ -823,6 +1043,10 @@ export interface InboxMessage {
   important?: boolean;
   /** The AI trade offer (Proposal id) this message carries: the inbox offers Accept and Review while it stands. */
   proposal?: number;
+  /** The user's restricted free agent (pid) whose offer sheet this message is about: the inbox offers Match and Let him go while it stands. */
+  sheet?: number;
+  /** The user's player (pid) whose 10-day contract is ending: the inbox offers a second 10-day, the rest of the season or letting him go while it runs. */
+  tenDay?: number;
 }
 
 /**
@@ -887,6 +1111,8 @@ export interface Settings {
   pregame?: boolean;
   /** Draft night stops before every AI pick, so picks can be traded for on the clock (default off). */
   draftPause?: boolean;
+  /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */
+  liveWinProb?: boolean;
 }
 
 export interface League {
@@ -959,6 +1185,11 @@ export interface League {
   nextTxnId?: number;
   /** The user's live game in progress, journaled as it's played so it survives the app being closed. */
   live?: LiveJournal;
+  /**
+   * Game-time decisions for the user's next game (`gid`): questionable players he cleared to play
+   * (see isQuestionable). Cleared when that game is played or its day has passed.
+   */
+  gameTime?: { gid: number; play: number[] };
 }
 
 /**
@@ -976,8 +1207,10 @@ export interface LiveJournal {
   seed: number;
   /** Whether in-game injuries were on. */
   injuries: boolean;
-  /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk. */
-  user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number };
+  /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk, and the questionable players cleared to play. */
+  user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number; play?: number[] };
+  /** The projected home margin at tip-off (see GameResult.edge): absent in journals from before win probability. */
+  edge?: number;
   /**
    * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
    * replay plays them as they were, whatever changed since (the difficulty, or the league's id on a
@@ -1095,6 +1328,8 @@ export interface GamePlan {
   seriesId?: string;
   /** Planned matchups against this opponent: their pid -> my defender pid. */
   matchups?: Record<number, number>;
+  /** How to guard their players: their pid -> a scouting-report instruction. */
+  playerD?: Record<number, PlayerDefense>;
   note?: string;
 }
 

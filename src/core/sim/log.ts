@@ -1,4 +1,4 @@
-import type { ActionType, PnrCoverage, ShotZone } from '../types';
+import type { ActionType, DefScheme, PnrCoverage, SetId, ShotZone } from '../types';
 
 export type FinishType = 'pnrBH' | 'pnrRoll' | 'iso' | 'post' | 'spotup' | 'offscreen' | 'handoff' | 'cut' | 'transition' | 'putback' | 'misc';
 
@@ -20,7 +20,8 @@ export type StepKind =
   | 'advance' // bring ball up
   | 'press'
   | 'transition'
-  | 'screen'
+  | 'screen' // ball screen: pid sets it for pid2
+  | 'pin' // off-ball screen (a set's): pid screens for pid2, who comes off it
   | 'drive'
   | 'pass'
   | 'post'
@@ -57,10 +58,12 @@ export interface PossStep {
 
 /**
  * A play called from the bench in a live game: an offensive call (go for three, a quick two, run the
- * clock for a last shot, an isolation for one player) is run on the side's next trip, "foul" on its
- * next defensive one. Calls change what the team tries, never how well it executes.
+ * clock for a last shot, an isolation for one player, a set for one player or the best fit on the
+ * floor) is run on the side's next trip, "foul" on its next defensive one. Calls change what the team
+ * tries, never how well it executes; a set adds only its documented edges against the defense it
+ * meets, and the defense reads it a little better each time it's run (see sets.ts).
  */
-export type PlayCall = { kind: 'three' | 'two' | 'hold' | 'foul' } | { kind: 'iso'; pid: number };
+export type PlayCall = { kind: 'three' | 'two' | 'hold' | 'foul' } | { kind: 'iso'; pid: number } | { kind: 'set'; set: SetId; pid?: number };
 
 export interface PossLog {
   off: 0 | 1;
@@ -83,10 +86,14 @@ export interface PossLog {
   /** Offensive pid -> defender pid at possession start. */
   guards: Record<number, number>;
   /** Defensive scheme in use (for drawing zones). */
-  scheme: 'man' | 'zone23' | 'zone32';
+  scheme: DefScheme;
+  /** A junk defense's chased players (offensive pids), face-guarded by their defenders while the rest play the zone. */
+  chase?: number[];
   help: number;
   /** A called play this possession ran, and the side that called it. */
   call?: PlayCall & { t: 0 | 1 };
+  /** The set the offense ran (called, after a timeout, or from its package): who it was for, and its run tonight (1 = first). */
+  set?: { id: SetId; pid: number; n: number };
   /** Each side's situational plan in effect ('' for none), when either has one. */
   sit?: [string, string];
 }

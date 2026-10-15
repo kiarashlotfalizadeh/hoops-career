@@ -12,6 +12,7 @@ import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
+import { tenDayLabel } from '../office/TenDayPanel';
 
 type View = 'players' | 'ratings' | 'stats' | 'contracts';
 
@@ -176,6 +177,7 @@ export default function Roster() {
                     </div>
                     <div className="row" style={{ gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
                       {p.contract.twoWay && <Tag>Two-way</Tag>}
+                      {p.contract.tenDay && <Tag tone="warn">{tenDayLabel(league, p)}</Tag>}
                       {p.injury && (
                         <Tag tone="bad">
                           {p.injury.type} · {p.injury.gamesRemaining}g

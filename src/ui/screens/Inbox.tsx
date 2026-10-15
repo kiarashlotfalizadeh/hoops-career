@@ -10,7 +10,9 @@ import { Card, Empty, PageHeader } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
 import { inAppPath } from '../nav';
 import { continueDraft } from '../../core/league/season';
+import { sheetDecisionBlocked, userDecideSheet } from '../../core/league/rfa';
 import { liveInProgress } from '../../state/live';
+import { TenDayMessage } from '../office/TenDayPanel';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
   Owner: Crown,
@@ -131,9 +133,13 @@ export default function Inbox() {
                         <p key={i}>{p}</p>
                       ))}
                       {m.proposal !== undefined && <OfferStatus league={league} id={m.proposal} />}
+                      {m.sheet !== undefined && <SheetStatus league={league} pid={m.sheet} />}
+                      {m.tenDay !== undefined && <TenDayMessage league={league} pid={m.tenDay} />}
                       <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
                         {m.proposal !== undefined ? (
                           <OfferButtons league={league} id={m.proposal} onReview={() => nav(`/trade?proposal=${m.proposal}`)} />
+                        ) : m.sheet !== undefined ? (
+                          <SheetButtons league={league} pid={m.sheet} />
                         ) : (
                           to && (
                             <button className="btn sm primary" onClick={() => nav(to)}>
@@ -198,6 +204,39 @@ function OfferButtons({ league, id, onReview }: { league: League; id: number; on
       </button>
       <button className="btn sm primary" disabled={!!err} onClick={onReview}>
         Review <ArrowRight size={15} />
+      </button>
+    </>
+  );
+}
+
+/** Where an offer sheet on the user's restricted free agent stands: decided (and how), or what keeps him from matching it. */
+function SheetStatus({ league, pid }: { league: League; pid: number }) {
+  const p = league.players[pid];
+  const why = sheetDecisionBlocked(league, pid, true);
+  if (!why) return null;
+  if (!sheetDecisionBlocked(league, pid, false)) return <p className="small warn">{why}</p>;
+  const where = p && p.tid >= 0 ? (p.tid === league.userTid ? 'he stayed with us' : `he joined the ${league.teams[p.tid].region} ${league.teams[p.tid].name}`) : '';
+  return <p className="small dim">{where ? `This offer sheet has been decided: ${where}.` : why}</p>;
+}
+
+/** An offer sheet on the user's restricted free agent, from its message: match it or let him go while it stands. */
+function SheetButtons({ league, pid }: { league: League; pid: number }) {
+  const open = !sheetDecisionBlocked(league, pid, false);
+  const canMatch = !sheetDecisionBlocked(league, pid, true);
+  const decide = (match: boolean) => {
+    let r = { ok: false, reason: '' };
+    useStore.getState().mutate((l) => {
+      r = userDecideSheet(l, pid, match);
+    });
+    useStore.getState().toast(r.reason, r.ok ? (match ? 'good' : 'neutral') : 'bad');
+  };
+  return (
+    <>
+      <button className="btn sm good" disabled={!canMatch} onClick={() => decide(true)}>
+        <Check size={15} /> Match
+      </button>
+      <button className="btn sm" disabled={!open} onClick={() => decide(false)}>
+        Let him go
       </button>
     </>
   );

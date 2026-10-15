@@ -9,7 +9,7 @@ import { GameSim, type SimTeamInput } from '../core/sim/engine';
 import type { PlayCall, PossLog } from '../core/sim/log';
 import { Rng } from '../core/random';
 import { cloneTactics } from '../core/sim/tactics';
-import { buildSimInput, ensureRotation, neutralSite, playGame, userGameOnDay } from '../core/league/games';
+import { buildSimInput, ensureRotation, neutralSite, playGame, tipoffEdge, userGameOnDay } from '../core/league/games';
 import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
@@ -39,6 +39,8 @@ export class LiveGame {
   planned: Tactics;
   /** Possessions played so far (engine steps): what the journal counts in. */
   steps = 0;
+  /** The projected home margin at tip-off (GameResult.edge): where win probability starts. */
+  readonly edge: number;
   /** This game's journal: the league's `live` while the game is pending (see checkpoint). */
   readonly journal: LiveJournal;
   /**
@@ -78,6 +80,8 @@ export class LiveGame {
         perf: { ...u.perf },
         rest: [...u.rest],
         injuryMult: u.injuryMult,
+        // the questionable players cleared at tip-off (none in a journal from before game-time decisions)
+        play: u.play ? [...u.play] : undefined,
         adjust: false,
       };
     };
@@ -86,6 +90,9 @@ export class LiveGame {
     const injuries = from ? from.injuries : league.settings.injuries !== false;
     this.sim = new GameSim(sides[0], sides[1], { rng: new Rng(seed), type: game.type, record: true, keepShots: true, injuries, neutral: neutralSite(game) });
     this.planned = this.sim.baseTactics(this.userSide);
+    // (a journal from before win probability has none: the projection is worked out again from the tip)
+    this.edge = from?.edge ?? tipoffEdge(league, game, this.sim);
+    if (from && from.edge === undefined) from.edge = this.edge;
     const mine = sides[this.userSide];
     const theirs = sides[1 - this.userSide];
     const oppPlan = oppPlanIn(this.sim, (1 - this.userSide) as 0 | 1);
@@ -100,7 +107,9 @@ export class LiveGame {
         perf: { ...mine.perf },
         rest: [...(mine.rest ?? [])],
         injuryMult: mine.injuryMult ?? 1,
+        ...(mine.play?.length ? { play: [...mine.play] } : {}),
       },
+      edge: this.edge,
       opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}) },
       steps: 0,
       q: this.sim.q,
@@ -309,7 +318,7 @@ export class LiveGame {
     }
     if (!this.sim.over) this.simTo('end');
     // (recording it ends its journal)
-    const res = playGame(league, g, { sim: this.sim });
+    const res = playGame(league, g, { sim: this.sim, edge: this.edge });
     postGame(league, g, res.home.pts > res.away.pts);
     advanceDay(league);
     this.committed = res;

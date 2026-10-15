@@ -667,6 +667,11 @@ table.stats.fo-contracts tr.clickable td {
 .fo-yr.on small {
   color: var(--text-2);
 }
+/* a length the offer can't run (an offer sheet's single season) */
+.fo-yr:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .fo-gauge text {
   font-family: var(--display);
 }

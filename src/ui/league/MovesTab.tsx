@@ -19,6 +19,8 @@ type Filter = 'all' | Group;
 
 const GROUP: Record<TxnKind, Group> = {
   trade: 'trade',
+  // an exercised pick swap: picks changing hands, as in a trade
+  swap: 'trade',
   sign: 'signing',
   resign: 'signing',
   extend: 'signing',
@@ -31,13 +33,22 @@ const GROUP: Record<TxnKind, Group> = {
   renounce: 'release',
   option: 'other',
   draft: 'other',
+  // restricted free agency: an offer sheet and its outcome are signings; a qualifying offer is a
+  // rights call, like an option, until he takes it (see groupOf)
+  qualify: 'other',
+  offerSheet: 'signing',
+  match: 'signing',
+  // a 10-day contract is a signing; one that ended, a departure
+  tenDay: 'signing',
 };
+/** A move's filter group: a qualifying offer he took is a signing, a 10-day contract that ended a release. */
+const groupOf = (t: Txn): Group => (t.kind === 'qualify' && t.note === 'accepted' ? 'signing' : t.kind === 'tenDay' && t.note === 'ended' ? 'release' : GROUP[t.kind]);
 const FILTERS: Filter[] = ['all', 'trade', 'signing', 'release', 'other'];
 const FILTER_LABEL: Record<Filter, string> = { all: 'All', trade: 'Trades', signing: 'Signings', release: 'Releases', other: 'Other' };
 /** The news log's icon and colour for each kind of move. */
-const kindMeta = (k: TxnKind) => {
-  const g = GROUP[k];
-  return NEWS_KIND[g === 'other' ? (k === 'draft' ? 'draft' : 'general') : g];
+const kindMeta = (t: Txn) => {
+  const g = groupOf(t);
+  return NEWS_KIND[g === 'other' ? (t.kind === 'draft' ? 'draft' : 'general') : g];
 };
 
 const OFFSEASON: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
@@ -74,8 +85,8 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
   const [limit, setLimit] = useState(PAGE);
   const all = useLeagueMemo(() => teamTxns(league, tid), [league, tid]);
   const counts = new Map<Filter, number>([['all', all.length]]);
-  for (const t of all) counts.set(GROUP[t.kind], (counts.get(GROUP[t.kind]) ?? 0) + 1);
-  const shown = all.filter((t) => filter === 'all' || GROUP[t.kind] === filter);
+  for (const t of all) counts.set(groupOf(t), (counts.get(groupOf(t)) ?? 0) + 1);
+  const shown = all.filter((t) => filter === 'all' || groupOf(t) === filter);
   let lastKey = '';
   return (
     <>
@@ -98,7 +109,7 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
             const key = `${t.season}:${summer}`;
             const header = key !== lastKey;
             lastKey = key;
-            const M = kindMeta(t.kind);
+            const M = kindMeta(t);
             return (
               <Fragment key={t.id}>
                 {header && <div className="lg-date-h">{summer ? `${t.season} offseason` : `${seasonLabel(t.season)} season`}</div>}
@@ -132,8 +143,9 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
   );
 }
 
-/** The team a move put the player with (a trade: the team that got him), for its logo. */
+/** The team a move put the player with (a trade: the team that got him; an offer sheet he joined: the team that signed it), for its logo. */
 function moveTeam(t: Txn, pid: number): number {
+  if (t.kind === 'match' && t.note === 'declined') return t.tids[1];
   if (t.kind !== 'trade') return t.tids[0];
   return t.sides?.find((s) => !s.players.some((x) => x.pid === pid))?.tid ?? t.tids[0];
 }

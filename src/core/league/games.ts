@@ -5,14 +5,16 @@ import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
 import { addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
-import { applyInjury, healOneGame } from './injuries';
+import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
 import { consumePlans, effectiveTactics, planFor } from './gamePlans';
 import { confStandings } from './standings';
-import { withoutCoachPlans } from '../sim/tactics';
+import { hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
+import { projectGame } from '../analysis/projection';
+import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneStat } from '../analysis/milestones';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -186,22 +188,34 @@ export function buildSimInput(
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
   // practice intensity: intense camps build skills but add wear and injury risk
   const injuryMult = teamInjuryMult(team);
-  // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
-  if (tid === league.userTid && opp !== undefined && planFor(league, opp, game)) {
-    const tactics = effectiveTactics(league, opp, game);
-    return { team: { ...team, tactics }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts };
+  if (tid === league.userTid) {
+    // game-time decisions: questionable players the user cleared to play tonight dress, a step slow
+    // (the engine raises their injury risk), and an assistant-run rotation plans their minutes as if
+    // they were healthy (the staff's left them out); a rotation the user runs keeps his minutes
+    const play = game?.gid !== undefined ? clearedToPlay(league, game.gid) : [];
+    for (const pid of play) perf[pid] *= GAME_TIME_PERF;
+    let rotation = team.rotation;
+    if (play.length && !rotation.manual) {
+      const ready = players.map((p) => (play.includes(p.pid) ? { ...p, injury: null } : p));
+      rotation = autoRotation(ready, team.rotation);
+      benchTwoWays(rotation, ready);
+    }
+    const extra = play.length ? { play } : {};
+    // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
+    if (opp !== undefined && planFor(league, opp, game)) {
+      const tactics = effectiveTactics(league, opp, game);
+      return { team: { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts, ...extra };
+    }
+    return { team: rotation === team.rotation ? team : { ...team, rotation }, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts, ...extra };
   }
-  if (tid !== league.userTid) {
-    // an AI coach never plays the situational plans or crunch-time calls a user left on this team
-    const t = team.tactics;
-    const userPlans = t.situations || t.manage.goTo != null || t.manage.ato || t.manage.hackTargets || t.manage.hackFromQ !== undefined;
-    const tactics = userPlans ? withoutCoachPlans(t) : t;
-    // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
-    const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
-    if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
-    return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
-  }
-  return { team, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts };
+  // an AI coach never plays the situational plans or crunch-time calls a user left on this team
+  const t = team.tactics;
+  const userPlans = hasCoachPlans(t);
+  const tactics = userPlans ? withoutCoachPlans(t) : t;
+  // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
+  const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
+  if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
+  return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {
@@ -249,12 +263,24 @@ function recordTeamGame(
 export interface PlayOpts {
   /** Use an already-finished live sim instead of simulating. */
   sim?: GameSim;
+  /** With `sim`: the projected home margin it tipped off with (see tipoffEdge). */
+  edge?: number;
+}
+
+/**
+ * The projected home margin of a game about to tip off in `sim` (the preview's projection, from the
+ * rotations as the game plans them), to two decimals: what the user's games keep as GameResult.edge,
+ * the starting point of their win probability. Reads the league only.
+ */
+export function tipoffEdge(league: League, g: ScheduledGame, sim: GameSim): number {
+  return Math.round(projectGame(league, sim, neutralSite(g)).margin * 100) / 100;
 }
 
 export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}): GameResult {
   const rng = new Rng(league.rng);
   const userGame = g.home === league.userTid || g.away === league.userTid;
   let sim = opts.sim;
+  let edge = opts.edge;
   if (!sim) {
     ensureRotation(league, g.home);
     ensureRotation(league, g.away);
@@ -265,16 +291,21 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
       injuries: league.settings.injuries,
       neutral: neutralSite(g),
     });
+    // (read before the game is played: the projection counts the players the plan has on the floor)
+    if (userGame) edge = tipoffEdge(league, g, sim);
     sim.simToEnd();
   }
   league.rng = rng.state;
   const res = sim.result(g.gid, league.season, g.day);
   res.seriesId = g.seriesId;
   if (g.cup) res.cup = g.cup;
+  if (userGame && edge !== undefined) res.edge = edge;
   applyResult(league, g, sim, res, rng);
   league.rng = rng.state;
   // a recorded game has nothing left to pick up, however it was finished (live, or simmed from the Play menu)
   if (league.live?.gid === g.gid) delete league.live;
+  // and its game-time decisions are made
+  if (league.gameTime?.gid === g.gid) delete league.gameTime;
   return res;
 }
 
@@ -387,6 +418,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.lineups;
     delete res.flow;
     delete res.flowPeriods;
+    delete res.flowT;
+    delete res.flowPoss;
     delete res.pbp;
     delete res.adjustments;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
@@ -403,6 +436,36 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     if (userGames.length > 6) delete userGames[0].pbp;
   }
   notableNews(league, res);
+  if (g.type === 'regular') milestoneNews(league, sim);
+}
+
+const STAT_NEWS: Record<MilestoneStat, string> = { pts: 'scored his', reb: 'grabbed his', ast: 'handed out his' };
+
+/**
+ * Round career marks reached in a regular-season game make the news when they're big (see
+ * newsworthy): only players who played, and only careers the game has whole (careerOnRecord).
+ */
+function milestoneNews(league: League, sim: GameSim) {
+  for (const rb of sim.rawBoxes()) {
+    if (!rb.played || rb.b.sec <= 0) continue;
+    const p = league.players[rb.pid];
+    if (!p || !careerOnRecord(p, league.season)) continue;
+    const after = careerTotals(p);
+    for (const stat of ['pts', 'reb', 'ast'] as const) {
+      const tonight = stat === 'pts' ? rb.b.pts : stat === 'reb' ? rb.b.orb + rb.b.drb : rb.b.ast;
+      if (tonight <= 0) continue;
+      for (const mark of marksCrossed(after[stat] - tonight, after[stat])) {
+        if (!newsworthy(stat, mark)) continue;
+        const team = league.teams[rb.tid];
+        addNews(league, {
+          kind: 'milestone',
+          text: `${playerName(p)} (${team.abbrev}) ${STAT_NEWS[stat]} ${mark.toLocaleString('en-US')}th career ${stat === 'pts' ? 'point' : stat === 'reb' ? 'rebound' : 'assist'}.`,
+          tids: [team.tid],
+          pids: [p.pid],
+        });
+      }
+    }
+  }
 }
 
 function notableNews(league: League, res: GameResult) {

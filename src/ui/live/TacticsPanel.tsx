@@ -1,11 +1,12 @@
 import { Hand } from 'lucide-react';
 import type { DefScheme, PnrCoverage, PressMode, Settings, StarPlan, Tactics } from '../../core/types';
-import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, startHacking, stopHacking } from '../../core/sim/tactics';
-import { Chips, Segmented, Slider, Tag, Toggle } from '../components/ui';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, chasers, schemesFor, startHacking, stopHacking } from '../../core/sim/tactics';
+import { Chips, Slider, Tag, Toggle } from '../components/ui';
 
 /**
  * The in-game adjustments sheet, as deep as the coaching depth: Simple gets the big levers,
- * Advanced the press, star plan and the rest of the sliders, Expert the matchups and late-game rules.
+ * Advanced the junk defenses, the press, star plan and the rest of the sliders, Expert the matchups
+ * and late-game rules.
  */
 export function TacticsPanel({
   tactics: t,
@@ -38,6 +39,10 @@ export function TacticsPanel({
 }) {
   const adv = complexity !== 'simple';
   const expert = complexity === 'expert';
+  // the junk defenses from Advanced (one already in play stays on offer)
+  const schemes = schemesFor(complexity).concat(schemesFor(complexity).includes(t.defense.scheme) ? [] : [t.defense.scheme]);
+  const n = chasers(t.defense.scheme);
+  const chase = (t.defense.chase ?? []).slice(0, n);
   const set = apply;
   const head = (text: string) => <div className="tiny dim upper bold">{text}</div>;
   return (
@@ -76,12 +81,53 @@ export function TacticsPanel({
           options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
         />
       </div>
-      <Segmented
-        value={t.defense.scheme}
-        onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
-        label="Base scheme"
-        options={(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))}
-      />
+      <div>
+        <div className="small bold" style={{ marginBottom: 6 }}>
+          Scheme
+        </div>
+        <Chips
+          label="Scheme"
+          value={t.defense.scheme}
+          onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
+          options={schemes.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
+        />
+        {n > 0 && (
+          <>
+            <div className="tiny upper dim bold" style={{ margin: '10px 0 6px' }}>
+              Chase
+            </div>
+            <div className="chips" role="group" aria-label="Players to chase">
+              <button className={`chip ${!chase.length ? 'on' : ''}`} aria-pressed={!chase.length} onClick={() => set((tt) => void delete tt.defense.chase)}>
+                Auto
+              </button>
+              {oppOn.map((pid) => {
+                const on = chase.includes(pid);
+                return (
+                  <button
+                    key={pid}
+                    className={`chip ${on ? 'on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() =>
+                      set((tt) => {
+                        const next = on ? chase.filter((x) => x !== pid) : [...chase, pid].slice(-n);
+                        if (next.length) tt.defense.chase = next;
+                        else delete tt.defense.chase;
+                      })
+                    }
+                  >
+                    {nameOf(pid)}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="tiny dim" style={{ marginTop: 6 }}>
+              {chase.length
+                ? `Chasing ${chase.map(nameOf).join(' and ')}${chase.length < n ? ' and their next creator on the floor' : ''}; while ${chase.length === 2 ? 'neither is' : "he isn't"} on the floor you play man-to-man.`
+                : `Auto: the chaser${n === 2 ? 's take their two main creators' : ' takes their main creator'} on the floor.`}
+            </div>
+          </>
+        )}
+      </div>
       <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack the paint" />
       {adv && (
         <>
@@ -207,6 +253,12 @@ export function TacticsPanel({
             help="In the final seconds, foul before the opponent can attempt a tying three."
           />
           <Toggle on={t.manage.twoForOne} onChange={(x) => set((tt) => void (tt.manage.twoForOne = x))} label="Go for 2-for-1" />
+          <Toggle
+            on={!!t.manage.foulToGive}
+            onChange={(x) => set((tt) => void (tt.manage.foulToGive = x))}
+            label="Foul to give"
+            help="With 3 to 8 seconds left and the ball theirs, foul at once when it's only a side out: a worse inbounds look for them (in the 4th and overtime only tied or up 3 or less)."
+          />
           <Slider
             label="Hack-a-player threshold"
             value={t.manage.hackThreshold}

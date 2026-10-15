@@ -1,21 +1,27 @@
-// The pre-game screen: everything about the next game before tip-off (the projection, who's out,
-// the starting fives, how they play, the matchups on their best players and your game plan for
-// them), with Tip off, Quick sim and the Lab one tap away.
+// The pre-game screen: everything about the next game before tip-off (the storylines, the
+// projection, who's out and the game-time decisions on your questionable players, the starting
+// fives, how they play, the matchups on their best players and your game plan for them), with Tip
+// off, Quick sim and the Lab one tap away.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Beaker, ChevronRight, Eye, FastForward, Plus, X } from 'lucide-react';
+import { Beaker, ChevronRight, Crown, Eye, FastForward, Flame, History, Medal, Plus, Repeat, Star, TrendingUp, X, type LucideIcon } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { progressCallback, resetLab, withLab } from '../../state/labClient';
 import type { LabSide, LabSummary } from '../../core/ai/lab';
 import { counterCandidates } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation } from '../../core/league/games';
-import { planFor, removePlanItem, setPlanItem, setPlanMatchup } from '../../core/league/gamePlans';
+import { planFor, removePlanItem, setPlanItem, setPlanMatchup, setPlanPlayerD } from '../../core/league/gamePlans';
+import { guardAdvice } from '../../core/analysis/guarding';
+import { PLAYER_D_META } from '../../core/sim/tactics';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate, teamPlayers } from '../../core/league/helpers';
 import { hashString } from '../../core/random';
 import { countdownLabel, matchupPreview, nextUserGame, type MatchupPreview, type SidePreview } from '../../core/analysis/preview';
-import type { GameType, League, ScheduledGame } from '../../core/types';
+import { PLAYER_DEFENSES, type GameType, type League, type PlayerDefense, type ScheduledGame } from '../../core/types';
+import { storylines, type StorylineKind } from '../../core/analysis/storylines';
+import { GAME_TIME_PERF, injuryText, setGameTime } from '../../core/league/injuries';
+import { K } from '../../core/sim/engine';
 import { Bar, Card, Chips, Empty, Help, PageHeader, Spinner, Tag } from '../components/ui';
 import { OppPlanNote } from '../components/scouting';
 import { TeamLogo } from '../components/TeamLogo';
@@ -149,12 +155,30 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
         )}
       </Card>
 
+      <StorylinesCard league={league} game={game} pv={pv} />
+
       {pv.userGame && <ProjectionCard league={league} game={game} pv={pv} />}
 
-      <Card title="Injury report">
+      <Card
+        title="Injury report"
+        right={
+          pv.us.questionable.length > 0 ? (
+            <Help title="Questionable players">
+              <p>
+                A player one game from returning from a minor or moderate injury (not a concussion) is questionable: he sits tonight unless you clear him to play. Tonight still
+                counts as the game he had left either way.
+              </p>
+              <p>
+                Cleared, he plays about {Math.round((1 - GAME_TIME_PERF) * 100)}% below his best (his shots, his creation, how much the offense looks for him and, a little, his
+                defense) and is {K.gameTimeRisk}× as likely to get hurt during the game. Other teams always sit theirs.
+              </p>
+            </Help>
+          ) : undefined
+        }
+      >
         <div className="md-grid2" style={{ display: 'grid', gap: 12 }}>
           {[pv.us, pv.them].map((s) => (
-            <InjuryList key={s.tid} league={league} s={s} />
+            <InjuryList key={s.tid} league={league} s={s} game={game} locked={inProgress} />
           ))}
         </div>
       </Card>
@@ -355,8 +379,36 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
   );
 }
 
-function InjuryList({ league, s }: { league: League; s: SidePreview }) {
-  const none = !s.out.length && !s.resting.length && !s.worn.length;
+/** Icons by storyline kind. */
+const STORY_ICON: Record<StorylineKind, LucideIcon> = { revenge: History, milestone: Medal, streak: TrendingUp, hot: Flame, rematch: Repeat, mvp: Crown, picks: Star };
+
+/** What a broadcast would lead with tonight (see storylines.ts): the top four. */
+function StorylinesCard({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
+  const stories = useLeagueMemo(() => {
+    const out = new Set([pv.us, pv.them].flatMap((s) => [...s.out, ...s.resting, ...s.questionable.filter((q) => !q.cleared)].map((p) => p.pid)));
+    return storylines(league, game, out).slice(0, 4);
+  }, [league, game, pv]);
+  if (!stories.length) return null;
+  return (
+    <Card title="Storylines">
+      <div className="col" style={{ gap: 8 }}>
+        {stories.map((st) => {
+          const Icon = STORY_ICON[st.kind];
+          return (
+            <div key={st.id} className="row top small" style={{ gap: 8 }}>
+              <Icon size={15} className="dim" style={{ flex: 'none', marginTop: 2 }} aria-hidden="true" />
+              <span className="grow">{st.text}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function InjuryList({ league, s, game, locked }: { league: League; s: SidePreview; game: ScheduledGame; locked: boolean }) {
+  const none = !s.out.length && !s.resting.length && !s.worn.length && !s.questionable.length;
+  const rot = league.teams[s.tid].rotation;
   return (
     <div className="col" style={{ gap: 4 }}>
       <div className="row" style={{ gap: 6 }}>
@@ -364,6 +416,33 @@ function InjuryList({ league, s }: { league: League; s: SidePreview }) {
         <span className="small bold">{league.teams[s.tid].name}</span>
       </div>
       {none && <div className="small dim">Everyone is available.</div>}
+      {s.questionable.map((p) => (
+        <div key={p.pid} className="col" style={{ gap: 2, padding: '4px 0' }}>
+          <div className="row small" style={{ gap: 8, minHeight: 32 }}>
+            <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Questionable'}</Tag>
+            <Link to={`/player/${p.pid}`} className="grow ellipsis">
+              <b>{p.name}</b> <span className="dim">{p.injury}</span>
+            </Link>
+            <button
+              className={`btn xs ${p.cleared ? '' : 'primary'}`}
+              disabled={locked}
+              aria-pressed={p.cleared}
+              aria-label={p.cleared ? `Sit ${p.name} tonight` : `Clear ${p.name} to play tonight`}
+              onClick={() => useStore.getState().mutate((l) => setGameTime(l, game.gid, p.pid, !p.cleared))}
+            >
+              {p.cleared ? 'Sit him' : 'Clear to play'}
+            </button>
+          </div>
+          <div className="tiny dim">
+            {p.cleared
+              ? `Medical staff: he plays about ${Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, ${K.gameTimeRisk}× as likely to get hurt in the game${
+                  rot.manual ? (rot.minutes[p.pid] ? ` (your rotation gives him ${rot.minutes[p.pid]} minutes)` : ' (your rotation gives him no minutes)') : ''
+                }. Tonight counts as the game he had left.`
+              : `Medical staff: one game left on his ${injuryText(p.injury)}. He sits tonight unless you clear him.`}
+            {locked ? ' The game is under way: this was settled at tip-off.' : ''}
+          </div>
+        </div>
+      ))}
       {s.out.map((p) => (
         <Link key={p.pid} to={`/player/${p.pid}`} className="gd-row small">
           <Tag tone="bad">Out</Tag>
@@ -474,7 +553,7 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
       right={
         <Help title="Key matchups">
           Their key players and who guards them when the game tips off. Pick a defender to plan the matchup for this opponent: he takes that assignment whenever both are on the
-          floor. Staff lets the coaches decide.
+          floor. Staff lets the coaches decide.{canPlan ? ' You can also say how to guard each one (go under, top-lock, sag off, get physical); ★ is the staff’s suggestion.' : ''}
         </Help>
       }
     >
@@ -482,6 +561,9 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
         {threats.map((th) => {
           const planned = plan?.matchups?.[th.pid];
           const open = editing === th.pid;
+          const how = plan?.playerD?.[th.pid];
+          const them = league.players[th.pid];
+          const suggest = canPlan && them ? guardAdvice(league, them).suggest : undefined;
           return (
             <div key={th.pid} className="col" style={{ gap: 6 }}>
               <div className="row top" style={{ gap: 10 }}>
@@ -490,6 +572,11 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
                     {th.name}
                   </Link>
                   <div className="tiny dim">{th.why}</div>
+                  {canPlan && how && (
+                    <div style={{ marginTop: 4 }}>
+                      <Tag tone="info">{PLAYER_D_META[how].label}</Tag>
+                    </div>
+                  )}
                 </div>
                 <div className="small right" style={{ flex: 'none', maxWidth: '45%' }}>
                   {th.resting ? (
@@ -516,12 +603,21 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
                 </div>
               </div>
               {open && (
-                <Chips
-                  label={`Who guards ${th.name}`}
-                  value={planned ?? -1}
-                  onChange={(pid) => useStore.getState().mutate((l) => setPlanMatchup(l, opp, th.pid, pid === -1 ? null : pid))}
-                  options={[{ id: -1, label: 'Staff' }, ...mine.map((p) => ({ id: p.pid, label: nameOf(p.pid) }))]}
-                />
+                <>
+                  <Chips
+                    label={`Who guards ${th.name}`}
+                    value={planned ?? -1}
+                    onChange={(pid) => useStore.getState().mutate((l) => setPlanMatchup(l, opp, th.pid, pid === -1 ? null : pid))}
+                    options={[{ id: -1, label: 'Staff' }, ...mine.map((p) => ({ id: p.pid, label: nameOf(p.pid) }))]}
+                  />
+                  <div className="tiny upper dim bold">How to guard him</div>
+                  <Chips
+                    label={`How to guard ${th.name}`}
+                    value={how ?? ('' as PlayerDefense)}
+                    onChange={(d: PlayerDefense) => useStore.getState().mutate((l) => setPlanPlayerD(l, opp, th.pid, d === how ? null : d))}
+                    options={PLAYER_DEFENSES.map((d) => ({ id: d, label: `${PLAYER_D_META[d].short}${d === suggest ? ' ★' : ''}` }))}
+                  />
+                </>
               )}
             </div>
           );

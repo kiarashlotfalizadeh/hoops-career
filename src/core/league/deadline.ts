@@ -5,7 +5,7 @@
 
 import type { League, NewsItem } from '../types';
 import { Rng, hashString } from '../random';
-import { addInbox, addNews, andList, playerName } from './helpers';
+import { addInbox, addNews, andList, playerName, teamPlayers } from './helpers';
 import { onTheBlock } from './trades';
 import { openProposals } from './proposals';
 
@@ -62,8 +62,13 @@ function deadlineBriefing(league: League) {
   const block = onTheBlock(league, 3);
   const offers = openProposals(league).length;
   const trades = seasonTrades(league).length;
+  // players you told you'd move by today (see meetPlayer): unmoved, they go public tomorrow
+  const promised = teamPlayers(league, league.userTid).filter((p) => p.promise?.kind === 'trade' && p.promise.by === 'deadline' && p.mood.tradeRequest);
   const lines = [
     'Today is the trade deadline: deals have to be done by the end of the day. After that, only free agents can be added until the summer.',
+    promised.length
+      ? `You told ${andList(promised.map(playerName))} you'd find ${promised.length > 1 ? 'them trades' : 'him a trade'} by today: still here tomorrow, ${promised.length > 1 ? 'they go' : 'he goes'} public.`
+      : '',
     block.length ? `On the block: ${andList(block.map((r) => `${playerName(league.players[r.pid])} (${league.teams[r.tid].abbrev}, ${league.players[r.pid].ovr})`))}.` : '',
     offers ? `You have ${offers} trade offer${offers > 1 ? 's' : ''} waiting.` : '',
     `${trades === 0 ? 'No trades' : trades === 1 ? 'One trade' : `${trades} trades`} so far this season.`,

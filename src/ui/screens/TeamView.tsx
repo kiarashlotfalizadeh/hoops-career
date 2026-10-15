@@ -4,7 +4,7 @@ import { ArrowLeftRight, BarChart3, ChevronRight, ClipboardList, ShieldAlert, Sw
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted, teamName } from '../../core/league/helpers';
-import { pickLabel } from '../../core/league/trades';
+import { pickLabel, pickTermsNote } from '../../core/league/trades';
 import { confStandings } from '../../core/league/standings';
 import { scoutTeam } from '../../core/ai/advisor';
 import { SCOUT_MIN_GAMES, scoutData } from '../../core/analysis/scouting';
@@ -875,7 +875,11 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
                 <TeamLogo tid={d.originalTid} size={28} />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
-                  <div className="tiny dim">{acquired ? `Acquired from the ${teamName(league.teams[d.originalTid])}` : 'Own pick'}</div>
+                  <div className="tiny dim">
+                    {acquired ? `Acquired from the ${teamName(league.teams[d.originalTid])}` : 'Own pick'}
+                    {/* its protection and any swap on it, in words */}
+                    {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
+                  </div>
                 </div>
                 {(() => {
                   const t = slotTag(d);
@@ -895,7 +899,10 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
                 <TeamLogo tid={d.tid} size={28} />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
-                  <div className="tiny dim">Owned by the {teamName(league.teams[d.tid])}</div>
+                  <div className="tiny dim">
+                    Owned by the {teamName(league.teams[d.tid])}
+                    {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
+                  </div>
                 </div>
                 <ChevronRight size={16} className="dim" />
               </Link>

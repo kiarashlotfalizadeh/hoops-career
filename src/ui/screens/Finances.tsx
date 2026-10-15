@@ -150,7 +150,54 @@ function Overview({ team }: { team: Team }) {
           its local revenue (gate, merchandise, local TV) and the league average.
         </div>
       </Card>
+
+      <DeadMoney team={team} from={s} />
     </>
+  );
+}
+
+/**
+ * Dead money by season from the season the books are on: salary still owed to released players,
+ * counted in the payroll above. A stretched release (the stretch provision) is labelled, and so are
+ * its later seasons, which run past the usual horizon.
+ */
+function DeadMoney({ team, from }: { team: Team; from: number }) {
+  const rows = new Map<number, { total: number; stretched: number; who: Set<string> }>();
+  for (const d of team.deadMoney) {
+    if (d.season < from) continue;
+    const r = rows.get(d.season) ?? { total: 0, stretched: 0, who: new Set<string>() };
+    r.total += d.amount;
+    if (d.stretched) r.stretched += d.amount;
+    r.who.add(d.name);
+    rows.set(d.season, r);
+  }
+  if (!rows.size) return null;
+  const seasons = [...rows.keys()].sort((a, b) => a - b);
+  const any = seasons.some((s) => rows.get(s)!.stretched > 0);
+  return (
+    <Card title="Dead money" right={<span className="tiny dim">by season</span>}>
+      <div className="col" style={{ gap: 6 }}>
+        {seasons.map((s) => {
+          const r = rows.get(s)!;
+          return (
+            <div key={s} className="row small" style={{ gap: 8 }}>
+              <span className="dim2" style={{ width: 52, flex: 'none' }}>
+                {shortSeason(s)}
+              </span>
+              <span className="grow tiny dim ellipsis">{[...r.who].join(', ')}</span>
+              {r.stretched > 0 && <span className="tag warn">{r.stretched === r.total ? 'stretched' : `${fmtM(r.stretched)} stretched`}</span>}
+              <span className="num bold" style={{ width: 58, textAlign: 'right' }}>
+                {fmtM(r.total)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="tiny dim" style={{ marginTop: 8 }}>
+        Salary still owed to players you released: it counts against the cap and is paid like payroll until it runs out.
+        {any ? ' Stretched money was spread by the stretch provision over twice the seasons left on the deal, plus one.' : ''}
+      </div>
+    </Card>
   );
 }
 

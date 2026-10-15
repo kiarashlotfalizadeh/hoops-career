@@ -3,14 +3,22 @@
 import { describe, expect, it } from 'vitest';
 import { IMPACT_TEXT } from '../analysis/gameReport';
 import { impactCounter } from '../ai/advisor';
-import { applyPatch, cloneTactics, defaultTactics, emptyPatch, tacticsDiff } from '../sim/tactics';
+import { applyPatch, cloneTactics, defaultTactics, emptyPatch, namedJunk, tacticsDiff } from '../sim/tactics';
 import { Rng } from '../random';
-import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../types';
+import { PLAYER_DEFENSES, SET_IDS, type DefScheme, type PlayerDefense, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
 
 /** Tactics with every setting an impact's `uses` reads spread over its range. */
 function randomTactics(rng: Rng): Tactics {
   const t = defaultTactics();
-  t.defense.scheme = rng.pick<DefScheme>(['man', 'man', 'zone23', 'zone32']);
+  t.defense.scheme = rng.pick<DefScheme>(['man', 'man', 'zone23', 'zone32', 'box1', 'tri2']);
+  // instructions on a couple of their players, a hunt, a foul to give, how much the ball moves
+  const pd: Record<number, PlayerDefense> = {};
+  for (const pid of [31, 32]) if (rng.chance(0.4)) pd[pid] = rng.pick(PLAYER_DEFENSES);
+  if (Object.keys(pd).length) t.defense.playerD = pd;
+  if (rng.chance(0.3)) t.offense.huntTarget = 33;
+  t.manage.foulToGive = rng.chance(0.5);
+  t.offense.actions.motion = rng.int(0, 100);
+  t.offense.actions.handoff = rng.int(0, 100);
   t.defense.pnr = rng.pick<PnrCoverage>(['drop', 'switch', 'hedge', 'blitz', 'ice']);
   t.defense.help = rng.int(0, 100);
   t.defense.pressure = rng.int(0, 100);
@@ -22,6 +30,9 @@ function randomTactics(rng: Rng): Tactics {
   t.offense.crashBoards = rng.int(0, 100);
   t.offense.transition = rng.int(0, 100);
   t.manage.hackThreshold = rng.chance(0.5) ? 0 : rng.int(40, 65);
+  // a set package now and then: up to four of the sets
+  const pkg = SET_IDS.filter(() => rng.chance(0.3)).slice(0, 4);
+  if (pkg.length) t.offense.sets = pkg;
   return t;
 }
 
@@ -59,7 +70,7 @@ describe('impact counters', () => {
 });
 
 describe('tactics diffs', () => {
-  it('give back the changed tactics when applied, except tonight’s matchups and star target', () => {
+  it('give back the changed tactics when applied, except tonight’s matchups, star, chase and hunt targets, instructions by player and a named junk defense', () => {
     const rng = new Rng(7);
     for (let i = 0; i < 200; i++) {
       const a = randomTactics(rng);
@@ -75,11 +86,30 @@ describe('tactics diffs', () => {
       b.manage.fatigueSub = rng.pick([0.5, 0.55, 0.6]);
       b.defense.matchups = { 20: 5 };
       b.defense.starTarget = 21;
+      b.defense.chase = [22];
       const d = tacticsDiff(a, b);
-      expect(d.defense && ('matchups' in d.defense || 'starTarget' in d.defense)).toBeFalsy();
+      expect(d.defense && ['matchups', 'starTarget', 'chase', 'playerD'].some((k) => k in d.defense!)).toBeFalsy();
+      expect(d.offense && 'huntTarget' in d.offense).toBeFalsy();
       const back = applyPatch(a, d);
-      expect({ ...back, defense: { ...back.defense, matchups: b.defense.matchups, starTarget: b.defense.starTarget } }).toEqual(b);
-      expect([back.defense.matchups, back.defense.starTarget]).toEqual([a.defense.matchups, a.defense.starTarget]);
+      const game = (t: Tactics) => ({
+        matchups: t.defense.matchups,
+        starTarget: t.defense.starTarget,
+        chase: t.defense.chase,
+        playerD: t.defense.playerD,
+        huntTarget: t.offense.huntTarget,
+      });
+      const { matchups, starTarget, chase, playerD, huntTarget } = game(b);
+      // a junk defense named for their players is tonight's too: the scheme stays as it was
+      const junk = namedJunk(b.defense);
+      if (junk) expect(back.defense.scheme).toBe(a.defense.scheme);
+      const withB = {
+        ...back,
+        offense: { ...back.offense, huntTarget },
+        defense: { ...back.defense, matchups, starTarget, chase, playerD, ...(junk ? { scheme: b.defense.scheme } : {}) },
+      };
+      for (const x of [withB.offense, withB.defense] as Record<string, unknown>[]) for (const k of Object.keys(x)) if (x[k] === undefined) delete x[k];
+      expect(withB).toEqual(b);
+      expect(game(back)).toEqual(game(a));
       // the patch owns nothing of b's
       expect(back.offense.roles).not.toBe(b.offense.roles);
     }

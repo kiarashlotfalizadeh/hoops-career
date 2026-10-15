@@ -1,7 +1,7 @@
 import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, PenLine } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeftRight, MessageCircle, PenLine } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -14,7 +14,8 @@ import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
-import { moodLevel, MOOD_META } from '../../core/league/morale';
+import { moodLevel, MOOD_META, meetBlockedReason, promiseStatus, wantsMeeting } from '../../core/league/morale';
+import { MeetingPanel } from '../office/PlayerMeeting';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
 import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
@@ -22,6 +23,9 @@ import { liveInProgress } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
 import { BBREF_TO_TID } from '../../core/teams';
 import { PlayerMoves } from '../league/MovesTab';
+import { deadlineLabel } from '../../core/league/rfa';
+import { sheetTerms } from '../office/RfaPanel';
+import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -125,6 +129,9 @@ export default function PlayerView() {
   const [roleOpen, setRoleOpen] = useState(false);
   const [extending, setExtending] = useState(false);
   const [openRating, setOpenRating] = useState<string | null>(null);
+  // the trade-request mail links here with ?meet=1
+  const [params] = useSearchParams();
+  const [meeting, setMeeting] = useState(() => params.get('meet') === '1');
   const pctile = useSkillPercentiles(league);
   if (!p) {
     return (
@@ -161,7 +168,9 @@ export default function PlayerView() {
   const faAsk = p.tid === FREE_AGENT ? askingContract(league, p, league.userTid) : null;
   const status =
     p.tid === FREE_AGENT
-      ? 'Free agent'
+      ? p.rfa
+        ? 'Restricted free agent'
+        : 'Free agent'
       : p.tid === DRAFT_PROSPECT
         ? `${p.draft.year} draft prospect`
         : p.tid === RETIRED
@@ -333,6 +342,24 @@ export default function PlayerView() {
                   {p.mood.notes.length ? p.mood.notes.map((n) => <div key={n}>• {n}</div>) : <div>No complaints.</div>}
                   {p.mood.expectedMin > 0 && <div className="dim">Expects about {p.mood.expectedMin} minutes a night.</div>}
                 </div>
+                {/* one who asked out or is unhappy can be met, and promised something */}
+                {mine && p.promise && (
+                  <div className="small bold" style={{ marginTop: 8 }}>
+                    {promiseStatus(league, p)}
+                  </div>
+                )}
+                {mine && !p.promise && wantsMeeting(p) && (
+                  <>
+                    <button className="btn xs" style={{ marginTop: 10 }} disabled={!!(busyWhy ?? meetBlockedReason(league, p))} onClick={() => setMeeting(true)}>
+                      <MessageCircle size={14} /> Meet with him
+                    </button>
+                    {(busyWhy ?? meetBlockedReason(league, p)) && (
+                      <div className="tiny dim" style={{ marginTop: 6 }}>
+                        {busyWhy ?? meetBlockedReason(league, p)}
+                      </div>
+                    )}
+                  </>
+                )}
               </Card>
             )}
             <Card title="Contract">
@@ -365,6 +392,12 @@ export default function PlayerView() {
                     </>
                   )}
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
+                  {p.contract.tenDay && <div className="small dim2">{tenDayLine(league, p)}</div>}
+                  {p.rfa && (
+                    <div className="small dim2">
+                      Qualifying offer extended ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): he becomes a restricted free agent when free agency opens.
+                    </div>
+                  )}
                   <div className="row between">
                     <span className="dim2 small">Market value</span>
                     <span className="num">{fmtM(marketSalary(league, p))}</span>
@@ -375,12 +408,20 @@ export default function PlayerView() {
                   <div className="small dim2">
                     {p.waivers
                       ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
-                      : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
+                      : p.rfa?.sheet
+                        ? `Restricted: he signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match it until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
+                        : p.rfa?.tid === league.userTid
+                          ? `Your restricted free agent: re-sign him with Bird rights (asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}), or match any offer sheet. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
+                          : p.rfa
+                            ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
+                            : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                   </div>
                   {/* straight to his offer (or claim) sheet on the Free Agents screen */}
-                  <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
-                    {p.waivers ? 'Claim off waivers' : 'Make an offer'}
-                  </Link>
+                  {!p.rfa?.sheet && (
+                    <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
+                      {p.waivers ? 'Claim off waivers' : p.rfa?.tid === league.userTid ? 'Re-sign' : p.rfa ? 'Offer sheet' : 'Make an offer'}
+                    </Link>
+                  )}
                 </div>
               ) : p.tid === DRAFT_PROSPECT ? (
                 <div className="small dim2">Eligible for the {p.draft.year} draft.</div>
@@ -424,6 +465,11 @@ export default function PlayerView() {
                   {(tradeWhy || releaseWhy || extendWhy) && (
                     <div className="tiny dim" style={{ marginTop: 6 }}>
                       {[...new Set([tradeWhy, releaseWhy, extendWhy])].filter(Boolean).join(' ')}
+                    </div>
+                  )}
+                  {p.contract.tenDay && (
+                    <div style={{ marginTop: 10 }}>
+                      <TenDayActions league={league} p={p} />
                     </div>
                   )}
                 </>
@@ -510,6 +556,9 @@ export default function PlayerView() {
         </div>
       </Sheet>
       <ContractSheet pid={extending && mine ? p.pid : null} mode="extend" onClose={() => setExtending(false)} />
+      <Sheet open={meeting && mine && (wantsMeeting(p) || !!p.promise)} onClose={() => setMeeting(false)} title={`Meet with ${p.lastName}`}>
+        <MeetingPanel league={league} p={p} />
+      </Sheet>
     </main>
   );
 }

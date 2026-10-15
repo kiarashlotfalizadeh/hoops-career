@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Check, Handshake, Info, Lock, LockKeyhole, RotateCcw, Ticket, X } from 'lucide-react';
+import { Ban, Banknote, Check, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
@@ -10,11 +10,14 @@ import {
   availability,
   canMakeWork,
   capSalary,
+  cashRoom,
   counterOffers,
   evaluateTrade,
   executeTrade,
+  fmtCash,
   makeItWork,
   pickLabel,
+  swapSeasons,
   salaryMatchGap,
   tradeRoster,
   untradeable,
@@ -24,6 +27,7 @@ import {
   type CounterOffer,
   type TradeEval,
   type TradeOffer,
+  type TradeSide,
 } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -37,6 +41,7 @@ import { UntouchableToggle } from '../office/Untouchable';
 import { rosterNames } from '../stats';
 import { TierLine, TradeNotes } from '../trade/common';
 import { CounterSheet } from '../trade/CounterSheet';
+import { CashControl, ProtectSelect, SwapChips, TermsList, protectable } from '../trade/Terms';
 import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
 import { RecentDeals } from '../league/MovesTab';
 import { continueDraft } from '../../core/league/season';
@@ -44,8 +49,16 @@ import { continueDraft } from '../../core/league/season';
 interface Sel {
   pids: number[];
   dpids: number[];
+  /** Protections on the team's own firsts it sends: dpid -> top-N. */
+  protect?: Record<number, number>;
+  /** Drafts in which it gives the other team the right to swap firsts. */
+  swaps?: number[];
+  /** Cash it sends ($K). */
+  cash?: number;
 }
 const EMPTY: Sel = { pids: [], dpids: [] };
+/** A side of an offer as the builder holds it. */
+const selOf = (s: TradeSide): Sel => ({ pids: s.pids, dpids: s.dpids, protect: s.protect, swaps: s.swaps, cash: s.cash });
 const ids = (s: string | null) =>
   s
     ? s
@@ -117,18 +130,30 @@ export default function Trade() {
 
   const s = capSeason(league);
   const pt = league.teams[partner];
-  // drop anything that is no longer where it was (trades, releases, used picks)
-  const cleanGive: Sel = {
-    pids: give.pids.filter((pid) => league.players[pid]?.tid === user),
-    dpids: give.dpids.filter((d) => league.draftPicks.some((x) => x.dpid === d && x.tid === user)),
+  // drop anything that is no longer where it was (trades, releases, used picks), and terms that no
+  // longer apply (a protection on a pick taken out, a swap the rules no longer allow)
+  const clean = (sel: Sel, tid: number, other: number): Sel => {
+    const dpids = sel.dpids.filter((d) => league.draftPicks.some((x) => x.dpid === d && x.tid === tid));
+    const protect = Object.entries(sel.protect ?? {}).filter(([d, n]) => {
+      const dp = league.draftPicks.find((x) => x.dpid === Number(d));
+      return n > 0 && dp && dpids.includes(dp.dpid) && protectable(league, dp, tid);
+    });
+    const open = swapSeasons(league, tid, other);
+    const swaps = (sel.swaps ?? []).filter((y) => open.includes(y));
+    return {
+      pids: sel.pids.filter((pid) => league.players[pid]?.tid === tid),
+      dpids,
+      ...(protect.length ? { protect: Object.fromEntries(protect) } : {}),
+      ...(swaps.length ? { swaps } : {}),
+      ...((sel.cash ?? 0) > 0 ? { cash: sel.cash } : {}),
+    };
   };
-  const cleanGet: Sel = {
-    pids: get.pids.filter((pid) => league.players[pid]?.tid === partner),
-    dpids: get.dpids.filter((d) => league.draftPicks.some((x) => x.dpid === d && x.tid === partner)),
-  };
+  const cleanGive = clean(give, user, partner);
+  const cleanGet = clean(get, partner, user);
   const offer: TradeOffer = { a: { tid: user, ...cleanGive }, b: { tid: partner, ...cleanGet } };
   const offerKey = JSON.stringify(offer);
-  const empty = !cleanGive.pids.length && !cleanGive.dpids.length && !cleanGet.pids.length && !cleanGet.dpids.length;
+  const count = (s: Sel) => s.pids.length + s.dpids.length + (s.swaps?.length ?? 0) + (s.cash ? 1 : 0);
+  const empty = !count(cleanGive) && !count(cleanGet);
   // offerKey stands for the offer (a new object every render) and whether it is empty
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const ev = useLeagueMemo(() => (empty ? null : evaluateTrade(league, offer)), [league, offerKey]);
@@ -142,6 +167,8 @@ export default function Trade() {
     if (tid === partner) return;
     setPartner(tid);
     setGet(EMPTY);
+    // swap rights are given to one team
+    setGive((g) => ({ ...g, swaps: undefined }));
     setSide('theirs');
   };
 
@@ -187,8 +214,8 @@ export default function Trade() {
 
   const loadDeal = (o: TradeOffer) => {
     setPartner(o.b.tid);
-    setGive({ pids: o.a.pids, dpids: o.a.dpids });
-    setGet({ pids: o.b.pids, dpids: o.b.dpids });
+    setGive(selOf(o.a));
+    setGet(selOf(o.b));
     setSide('theirs');
     setTab('build');
     window.scrollTo({ top: 0, behavior: scrollBehavior() });
@@ -204,7 +231,8 @@ export default function Trade() {
   };
 
   const whatWorks = () => {
-    const { offer: r, why } = makeItWork(league, offer);
+    // (a small gap can be closed with a little of your cash)
+    const { offer: r, why } = makeItWork(league, offer, [], { cash: true });
     if (!r) {
       const gap = salaryMatchGap(league, offer, 'a');
       const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
@@ -220,6 +248,7 @@ export default function Trade() {
     }
     const addP = r.a.pids.filter((x) => !offer.a.pids.includes(x));
     const addD = r.a.dpids.filter((x) => !offer.a.dpids.includes(x));
+    const addC = (r.a.cash ?? 0) - (offer.a.cash ?? 0);
     const names = [
       ...addP.map((pid) => playerName(league.players[pid])),
       ...addD.map((d) =>
@@ -228,8 +257,9 @@ export default function Trade() {
           league.draftPicks.find((x) => x.dpid === d)!,
         ),
       ),
+      ...(addC > 0 ? [`${fmtCash(addC)} in cash`] : []),
     ];
-    setGive({ pids: r.a.pids, dpids: r.a.dpids });
+    setGive(selOf(r.a));
     useStore.getState().toast(names.length ? `${pt.abbrev} would do it if you add ${names.join(' + ')}.` : `${pt.abbrev} would accept this as is.`, 'good');
   };
 
@@ -260,6 +290,20 @@ export default function Trade() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Draft picks.</b> No team can be left without a first-round pick in two drafts in a row, and no AI team gives up more than {MAX_FIRSTS_OUT} firsts in one deal.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Protections.</b> A team can protect its own first as it trades it (top 4, 8, 10, 14 or 20): if the pick lands in those slots it stays home and nothing more is
+              owed. It's worth less to the team getting it. A pick already protected, or one acquired from another team, keeps its terms, and a pick in a swap can't be protected.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Pick swaps.</b> A team can give another the right to swap firsts in a future draft when each holds its own, unprotected first of that draft. When the lottery sets
+              the order, the team holding the right takes the other first instead of its own if that one landed higher. The right goes with the pick that carries it if that pick is
+              traded, and each first can be in one swap. AI GMs value the right by how likely the swap is and what it would gain, on the projection they value picks with.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Cash.</b> Each team can send, and receive, up to {fmtCash(cashRoom(league, user).limit)} in cash in trades a season (about 5% of the cap). Cash isn't salary: it
+              doesn't match or count against the cap. It comes out of the sender's profit and goes onto the receiver's. AI GMs value $2-3M about like a typical second-round pick,
+              rebuilders a little more and contenders less.
             </p>
             <p style={{ margin: 0 }}>
               <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens after the playoffs, with the draft lottery.
@@ -302,8 +346,8 @@ export default function Trade() {
           closed={closed}
           onCounter={(o) => {
             setPartner(o.b.tid);
-            setGive({ pids: o.a.pids, dpids: o.a.dpids });
-            setGet({ pids: o.b.pids, dpids: o.b.dpids });
+            setGive(selOf(o.a));
+            setGet(selOf(o.b));
             setSide('theirs');
             setTab('build');
             window.scrollTo({ top: 0, behavior: scrollBehavior() });
@@ -316,7 +360,7 @@ export default function Trade() {
           <TeamPicker league={league} partner={partner} onPick={pickPartner} />
           <PartnerCard league={league} tid={partner} season={s} />
           {ask && ask.tid === partner && <AskCallout league={league} ask={ask} onClose={() => setAsk(null)} />}
-          <DealCard league={league} partner={partner} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
+          <DealCard league={league} partner={partner} offer={offer} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
           <div className="fo-only-sm">
             <Segmented
               label="Assets shown"
@@ -330,10 +374,10 @@ export default function Trade() {
           </div>
           <div className="fo-split">
             <div className={side === 'theirs' ? '' : 'fo-hide-sm'}>
-              <AssetList league={league} tid={partner} season={s} sel={cleanGet} onChange={setGet} title={`${pt.region} ${pt.name} send`} />
+              <AssetList league={league} tid={partner} offer={offer} season={s} sel={cleanGet} onChange={setGet} title={`${pt.region} ${pt.name} send`} />
             </div>
             <div className={side === 'mine' ? '' : 'fo-hide-sm'}>
-              <AssetList league={league} tid={user} season={s} sel={cleanGive} onChange={setGive} title="You send" />
+              <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
             </div>
           </div>
           <Dock league={league} offer={offer} ev={ev} empty={empty} season={s} onPropose={propose} onWork={whatWorks} />
@@ -348,8 +392,8 @@ export default function Trade() {
           closed={closed}
           onLoad={(o) => {
             setPartner(o.b.tid);
-            setGive({ pids: o.a.pids, dpids: o.a.dpids });
-            setGet({ pids: o.b.pids, dpids: o.b.dpids });
+            setGive(selOf(o.a));
+            setGet(selOf(o.b));
             setSide('theirs');
             setTab('build');
             window.scrollTo({ top: 0, behavior: scrollBehavior() });
@@ -444,6 +488,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
 function DealCard({
   league,
   partner,
+  offer,
   give,
   get,
   onGive,
@@ -452,20 +497,28 @@ function DealCard({
 }: {
   league: League;
   partner: number;
+  offer: TradeOffer;
   give: Sel;
   get: Sel;
   onGive: (s: Sel) => void;
   onGet: (s: Sel) => void;
   onReset: () => void;
 }) {
-  const any = give.pids.length + give.dpids.length + get.pids.length + get.dpids.length > 0;
+  const size = (s: Sel) => s.pids.length + s.dpids.length + (s.swaps?.length ?? 0) + (s.cash ? 1 : 0);
+  const any = size(give) + size(get) > 0;
+  const protect = (sel: Sel, set: (s: Sel) => void, d: number, n: number) => {
+    const next = { ...sel.protect };
+    if (n) next[d] = n;
+    else delete next[d];
+    set({ ...sel, protect: next });
+  };
   const col = (title: string, tid: number, sel: Sel, set: (s: Sel) => void) => (
     <div className="col" style={{ gap: 6, minWidth: 0 }}>
       <div className="row" style={{ gap: 6 }}>
         <TeamLogo tid={tid} size={18} />
         <span className="tiny upper bold dim">{title}</span>
       </div>
-      {sel.pids.length + sel.dpids.length === 0 && <div className="small dim">Nothing yet</div>}
+      {size(sel) === 0 && <div className="small dim">Nothing yet</div>}
       {sel.pids.map((pid) => {
         const p = league.players[pid];
         return (
@@ -480,16 +533,41 @@ function DealCard({
       })}
       {sel.dpids.map((d) => {
         const dp = league.draftPicks.find((x) => x.dpid === d)!;
+        // a protection being set shows in its drop-down, one it already carries in its name
+        const open = protectable(league, dp, tid);
+        const label = pickLabel(league, dp);
         return (
-          <span key={d} className="fo-pill">
-            <Ticket size={16} style={{ marginLeft: 4 }} className="dim" />
-            <span className="ellipsis grow">{pickLabel(league, dp)}</span>
-            <button className="x" aria-label={`Remove ${pickLabel(league, dp)}`} onClick={() => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) })}>
-              <X size={14} />
-            </button>
-          </span>
+          <div key={d} className="col" style={{ gap: 4, minWidth: 0 }}>
+            <span className="fo-pill">
+              <Ticket size={16} style={{ marginLeft: 4 }} className="dim" />
+              <span className="ellipsis grow">{label}</span>
+              <button className="x" aria-label={`Remove ${label}`} onClick={() => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) })}>
+                <X size={14} />
+              </button>
+            </span>
+            {/* a team's own first can go out protected */}
+            {open && <ProtectSelect dp={dp} value={sel.protect?.[d] ?? 0} onChange={(n) => protect(sel, set, d, n)} />}
+          </div>
         );
       })}
+      {(sel.swaps ?? []).map((y) => (
+        <span key={`s${y}`} className="fo-pill">
+          <Repeat size={15} style={{ marginLeft: 4 }} className="dim" />
+          <span className="ellipsis grow">{y} swap right</span>
+          <button className="x" aria-label={`Remove the ${y} swap right`} onClick={() => set({ ...sel, swaps: sel.swaps!.filter((x) => x !== y) })}>
+            <X size={14} />
+          </button>
+        </span>
+      ))}
+      {(sel.cash ?? 0) > 0 && (
+        <span className="fo-pill">
+          <Banknote size={16} style={{ marginLeft: 4 }} className="dim" />
+          <span className="ellipsis grow">{fmtCash(sel.cash!)} cash</span>
+          <button className="x" aria-label="Remove the cash" onClick={() => set({ ...sel, cash: 0 })}>
+            <X size={14} />
+          </button>
+        </span>
+      )}
     </div>
   );
   return (
@@ -508,13 +586,37 @@ function DealCard({
         {col('You send', league.userTid, give, onGive)}
         {col('You get', partner, get, onGet)}
       </div>
+      <TermsList league={league} offer={offer} />
     </Card>
   );
 }
 
 // ------------------------------------------------------------------ asset lists
 
-function AssetList({ league, tid, season, sel, onChange, title }: { league: League; tid: number; season: number; sel: Sel; onChange: (s: Sel) => void; title: string }) {
+function AssetList({
+  league,
+  tid,
+  offer,
+  season,
+  sel,
+  onChange,
+  title,
+}: {
+  league: League;
+  tid: number;
+  offer: TradeOffer;
+  season: number;
+  sel: Sel;
+  onChange: (s: Sel) => void;
+  title: string;
+}) {
+  const other = offer.a.tid === tid ? offer.b : offer.a;
+  // a draft can't be swapped both ways, nor while either team's own first of it is moving in the deal
+  const moving = new Set([...offer.a.dpids, ...offer.b.dpids]);
+  const taken = [
+    ...(other.swaps ?? []),
+    ...league.draftPicks.filter((d) => d.round === 1 && moving.has(d.dpid) && (d.originalTid === tid || d.originalTid === other.tid)).map((d) => d.season),
+  ];
   const players = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
   const tw = players.filter((p) => p.contract.twoWay).length;
   const nameOf = rosterNames(players, { initial: true });
@@ -559,6 +661,14 @@ function AssetList({ league, tid, season, sel, onChange, title }: { league: Leag
           ))}
         </div>
       )}
+      <div className="fo-sec" style={{ margin: '10px 12px 6px' }}>
+        Swap rights
+      </div>
+      <SwapChips league={league} giver={tid} taker={other.tid} value={sel.swaps ?? []} taken={taken} onChange={(swaps) => onChange({ ...sel, swaps })} />
+      <div className="fo-sec" style={{ margin: '4px 12px 6px' }}>
+        Cash
+      </div>
+      <CashControl league={league} from={tid} to={other.tid} value={sel.cash ?? 0} blocked={(other.cash ?? 0) > 0} onChange={(cash) => onChange({ ...sel, cash })} />
     </Card>
   );
 }
@@ -594,7 +704,8 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
           {/* the name line has no room for it: it leads the details instead */}
           {p.mood.tradeRequest && (
             <span className="warn" style={{ fontWeight: 700 }}>
-              Wants a trade ·{' '}
+              {/* you told him you'd move him */}
+              {p.promise?.kind === 'trade' ? 'Promised a trade' : 'Wants a trade'} ·{' '}
             </span>
           )}
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
@@ -721,6 +832,8 @@ function Dock({
           <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />
         </div>
       )}
+      {/* what each protection, swap and sum of cash does, a line each */}
+      <TermsList league={league} offer={offer} short />
       <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
         <div>
           <div className="tiny dim upper bold">Salary</div>

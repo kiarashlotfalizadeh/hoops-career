@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../../native';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Activity, ChevronsRight, FastForward, Home as HomeIcon, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
+import { Activity, ChevronsRight, ClipboardList, FastForward, Home as HomeIcon, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { prepareLive, clearLive, playedElsewhere, CLUTCH_SEC, type LiveGame } from '../../state/live';
 import { buildScript, type Script } from '../live/choreo';
@@ -33,17 +33,26 @@ import { TacticsPanel } from '../live/TacticsPanel';
 import { BoxPanel } from '../live/BoxPanel';
 import { SubsPanel } from '../live/SubsPanel';
 import { OppPlayer } from '../live/OppPlayer';
+import { MyPlayer } from '../live/MyPlayer';
+import { Huddle } from '../live/Huddle';
+import { PlayPicker } from '../live/PlayPicker';
+import { useCalls } from '../live/plays';
 import '../live/live.css';
 import { GameRecap } from '../components/GameRecap';
+import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from '../live/graphics';
+import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
+import { winProb } from '../../core/analysis/winProb';
 
 const FEED_MAX = 80;
+const NO_LOGS: PossLog[] = [];
 /** Key plays mode: the pause between possessions it doesn't draw (at 1×). */
 const FF_MS = 90;
 /** How long an event banner stays over the court. */
 const BANNER_MS = 3200;
 
 type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
-type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player';
+/** 'player': one of theirs; 'mine': one of yours; 'huddle': your timeout, while it's taken. */
+type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player' | 'mine' | 'plays' | 'huddle';
 type SkipTo = 'quarter' | 'half' | 'clutch' | 'end';
 
 /** Whether a period's buzzer stops for a break with the period report. */
@@ -76,8 +85,14 @@ export default function Live() {
   /** Injuries, foul-outs and coaching adjustments, once drawn: alerts for a while, banners over the court once. */
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [banners, setBanners] = useState<LiveEvent[]>([]);
+  /** The broadcast graphic up now (see graphics.ts), and the ones shown so far: each once, one every two game minutes. */
+  const [graphic, setGraphic] = useState<Graphic | null>(null);
+  // graphics shown so far tonight, when the last went up, and whether this game was picked up part-way (see takeView)
+  const gfx = useRef({ shown: new Set<string>(), last: null as number | null, seed: false });
   /** A timeout the user called that the court hasn't shown yet (it opens the next possession). */
   const [toPending, setToPending] = useState(false);
+  /** The user called a timeout: once the court gets to it, the game waits in the huddle. */
+  const huddleNext = useRef(false);
   /** The period whose break the screen stopped at: resuming plays on instead of stopping again. */
   const brokeAt = useRef(0);
   /** Key plays: the timer that brings up the next possession after one it didn't draw, or one waiting for the pause to end. */
@@ -163,8 +178,43 @@ export default function Live() {
     },
     [home, away, atBreak, toPending, events, nameOf, baselines, league.settings.complexity, subFor],
   );
-  const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const });
-  loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const };
+  // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const before = useMemo(() => (game ? playersBefore(league, game.sim) : new Map()), [game]);
+  /** What the graphics read of the drawn game `v`. */
+  const graphicInput = useCallback(
+    (v: Drawn, lg: LiveGame): GraphicInput | null =>
+      home && away
+        ? {
+            view: v,
+            logs: lg.logs,
+            abbrevs: [home.abbrev, away.abbrev],
+            names: nameOf,
+            before,
+            shown: gfx.current.shown,
+            last: gfx.current.last,
+            regular: lg.game.type === 'regular',
+          }
+        : null,
+    [home, away, nameOf, before],
+  );
+  /** The broadcast graphic the drawn game `v` calls for now, if any; and every one it calls for (shown or not). */
+  const graphicFor = useCallback(
+    (v: Drawn, lg: LiveGame): Graphic | null => {
+      const input = graphicInput(v, lg);
+      return input ? nextGraphic(input) : null;
+    },
+    [graphicInput],
+  );
+  const graphicsDue = useCallback(
+    (v: Drawn, lg: LiveGame): Graphic[] => {
+      const input = graphicInput(v, lg);
+      return input ? graphicCandidates(input) : [];
+    },
+    [graphicInput],
+  );
+  const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue });
+  loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue };
 
   /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included); returns the new lines, newest first. */
   const flushFeed = useCallback((): PbpEntry[] => {
@@ -195,6 +245,21 @@ export default function Live() {
         if (banner) setBanners((b) => [...b, ...ev].slice(-4));
       }
     }
+    // a game picked up part-way (the app was closed, or this screen left and opened again): what the
+    // court already showed when it was picked up went up then, or had its moment, so only what happens
+    // from here gets a graphic
+    if (gfx.current.seed && prev) {
+      gfx.current.seed = false;
+      for (const g of loopHelpers.current.graphicsDue(prev, lg)) gfx.current.shown.add(g.id);
+    }
+    // a broadcast graphic, now and then (not along a skip: that would be a string of them)
+    const g = banner ? loopHelpers.current.graphicFor(next, lg) : null;
+    if (g) {
+      gfx.current.shown.add(g.id);
+      // a break's team number doesn't hold up the next one
+      if (g.kind !== 'team') gfx.current.last = next.elapsed;
+      setGraphic(g);
+    }
     return next;
   }, []);
 
@@ -212,7 +277,10 @@ export default function Live() {
     setView(viewRef.current);
     setEvents([]);
     setBanners([]);
+    gfx.current = { shown: new Set(), last: null, seed: !!lg && lg.steps > 0 };
+    setGraphic(null);
     setToPending(false);
+    huddleNext.current = false;
     setGame(lg);
     setScript(null);
     setAtBreak(false);
@@ -372,7 +440,11 @@ export default function Live() {
     const s = lg.sim;
     if (s.injuries.length > before.injuries || s.adjustments.length > before.adjustments) return true;
     if (s.T.some((t) => t.players.some((p) => p.out === 1 && drawnPlayer(before, p.pid)?.out !== 1))) return true;
-    const inputs = [before, snapshot(s)].map((d) => loopHelpers.current.alertInput(d));
+    const ahead = snapshot(s);
+    // a play that puts up a graphic is worth seeing
+    const g = loopHelpers.current.graphicFor(ahead, lg);
+    if (g && g.kind !== 'team') return true;
+    const inputs = [before, ahead].map((d) => loopHelpers.current.alertInput(d));
     if (!inputs[0] || !inputs[1]) return false;
     const was = new Set(liveAlerts(inputs[0]).map((x) => x.id));
     return liveAlerts(inputs[1]).some((x) => !was.has(x.id) && !opts.current.dismissed.includes(x.id));
@@ -395,6 +467,14 @@ export default function Live() {
     setToPending(false);
     const v = takeView(lg);
     const s = lg.sim;
+    // the court has got to the user's timeout: the game waits in the huddle (the sim is no longer ahead)
+    if (huddleNext.current && !lg.over) {
+      huddleNext.current = false;
+      setScript(null);
+      setPaused(true);
+      setPanel('huddle');
+      return;
+    }
     if (!lg.over && s.clock <= 0.05) {
       // a decided game ends at the buzzer: no break before an overtime that won't be played
       if (s.q >= 4 && s.T[0].score !== s.T[1].score) {
@@ -436,9 +516,10 @@ export default function Live() {
   }, [info, finish, flushFeed, fate, ticker, takeView, enterBreak, eventAhead]);
   nextRef.current = nextPossession;
 
+  const huddling = panel === 'huddle';
   useEffect(() => {
-    if (status === 'live' && !script && !atBreak && !ff.current.timer && !ff.current.waiting) nextPossession();
-  }, [status, script, atBreak, nextPossession]);
+    if (status === 'live' && !script && !atBreak && !huddling && !ff.current.timer && !ff.current.waiting) nextPossession();
+  }, [status, script, atBreak, huddling, nextPossession]);
   // a fast-forward that came up during a pause goes on when it ends
   useEffect(() => {
     if (!paused && ff.current.waiting && status === 'live') {
@@ -446,6 +527,13 @@ export default function Live() {
       nextPossession();
     }
   }, [paused, status, nextPossession]);
+  // a graphic stays up a few seconds of play (it waits out a break)
+  const graphicId = graphic?.id;
+  useEffect(() => {
+    if (!graphicId || atBreak) return;
+    const t = setTimeout(() => setGraphic(null), GRAPHIC_MS);
+    return () => clearTimeout(t);
+  }, [graphicId, atBreak]);
   // one event banner at a time
   const bannerId = banners[0]?.id;
   useEffect(() => {
@@ -458,6 +546,8 @@ export default function Live() {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
     clearFF();
+    // a timeout called just before the skip is taken along the way: no huddle at the other end
+    huddleNext.current = false;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
     if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to);
     // a decided game ends at the buzzer: no break before an overtime that won't be played
@@ -509,8 +599,10 @@ export default function Live() {
   const callTimeout = (reason?: string) => {
     const lg = liveRef.current;
     if (!lg || lg.over || !coach((g) => g.callTimeout(reason))) return;
-    // the court flashes it as the next possession opens: the one possession still being drawn finishes first
+    // the court flashes it as the next possession opens: the one possession still being drawn finishes
+    // first, and then the huddle comes up
     setToPending(true);
+    huddleNext.current = true;
     setAnnounce(`Timeout ${lg.sim.T[userSide].team.abbrev}.`);
     setTick((x) => x + 1);
   };
@@ -585,6 +677,20 @@ export default function Live() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [game, tick],
   );
+  // play calls: one waiting at a time, shared by the Late game card, the Plays sheet, the huddle and the player sheet
+  const calls = useCalls({
+    gid: game?.game.gid ?? -1,
+    side: userSide,
+    logs: game?.logs ?? NO_LOGS,
+    quarter: script?.q ?? view?.q ?? 1,
+    initial: game?.pendingCall ?? null,
+    call: (c) => !!coach((g) => g.callPlay(c)),
+    cancel: () => coach((g) => g.cancelPlay()),
+  });
+  const resume = () => {
+    setPanel('none');
+    setPaused(false);
+  };
   const alerts = useMemo(() => {
     if (!view || over) return [];
     const input = alertInput(view);
@@ -618,6 +724,10 @@ export default function Live() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game]);
   const context = game ? gameContext(league, game.game, gameNo) : undefined;
+  // the home team's chance to win as the court has drawn the game (Settings can switch it off)
+  const showWp = league.settings.liveWinProb !== false;
+  const wpHome =
+    game && view && showWp ? winProb({ margin: view.sides[0].score - view.sides[1].score, q: view.q, clock: view.clock, ball: view.ball, edge: game.edge }) : undefined;
 
   // only offered once the game is over (or there is none): not worked out on every possession
   const nextAction = status !== 'live' ? flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame')) : undefined;
@@ -666,6 +776,7 @@ export default function Live() {
   const won = !!result && (userSide === 0 ? result.home.pts > result.away.pts : result.away.pts > result.home.pts);
   // the fives the court is drawing (between possessions, the ones on the floor now)
   const fives: [number[], number[]] = script ? (script.off === 0 ? [script.oPids, script.dPids] : [script.dPids, script.oPids]) : [view.sides[0].on, view.sides[1].on];
+  const flowKits = matchupColors(home.colors, away.colors);
   // the user's team carries the accent in two-team comparisons (away first)
   const barColors: [string, string] = userSide === 1 ? ['var(--accent)', 'var(--text-dim)'] : ['var(--text-dim)', 'var(--accent)'];
   const plan = planFor(league, userSide === 0 ? game.game.away : game.game.home, game.game);
@@ -692,11 +803,14 @@ export default function Live() {
       onTap={(pid, mine) => {
         if (over) return;
         setPicked(pid);
-        setPanel(mine ? 'subs' : 'player');
+        setPanel(mine ? 'mine' : 'player');
       }}
     />
   );
   const pickedOpp = panel === 'player' && picked !== undefined ? drawnPlayer(view, picked) : undefined;
+  const pickedMine = panel === 'mine' && picked !== undefined ? drawnPlayer(view, picked) : undefined;
+  // the Plays sheet and its sets from Advanced depth (Simple keeps the Late game card)
+  const playsOn = league.settings.complexity !== 'simple';
 
   return (
     <main className="page full" style={{ gap: 10 }}>
@@ -704,7 +818,7 @@ export default function Live() {
       <h1 className="sr-only">
         Live game: {away.region} {away.name} at {home.region} {home.name}
       </h1>
-      <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} />
+      <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome} />
       <div className="sr-only" aria-live="polite">
         {announce}
       </div>
@@ -752,14 +866,19 @@ export default function Live() {
                 </button>
               </div>
             )}
-            {(script || ffing) && !over && !atBreak && (
-              <div className="pill" aria-hidden="true" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '85%' }}>
-                {script ? (
-                  <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
-                ) : (
-                  <FastForward size={12} />
+            {!over && !atBreak && (script || ffing || graphic) && (
+              <div className="live-lower">
+                {(script || ffing) && (
+                  <div className="pill" aria-hidden="true" style={{ background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '85%' }}>
+                    {script ? (
+                      <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
+                    ) : (
+                      <FastForward size={12} />
+                    )}
+                    <span className="ellipsis small">{script ? script.label : 'Fast-forward to the next key play'}</span>
+                  </div>
                 )}
-                <span className="ellipsis small">{script ? script.label : 'Fast-forward to the next key play'}</span>
+                {graphic && <LowerThird key={graphic.id} g={graphic} kit={flowKits[graphic.side]} />}
               </div>
             )}
           </div>
@@ -855,6 +974,7 @@ export default function Live() {
               apply={applyTactics}
               onStart={togglePause}
               oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
+              win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
             />
           )}
 
@@ -896,13 +1016,12 @@ export default function Live() {
               drawing={!!script}
               nameOf={nameOf}
               timeout={() => callTimeout()}
-              initialCall={game.pendingCall}
-              callPlay={(c) => !!coach((g) => g.callPlay(c))}
-              cancelPlay={() => coach((g) => g.cancelPlay())}
+              calls={calls}
+              onSets={playsOn ? () => setPanel('plays') : undefined}
             />
           )}
           {!over && (
-            <div className="grid4 live-ctl">
+            <div className={`grid4 live-ctl${playsOn ? ' five' : ''}`}>
               <button
                 className="btn sm"
                 disabled={me.timeouts <= 0 || atBreak || toPending}
@@ -920,6 +1039,15 @@ export default function Live() {
               >
                 <Users size={16} /> Subs
               </button>
+              {playsOn && (
+                <button
+                  className={`btn sm ${calls.pending ? 'primary' : ''}`}
+                  onClick={() => setPanel('plays')}
+                  aria-label={calls.pending ? 'Plays: a call is waiting' : 'Plays: call a play'}
+                >
+                  <ClipboardList size={16} /> Plays
+                </button>
+              )}
               <button className="btn sm" onClick={() => setPanel('tactics')}>
                 <SlidersHorizontal size={16} /> Adjust
               </button>
@@ -970,13 +1098,58 @@ export default function Live() {
           league={league}
           nameOf={nameOf}
           colors={barColors}
-          flowColors={matchupColors(home.colors, away.colors)}
+          flowColors={flowKits}
+          wp={showWp ? { edge: game.edge, type: game.game.type } : undefined}
         />
       </Sheet>
       <Sheet open={panel === 'player' && !!pickedOpp} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>
         {pickedOpp && (
           <OppPlayer p={pickedOpp} name={nameOf(pickedOpp.pid)} tactics={tactics} complexity={league.settings.complexity} clock={view.clock} q={view.q} apply={applyTactics} />
         )}
+      </Sheet>
+      <Sheet open={panel === 'mine' && !!pickedMine} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>
+        {pickedMine && (
+          <MyPlayer
+            league={league}
+            p={pickedMine}
+            name={nameOf(pickedMine.pid)}
+            tactics={tactics}
+            complexity={league.settings.complexity}
+            oppOn={view.sides[1 - userSide].on}
+            guarding={[...me.guardOf].find(([, d]) => d.pid === pickedMine.pid)?.[0]}
+            nameOf={nameOf}
+            apply={applyTactics}
+            calls={calls}
+            onSub={() => setPanel('subs')}
+          />
+        )}
+      </Sheet>
+      <Sheet open={panel === 'plays'} onClose={() => setPanel('none')} title="Plays">
+        <PlayPicker league={league} tactics={tactics} me={view.sides[userSide]} calls={calls} nameOf={nameOf} late />
+      </Sheet>
+      <Sheet open={huddling} onClose={resume} title={`Timeout ${me.team.abbrev}`}>
+        <Huddle
+          league={league}
+          view={view}
+          side={userSide}
+          teams={[home, away]}
+          tactics={tactics}
+          nameOf={nameOf}
+          win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
+          subFor={subFor}
+          substitute={(out, inn) => {
+            const ok = !!coach((g) => g.substitute(out, inn));
+            if (!ok) useStore.getState().toast(`${nameOf(inn)} can't come in for ${nameOf(out)} right now.`, 'bad');
+            // the court is waiting on the sim here: what it shows is the game as it stands
+            if (game) takeView(game, false);
+            return ok;
+          }}
+          alerts={alerts}
+          runAlert={runAlert}
+          apply={applyTactics}
+          calls={calls}
+          onResume={resume}
+        />
       </Sheet>
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">
         <div className="col" style={{ gap: 8 }}>

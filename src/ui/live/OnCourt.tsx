@@ -20,7 +20,8 @@ interface SideInfo {
 
 /**
  * Both fives on the floor, right under the court (yours first): energy, fouls, points, and who's
- * hot or cold. Tap one of yours to sub him out, one of theirs for his free throws and a Hack-a.
+ * hot or cold. Tap one of yours for his sheet (orders, a play for him, the sub), one of theirs for
+ * his free throws and a Hack-a.
  * `fives` are [home, away] as the court draws them.
  */
 export const OnCourt = memo(function OnCourt({
@@ -56,7 +57,7 @@ export const OnCourt = memo(function OnCourt({
           const hot = p.streak >= HOT_STREAK;
           const cold = !hot && isCold(p);
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
-          const label = `${names(pid)}: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Substitute him' : 'Free throws and Hack-a'}`;
+          const label = `${names(pid)}: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
           return (
             <button
               key={pid}
