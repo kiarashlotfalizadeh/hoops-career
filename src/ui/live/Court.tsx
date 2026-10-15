@@ -10,6 +10,12 @@ export interface CourtProps {
   jersey: (pid: number) => string;
   onDone: () => void;
   onTick?: (clock: number, score: [number, number] | null) => void;
+  /** The last frame the court has reached, as it changes (the Live screen's captions follow it). */
+  onBeat?: (frame: number) => void;
+  /** The ball handler's name tag (none without it). */
+  names?: (pid: number) => string;
+  /** [home, away]: the team with the ball is named along the baseline it attacks. */
+  abbrevs?: [string, string];
   /** What the court shows, for screen readers. */
   label: string;
 }
@@ -19,16 +25,23 @@ const H_FT = 47;
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
-export function Court({ script, speed, paused, colors, jersey, onDone, onTick, label }: CourtProps) {
+export function Court({ script, speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, label }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, score: null as [number, number] | null });
-  const props = useRef({ speed, paused, colors, jersey, onDone, onTick });
-  props.current = { speed, paused, colors, jersey, onDone, onTick };
+  const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, score: null as [number, number] | null, beat: -1 });
+  const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs });
+  props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs };
 
+  // how far each possession got: a replay shown in between doesn't make the one it interrupted start over
+  // (or a finished one play again)
+  const progress = useRef(new WeakMap<Script, { t: number; done: boolean }>());
   useEffect(() => {
-    state.current = { t: 0, last: 0, script, done: false, score: null };
+    const was = state.current;
+    if (was.script) progress.current.set(was.script, { t: was.t, done: was.done });
+    const back = script ? progress.current.get(script) : undefined;
+    state.current = { t: back?.t ?? 0, last: 0, script, done: back?.done ?? false, score: null, beat: -1 };
   }, [script]);
 
   useEffect(() => {
@@ -102,14 +115,39 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, l
       const lastScore = reached.length ? reached[reached.length - 1].score! : null;
       const clock = lerp(sc.clockStart, sc.clockEnd, Math.min(1, s.t / Math.max(1, total)));
       props.current.onTick?.(clock, lastScore);
+      const beat = Math.min(sc.frames.length - 1, u >= 1 ? i : i - 1);
+      if (beat !== s.beat) {
+        s.beat = beat;
+        props.current.onBeat?.(beat);
+      }
       const offColors = props.current.colors[sc.off];
       const defColors = props.current.colors[1 - sc.off];
+      // the team with the ball, along the baseline it attacks
+      const ab = props.current.abbrevs;
+      if (ab) drawBaseline(ctx, k, ab[sc.off], offColors);
+      const calm = !!still?.matches;
+      // the net or the rim answers a shot as it lands, and a moment after
+      const fx = b.fx && u > 0.72 ? { kind: b.fx, p: (u - 0.72) / 0.28 } : a.fx && u < 0.5 && i > 1 ? { kind: a.fx, p: 1 + u / 0.5 } : null;
+      if (fx && !calm) drawRim(ctx, k, fx.kind, fx.p);
       // defense first (under), then offense
-      sc.dPids.forEach((pid, j) => drawPlayer(ctx, k, lerpPt(a.d[j], b.d[j], u), defColors, props.current.jersey(pid), false));
-      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, lerpPt(a.o[j], b.o[j], u), offColors, props.current.jersey(pid), true));
+      const dAt = sc.dPids.map((_, j) => lerpPt(a.d[j], b.d[j], u));
+      const oAt = sc.oPids.map((_, j) => lerpPt(a.o[j], b.o[j], u));
+      sc.dPids.forEach((pid, j) => drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false));
+      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, oAt[j], offColors, props.current.jersey(pid), true));
+      // the ball handler's name, under him (whoever has it at the end of this move, once he does)
+      const nm = props.current.names;
+      const hold = u >= 0.5 ? b.hold : a.hold;
+      if (nm && hold !== undefined && hold >= 0) {
+        const off = hold < sc.oPids.length;
+        const pid = off ? sc.oPids[hold] : sc.dPids[hold - sc.oPids.length];
+        const at = off ? oAt[hold] : dAt[hold - sc.oPids.length];
+        if (pid !== undefined && at) drawTag(ctx, k, at, nm(pid));
+      }
       // ball
       const bp = lerpPt(a.ball, b.ball, u);
       const z = b.ballZ ? Math.sin(Math.PI * u) * 7 : 0;
+      // a shot's flight leaves a faint trail behind the ball
+      if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, k, a.ball, b.ball, u);
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath();
       ctx.ellipse(bp.x * k + (W_FT / 2) * k + 2, bp.y * k + 2, 0.55 * k, 0.4 * k, 0, 0, Math.PI * 2);
@@ -238,8 +276,87 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
   ctx.fillText(num, x, y + 0.5);
 }
 
+/** The team with the ball, in its colours, on the baseline under the basket it attacks (both sides of the backboard). */
+function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, colors: [string, string]) {
+  const h = 1.15 * k;
+  const w = 7 * k;
+  ctx.font = `800 ${Math.max(9, h * 0.78)}px "Barlow Condensed", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const cx of [-14.5, 14.5]) {
+    const x = (cx + W_FT / 2) * k - w / 2;
+    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = colors[0];
+    ctx.beginPath();
+    ctx.roundRect?.(x, 0, w, h, [0, 0, h / 2, h / 2]);
+    if (!ctx.roundRect) ctx.rect(x, 0, w, h);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = inkOn(colors[0]);
+    ctx.fillText(abbrev, x + w / 2, h / 2 + 0.5);
+  }
+}
+
+/** A made shot ripples the net; a miss rattles the rim. `p` runs 0..2 over the landing and the moment after. */
+function drawRim(ctx: CanvasRenderingContext2D, k: number, kind: 'make' | 'miss', p: number) {
+  const x = (W_FT / 2) * k;
+  const y = 5.25 * k;
+  const t = Math.min(1, p / 2);
+  ctx.globalAlpha = Math.max(0, 1 - t);
+  ctx.lineWidth = Math.max(1.5, k * 0.18);
+  if (kind === 'make') {
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, (0.9 + t * 2.2) * k, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = '#ff8c2b';
+    const j = Math.sin(p * Math.PI * 6) * 0.25 * k;
+    ctx.beginPath();
+    ctx.arc(x + j, y, 0.95 * k, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** The ball's arc so far on a shot (u: how far along). */
+function drawTrail(ctx: CanvasRenderingContext2D, k: number, from: Pt, to: Pt, u: number) {
+  ctx.fillStyle = '#ffd2a6';
+  const n = 9;
+  for (let i = 1; i <= n; i++) {
+    const v = (u * i) / (n + 1);
+    const p = lerpPt(from, to, v);
+    const z = Math.sin(Math.PI * v) * 7;
+    ctx.globalAlpha = 0.12 + (0.3 * i) / n;
+    ctx.beginPath();
+    ctx.arc((p.x + W_FT / 2) * k, (p.y - z) * k, 0.16 * k + 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** The ball handler's name, in a small tag under his circle. */
+function drawTag(ctx: CanvasRenderingContext2D, k: number, p: Pt, name: string) {
+  if (!name) return;
+  const x = (p.x + W_FT / 2) * k;
+  const y = p.y * k + 1.45 * k + Math.max(7, k * 1.05);
+  ctx.font = `700 ${Math.max(10, k * 1.25)}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = ctx.measureText(name).width + 8;
+  const h = Math.max(14, k * 1.75);
+  ctx.fillStyle = 'rgba(6,8,12,0.78)';
+  ctx.beginPath();
+  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, h / 2);
+  if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(name, x, y + 0.5);
+}
+
 function drawFlash(ctx: CanvasRenderingContext2D, k: number, text: string, kind: string, fx: number, fy: number, alpha: number) {
-  const x = (fx + W_FT / 2) * k;
+  // (kept off the sidelines: a ball thrown out of bounds would put it under the playback buttons)
+  const x = (clamp(fx, -13, 13) + W_FT / 2) * k;
   const y = fy * k;
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
   ctx.font = `800 ${Math.max(16, k * 2.6)}px "Barlow Condensed", sans-serif`;

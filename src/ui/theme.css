@@ -1253,8 +1253,9 @@ body:has(.simbar) .page {
   padding: 0 6px;
   gap: 5px;
 }
-/* tablets, portrait too: the court sits beside the coaching panels instead of filling the screen */
-@media (min-width: 760px) {
+/* tablets held sideways: the court sits beside the coaching panels instead of filling the screen
+   (held upright they stack, like a phone: see live.css) */
+@media (min-width: 760px) and (orientation: landscape) {
   .live-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr);
@@ -1339,11 +1340,6 @@ body:has(.input:focus, .lg-search input:focus) .simbar {
   .live-left {
     position: sticky;
     top: calc(var(--top-h) + var(--safe-t) + 8px);
-  }
-  /* the half court is 50 x 47 ft: size it so it and the transport row fit the short screen */
-  .live-court {
-    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - 140px) * 50 / 47));
-    margin: 0 auto;
   }
 }
 

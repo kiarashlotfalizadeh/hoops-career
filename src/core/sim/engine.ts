@@ -3677,8 +3677,9 @@ export class GameSim {
         this.shots.push({ t: off.side, pid: sh.pid, x: Math.round(xy.x * 10) / 10, y: Math.round(xy.y * 10) / 10, made, zone, q: this.q });
       }
     }
-    if (this.record) {
-      this.cur!.steps.push({ k: 'shot', pid: sh.pid, zone, x: xy!.x, y: xy!.y, made, v: value, pid2: ast?.pid, f: s.finish });
+    const shotStep: PossStep | null = this.record ? { k: 'shot', pid: sh.pid, zone, x: xy!.x, y: xy!.y, made, v: value, pid2: ast?.pid, f: s.finish } : null;
+    if (shotStep) {
+      this.cur!.steps.push(shotStep);
       if (blocker) this.cur!.steps.push({ k: 'block', pid: blocker.pid, pid2: sh.pid });
     }
     if (!this.cur?.finish && this.cur) this.cur.finish = s.finish;
@@ -3686,6 +3687,8 @@ export class GameSim {
     this.lastShooter = sh;
 
     const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast) : '';
+    // the court's captions call the shot as the play-by-play does
+    if (shotStep) shotStep.d = desc;
     if (made) {
       sh.b.fgm++;
       off.tot.fgm++;

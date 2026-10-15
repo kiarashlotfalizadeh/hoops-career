@@ -1,12 +1,28 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { haptic } from '../../native';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Activity, ChevronsRight, ClipboardList, FastForward, Home as HomeIcon, ListOrdered, Pause, Play, SlidersHorizontal, Timer, Users, Zap } from 'lucide-react';
+import {
+  Activity,
+  ChevronsRight,
+  ClipboardList,
+  Clapperboard,
+  FastForward,
+  Home as HomeIcon,
+  ListOrdered,
+  Pause,
+  Play,
+  RotateCcw,
+  SlidersHorizontal,
+  Timer,
+  Users,
+  X,
+  Zap,
+} from 'lucide-react';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { prepareLive, clearLive, playedElsewhere, CLUTCH_SEC, type LiveGame } from '../../state/live';
-import { buildScript, type Script } from '../live/choreo';
+import { buildScript, captionAt, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
-import { Card, Empty, PageHeader, Sheet } from '../components/ui';
+import { Card, Empty, PageHeader, Sheet, Toggle, scrollBehavior } from '../components/ui';
 import { LateGameCard } from '../live/LateGameCard';
 import { composites } from '../../core/ratings';
 import type { League, PbpEntry, Settings, Tactics } from '../../core/types';
@@ -24,7 +40,7 @@ import { drawnPlayer, snapshot, type Drawn } from '../live/drawn';
 import { liveAlerts, newEvents, type AlertInput, type LiveAlert, type LiveEvent } from '../live/alerts';
 import { livePills } from '../live/pills';
 import { isKey } from '../live/keyPlays';
-import { createTicker, type Ticker } from '../live/ticker';
+import { createBeat, createTicker, type Beat, type Ticker } from '../live/ticker';
 import { ScoreBug, gameContext } from '../live/ScoreBug';
 import { HOT_STREAK, OnCourt } from '../live/OnCourt';
 import { PeriodReport } from '../live/PeriodReport';
@@ -42,6 +58,11 @@ import { GameRecap } from '../components/GameRecap';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from '../live/graphics';
 import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
 import { winProb } from '../../core/analysis/winProb';
+import { pickHighlights } from '../../core/analysis/highlights';
+import { gameKeys } from '../../core/analysis/keys';
+import { otherGames } from '../live/scoreboard';
+import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
+import { Intro } from '../live/Intro';
 
 const FEED_MAX = 80;
 const NO_LOGS: PossLog[] = [];
@@ -52,8 +73,22 @@ const BANNER_MS = 3200;
 
 type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
 /** 'player': one of theirs; 'mine': one of yours; 'huddle': your timeout, while it's taken. */
-type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player' | 'mine' | 'plays' | 'huddle';
+type Panel = 'none' | 'subs' | 'tactics' | 'stats' | 'skip' | 'player' | 'mine' | 'plays' | 'huddle' | 'scores';
 type SkipTo = 'quarter' | 'half' | 'clutch' | 'end';
+/**
+ * Something the court shows in place of the game for a moment: a replay (asked for, or the automatic
+ * one of a shot at the buzzer) or the night's highlights after the final. The possession it
+ * interrupts picks up where it was.
+ */
+interface Show {
+  kind: 'replay' | 'auto' | 'reel';
+  scripts: Script[];
+  i: number;
+  /** For the reel: when each play happened and the score it left ('Q4 0:02 · OKC 101-100'). */
+  tags?: string[];
+}
+/** Replays run at this share of the game's speed. */
+const REPLAY_SPEED = 0.55;
 
 /** Whether a period's buzzer stops for a break with the period report. */
 const breakAfter = (mode: NonNullable<Settings['liveBreaks']>, q: number) => (mode === 'quarters' ? true : mode === 'half' ? q === 2 : false);
@@ -101,7 +136,21 @@ export default function Live() {
   const [game, setGame] = useState<LiveGame | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [ticker, setTicker] = useState<Ticker>(() => createTicker(720, [0, 0]));
+  // the frame the court has reached in the possession it's drawing: the caption over the backcourt follows it
+  const [beat] = useState<Beat>(() => createBeat());
   const [script, setScript] = useState<Script | null>(null);
+  const [show, setShow] = useState<Show | null>(null);
+  // a game from its tip: the starting lineups go up on the court first
+  const [intro, setIntro] = useState(false);
+  const tipOff = useCallback(() => setIntro(false), []);
+  // read when the court finishes drawing (from its animation loop): the latest of each
+  const showRef = useRef<Show | null>(null);
+  showRef.current = show;
+  const scriptRef = useRef<Script | null>(null);
+  scriptRef.current = script;
+  /** The possession the court last finished drawing: what Replay shows. */
+  const lastDone = useRef<Script | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
@@ -122,6 +171,13 @@ export default function Live() {
       clearTimeout(ff.current.timer);
     };
   }, []);
+  // while a game is on, a phone's tab bar gives way to the coaching dock (theme.css: :root[data-gameday])
+  useEffect(() => {
+    if (status !== 'live') return;
+    const root = document.documentElement;
+    root.dataset.gameday = '';
+    return () => void delete root.dataset.gameday;
+  }, [status]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const baselines = useMemo(() => playTypeBaselines(league), [league.season]);
   const keyPlays = !!league.settings.liveKeyPlays;
@@ -130,6 +186,8 @@ export default function Live() {
   opts.current = { keyPlays, breaks: league.settings.liveBreaks ?? 'quarters', speed, paused, dismissed };
 
   const userSide = game?.userSide ?? 0;
+  const userSideRef = useRef(userSide);
+  userSideRef.current = userSide;
   const home = game ? league.teams[game.game.home] : null;
   const away = game ? league.teams[game.game.away] : null;
   const colors = useMemo(() => (home && away ? jerseyColors(home.colors, away.colors) : null), [home, away]);
@@ -178,6 +236,13 @@ export default function Live() {
     },
     [home, away, atBreak, toPending, events, nameOf, baselines, league.settings.complexity, subFor],
   );
+  // the night's other games (played before this one: see prepareLive), for the bottom line
+  const showScores = league.settings.liveScores !== false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const others = useMemo(() => (game && showScores ? otherGames(league, game.game.gid, game.game.day, league.userTid) : []), [game, showScores]);
+  // tonight's keys to the game, as the preview set them (from the games before today)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const keys = useMemo(() => (game ? gameKeys(league, game.game) : []), [game]);
   // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const before = useMemo(() => (game ? playersBefore(league, game.sim) : new Map()), [game]);
@@ -283,6 +348,9 @@ export default function Live() {
     huddleNext.current = false;
     setGame(lg);
     setScript(null);
+    setShow(null);
+    lastDone.current = null;
+    setIntro(!!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false);
     setAtBreak(false);
     setPaused(false);
     setDismissed([]);
@@ -511,15 +579,56 @@ export default function Live() {
       }, FF_MS / opts.current.speed);
       return;
     }
-    setScript(buildScript(log, info, logs.length > 1 ? logs[logs.length - 2].score : from, [s.T[0].team.abbrev, s.T[1].team.abbrev]));
+    beat.set(0);
+    setScript(buildScript(log, info, logs.length > 1 ? logs[logs.length - 2].score : from, [s.T[0].team.abbrev, s.T[1].team.abbrev], loopHelpers.current.nameOf));
     setTick((t) => t + 1);
-  }, [info, finish, flushFeed, fate, ticker, takeView, enterBreak, eventAhead]);
+  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead]);
   nextRef.current = nextPossession;
+
+  /** The court finished drawing: the next play of a replay or the reel, an automatic replay of a shot at the buzzer, or the next possession. */
+  const courtDone = () => {
+    const sh = showRef.current;
+    if (sh) {
+      if (sh.i + 1 < sh.scripts.length) return setShow({ ...sh, i: sh.i + 1 });
+      setShow(null);
+      if (sh.kind === 'auto') nextRef.current();
+      return;
+    }
+    const sc = scriptRef.current;
+    if (sc) lastDone.current = sc;
+    // a shot at the buzzer, felt as it drops (on a phone)
+    if (sc?.moment) haptic(sc.off === userSideRef.current ? 'success' : 'warning');
+    if (sc?.moment && useStore.getState().league?.settings.liveReplays !== false) {
+      setShow({ kind: 'auto', scripts: [{ ...sc }], i: 0 });
+      return;
+    }
+    nextRef.current();
+  };
+  const replay = () => {
+    const sc = lastDone.current;
+    if (sc && !showRef.current) setShow({ kind: 'replay', scripts: [{ ...sc }], i: 0 });
+  };
+  /** The night's highlights, from the possessions the game played, on the court after the final. */
+  const playReel = () => {
+    const lg = liveRef.current;
+    if (!lg || showRef.current) return;
+    const picks = pickHighlights(lg.logs, lg.userSide);
+    if (!picks.length) return;
+    const ab: [string, string] = [lg.sim.T[0].team.abbrev, lg.sim.T[1].team.abbrev];
+    const scripts = picks.map((h) => buildScript(lg.logs[h.i], info, h.i > 0 ? lg.logs[h.i - 1].score : [0, 0], ab, loopHelpers.current.nameOf));
+    const tags = picks.map((h) => {
+      const l = lg.logs[h.i];
+      return `${periodLabel(l.q)} ${fmtClock(l.clockEnd)} · ${ab[1]} ${l.score[1]}, ${ab[0]} ${l.score[0]}`;
+    });
+    setShow({ kind: 'reel', scripts, i: 0, tags });
+    // (after the final the page scrolls: bring the court back up, once the button that started it has settled)
+    requestAnimationFrame(() => stageRef.current?.scrollIntoView({ block: 'start', behavior: scrollBehavior() }));
+  };
 
   const huddling = panel === 'huddle';
   useEffect(() => {
-    if (status === 'live' && !script && !atBreak && !huddling && !ff.current.timer && !ff.current.waiting) nextPossession();
-  }, [status, script, atBreak, huddling, nextPossession]);
+    if (status === 'live' && !script && !atBreak && !huddling && !intro && !ff.current.timer && !ff.current.waiting) nextPossession();
+  }, [status, script, atBreak, huddling, intro, nextPossession]);
   // a fast-forward that came up during a pause goes on when it ends
   useEffect(() => {
     if (!paused && ff.current.waiting && status === 'live') {
@@ -546,6 +655,7 @@ export default function Live() {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
     clearFF();
+    setIntro(false);
     // a timeout called just before the skip is taken along the way: no huddle at the other end
     huddleNext.current = false;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
@@ -583,6 +693,12 @@ export default function Live() {
     if (!paused && lg) useStore.getState().mutate(() => void lg.checkpoint());
     setPaused((p) => !p);
   };
+  const pickSpeed = (to: number) => {
+    setSpeed(to);
+    // the next game starts at the speed you left this one at (it's the Settings default too)
+    if (league.settings.liveSpeed !== to) useStore.getState().mutate((l) => void (l.settings.liveSpeed = to));
+  };
+  const toggleKeyPlays = () => useStore.getState().mutate((l) => void (l.settings.liveKeyPlays = !keyPlays));
 
   /**
    * Every coaching move goes through the game, into its journal, inside a league change: the save
@@ -782,6 +898,11 @@ export default function Live() {
   const plan = planFor(league, userSide === 0 ? game.game.away : game.game.home, game.game);
   const banner = banners[0];
   const ffing = keyPlays && !script && !atBreak && !over;
+  // what the court draws: a replay or the reel in place of the game for a moment
+  const drawing = show ? show.scripts[show.i] : script;
+  const canReplay = status === 'live' && !show && !!lastDone.current && paused;
+  // (only worked out once the game is over)
+  const reelSize = status === 'final' ? pickHighlights(game.logs, game.userSide).length : 0;
   const skipTo: { id: SkipTo; label: string; sub: string }[] = [
     { id: 'quarter', label: `End of ${periodLabel(atBreak ? view.q + 1 : view.q)}`, sub: 'Stops at the break with the period report.' },
     // (from the first quarter's break, the end of the next quarter is halftime)
@@ -813,114 +934,158 @@ export default function Live() {
   const playsOn = league.settings.complexity !== 'simple';
 
   return (
-    <main className="page full" style={{ gap: 10 }}>
+    <main className={`page full live-page${over ? ' done' : ''}`} style={{ gap: 10 }}>
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
         Live game: {away.region} {away.name} at {home.region} {home.name}
       </h1>
-      <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome} />
       <div className="sr-only" aria-live="polite">
         {announce}
       </div>
 
       <div className="live-grid">
         <div className="col live-left" style={{ gap: 10 }}>
-          {/* court */}
-          <div className="live-court" style={{ position: 'relative' }}>
-            <Court
-              script={script}
-              speed={speed}
-              paused={paused || over}
-              colors={colors}
-              jersey={(pid) => league.players[pid]?.jersey || '0'}
-              onDone={nextPossession}
-              onTick={(c, s) => ticker.set(c, s)}
-              label={
-                over
-                  ? 'Court: the game is over.'
-                  : atBreak
-                    ? `Court: end of ${periodLabel(view.q)}.`
-                    : ffing
-                      ? 'Court: fast-forwarding to the next key play.'
-                      : `Court: ${script?.label ?? 'tip-off'}.`
-              }
-            />
-            {banner && !over && (
-              <div key={banner.id} className={`live-banner fade-in ${banner.kind}`} role="status">
-                {banner.text}
-              </div>
-            )}
-            {atBreak && !over && (
-              <div
-                className="col center fade-in"
-                style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, background: 'rgba(6,8,12,0.62)' }}
-              >
-                <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase', color: '#fff' }}>
-                  {view.q === 2 ? 'Halftime' : `End of ${periodLabel(view.q)}`}
+          {/* the scorebug and the court: on a phone they stay at the top while the rest scrolls under them */}
+          <div className="live-stage" ref={stageRef}>
+            <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome}>
+              {others.length > 0 && status !== 'simmed' && <ScoreTicker league={league} games={others} elapsed={view.elapsed} done={over} onOpen={() => setPanel('scores')} />}
+            </ScoreBug>
+            <div className="live-court">
+              <Court
+                script={drawing}
+                speed={show && show.kind !== 'reel' ? speed * REPLAY_SPEED : speed}
+                paused={!show && (paused || over)}
+                colors={colors}
+                jersey={(pid) => league.players[pid]?.jersey || '0'}
+                onDone={courtDone}
+                // (a replay doesn't move the scorebug: it stays on the game as it stands)
+                onTick={show ? undefined : (c, s) => ticker.set(c, s)}
+                onBeat={beat.set}
+                names={nameOf}
+                abbrevs={[home.abbrev, away.abbrev]}
+                label={
+                  show
+                    ? `Court: ${show.kind === 'reel' ? `highlight ${show.i + 1} of ${show.scripts.length}` : 'replay'}, ${drawing?.label ?? ''}.`
+                    : over
+                      ? 'Court: the game is over.'
+                      : atBreak
+                        ? `Court: end of ${periodLabel(view.q)}.`
+                        : ffing
+                          ? 'Court: fast-forwarding to the next key play.'
+                          : `Court: ${script?.label ?? 'tip-off'}.`
+                }
+              />
+              {banner && !over && !show && (
+                <div key={banner.id} className={`live-banner fade-in ${banner.kind}`} role="status">
+                  {banner.text}
                 </div>
-                <div className="small" style={{ maxWidth: 280, color: '#d6dbe3' }}>
-                  The period report is with the coaching panels. Subs and adjustments you make now apply from the first possession of {periodLabel(view.q + 1)}.
-                </div>
-                <button className="btn primary sm" onClick={togglePause}>
-                  <Play size={16} fill="currentColor" /> Start {periodLabel(view.q + 1)}
-                </button>
-              </div>
-            )}
-            {!over && !atBreak && (script || ffing || graphic) && (
-              <div className="live-lower">
-                {(script || ffing) && (
-                  <div className="pill" aria-hidden="true" style={{ background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '85%' }}>
-                    {script ? (
-                      <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
-                    ) : (
-                      <FastForward size={12} />
-                    )}
-                    <span className="ellipsis small">{script ? script.label : 'Fast-forward to the next key play'}</span>
+              )}
+              {intro && status === 'live' && (
+                <Intro
+                  league={league}
+                  teams={[home, away]}
+                  fives={[view.sides[0].on, view.sides[1].on]}
+                  kits={colors}
+                  names={nameOf}
+                  context={context}
+                  speed={speed}
+                  paused={paused}
+                  onTip={tipOff}
+                />
+              )}
+              {atBreak && !over && !show && (
+                <div
+                  className="col center fade-in live-break"
+                  style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, background: 'rgba(6,8,12,0.62)' }}
+                >
+                  <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase', color: '#fff' }}>
+                    {view.q >= 4 ? (view.q === 4 ? 'Overtime' : `Overtime ${view.q - 3}`) : view.q === 2 ? 'Halftime' : `End of ${periodLabel(view.q)}`}
                   </div>
-                )}
-                {graphic && <LowerThird key={graphic.id} g={graphic} kit={flowKits[graphic.side]} />}
-              </div>
-            )}
+                  {view.q >= 4 && (
+                    <div className="bold" style={{ color: '#fff' }}>
+                      Tied at {view.sides[0].score} after {view.q === 4 ? 'regulation' : periodLabel(view.q)}
+                    </div>
+                  )}
+                  <div className="small" style={{ maxWidth: 280, color: '#d6dbe3' }}>
+                    The period report is with the coaching panels. Subs and adjustments you make now apply from the first possession of {periodLabel(view.q + 1)}.
+                  </div>
+                  <button className="btn primary sm" onClick={togglePause}>
+                    <Play size={16} fill="currentColor" /> Start {periodLabel(view.q + 1)}
+                  </button>
+                </div>
+              )}
+              {(show || (!over && !atBreak && (script || ffing || graphic))) && (
+                <div className="live-lower">
+                  {show && (
+                    <div className="live-show" role="status">
+                      {show.kind === 'reel' ? <Clapperboard size={13} /> : <RotateCcw size={13} />}
+                      <span>{show.kind === 'reel' ? `Highlights ${show.i + 1}/${show.scripts.length}` : 'Replay'}</span>
+                      {show.tags && <span className="live-show-tag">{show.tags[show.i]}</span>}
+                      <button
+                        className="live-show-x"
+                        aria-label={show.kind === 'reel' ? 'Stop the highlights' : 'Stop the replay'}
+                        onClick={() => {
+                          const kind = show.kind;
+                          setShow(null);
+                          if (kind === 'auto') nextRef.current();
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                  {(drawing || ffing) && (
+                    <div className="pill" aria-hidden="true" style={{ background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '100%' }}>
+                      {drawing ? (
+                        <span style={{ width: 8, height: 8, borderRadius: 4, flex: 'none', background: colors[drawing.off][0], border: `1px solid ${colors[drawing.off][1]}` }} />
+                      ) : (
+                        <FastForward size={12} />
+                      )}
+                      {drawing ? <Caption script={drawing} beat={beat} /> : <span className="ellipsis small">Fast-forward to the next key play</span>}
+                    </div>
+                  )}
+                  {graphic && !show && <LowerThird key={graphic.id} g={graphic} kit={flowKits[graphic.side]} />}
+                </div>
+              )}
+              {/* playback, over the court like a video's: pause, speed, key plays and skip */}
+              {status === 'live' && (
+                <div className="live-mini" role="group" aria-label="Playback">
+                  {canReplay && (
+                    <button className="live-mini-btn" onClick={replay} aria-label="Replay the last play">
+                      <RotateCcw size={16} />
+                    </button>
+                  )}
+                  <button className="live-mini-btn" onClick={togglePause} aria-label={atBreak ? `Start ${periodLabel(view.q + 1)}` : paused ? 'Resume' : 'Pause'}>
+                    {paused ? <Play size={16} fill="currentColor" /> : <Pause size={16} />}
+                  </button>
+                  <button
+                    className="live-mini-btn num"
+                    onClick={() => pickSpeed(LIVE_SPEEDS[(LIVE_SPEEDS.findIndex((x) => x.id === speed) + 1) % LIVE_SPEEDS.length].id)}
+                    aria-label={`Speed ${speed}×: tap for ${LIVE_SPEEDS[(LIVE_SPEEDS.findIndex((x) => x.id === speed) + 1) % LIVE_SPEEDS.length].label}`}
+                  >
+                    {speed}×
+                  </button>
+                  <button
+                    className={`live-mini-btn${keyPlays ? ' on' : ''}`}
+                    aria-pressed={keyPlays}
+                    aria-label="Key plays only"
+                    title="Only draw the key plays: crunch time, the ends of periods, runs, timeouts and anything your assistant flags"
+                    onClick={toggleKeyPlays}
+                  >
+                    <Zap size={16} />
+                  </button>
+                  <button className="live-mini-btn" onClick={() => setPanel('skip')} aria-label="Skip ahead">
+                    <FastForward size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* a game simulated elsewhere: the coached version never happened, so don't show its floor */}
           {status !== 'simmed' && <div className="live-strip-under">{strip}</div>}
 
-          {/* controls */}
-          {status === 'live' ? (
-            <div className="row live-ctl live-transport" style={{ gap: 6, flexWrap: 'wrap' }}>
-              <button className="btn sm" onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}>
-                {paused ? <Play size={16} /> : <Pause size={16} />}
-              </button>
-              <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
-                {LIVE_SPEEDS.map((s) => (
-                  <button
-                    key={s.id}
-                    className={speed === s.id ? 'on' : ''}
-                    aria-pressed={speed === s.id}
-                    onClick={() => {
-                      setSpeed(s.id);
-                      // the next game starts at the speed you left this one at (it's the Settings default too)
-                      if (league.settings.liveSpeed !== s.id) useStore.getState().mutate((l) => void (l.settings.liveSpeed = s.id));
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                className={`btn sm ${keyPlays ? 'primary' : ''}`}
-                aria-pressed={keyPlays}
-                title="Only draw the key plays: crunch time, the ends of periods, runs, timeouts and anything your assistant flags"
-                onClick={() => useStore.getState().mutate((l) => void (l.settings.liveKeyPlays = !keyPlays))}
-              >
-                Key plays
-              </button>
-              <button className="btn sm" style={{ marginLeft: 'auto' }} onClick={() => setPanel('skip')} aria-label="Skip ahead">
-                <FastForward size={16} /> Skip
-              </button>
-            </div>
-          ) : (
+          {status !== 'live' && (
             <Card accent>
               {status === 'final' ? (
                 <>
@@ -944,6 +1109,11 @@ export default function Live() {
               <button className="btn primary block" disabled={resultGid === null} onClick={() => resultGid !== null && nav(`/game/${resultGid}`, { replace: true })}>
                 <Activity size={16} /> {status === 'final' ? 'Game report' : 'Box score'}
               </button>
+              {status === 'final' && reelSize > 0 && (
+                <button className="btn block" style={{ marginTop: 8 }} disabled={!!show} onClick={playReel}>
+                  <Clapperboard size={16} /> {show?.kind === 'reel' ? 'Playing the highlights…' : `Watch the highlights (${reelSize})`}
+                </button>
+              )}
               <div className="row" style={{ marginTop: 8 }}>
                 <button className="btn grow" onClick={() => nav('/', { replace: true })}>
                   <HomeIcon size={16} /> Home
@@ -958,77 +1128,21 @@ export default function Live() {
           )}
           {status === 'final' && result && <GameRecap res={result} league={league} />}
         </div>
-        <div className="col" style={{ gap: 10 }}>
-          {status !== 'simmed' && <div className="live-strip-side">{strip}</div>}
-
-          {atBreak && !over && (
-            <PeriodReport
-              league={league}
-              view={view}
-              side={userSide}
-              teams={[home, away]}
-              tactics={tactics}
-              names={nameOf}
-              baselines={baselines}
-              colors={barColors}
-              apply={applyTactics}
-              onStart={togglePause}
-              oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
-              win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
-            />
-          )}
-
-          {alerts.slice(0, 2).map((s) => (
-            <div key={s.id} className="card tight fade-in" style={{ borderColor: `color-mix(in srgb, var(--${s.tone === 'info' ? 'info' : s.tone}) 40%, transparent)` }}>
-              <div className="row top">
-                <Zap size={16} style={{ color: `var(--${s.tone === 'info' ? 'info' : s.tone})`, flex: 'none', marginTop: 2 }} />
-                <div className="grow small">{s.text}</div>
-              </div>
-              <div className="row" style={{ justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
-                <button className="btn xs ghost" onClick={() => setDismissed((d) => [...d, s.id])}>
-                  Dismiss
-                </button>
-                {s.action && (
-                  <button className="btn xs primary" onClick={() => runAlert(s)}>
-                    {s.action.label}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {!over && pills.length > 0 && (
-            <div className="hscroll live-pills" role="group" aria-label="Quick adjustments">
-              {pills.map((p) => (
-                <button key={p.id} className={`chip ${p.on ? 'on' : ''}`} aria-pressed={p.id === 'reset' ? undefined : p.on} title={p.help} onClick={() => applyTactics(p.apply)}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          )}
-
+        <div className="col live-right" style={{ gap: 10 }}>
+          {/* the coaching buttons: a dock in place of the tab bar on a phone, the top of this column elsewhere */}
           {!over && (
-            <LateGameCard
-              side={userSide}
-              shown={ticker}
-              quarter={quarter}
-              logs={game.logs}
-              drawing={!!script}
-              nameOf={nameOf}
-              timeout={() => callTimeout()}
-              calls={calls}
-              onSets={playsOn ? () => setPanel('plays') : undefined}
-            />
-          )}
-          {!over && (
-            <div className={`grid4 live-ctl${playsOn ? ' five' : ''}`}>
+            <div className={`grid4 live-ctl live-dock${playsOn ? ' five' : ''}`} role="group" aria-label="Coaching">
               <button
                 className="btn sm"
-                disabled={me.timeouts <= 0 || atBreak || toPending}
+                // (nothing to stop before the opening tip)
+                disabled={me.timeouts <= 0 || atBreak || toPending || intro}
                 onClick={() => callTimeout()}
                 aria-label={toPending ? 'TO: timeout called, the court shows it next' : `TO: call a timeout, ${view.sides[userSide].timeouts} left`}
               >
                 <Timer size={16} /> TO
+                <span className="live-dock-n num" aria-hidden="true">
+                  {view.sides[userSide].timeouts}
+                </span>
               </button>
               <button
                 className="btn sm"
@@ -1057,7 +1171,70 @@ export default function Live() {
             </div>
           )}
 
-          {status !== 'simmed' && <Feed feed={feed} colors={colors} />}
+          {status !== 'simmed' && <div className="live-strip-side">{strip}</div>}
+
+          {alerts.slice(0, 2).map((s) => (
+            <div key={s.id} className="card tight fade-in" style={{ borderColor: `color-mix(in srgb, var(--${s.tone === 'info' ? 'info' : s.tone}) 40%, transparent)` }}>
+              <div className="row top">
+                <Zap size={16} style={{ color: `var(--${s.tone === 'info' ? 'info' : s.tone})`, flex: 'none', marginTop: 2 }} />
+                <div className="grow small">{s.text}</div>
+              </div>
+              <div className="row" style={{ justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+                <button className="btn xs ghost" onClick={() => setDismissed((d) => [...d, s.id])}>
+                  Dismiss
+                </button>
+                {s.action && (
+                  <button className="btn xs primary" onClick={() => runAlert(s)}>
+                    {s.action.label}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {!over && (
+            <LateGameCard
+              side={userSide}
+              shown={ticker}
+              quarter={quarter}
+              logs={game.logs}
+              drawing={!!script}
+              nameOf={nameOf}
+              timeout={() => callTimeout()}
+              calls={calls}
+              onSets={playsOn ? () => setPanel('plays') : undefined}
+            />
+          )}
+
+          {atBreak && !over && (
+            <PeriodReport
+              league={league}
+              view={view}
+              side={userSide}
+              teams={[home, away]}
+              tactics={tactics}
+              names={nameOf}
+              baselines={baselines}
+              colors={barColors}
+              apply={applyTactics}
+              onStart={togglePause}
+              oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
+              win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
+              keys={keys}
+            />
+          )}
+
+          {!over && pills.length > 0 && (
+            <div className="hscroll live-pills" role="group" aria-label="Quick adjustments">
+              {pills.map((p) => (
+                <button key={p.id} className={`chip ${p.on ? 'on' : ''}`} aria-pressed={p.id === 'reset' ? undefined : p.on} title={p.help} onClick={() => applyTactics(p.apply)}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {status !== 'simmed' && <Feed feed={feed} colors={colors} homeAbbrev={home.abbrev} awayAbbrev={away.abbrev} />}
         </div>
       </div>
 
@@ -1149,10 +1326,30 @@ export default function Live() {
           apply={applyTactics}
           calls={calls}
           onResume={resume}
+          keys={keys}
         />
+      </Sheet>
+      <Sheet open={panel === 'scores'} onClose={() => setPanel('none')} title="Around the league">
+        <ScoresSheet league={league} games={others} elapsed={view.elapsed} done={over} />
       </Sheet>
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">
         <div className="col" style={{ gap: 8 }}>
+          <div className="row between" style={{ gap: 10 }}>
+            <span className="small dim2">Speed</span>
+            <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
+              {LIVE_SPEEDS.map((s) => (
+                <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => pickSpeed(s.id)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Toggle
+            on={keyPlays}
+            onChange={toggleKeyPlays}
+            label="Key plays only"
+            help="Draws crunch time, the ends of periods, runs, timeouts and anything your assistant flags, and fast-forwards the rest."
+          />
           {skipTo.map((o) => (
             <button
               key={o.id}
@@ -1178,12 +1375,51 @@ export default function Live() {
   );
 }
 
+/** The court's running call of the possession it's drawing ('Holmgren screens for Mitchell'), from the frame it has reached. */
+function Caption({ script, beat }: { script: Script; beat: Beat }) {
+  const i = useSyncExternalStore(beat.subscribe, beat.get);
+  return <span className="small live-cap">{captionAt(script, i)}</span>;
+}
+
 /** The play-by-play only re-renders when new lines arrive, not on every animation frame. */
-const Feed = memo(function Feed({ feed, colors }: { feed: { i: number; e: PbpEntry }[]; colors: [[string, string], [string, string]] }) {
+const Feed = memo(function Feed({
+  feed,
+  colors,
+  homeAbbrev,
+  awayAbbrev,
+}: {
+  feed: { i: number; e: PbpEntry }[];
+  colors: [[string, string], [string, string]];
+  homeAbbrev: string;
+  awayAbbrev: string;
+}) {
+  // everything, the scoring plays (with the period and timeout lines that frame them), or one team's
+  const [only, setOnly] = useState<'all' | 'score' | 0 | 1>('all');
+  const shown = feed.filter(({ e }) =>
+    only === 'all' ? true : only === 'score' ? e.kind === 'make' || e.kind === 'ft' || e.kind === 'period' : e.t === only || e.kind === 'period',
+  );
+  const opts: { id: typeof only; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'score', label: 'Scoring' },
+    { id: 1, label: awayAbbrev },
+    { id: 0, label: homeAbbrev },
+  ];
   return (
-    <Card title="Play-by-play">
+    <Card
+      title="Play-by-play"
+      right={
+        <div className="seg" role="group" aria-label="Show" style={{ flex: 'none' }}>
+          {opts.map((o) => (
+            <button key={String(o.id)} className={only === o.id ? 'on' : ''} aria-pressed={only === o.id} onClick={() => setOnly(o.id)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      }
+    >
       <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-        {feed.map(({ i, e }) => (
+        {shown.length === 0 && <div className="small dim">Nothing yet.</div>}
+        {shown.map(({ i, e }) => (
           <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
             <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
               {periodLabel(e.q)} {fmtClock(e.clock)}

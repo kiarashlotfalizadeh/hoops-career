@@ -1,7 +1,7 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
-import type { PlayCall } from './sim/log';
+import type { PlayCall, PossLog } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 export const POSITIONS: Pos[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -876,6 +876,28 @@ export interface GameResult {
   att?: number;
   /** The user's regular-season games: where his team stood in its conference going in and coming out. */
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
+  /** The user's games: the keys to the game set before it (see analysis/keys.ts) and how each went. */
+  keys?: KeyGrade[];
+}
+
+/** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */
+export type KeyStat = 'orb' | 'tov' | 'tpm' | 'fta' | 'fastBreak' | 'paint' | 'ast' | 'pts';
+
+/** One key to the game as it went (GameResult.keys). */
+export interface KeyGrade {
+  id: string;
+  /** "Keep them off the glass". */
+  title: string;
+  /** "Hold BOS to 10 offensive rebounds or fewer". */
+  goal: string;
+  dir: 'max' | 'min';
+  target: number;
+  /** The number on the night (null: the player it was about didn't play). */
+  value: number | null;
+  /** Null when it didn't apply. */
+  met: boolean | null;
+  /** The number is a percentage (a share of the misses on the offensive glass). */
+  pct?: true;
 }
 
 /** One set's night (GameResult.sets): how often a side ran it, the points those possessions scored, and the run the defense was on it by. */
@@ -1113,6 +1135,12 @@ export interface Settings {
   draftPause?: boolean;
   /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */
   liveWinProb?: boolean;
+  /** Live games replay a shot at the buzzer and the one that wins the game, once, as it happens (default on). */
+  liveReplays?: boolean;
+  /** Live games open with the starting lineups on the court before the tip (default on). */
+  liveIntro?: boolean;
+  /** Live games show the night's other scores as they go (default on). */
+  liveScores?: boolean;
 }
 
 export interface League {
@@ -1185,6 +1213,11 @@ export interface League {
   nextTxnId?: number;
   /** The user's live game in progress, journaled as it's played so it survives the app being closed. */
   live?: LiveJournal;
+  /**
+   * The highlights of the user's latest live game (`gid`): the possessions the reel shows, with the
+   * score each started from, kept so its game report can play them; the next live game replaces them.
+   */
+  reel?: { gid: number; plays: { log: PossLog; before: [number, number] }[] };
   /**
    * Game-time decisions for the user's next game (`gid`): questionable players he cleared to play
    * (see isQuestionable). Cleared when that game is played or its day has passed.

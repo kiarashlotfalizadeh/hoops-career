@@ -198,6 +198,24 @@ export default function Settings() {
             label="Win probability in live games"
             help="Your chance to win as the game stands (the score, the time left, who has the ball and the pre-game projection) on the scorebug, in the box score's Flow tab and at the breaks. Game reports always show it."
           />
+          <Toggle
+            on={st.liveIntro !== false}
+            onChange={(v) => mutate((l) => (l.settings.liveIntro = v))}
+            label="Starting lineups at tip-off"
+            help="A live game opens with both starting fives on the court: numbers, positions and their season lines. Tap the court to skip it."
+          />
+          <Toggle
+            on={st.liveReplays !== false}
+            onChange={(v) => mutate((l) => (l.settings.liveReplays = v))}
+            label="Instant replays"
+            help="A shot at the buzzer, and the one that wins the game, plays again once in slow motion. Any play can be replayed by hand from the pause button."
+          />
+          <Toggle
+            on={st.liveScores !== false}
+            onChange={(v) => mutate((l) => (l.settings.liveScores = v))}
+            label="Scores around the league"
+            help="The night's other games tick along with yours under the scorebug, the ones that matter to your standing first."
+          />
           <div className="divider" />
           <Toggle
             on={st.injuries}

@@ -15,6 +15,7 @@ import { hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneStat } from '../analysis/milestones';
+import { gameKeys, gradeKey } from '../analysis/keys';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -320,6 +321,11 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   // (taken while this game still counts as unplayed: a stored result isn't written again once saved)
   const stakesTid = g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid) ? league.userTid : undefined;
   const before = stakesTid !== undefined ? standingLine(league, stakesTid) : undefined;
+  // and how the keys to the game went (set from the games before tonight, as the preview showed them)
+  if (g.type !== 'allstar' && (g.home === league.userTid || g.away === league.userTid)) {
+    const keys = gameKeys(league, g);
+    if (keys.length) res.keys = keys.map((k) => gradeKey(k, res, g.home === league.userTid ? 0 : 1));
+  }
   g.played = true;
   // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
   consumePlans(league, g);

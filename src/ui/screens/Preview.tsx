@@ -2,6 +2,8 @@
 // projection, who's out and the game-time decisions on your questionable players, the starting
 // fives, how they play, the matchups on their best players and your game plan for them), with Tip
 // off, Quick sim and the Lab one tap away.
+import { gameKeys } from '../../core/analysis/keys';
+import { KeysList } from '../components/GameKeys';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Beaker, ChevronRight, Crown, Eye, FastForward, Flame, History, Medal, Plus, Repeat, Star, TrendingUp, X, type LucideIcon } from 'lucide-react';
@@ -156,6 +158,8 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
       </Card>
 
       <StorylinesCard league={league} game={game} pv={pv} />
+
+      {pv.userGame && <KeysCard league={league} game={game} />}
 
       {pv.userGame && <ProjectionCard league={league} game={game} pv={pv} />}
 
@@ -375,6 +379,28 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
       <button className="btn sm block" style={{ marginTop: 12 }} disabled={busy} onClick={() => void simulate()}>
         <Beaker size={15} /> {shown ? 'Simulate again' : `Simulate ${GAMES} games`}
       </button>
+    </Card>
+  );
+}
+
+/** Tonight's keys to the game (see keys.ts): tracked live at the breaks, graded with the result. */
+function KeysCard({ league, game }: { league: League; game: ScheduledGame }) {
+  const keys = useLeagueMemo(() => gameKeys(league, game), [league, game]);
+  if (!keys.length) return null;
+  return (
+    <Card
+      title="Keys to the game"
+      right={
+        <Help title="Keys to the game">
+          <p>
+            Three numbers to hit tonight, from what both teams have done this season: what they do best, what their defense gives up or takes away, and the player they run their
+            offense through. Each target is about where tonight&apos;s number lands if both teams play to form, so hitting one is a real edge.
+          </p>
+          <p>The live game tracks them at every break and in the huddle, and the recap grades them.</p>
+        </Help>
+      }
+    >
+      <KeysList keys={keys} />
     </Card>
   );
 }
