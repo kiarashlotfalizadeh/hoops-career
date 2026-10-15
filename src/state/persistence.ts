@@ -352,8 +352,58 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
   }
+  migrateContracts(x);
   x.version = SAVE_VERSION;
   return x;
+}
+
+const TALK_KINDS = new Set(['fa', 'resign', 'extend']);
+const TALK_PERIODS = new Set(['resign', 'fa', 'season']);
+const OPTIONS = new Set(['player', 'team']);
+
+/**
+ * Contract talks, 10-day contracts, the stretch provision and the exceptions (all optional): a
+ * damaged piece is dropped. Talks need a real team, season, kind and period, patience 0-5, a
+ * counter with a positive salary for 1-5 years, and lost interest and a firm ask in range; a 10-day
+ * contract is only kept on a rostered player in the regular season (without it, his one prorated
+ * salary runs to the season's end like any deal); the 10-day count names a real team and one or two
+ * contracts; a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
+ * or an exception are whole numbers; and an inbox message's 10-day link is a player id.
+ */
+function migrateContracts(x: League) {
+  const teamOk = (v: unknown) => int(v) && !!x.teams[v];
+  for (const p of Object.values(x.players)) {
+    const t = p.talks as unknown;
+    if (t !== undefined) {
+      const c = obj(t) ? t.counter : undefined;
+      const ok =
+        obj(t) &&
+        teamOk(t.tid) &&
+        int(t.season) &&
+        TALK_KINDS.has(t.kind as string) &&
+        TALK_PERIODS.has(t.period as string) &&
+        int(t.patience) &&
+        t.patience >= 0 &&
+        t.patience <= 5 &&
+        (c === undefined ||
+          (obj(c) && num(c.amount) && (c.amount as number) > 0 && int(c.years) && c.years >= 1 && c.years <= 5 && (c.option === undefined || OPTIONS.has(c.option as string)))) &&
+        (t.lowballs === undefined || (int(t.lowballs) && t.lowballs >= 0)) &&
+        (t.sour === undefined || (num(t.sour) && (t.sour as number) >= 0 && (t.sour as number) <= 0.1)) &&
+        (t.closed === undefined || (obj(t.closed) && int(t.closed.season) && int(t.closed.day))) &&
+        (t.firm === undefined || (num(t.firm) && (t.firm as number) >= 1 && (t.firm as number) <= 1.2));
+      if (!ok) delete p.talks;
+    }
+    const n = p.tenDays as unknown;
+    if (n !== undefined && !(obj(n) && teamOk(n.tid) && int(n.season) && int(n.n) && n.n >= 1 && n.n <= 2)) delete p.tenDays;
+    const td = p.contract?.tenDay as unknown;
+    if (td !== undefined && !(obj(td) && int(td.until) && (td.hardship === undefined || td.hardship === true) && p.tid >= 0 && x.phase === 'regular')) delete p.contract.tenDay;
+    if (p.waivers && Array.isArray(p.waivers.dead)) for (const d of p.waivers.dead) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
+  }
+  for (const t of x.teams) {
+    for (const d of Array.isArray(t.deadMoney) ? t.deadMoney : []) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
+    for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
+  }
+  for (const m of x.inbox) if (m.tenDay !== undefined && !int(m.tenDay)) delete m.tenDay;
 }
 
 const PROMISES = new Set(['role', 'trade', 'patience']);
@@ -473,7 +523,7 @@ function liveIntact(l: League, j: unknown): boolean {
   return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
 }
 
-const SHEET_ROUTES = new Set(['min', 'space', 'mle']);
+const SHEET_ROUTES = new Set(['min', 'space', 'mle', 'room', 'bae']);
 
 /**
  * A restricted free agent's rights in shape (see src/core/league/rfa.ts), or dropped: a qualifying

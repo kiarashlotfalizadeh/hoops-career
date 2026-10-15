@@ -12,6 +12,7 @@ import { inAppPath } from '../nav';
 import { continueDraft } from '../../core/league/season';
 import { sheetDecisionBlocked, userDecideSheet } from '../../core/league/rfa';
 import { liveInProgress } from '../../state/live';
+import { TenDayMessage } from '../office/TenDayPanel';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
   Owner: Crown,
@@ -133,6 +134,7 @@ export default function Inbox() {
                       ))}
                       {m.proposal !== undefined && <OfferStatus league={league} id={m.proposal} />}
                       {m.sheet !== undefined && <SheetStatus league={league} pid={m.sheet} />}
+                      {m.tenDay !== undefined && <TenDayMessage league={league} pid={m.tenDay} />}
                       <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
                         {m.proposal !== undefined ? (
                           <OfferButtons league={league} id={m.proposal} onReview={() => nav(`/trade?proposal=${m.proposal}`)} />

@@ -68,8 +68,9 @@ export function gameFinances(league: League, team: Team, home: boolean, playoffs
   if (!playoffs) revenue += (NATIONAL_REVENUE * scale) / 82;
   let expenses = 0;
   if (!playoffs) {
+    // (a 10-day contract is paid in full when it's signed: see tenDay.ts)
     const pay =
-      teamPlayers(league, team.tid).reduce((a, p) => a + salaryFor(p, league.season), 0) +
+      teamPlayers(league, team.tid).reduce((a, p) => a + (p.contract.tenDay ? 0 : salaryFor(p, league.season)), 0) +
       team.deadMoney.filter((d) => d.season === league.season).reduce((a, d) => a + d.amount, 0);
     expenses += pay / 82;
     expenses += (budgetCostPerSeason(league, team.budget.coaching) + budgetCostPerSeason(league, team.budget.health) + budgetCostPerSeason(league, team.budget.facilities)) / 82;

@@ -38,9 +38,11 @@ const GROUP: Record<TxnKind, Group> = {
   qualify: 'other',
   offerSheet: 'signing',
   match: 'signing',
+  // a 10-day contract is a signing; one that ended, a departure
+  tenDay: 'signing',
 };
-/** A move's filter group: a qualifying offer he took is a signing. */
-const groupOf = (t: Txn): Group => (t.kind === 'qualify' && t.note === 'accepted' ? 'signing' : GROUP[t.kind]);
+/** A move's filter group: a qualifying offer he took is a signing, a 10-day contract that ended a release. */
+const groupOf = (t: Txn): Group => (t.kind === 'qualify' && t.note === 'accepted' ? 'signing' : t.kind === 'tenDay' && t.note === 'ended' ? 'release' : GROUP[t.kind]);
 const FILTERS: Filter[] = ['all', 'trade', 'signing', 'release', 'other'];
 const FILTER_LABEL: Record<Filter, string> = { all: 'All', trade: 'Trades', signing: 'Signings', release: 'Releases', other: 'Other' };
 /** The news log's icon and colour for each kind of move. */

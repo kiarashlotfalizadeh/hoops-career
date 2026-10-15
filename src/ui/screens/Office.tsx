@@ -30,19 +30,23 @@ import {
   twoWayRoster,
 } from '../../core/league/helpers';
 import {
-  MLE_PCT,
+  EXCEPTIONS,
+  EXCEPTION_ORDER,
   askingContract,
   buyoutTerms,
   capSpace,
   extensionBlockedReason,
-  mleRoom,
+  exceptionAmount,
+  exceptionUsedReason,
   nonGuaranteed,
   releaseBlockedReason,
   releaseDeadMoney,
   rookieScaleDeal,
+  stretchDeadMoney,
   valueScore,
 } from '../../core/league/contracts';
-import { capHolds, expiringPlayers, offerRoute, signingClosedReason } from '../../core/league/freeAgency';
+import { capHolds, expiringPlayers, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
+import { HARDSHIP_OUT } from '../../core/league/tenDay';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
@@ -75,6 +79,7 @@ import { overallPick } from '../league/shared';
 import { UntouchableToggle } from '../office/Untouchable';
 import { MeetingPanel } from '../office/PlayerMeeting';
 import { SheetDecision } from '../office/RfaPanel';
+import { TenDayActions, tenDayLabel, tenDayLine } from '../office/TenDayPanel';
 import { pendingSheets, qualifyBlockedReason, restrictedFreeAgents } from '../../core/league/rfa';
 import { rosterNames } from '../stats';
 import { useFlowRunner } from '../useFlow';
@@ -106,7 +111,7 @@ export default function Office() {
   const signedN = isOffseason(league) ? roster.filter((p) => contractExp(p.contract) >= s0).length : roster.length;
   const expiringN = roster.length - signedN;
   const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
-  const mle = mleRoom(league, tid, s0);
+  const exc = bestException(league, s0);
   const inSeasonNow = rosterMaxNow(league) === CAP.rosterMax;
   const [sel, setSel] = useState<number | null>(null);
   // the player whose extension is being negotiated (from his contract sheet)
@@ -134,7 +139,7 @@ export default function Office() {
           ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ${faCount} left`
           : signingClosed
             ? `${faCount} on the market · signings reopen in free agency`
-            : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : mle > 0 ? `${fmtM(mle)} mid-level` : 'min deals only'}`,
+            : `${faCount} available · ${space > 0 ? `${fmtM(space)} space` : exc ? `${fmtM(exc.room)} ${EXCEPTIONS[exc.k].short.toLowerCase()}` : 'min deals only'}`,
       color: 'var(--good)',
       hot: league.phase === 'freeAgency',
       muted: signingClosed,
@@ -189,8 +194,26 @@ export default function Office() {
               <b>Soft cap ({fmtM(cap.salaryCap)}).</b> You can sign free agents with cap space, or for the minimum (up to {fmtM(cap.vetMin, 2)}) when you're over it.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Mid-level exception.</b> Once a season, a team that stays under the tax line can sign one free agent for up to {fmtM(cap.salaryCap * MLE_PCT)} (
-              {Math.round(MLE_PCT * 1000) / 10}% of the cap), even over the cap. For the rest of that season, trades can't take its payroll past the tax line.
+              <b>Mid-level exception.</b> Once a season, a team that stays under the tax line can sign one free agent for up to {fmtM(exceptionAmount(league, 'mle', s0))} (
+              {Math.round(EXCEPTIONS.mle.pct * 1000) / 10}% of the cap, {EXCEPTIONS.mle.years} years), even over the cap. For the rest of that season, trades can't take its payroll
+              past the tax line.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Room exception.</b> A team that signs a free agent with cap space loses the mid-level for that season and gets this instead: one signing up to{' '}
+              {fmtM(exceptionAmount(league, 'room', s0))} ({Math.round(EXCEPTIONS.room.pct * 1000) / 10}%), {EXCEPTIONS.room.years} years.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Bi-annual exception.</b> One signing up to {fmtM(exceptionAmount(league, 'bae', s0))} ({Math.round(EXCEPTIONS.bae.pct * 1000) / 10}%), {EXCEPTIONS.bae.years}{' '}
+              years, for a team that stays under the tax line after it: not two seasons running, and not in a season the team uses the room exception. Like the mid-level, it keeps
+              trades from taking the payroll past the tax line that season.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Stretch provision.</b> Releasing a player, you can spread his dead money evenly over twice the seasons left plus one: in season this season's salary is paid as
+              usual and the rest is stretched; in the summer all of it is. Less dead money a season, for longer. A waiver claim still wipes it.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>10-day contracts.</b> From January 5 to the end of the regular season: the minimum prorated for 10 days, ending by itself with no dead money, two at most per
+              player and team. With {HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows 10-day players beyond {CAP.rosterMax}.
             </p>
             <p style={{ margin: 0 }}>
               <b>Bird rights.</b> Your own expiring players can be re-signed for any amount during the re-sign period, even over the cap. Until free agency opens (or you renounce
@@ -245,8 +268,8 @@ export default function Office() {
                 ? `After ${fmtM(holds)} in cap holds`
                 : space > 0
                   ? 'Room to sign free agents'
-                  : mle > 0
-                    ? `Min deals or the ${fmtM(mle)} mid-level`
+                  : exc
+                    ? `Min deals or the ${fmtM(exc.room)} ${EXCEPTIONS[exc.k].short.toLowerCase()}`
                     : `Min deals only (${fmtM(cap.vetMin, 2)})`
             }
           />
@@ -279,6 +302,7 @@ export default function Office() {
           />
           <Kpi k="Cash" v={fmtM(team.cash)} color={team.cash < 0 ? 'var(--bad)' : undefined} sub={`${ts.won}-${ts.lost} · ${seasonLabel(league.season)}`} />
         </div>
+        <ExceptionsBlock league={league} season={s0} />
       </Card>
 
       <div className="fo-tiles">
@@ -338,6 +362,47 @@ export default function Office() {
   );
 }
 
+/** The largest exception open to the user now (net of his pending offers), or null. */
+const bestException = (league: League, season: number) =>
+  EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, season) }))
+    .filter((x) => x.room > 0)
+    .sort((a, b) => b.room - a.room)[0] ?? null;
+
+/** The cap sheet's exceptions: what each would pay one free agent now (net of a pending offer that leans on it), or why not. */
+function ExceptionsBlock({ league, season }: { league: League; season: number }) {
+  const rows = EXCEPTION_ORDER.slice()
+    .reverse()
+    .map((k) => {
+      const room = userExceptionRoom(league, k, season);
+      const bid = league.faBids?.find((b) => b.route === k);
+      const why =
+        exceptionUsedReason(league, league.userTid, k, season) ??
+        (bid ? `Held for your pending offer to ${playerName(league.players[bid.pid])}.` : room <= 0 ? 'Only for a team under the tax line.' : null);
+      return { k, room, why, capped: room > 0 && room < exceptionAmount(league, k, season) };
+    });
+  return (
+    <div className="col" style={{ gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+      <div className="tiny dim upper bold">Exceptions over the cap</div>
+      {rows.map((r) => (
+        <div key={r.k} className="row between small" style={{ gap: 10, alignItems: 'flex-start' }}>
+          <span className="dim2" style={{ flex: 'none' }}>
+            {EXCEPTIONS[r.k].short}
+          </span>
+          {r.why ? (
+            <span className="tiny dim" style={{ textAlign: 'right', minWidth: 0 }}>
+              {r.why}
+            </span>
+          ) : (
+            <span className="num bold good" style={{ textAlign: 'right' }}>
+              {fmtM(r.room)} · {EXCEPTIONS[r.k].years} yrs{r.capped ? <span className="tiny dim"> (to the tax line)</span> : null}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ phase spotlight
 
 function Spotlight({ league }: { league: League }) {
@@ -348,10 +413,10 @@ function Spotlight({ league }: { league: League }) {
   const s0 = capSeason(league);
   // (net of what the summer market holds: your restricted free agents' cap holds and your offer sheets)
   const space = capSpace(league, tid, s0);
-  const mle = mleRoom(league, tid, s0);
+  const exc = bestException(league, s0);
   const roster = standardRoster(league, tid).length;
   const full = roster >= rosterMaxNow(league);
-  // only players the team can actually pay: cap space, the mid-level or the minimum (your own
+  // only players the team can actually pay: cap space, an exception or the minimum (your own
   // restricted free agents have their own card, and one who signed an offer sheet waits on it)
   const topFAs = useLeagueMemo(
     () =>
@@ -442,7 +507,7 @@ function Spotlight({ league }: { league: League }) {
         <Card accent className="fo-hero">
           <div className="row between">
             <div className="fo-eyebrow">{fa ? `Free agency · Day ${faDayNumber(league)} of ${FA_DAYS}` : 'Preseason'}</div>
-            <span className="tag">{space > 0 ? `${fmtM(space)} space` : mle > 0 ? `Mid-level ${fmtM(mle)}` : 'Min deals only'}</span>
+            <span className="tag">{space > 0 ? `${fmtM(space)} space` : exc ? `${EXCEPTIONS[exc.k].short} ${fmtM(exc.room)}` : 'Min deals only'}</span>
           </div>
           {full && (
             <div className="small bad" style={{ marginTop: 6 }}>
@@ -479,15 +544,13 @@ function Spotlight({ league }: { league: League }) {
                   Cut down to {CAP.rosterMax} players before opening night ({roster} now).
                 </span>
               ) : (
-                `Roster set at ${roster}.${topFAs.length ? ' Best players you can still afford:' : ' No free agent left fits your cap space, mid-level or the minimum.'}`
+                `Roster set at ${roster}.${topFAs.length ? ' Best players you can still afford:' : ' No free agent left fits your cap space, an exception or the minimum.'}`
               )}
             </div>
           )}
           {fa && space <= 0 && (
             <div className="small dim2" style={{ marginTop: 6 }}>
-              {mle > 0
-                ? 'Over the cap: the best players you can sign for the minimum or with your mid-level exception.'
-                : 'Over the cap: the best players who would sign for the minimum.'}
+              {exc ? 'Over the cap: the best players you can sign for the minimum or with an exception.' : 'Over the cap: the best players who would sign for the minimum.'}
             </div>
           )}
           {topFAs.length > 0 && (
@@ -526,7 +589,7 @@ function Spotlight({ league }: { league: League }) {
             <div className="fo-eyebrow">Trade deadline passed</div>
             <div className="small dim2" style={{ marginTop: 6 }}>
               Rosters are locked to trades until the offseason. You can still sign free agents: with cap space,{' '}
-              {mle > 0 ? `with your mid-level exception (up to ${fmtM(mle)}), ` : ''}or on minimum deals ({fmtM(CAP_FOR(league).vetMin, 2)}).
+              {exc ? `with your ${EXCEPTIONS[exc.k].name} (up to ${fmtM(exc.room)}), ` : ''}or on minimum deals ({fmtM(CAP_FOR(league).vetMin, 2)}).
             </div>
           </Card>
         );
@@ -593,11 +656,14 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
   const seasons = [s0, s0 + 1, s0 + 2, s0 + 3];
   const roster = teamPlayers(league, tid).sort((a, b) => salaryFor(b, s0) - salaryFor(a, s0) || contractExp(b.contract) - contractExp(a.contract) || b.ovr - a.ovr);
   const nameOf = rosterNames(roster, { initial: true });
-  const dead = new Map<number, { name: string; by: Record<number, number> }>();
+  // (a stretched release can run past the table's four seasons: its row says through when)
+  const dead = new Map<number, { name: string; by: Record<number, number>; stretched: boolean; last: number }>();
   for (const d of team.deadMoney) {
-    if (d.season < s0 || d.season > s0 + 3) continue;
-    const e = dead.get(d.pid) ?? { name: d.name, by: {} };
+    if (d.season < s0) continue;
+    const e = dead.get(d.pid) ?? { name: d.name, by: {}, stretched: false, last: d.season };
     e.by[d.season] = (e.by[d.season] ?? 0) + d.amount;
+    e.stretched ||= !!d.stretched;
+    e.last = Math.max(e.last, d.season);
     dead.set(d.pid, e);
   }
   const totals = seasons.map((s) => payroll(league, tid, s));
@@ -618,7 +684,12 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
             <p style={{ margin: 0 }}>
               <span className="tag">2W</span> two-way deals are paid outside the cap and the tax, so they're left out of the totals.
             </p>
-            <p style={{ margin: 0 }}>Dead money is salary still owed to players you released. It counts against the cap until it runs out.</p>
+            <p style={{ margin: 0 }}>
+              Dead money is salary still owed to players you released. It counts against the cap until it runs out; a stretched release spreads it over more seasons.
+            </p>
+            <p style={{ margin: 0 }}>
+              <span className="tag warn">10D</span> a 10-day contract: its prorated pay counts this season, and it ends by itself.
+            </p>
             {holds > 0 && (
               <p style={{ margin: 0 }}>
                 Cap holds: until free agency opens, your expiring players hold cap room at about their asking price; through free agency, your restricted free agents and your
@@ -665,6 +736,11 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                             2W
                           </span>
                         )}
+                        {p.contract.tenDay && (
+                          <span className="tag warn" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
+                            10D
+                          </span>
+                        )}
                         {p.injury && (
                           <span className="tag bad" style={{ height: 16, padding: '0 4px', fontSize: 10 }}>
                             INJ
@@ -707,7 +783,7 @@ function ContractsTable({ league, onPick }: { league: League; onPick: (pid: numb
                 <td className="l sticky">
                   <div className="fo-ct-name">
                     <div className="fo-name small">{d.name}</div>
-                    <div className="tiny">dead money</div>
+                    <div className="tiny">{d.stretched ? `dead money · stretched thru ${shortSeason(d.last)}` : 'dead money'}</div>
                   </div>
                 </td>
                 <td />
@@ -779,6 +855,9 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
   const remaining = releaseDeadMoney(league, p);
   const camp = nonGuaranteed(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
+  // the stretch provision's version of the same dead money (see ReleaseConfirm)
+  const stretch = stretchDeadMoney(league, remaining);
+  const stretched = stretch?.filter((d) => d.stretched) ?? [];
   const blocked = releaseBlockedReason(league, p);
   // a veteran with guaranteed money left can be bought out instead (the Release confirmation offers it)
   const buyout = buyoutTerms(league, p);
@@ -842,7 +921,14 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
         )}
         {p.mood.tradeRequest && <span className="tag bad">Wants a trade</span>}
         {extStart !== null && <span className="tag good">Extended through {seasonLabel(exp)}</span>}
+        {tenDayLabel(league, p) && <span className="tag warn">{tenDayLabel(league, p)}</span>}
       </div>
+      {p.contract.tenDay && (
+        <div className="col" style={{ gap: 8 }}>
+          <div className="small dim2">{tenDayLine(league, p)}</div>
+          <TenDayActions league={league} p={p} />
+        </div>
+      )}
       {/* he asked out or he's unhappy: what you promised him, or a meeting */}
       {(p.promise || wantsMeeting(p)) && (
         <div className="row" style={{ gap: 8 }}>
@@ -904,12 +990,14 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
         !expiringNow && (
           <div className="tiny dim">
             {owed > 0
-              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}${league.phase === 'regular' ? ', unless a team claims him off waivers' : ''}.${buyout ? ` A buyout would cut it to ${fmtM(buyout.dead)}.` : ''}`
+              ? `Releasing him leaves ${fmtM(owed)} in dead money through ${seasonLabel(remaining[remaining.length - 1].season)}${league.phase === 'regular' ? ', unless a team claims him off waivers' : ''}.${stretched.length ? ` Stretched, ${fmtM(stretched[0].amount)} a season${stretched.length < (stretch?.length ?? 0) ? ' after this one' : ''} through ${seasonLabel(stretched[stretched.length - 1].season)}.` : ''}${buyout ? ` A buyout would cut it to ${fmtM(buyout.dead)}.` : ''}`
               : p.contract.twoWay
                 ? 'Releasing him costs nothing: two-way pay sits outside the cap.'
-                : camp
-                  ? "Releasing him costs nothing: his minimum deal isn't guaranteed until opening night."
-                  : 'Releasing him leaves no dead money.'}
+                : p.contract.tenDay
+                  ? 'Releasing him leaves no dead money: his 10-day pay was paid when he signed.'
+                  : camp
+                    ? "Releasing him costs nothing: his minimum deal isn't guaranteed until opening night."
+                    : 'Releasing him leaves no dead money.'}
           </div>
         )
       )}

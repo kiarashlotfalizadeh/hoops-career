@@ -23,11 +23,11 @@ import {
   signPlayer,
   teamAppeal,
   tradeValue,
-  userExtend,
   valueScore,
   willExtend,
   type Strategy,
 } from '../league/contracts';
+import { userExtend } from '../league/negotiation';
 import { aiExtensions, capHolds, expiringPlayers, releaseExpiring, renouncePlayer, signedThisSummer } from '../league/freeAgency';
 import { executeTrade, validateTrade } from '../league/trades';
 import { contractExp, extensionStart, salaryFor } from '../playerGen';
@@ -195,7 +195,8 @@ describe('an extension on the books', () => {
     const p = finalYear(l, standardRoster(l, U)[0], 79, 27, 12_000);
     const before = payroll(l, U, l.season + 1);
     const amount = agreed(l, p, 3);
-    expect(userExtend(l, p.pid, amount - 50, 3).ok).toBe(false);
+    // under any walk-away price (12% at most) he counters (see negotiation.test.ts)
+    expect(userExtend(l, p.pid, Math.floor((amount * 0.86) / 50) * 50, 3).ok).toBe(false);
     expect(p.contract.next).toBeUndefined();
     expect(userExtend(l, p.pid, amount, 3).ok).toBe(true);
     expect(extensionStart(p.contract)).toBe(l.season + 1);

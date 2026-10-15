@@ -94,6 +94,17 @@ describe('meeting a player who wants out', () => {
     expect(meetBlockedReason(l, fine)).toBeNull();
   });
 
+  it('after the season, a player whose deal is up is re-signed or let go: no meeting can hold him', () => {
+    const { l, p } = setup();
+    l.phase = 'resign';
+    p.contract = { start: l.season - 1, salaries: [10_000, 10_000] };
+    expect(meetBlockedReason(l, p)).toMatch(/contract is up: a promise now would keep him from re-signing/);
+    expect(meetPlayer(l, p.pid, 'role').ok).toBe(false);
+    // signed for next season, he can still be met
+    p.contract = { start: l.season - 1, salaries: [10_000, 10_000, 10_000] };
+    expect(meetBlockedReason(l, p)).toBeNull();
+  });
+
   it("a bigger role, kept: he holds off while you play him what he expects over his next 15 games (games he misses hurt or rested don't count)", () => {
     const { l, p } = setup();
     const before = p.mood.score;

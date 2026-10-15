@@ -7,9 +7,9 @@
 import type { League, MoodLevel, Player, PlayerPromise } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { archetype } from '../ratings';
-import { addInbox, addNews, curTeamSeason, fmtDate, playerName, seasonTotals, teamPlayers, winPct } from './helpers';
+import { addInbox, addNews, contractSeason, curTeamSeason, fmtDate, playerName, seasonTotals, teamPlayers, winPct } from './helpers';
 import { marketSalary } from './contracts';
-import { playerAge, salaryFor } from '../playerGen';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { sustainableMinutes } from '../ai/coachAI';
 
 export function moodLevel(score: number): MoodLevel {
@@ -168,6 +168,10 @@ export function meetBlockedReason(league: League, p: Player): string | null {
   if (league.fired || p.tid !== league.userTid) return 'Only your own players meet with you.';
   if (p.promise) return promiseStatus(league, p);
   if (!wantsMeeting(p)) return `${p.lastName} has nothing to raise with you.`;
+  // after the season, a player whose deal is up is re-signed or let go: a promise only holds a
+  // request, and he won't re-sign while one stands
+  if (contractSeason(league) > league.season && contractExp(p.contract) < contractSeason(league))
+    return `${p.lastName}'s contract is up: a promise now would keep him from re-signing. Re-sign him if he will, or let him go.`;
   if (p.meeting?.broken === league.season) return `You broke your word to ${p.lastName} this season: he won't take another promise until next season.`;
   const m = p.meeting;
   if (m && m.season === league.season && league.day - m.day < MEET_DAYS)

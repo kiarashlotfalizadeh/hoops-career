@@ -13,6 +13,7 @@ import {
   pendingTeamOptions,
   rookieScaleDeal,
   teamOptionWorth,
+  wantsOut,
 } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
 import { startFreeAgency } from '../../core/league/season';
@@ -24,6 +25,7 @@ import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta
 import { ContractSheet } from '../office/ContractSheet';
 import { QualifyRow } from '../office/RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE, restrictedFreeAgents } from '../../core/league/rfa';
+import { FIRM_BUMP, talkAsk, talkState } from '../../core/league/negotiation';
 
 export default function Resign() {
   const league = useLeague();
@@ -71,7 +73,8 @@ function ResignPhase() {
   const [renounce, setRenounce] = useState<Player | null>(null);
   const [decline, setDecline] = useState<Player | null>(null);
   const expiring = useLeagueMemo(() => expiringPlayers(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
-  const asks = useMemo(() => new Map(expiring.map((p) => [p.pid, askingContract(league, p, tid)])), [expiring, league, tid]);
+  // (his ask in your talks: up after they broke down)
+  const asks = useMemo(() => new Map(expiring.map((p) => [p.pid, talkAsk(league, p, 'resign')])), [expiring, league]);
   const committed = payroll(league, tid, next);
   // the players who hold cap room until free agency: two-way pay sits outside the cap, and a player who wants out won't re-sign
   const holders = capHolds(league, tid);
@@ -127,7 +130,12 @@ function ResignPhase() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs
-              on the spot.
+              on the spot. He'd take a little less, how much he keeps to himself; below that he counters, and he only hears so many offers. Run out his patience and his ask goes up{' '}
+              {Math.round((FIRM_BUMP - 1) * 100)}%, and he takes nothing less for the rest of the re-sign period.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Options.</b> On a deal of two years or more you can add an option on the last season: a player option (his call) takes about 4% off his price, a team option
+              (yours) adds about 6%.
             </p>
             <p style={{ margin: 0 }}>
               <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
@@ -275,11 +283,11 @@ function ResignPhase() {
               </div>
               <div className="row" style={{ marginTop: 10, gap: 10 }}>
                 <div className="grow">
-                  {p.mood.tradeRequest ? (
-                    <span className="small bad bold">Wants a trade: won't re-sign</span>
+                  {wantsOut(p) ? (
+                    <span className="small bad bold">{p.mood.tradeRequest ? "Wants a trade: won't re-sign" : "Asked for a trade: on hold, won't re-sign"}</span>
                   ) : (
                     <>
-                      <div className="tiny dim upper bold">Asking</div>
+                      <div className="tiny dim upper bold">{talkState(league, p, 'resign').firm ? 'Asking · firm' : 'Asking'}</div>
                       <div className="small">
                         <b className="num" style={{ fontSize: 16 }}>
                           {fmtM(ask.amount)}
@@ -295,7 +303,7 @@ function ResignPhase() {
                 <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
                   Renounce
                 </button>
-                <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} disabled={p.mood.tradeRequest} onClick={() => setSel(p.pid)}>
+                <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} disabled={wantsOut(p)} onClick={() => setSel(p.pid)}>
                   <PenLine size={15} /> Negotiate
                 </button>
               </div>
@@ -359,7 +367,7 @@ function ResignPhase() {
             <div className="dim2">
               You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he becomes an unrestricted free agent when the market
               opens
-              {renounce.contract.twoWay || (renounce.mood.tradeRequest && !renounce.rfa)
+              {renounce.contract.twoWay || (wantsOut(renounce) && !renounce.rfa)
                 ? ''
                 : `, and his ${fmtM(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}
               . To bring him back you'd have to outbid other teams with cap space.
