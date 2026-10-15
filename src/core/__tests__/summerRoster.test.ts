@@ -141,17 +141,17 @@ describe('free agency waits on an offer sheet', () => {
 describe('a trade request on hold', () => {
   it("a player whose request a promise put on hold won't re-sign or extend while it stands", () => {
     const l = league();
-    l.phase = 'resign';
+    l.phase = 'regular';
     const p = teamPlayers(l, U)[0];
     p.contract = { start: l.season - 1, salaries: [10_000, 10_000] };
     p.mood.tradeRequest = true;
     p.mood.score = -7;
     p.mood.expectedMin = 30;
-    const ask = askingContract(l, p, U);
-    expect(userResign(l, p.pid, ask.amount, ask.years).reason).toMatch(/wants out/);
+    // the promise made late in his last season, still open when the re-sign period comes
     expect(meetPlayer(l, p.pid, 'role').ok).toBe(true);
     expect(p.mood.tradeRequest).toBe(false);
     expect(p.promise?.request).toBe(true);
+    l.phase = 'resign';
     const ask2 = askingContract(l, p, U);
     expect(userResign(l, p.pid, ask2.amount, ask2.years).reason).toMatch(/your promise has him holding off, but he won't re-sign/);
     // an extension the same
