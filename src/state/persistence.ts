@@ -3,7 +3,8 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import type { GamePlanItem, GameResult, League } from '../core/types';
+import type { GamePlanItem, GameResult, League, Player } from '../core/types';
+import { FREE_AGENT } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
 import { MAX_STEPS } from './live';
@@ -273,6 +274,10 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
   if (x.untouchable !== undefined) x.untouchable = Array.isArray(x.untouchable) ? x.untouchable.filter((pid) => num(pid) && !!x.players[pid]) : [];
   for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
+  // restricted free agency: damaged rights or offer sheets are dropped (see rfaIntact), and so is an
+  // inbox message's link to an offer sheet that isn't a player id
+  for (const p of Object.values(x.players)) if (p.rfa !== undefined) rfaIntact(x, p);
+  for (const m of x.inbox) if (m.sheet !== undefined && !int(m.sheet)) delete m.sheet;
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
   x.version = SAVE_VERSION;
@@ -333,6 +338,50 @@ function liveIntact(l: League, j: unknown): boolean {
   }
   const g = l.schedule.find((x) => x.gid === j.gid);
   return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
+}
+
+const SHEET_ROUTES = new Set(['min', 'space', 'mle']);
+
+/**
+ * A restricted free agent's rights in shape (see src/core/league/rfa.ts), or dropped: a qualifying
+ * offer from a real team, for a positive amount, on that team's player in the re-sign period or on
+ * a free agent in free agency; an offer sheet only in free agency, from another real team, 2-5
+ * years at a positive salary, paid for by a known route, its match days in order. A damaged sheet
+ * goes alone (his team keeps his rights); damaged rights take the sheet with them, and he is an
+ * unrestricted free agent.
+ */
+function rfaIntact(l: League, p: Player) {
+  const r = p.rfa as unknown;
+  const ok =
+    obj(r) &&
+    int(r.tid) &&
+    !!l.teams[r.tid] &&
+    num(r.qo) &&
+    (r.qo as number) > 0 &&
+    (r.hold === undefined || (num(r.hold) && (r.hold as number) >= 0)) &&
+    (l.phase === 'resign' ? p.tid === r.tid : l.phase === 'freeAgency' && p.tid === FREE_AGENT);
+  if (!ok) {
+    delete p.rfa;
+    return;
+  }
+  const s = r.sheet;
+  if (s === undefined) return;
+  const sheetOk =
+    obj(s) &&
+    l.phase === 'freeAgency' &&
+    int(s.tid) &&
+    s.tid !== r.tid &&
+    !!l.teams[s.tid] &&
+    num(s.amount) &&
+    (s.amount as number) > 0 &&
+    int(s.years) &&
+    s.years >= 2 &&
+    s.years <= 5 &&
+    SHEET_ROUTES.has(s.route as string) &&
+    int(s.day) &&
+    int(s.until) &&
+    s.until >= s.day;
+  if (!sheetOk) delete p.rfa!.sheet;
 }
 
 /** A stored trade offer with both sides in shape, and every player and pick in it still in the league. */

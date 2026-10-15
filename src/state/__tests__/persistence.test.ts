@@ -221,6 +221,36 @@ describe('reading a league', () => {
     expect(migrate(structuredClone(once))).toEqual(once);
   });
 
+  it('keeps restricted free agency in shape: damaged rights or offer sheets, or ones out of their phase, are dropped, and so are inbox links that aren’t a player', () => {
+    const l = testLeague('rfa');
+    l.phase = 'freeAgency';
+    const [a, b, c, d] = Object.values(l.players).filter((p) => p.tid === -1);
+    const rostered = Object.values(l.players).find((p) => p.tid === 3)!;
+    const sheet = { tid: 4, amount: 9_000, years: 3, route: 'space' as const, day: 2, until: 3 };
+    a.rfa = { tid: 3, qo: 5_000, hold: 9_000, sheet };
+    b.rfa = { tid: 3, qo: 5_000, hold: 9_000, sheet: { ...sheet, years: 9 } };
+    c.rfa = { tid: 999, qo: 5_000, sheet };
+    d.rfa = { tid: 3, qo: -1 };
+    rostered.rfa = { tid: 3, qo: 5_000 };
+    l.inbox[0].sheet = 'x' as never;
+    l.inbox[1].sheet = a.pid;
+    const once = migrate(l);
+    const by = (pid: number) => once.players[pid].rfa;
+    expect(by(a.pid)).toEqual({ tid: 3, qo: 5_000, hold: 9_000, sheet });
+    expect(by(b.pid)).toEqual({ tid: 3, qo: 5_000, hold: 9_000 });
+    expect([by(c.pid), by(d.pid), by(rostered.pid)]).toEqual([undefined, undefined, undefined]);
+    expect([once.inbox[0].sheet, once.inbox[1].sheet]).toEqual([undefined, a.pid]);
+    expect(migrate(structuredClone(once))).toEqual(once);
+    // nothing of it outlives the summer, nor does an offer sheet before free agency
+    const later = structuredClone(once);
+    later.phase = 'preseason';
+    expect(Object.values(migrate(later).players).some((p) => p.rfa)).toBe(false);
+    const resign = structuredClone(once);
+    resign.phase = 'resign';
+    resign.players[rostered.pid].rfa = { tid: 3, qo: 5_000, sheet };
+    expect(migrate(resign).players[rostered.pid].rfa).toEqual({ tid: 3, qo: 5_000 });
+  });
+
   it('keeps only #rrggbb team colours, which the screens put in styles as they are', () => {
     const l = testLeague('colours');
     const real = [...l.teams[0].colors];
