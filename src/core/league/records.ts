@@ -244,9 +244,9 @@ export function freezeRecordNames(league: League, p: Player) {
 /**
  * The records a game set make the news once the book has a full season behind it (on the first
  * nights every big game is "a record"): league records in every stat (and a share of the league's
- * scoring record), a franchise's scoring record of 40 or more, and the user's team's franchise
+ * scoring record), a franchise's scoring record of 45 or more, and the user's team's franchise
  * records in points, rebounds, assists and threes and its team scoring and winning margin, which
- * the GM hears about too. About 25 a season once the book has a season in it, fewer each season after.
+ * the GM hears about too. They're routine news (see addNews): the book keeps them for good.
  */
 export function recordNews(league: League, res: GameResult, notes: RecordNote[]) {
   const book = league.records;
@@ -260,7 +260,7 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
     const newsworthy =
       n.scope === 'league'
         ? n.kind === 'record' || (n.stat === 'pts' && !n.team)
-        : n.kind === 'record' && (n.tid === user ? !['stl', 'blk'].includes(n.stat) && !(n.team && n.stat === 'tpm') : n.stat === 'pts' && !n.team && n.v >= 40);
+        : n.kind === 'record' && (n.tid === user ? !['stl', 'blk'].includes(n.stat) && !(n.team && n.stat === 'tpm') : n.stat === 'pts' && !n.team && n.v >= 45);
     if (!newsworthy) continue;
     const key = n.team ? `t${n.tid}` : `p${n.pid}`;
     byWho.set(key, [...(byWho.get(key) ?? []), n]);

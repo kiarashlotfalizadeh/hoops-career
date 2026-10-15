@@ -63,12 +63,13 @@ function check() {
         ...Object.entries(book.teams).map(([tid, t]) => ({ who: tid, s: t[kind], keep: REC.KEEP.team[kind] })),
       ];
       for (const { who, s, keep } of shelves)
-        for (const [stat, list] of [...Object.entries(s.players), ...Object.entries(s.teams)] as [string, number[][]][]) {
-          if (list.length > keep || list.some((r, i) => i > 0 && r[0] > list[i - 1][0]))
-            bad('record book list out of order', `${who} ${kind} ${stat} ${JSON.stringify(list.map((r) => r[0]))}`);
-          const top = (book.league[kind].players as Record<string, number[][]>)[stat]?.[0]?.[0] ?? (book.league[kind].teams as Record<string, number[][]>)[stat]?.[0]?.[0];
-          if (who !== 'league' && list[0] && top !== undefined && list[0][0] > top) bad('franchise record past the league record', `${who} ${kind} ${stat}`);
-        }
+        for (const side of ['players', 'teams'] as const)
+          for (const [stat, list] of Object.entries(s[side]) as [string, number[][]][]) {
+            if (list.length > keep || list.some((r, i) => i > 0 && r[0] > list[i - 1][0]))
+              bad('record book list out of order', `${who} ${kind} ${side} ${stat} ${JSON.stringify(list.map((r) => r[0]))}`);
+            const top = (book.league[kind][side] as Record<string, number[][]>)[stat]?.[0]?.[0];
+            if (who !== 'league' && list[0] && top !== undefined && list[0][0] > top) bad('franchise record past the league record', `${who} ${kind} ${side} ${stat}`);
+          }
     }
   }
   for (const t of L.teams) {

@@ -130,7 +130,7 @@ export function seasonTotals(p: Player, season: number, playoffs = false): Playe
 /** News items the save keeps, and how many of the latest injuries and big games always stay. */
 const NEWS_MAX = 400;
 const ROUTINE_KEEP = 100;
-const routineNews = (n: NewsItem) => n.kind === 'injury' || n.kind === 'milestone';
+const routineNews = (n: NewsItem) => n.kind === 'injury' || n.kind === 'milestone' || n.kind === 'record';
 
 /**
  * Add a news item. Over the limit the oldest injury or big game goes first (there are hundreds a
