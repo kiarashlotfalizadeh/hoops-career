@@ -275,8 +275,64 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   for (const m of x.inbox) if (m.proposal !== undefined && !num(m.proposal)) delete m.proposal;
   // a live game's journal that's damaged, or not for today's game any more, goes (the game starts over)
   if (x.live !== undefined && !liveIntact(x, x.live)) delete x.live;
+  migrateDealTerms(x);
   x.version = SAVE_VERSION;
   return x;
+}
+
+const PROMISES = new Set(['role', 'trade', 'patience']);
+
+/**
+ * Pick swaps, cash in trades and promises to players (all optional): a damaged one is dropped. A
+ * swap must tie a first to another team's first of the same draft, neither protected, each pick in
+ * one swap at most; cash records and logged cash are amounts of money; a promise or meeting has
+ * its kind and dates.
+ */
+function migrateDealTerms(x: League) {
+  const picks = new Map(x.draftPicks.filter(obj).map((d) => [d.dpid, d]));
+  const swapOk = (d: League['draftPicks'][number]) => {
+    const o = picks.get(d.swap as number);
+    return int(d.swap) && !!o && o !== d && d.round === 1 && o.round === 1 && o.season === d.season && o.originalTid !== d.originalTid && !d.protection && !o.protection;
+  };
+  // one swap per pick, the first one kept: no pick both holds a right and is subject to one, or is in two
+  const inOne = new Set<number>();
+  for (const d of picks.values()) {
+    if (d.swap === undefined) continue;
+    if (!swapOk(d) || inOne.has(d.dpid) || inOne.has(d.swap)) delete d.swap;
+    else inOne.add(d.dpid).add(d.swap);
+  }
+  const money = (v: unknown) => num(v) && (v as number) >= 0;
+  for (const t of x.teams) {
+    const c = t.cashTrades;
+    if (c !== undefined && !(obj(c) && int(c.season) && money(c.sent) && money(c.received))) delete t.cashTrades;
+    for (const s of t.seasons) if (obj(s) && s.cashIn !== undefined && !money(s.cashIn)) delete s.cashIn;
+  }
+  for (const p of Object.values(x.players)) {
+    const pr = p.promise;
+    if (
+      pr !== undefined &&
+      !(
+        obj(pr) &&
+        PROMISES.has(pr.kind as string) &&
+        int(pr.tid) &&
+        int(pr.season) &&
+        int(pr.day) &&
+        typeof pr.request === 'boolean' &&
+        (pr.kind !== 'role' || (num(pr.minutes) && (pr.minutes as number) > 0)) &&
+        (pr.kind !== 'trade' || pr.by === 'deadline' || pr.by === 'opening')
+      )
+    )
+      delete p.promise;
+    const m = p.meeting;
+    if (m !== undefined && !(obj(m) && int(m.season) && int(m.day) && (m.broken === undefined || int(m.broken)))) delete p.meeting;
+  }
+  for (const t of Array.isArray(x.transactions) ? x.transactions : []) {
+    for (const s of obj(t) && Array.isArray(t.sides) ? t.sides : []) {
+      if (!obj(s)) continue;
+      if (s.cash !== undefined && !money(s.cash)) delete s.cash;
+      if (s.swaps !== undefined && !(Array.isArray(s.swaps) && s.swaps.every(int))) delete s.swaps;
+    }
+  }
 }
 
 const int = (v: unknown): v is number => Number.isInteger(v);
@@ -335,7 +391,10 @@ function liveIntact(l: League, j: unknown): boolean {
   return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
 }
 
-/** A stored trade offer with both sides in shape, and every player and pick in it still in the league. */
+/**
+ * A stored trade offer with both sides in shape, and every player and pick in it still in the
+ * league. AI teams' offers never carry protections, swap rights or cash: one that does was crafted.
+ */
 function proposalIntact(l: League, p: unknown): boolean {
   if (!obj(p) || !num(p.id) || !num(p.tid) || !num(p.season) || !num(p.expires) || !obj(p.offer)) return false;
   const pick = new Set(l.draftPicks.map((d) => d.dpid));
@@ -347,7 +406,10 @@ function proposalIntact(l: League, p: unknown): boolean {
       Array.isArray(s.pids) &&
       Array.isArray(s.dpids) &&
       s.pids.every((pid) => num(pid) && !!l.players[pid as number]) &&
-      s.dpids.every((d) => num(d) && pick.has(d as number)),
+      s.dpids.every((d) => num(d) && pick.has(d as number)) &&
+      s.protect === undefined &&
+      s.swaps === undefined &&
+      s.cash === undefined,
   );
 }
 

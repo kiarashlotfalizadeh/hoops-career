@@ -102,7 +102,8 @@ export function shareRevenue(league: League): Map<number, number> {
   const national = (NATIONAL_REVENUE * revenueScale(league)) / 82;
   const local = league.teams.map((t) => {
     const ts = curTeamSeason(league, t.tid);
-    return ts.revenue - national * (ts.won + ts.lost);
+    // (cash taken in trades is revenue, but not local revenue)
+    return ts.revenue - national * (ts.won + ts.lost) - (ts.cashIn ?? 0);
   });
   const mean = local.reduce((a, v) => a + v, 0) / Math.max(1, local.length);
   const out = new Map<number, number>();

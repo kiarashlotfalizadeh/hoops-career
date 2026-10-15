@@ -1,7 +1,7 @@
 import { AccoladeChips, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, PenLine } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeftRight, MessageCircle, PenLine } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -14,7 +14,8 @@ import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
-import { moodLevel, MOOD_META } from '../../core/league/morale';
+import { moodLevel, MOOD_META, meetBlockedReason, promiseStatus, wantsMeeting } from '../../core/league/morale';
+import { MeetingPanel } from '../office/PlayerMeeting';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
 import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
@@ -125,6 +126,9 @@ export default function PlayerView() {
   const [roleOpen, setRoleOpen] = useState(false);
   const [extending, setExtending] = useState(false);
   const [openRating, setOpenRating] = useState<string | null>(null);
+  // the trade-request mail links here with ?meet=1
+  const [params] = useSearchParams();
+  const [meeting, setMeeting] = useState(() => params.get('meet') === '1');
   const pctile = useSkillPercentiles(league);
   if (!p) {
     return (
@@ -333,6 +337,24 @@ export default function PlayerView() {
                   {p.mood.notes.length ? p.mood.notes.map((n) => <div key={n}>• {n}</div>) : <div>No complaints.</div>}
                   {p.mood.expectedMin > 0 && <div className="dim">Expects about {p.mood.expectedMin} minutes a night.</div>}
                 </div>
+                {/* one who asked out or is unhappy can be met, and promised something */}
+                {mine && p.promise && (
+                  <div className="small bold" style={{ marginTop: 8 }}>
+                    {promiseStatus(league, p)}
+                  </div>
+                )}
+                {mine && !p.promise && wantsMeeting(p) && (
+                  <>
+                    <button className="btn xs" style={{ marginTop: 10 }} disabled={!!(busyWhy ?? meetBlockedReason(league, p))} onClick={() => setMeeting(true)}>
+                      <MessageCircle size={14} /> Meet with him
+                    </button>
+                    {(busyWhy ?? meetBlockedReason(league, p)) && (
+                      <div className="tiny dim" style={{ marginTop: 6 }}>
+                        {busyWhy ?? meetBlockedReason(league, p)}
+                      </div>
+                    )}
+                  </>
+                )}
               </Card>
             )}
             <Card title="Contract">
@@ -510,6 +532,9 @@ export default function PlayerView() {
         </div>
       </Sheet>
       <ContractSheet pid={extending && mine ? p.pid : null} mode="extend" onClose={() => setExtending(false)} />
+      <Sheet open={meeting && mine && (wantsMeeting(p) || !!p.promise)} onClose={() => setMeeting(false)} title={`Meet with ${p.lastName}`}>
+        <MeetingPanel league={league} p={p} />
+      </Sheet>
     </main>
   );
 }

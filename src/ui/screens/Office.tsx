@@ -1,6 +1,19 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { type LucideIcon, ArrowLeftRight, ChevronRight, History as HistoryIcon, ListOrdered, PenLine, PiggyBank, Timer, TriangleAlert, UserMinus, UserPlus } from 'lucide-react';
+import {
+  type LucideIcon,
+  ArrowLeftRight,
+  ChevronRight,
+  History as HistoryIcon,
+  ListOrdered,
+  MessageCircle,
+  PenLine,
+  PiggyBank,
+  Timer,
+  TriangleAlert,
+  UserMinus,
+  UserPlus,
+} from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, PHASE_LABEL, seasonLabel } from '../../core/constants';
 import {
@@ -33,6 +46,7 @@ import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { TAX_SHARE_TO_NON_TAXPAYERS } from '../../core/league/finances';
 import { untradeableReason } from '../../core/league/trades';
+import { promiseStatus, wantsMeeting } from '../../core/league/morale';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -58,6 +72,7 @@ import {
 import { ContractSheet } from '../office/ContractSheet';
 import { overallPick } from '../league/shared';
 import { UntouchableToggle } from '../office/Untouchable';
+import { MeetingPanel } from '../office/PlayerMeeting';
 import { rosterNames } from '../stats';
 import { useFlowRunner } from '../useFlow';
 
@@ -713,6 +728,8 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
   const league = useLeague();
   const nav = useNavigate();
   const [confirm, setConfirm] = useState(false);
+  // meeting him (he asked out, or he's unhappy), in place of the contract
+  const [meet, setMeet] = useState(false);
   const exp = contractExp(p.contract);
   const remaining = releaseDeadMoney(league, p);
   const camp = nonGuaranteed(league, p);
@@ -743,6 +760,20 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
       </div>
     );
   }
+  if (meet) {
+    return (
+      <div className="col" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 10 }}>
+          <MessageCircle className="dim" />
+          <h2 className="grow">Meet with {p.lastName}</h2>
+          <button className="btn xs ghost" onClick={() => setMeet(false)}>
+            Back
+          </button>
+        </div>
+        <MeetingPanel league={league} p={p} />
+      </div>
+    );
+  }
 
   return (
     <div className="col" style={{ gap: 12 }}>
@@ -767,6 +798,17 @@ function PlayerContractBody({ p, onClose, onExtend }: { p: Player; onClose: () =
         {p.mood.tradeRequest && <span className="tag bad">Wants a trade</span>}
         {extStart !== null && <span className="tag good">Extended through {seasonLabel(exp)}</span>}
       </div>
+      {/* he asked out or he's unhappy: what you promised him, or a meeting */}
+      {(p.promise || wantsMeeting(p)) && (
+        <div className="row" style={{ gap: 8 }}>
+          <span className="small dim2 grow">{promiseStatus(league, p) ?? (p.mood.tradeRequest ? 'He wants a trade.' : "He's unhappy.")}</span>
+          {!p.promise && (
+            <button className="btn xs" onClick={() => setMeet(true)}>
+              <MessageCircle size={14} /> Meet
+            </button>
+          )}
+        </div>
+      )}
       <div className="card tight">
         {/* every season he's signed for, a signed extension's included */}
         {Array.from({ length: exp - p.contract.start + 1 }, (_, i) => p.contract.start + i).map((s) => (

@@ -4,7 +4,7 @@ import { Handshake, Minus, PackagePlus, Plus } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
-import { capSalary, evaluateTrade, pickLabel, type CounterOffer, type TradeOffer } from '../../core/league/trades';
+import { capSalary, evaluateTrade, fmtCash, pickLabel, type CounterOffer, type TradeOffer } from '../../core/league/trades';
 import { useLeagueMemo } from '../../state/store';
 import { Sheet } from '../components/ui';
 import { capSeason, fmtM, fmtMs } from '../office/common';
@@ -85,15 +85,20 @@ function CounterCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [league, key, user, s],
   );
-  const pick = (d: number) => {
+  // a pick with the protection its side puts on it in that version of the deal
+  const pick = (d: number, side: TradeOffer['a']) => {
     const dp = league.draftPicks.find((x) => x.dpid === d);
-    return dp ? pickLabel(league, dp) : 'a pick';
+    return dp ? pickLabel(league, dp, { protection: side.protect?.[d] }) : 'a pick';
   };
   const items = (now: TradeOffer['a'], was: TradeOffer['a']): Item[] => [
     ...now.pids.map((pid) => ({ key: `p${pid}`, name: playerName(league.players[pid]), change: was.pids.includes(pid) ? undefined : ('added' as const) })),
-    ...now.dpids.map((d) => ({ key: `d${d}`, name: pick(d), change: was.dpids.includes(d) ? undefined : ('added' as const) })),
+    ...now.dpids.map((d) => ({ key: `d${d}`, name: pick(d, now), change: was.dpids.includes(d) ? undefined : ('added' as const) })),
+    ...(now.swaps ?? []).map((y) => ({ key: `s${y}`, name: `${y} swap right`, change: was.swaps?.includes(y) ? undefined : ('added' as const) })),
+    ...(now.cash ? [{ key: 'c', name: `${fmtCash(now.cash)} cash`, change: was.cash === now.cash ? undefined : ('added' as const) }] : []),
     ...was.pids.filter((pid) => !now.pids.includes(pid)).map((pid) => ({ key: `p${pid}`, name: playerName(league.players[pid]), change: 'dropped' as const })),
-    ...was.dpids.filter((d) => !now.dpids.includes(d)).map((d) => ({ key: `d${d}`, name: pick(d), change: 'dropped' as const })),
+    ...was.dpids.filter((d) => !now.dpids.includes(d)).map((d) => ({ key: `d${d}`, name: pick(d, was), change: 'dropped' as const })),
+    ...(was.swaps ?? []).filter((y) => !now.swaps?.includes(y)).map((y) => ({ key: `s${y}`, name: `${y} swap right`, change: 'dropped' as const })),
+    ...(was.cash && !now.cash ? [{ key: 'c', name: `${fmtCash(was.cash)} cash`, change: 'dropped' as const }] : []),
   ];
   const k = KIND[c.kind];
   const Icon = k.icon;

@@ -228,6 +228,30 @@ export interface Player {
   faDays?: number;
   /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
   waivers?: Waivers;
+  /** What the GM promised him at their last meeting, while it's open (the user's players only; see meetPlayer in morale.ts). */
+  promise?: PlayerPromise;
+  /** His last meeting with the GM (one every MEET_DAYS days), and the season a promise to him was broken: he takes no more that season. */
+  meeting?: { season: number; day: number; broken?: number };
+}
+
+/**
+ * A promise the GM made to one of his players who asked for a trade or is unhappy (see meetPlayer):
+ * 'role' a bigger role (he holds off and is judged on his minutes over his next ROLE_GAMES games),
+ * 'trade' to move him (by this season's deadline, or by next opening night), 'patience' he agreed
+ * to hold off for PATIENCE_GAMES team games.
+ */
+export interface PlayerPromise {
+  kind: 'role' | 'trade' | 'patience';
+  /** His team when it was made: a trade or a release ends it. */
+  tid: number;
+  season: number;
+  day: number;
+  /** He had asked for a trade when it was made (a role or patience promise puts the request on hold). */
+  request: boolean;
+  /** Role: the minutes a night he expects by the end of it. */
+  minutes?: number;
+  /** Trade: judged the day after this season's deadline, or on next season's opening night. */
+  by?: 'deadline' | 'opening';
 }
 
 export interface Waivers {
@@ -491,6 +515,8 @@ export interface TeamSeason {
   attendance: number;
   pop: number;
   playIn?: boolean;
+  /** Cash received in trades this season ($K): booked as revenue, but not local revenue that revenue sharing evens out. */
+  cashIn?: number;
   /** Team totals for advanced team stats. */
   t: TeamTotals;
   o: TeamTotals; // opponent totals
@@ -547,6 +573,8 @@ export interface Team {
   numbered?: number[];
   practice: 'light' | 'normal' | 'intense';
   timeoutsUsedThisGame?: number;
+  /** Cash sent and received in trades in one contract season ($K), each held to CASH_PCT of the cap (see cashRoom). */
+  cashTrades?: { season: number; sent: number; received: number };
 }
 
 export interface CoachProfile {
@@ -571,6 +599,12 @@ export interface DraftPick {
   protection?: number;
   /** The team that last traded it away, and when (`also`: the others that traded it away that season): it can't go back to them that season. */
   tradedFrom?: { tid: number; season: number; also?: number[] };
+  /**
+   * A swap right riding on this first: the dpid of another team's first in the same draft that its
+   * holder may take instead, if that one lands higher (that pick is "subject to a swap"). It goes
+   * with this pick when it's traded and is settled when the lottery sets the order (see resolveSwaps).
+   */
+  swap?: number;
 }
 
 // ---------------------------------------------------------------- games
@@ -768,14 +802,18 @@ export interface NewsItem {
   pids: number[];
 }
 
-/** A kind of roster move in the transaction log. */
-export type TxnKind = 'trade' | 'sign' | 'resign' | 'extend' | 'release' | 'waive' | 'claim' | 'buyout' | 'twoWay' | 'convert' | 'renounce' | 'option' | 'draft';
+/** A kind of roster move in the transaction log ('swap': a pick swap exercised when the lottery set the order). */
+export type TxnKind = 'trade' | 'swap' | 'sign' | 'resign' | 'extend' | 'release' | 'waive' | 'claim' | 'buyout' | 'twoWay' | 'convert' | 'renounce' | 'option' | 'draft';
 
-/** What one team sent in a trade, as it was: names and pick labels at the time. */
+/** What one team sent in a trade (or gave up in an exercised swap), as it was: names and pick labels at the time. */
 export interface TxnSide {
   tid: number;
   players: { pid: number; name: string }[];
   picks: string[];
+  /** Drafts in which it gave the other team the right to swap first-round picks. */
+  swaps?: number[];
+  /** Cash it sent ($K). */
+  cash?: number;
 }
 
 /**

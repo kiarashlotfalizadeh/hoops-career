@@ -5,7 +5,7 @@ import type { CombineResults, DraftPick, League, Player } from '../../core/types
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
-import { pickLabel, tradingClosedReason } from '../../core/league/trades';
+import { pickLabel, pickTermsNote, tradingClosedReason } from '../../core/league/trades';
 import { draftNextPick, finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
 import { draftProposals } from '../../core/league/proposals';
 import { fmtHeight } from '../../core/ratings';
@@ -648,6 +648,8 @@ function MyPicks({ league }: { league: League }) {
                   <div className="bold ellipsis">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
                     {d.originalTid === user ? 'Own pick' : `Acquired from the ${teamName(league.teams[d.originalTid])}`} · drafted after {seasonLabel(d.season)}
+                    {/* its protection and any swap on it, in words */}
+                    {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
                   </div>
                 </div>
                 {/* the label carries the overall number once the order is set */}
@@ -673,7 +675,10 @@ function MyPicks({ league }: { league: League }) {
                   <TeamLogo tid={d.tid} size={30} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">{pickLabel(league, d)}</div>
-                    <div className="tiny dim">Owned by the {teamName(league.teams[d.tid])}</div>
+                    <div className="tiny dim">
+                      Owned by the {teamName(league.teams[d.tid])}
+                      {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
+                    </div>
                   </div>
                   <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
                 </div>

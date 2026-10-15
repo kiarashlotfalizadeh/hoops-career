@@ -19,6 +19,7 @@ import {
   inSeason,
   playerName,
   prospects,
+  revenueScale,
   rosterMaxNow,
   standardRoster,
   twoWayRoster,
@@ -32,6 +33,12 @@ export interface TradeSide {
   tid: number;
   pids: number[];
   dpids: number[];
+  /** Protections this team puts on its own firsts it sends: dpid -> top-N (see PROTECTIONS). */
+  protect?: Record<number, number>;
+  /** Drafts in which this team gives the other the right to swap first-round picks (see swapPicks). */
+  swaps?: number[];
+  /** Cash this team sends ($K; see cashRoom). */
+  cash?: number;
 }
 
 export interface TradeOffer {
@@ -60,10 +67,10 @@ export interface TradeNote {
   text: string;
 }
 
-/** One asset in a deal as the judging team sees it. */
+/** One asset in a deal as the judging team sees it: a player, a pick, the right to swap firsts or cash. */
 export interface AssetView {
-  kind: 'player' | 'pick';
-  /** pid or dpid */
+  kind: 'player' | 'pick' | 'swap' | 'cash';
+  /** pid, dpid, the swap's draft, or the cash ($K) */
   id: number;
   /** What it counts for in the deal: the team's own view, kept near neutral (see lens). */
   value: number;
@@ -79,11 +86,14 @@ export interface AssetView {
 export interface VerdictParts {
   incoming: AssetView[];
   outgoing: AssetView[];
-  /** Incoming players' value after depth weighting, and the picks' after the pile discount. */
+  /** Incoming players' value after depth weighting, and the picks' (swap rights with them) after the pile discount. */
   playersIn: number;
   picksIn: number;
   playersOut: number;
   picksOut: number;
+  /** Value of the cash coming in and going out. */
+  cashIn: number;
+  cashOut: number;
   /** Value of the luxury tax and cap room the deal costs (negative: what it saves). */
   money: number;
   /** Salary coming in and going out, and cap payroll before and after the deal ($K). */
@@ -127,22 +137,30 @@ function classProspects(league: League): { v: number; market: number }[] {
   return list;
 }
 
+/** Where a pick may land in its round, as its value projects it, and what each slot is worth. */
+interface Outlook {
+  /** Weight of each slot of the round (index: slot - 1), and their sum; one slot once the order is set. */
+  w: number[];
+  sum: number;
+  /** What the player taken at slot `k` of the round is worth in a trade today. */
+  at: (k: number) => number;
+}
+
 /**
- * Trade value of a draft pick: what the player taken there would be worth once drafted, his
- * rookie-scale surplus included (the prospect ranked at its slot in this season's class, in later
- * classes the player a slot usually brings), discounted by the time to its draft: up to 15% over
- * the last year (who will be there, and how he turns out) and 7% for each year before that. So a
- * pick keeps its value from one season into the next, and on the clock is worth the player it
- * becomes. Unknown slots are projected from the original team's record (regressed toward the
- * middle for later years) and averaged over a spread of outcomes. A top-N protected pick held by
- * another team is worth nothing in the slots where it would stay home.
+ * A pick's outlook: what the player taken there would be worth once drafted, his rookie-scale
+ * surplus included (the prospect ranked at its slot in this season's class, in later classes the
+ * player a slot usually brings), discounted by the time to its draft: up to 15% over the last year
+ * (who will be there, and how he turns out) and 7% for each year before that. Unknown slots are
+ * projected from the original team's record (regressed toward the middle for later years) and
+ * spread over a range of outcomes.
  */
-export function pickValue(league: League, dp: DraftPick): number {
+function outlook(league: League, dp: DraftPick): Outlook {
   const yearsOut = dp.season - league.season;
   const cls = yearsOut === 0 ? classProspects(league) : [];
   const years = Math.max(0, yearsOut + (dateToDay(league.season, 5, 25) - league.day) / 365);
   const discount = years <= 1 ? 1 - 0.15 * years : 0.85 * Math.pow(0.93, years - 1);
-  const valueAt = (inRound: number, known: boolean) => {
+  const known = dp.pick !== undefined;
+  const at = (inRound: number) => {
     const overall = (dp.round - 1) * 30 + inRound;
     // during the draft the next pick gets the best prospect left
     const idx = known ? league.draftPicks.filter((d) => d.season === dp.season && d.pick !== undefined && (d.round - 1) * 30 + d.pick < overall).length : overall - 1;
@@ -151,8 +169,10 @@ export function pickValue(league: League, dp: DraftPick): number {
     const surplus = rookie.salaries.reduce((a, sal) => a + (p.market - sal) / 1000, 0);
     return Math.max(0, p.v + surplus * 0.1) * discount;
   };
-  const prot = dp.protection && dp.tid !== dp.originalTid ? dp.protection : 0;
-  if (dp.pick !== undefined) return dp.pick <= prot ? 0 : valueAt(dp.pick, true);
+  if (known) {
+    const w = Array.from({ length: Math.max(30, dp.pick!) }, (_, i) => (i === dp.pick! - 1 ? 1 : 0));
+    return { w, sum: 1, at };
+  }
   const orig = league.teams[dp.originalTid];
   const ts = curTeamSeason(league, orig.tid);
   const games = ts.won + ts.lost;
@@ -162,20 +182,211 @@ export function pickValue(league: League, dp: DraftPick): number {
   const keep = Math.pow(0.75, Math.max(0, yearsOut));
   const center = (1 + clamp(wp, 0, 1) * 29) * keep + 15.5 * (1 - keep);
   const sd = yearsOut <= 0 ? 2 + 6 * (1 - Math.min(1, games / 82)) : 5 + 2 * yearsOut;
-  let total = 0;
-  let weight = 0;
+  const w: number[] = [];
+  let sum = 0;
   for (let k = 1; k <= 30; k++) {
-    const w = Math.exp(-((k - center) ** 2) / (2 * sd * sd));
-    weight += w;
-    if (k > prot) total += w * valueAt(k, false);
+    w.push(Math.exp(-((k - center) ** 2) / (2 * sd * sd)));
+    sum += w[k - 1];
   }
-  return total / weight;
+  return { w, sum, at };
+}
+
+/** The protection a pick carries for its holder: top-N, or 0 (back with its original team it has nothing to protect). */
+const protectionOf = (dp: DraftPick) => (dp.protection && dp.tid !== dp.originalTid ? dp.protection : 0);
+
+/** A pick's value without any swap riding on it: a top-`prot` protected pick is worth nothing in the slots where it would stay home. */
+function ownValue(league: League, dp: DraftPick, prot = protectionOf(dp)): number {
+  const o = outlook(league, dp);
+  if (dp.pick !== undefined) return dp.pick <= prot ? 0 : o.at(dp.pick);
+  let total = 0;
+  for (let k = 1; k <= 30; k++) if (k > prot) total += o.w[k - 1] * o.at(k);
+  return total / o.sum;
+}
+
+/** The pick holding the right to swap for `dp`, if `dp` is subject to a swap. */
+export const swapHolder = (league: League, dp: DraftPick): DraftPick | undefined => (dp.round === 1 ? league.draftPicks.find((d) => d.swap === dp.dpid) : undefined);
+
+/** Is this pick in a swap, holding the right or subject to it? */
+export const inSwap = (league: League, dp: DraftPick) => dp.swap !== undefined || !!swapHolder(league, dp);
+
+/** Each slot of the round with its chance (a set order: the one slot). */
+const slotOdds = (o: Outlook): [number, number][] => o.w.flatMap((w, i) => (w > 0 ? [[i + 1, w / o.sum] as [number, number]] : []));
+
+/**
+ * What the right to take pick `other` in place of `own` is worth to the team holding `own` (both
+ * firsts of one draft): the expected gain when `other` lands higher, over both picks' projected
+ * slots (the projection their values use, taken as independent), and the chance that it does.
+ */
+export function swapOutlook(league: League, own: DraftPick, other: DraftPick): { gain: number; odds: number } {
+  const a = outlook(league, own);
+  const b = outlook(league, other);
+  // one draft and round: one value per slot
+  const at = new Map<number, number>();
+  const v = (k: number) => at.get(k) ?? at.set(k, a.at(k)).get(k)!;
+  let gain = 0;
+  let odds = 0;
+  for (const [i, pi] of slotOdds(a))
+    for (const [j, pj] of slotOdds(b)) {
+      if (j >= i) continue;
+      odds += pi * pj;
+      gain += pi * pj * Math.max(0, v(j) - v(i));
+    }
+  return { gain, odds };
+}
+
+/**
+ * Trade value of a draft pick (see outlook): it keeps its value from one season into the next, and
+ * on the clock is worth the player it becomes. A top-N protected pick held by another team is worth
+ * nothing in the slots where it would stay home. A swap riding on a first moves value between the
+ * two picks: the one holding the right is worth what the swap is expected to gain it, the one
+ * subject to it that much less (a team holding both is worth the two picks).
+ */
+export function pickValue(league: League, dp: DraftPick): number {
+  const base = ownValue(league, dp);
+  if (dp.round !== 1) return base;
+  const other = dp.swap !== undefined ? findPick(league, dp.swap) : undefined;
+  const holder = swapHolder(league, dp);
+  if (!other && !holder) return base;
+  return base + (other ? swapOutlook(league, dp, other).gain : 0) - (holder ? swapOutlook(league, holder, dp).gain : 0);
+}
+
+/** The chance a pick lands in the first `n` slots of its round, by the projection its value uses. */
+export function topOdds(league: League, dp: DraftPick, n: number): number {
+  return slotOdds(outlook(league, dp)).reduce((a, [k, p]) => a + (k <= n ? p : 0), 0);
 }
 
 // ---------------------------------------------------------------- AI valuation
 
 /** How each strategy weighs draft picks against their neutral value. */
 export const PICK_LENS: Record<Strategy, number> = { contend: 0.7, retool: 1, rebuild: 1.35 };
+
+// ---------------------------------------------------------------- deal terms: protections, swaps, cash
+
+/** The protections a team can put on its own first when it trades it: top 4, 8, 10, 14 (the lottery) or 20. */
+export const PROTECTIONS = [4, 8, 10, 14, 20] as const;
+
+/** A team can send, and separately receive, about this share of the cap in cash in trades each (contract) season, as in the NBA (to the $0.1M). */
+export const CASH_PCT = 0.05;
+
+/**
+ * Trade value of $1M in cash, in the league's first-season money, to a retooling team: about what
+ * second-round picks sell for ($2-3M buys a typical one). Rebuilders take it a little more gladly,
+ * contenders less. It is far more than a dollar of luxury tax weighs (TAX_VALUE): cash in a trade
+ * is a scarce currency for picks, capped by CASH_PCT, not payroll.
+ */
+const CASH_VALUE = 1;
+const CASH_LENS: Record<Strategy, number> = { contend: 0.8, retool: 1, rebuild: 1.1 };
+
+/** League-neutral trade value of cash ($K), in today's money as the cap grows. */
+export const cashValue = (league: League, k: number) => (k / 1000 / revenueScale(league, contractSeason(league))) * CASH_VALUE;
+
+/** Cash team `tid` can still send and receive in trades this contract season ($K), and the season's limit. */
+export function cashRoom(league: League, tid: number): { send: number; receive: number; limit: number } {
+  const s = contractSeason(league);
+  // (to the $0.1M cash moves in)
+  const limit = Math.round((CAP_FOR(league, s).salaryCap * CASH_PCT) / 100) * 100;
+  const used = league.teams[tid].cashTrades;
+  const cur = used?.season === s ? used : { sent: 0, received: 0 };
+  return { limit, send: Math.max(0, limit - cur.sent), receive: Math.max(0, limit - cur.received) };
+}
+
+/** The pick as it would move in a deal: with the protection its team puts on it (held by the team it goes to). */
+export function dealPick(dp: DraftPick, side: TradeSide, to: number): DraftPick {
+  const n = side.protect?.[dp.dpid];
+  return n ? { ...dp, tid: to, protection: n } : dp;
+}
+
+/** Each team's own first of a draft, which a swap right given by `giver` to `taker` would tie together: the taker's carries the right, the giver's is subject to it. */
+export function swapPicks(league: League, giver: number, taker: number, season: number): { right: DraftPick; subject: DraftPick } | null {
+  const own = (tid: number) => league.draftPicks.find((d) => d.season === season && d.round === 1 && d.originalTid === tid);
+  const right = own(taker);
+  const subject = own(giver);
+  return right && subject ? { right, subject } : null;
+}
+
+/** Drafts in which `giver` could give `taker` the right to swap firsts now: each holds its own first, with no protection, swap or set slot on either. */
+export function swapSeasons(league: League, giver: number, taker: number): number[] {
+  const seasons = [...new Set(league.draftPicks.filter((d) => d.round === 1 && d.originalTid === giver).map((d) => d.season))].sort((a, b) => a - b);
+  return seasons.filter((y) => {
+    const sp = swapPicks(league, giver, taker, y);
+    return !!sp && [sp.right, sp.subject].every((d) => d.tid === d.originalTid && d.pick === undefined && !d.protection && !inSwap(league, d));
+  });
+}
+
+/** One of a deal's terms in plain words (see dealTerms). */
+export interface DealTerm {
+  key: string;
+  /** One line for the trade dock. */
+  short: string;
+  /** What it does, in full. */
+  text: string;
+}
+
+const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+/**
+ * A deal's terms in plain words, for the trade builder, from side A's (your) point of view: what each
+ * protection does (the chance the pick stays home by the projection its value uses, and how much
+ * less the other team counts it for), what each swap right does (the chance it's used, and what
+ * it's worth to the team that gets it next to the pick it may take) and what the cash is (no
+ * salary, off the sender's profit, within its limit for the season).
+ */
+export function dealTerms(league: League, offer: TradeOffer): DealTerm[] {
+  const out: DealTerm[] = [];
+  const ab = (tid: number) => league.teams[tid].abbrev;
+  for (const [side, other] of [
+    [offer.a, offer.b],
+    [offer.b, offer.a],
+  ] as const) {
+    const yours = side === offer.a;
+    const whose = yours ? 'your' : `${ab(side.tid)}'s`;
+    // the AI side's view: what it takes in, or what it gives up
+    const judge = yours ? other.tid : side.tid;
+    for (const [k, n] of Object.entries(side.protect ?? {})) {
+      const dp = findPick(league, Number(k));
+      if (!dp || !side.dpids.includes(dp.dpid)) continue;
+      const odds = topOdds(league, dp, n);
+      const full = pickValueFor(league, { ...dp, tid: other.tid }, judge, yours);
+      const kept = pickValueFor(league, dealPick(dp, side, other.tid), judge, yours);
+      const cut = full > 0 ? 1 - kept / full : 0;
+      out.push({
+        key: `p${dp.dpid}`,
+        short: `Top-${n} protection: stays ${yours ? 'yours' : 'theirs'} about ${pct(odds)} of the time; ${yours ? `${ab(judge)} count it ${pct(cut)} lower` : `${pct(cut)} less for ${ab(judge)} to give up`}`,
+        text: `Top-${n} protection: ${whose} ${dp.season} 1st stays ${yours ? 'yours' : 'theirs'} if it lands in the top ${n} (about ${pct(odds)} likely on the current projection), and then nothing is owed. ${
+          yours ? `${ab(judge)} count it ${pct(cut)} lower for that.` : `It costs ${ab(judge)} ${pct(cut)} less to give up.`
+        }`,
+      });
+    }
+    for (const y of side.swaps ?? []) {
+      const sp = swapPicks(league, side.tid, other.tid, y);
+      if (!sp) continue;
+      const { gain, odds } = swapOutlook(league, sp.right, sp.subject);
+      const base = ownValue(league, sp.subject);
+      const share = base > 0 ? gain / base : 0;
+      out.push({
+        key: `s${y}`,
+        short: `${y} swap: used about ${pct(odds)} of the time; ${yours ? `worth ${pct(share)} of your pick to ${ab(other.tid)}` : `costs ${ab(side.tid)} ${pct(share)} of their pick`}`,
+        text: yours
+          ? `${y} swap: ${ab(other.tid)} may take your ${y} 1st for theirs if yours lands higher (about ${pct(odds)} likely on the current projection). It's worth about ${pct(share)} of your pick to them.`
+          : `${y} swap: you may take ${ab(side.tid)}'s ${y} 1st for yours if theirs lands higher (about ${pct(odds)} likely on the current projection). It costs them about ${pct(share)} of their pick.`,
+      });
+    }
+    const c = side.cash ?? 0;
+    if (c > 0) {
+      const room = cashRoom(league, side.tid).send - c;
+      out.push({
+        key: 'cash',
+        short: yours
+          ? `${fmtCash(c)} cash: not salary, off your profit; ${room > 0 ? `${fmtCash(room)} more allowed` : 'no more allowed'} for ${seasonLabel(contractSeason(league))}`
+          : `${fmtCash(c)} cash from ${ab(side.tid)}: not salary, onto your profit`,
+        text: yours
+          ? `${fmtCash(c)} in cash to ${ab(other.tid)}: not salary (no matching, no cap), and it comes out of your profit. ${room > 0 ? `You can send ${fmtCash(room)} more` : "That's all you can send"} for ${seasonLabel(contractSeason(league))}.`
+          : `${fmtCash(c)} in cash from ${ab(side.tid)}: not salary (no matching, no cap), and it adds to your profit.`,
+      });
+    }
+  }
+  return out;
+}
 
 /**
  * A team's view of an asset it would receive (`incoming`) or send: its strategy's lens, kept
@@ -224,6 +435,44 @@ function pickView(league: League, dp: DraftPick, tid: number, incoming: boolean,
   const f = flipped(league, dp);
   return { kind: 'pick', id: dp.dpid, value: f ? neutral : lens(own, neutral, incoming, aiDeal), neutral, own, flipped: f };
 }
+
+/** The right to swap firsts in draft `season` as team `tid` sees it: a pick-like asset, through its strategy's pick lens. */
+function swapView(league: League, gain: number, season: number, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
+  const own = gain * PICK_LENS[league.teams[tid].strategy];
+  return { kind: 'swap', id: season, value: lens(own, gain, incoming, aiDeal), neutral: gain, own, flipped: false };
+}
+
+/** Cash ($K) as team `tid` sees it: a rebuilder a little more gladly, a contender less (never below neutral for what it sends you). */
+function cashView(league: League, k: number, tid: number, incoming: boolean, aiDeal: boolean): AssetView {
+  const neutral = cashValue(league, k);
+  const own = neutral * CASH_LENS[league.teams[tid].strategy];
+  return { kind: 'cash', id: k, value: lens(own, neutral, incoming, aiDeal), neutral, own, flipped: false };
+}
+
+/** What team `tid` thinks a sum of cash ($K) is worth in a deal with the user. */
+export const cashValueFor = (league: League, k: number, tid: number, incoming: boolean) => cashView(league, k, tid, incoming, false).value;
+
+/**
+ * Everything a side sends, as team `tid` sees it: its players, its picks with the protections it
+ * puts on them, the swap rights it gives and its cash. `to` is the team on the other side.
+ */
+function sideViews(league: League, side: TradeSide, to: number, tid: number, incoming: boolean, aiDeal: boolean): AssetView[] {
+  return [
+    ...side.pids.map((pid) => playerView(league, league.players[pid], tid, incoming, aiDeal)),
+    ...side.dpids.flatMap((d) => {
+      const dp = findPick(league, d);
+      return dp ? [pickView(league, dealPick(dp, side, to), tid, incoming, aiDeal)] : [];
+    }),
+    ...(side.swaps ?? []).flatMap((y) => {
+      const sp = swapPicks(league, side.tid, to, y);
+      return sp ? [swapView(league, swapOutlook(league, sp.right, sp.subject).gain, y, tid, incoming, aiDeal)] : [];
+    }),
+    ...((side.cash ?? 0) > 0 ? [cashView(league, side.cash!, tid, incoming, aiDeal)] : []),
+  ];
+}
+
+/** Picks and swap rights count together: a pile of them coming in is worth less than the sum of its parts. */
+const pickLike = (a: AssetView) => a.kind === 'pick' || a.kind === 'swap';
 
 /** What team `tid` thinks a player is worth in a deal (with the user unless `aiDeal`). */
 export function playerValueFor(league: League, p: Player, tid: number, incoming: boolean, aiDeal = false): number {
@@ -305,27 +554,25 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const mine = offer.a.tid === tid ? offer.a : offer.b;
   const other = mine === offer.a ? offer.b : offer.a;
   const aiDeal = offer.a.tid !== league.userTid && offer.b.tid !== league.userTid;
-  const views = (side: TradeSide, incoming: boolean): AssetView[] => [
-    ...side.pids.map((pid) => playerView(league, league.players[pid], tid, incoming, aiDeal)),
-    ...side.dpids.flatMap((d) => {
-      const dp = findPick(league, d);
-      return dp ? [pickView(league, dp, tid, incoming, aiDeal)] : [];
-    }),
-  ];
-  const incoming = views(other, true);
-  const outgoing = views(mine, false);
-  const values = (xs: AssetView[], kind: AssetView['kind']) => xs.filter((x) => x.kind === kind).map((x) => x.value);
+  const incoming = sideViews(league, other, mine.tid, tid, true, aiDeal);
+  const outgoing = sideViews(league, mine, other.tid, tid, false, aiDeal);
+  const values = (xs: AssetView[], kind: (a: AssetView) => boolean) => xs.filter(kind).map((x) => x.value);
+  const isPlayer = (a: AssetView) => a.kind === 'player';
+  const isCash = (a: AssetView) => a.kind === 'cash';
   const depthApplied = other.pids.length > mine.pids.length;
-  const playersIn = weighted(values(incoming, 'player'), depthApplied ? DEPTH : null);
-  const picksIn = weighted(values(incoming, 'pick'), PICK_DEPTH);
-  const playersOut = weighted(values(outgoing, 'player'), mine.pids.length > other.pids.length ? DEPTH : null);
-  const picksOut = weighted(values(outgoing, 'pick'), null);
+  const playersIn = weighted(values(incoming, isPlayer), depthApplied ? DEPTH : null);
+  const picksIn = weighted(values(incoming, pickLike), PICK_DEPTH);
+  const playersOut = weighted(values(outgoing, isPlayer), mine.pids.length > other.pids.length ? DEPTH : null);
+  const picksOut = weighted(values(outgoing, pickLike), null);
+  // cash isn't salary: it neither matches nor counts against the cap, and it adds up dollar for dollar
+  const cashIn = values(incoming, isCash).reduce((a, v) => a + v, 0);
+  const cashOut = values(outgoing, isCash).reduce((a, v) => a + v, 0);
   const salaryIn = sideSalary(league, other);
   const salaryOut = sideSalary(league, mine);
   const money = moneyCost(league, tid, salaryIn, salaryOut);
   const cut = cutCost(league, tid, mine.pids, other.pids);
-  const valueIn = playersIn + picksIn - (money.value + cut.value);
-  const valueOut = playersOut + picksOut;
+  const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
+  const valueOut = playersOut + picksOut + cashOut;
   let slack = (generosity - 1) * Math.abs(valueOut);
   if (generosity < 1) {
     // a casual GM's discount covers the other side's own assets, not ones it just traded for:
@@ -344,6 +591,8 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
     picksIn,
     playersOut,
     picksOut,
+    cashIn,
+    cashOut,
     money: money.value,
     salaryIn,
     salaryOut,
@@ -354,7 +603,7 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
     cuts: cut.count,
     slack,
     depthApplied,
-    depthLoss: depthApplied ? weighted(values(incoming, 'player'), null) - playersIn : 0,
+    depthLoss: depthApplied ? weighted(values(incoming, isPlayer), null) - playersIn : 0,
     flippedIn: incoming.filter((x) => x.flipped),
     tooManyFirsts,
   };
@@ -500,13 +749,66 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       errors.push(`${abbrev} used the mid-level exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`);
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
+    errors.push(...termErrors(league, offer, mine, other));
   }
-  if (!offer.a.pids.length && !offer.a.dpids.length && !offer.b.pids.length && !offer.b.dpids.length) errors.push('The trade is empty.');
+  const something = (x: TradeSide) => x.pids.length || x.dpids.length || x.swaps?.length || (x.cash ?? 0) > 0;
+  if (!something(offer.a) && !something(offer.b)) errors.push('The trade is empty.');
   // (a deep link can name a player twice: the AI would count him twice, and he'd move twice)
   const pids = [...offer.a.pids, ...offer.b.pids];
   const dpids = [...offer.a.dpids, ...offer.b.dpids];
   if (new Set(pids).size < pids.length || new Set(dpids).size < dpids.length) errors.push('A player or pick is in the deal twice.');
+  if ((offer.a.cash ?? 0) > 0 && (offer.b.cash ?? 0) > 0) errors.push('Cash can only go one way in a deal.');
+  for (const y of offer.a.swaps ?? []) if (offer.b.swaps?.includes(y)) errors.push(`The ${y} firsts can only be swapped one way: one swap per pick.`);
   return [...new Set(errors)];
+}
+
+/**
+ * What the rules say about the terms one side puts on the table. A protection goes only on the
+ * team's own first, before its draft order is set and outside any swap (a pick it already holds
+ * with a protection, or another team's, keeps its terms). A swap right needs both teams to hold
+ * their own firsts of that draft, unprotected, with no slot set and no swap on either (one swap
+ * per pick), and neither may change hands in the same deal. Cash stays within what each team can
+ * still send and receive this season (see cashRoom).
+ */
+function termErrors(league: League, offer: TradeOffer, mine: TradeSide, other: TradeSide): string[] {
+  const errors: string[] = [];
+  const abbrev = league.teams[mine.tid].abbrev;
+  for (const [k, n] of Object.entries(mine.protect ?? {})) {
+    const dp = findPick(league, Number(k));
+    if (!dp || !mine.dpids.includes(dp.dpid)) errors.push("A protection is set on a pick that isn't in the deal.");
+    else if (!(PROTECTIONS as readonly number[]).includes(n)) errors.push('A protection covers the top 4, 8, 10, 14 or 20 picks.');
+    else if (dp.round !== 1 || dp.originalTid !== mine.tid) errors.push(`${abbrev} can only protect its own first-round picks: the ${pickLabel(league, dp)} keeps its terms.`);
+    else if (dp.pick !== undefined) errors.push(`The ${dp.season} draft order is set: the ${pickLabel(league, dp)} can't be protected now.`);
+    else if (inSwap(league, dp)) errors.push(`The ${pickLabel(league, dp)} is part of a pick swap, so it can't be protected.`);
+  }
+  const moving = new Set([...offer.a.dpids, ...offer.b.dpids]);
+  const seasons = mine.swaps ?? [];
+  if (new Set(seasons).size < seasons.length) errors.push('A swap is in the deal twice.');
+  for (const y of seasons) {
+    const sp = Number.isInteger(y) ? swapPicks(league, mine.tid, other.tid, y) : null;
+    if (!sp) errors.push(`There are no ${y} first-round picks to swap.`);
+    else if (sp.subject.tid !== mine.tid || sp.right.tid !== other.tid) errors.push(`A ${y} swap needs both teams to hold their own ${y} first-round picks.`);
+    else if (sp.subject.pick !== undefined || sp.right.pick !== undefined) errors.push(`The ${y} draft order is set: those firsts can't be swapped now.`);
+    else if (protectionOf(sp.subject) || protectionOf(sp.right) || inSwap(league, sp.subject) || inSwap(league, sp.right))
+      errors.push(`A ${y} first in that swap already has a protection or a swap: one swap per pick, and none on a protected pick.`);
+    else if (moving.has(sp.subject.dpid) || moving.has(sp.right.dpid)) errors.push(`A ${y} first can't change hands in the same deal that swaps it.`);
+  }
+  const c = mine.cash;
+  if (c !== undefined && c !== 0) {
+    if (!Number.isInteger(c) || c < 0) errors.push("The cash in the deal isn't a valid amount.");
+    else {
+      const s = seasonLabel(contractSeason(league));
+      const out = cashRoom(league, mine.tid);
+      const into = cashRoom(league, other.tid);
+      if (c > out.send)
+        errors.push(`${abbrev} can send ${out.send > 0 ? `at most ${fmtCash(out.send)} more` : 'no more'} in cash in trades for ${s} (${fmtCash(out.limit)} a season).`);
+      if (c > into.receive)
+        errors.push(
+          `${league.teams[other.tid].abbrev} can take ${into.receive > 0 ? `at most ${fmtCash(into.receive)} more` : 'no more'} in cash in trades for ${s} (${fmtCash(into.limit)} a season).`,
+        );
+    }
+  }
+  return errors;
 }
 
 export function evaluateTrade(league: League, offer: TradeOffer): TradeEval {
@@ -544,6 +846,8 @@ function evaluate(league: League, offer: TradeOffer): TradeEval {
 const STRATEGY_NOUN: Record<Strategy, string> = { contend: 'contender', retool: 'retooling team', rebuild: 'rebuilder' };
 
 const fmtK = (k: number) => `$${(Math.abs(k) / 1000).toFixed(1)}M`;
+/** Cash: "$2.5M" (to the $10K, "$2.25M", if it isn't a round $0.1M). */
+export const fmtCash = (k: number) => `$${(k / 1000).toFixed(k % 100 ? 2 : 1)}M`;
 
 /**
  * League-neutral value of what side A gives and gets, weighed the way an AI team weighs a deal:
@@ -557,9 +861,10 @@ export function neutralSplit(parts: Pick<VerdictParts, 'incoming' | 'outgoing'>,
       depth ? DEPTH : null,
     ) +
     weighted(
-      xs.filter((x) => x.kind === 'pick').map((x) => x.neutral),
+      xs.filter(pickLike).map((x) => x.neutral),
       incoming ? PICK_DEPTH : null,
-    );
+    ) +
+    xs.filter((x) => x.kind === 'cash').reduce((a, x) => a + x.neutral, 0);
   return {
     give: sum(parts.incoming, offer.a.pids.length > offer.b.pids.length, false),
     get: sum(parts.outgoing, offer.b.pids.length > offer.a.pids.length, true),
@@ -582,7 +887,14 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
   // worth a mention: about 3% of the deal, and at least half a point of value (a 60 OVR is worth 1)
   const scale = Math.max(Math.abs(ev.valueOut), Math.abs(ev.valueIn), x.playersIn + x.picksIn);
   const matters = (v: number) => Math.abs(v) >= Math.max(0.5, 0.03 * scale);
-  const nameOf = (a: AssetView) => (a.kind === 'player' ? playerName(league.players[a.id]) : `the ${pickLabel(league, findPick(league, a.id)!)}`);
+  const nameOf = (a: AssetView) =>
+    a.kind === 'player'
+      ? playerName(league.players[a.id])
+      : a.kind === 'pick'
+        ? `the ${pickLabel(league, findPick(league, a.id)!)}`
+        : a.kind === 'swap'
+          ? `the ${a.id} swap right`
+          : `${fmtCash(a.id)} in cash`;
 
   if (offer.a.tid === league.userTid) {
     const { give, get } = neutralSplit(x, offer);
@@ -615,9 +927,16 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
       if (a.value < a.neutral) add('bad', a.neutral > 0 ? `${who} is worth less to a ${noun}` : `${who}'s contract is a bigger burden to a ${noun}`, a.neutral - a.value);
       else add('good', a.neutral > 0 ? `${who} is worth more to a ${noun}` : `${who}'s contract is less of a burden to a ${noun}`, a.value - a.neutral);
     }
-    const picks = x.incoming.filter((a) => a.kind === 'pick' && !a.flipped);
+    const picks = x.incoming.filter((a) => pickLike(a) && !a.flipped);
     const lift = picks.reduce((s, a) => s + a.value - a.neutral, 0);
     if (picks.length && matters(lift)) add(lift > 0 ? 'good' : 'bad', lift > 0 ? 'Picks count extra for them' : "Picks don't help them win now", Math.abs(lift));
+    const cash = x.incoming.find((a) => a.kind === 'cash');
+    if (cash && matters(cash.value - cash.neutral))
+      add(
+        cash.value > cash.neutral ? 'good' : 'bad',
+        `${fmtCash(cash.id)} in cash counts ${cash.value > cash.neutral ? 'extra' : 'for less'} to a ${noun}`,
+        Math.abs(cash.value - cash.neutral),
+      );
   }
 
   // face value for anything that changed hands this season: no strategy premium, no casual discount
@@ -658,8 +977,9 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
 }
 
 export function executeTrade(league: League, offer: TradeOffer) {
-  // (logged before anything moves: each pick is named as its sender held it, "2027 1st" for its own)
-  logTrade(league, [offer.a, offer.b], (dpid) => pickLabel(league, findPick(league, dpid)!));
+  // (logged before anything moves: each pick is named as its sender held it, "2027 1st" for its
+  // own, with the protection it goes with)
+  logTrade(league, [offer.a, offer.b], (dpid, side) => pickLabel(league, findPick(league, dpid)!, { protection: side.protect?.[dpid] }));
   const move = (pids: number[], to: number) => {
     for (const pid of pids) {
       const p = league.players[pid];
@@ -669,29 +989,51 @@ export function executeTrade(league: League, offer: TradeOffer) {
       p.joinedSeason = league.season;
       p.mood.tradeRequest = false;
       p.mood.score = Math.max(p.mood.score, 0);
+      // a fresh start: what his old GM promised him, and their meetings, stay behind
+      delete p.promise;
+      delete p.meeting;
       league.teams[to].rotation.order.push(pid);
     }
   };
-  const movePicks = (dpids: number[], to: number) => {
-    for (const dpid of dpids) {
+  const movePicks = (side: TradeSide, to: number) => {
+    for (const dpid of side.dpids) {
       const dp = findPick(league, dpid);
       if (!dp) continue;
       dp.tradedFrom = tradedAway(league, dp, dp.tid);
       dp.tid = to;
       // back with its original team, a protection has nothing left to protect
       if (to === dp.originalTid) delete dp.protection;
+      // a team's own first, protected as it goes
+      const n = side.protect?.[dpid];
+      if (n && to !== dp.originalTid) dp.protection = n;
     }
   };
   move(offer.a.pids, offer.b.tid);
   move(offer.b.pids, offer.a.tid);
-  movePicks(offer.a.dpids, offer.b.tid);
-  movePicks(offer.b.dpids, offer.a.tid);
+  movePicks(offer.a, offer.b.tid);
+  movePicks(offer.b, offer.a.tid);
+  for (const [side, to] of [
+    [offer.a, offer.b.tid],
+    [offer.b, offer.a.tid],
+  ] as const) {
+    // a swap right rides on the other team's own first of that draft
+    for (const y of side.swaps ?? []) {
+      const sp = swapPicks(league, side.tid, to, y);
+      if (sp) sp.right.swap = sp.subject.dpid;
+    }
+    payCash(league, side, to);
+  }
   // a player the user marked untouchable is unmarked when he leaves
   if (league.untouchable) league.untouchable = league.untouchable.filter((pid) => league.players[pid]?.tid === league.userTid);
   const ta = league.teams[offer.a.tid];
   const tb = league.teams[offer.b.tid];
   const desc = (side: TradeSide) =>
-    [...side.pids.map((pid) => playerName(league.players[pid])), ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!))].join(', ') || 'nothing';
+    [
+      ...side.pids.map((pid) => playerName(league.players[pid])),
+      ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!)),
+      ...(side.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
+      ...((side.cash ?? 0) > 0 ? [`${fmtCash(side.cash!)} in cash`] : []),
+    ].join(', ') || 'nothing';
   addNews(league, {
     kind: 'trade',
     text: `Trade: ${ta.abbrev} send ${desc(offer.a)} to ${tb.abbrev} for ${desc(offer.b)}.`,
@@ -700,13 +1042,65 @@ export function executeTrade(league: League, offer: TradeOffer) {
   });
 }
 
-/** "2027 1st", "2027 2nd #59" once the order is set (overall number), "(BOS)" if acquired, and any protection. */
-export function pickLabel(league: League, dp: DraftPick) {
+/**
+ * Cash a side sends: off its bank balance and onto the other team's, an expense of the sender's
+ * season and revenue of the receiver's (kept apart from the local revenue that revenue sharing
+ * evens out), and counted against both teams' limits for the contract season.
+ */
+function payCash(league: League, side: TradeSide, to: number) {
+  const c = side.cash ?? 0;
+  if (c <= 0) return;
+  const s = contractSeason(league);
+  const used = (tid: number) => {
+    const t = league.teams[tid];
+    if (t.cashTrades?.season !== s) t.cashTrades = { season: s, sent: 0, received: 0 };
+    return t.cashTrades;
+  };
+  used(side.tid).sent += c;
+  used(to).received += c;
+  league.teams[side.tid].cash -= c;
+  league.teams[to].cash += c;
+  curTeamSeason(league, side.tid).expenses += c;
+  const ts = curTeamSeason(league, to);
+  ts.revenue += c;
+  ts.cashIn = (ts.cashIn ?? 0) + c;
+}
+
+/**
+ * "2027 1st", "2027 2nd #59" once the order is set (overall number), "(BOS)" if acquired, any
+ * protection ("· top-10 prot."; `terms.protection`: the one it goes with in a deal) and a swap
+ * riding on it ("· swap with BKN" on the pick holding the right, "· BOS may swap" on the one
+ * subject to it, naming the team that holds the right).
+ */
+export function pickLabel(league: League, dp: DraftPick, terms: { protection?: number } = {}) {
   const orig = league.teams[dp.originalTid];
   const slot = dp.pick ? ` #${(dp.round - 1) * 30 + dp.pick}` : '';
   const via = dp.originalTid !== dp.tid ? ` (${orig.abbrev})` : '';
-  const prot = dp.protection && dp.originalTid !== dp.tid ? ` · top-${(dp.round - 1) * 30 + dp.protection} prot.` : '';
-  return `${dp.season} ${dp.round === 1 ? '1st' : '2nd'}${slot}${via}${prot}`;
+  const n = terms.protection || protectionOf(dp);
+  const prot = n ? ` · top-${(dp.round - 1) * 30 + n} prot.` : '';
+  return `${dp.season} ${dp.round === 1 ? '1st' : '2nd'}${slot}${via}${prot}${swapLabel(league, dp)}`;
+}
+
+function swapLabel(league: League, dp: DraftPick): string {
+  const other = dp.swap !== undefined ? findPick(league, dp.swap) : undefined;
+  if (other) return ` · swap with ${league.teams[other.originalTid].abbrev}`;
+  const holder = swapHolder(league, dp);
+  return holder ? ` · ${league.teams[holder.tid].abbrev} may swap` : '';
+}
+
+/** A pick's terms in plain words for pick lists ("Stays with BKN if it lands in the top 10."), or null. */
+export function pickTermsNote(league: League, dp: DraftPick): string | null {
+  const notes: string[] = [];
+  const n = protectionOf(dp);
+  if (n) notes.push(`Stays with ${league.teams[dp.originalTid].abbrev} if it lands in the top ${n}${dp.round === 2 ? ' of the second round' : ''}.`);
+  const other = dp.swap !== undefined ? findPick(league, dp.swap) : undefined;
+  if (other) notes.push(`Swaps for ${league.teams[other.originalTid].abbrev}'s ${dp.season} 1st if that one lands higher.`);
+  const holder = swapHolder(league, dp);
+  if (holder)
+    notes.push(
+      `${league.teams[holder.tid].abbrev} may take it for ${holder.tid === holder.originalTid ? 'their own' : `${league.teams[holder.originalTid].abbrev}'s`} ${dp.season} 1st if it lands higher.`,
+    );
+  return notes.length ? notes.join(' ') : null;
 }
 
 // ---------------------------------------------------------------- "what would make this work?"
@@ -736,13 +1130,28 @@ export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null;
  * much salary, first add the least valuable player (or pair) whose salary fixes the matching, then
  * top up the value: each round adds the smallest pick or player that covers what's missing, else
  * the most valuable one (a full roster takes a player). See salaryMatchGap for the salary A would
- * need to send. The user's untouchables are never asked for, nor anyone in `keep`.
+ * need to send. The user's untouchables are never asked for, nor anyone in `keep`. With `cash`, a
+ * gap that a little of A's cash covers (within what both teams can still move this season) is
+ * closed with cash before any pick or player is added.
  */
-export function makeItWork(league: League, offer: TradeOffer, keep: readonly number[] = []): WorkResult {
-  return withHoldsMemo(() => findWork(league, offer, keep));
+export function makeItWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean } = {}): WorkResult {
+  return withHoldsMemo(() => findWork(league, offer, keep, opts));
 }
 
-function findWork(league: League, offer: TradeOffer, keep: readonly number[] = []): WorkResult {
+/**
+ * The cash ($K, in $0.1M steps) side A would send in all for side B to see `need` more value, or
+ * null when that's more than both teams can still move this season (or B is the one sending cash).
+ */
+function cashToClose(league: League, o: TradeOffer, need: number): number | null {
+  if (!(need > 0) || (o.b.cash ?? 0) > 0) return null;
+  const room = Math.min(cashRoom(league, o.a.tid).send, cashRoom(league, o.b.tid).receive);
+  // (cash is valued in proportion: what $1M is worth to B)
+  const per = cashValueFor(league, 1000, o.b.tid, true);
+  const total = (o.a.cash ?? 0) + Math.ceil((need / per) * 10) * 100;
+  return per > 0 && total <= room ? total : null;
+}
+
+function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean } = {}): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
   const gapA = salaryMatchGap(league, cur, 'a');
@@ -769,6 +1178,12 @@ function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [
     if (ev.accept) return { offer: cur };
     if (!ev.ok && !canMakeWork(league, cur)) break;
     const need = -ev.delta;
+    // a little cash before a pick or a player
+    const c = opts.cash ? cashToClose(league, cur, need) : null;
+    if (c !== null) {
+      const next: TradeOffer = { a: { ...cur.a, cash: c }, b: cur.b };
+      if (legal(next) && evaluateTrade(league, next).accept) return { offer: next };
+    }
     const picks = league.draftPicks
       .filter((d) => d.tid === cur.a.tid && !cur.a.dpids.includes(d.dpid) && legal(withA(cur, [], [d.dpid])))
       .map((d) => ({ next: withA(cur, [], [d.dpid]), v: pickValueFor(league, d, ai, true) }));
@@ -798,11 +1213,12 @@ export interface CounterOffer {
 
 /**
  * Up to `max` versions of a turned-down deal that side B would accept, the best for side A (by
- * league-neutral value) first: what "what would make this work?" adds from A, the deal without
- * one of B's assets, and B sending one of its bad contracts for A to absorb (the least burden that
- * gets it done; else the worst one with whatever else A would have to add). Each one passes the
- * rules and B's yes as it stands, and moves only assets each side owns. Nothing for a deal B
- * already takes.
+ * league-neutral value) first: what "what would make this work?" adds from A (or a little cash
+ * from A that closes the gap), the deal without one of B's assets (a player, a pick, a swap right
+ * or its cash) or without a protection A put on its pick, and B sending one of its bad contracts
+ * for A to absorb (the least burden that gets it done; else the worst one with whatever else A
+ * would have to add). Each one passes the rules and B's yes as it stands, and moves only assets
+ * each side owns. Nothing for a deal B already takes.
  */
 export function counterOffers(league: League, offer: TradeOffer, max = 3): CounterOffer[] {
   return withHoldsMemo(() => findCounters(league, offer, max));
@@ -814,8 +1230,9 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
   const found: { c: CounterOffer; net: number }[] = [];
   const seen = new Set<string>();
   const sorted = (xs: number[]) => [...xs].sort((x, y) => x - y);
+  const terms = (x: TradeSide) => [Object.entries(x.protect ?? {}).sort(), sorted(x.swaps ?? []), x.cash ?? 0];
   const consider = (o: TradeOffer, kind: CounterOffer['kind'], label: string) => {
-    const key = JSON.stringify([sorted(o.a.pids), sorted(o.a.dpids), sorted(o.b.pids), sorted(o.b.dpids)]);
+    const key = JSON.stringify([sorted(o.a.pids), sorted(o.a.dpids), sorted(o.b.pids), sorted(o.b.dpids), terms(o.a), terms(o.b)]);
     if (seen.has(key)) return;
     seen.add(key);
     if (validateTrade(league, o).length) return;
@@ -830,12 +1247,28 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
     ...to.a.dpids.filter((x) => !from.a.dpids.includes(x)).map((x) => assetName('pick', x)),
   ];
 
-  // what they'd need added from A
+  // what they'd need added from A, or a little cash from A instead
   const work = findWork(league, offer);
   if (work.offer) consider(work.offer, 'add', `Add ${added(offer, work.offer).join(' + ')}`);
+  const cash = cashToClose(league, offer, -base.delta);
+  if (cash !== null) consider({ a: { ...offer.a, cash }, b: offer.b }, 'add', `Add ${fmtCash(cash - (offer.a.cash ?? 0))} in cash`);
+
+  // A's own pick without the protection A put on it
+  for (const [k, n] of Object.entries(offer.a.protect ?? {})) {
+    const dp = findPick(league, Number(k));
+    if (!dp || !offer.a.dpids.includes(dp.dpid)) continue;
+    const protect = { ...offer.a.protect };
+    delete protect[dp.dpid];
+    consider({ a: { ...offer.a, protect }, b: offer.b }, 'remove', `Without the top-${n} protection on the ${pickLabel(league, dp)}`);
+  }
 
   // one of B's assets stays home (unless that leaves A giving something for nothing)
-  const without = (pids: number[], dpids: number[]): TradeOffer => ({ a: offer.a, b: { ...offer.b, pids, dpids } });
+  const without = (pids: number[], dpids: number[], patch: Partial<TradeSide> = {}): TradeOffer => {
+    const b: TradeSide = { ...offer.b, pids, dpids, ...patch };
+    // a protection goes with its pick
+    if (b.protect) b.protect = Object.fromEntries(Object.entries(b.protect).filter(([d]) => dpids.includes(Number(d))));
+    return { a: offer.a, b };
+  };
   const aValue = neutralSplit(base.parts, offer).give;
   const drops: [TradeOffer, string][] = [
     ...offer.b.pids.map((pid): [TradeOffer, string] => [
@@ -852,8 +1285,14 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
       ),
       `the ${assetName('pick', d)}`,
     ]),
+    ...(offer.b.swaps ?? []).map((y): [TradeOffer, string] => [
+      without(offer.b.pids, offer.b.dpids, { swaps: offer.b.swaps!.filter((x) => x !== y) }),
+      `the right to swap ${y} firsts`,
+    ]),
+    ...((offer.b.cash ?? 0) > 0 ? [[without(offer.b.pids, offer.b.dpids, { cash: 0 }), `the ${fmtCash(offer.b.cash!)} in cash`] as [TradeOffer, string]] : []),
   ];
-  for (const [o, name] of drops) if (o.b.pids.length + o.b.dpids.length > 0 || aValue <= 0) consider(o, 'remove', `Without ${name}`);
+  for (const [o, name] of drops)
+    if (o.b.pids.length + o.b.dpids.length + (o.b.swaps?.length ?? 0) + (o.b.cash ? 1 : 0) > 0 || aValue <= 0) consider(o, 'remove', `Without ${name}`);
 
   // one of B's bad contracts comes along: the smallest burden that does it, else the worst one plus what A adds
   const s = contractSeason(league);
@@ -1197,16 +1636,24 @@ export function neutralBalance(league: League, offer: TradeOffer, side: 'a' | 'b
       s.pids.flatMap((pid) => (league.players[pid] ? [tradeValue(league, league.players[pid], 'retool')] : [])),
       depth ? DEPTH : null,
     );
-  const picks = (s: TradeSide, incoming: boolean) =>
+  // picks as they'd go (with their protections) and swap rights count together; cash at face value
+  const picks = (s: TradeSide, to: number, incoming: boolean) =>
     weighted(
-      s.dpids.flatMap((d) => {
-        const dp = findPick(league, d);
-        return dp ? [pickValue(league, dp)] : [];
-      }),
+      [
+        ...s.dpids.flatMap((d) => {
+          const dp = findPick(league, d);
+          return dp ? [pickValue(league, dealPick(dp, s, to))] : [];
+        }),
+        ...(s.swaps ?? []).flatMap((y) => {
+          const sp = swapPicks(league, s.tid, to, y);
+          return sp ? [swapOutlook(league, sp.right, sp.subject).gain] : [];
+        }),
+      ],
       incoming ? PICK_DEPTH : null,
     );
-  const inc = players(other, other.pids.length > mine.pids.length) + picks(other, true);
-  const out = players(mine, mine.pids.length > other.pids.length) + picks(mine, false);
+  const cash = (s: TradeSide) => ((s.cash ?? 0) > 0 ? cashValue(league, s.cash!) : 0);
+  const inc = players(other, other.pids.length > mine.pids.length) + picks(other, mine.tid, true) + cash(other);
+  const out = players(mine, mine.pids.length > other.pids.length) + picks(mine, other.tid, false) + cash(mine);
   return { net: inc - out, out };
 }
 

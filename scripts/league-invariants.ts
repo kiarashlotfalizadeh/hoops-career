@@ -13,7 +13,8 @@ import { finalsHomeCourt, standings } from '../src/core/league/standings';
 import { cupTables } from '../src/core/league/cup';
 import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
-import { validateTrade } from '../src/core/league/trades';
+import * as TR from '../src/core/league/trades';
+import * as MO from '../src/core/league/morale';
 import * as P from '../src/core/league/proposals';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP } from '../src/core/constants';
@@ -137,6 +138,7 @@ function check() {
   if ((L.proposals?.length ?? 0) > P.MAX_OPEN || new Set(L.proposals?.map((p) => p.tid)).size !== (L.proposals?.length ?? 0))
     bad('too many trade offers', String(L.proposals?.length));
   for (const pid of L.untouchable ?? []) if (L.players[pid]?.tid !== L.userTid) bad('untouchable not on the user team', nm(pid));
+  checkTerms();
   checkTransactions();
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
@@ -354,6 +356,98 @@ function checkLottery() {
   if (pct.some((x, i) => i > 0 && x < pct[i - 1] - 1e-9)) bad('second round not by record', pct.map((x) => x.toFixed(3)).join(','));
 }
 
+/**
+ * Deal terms: a swap right ties a first to another team's first of the same draft, neither
+ * protected nor with its slot set, each pick in one swap at most; no team past its cash limit for
+ * the contract season; promises only to the user's players while the season is on.
+ */
+function checkTerms() {
+  const inOne = new Set<number>();
+  for (const d of L.draftPicks) {
+    if (d.swap === undefined) continue;
+    const o = L.draftPicks.find((x) => x.dpid === d.swap);
+    if (
+      !o ||
+      o.season !== d.season ||
+      d.round !== 1 ||
+      o.round !== 1 ||
+      o.originalTid === d.originalTid ||
+      d.protection ||
+      o.protection ||
+      d.pick !== undefined ||
+      o.pick !== undefined
+    )
+      bad('bad pick swap', JSON.stringify([d, o]));
+    if (inOne.has(d.dpid) || inOne.has(d.swap)) bad('pick in two swaps', String(d.dpid));
+    inOne.add(d.dpid).add(d.swap);
+  }
+  const cs = H.contractSeason(L);
+  for (const t of L.teams) {
+    const c = t.cashTrades;
+    const limit = TR.cashRoom(L, t.tid).limit;
+    if (c && c.season === cs && (c.sent > limit || c.received > limit || c.sent < 0 || c.received < 0))
+      bad('cash in trades over the limit', `${t.abbrev} ${JSON.stringify(c)} limit ${limit}`);
+  }
+  if (H.inSeason(L) && L.phase !== 'preseason')
+    for (const p of Object.values(L.players)) if (p.promise && (p.promise.tid !== L.userTid || (p.tid >= 0 && p.tid !== L.userTid))) bad("promise off the user's team", nm(p.pid));
+}
+
+/** What the user's deals and meetings with deal terms came to this season. */
+const termsTally = { trades: 0, swaps: 0, cash: 0, promises: 0 };
+
+/**
+ * Preseason: the user trades with terms, as a player might. His next first, top-10 protected, the
+ * right to swap the following draft's firsts and $1M for an AI team's next second (the first team in
+ * order that takes it; without the first if the Stepien rule or a swap stands in the way), then
+ * "what would make this work?" with cash for another team's second.
+ */
+function tradeWithTerms() {
+  const u = L.userTid;
+  const s = L.season;
+  const mine = L.draftPicks.find((d) => d.originalTid === u && d.tid === u && d.round === 1 && d.season === s + 1 && !TR.inSwap(L, d));
+  for (const t of L.teams) {
+    if (t.tid === u) continue;
+    const second = L.draftPicks.find((d) => d.originalTid === t.tid && d.tid === t.tid && d.round === 2 && d.season === s + 1);
+    if (!second) continue;
+    const swaps = TR.swapSeasons(L, u, t.tid).filter((y) => y === s + 2);
+    const tries: TR.TradeOffer[] = [
+      ...(mine ? [{ a: { tid: u, pids: [], dpids: [mine.dpid], protect: { [mine.dpid]: 10 }, swaps, cash: 1_000 }, b: { tid: t.tid, pids: [], dpids: [second.dpid] } }] : []),
+      { a: { tid: u, pids: [], dpids: [], swaps, cash: 1_000 }, b: { tid: t.tid, pids: [], dpids: [second.dpid] } },
+    ];
+    const o = tries.find((x) => TR.evaluateTrade(L, x).accept);
+    if (!o) continue;
+    TR.executeTrade(L, o);
+    termsTally.trades++;
+    termsTally.swaps += o.a.swaps?.length ?? 0;
+    termsTally.cash += o.a.cash ?? 0;
+    if (mine && o.a.dpids.includes(mine.dpid) && mine.protection !== 10) bad('protection not set by the trade', JSON.stringify(mine));
+    break;
+  }
+  for (const t of [...L.teams].reverse()) {
+    const second = L.draftPicks.find((d) => d.originalTid === t.tid && d.tid === t.tid && d.round === 2 && d.season === s + 2);
+    if (t.tid === u || !second) continue;
+    const r = TR.makeItWork(L, { a: { tid: u, pids: [], dpids: [] }, b: { tid: t.tid, pids: [], dpids: [second.dpid] } }, [], { cash: true });
+    if (!r.offer?.a.cash || r.offer.a.pids.length || r.offer.a.dpids.length) continue;
+    if (!TR.evaluateTrade(L, r.offer).accept) bad('a cash offer that would make it work is turned down', JSON.stringify(r.offer));
+    TR.executeTrade(L, r.offer);
+    termsTally.trades++;
+    termsTally.cash += r.offer.a.cash;
+    break;
+  }
+}
+
+/** In season, now and then: the user meets his players who asked out or are unhappy, promising each something in turn. */
+function meetUnhappy() {
+  const kinds: MO.MeetChoice[] = ['role', 'trade', 'patience'];
+  for (const p of H.teamPlayers(L, L.userTid)) {
+    if (MO.meetBlockedReason(L, p)) continue;
+    const kind = kinds[(termsTally.promises + p.pid) % 3];
+    const r = MO.meetPlayer(L, p.pid, kind === 'trade' && !p.mood.tradeRequest ? 'role' : kind);
+    if (!r.ok) bad('meeting refused', `${nm(p.pid)} ${r.text}`);
+    else termsTally.promises++;
+  }
+}
+
 /** The transaction log: ids unique and increasing, real teams, a player on every move, and sides (one per team) on trades only. */
 function checkTransactions() {
   let last = 0;
@@ -361,9 +455,12 @@ function checkTransactions() {
     if (!(t.id > last)) bad('transaction ids not increasing', `${last} then ${t.id}`);
     last = Math.max(last, t.id);
     if (!t.tids.length || t.tids.some((tid) => !L.teams[tid])) bad('transaction with a bad team', JSON.stringify(t));
-    if ((t.kind === 'trade') !== !!t.sides) bad('trade sides off a trade', JSON.stringify(t));
+    // (an exercised pick swap lists the pick each team gave up, as a trade does)
+    const picksMoved = t.kind === 'trade' || t.kind === 'swap';
+    if (picksMoved !== !!t.sides) bad('trade sides off a trade', JSON.stringify(t));
     if (t.sides && t.sides.map((x) => x.tid).join() !== t.tids.join()) bad("trade sides don't match its teams", JSON.stringify(t));
-    if (t.kind !== 'trade' && (t.pid === undefined || !t.name)) bad('move without a player', JSON.stringify(t));
+    if (!picksMoved && (t.pid === undefined || !t.name)) bad('move without a player', JSON.stringify(t));
+    if (t.kind === 'swap' && t.sides!.some((x) => x.picks.length !== 1 || x.players.length)) bad('swap without one pick a side', JSON.stringify(t));
   }
   if (last && !((L.nextTxnId ?? 0) > last)) bad('transaction id reused', `next ${L.nextTxnId}, last ${last}`);
 }
@@ -383,7 +480,7 @@ function fireAndMove() {
   if (fa && FA.userOffer(L, fa.pid, C.askingContract(L, fa, old).amount, 1).reason !== C.FIRED_REASON) bad('fired coach can sign', nm(fa.pid));
   const ai = (old + 1) % L.teams.length;
   const mine = std(old)[0];
-  if (mine && !validateTrade(L, { a: { tid: old, pids: [mine.pid], dpids: [] }, b: { tid: ai, pids: [], dpids: [] } }).some((e) => e.includes('fired')))
+  if (mine && !TR.validateTrade(L, { a: { tid: old, pids: [mine.pid], dpids: [] }, b: { tid: ai, pids: [], dpids: [] } }).some((e) => e.includes('fired')))
     bad('fired coach can trade', '');
   // the job on offer: the worst record in the league
   const to = L.teams.filter((t) => t.tid !== old).sort((a, b) => H.winPct(H.curTeamSeason(L, a.tid)) - H.winPct(H.curTeamSeason(L, b.tid)))[0].tid;
@@ -437,6 +534,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // the user's best player is off the table: no offer may ask for him
     const best = std(L.userTid).sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
     if (best) P.setUntouchable(L, best.pid, true);
+    Object.assign(termsTally, { trades: 0, swaps: 0, cash: 0, promises: 0 });
+    tradeWithTerms();
     check();
     const offers0 = L.nextProposalId ?? 1;
     const errs = S.startRegularSeason(L);
@@ -474,7 +573,10 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         lastId = L.nextMsgId;
         check();
       }
-      if (L.day % 30 === 0) check();
+      if (L.day % 30 === 0) {
+        meetUnhappy();
+        check();
+      }
       if (L.day > 90 && L.phase === 'regular') checkClinch();
       if (L.day === L.allStarDay + 1 && L.phase === 'regular') checkAllStars();
     }
@@ -518,6 +620,14 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
+    );
+    // the user's swaps settled at last season's lottery (he hears about each), and how many were used
+    const settled = L.inbox.filter((m) => m.season === L.season - 1 && m.subject.startsWith('Pick swap')).length;
+    const swapped = (L.transactions ?? []).filter((t) => t.kind === 'swap' && t.season === L.season - 1).length;
+    const kept = L.inbox.filter((m) => m.season === L.season - 1 && /likes his new role|has settled down/.test(m.subject)).length;
+    const broken = L.inbox.filter((m) => m.season >= L.season - 1 && /says you broke your word|goes public|wants a trade again/.test(m.subject)).length;
+    console.log(
+      `   deal terms: ${termsTally.trades} trades (${termsTally.swaps} swap rights given, $${(termsTally.cash / 1000).toFixed(1)}M cash), ${settled} swaps settled at the lottery (${swapped} used), ${termsTally.promises} promises (${kept} kept, ${broken} broken or back)`,
     );
     const log = L.transactions ?? [];
     const kinds = new Map<string, number>();
