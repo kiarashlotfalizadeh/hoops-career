@@ -3,8 +3,8 @@
 // quarter skip stops at the break, and a game in progress survives the app being closed (its
 // journal plays it back to where it was saved).
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { CLUTCH_SEC, checkpointLive, clearLive, liveInProgress, pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CLUTCH_SEC, checkpointLive, clearLive, dropLive, liveInProgress, pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
 import { useStore } from '../store';
 import { loadLeague, migrate } from '../persistence';
 import { flowActions } from '../../ui/flow';
@@ -12,7 +12,9 @@ import { regularGamesLeft, simDay } from '../../core/league/season';
 import { releasePlayer, signPlayer } from '../../core/league/contracts';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { curTeamSeason } from '../../core/league/helpers';
-import type { League, LiveJournal } from '../../core/types';
+import type { League, LiveJournal, Rotation } from '../../core/types';
+import { gamesOnDay } from '../../core/league/games';
+import { snapshot, subsLine } from '../../ui/live/drawn';
 import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { testLeague, toGameDay, userGames } from './fixtures';
 
@@ -482,6 +484,28 @@ describe('a live game survives the app being closed (W12)', () => {
     expect(again.commit(back).oppPlan).toEqual(plan!.items.map((it) => it.text));
   });
 
+  it('reading a save turns "Keep changes" off when its base is out of shape, and the game goes on', async () => {
+    const l = testLeague('keep damaged');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.setKeep(l.teams[l.userTid].tactics);
+    lg.simTo('quarter');
+    checkpointLive(l);
+    const file = JSON.parse(JSON.stringify(l)) as League;
+    const sound = JSON.parse(JSON.stringify(l)) as League;
+    clearLive();
+    // a crafted backup: tactics with nothing in them (any change with Keep on, or turning it off, would crash on them)
+    (file.live as { keep: unknown }).keep = { offense: {}, defense: {}, manage: {} };
+    const back = migrate(file);
+    expect(back.live).toBeDefined();
+    expect(back.live!.keep).toBeUndefined();
+    useStore.getState().setLeague(back);
+    const again = prepareLive(back)!;
+    expect([again.resumed, again.keep, again.steps]).toEqual(['journal', null, lg.steps]);
+    // a sound one stays
+    expect(migrate(sound).live!.keep).toEqual(lg.keep);
+  });
+
   it("reading a save drops a damaged journal, and one that isn't for the game still to play today", () => {
     const l = testLeague('read');
     toGameDay(l);
@@ -515,6 +539,91 @@ describe('a live game survives the app being closed (W12)', () => {
     const x = structuredClone(saved) as unknown as Record<string, unknown>;
     x.live = 'x';
     expect(migrate(x).live).toBeUndefined();
+  });
+});
+
+describe('a live game whose set-up or recording throws halfway (the Live screen)', () => {
+  // the failures below are on purpose
+  beforeEach(() => void vi.spyOn(console, 'error').mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
+
+  it('recording it: the league goes back to before the game, nothing half-done is saved, and the game can still be finished', async () => {
+    const l = testLeague('record error');
+    toGameDay(l);
+    const lg = goLive(l);
+    lg.simTo('quarter');
+    await useStore.getState().flush();
+    const day = l.day;
+    // something in playing out the day throws (here the assistant's rotation update for the user's team)
+    const rot = l.teams[l.userTid].rotation;
+    l.teams[l.userTid].rotation = null as unknown as Rotation;
+    const before = structuredClone(l);
+    expect(useStore.getState().attempt('Recording the game', (x) => void lg.commit(x))).toBe(false);
+    expect(l).toEqual(before);
+    expect(useStore.getState().toasts.at(-1)?.text).toMatch(/^Recording the game hit an error, so nothing changed/);
+    // (the screen goes Home: the game is still there to pick up)
+    dropLive();
+    l.teams[l.userTid].rotation = rot;
+    expect(liveInProgress(l)?.gid).toBe(lg.game.gid);
+    // the next save has the league as it was: no game recorded on a day that never ended
+    useStore.getState().mutate((x) => (x.name = 'next change'));
+    await useStore.getState().save();
+    const back = (await loadLeague(l.id))!;
+    expect([back.day, once(back, lg.game.gid), back.schedule.find((g) => g.gid === lg.game.gid)!.played, back.live?.gid]).toEqual([day, 0, undefined, lg.game.gid]);
+    // and "Finish this game" plays it from where it was saved, as the coached game would have gone
+    await useStore.getState().simulate({ kind: 'days', n: 1 });
+    expect([l.day, once(l, lg.game.gid)]).toEqual([day + 1, 1]);
+    const res = l.games.find((g) => g.gid === lg.game.gid)!;
+    expect([res.home.pts, res.away.pts]).toEqual([lg.sim.T[0].score, lg.sim.T[1].score]);
+  });
+
+  it("setting it up: a throw while the day's other games are played puts them back", () => {
+    const l = testLeague('setup error');
+    toGameDay(l);
+    useStore.getState().setLeague(l);
+    const others = gamesOnDay(l, l.day).filter((g) => g.home !== l.userTid && g.away !== l.userTid);
+    expect(others.length).toBeGreaterThan(1);
+    // the last of them throws, after the others are played
+    const broken = others.at(-1)!.home;
+    const rot = l.teams[broken].rotation;
+    l.teams[broken].rotation = null as unknown as Rotation;
+    const before = structuredClone(l);
+    expect(useStore.getState().attempt('Setting up the game', (x) => void prepareLive(x))).toBe(false);
+    dropLive();
+    expect(l).toEqual(before);
+    expect([pendingLive(l), liveInProgress(l)]).toEqual([null, null]);
+    // set up again once nothing throws: each of the day's games is played once
+    l.teams[broken].rotation = rot;
+    const lg = goLive(l);
+    expect(others.map((g) => once(l, g.gid))).toEqual(others.map(() => 1));
+    expect(once(l, lg.game.gid)).toBe(0);
+  });
+});
+
+describe('the Subs sheet', () => {
+  it("reads each player's numbers and whether he's out from the game as the court has drawn it, not the possession still being drawn", () => {
+    const l = testLeague('subs sheet');
+    toGameDay(l);
+    const lg = goLive(l);
+    for (let i = 0; i < 40; i++) lg.step();
+    // the court finished drawing here; the sim then plays the next possession, which the court is drawing
+    const view = snapshot(lg.sim);
+    lg.step();
+    const t = lg.sim.T[lg.userSide];
+    const p = t.on[0];
+    // (as if he fouled out in it: the court hasn't shown that yet)
+    p.out = 1;
+    p.fouls = 6;
+    const drawn = view.sides[lg.userSide].players.find((x) => x.pid === p.pid)!;
+    const box = (lg.userSide === 0 ? view.box.home : view.box.away).players.find((x) => x.pid === p.pid)!;
+    expect(subsLine(view, lg.userSide, p)).toEqual({
+      energy: Math.round(drawn.energy * 100),
+      fouls: drawn.fouls,
+      pts: drawn.pts,
+      min: Math.round(box.min),
+      out: 0,
+    });
+    expect(Math.round(box.min)).toBeLessThanOrEqual(Math.round(p.b.sec / 60));
   });
 });
 

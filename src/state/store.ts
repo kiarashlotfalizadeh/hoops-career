@@ -65,6 +65,12 @@ interface AppState {
   /** Heavy one-shot league work (phase changes) behind the progress bar: buttons that watch `sim`
    * are disabled meanwhile and a second call is ignored. Resolves false if it didn't run. */
   task: (label: string, fn: (l: League) => void) => Promise<boolean>;
+  /**
+   * `mutate` for league work that mustn't be left half-done and runs outside the progress bar (the
+   * Live screen setting up today's game and recording it): if `fn` throws, the league goes back to
+   * how it was before it and a toast says `label` hit an error. Returns whether it worked.
+   */
+  attempt: (label: string, fn: (l: League) => void) => boolean;
   stopSim: () => void;
   toast: (text: string, tone?: Toast['tone']) => void;
 }
@@ -140,6 +146,23 @@ function restore(l: League, copy: League) {
   for (const k of Object.keys(l) as (keyof League)[]) if (!(k in copy)) delete (l as Partial<League>)[k];
   Object.assign(l, copy);
 }
+
+/**
+ * A copy of the league to put back if a change throws halfway, without cloning a season of results:
+ * those are only ever added to, apart from an older game of the user's dropping its play-by-play,
+ * so the list and those play-by-plays are kept as they are.
+ */
+function rollbackPoint(l: League): () => void {
+  const games = l.games.slice();
+  const pbp = games.filter((g) => g.pbp).map((g) => [g, g.pbp] as const);
+  const copy = structuredClone({ ...l, games: [] });
+  return () => {
+    restore(l, { ...copy, games });
+    for (const [g, lines] of pbp) g.pbp = lines;
+  };
+}
+
+const failed = (label: string) => `${label} hit an error, so nothing changed. If it keeps happening, export a backup and report it.`;
 
 /** One write of `l`, recorded in the store while it's still the open league. */
 async function write(l: League): Promise<boolean> {
@@ -307,10 +330,25 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (e) {
       console.error(`${label} failed`, e);
       restore(l, before);
-      get().toast(`${label} hit an error, so nothing changed. If it keeps happening, export a backup and report it.`, 'bad');
+      get().toast(failed(label), 'bad');
       return false;
     } finally {
       if (get().league === l) set({ sim: null, v: get().v + 1 });
+    }
+  },
+  attempt: (label, fn) => {
+    const l = get().league;
+    if (!l) return false;
+    const undo = rollbackPoint(l);
+    try {
+      get().mutate(fn);
+      return true;
+    } catch (e) {
+      console.error(`${label} failed`, e);
+      undo();
+      set({ v: get().v + 1 });
+      get().toast(failed(label), 'bad');
+      return false;
     }
   },
   stopSim: () => set({ stopRequested: true }),
