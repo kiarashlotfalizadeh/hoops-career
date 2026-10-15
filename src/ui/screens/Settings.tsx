@@ -192,6 +192,12 @@ export default function Settings() {
             />
             <div className="small dim">Where a live game stops for a break, with a report on the period and time to adjust.</div>
           </div>
+          <Toggle
+            on={st.liveWinProb !== false}
+            onChange={(v) => mutate((l) => (l.settings.liveWinProb = v))}
+            label="Win probability in live games"
+            help="Your chance to win as the game stands (the score, the time left, who has the ball and the pre-game projection) on the scorebug, in the box score's Flow tab and at the breaks. Game reports always show it."
+          />
           <div className="divider" />
           <Toggle
             on={st.injuries}

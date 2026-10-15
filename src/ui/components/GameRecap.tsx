@@ -1,18 +1,32 @@
-// The post-game recap for one of the user's games: the player of the game, what the result did to
-// the standings or the series, quotes and the press conference, the rest of the night's results
-// that matter to you, and what's next. Takes a stored result, so the report and the Live screen's
-// final card can both show it.
+// The post-game recap for one of the user's games: the three stars (the player of the game first),
+// what the result did to the standings or the series, how win probability saw it (the turning point,
+// a comeback or a lead let slip), career milestones reached, quotes and the press conference, the
+// rest of the night's results that matter to you, and what's next. Takes a stored result, so the
+// report and the Live screen's final card can both show it.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarDays, Mic, Trophy } from 'lucide-react';
 import type { GameResult, League, PressChoice, ScheduledGame, StandingLine } from '../../core/types';
 import { buildGameReport, type GameReport } from '../../core/analysis/gameReport';
-import { holdPress, isLatestUserGame, postGameQuotes, pressEffects, pressOpen, pressOptions, pressSummary, streakAfter, type PressEffect } from '../../core/analysis/quotes';
+import {
+  holdPress,
+  isLatestUserGame,
+  postGameQuotes,
+  pressEffects,
+  pressOpen,
+  pressOptions,
+  pressSummary,
+  streakAfter,
+  threeStars,
+  type PressEffect,
+} from '../../core/analysis/quotes';
+import { COMEBACK_WP, playAt, swingWords, TURN_MIN, wpStory, wpText, type WpPoint } from '../../core/analysis/winProb';
+import { markText, milestonesIn } from '../../core/analysis/milestones';
 import { seriesLabel } from '../../core/league/playoffs';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { useStore } from '../../state/store';
-import { finalLabel, ordinal } from '../stats';
+import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
 import { Avatar, Card, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
 import './gameday.css';
@@ -51,6 +65,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
   const us = res.home.tid === tid ? res.home : res.away.tid === tid ? res.away : null;
   const rep = useMemo(() => (report !== undefined ? report : us && res.impacts ? buildGameReport(league, res) : null), [report, us, res, league]);
   const quotes = useMemo(() => (us ? postGameQuotes(league, res, rep) : []), [us, league, res, rep]);
+  const story = useMemo(() => (us ? wpStory(res) : null), [us, res]);
+  const marks = useMemo(() => (us ? milestonesIn(league, res) : []), [us, league, res]);
   const [pressFx, setPressFx] = useState<string | null>(null);
   if (!us) return null;
   const them = us === res.home ? res.away : res.home;
@@ -62,6 +78,35 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
   const pogP = res.pog !== undefined ? league.players[res.pog] : undefined;
   const pogMine = !!pogBox && us.players.includes(pogBox);
   const pogTeam = pogBox ? league.teams[pogMine ? us.tid : them.tid] : undefined;
+  // the second and third stars (the player of the game is the first)
+  const stars = threeStars(res).filter((x) => x.line.pid !== pogBox?.pid);
+  const nameOf = (pid: number, fallback: string) => (league.players[pid] ? playerName(league.players[pid]) : fallback);
+
+  // win probability: the play that swung it most the winner's way, and how low the winner fell
+  const pct = wpText;
+  const winAbbrev = league.teams[(story?.winner === 0 ? res.home : res.away).tid].abbrev;
+  const winnerMargin = (m: number) => (story?.winner === 0 ? m : -m);
+  const ourMargin = (m: number) => (us === res.home ? m : -m);
+  const turn = story && story.turn.to - story.turn.from >= TURN_MIN ? story.turn : null;
+  const turnPlay = turn ? playAt(res, turn.point) : null;
+  const turnText = turn
+    ? `${periodLabel(turn.point.q)} ${fmtClock(turn.point.clock)}, ${
+        turnPlay ? turnPlay.text.replace(/\.$/, '') : `${winAbbrev} ${swingWords(winnerMargin(turn.prev.margin), winnerMargin(turn.point.margin))}`
+      }: ${winAbbrev} ${pct(turn.from)} → ${pct(turn.to)} to win.`
+    : null;
+  // the winner's low point: a comeback (ours) or a lead let slip (theirs); at tip-off, an upset
+  const low = story && story.low.wp <= COMEBACK_WP ? story.low : null;
+  const lowWhere = (p: WpPoint) => {
+    const m = ourMargin(p.margin);
+    return `${m > 0 ? `up ${m}` : m < 0 ? `down ${-m}` : 'tied'}, ${periodLabel(p.q)} ${fmtClock(p.clock)}`;
+  };
+  const swing = !low
+    ? null
+    : low.point.i < 0
+      ? { label: 'Upset:', text: won ? `won with a ${pct(low.wp)} chance at tip-off` : `lost with a ${pct(1 - low.wp)} chance at tip-off` }
+      : won
+        ? { label: 'Comeback:', text: `won after falling to ${pct(low.wp)} (${lowWhere(low.point)})` }
+        : { label: 'Let it slip:', text: `lost after reaching ${pct(1 - low.wp)} (${lowWhere(low.point)})` };
 
   // standings (regular season) or the series (playoffs)
   const stakes = res.stakes?.tid === tid && res.stakes.before && res.stakes.after ? res.stakes : undefined;
@@ -127,6 +172,24 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
             {pogMine && <Tag tone="good">Yours</Tag>}
           </Link>
         )}
+        {stars.length > 0 && (
+          <div className="col" style={{ gap: 0, marginTop: -6 }}>
+            {stars.map(({ line, tid: st }, k) => (
+              <Link key={line.pid} to={`/player/${line.pid}`} className="gd-row small" style={{ minHeight: 34 }}>
+                <span className="tag" style={{ flex: 'none' }}>
+                  {k === 0 && pogBox ? '2nd' : k === 1 && pogBox ? '3rd' : ordinal(k + 1)} star
+                </span>
+                <b className="grow ellipsis">{nameOf(line.pid, line.name)}</b>
+                <span className="dim" style={{ flex: 'none' }}>
+                  {league.teams[st]?.abbrev}
+                </span>
+                <span className="num dim2 nowrap">
+                  {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
 
         <div className="col" style={{ gap: 4 }}>
           {stakes && (
@@ -165,6 +228,29 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
                   {series.next ? ` · Game ${series.game} ${fmtDate(league.season, series.next.day, { weekday: 'short' })}` : ''}
                 </span>
               )}
+            </div>
+          )}
+          {turnText && (
+            <div className="gd-line small">
+              <span className="bold">Turning point:</span>
+              <span>{turnText}</span>
+            </div>
+          )}
+          {swing && (
+            <div className="gd-line small">
+              <span className="bold">{swing.label}</span>
+              <span className={won ? 'good' : 'bad'}>{swing.text}</span>
+            </div>
+          )}
+          {marks.length > 0 && (
+            <div className="gd-line small">
+              <span className="bold">Milestone:</span>
+              <span>
+                {marks
+                  .slice(0, 2)
+                  .map((m) => `${nameOf(m.pid, '')}'s ${markText(m.stat, m.mark)}`)
+                  .join('; ')}
+              </span>
             </div>
           )}
           {playIn && (

@@ -8,6 +8,7 @@ import type { BoxLine, GameResult, League, Player, PressChoice, TeamBox } from '
 import { hashString, clamp } from '../random';
 import { playerName } from '../league/helpers';
 import type { Factor, GameReport } from './gameReport';
+import { COMEBACK_WP, wpStory } from './winProb';
 
 export interface Quote {
   /** Who said it: "Jalen Brunson" or "Joe Mazzulla". */
@@ -41,9 +42,25 @@ interface Facts {
   hurt: BoxLine | undefined;
   /** What the game report says decided it (the biggest factor that went the winner's way). */
   decided?: Factor['category'];
+  /** The winner's lowest win probability during the game, when its flow is stored. */
+  low?: number;
 }
 
 const gameScore = (b: BoxLine) => b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.orb + 0.3 * b.drb + b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov;
+
+/**
+ * The three stars of a game, both teams: the player of the game first (the engine's pick), then the
+ * next two by the same measure (game score, with two points for playing on the winning side).
+ */
+export function threeStars(res: GameResult): { line: BoxLine; tid: number }[] {
+  const all = [res.home, res.away].flatMap((side) =>
+    side.players.filter((b) => b.min > 0).map((line) => ({ line, tid: side.tid, won: side.pts > (side === res.home ? res.away : res.home).pts })),
+  );
+  const score = (x: (typeof all)[number]) => gameScore(x.line) + (x.won ? 2 : 0);
+  const pog = all.find((x) => x.line.pid === res.pog);
+  const rest = all.filter((x) => x !== pog).sort((a, b) => score(b) - score(a));
+  return [...(pog ? [pog] : []), ...rest].slice(0, 3).map(({ line, tid }) => ({ line, tid }));
+}
 
 const userSide = (league: League, res: GameResult) => (res.home.tid === league.userTid ? res.home : res.away.tid === league.userTid ? res.away : null);
 
@@ -126,6 +143,12 @@ function hurtInGame(league: League, res: GameResult, us: TeamBox): BoxLine | und
   });
 }
 
+/** The winner's lowest win probability once the game was under way (a low at tip-off is an upset, not a comeback). */
+function comebackLow(res: GameResult): number | undefined {
+  const low = wpStory(res)?.low;
+  return low && low.point.i >= 0 ? low.wp : undefined;
+}
+
 function facts(league: League, res: GameResult, report?: GameReport | null): Facts | null {
   const us = userSide(league, res);
   if (!us) return null;
@@ -151,6 +174,7 @@ function facts(league: League, res: GameResult, report?: GameReport | null): Fac
     upset: gap,
     hurt: hurtInGame(league, res, us),
     decided: report?.factors.find((x) => x.pts > 0 === won)?.category,
+    low: comebackLow(res),
   };
 }
 
@@ -174,7 +198,14 @@ function voiceLine(f: Facts, gid: number, league: League): string {
       `${name(f.hurt)} is a big part of what we do. Whoever steps in has to be ready.`,
     ]);
   }
+  const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
   if (f.won) {
+    if (comeback)
+      return pick(gid, 'wcomeback', [
+        `Nobody in here flinched, even when it looked bad. We just kept chipping away.`,
+        `That's a special win. We were in a deep hole and we climbed out together.`,
+        `We stopped worrying about the scoreboard and just got stops. That's how you come back.`,
+      ]);
     if (v.pts >= 30)
       return pick(gid, 'w30', [
         `${v.pts}? Honestly, my teammates found me in great spots. I just had to knock them down.`,
@@ -202,6 +233,12 @@ function voiceLine(f: Facts, gid: number, league: League): string {
       `Everybody chipped in. That's the formula.`,
     ]);
   }
+  if (comeback)
+    return pick(gid, 'lcollapse', [
+      `We had that one, and we let it slip. That's on all of us.`,
+      `You can't give a lead like that back in this league. It's going to sting.`,
+      `We stopped playing the way that got us the lead. Lesson learned, the hard way.`,
+    ]);
   if (v.pts >= 30) return pick(gid, 'l30', [`The points don't matter when we lose. I've got to make the right plays late.`, `I'd trade every one of those points for the win.`]);
   if (f.upset <= -10)
     return pick(gid, 'lup', [`We can't take anybody lightly in this league. Tonight showed that.`, `They wanted it more, and that's on us. It can't happen again.`]);
@@ -233,7 +270,13 @@ const LOST_ON: Partial<Record<Factor['category'], string>> = {
 function coachLine(f: Facts, gid: number, league: League): string {
   // the other coach's view: "they" are the user's team
   const us = `the ${f.usName}`;
+  const comeback = f.low !== undefined && f.low <= COMEBACK_WP;
   if (!f.won) {
+    if (comeback)
+      return pick(gid, 'ccomeback', [
+        `Our guys never quit. Down like that, you keep chipping away, and they did.`,
+        `That's as resilient as I've seen this group. What a comeback.`,
+      ]);
     if (f.theirStar)
       return pick(gid, 'cstar', [
         `${lastName(league, f.theirStar)} was special tonight. When he gets going like that, we're tough to beat.`,
@@ -245,6 +288,11 @@ function coachLine(f: Facts, gid: number, league: League): string {
     if (why) return why;
     return pick(gid, 'cw', [`Tough, physical game. Credit to ${us}: they made us earn every point.`, `We got enough stops when it mattered. Good win for us.`]);
   }
+  if (comeback)
+    return pick(gid, 'ccollapse', [
+      `We had control of that game and let it get away. That's on me.`,
+      `Credit to ${us}: they kept coming, and we stopped doing what built the lead.`,
+    ]);
   const v = f.voice;
   if (v && v.pts >= 30)
     return pick(gid, 'cl30', [

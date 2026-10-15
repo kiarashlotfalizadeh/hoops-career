@@ -690,6 +690,12 @@ export interface GameResult {
   flow?: number[];
   /** Index into flow where each period (Q1, Q2, ..., OT) starts. */
   flowPeriods?: number[];
+  /** Game seconds played at each flow sample (games kept in detail; absent in older saves): the win-probability chart's clock. */
+  flowT?: number[];
+  /** The side (0 home, 1 away) with the first possession of each period, in flowPeriods order: possessions alternate within a period. */
+  flowPoss?: (0 | 1)[];
+  /** The user's games: the projected home margin at tip-off (the preview's projection, home court included), which win probability starts from. */
+  edge?: number;
   /** Compact play-by-play for detailed (user) games. */
   pbp?: PbpEntry[];
   /** Coaches' in-game adjustments (user games only). */
@@ -887,6 +893,8 @@ export interface Settings {
   pregame?: boolean;
   /** Draft night stops before every AI pick, so picks can be traded for on the clock (default off). */
   draftPause?: boolean;
+  /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */
+  liveWinProb?: boolean;
 }
 
 export interface League {
@@ -959,6 +967,11 @@ export interface League {
   nextTxnId?: number;
   /** The user's live game in progress, journaled as it's played so it survives the app being closed. */
   live?: LiveJournal;
+  /**
+   * Game-time decisions for the user's next game (`gid`): questionable players he cleared to play
+   * (see isQuestionable). Cleared when that game is played or its day has passed.
+   */
+  gameTime?: { gid: number; play: number[] };
 }
 
 /**
@@ -976,8 +989,10 @@ export interface LiveJournal {
   seed: number;
   /** Whether in-game injuries were on. */
   injuries: boolean;
-  /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk. */
-  user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number };
+  /** The user's side as the engine took it: tactics (with tonight's game plan), rotation, form, who rests, injury risk, and the questionable players cleared to play. */
+  user: { tactics: Tactics; rotation: Rotation; perf: Record<number, number>; rest: number[]; injuryMult: number; play?: number[] };
+  /** The projected home margin at tip-off (see GameResult.edge): absent in journals from before win probability. */
+  edge?: number;
   /**
    * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
    * replay plays them as they were, whatever changed since (the difficulty, or the league's id on a

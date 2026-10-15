@@ -35,6 +35,9 @@ import { SubsPanel } from '../live/SubsPanel';
 import { OppPlayer } from '../live/OppPlayer';
 import '../live/live.css';
 import { GameRecap } from '../components/GameRecap';
+import { nextGraphic, type Graphic } from '../live/graphics';
+import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
+import { winProb } from '../../core/analysis/winProb';
 
 const FEED_MAX = 80;
 /** Key plays mode: the pause between possessions it doesn't draw (at 1×). */
@@ -76,6 +79,9 @@ export default function Live() {
   /** Injuries, foul-outs and coaching adjustments, once drawn: alerts for a while, banners over the court once. */
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [banners, setBanners] = useState<LiveEvent[]>([]);
+  /** The broadcast graphic up now (see graphics.ts), and the ones shown so far: each once, one every two game minutes. */
+  const [graphic, setGraphic] = useState<Graphic | null>(null);
+  const gfx = useRef({ shown: new Set<string>(), last: null as number | null });
   /** A timeout the user called that the court hasn't shown yet (it opens the next possession). */
   const [toPending, setToPending] = useState(false);
   /** The period whose break the screen stopped at: resuming plays on instead of stopping again. */
@@ -163,8 +169,28 @@ export default function Live() {
     },
     [home, away, atBreak, toPending, events, nameOf, baselines, league.settings.complexity, subFor],
   );
-  const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const });
-  loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const };
+  // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const before = useMemo(() => (game ? playersBefore(league, game.sim) : new Map()), [game]);
+  /** The broadcast graphic the drawn game `v` calls for now, if any. */
+  const graphicFor = useCallback(
+    (v: Drawn, lg: LiveGame): Graphic | null =>
+      home && away
+        ? nextGraphic({
+            view: v,
+            logs: lg.logs,
+            abbrevs: [home.abbrev, away.abbrev],
+            names: nameOf,
+            before,
+            shown: gfx.current.shown,
+            last: gfx.current.last,
+            regular: lg.game.type === 'regular',
+          })
+        : null,
+    [home, away, nameOf, before],
+  );
+  const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const, graphicFor });
+  loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor };
 
   /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included); returns the new lines, newest first. */
   const flushFeed = useCallback((): PbpEntry[] => {
@@ -195,6 +221,14 @@ export default function Live() {
         if (banner) setBanners((b) => [...b, ...ev].slice(-4));
       }
     }
+    // a broadcast graphic, now and then (not along a skip: that would be a string of them)
+    const g = banner ? loopHelpers.current.graphicFor(next, lg) : null;
+    if (g) {
+      gfx.current.shown.add(g.id);
+      // a break's team number doesn't hold up the next one
+      if (g.kind !== 'team') gfx.current.last = next.elapsed;
+      setGraphic(g);
+    }
     return next;
   }, []);
 
@@ -212,6 +246,8 @@ export default function Live() {
     setView(viewRef.current);
     setEvents([]);
     setBanners([]);
+    gfx.current = { shown: new Set(), last: null };
+    setGraphic(null);
     setToPending(false);
     setGame(lg);
     setScript(null);
@@ -372,7 +408,11 @@ export default function Live() {
     const s = lg.sim;
     if (s.injuries.length > before.injuries || s.adjustments.length > before.adjustments) return true;
     if (s.T.some((t) => t.players.some((p) => p.out === 1 && drawnPlayer(before, p.pid)?.out !== 1))) return true;
-    const inputs = [before, snapshot(s)].map((d) => loopHelpers.current.alertInput(d));
+    const ahead = snapshot(s);
+    // a play that puts up a graphic is worth seeing
+    const g = loopHelpers.current.graphicFor(ahead, lg);
+    if (g && g.kind !== 'team') return true;
+    const inputs = [before, ahead].map((d) => loopHelpers.current.alertInput(d));
     if (!inputs[0] || !inputs[1]) return false;
     const was = new Set(liveAlerts(inputs[0]).map((x) => x.id));
     return liveAlerts(inputs[1]).some((x) => !was.has(x.id) && !opts.current.dismissed.includes(x.id));
@@ -446,6 +486,13 @@ export default function Live() {
       nextPossession();
     }
   }, [paused, status, nextPossession]);
+  // a graphic stays up a few seconds of play (it waits out a break)
+  const graphicId = graphic?.id;
+  useEffect(() => {
+    if (!graphicId || atBreak) return;
+    const t = setTimeout(() => setGraphic(null), GRAPHIC_MS);
+    return () => clearTimeout(t);
+  }, [graphicId, atBreak]);
   // one event banner at a time
   const bannerId = banners[0]?.id;
   useEffect(() => {
@@ -618,6 +665,10 @@ export default function Live() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game]);
   const context = game ? gameContext(league, game.game, gameNo) : undefined;
+  // the home team's chance to win as the court has drawn the game (Settings can switch it off)
+  const showWp = league.settings.liveWinProb !== false;
+  const wpHome =
+    game && view && showWp ? winProb({ margin: view.sides[0].score - view.sides[1].score, q: view.q, clock: view.clock, ball: view.ball, edge: game.edge }) : undefined;
 
   // only offered once the game is over (or there is none): not worked out on every possession
   const nextAction = status !== 'live' ? flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame')) : undefined;
@@ -666,6 +717,7 @@ export default function Live() {
   const won = !!result && (userSide === 0 ? result.home.pts > result.away.pts : result.away.pts > result.home.pts);
   // the fives the court is drawing (between possessions, the ones on the floor now)
   const fives: [number[], number[]] = script ? (script.off === 0 ? [script.oPids, script.dPids] : [script.dPids, script.oPids]) : [view.sides[0].on, view.sides[1].on];
+  const flowKits = matchupColors(home.colors, away.colors);
   // the user's team carries the accent in two-team comparisons (away first)
   const barColors: [string, string] = userSide === 1 ? ['var(--accent)', 'var(--text-dim)'] : ['var(--text-dim)', 'var(--accent)'];
   const plan = planFor(league, userSide === 0 ? game.game.away : game.game.home, game.game);
@@ -704,7 +756,7 @@ export default function Live() {
       <h1 className="sr-only">
         Live game: {away.region} {away.name} at {home.region} {home.name}
       </h1>
-      <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} />
+      <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome} />
       <div className="sr-only" aria-live="polite">
         {announce}
       </div>
@@ -752,14 +804,19 @@ export default function Live() {
                 </button>
               </div>
             )}
-            {(script || ffing) && !over && !atBreak && (
-              <div className="pill" aria-hidden="true" style={{ position: 'absolute', left: 8, bottom: 8, background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '85%' }}>
-                {script ? (
-                  <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
-                ) : (
-                  <FastForward size={12} />
+            {!over && !atBreak && (script || ffing || graphic) && (
+              <div className="live-lower">
+                {(script || ffing) && (
+                  <div className="pill" aria-hidden="true" style={{ background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '85%' }}>
+                    {script ? (
+                      <span style={{ width: 8, height: 8, borderRadius: 4, background: colors[script.off][0], border: `1px solid ${colors[script.off][1]}` }} />
+                    ) : (
+                      <FastForward size={12} />
+                    )}
+                    <span className="ellipsis small">{script ? script.label : 'Fast-forward to the next key play'}</span>
+                  </div>
                 )}
-                <span className="ellipsis small">{script ? script.label : 'Fast-forward to the next key play'}</span>
+                {graphic && <LowerThird key={graphic.id} g={graphic} kit={flowKits[graphic.side]} />}
               </div>
             )}
           </div>
@@ -855,6 +912,7 @@ export default function Live() {
               apply={applyTactics}
               onStart={togglePause}
               oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
+              win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
             />
           )}
 
@@ -970,7 +1028,8 @@ export default function Live() {
           league={league}
           nameOf={nameOf}
           colors={barColors}
-          flowColors={matchupColors(home.colors, away.colors)}
+          flowColors={flowKits}
+          wp={showWp ? { edge: game.edge, type: game.game.type } : undefined}
         />
       </Sheet>
       <Sheet open={panel === 'player' && !!pickedOpp} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>

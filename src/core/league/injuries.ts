@@ -98,6 +98,38 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   }
 }
 
+/** How well a questionable player cleared to play plays: about 6% off his game (his shots, his creation, his share of the offense and, a little, his defense: the engine's form multiplier). */
+export const GAME_TIME_PERF = 0.94;
+
+/**
+ * Questionable for his team's next game: one game left on a minor or moderate injury (not a
+ * concussion: the protocol decides those). He sits unless the coach clears him to play (only the
+ * user's team does: AI teams sit him); a game he plays counts as the one he had left.
+ */
+export function isQuestionable(p: Player): boolean {
+  const inj = p.injury;
+  return !!inj && inj.gamesRemaining === 1 && (inj.severity === 'minor' || inj.severity === 'moderate') && inj.type !== 'Concussion';
+}
+
+/** The user's questionable players cleared to play game `gid` (League.gameTime), still questionable and still his. */
+export function clearedToPlay(league: League, gid: number): number[] {
+  const gt = league.gameTime;
+  if (!gt || gt.gid !== gid) return [];
+  return gt.play.filter((pid) => {
+    const p = league.players[pid];
+    return !!p && p.tid === league.userTid && isQuestionable(p);
+  });
+}
+
+/** Clear a questionable player of the user's to play game `gid` (`play`), or sit him again. Decisions for another game are dropped. */
+export function setGameTime(league: League, gid: number, pid: number, play: boolean) {
+  const keep = clearedToPlay(league, gid).filter((x) => x !== pid);
+  const p = league.players[pid];
+  if (play && p && p.tid === league.userTid && isQuestionable(p)) keep.push(pid);
+  if (keep.length) league.gameTime = { gid, play: keep };
+  else delete league.gameTime;
+}
+
 /** Called once per game a team plays, and about every other day for a player with no games to miss (healIdle in season.ts). */
 export function healOneGame(league: League, p: Player, rng: Rng) {
   if (!p.injury) return;

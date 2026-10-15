@@ -59,6 +59,8 @@ export const K = {
   actionTime: 7.6,
   continueBase: 0.38,
   injuryRate: 0.00042,
+  /** A player playing through an injury (a game-time decision: SimTeamInput.play) is this many times as likely to get hurt in the game. */
+  gameTimeRisk: 2,
   drain: 0.00068,
   recover: 0.0012,
   home: 0.007,
@@ -345,6 +347,8 @@ export interface SP {
   cap?: number;
   /** Minutes in the stint plan. */
   planMin: number;
+  /** In-game injury risk multiplier: 1, or K.gameTimeRisk for an injured player cleared to play. */
+  risk: number;
 }
 
 export interface ST {
@@ -412,6 +416,11 @@ export interface SimTeamInput {
   perf?: Record<number, number>;
   /** Players held out (rest / coach decision). */
   rest?: number[];
+  /**
+   * Injured players who play anyway (game-time decisions on questionable players): dressed instead
+   * of sitting out, at K.gameTimeRisk times the usual in-game injury risk. Their form is in `perf`.
+   */
+  play?: number[];
   /** A coach (AI, or the user's assistant in simmed games) who may adjust the game plan at quarter breaks and timeouts. */
   adjust?: boolean;
 }
@@ -490,6 +499,10 @@ export class GameSim {
   flow: number[] = [];
   /** Index into flow where each period starts. */
   flowPeriods: number[] = [0];
+  /** Game seconds played at each flow sample (rounded): when each possession ended, for the win-probability chart. */
+  flowT: number[] = [];
+  /** The side with the first possession of each period (possessions alternate within one), so who had the ball at each flow sample is known. */
+  flowPoss: (0 | 1)[] = [];
   impacts = new Map<string, TacticImpact>();
   private impactSlots = new Map<string, (TacticImpact | null)[]>();
   lineups = new Map<string, LineupStat>();
@@ -546,6 +559,7 @@ export class GameSim {
     const p0 = clamp(0.5 + (j0.r.hgt + j0.r.ath - j1.r.hgt - j1.r.ath) / 200, 0.2, 0.8);
     this.tipWinner = this.rng.chance(p0) ? 0 : 1;
     this.poss = this.tipWinner;
+    this.flowPoss.push(this.poss);
     this.addPbp(-1, `Start of 1st quarter. ${this.T[this.tipWinner].team.abbrev} wins the tip.`, 'period');
   }
 
@@ -558,6 +572,7 @@ export class GameSim {
     rot.order.forEach((pid, i) => orderIdx.set(pid, i));
     const roster = [...input.players].sort((a, b) => (orderIdx.get(a.pid) ?? 99 + (100 - a.ovr)) - (orderIdx.get(b.pid) ?? 99 + (100 - b.ovr)));
     const rest = new Set(input.rest ?? []);
+    const play = new Set(input.play ?? []);
     const players: SP[] = roster.map((p) => {
       const role = tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
       const sp: SP = {
@@ -596,13 +611,18 @@ export class GameSim {
         b: newBox(),
         played: false,
         planMin: 0,
+        risk: 1,
       };
-      if (p.injury && p.injury.gamesRemaining > 0) {
+      const hurt = !!p.injury && p.injury.gamesRemaining > 0;
+      if (hurt && !play.has(p.pid)) {
         sp.out = 2;
-        sp.dnp = `Injured (${p.injury.type})`;
+        sp.dnp = `Injured (${p.injury!.type})`;
       } else if (rest.has(p.pid)) {
         sp.out = 2;
         sp.dnp = 'Rest';
+      } else if (hurt) {
+        // a game-time decision: he plays through it, at a higher risk of getting hurt
+        sp.risk = K.gameTimeRisk;
       }
       return sp;
     });
@@ -979,6 +999,7 @@ export class GameSim {
     if (this.q === 2 || this.q === 3) this.poss = (1 - this.tipWinner) as 0 | 1;
     else if (this.q === 4) this.poss = this.tipWinner;
     else this.poss = this.rng.chance(0.5) ? 0 : 1;
+    this.flowPoss.push(this.poss);
     this.ctx = 'start';
     this.T[0].run = 0;
     this.T[1].run = 0;
@@ -3224,6 +3245,7 @@ export class GameSim {
       this.cur = null;
     }
     this.flow.push(this.T[0].score - this.T[1].score);
+    this.flowT.push(Math.round(this.elapsed));
     // injuries
     if (this.opts.injuries !== false) this.injuryCheck();
     this.poss = (1 - off.side) as 0 | 1;
@@ -3236,7 +3258,8 @@ export class GameSim {
         // one left on the floor hurt (nobody to replace him) can't get hurt again
         if (p.out === 2) continue;
         const fatigue = p.energy < 0.6 ? 1.6 : 1;
-        if (this.rng.chance(K.injuryRate * t.injMult * fatigue)) {
+        // (risk is exactly 1 for everyone not playing through an injury: the draw is unchanged for them)
+        if (this.rng.chance(K.injuryRate * t.injMult * fatigue * p.risk)) {
           p.out = 2;
           this.injuries.push({ pid: p.pid, tid: t.tid, q: this.q });
           this.addPbp(t.side, `${p.name} is injured and leaves the game.`, 'other');
@@ -3334,6 +3357,8 @@ export class GameSim {
       lineups: [...this.lineups.values()].filter((l) => l.sec >= 60),
       flow: this.flow,
       flowPeriods: this.flowPeriods,
+      flowT: this.flowT,
+      flowPoss: this.flowPoss,
       pbp: this.record ? this.pbp : undefined,
       adjustments: this.adjustments.length ? this.adjustments.map((a) => ({ ...a })) : undefined,
       pog,

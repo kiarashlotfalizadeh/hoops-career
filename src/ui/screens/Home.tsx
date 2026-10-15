@@ -20,6 +20,7 @@ import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import type { League } from '../../core/types';
 import { clearPlan, planFor } from '../../core/league/gamePlans';
 import { countdownLabel, matchupPreview } from '../../core/analysis/preview';
+import { storylines } from '../../core/analysis/storylines';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -57,6 +58,12 @@ export default function Home() {
   const plan = oppTid !== undefined && next ? planFor(league, oppTid, next) : null;
   // countdown, back-to-backs, who's out, the season series and the playoff stakes (no lineups needed: the rotations aren't refreshed here)
   const pv = useLeagueMemo(() => (next ? matchupPreview(league, next.gid) : null), [league, next]);
+  // tonight's lead storyline (players who won't play are left out of them)
+  const story = useLeagueMemo(() => {
+    if (!next || !pv) return undefined;
+    const out = new Set([pv.us, pv.them].flatMap((s) => [...s.out, ...s.resting, ...s.questionable.filter((q) => !q.cleared)].map((p) => p.pid)));
+    return storylines(league, next, out)[0];
+  }, [league, next, pv]);
   const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid), [league]);
   const actions = flowActions(league);
   const unread = league.inbox.filter((m) => !m.read).slice(0, 3);
@@ -187,7 +194,7 @@ export default function Home() {
                 </div>
               )}
               {[pv.us, pv.them].map((side) =>
-                side.out.length || side.resting.length ? (
+                side.out.length || side.resting.length || side.questionable.length ? (
                   <div key={side.tid}>
                     <span className="bold">{league.teams[side.tid].abbrev}</span>{' '}
                     {side.out.length > 0 && (
@@ -201,8 +208,23 @@ export default function Home() {
                         <span className="warn">resting:</span> {side.resting.map((p) => league.players[p.pid]?.lastName ?? p.name).join(', ')}
                       </>
                     )}
+                    {side.out.length + side.resting.length > 0 && side.questionable.length > 0 && ' · '}
+                    {side.questionable.length > 0 && (
+                      <>
+                        <span className="warn">questionable:</span>{' '}
+                        {side.questionable.map((p) => `${league.players[p.pid]?.lastName ?? p.name} (${p.cleared ? 'cleared to play' : 'sits'})`).join(', ')}
+                      </>
+                    )}
                   </div>
                 ) : null,
+              )}
+              {story && (
+                <div className="dim2">
+                  <span className="bold" style={{ color: 'var(--text)' }}>
+                    Storyline:
+                  </span>{' '}
+                  {story.text}
+                </div>
               )}
             </div>
           )}

@@ -235,6 +235,9 @@ export function advanceDay(league: League) {
   // "only playing 0 minutes", with a starting five he wasn't in)
   if (!league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
   league.day++;
+  // game-time decisions for a game whose day has passed (or that is gone) are over
+  const gt = league.gameTime;
+  if (gt && !league.schedule.some((g) => g.gid === gt.gid && !g.played && g.day >= league.day)) delete league.gameTime;
   // released players whose days on waivers are up are claimed or clear to free agency
   resolveWaivers(league);
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
@@ -555,7 +558,7 @@ export function newSeason(league: League): boolean {
   league.games = league.games
     .filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid))
     // (lineups stay, about 2 KB a game: the lineup screen looks back a season)
-    .map((g) => ({ ...g, pbp: undefined, shots: undefined, flow: undefined, flowPeriods: undefined }));
+    .map((g) => ({ ...g, pbp: undefined, shots: undefined, flow: undefined, flowPeriods: undefined, flowT: undefined, flowPoss: undefined }));
   league.playIn = [];
   league.playoffs = [];
   league.schedule = [];
