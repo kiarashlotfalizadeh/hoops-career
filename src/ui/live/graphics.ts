@@ -79,12 +79,11 @@ function scoring(logs: readonly PossLog[], q: number) {
 
 const ordinalQ = (q: number) => (q === 1 ? '1st' : q === 2 ? '2nd' : q === 3 ? '3rd' : q === 4 ? '4th' : null);
 
-/** The graphic to put up now, if any: the most important one not shown yet, within the rate limit. */
-export function nextGraphic(a: GraphicInput): Graphic | null {
+/** Every graphic the drawn game calls for that hasn't been shown, before the rate limit (see nextGraphic). */
+export function graphicCandidates(a: GraphicInput): Graphic[] {
   const { view, names } = a;
   const q = view.q;
   const ended = view.clock <= 0.05;
-  const drama = !ended && view.clock <= 24;
   const pts = scoring(a.logs, q);
   // the logs carry every point but a technical free throw's: when a team's don't add up, its runs and periods aren't claimed
   const exact = [0, 1].map((s) => pts.team[s] === view.sides[s].score);
@@ -234,6 +233,15 @@ export function nextGraphic(a: GraphicInput): Graphic | null {
     }
   }
 
+  return out;
+}
+
+/** The graphic to put up now, if any: the most important one not shown yet, within the rate limit. */
+export function nextGraphic(a: GraphicInput): Graphic | null {
+  const { view } = a;
+  const ended = view.clock <= 0.05;
+  const drama = !ended && view.clock <= 24;
+  const out = graphicCandidates(a);
   // the rate limit: one every two minutes of game time (a break's team number whenever it comes), and in
   // the last 24 seconds of a period only the big ones
   const gapOk = a.last === null || view.elapsed - a.last >= GRAPHIC_GAP;

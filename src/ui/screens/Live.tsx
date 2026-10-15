@@ -35,7 +35,7 @@ import { SubsPanel } from '../live/SubsPanel';
 import { OppPlayer } from '../live/OppPlayer';
 import '../live/live.css';
 import { GameRecap } from '../components/GameRecap';
-import { nextGraphic, type Graphic } from '../live/graphics';
+import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from '../live/graphics';
 import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
 import { winProb } from '../../core/analysis/winProb';
 
@@ -81,7 +81,8 @@ export default function Live() {
   const [banners, setBanners] = useState<LiveEvent[]>([]);
   /** The broadcast graphic up now (see graphics.ts), and the ones shown so far: each once, one every two game minutes. */
   const [graphic, setGraphic] = useState<Graphic | null>(null);
-  const gfx = useRef({ shown: new Set<string>(), last: null as number | null });
+  // graphics shown so far tonight, when the last went up, and whether this game was picked up part-way (see takeView)
+  const gfx = useRef({ shown: new Set<string>(), last: null as number | null, seed: false });
   /** A timeout the user called that the court hasn't shown yet (it opens the next possession). */
   const [toPending, setToPending] = useState(false);
   /** The period whose break the screen stopped at: resuming plays on instead of stopping again. */
@@ -172,11 +173,11 @@ export default function Live() {
   // what the graphics know about the players from before tip-off (tonight's game isn't in the stats yet)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const before = useMemo(() => (game ? playersBefore(league, game.sim) : new Map()), [game]);
-  /** The broadcast graphic the drawn game `v` calls for now, if any. */
-  const graphicFor = useCallback(
-    (v: Drawn, lg: LiveGame): Graphic | null =>
+  /** What the graphics read of the drawn game `v`. */
+  const graphicInput = useCallback(
+    (v: Drawn, lg: LiveGame): GraphicInput | null =>
       home && away
-        ? nextGraphic({
+        ? {
             view: v,
             logs: lg.logs,
             abbrevs: [home.abbrev, away.abbrev],
@@ -185,12 +186,27 @@ export default function Live() {
             shown: gfx.current.shown,
             last: gfx.current.last,
             regular: lg.game.type === 'regular',
-          })
+          }
         : null,
     [home, away, nameOf, before],
   );
-  const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const, graphicFor });
-  loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor };
+  /** The broadcast graphic the drawn game `v` calls for now, if any; and every one it calls for (shown or not). */
+  const graphicFor = useCallback(
+    (v: Drawn, lg: LiveGame): Graphic | null => {
+      const input = graphicInput(v, lg);
+      return input ? nextGraphic(input) : null;
+    },
+    [graphicInput],
+  );
+  const graphicsDue = useCallback(
+    (v: Drawn, lg: LiveGame): Graphic[] => {
+      const input = graphicInput(v, lg);
+      return input ? graphicCandidates(input) : [];
+    },
+    [graphicInput],
+  );
+  const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue });
+  loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue };
 
   /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included); returns the new lines, newest first. */
   const flushFeed = useCallback((): PbpEntry[] => {
@@ -221,6 +237,13 @@ export default function Live() {
         if (banner) setBanners((b) => [...b, ...ev].slice(-4));
       }
     }
+    // a game picked up part-way (the app was closed, or this screen left and opened again): what the
+    // court already showed when it was picked up went up then, or had its moment, so only what happens
+    // from here gets a graphic
+    if (gfx.current.seed && prev) {
+      gfx.current.seed = false;
+      for (const g of loopHelpers.current.graphicsDue(prev, lg)) gfx.current.shown.add(g.id);
+    }
     // a broadcast graphic, now and then (not along a skip: that would be a string of them)
     const g = banner ? loopHelpers.current.graphicFor(next, lg) : null;
     if (g) {
@@ -246,7 +269,7 @@ export default function Live() {
     setView(viewRef.current);
     setEvents([]);
     setBanners([]);
-    gfx.current = { shown: new Set(), last: null };
+    gfx.current = { shown: new Set(), last: null, seed: !!lg && lg.steps > 0 };
     setGraphic(null);
     setToPending(false);
     setGame(lg);

@@ -8,7 +8,7 @@ import { GameSim } from '../../core/sim/engine';
 import { Rng } from '../../core/random';
 import type { PossLog } from '../../core/sim/log';
 import { snapshot, type Drawn } from '../live/drawn';
-import { GRAPHIC_GAP, KEY_PRIORITY, nextGraphic, type Graphic, type GraphicInput, type PlayerBefore } from '../live/graphics';
+import { GRAPHIC_GAP, KEY_PRIORITY, graphicCandidates, nextGraphic, type Graphic, type GraphicInput, type PlayerBefore } from '../live/graphics';
 
 function game(seed: number) {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
@@ -79,6 +79,18 @@ describe('broadcast graphics', () => {
     }
     // a game has a few
     expect(total).toBeGreaterThan(3);
+  });
+
+  it('a game picked up part-way puts up only what happens after it: everything it already called for counts as shown', () => {
+    const { views, logs } = playThrough(11);
+    // halfway through, with a big night or a double-double already on the court
+    const mid = views[Math.floor(views.length / 2)];
+    const due = graphicCandidates(input(mid, logs));
+    expect(due.length).toBeGreaterThan(0);
+    const g = nextGraphic(input(mid, logs));
+    if (g) expect(due.map((x) => x.id)).toContain(g.id);
+    // seeded with them, nothing from before is put up again
+    expect(nextGraphic(input(mid, logs, { shown: new Set(due.map((x) => x.id)) }))).toBeNull();
   });
 
   it("say what the box score shows: a player's points in a period, perfect shooting, one man's run", () => {
