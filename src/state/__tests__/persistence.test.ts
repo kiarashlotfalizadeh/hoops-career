@@ -6,6 +6,7 @@ import { deleteLeague, isLeague, listLeagues, loadLeague, migrate, onRemoteChang
 import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { FRANCHISES } from '../../core/teams';
+import { emptyBook } from '../../core/league/records';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import type { League } from '../../core/types';
 import { testLeague, userGames } from './fixtures';
@@ -197,7 +198,8 @@ describe('reading a league', () => {
     delete plain.untouchable;
     for (const m of plain.inbox) delete m.proposal;
     const old = structuredClone(plain);
-    expect(migrate(plain)).toEqual({ ...old, version: SAVE_VERSION });
+    // (with the record book a save from before it gets: an empty one, no games played yet)
+    expect(migrate(plain)).toEqual({ ...old, version: SAVE_VERSION, records: emptyBook(l.season) });
     const mine = l.teams[l.userTid];
     const pid = Object.values(l.players).find((p) => p.tid === mine.tid)!.pid;
     const theirs = Object.values(l.players).find((p) => p.tid === 3)!.pid;
@@ -225,7 +227,7 @@ describe('reading a league', () => {
     const l = testLeague('terms');
     // a save from before them comes through as it was
     const before = structuredClone(l);
-    expect(migrate(structuredClone(l))).toEqual({ ...before, version: SAVE_VERSION });
+    expect(migrate(structuredClone(l))).toEqual({ ...before, version: SAVE_VERSION, records: emptyBook(l.season) });
     const first = (tid: number, season: number) => l.draftPicks.find((d) => d.originalTid === tid && d.season === season && d.round === 1)!;
     const y = l.season + 1;
     // sound: 0's first may swap for 1's; damaged: a swap to a missing pick, to a second-rounder, to another

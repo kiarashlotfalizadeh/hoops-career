@@ -31,6 +31,7 @@ import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
+import { allStarSaturday } from './allStarSaturday';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
@@ -227,6 +228,8 @@ export function advanceDay(league: League) {
       periodic(league, rng);
       if (league.day === league.allStarDay) {
         selectAllStars(league);
+        // the Three-Point and Slam Dunk Contests, on a random stream of their own
+        allStarSaturday(league);
         playAllStarGame(league, rng);
       }
     }

@@ -219,6 +219,8 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
     { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
+    { label: '3-Point Contest', n: count((t) => t === 'Three-Point Contest') },
+    { label: 'Dunk Contest', n: count((t) => t === 'Slam Dunk Contest') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },
     { label: '6MOY', n: count((t) => t === 'Sixth Man of the Year') },
@@ -227,6 +229,9 @@ export function accolades(p: Player): { label: string; n: number; gold?: boolean
   ];
   return out.filter((x) => x.n > 0);
 }
+
+/** All-Star Saturday's contests: a token in a career's honours, never a reason on its own to remember one (see careerValue in History). */
+const CONTEST_AWARDS = new Set(['Three-Point Contest', 'Slam Dunk Contest']);
 
 export function accoladeScore(p: Player) {
   return p.awards.reduce(
@@ -248,7 +253,9 @@ export function accoladeScore(p: Player) {
                     ? 1
                     : a.type === 'Hall of Fame'
                       ? 0
-                      : 0.5),
+                      : CONTEST_AWARDS.has(a.type)
+                        ? 0.25
+                        : 0.5),
     0,
   );
 }
