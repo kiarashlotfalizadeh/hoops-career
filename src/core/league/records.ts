@@ -214,7 +214,7 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
     // a stat that set the league's record doesn't also claim the franchise's
     const shown = list.filter((n) => n.scope === 'league' || !list.some((m) => m.scope === 'league' && m.stat === n.stat && m.kind === 'record'));
     const parts = shown.map((n) => {
-      const what = n.team ? `${n.v} ${n.stat === 'margin' ? 'point win' : n.stat === 'pts' ? 'points' : 'threes'}` : `${n.v} ${REC_LABEL[n.stat as RecStat][1]}`;
+      const what = recordWhat(n);
       const whose = n.scope === 'league' ? 'league' : `${league.teams[n.tid]?.name ?? 'franchise'}`;
       return `${what} (${n.kind === 'tie' ? 'tying the' : 'a'} ${whose} ${post(n)}record)`;
     });
@@ -453,4 +453,51 @@ export function careerLeaders(league: League, stat: CareerStat, opts: { tid?: nu
     if (v > 0) out.push({ v, pid: p.pid, active: p.tid !== RETIRED, seasons: seasons.size });
   }
   return out.sort((a, b) => b.v - a.v).slice(0, opts.n ?? 10);
+}
+
+/** A record a game holds now: the best in the league's or a franchise's book. */
+export interface HeldRecord {
+  scope: 'league' | 'team';
+  book: BookKind;
+  stat: RecStat | TeamRecStat;
+  team?: true;
+  tid: number;
+  pid?: number;
+  v: number;
+}
+
+/**
+ * The records a game holds now (the recap's "Record" line): the top of the league's or a franchise's
+ * list, for a game played once the book has a full season behind it (as with the news). A franchise
+ * record that's also the league's is named once, as the league's.
+ */
+export function recordsHeld(league: League, res: GameResult): HeldRecord[] {
+  const book = league.records;
+  const kind = bookOf(res.type);
+  if (!book || !kind || res.season <= book.since) return [];
+  const out: HeldRecord[] = [];
+  const top = <M extends { gid: number; season: number }>(list: M[] | undefined) => (list?.[0] && list[0].gid === res.gid && list[0].season === res.season ? list[0] : undefined);
+  for (const stat of REC_STATS) {
+    const lg = top(book.league[kind].players[stat]);
+    if (lg) out.push({ scope: 'league', book: kind, stat, tid: lg.tid, pid: lg.pid, v: lg.v });
+    for (const tid of [res.home.tid, res.away.tid]) {
+      const m = top(book.teams[tid]?.[kind].players[stat]);
+      if (m && !(lg && lg.pid === m.pid)) out.push({ scope: 'team', book: kind, stat, tid, pid: m.pid, v: m.v });
+    }
+  }
+  for (const stat of TEAM_REC_STATS) {
+    const lg = top(book.league[kind].teams[stat]);
+    if (lg) out.push({ scope: 'league', book: kind, stat, team: true, tid: lg.tid, v: lg.v });
+    for (const tid of [res.home.tid, res.away.tid]) {
+      const m = top(book.teams[tid]?.[kind].teams[stat]);
+      if (m && !(lg && lg.tid === m.tid)) out.push({ scope: 'team', book: kind, stat, team: true, tid, v: m.v });
+    }
+  }
+  return out;
+}
+
+/** "52 points", "a 41-point win", "24 threes": a held record's number, said as the recap and news say it. */
+export function recordWhat(r: Pick<HeldRecord, 'stat' | 'team' | 'v'>): string {
+  if (r.team) return r.stat === 'margin' ? `a ${r.v}-point win` : `${r.v} ${r.stat === 'pts' ? 'points' : 'threes'}`;
+  return `${r.v} ${REC_LABEL[r.stat as RecStat][1]}`;
 }

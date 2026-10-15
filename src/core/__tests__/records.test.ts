@@ -18,6 +18,8 @@ import {
   qualifies,
   recordGame,
   recordNews,
+  recordWhat,
+  recordsHeld,
   seasonRecords,
   teamSeasonRecords,
   type GameMark,
@@ -196,5 +198,26 @@ describe('single-season and career records', () => {
   it('team seasons count only once the regular season is over', () => {
     const l = played('team-records', 10);
     expect(teamSeasonRecords(l, 'wins')).toEqual([]);
+  });
+});
+
+describe('records a game holds', () => {
+  it('the recap names the records a game holds once the book has a season behind it', () => {
+    const l = played('records-held', 6);
+    const res = structuredClone(l.games.find((g) => g.type === 'regular')!);
+    const star = res.home.players.find((b) => b.min > 0)!;
+    star.pts = 99;
+    const first: GameResult = { ...res, gid: 999_101 };
+    recordGame(l, first);
+    expect(recordsHeld(l, first)).toEqual([]);
+    const next: GameResult = { ...structuredClone(first), gid: 999_102, season: l.season + 1 };
+    next.home.players.find((b) => b.pid === star.pid)!.pts = 101;
+    recordGame(l, next);
+    const held = recordsHeld(l, next);
+    expect(held.find((r) => r.stat === 'pts' && !r.team)).toMatchObject({ scope: 'league', pid: star.pid, v: 101 });
+    // named once, as the league's, not also as the franchise's
+    expect(held.filter((r) => r.stat === 'pts' && !r.team)).toHaveLength(1);
+    expect(recordWhat({ stat: 'margin', team: true, v: 41 })).toBe('a 41-point win');
+    expect(recordWhat({ stat: 'reb', v: 25 })).toBe('25 rebounds');
   });
 });

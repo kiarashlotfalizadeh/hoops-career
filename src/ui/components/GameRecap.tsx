@@ -23,6 +23,7 @@ import {
 } from '../../core/analysis/quotes';
 import { COMEBACK_WP, playAt, swingWords, TURN_MIN, wpStory, wpText, type WpPoint } from '../../core/analysis/winProb';
 import { markText, milestonesIn } from '../../core/analysis/milestones';
+import { recordWhat, recordsHeld } from '../../core/league/records';
 import { seriesLabel } from '../../core/league/playoffs';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
@@ -68,6 +69,7 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
   const quotes = useMemo(() => (us ? postGameQuotes(league, res, rep) : []), [us, league, res, rep]);
   const story = useMemo(() => (us ? wpStory(res) : null), [us, res]);
   const marks = useMemo(() => (us ? milestonesIn(league, res) : []), [us, league, res]);
+  const records = useMemo(() => (us ? recordsHeld(league, res) : []), [us, league, res]);
   const [pressFx, setPressFx] = useState<string | null>(null);
   if (!us) return null;
   const them = us === res.home ? res.away : res.home;
@@ -250,6 +252,22 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
                 {marks
                   .slice(0, 2)
                   .map((m) => `${nameOf(m.pid, '')}'s ${markText(m.stat, m.mark)}`)
+                  .join('; ')}
+              </span>
+            </div>
+          )}
+          {records.length > 0 && (
+            <div className="gd-line small">
+              <span className="bold">Record:</span>
+              <span>
+                {records
+                  .slice(0, 2)
+                  .map((r) => {
+                    const who = r.pid !== undefined ? `${nameOf(r.pid, '')}'s` : `${league.teams[r.tid]?.abbrev ?? '?'}'s`;
+                    const whose = r.scope === 'league' ? 'league' : `${league.teams[r.tid]?.name ?? 'franchise'}`;
+                    const what = r.team && r.stat === 'margin' ? `${r.v}-point win` : recordWhat(r);
+                    return `${who} ${what}, a ${whose} ${r.book === 'post' ? 'playoff ' : ''}record`;
+                  })
                   .join('; ')}
               </span>
             </div>
