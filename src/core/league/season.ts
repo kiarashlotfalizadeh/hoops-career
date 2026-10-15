@@ -50,7 +50,7 @@ import {
   resolveWaivers,
 } from './contracts';
 import { healOneGame } from './injuries';
-import { aiToAiTrade, teamStrategyUpdate } from './trades';
+import { aiToAiTrade, bookTradedCash, teamStrategyUpdate } from './trades';
 import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
 import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
@@ -598,6 +598,8 @@ export function newSeason(league: League): boolean {
     teamSeason(t, league.season);
     t.deadMoney = t.deadMoney.filter((d) => d.season >= league.season);
   }
+  // cash traded over the summer goes on the new season's books
+  bookTradedCash(league);
   withRng(league, (rng) => {
     // players age a year: development & experience (a season counts if he played in it, wherever
     // he is now; this summer's draftees start at 0)

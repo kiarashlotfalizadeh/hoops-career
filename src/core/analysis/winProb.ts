@@ -11,6 +11,7 @@
 // points); winProb.test.ts keeps it honest on a smaller sample.
 
 import { GAME } from '../constants';
+import { clamp } from '../random';
 import type { GameResult, PbpEntry } from '../types';
 import { HOME_EDGE, phi } from './projection';
 
@@ -62,6 +63,9 @@ export function overtimeWin(edge: number, k: WpParams = WP) {
   return phi((edge * share) / Math.sqrt(k.sd * k.sd * Math.pow(share, k.alpha) + k.floor * k.floor));
 }
 
+/** The least chance a game still being played is given either way. */
+const UNDECIDED = 1e-4;
+
 /** The chance the home team wins from this state: 1 or 0 once the game is decided. */
 export function winProb(s: WpState, k: WpParams = WP): number {
   const left = secondsLeft(s.q, s.clock);
@@ -77,7 +81,8 @@ export function winProb(s: WpState, k: WpParams = WP): number {
   // whole points: ahead by half a point or more wins, within half a point is a tie (overtime)
   const lose = phi((-0.5 - mean) / sd);
   const notWin = phi((0.5 - mean) / sd);
-  return 1 - notWin + (notWin - lose) * ot;
+  // (the normal's tail underflows in a late blowout: still a chance, never a certainty, until it's over)
+  return clamp(1 - notWin + (notWin - lose) * ot, UNDECIDED, 1 - UNDECIDED);
 }
 
 /** One point of a game's win-probability line. */
@@ -194,7 +199,7 @@ export function wpStory(g: Pick<GameResult, 'flow' | 'flowPeriods' | 'flowT' | '
  * when it scored, else the miss or turnover), when the game's play-by-play and possession clock are
  * stored (the play-by-play is kept for the user's latest few games).
  */
-export function playAt(g: Pick<GameResult, 'pbp' | 'flow' | 'flowT' | 'flowPeriods'>, point: WpPoint): PbpEntry | null {
+export function playAt(g: Pick<GameResult, 'pbp' | 'flow' | 'flowT' | 'flowPeriods' | 'flowPoss'>, point: WpPoint): PbpEntry | null {
   const { pbp, flow, flowT } = g;
   if (!pbp?.length || !flow || flowT?.length !== flow.length || point.i < 0) return null;
   const q = point.q;
@@ -204,7 +209,11 @@ export function playAt(g: Pick<GameResult, 'pbp' | 'flow' | 'flowT' | 'flowPerio
   // the possession ran from `from` to flowT[i] (whole seconds, so half a second of slack each way)
   const hi = end - from + 0.6;
   const lo = end - flowT[point.i] - 0.6;
-  const inWindow = pbp.filter((e) => e.q === q && e.clock <= hi && e.clock >= lo);
+  // the side that had the ball (possessions alternate within a period, from the one that started it):
+  // the slack must not pick up the other side's last miss on a trip that only ran out the clock
+  const start = g.flowPoss?.[q - 1];
+  const off = start === undefined ? null : (start + point.i - first) % 2;
+  const inWindow = pbp.filter((e) => e.q === q && e.clock <= hi && e.clock >= lo && (off === null || e.t === off));
   const before = point.i > 0 ? flow[point.i - 1] : 0;
   const scored = flow[point.i] !== before;
   const pick = [...inWindow].reverse().find((e) => (scored ? (e.kind === 'make' || e.kind === 'ft') && e.hs - e.as === flow[point.i] : e.kind === 'miss' || e.kind === 'to'));

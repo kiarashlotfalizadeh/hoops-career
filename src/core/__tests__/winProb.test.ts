@@ -77,6 +77,24 @@ describe('the win-probability model', () => {
   });
 });
 
+describe('a game still being played', () => {
+  it('never reads as decided, however big the lead, until the horn', () => {
+    for (const [margin, clock] of [
+      [30, 45],
+      [25, 10],
+      [-25, 10],
+      [60, 0.5],
+    ])
+      for (const ball of [0, 1, null] as const) {
+        const v = winProb(st({ q: 4, clock, margin, ball }));
+        expect(v).toBeGreaterThan(0);
+        expect(v).toBeLessThan(1);
+        expect(wpText(v)).toBe(margin > 0 ? '>99%' : '<1%');
+      }
+    expect([winProb(st({ q: 4, clock: 0, margin: 1 })), winProb(st({ q: 4, clock: 0, margin: -1 }))]).toEqual([1, 0]);
+  });
+});
+
 describe('win probability from engine games', () => {
   it('keeps the possession clock and who had the ball, as the possession logs show them', () => {
     const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
@@ -108,6 +126,11 @@ describe('win probability from engine games', () => {
       expect(s[s.length - 1].wp).toBe(res.home.pts > res.away.pts ? 1 : 0);
       const story = wpStory(res)!;
       expect(story.turn.to).toBeGreaterThan(story.turn.from);
+      // every possession's play is the side's that had the ball, never the other side's last miss
+      for (const p of s) {
+        const play = p.i >= 0 ? playAt(res, p) : null;
+        if (play) expect(play.t).toBe(logs[p.i].off);
+      }
       for (const x of biggestSwings(s, 5)) {
         const p = s[x.at];
         const play = playAt(res, p);

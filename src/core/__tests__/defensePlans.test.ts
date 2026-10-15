@@ -10,7 +10,12 @@ import { counterCandidates, impactCounter } from '../ai/advisor';
 import { aiGamePlan, nextMeeting } from '../ai/opponentPlan';
 import { guardAdvice, huntPick } from '../analysis/guarding';
 import { projectedRotation } from '../analysis/scouting';
-import { defaultTactics, hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
+import { applyPatch, cloneTactics, defaultTactics, hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
+import { persistableTactics } from '../league/gamePlans';
+import { keptTactics } from '../../ui/live/keep';
+import { GameSim } from '../sim/engine';
+import { Rng } from '../random';
+import type { PossLog } from '../sim/log';
 import type { League, Player } from '../types';
 
 function leagueAt(difficulty: League['settings']['difficulty'], days = 14): League {
@@ -176,6 +181,41 @@ describe('counters and opposing plans', () => {
     }
     expect(hunts).toBeGreaterThan(3);
     expect(guards).toBeGreaterThan(0);
+  });
+
+  it('a junk defense named for their players stays with that opponent: the Lab’s Always and Keep changes never make it the default', () => {
+    const l = testLeague();
+    const mine = l.teams[l.userTid].tactics;
+    mine.defense.scheme = 'zone23';
+    const star = teamPlayers(l, 5).sort((a, b) => b.ovr - a.ovr)[0];
+    const patch = { defense: { scheme: 'box1' as const, chase: [star.pid] } };
+    // nothing to keep for every game (the Lab hides Always), and kept anyway it's the scheme it was drawn up over
+    expect(persistableTactics(applyPatch(mine, patch), mine)).toEqual(persistableTactics(mine, mine));
+    expect(persistableTactics(applyPatch(mine, patch)).defense.scheme).toBe('man');
+    // named live and kept after the game: the saved scheme stays
+    expect(keptTactics(mine, cloneTactics(mine), applyPatch(mine, patch)).defense.scheme).toBe('zone23');
+    // a box-and-one you set for every game, chasing whoever runs their offense, is yours to keep
+    const auto = { defense: { scheme: 'box1' as const } };
+    expect(persistableTactics(applyPatch(mine, auto), mine).defense.scheme).toBe('box1');
+    expect(keptTactics(mine, cloneTactics(mine), applyPatch(mine, auto)).defense.scheme).toBe('box1');
+  });
+
+  it('a box-and-one chases the first name it has: a second one left from a triangle-and-two doesn’t count', () => {
+    const l = testLeague();
+    const [a, b] = projectedRotation(l, 4, 8);
+    const t = cloneTactics(l.teams[l.userTid].tactics);
+    t.defense.scheme = 'box1';
+    t.defense.chase = [a.pid, b.pid];
+    const sim = new GameSim(
+      { team: { ...l.teams[l.userTid], tactics: t }, players: teamPlayers(l, l.userTid) },
+      { team: l.teams[4], players: teamPlayers(l, 4), rest: [a.pid] },
+      { rng: new Rng(3), type: 'regular', record: true, injuries: false },
+    );
+    const logs: PossLog[] = [];
+    while (sim.step()) logs.push(...sim.drainLogs());
+    const theirs = logs.filter((x) => x.off === 1);
+    // their first name sits tonight: man-to-man all game, nobody chased
+    expect(theirs.every((x) => x.scheme === 'man' && !x.chase?.length)).toBe(true);
   });
 
   it('the live one-tap fixes take a junk defense, an instruction or a hunt away', () => {

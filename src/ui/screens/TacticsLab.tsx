@@ -176,7 +176,7 @@ export default function TacticsLab() {
       if (scope === 'always') {
         const tm = l.teams[l.userTid];
         // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
-        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch)), manual: true };
+        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
       } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
     });
     setApplied((a) => [...a, `${vs}:${c.id}`]);
@@ -361,7 +361,7 @@ export default function TacticsLab() {
                 const bad = c.delta < -sig * c.se;
                 // a counter that only names their players (attacking one defender) has nothing to keep for every game
                 const mine = league.teams[league.userTid].tactics;
-                const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch))) !== JSON.stringify(persistableTactics(mine));
+                const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
                 return (
                   <div key={c.id} className="card tight" style={{ borderColor: good ? 'color-mix(in srgb, var(--good) 45%, transparent)' : undefined }}>
                     <div className="row between">

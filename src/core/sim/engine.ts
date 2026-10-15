@@ -1496,7 +1496,8 @@ export class GameSim {
     const n = s === 'box1' ? 1 : s === 'tri2' ? 2 : 0;
     if (!n) return NONE;
     const out: SP[] = [];
-    const named = def.t.defense.chase ?? [];
+    // (names past the scheme's chasers, left from a triangle-and-two switched to a box, don't count)
+    const named = (def.t.defense.chase ?? []).slice(0, n);
     for (const pid of named) {
       const p = off.on.find((x) => x.pid === pid);
       if (p && !out.includes(p) && out.length < n) out.push(p);

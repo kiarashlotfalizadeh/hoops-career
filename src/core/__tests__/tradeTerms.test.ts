@@ -11,6 +11,7 @@ import { txnLine, txnText } from '../league/transactions';
 import {
   CASH_PCT,
   PROTECTIONS,
+  bookTradedCash,
   cashRoom,
   cashValueFor,
   counterOffers,
@@ -26,6 +27,7 @@ import {
   pickValueFor,
   salaryMatchGap,
   swapOutlook,
+  tradeRoster,
   swapPicks,
   swapSeasons,
   topOdds,
@@ -33,8 +35,10 @@ import {
   type TradeOffer,
   type TradeSide,
 } from '../league/trades';
+import { signOfferSheet } from '../league/rfa';
 import { Rng } from '../random';
 import type { DraftPick, League } from '../types';
+import { FREE_AGENT } from '../types';
 
 const U = 0;
 const AI = 1;
@@ -133,6 +137,23 @@ describe('protections you set on picks you trade (G1)', () => {
     runLottery(l, new Rng(3));
     expect(now.protection).toBeUndefined();
     expect(now.tid).toBe(now.pick! <= 20 ? U : AI);
+  });
+
+  it('a protected pick going home is worth all of it to its original team, and only what it held to the team sending it', () => {
+    const l = league();
+    record(l, AI, 5, 35);
+    // the user holds AI's next first, top-10 protected, and sends it home
+    const dp = own(l, AI, l.season + 1);
+    dp.tid = U;
+    dp.protection = 10;
+    const o = deal({ dpids: [dp.dpid] });
+    const full = pickValue(l, { ...dp, tid: AI, protection: undefined });
+    const held = pickValue(l, dp);
+    expect(held).toBeLessThan(full * 0.6);
+    expect(evaluateTrade(l, o).parts.picksIn).toBeCloseTo(pickValueFor(l, { ...dp, tid: AI, protection: undefined }, AI, true), 6);
+    expect(neutralBalance(l, o).out).toBeCloseTo(held, 6);
+    executeTrade(l, o);
+    expect([dp.tid, dp.protection]).toEqual([AI, undefined]);
   });
 
   it('the dock says what a protection does, and a turned-down deal comes back without it', () => {
@@ -327,6 +348,30 @@ describe('cash (G3)', () => {
     expect(evaluateTrade(l, deal({ cash: 5_000 }, { dpids: [second.dpid] })).notes.map((n) => n.text)).toContain('$5.0M in cash counts for less to a contender');
   });
 
+  it('traded over the summer, goes on next season’s books (the one its limit counts for), not the season the owner has already judged', () => {
+    const l = league();
+    l.phase = 'draftLottery';
+    const S = l.season;
+    const before = { ...curTeamSeason(l, U) };
+    const second = own(l, AI, S + 1, 2);
+    const o = deal({ cash: 3_000 }, { dpids: [second.dpid] });
+    expect(validateTrade(l, o)).toEqual([]);
+    const bank = [l.teams[U].cash, l.teams[AI].cash];
+    executeTrade(l, o);
+    // the bank balance moves at once and the limit counted is next season's...
+    expect([l.teams[U].cash, l.teams[AI].cash]).toEqual([bank[0] - 3_000, bank[1] + 3_000]);
+    expect(l.teams[U].cashTrades).toEqual({ season: S + 1, sent: 3_000, received: 0 });
+    // ...this season's books are left alone, and no season's books are opened early
+    expect([curTeamSeason(l, U).expenses, curTeamSeason(l, U).revenue]).toEqual([before.expenses, before.revenue]);
+    expect(l.teams[U].seasons.some((s) => s.season === S + 1)).toBe(false);
+    // next season's books take it when they open
+    l.season = S + 1;
+    const fresh = [curTeamSeason(l, U).expenses, curTeamSeason(l, AI).revenue];
+    bookTradedCash(l);
+    expect(curTeamSeason(l, U).expenses).toBe(fresh[0] + 3_000);
+    expect([curTeamSeason(l, AI).revenue, curTeamSeason(l, AI).cashIn]).toEqual([fresh[1] + 3_000, 3_000]);
+  });
+
   it('moves money, not salary: the bank balance and the books, outside salary matching and revenue sharing, logged', () => {
     const l = league();
     const base = structuredClone(l);
@@ -369,6 +414,34 @@ describe('cash (G3)', () => {
     // no room left this season: no cash
     l.teams[U].cashTrades = { season: contractSeason(l), sent: cashRoom(l, U).limit, received: 0 };
     expect(makeItWork(l, ask, [], { cash: true }).offer?.a.cash).toBeUndefined();
+  });
+});
+
+describe('roster spots in free agency', () => {
+  it('an offer sheet a team has signed holds one of its spots: a trade can’t take it past the offseason limit', () => {
+    const l = league();
+    l.phase = 'freeAgency';
+    l.faDay = 1;
+    const next = contractSeason(l);
+    const cap = CAP_FOR(l, next);
+    // the user's roster for next season at 20
+    const mine = standardRoster(l, U);
+    for (const p of mine) p.contract = { start: next, salaries: [cap.vetMin] };
+    const extra = Object.values(l.players).filter((p) => p.tid === FREE_AGENT);
+    for (const p of extra.slice(0, 20 - mine.length)) {
+      p.tid = U;
+      p.contract = { start: next, salaries: [cap.vetMin] };
+    }
+    expect(tradeRoster(l, U)).toHaveLength(20);
+    const theirs = standardRoster(l, AI).find((p) => p.contract.salaries.length > 1)!;
+    const o = deal({}, { pids: [theirs.pid] });
+    const roster = () => validateTrade(l, o).filter((e) => e.includes('players (max'));
+    expect(roster()).toEqual([]);
+    // the user signs another team's restricted free agent to an offer sheet: it waits on his team
+    const r = extra[30];
+    r.rfa = { tid: THIRD, qo: cap.vetMin };
+    signOfferSheet(l, r, U, cap.vetMin * 2, 2, 'min', 1);
+    expect(roster()).toEqual([`${l.teams[U].abbrev} would have 22 players (max 21 in the offseason).`]);
   });
 });
 

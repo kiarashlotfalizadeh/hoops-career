@@ -153,9 +153,10 @@ export function consumePlans(league: League, g: ScheduledGame) {
 
 /**
  * Tactics the user keeps for every game: tonight's matchups, star, chase, hunt and hack-a-player
- * targets and instructions by player name this opponent's players, so they stay in the game (or
- * its plan) instead.
+ * targets, instructions by player and a junk defense named for their players all name this
+ * opponent's players, so they stay in the game (or its plan) instead; `base` is the tactics they
+ * were applied over (a named junk defense goes back to its scheme).
  */
-export function persistableTactics(t: Tactics): Tactics {
-  return withoutGameSpecific(t);
+export function persistableTactics(t: Tactics, base?: Tactics): Tactics {
+  return withoutGameSpecific(t, base);
 }

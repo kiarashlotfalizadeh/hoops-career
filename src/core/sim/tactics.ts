@@ -330,9 +330,17 @@ export function withoutCoachPlans(t: Tactics): Tactics {
   return out;
 }
 
-/** The parts of the tactics that name one night's opponents: kept in a game or its plan, never in saved tactics. */
-export function withoutGameSpecific(t: Tactics): Tactics {
+/** A box-and-one or triangle-and-two named for particular players: drawn up for one opponent. */
+export const namedJunk = (d: DefenseTactics) => isJunk(d.scheme) && !!d.chase?.length;
+
+/**
+ * The parts of the tactics that name one night's opponents: kept in a game or its plan, never in
+ * saved tactics. A junk defense named for their players goes with them, back to `base`'s scheme
+ * (the tactics it was drawn up over) or man-to-man.
+ */
+export function withoutGameSpecific(t: Tactics, base?: Tactics): Tactics {
   const out = cloneTactics(t);
+  if (namedJunk(out.defense)) out.defense.scheme = base && !namedJunk(base.defense) ? base.defense.scheme : 'man';
   out.defense.matchups = {};
   out.defense.starTarget = null;
   delete out.defense.chase;
@@ -391,7 +399,8 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   if (Object.keys(offense).length) patch.offense = offense;
   const defense: Partial<DefenseTactics> = {};
   for (const k of Object.keys(b.defense) as (keyof DefenseTactics)[]) {
-    if (GAME_DEFENSE.has(k) || same(a.defense[k], b.defense[k])) continue;
+    // (a junk defense named for their players is tonight's too)
+    if (GAME_DEFENSE.has(k) || same(a.defense[k], b.defense[k]) || (k === 'scheme' && namedJunk(b.defense))) continue;
     (defense as Record<string, unknown>)[k] = b.defense[k];
   }
   if (Object.keys(defense).length) patch.defense = defense;

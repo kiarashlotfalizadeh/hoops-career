@@ -4,7 +4,7 @@
 // for the trade finder, the best package a team would give for the user's assets, and AI-to-AI
 // deals (the AI's offers to the user are in proposals.ts).
 
-import type { DraftPick, League, Player, Pos } from '../types';
+import type { DraftPick, League, Player, Pos, TeamSeason } from '../types';
 import { CAP, seasonLabel } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -16,6 +16,7 @@ import {
   curTeamSeason,
   dateToDay,
   fmtDate,
+  freeAgents,
   inSeason,
   playerName,
   prospects,
@@ -292,9 +293,18 @@ export function cashRoom(league: League, tid: number): { send: number; receive: 
 
 /** The pick as it would move in a deal: with the protection its team puts on it (held by the team it goes to). */
 export function dealPick(dp: DraftPick, side: TradeSide, to: number): DraftPick {
+  // back with its original team it has nothing to protect (executeTrade drops the protection)
+  if (to === dp.originalTid) return { ...dp, tid: to, protection: undefined };
   const n = side.protect?.[dp.dpid];
   return n ? { ...dp, tid: to, protection: n } : dp;
 }
+
+/**
+ * A pick in a deal as one side weighs it: the receiver as it will hold it, the sender as it gives it
+ * up. They differ only for a protected pick going home: all of it to its original team, but its
+ * sender gives up just the slots it held.
+ */
+const judgedPick = (dp: DraftPick, side: TradeSide, to: number, incoming: boolean) => (!incoming && to === dp.originalTid ? dp : dealPick(dp, side, to));
 
 /** Each team's own first of a draft, which a swap right given by `giver` to `taker` would tie together: the taker's carries the right, the giver's is subject to it. */
 export function swapPicks(league: League, giver: number, taker: number, season: number): { right: DraftPick; subject: DraftPick } | null {
@@ -461,7 +471,7 @@ function sideViews(league: League, side: TradeSide, to: number, tid: number, inc
     ...side.pids.map((pid) => playerView(league, league.players[pid], tid, incoming, aiDeal)),
     ...side.dpids.flatMap((d) => {
       const dp = findPick(league, d);
-      return dp ? [pickView(league, dealPick(dp, side, to), tid, incoming, aiDeal)] : [];
+      return dp ? [pickView(league, judgedPick(dp, side, to, incoming), tid, incoming, aiDeal)] : [];
     }),
     ...(side.swaps ?? []).flatMap((y) => {
       const sp = swapPicks(league, side.tid, to, y);
@@ -728,7 +738,9 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     // standard roster spots: the cap only binds a team taking in bodies, the floor one sending them out
     const out = mine.pids.filter((pid) => !twoWay(pid)).length;
     const inc = other.pids.filter((pid) => !twoWay(pid)).length;
-    const size = tradeRoster(league, mine.tid).length - out + inc;
+    // (in free agency an offer sheet the team signed holds a spot until it's decided: see rfa.ts)
+    const sheets = inc > out && league.phase === 'freeAgency' ? freeAgents(league).filter((p) => p.rfa?.sheet?.tid === mine.tid).length : 0;
+    const size = tradeRoster(league, mine.tid).length - out + inc + sheets;
     if (inc > out && size > maxSize) errors.push(`${abbrev} would have ${size} players (max ${maxSize}${inSeason(league) ? '' : ' in the offseason'}).`);
     if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players (minimum ${CAP.rosterMin} during the season).`);
     const twIn = other.pids.filter(twoWay).length;
@@ -1060,10 +1072,32 @@ function payCash(league: League, side: TradeSide, to: number) {
   used(to).received += c;
   league.teams[side.tid].cash -= c;
   league.teams[to].cash += c;
-  curTeamSeason(league, side.tid).expenses += c;
-  const ts = curTeamSeason(league, to);
-  ts.revenue += c;
-  ts.cashIn = (ts.cashIn ?? 0) + c;
+  // cash traded after the season counts toward next season's limit, and next season's books: the
+  // owner has already judged this one (see bookTradedCash, when next season's books open)
+  if (s === league.season) bookCash(curTeamSeason(league, side.tid), curTeamSeason(league, to), c);
+}
+
+/** Cash in a trade on the season's books: an expense for the sender, revenue (but not local revenue) for the receiver. */
+function bookCash(from: TeamSeason, to: TeamSeason, c: number) {
+  from.expenses += c;
+  to.revenue += c;
+  to.cashIn = (to.cashIn ?? 0) + c;
+}
+
+/**
+ * The new season's books open: cash traded over the summer (counted against this season's limit,
+ * see cashRoom) goes on them. The receiving side's share is booked once per team, with what it
+ * received; the senders' with what they sent.
+ */
+export function bookTradedCash(league: League) {
+  for (const t of league.teams) {
+    const c = t.cashTrades;
+    if (c?.season !== league.season || (!c.sent && !c.received)) continue;
+    const ts = curTeamSeason(league, t.tid);
+    ts.expenses += c.sent;
+    ts.revenue += c.received;
+    if (c.received) ts.cashIn = (ts.cashIn ?? 0) + c.received;
+  }
 }
 
 /**
@@ -1642,7 +1676,7 @@ export function neutralBalance(league: League, offer: TradeOffer, side: 'a' | 'b
       [
         ...s.dpids.flatMap((d) => {
           const dp = findPick(league, d);
-          return dp ? [pickValue(league, dealPick(dp, s, to))] : [];
+          return dp ? [pickValue(league, judgedPick(dp, s, to, incoming))] : [];
         }),
         ...(s.swaps ?? []).flatMap((y) => {
           const sp = swapPicks(league, s.tid, to, y);

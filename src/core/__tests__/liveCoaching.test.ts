@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { IMPACT_TEXT } from '../analysis/gameReport';
 import { impactCounter } from '../ai/advisor';
-import { applyPatch, cloneTactics, defaultTactics, emptyPatch, tacticsDiff } from '../sim/tactics';
+import { applyPatch, cloneTactics, defaultTactics, emptyPatch, namedJunk, tacticsDiff } from '../sim/tactics';
 import { Rng } from '../random';
 import { PLAYER_DEFENSES, type DefScheme, type PlayerDefense, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
 
@@ -67,7 +67,7 @@ describe('impact counters', () => {
 });
 
 describe('tactics diffs', () => {
-  it('give back the changed tactics when applied, except tonight’s matchups, star, chase and hunt targets and instructions by player', () => {
+  it('give back the changed tactics when applied, except tonight’s matchups, star, chase and hunt targets, instructions by player and a named junk defense', () => {
     const rng = new Rng(7);
     for (let i = 0; i < 200; i++) {
       const a = randomTactics(rng);
@@ -96,7 +96,14 @@ describe('tactics diffs', () => {
         huntTarget: t.offense.huntTarget,
       });
       const { matchups, starTarget, chase, playerD, huntTarget } = game(b);
-      const withB = { ...back, offense: { ...back.offense, huntTarget }, defense: { ...back.defense, matchups, starTarget, chase, playerD } };
+      // a junk defense named for their players is tonight's too: the scheme stays as it was
+      const junk = namedJunk(b.defense);
+      if (junk) expect(back.defense.scheme).toBe(a.defense.scheme);
+      const withB = {
+        ...back,
+        offense: { ...back.offense, huntTarget },
+        defense: { ...back.defense, matchups, starTarget, chase, playerD, ...(junk ? { scheme: b.defense.scheme } : {}) },
+      };
       for (const x of [withB.offense, withB.defense] as Record<string, unknown>[]) for (const k of Object.keys(x)) if (x[k] === undefined) delete x[k];
       expect(withB).toEqual(b);
       expect(game(back)).toEqual(game(a));
