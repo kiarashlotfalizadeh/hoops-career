@@ -543,3 +543,126 @@
 .live-score-row > .col:first-child {
   flex: 1;
 }
+
+/* ------------------------------------------------------------------ live game: the starting lineups before the tip */
+.live-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 52px 14px 10px;
+  border-radius: 12px;
+  background: rgba(6, 8, 12, 0.8);
+  color: #fff;
+  overflow: hidden;
+}
+.live-intro-head {
+  text-align: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.live-intro-kicker {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.live-intro-where {
+  font-size: 11.5px;
+  color: #c9d1dc;
+}
+.live-intro-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+}
+.live-intro-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.live-intro-team {
+  padding-bottom: 3px;
+  border-bottom: 2px solid;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-intro-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  animation: intro-in 0.35s ease both;
+}
+.live-intro-row:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.live-intro-row:nth-child(4) {
+  animation-delay: 0.16s;
+}
+.live-intro-row:nth-child(5) {
+  animation-delay: 0.24s;
+}
+.live-intro-row:nth-child(6) {
+  animation-delay: 0.32s;
+}
+.live-intro-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 11px;
+}
+.live-intro-pos {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9aa5b5;
+}
+.live-intro-line {
+  font-size: 10.5px;
+  color: #b4bdca;
+}
+.live-intro-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.live-intro-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+@keyframes intro-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-intro-row {
+    animation: none;
+  }
+}

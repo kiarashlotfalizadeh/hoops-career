@@ -62,6 +62,7 @@ import { pickHighlights } from '../live/highlights';
 import { gameKeys } from '../../core/analysis/keys';
 import { otherGames } from '../live/scoreboard';
 import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
+import { Intro } from '../live/Intro';
 
 const FEED_MAX = 80;
 const NO_LOGS: PossLog[] = [];
@@ -139,6 +140,9 @@ export default function Live() {
   const [beat] = useState<Beat>(() => createBeat());
   const [script, setScript] = useState<Script | null>(null);
   const [show, setShow] = useState<Show | null>(null);
+  // a game from its tip: the starting lineups go up on the court first
+  const [intro, setIntro] = useState(false);
+  const tipOff = useCallback(() => setIntro(false), []);
   // read when the court finishes drawing (from its animation loop): the latest of each
   const showRef = useRef<Show | null>(null);
   showRef.current = show;
@@ -344,6 +348,7 @@ export default function Live() {
     setScript(null);
     setShow(null);
     lastDone.current = null;
+    setIntro(!!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false);
     setAtBreak(false);
     setPaused(false);
     setDismissed([]);
@@ -618,8 +623,8 @@ export default function Live() {
 
   const huddling = panel === 'huddle';
   useEffect(() => {
-    if (status === 'live' && !script && !atBreak && !huddling && !ff.current.timer && !ff.current.waiting) nextPossession();
-  }, [status, script, atBreak, huddling, nextPossession]);
+    if (status === 'live' && !script && !atBreak && !huddling && !intro && !ff.current.timer && !ff.current.waiting) nextPossession();
+  }, [status, script, atBreak, huddling, intro, nextPossession]);
   // a fast-forward that came up during a pause goes on when it ends
   useEffect(() => {
     if (!paused && ff.current.waiting && status === 'live') {
@@ -646,6 +651,7 @@ export default function Live() {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
     clearFF();
+    setIntro(false);
     // a timeout called just before the skip is taken along the way: no huddle at the other end
     huddleNext.current = false;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
@@ -969,6 +975,19 @@ export default function Live() {
                 <div key={banner.id} className={`live-banner fade-in ${banner.kind}`} role="status">
                   {banner.text}
                 </div>
+              )}
+              {intro && status === 'live' && (
+                <Intro
+                  league={league}
+                  teams={[home, away]}
+                  fives={[view.sides[0].on, view.sides[1].on]}
+                  kits={colors}
+                  names={nameOf}
+                  context={context}
+                  speed={speed}
+                  paused={paused}
+                  onTip={tipOff}
+                />
               )}
               {show && (
                 <div className="live-show" role="status">
