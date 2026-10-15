@@ -1,6 +1,8 @@
 // Player valuation, contract demands and roster transactions under a simplified CBA:
 // soft cap (sign FAs only with space, the mid-level exception or for the minimum), unlimited
 // re-signing of own players, luxury tax, 15-man rosters, rookie scale, 125% trade salary matching.
+// Restricted free agency's rules live in rfa.ts; its holds on summer cap space are here
+// (marketHolds), since every signing route counts them.
 
 import type { League, Player, Team } from '../types';
 import { FREE_AGENT } from '../types';
@@ -277,41 +279,99 @@ export const MLE_YEARS = 4;
 
 /**
  * Most a team can pay one free agent with its mid-level exception this season: once a season, up
- * to 8.5% of the cap, and only while the signing keeps it under the luxury tax. 0 when used up.
+ * to 8.5% of the cap, and only while the signing keeps it under the luxury tax (counting the offer
+ * sheets it has signed, which land on its payroll unless matched). 0 when used up.
  */
 export function mleRoom(league: League, tid: number, season = contractSeason(league)): number {
   if (league.teams[tid].mleSeason === season) return 0;
   const cap = CAP_FOR(league, season);
-  return Math.max(0, Math.min(Math.round((cap.salaryCap * MLE_PCT) / 10) * 10, cap.luxuryTax - payroll(league, tid, season)));
+  const sheets = marketHolds(league, tid, season).reduce((a, h) => a + (h.kind === 'sheet' ? h.amount : 0), 0);
+  return Math.max(0, Math.min(Math.round((cap.salaryCap * MLE_PCT) / 10) * 10, cap.luxuryTax - payroll(league, tid, season) - sheets));
 }
 
 export type SigningRoute = 'min' | 'space' | 'mle';
 
 /**
  * How a team can pay free agent `p` this much a season: the minimum (his own: the veteran minimum
- * only after 3 seasons in the league), cap space, the mid-level exception, or not at all.
+ * only after 3 seasons in the league), cap space (net of what the summer market holds, see
+ * marketHolds), the mid-level exception, or not at all.
  */
 export function signingRoute(league: League, tid: number, amount: number, season = contractSeason(league), p?: Pick<Player, 'experience'>): SigningRoute | null {
   const cap = CAP_FOR(league, season);
   if (amount <= (p && p.experience < 3 ? cap.minContract : cap.vetMin) + 1) return 'min';
-  if (payroll(league, tid, season) + amount <= cap.salaryCap) return 'space';
+  const pay = payroll(league, tid, season);
+  // (the holds are only worth adding up when the payroll alone leaves the room)
+  if (pay + amount <= cap.salaryCap && pay + heldSalary(league, tid, season) + amount <= cap.salaryCap) return 'space';
   if (amount <= mleRoom(league, tid, season)) return 'mle';
   return null;
+}
+
+/** A team's cap space for a signing now: under the cap net of its payroll and what the summer market holds (see marketHolds). */
+export function capSpace(league: League, tid: number, season = contractSeason(league)): number {
+  return CAP_FOR(league, season).salaryCap - payroll(league, tid, season) - heldSalary(league, tid, season);
+}
+
+/** Something held against a team's cap space in the summer market: its restricted free agent's cap hold, or an offer sheet it signed. */
+export interface MarketHold {
+  p: Player;
+  amount: number;
+  kind: 'rfa' | 'sheet';
+}
+
+/**
+ * What a team has held against its cap space in free agency besides its payroll (next season's
+ * books; see rfa.ts): the cap hold of each of its restricted free agents, the larger of his
+ * qualifying offer and his asking price when the market opened, until he signs or the offer is
+ * withdrawn; and each offer sheet it has signed, until his team decides. Unlike the re-sign
+ * period's holds these stay on through free agency, for AI teams as for the user's.
+ */
+export function marketHolds(league: League, tid: number, season = contractSeason(league)): MarketHold[] {
+  if (league.phase !== 'freeAgency' || season !== league.season + 1) return [];
+  const out: MarketHold[] = [];
+  for (const p of Object.values(league.players)) {
+    const r = p.rfa;
+    if (!r || p.tid !== FREE_AGENT) continue;
+    if (r.tid === tid) out.push({ p, amount: r.hold ?? r.qo, kind: 'rfa' });
+    if (r.sheet?.tid === tid) out.push({ p, amount: r.sheet.amount, kind: 'sheet' });
+  }
+  return out;
+}
+
+/** Total of a team's market holds (see marketHolds). */
+export const heldSalary = (league: League, tid: number, season = contractSeason(league)) => marketHolds(league, tid, season).reduce((a, h) => a + h.amount, 0);
+
+/**
+ * The payroll an AI team will go to for keeping a player worth `v`. It follows the strategy:
+ * contenders go a little past the tax, retooling teams stop halfway between cap and tax,
+ * rebuilders near the cap. A player worth 82+ stretches it to the tax (8% past it for a contender,
+ * or for anyone's franchise player at 86+). Re-signing, extensions, qualifying offers and matching
+ * offer sheets all budget with it.
+ */
+export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number): number {
+  if (v >= 86 || (v >= 82 && t.strategy === 'contend')) return cap.luxuryTax * 1.08;
+  if (t.strategy === 'contend') return cap.luxuryTax * 1.02;
+  if (v >= 82) return cap.luxuryTax;
+  return t.strategy === 'retool' ? (cap.salaryCap + cap.luxuryTax) / 2 : cap.salaryCap * 1.05;
 }
 
 /** Season day of December 15 (day 0 is October 20). */
 export const DEC_15 = 56;
 
-export function signPlayer(league: League, p: Player, tid: number, amount: number, years: number, opts: { news?: boolean; start?: number; twoWay?: boolean } = {}) {
+/** `log: false`: the caller logs the move itself (restricted free agency's matches and qualifying offers). */
+export function signPlayer(league: League, p: Player, tid: number, amount: number, years: number, opts: { news?: boolean; start?: number; twoWay?: boolean; log?: boolean } = {}) {
   const prevTid = p.tid;
+  // his own team re-signs him: from its roster, or as its restricted free agent (it kept his rights)
+  const own = prevTid === tid || p.rfa?.tid === tid;
   p.tid = tid;
   p.contract = makeContract(league, amount, years, opts.start ?? league.season, opts.twoWay ? undefined : p.experience);
   if (opts.twoWay) p.contract.twoWay = true;
-  if (prevTid !== tid) {
+  if (!own) {
     p.joinedSeason = league.season;
     // a new team: the trade-back rule was about his old one (a re-signing keeps it)
     delete p.tradedFrom;
   }
+  // whatever he signs, restricted free agency is over (a matched offer sheet included)
+  delete p.rfa;
   // like the NBA's: no trading him until December 15 of his first season, or three months after
   // an in-season signing if that is later (otherwise a free agent could be signed and flipped for
   // more value); a summer or training-camp signing waits for December 15
@@ -322,7 +382,7 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   const team = league.teams[tid];
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
   if (opts.news !== false) {
-    const verb = prevTid === tid ? 're-signed with' : opts.twoWay ? 'signed a two-way deal with' : 'signed with';
+    const verb = own ? 're-signed with' : opts.twoWay ? 'signed a two-way deal with' : 'signed with';
     addNews(league, {
       kind: 'signing',
       // the total includes the yearly raises, as on the offer sheet
@@ -333,8 +393,9 @@ export function signPlayer(league: League, p: Player, tid: number, amount: numbe
   }
   // the transaction log leaves out AI teams' roster filler: quiet fills (no news) and new minimum
   // deals, camp bodies most of whom are cut on opening night
-  const filler = opts.news === false || (prevTid !== tid && p.contract.salaries[0] <= CAP_FOR(league, p.contract.start).vetMin + 10);
-  if (!filler || tid === league.userTid) logMove(league, prevTid === tid ? 'resign' : opts.twoWay ? 'twoWay' : 'sign', tid, p, { amount: p.contract.salaries[0], years });
+  const filler = opts.news === false || (!own && p.contract.salaries[0] <= CAP_FOR(league, p.contract.start).vetMin + 10);
+  if (opts.log !== false && (!filler || tid === league.userTid))
+    logMove(league, own ? 'resign' : opts.twoWay ? 'twoWay' : 'sign', tid, p, { amount: p.contract.salaries[0], years });
 }
 
 /** Why a fired coach can't run his old team's roster (see owner.ts). */
@@ -385,6 +446,9 @@ export function leaveTeam(team: Team, pid: number) {
   delete team.tactics.offense.roles[pid];
   delete team.tactics.offense.freedom[pid];
 }
+
+/** Free agency lasts FA_DAYS days: opening day is day 1 (faDay 0), so the market closes at faDay FA_DAYS - 1. */
+export const FA_DAYS = 30;
 
 /** Days between a free agent's price cuts while he goes unsigned (see faDay). */
 export const FA_PRICE_CUT_DAYS = 5;
@@ -656,9 +720,13 @@ export function twoWayEligible(p: Player): boolean {
   return p.experience <= 3;
 }
 
-/** A free agent who'd take a two-way deal from this team: young enough, and minimum-level on the open market. */
+/**
+ * A free agent who'd take a two-way deal from this team: young enough, and minimum-level on the
+ * open market. Not a restricted free agent: his team holds his rights (an offer sheet or a
+ * re-signing, see rfa.ts).
+ */
 export function wantsTwoWay(league: League, p: Player, tid?: number): boolean {
-  return twoWayEligible(p) && askingContract(league, p, tid).amount <= CAP_FOR(league, contractSeason(league)).vetMin + 1;
+  return !p.rfa && twoWayEligible(p) && askingContract(league, p, tid).amount <= CAP_FOR(league, contractSeason(league)).vetMin + 1;
 }
 
 /** Two-way deals run two seasons, one for a player in his last season of eligibility. */

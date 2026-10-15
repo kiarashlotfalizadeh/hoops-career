@@ -2,13 +2,14 @@
 // extension mode (the Office, the player page and Re-sign) is in ExtendBody.tsx.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Ban, CircleCheck, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Ban, CircleCheck, Minus, Plus, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
-import { MLE_YEARS, askingContract, makeContract, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
+import { MLE_YEARS, askingContract, makeContract, marketHolds, marketSalary, mleRoom, signingRoute, teamAppeal, willSign } from '../../core/league/contracts';
+import { SHEET_MIN_YEARS, deadlineLabel, matchDeadline, pendingSheets, sheetBlockedReason } from '../../core/league/rfa';
 import {
   bidFloor,
   bidHolds,
@@ -34,10 +35,17 @@ export type OfferMode = 'fa' | 'resign' | 'extend';
 export function ContractSheet({ pid, mode, onClose }: { pid: number | null; mode: OfferMode; onClose: () => void }) {
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
-  const valid = !!p && (mode === 'fa' ? p.tid === FREE_AGENT : p.tid === league.userTid);
+  // the user's restricted free agent is re-signed with Bird rights, from the free-agent list too
+  const ownRfa = !!p && p.tid === FREE_AGENT && p.rfa?.tid === league.userTid;
+  const m: OfferMode = mode === 'fa' && ownRfa ? 'resign' : mode;
+  const valid = !!p && (m === 'fa' ? p.tid === FREE_AGENT : p.tid === league.userTid || (m === 'resign' && ownRfa));
   return (
-    <Sheet open={valid} onClose={onClose} label={p ? `${mode === 'fa' ? 'Offer to' : mode === 'extend' ? 'Extend' : 'Re-sign'} ${playerName(p)}` : undefined}>
-      {valid && p && (mode === 'extend' ? <ExtendBody key={p.pid} p={p} onClose={onClose} /> : <OfferBody key={p.pid} p={p} mode={mode} onClose={onClose} />)}
+    <Sheet
+      open={valid}
+      onClose={onClose}
+      label={p ? `${m === 'fa' ? (p.rfa ? 'Offer sheet for' : 'Offer to') : m === 'extend' ? 'Extend' : 'Re-sign'} ${playerName(p)}` : undefined}
+    >
+      {valid && p && (m === 'extend' ? <ExtendBody key={p.pid} p={p} onClose={onClose} /> : <OfferBody key={p.pid} p={p} mode={m} onClose={onClose} />)}
     </Sheet>
   );
 }
@@ -55,9 +63,14 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // a top free agent in the summer weighs offers: the sheet opens on your pending one, and raising it replaces it
   const bidding = mode === 'fa' && marqueeFA(league, p);
   const bid = bidding ? pendingBid(league, p.pid) : undefined;
+  // another team's restricted free agent signs an offer sheet it can match (2-5 years); the user's own is re-signed
+  const sheet = mode === 'fa' && !!p.rfa;
+  const ownRfa = mode === 'resign' && p.tid === FREE_AGENT;
   const [amount, setAmount] = useState(() => bid?.amount ?? clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt));
   // a mid-level offer can run 4 years at most
-  const [years, setYears] = useState(() => bid?.years ?? (mode === 'fa' && offerRoute(league, p, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years));
+  const [years, setYears] = useState(() =>
+    Math.max(sheet ? SHEET_MIN_YEARS : 1, bid?.years ?? (mode === 'fa' && offerRoute(league, p, amount, season) === 'mle' ? Math.min(ask.years, MLE_YEARS) : ask.years)),
+  );
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
 
   // smallest amount he accepts for the chosen length (binary search over willSign, which is monotone in amount);
@@ -82,19 +95,33 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // his ask from you against a neutral team's: interest and the difficulty setting both move it
   const vsNeutral = Math.round((ask.amount / askingContract(league, p).amount - 1) * 100);
   const market = marketSalary(league, p);
-  // your other pending offers on cap space hold their room
-  const held = mode === 'fa' ? bidHolds(league, p.pid) : 0;
+  // your other pending offers on cap space hold their room, and so do the summer market's holds:
+  // your offer sheets and your restricted free agents' cap holds
+  const holds = mode === 'fa' ? marketHolds(league, tid, season) : [];
+  const heldRfa = holds.reduce((a, h) => a + (h.kind === 'rfa' ? h.amount : 0), 0);
+  const heldOffers = (mode === 'fa' ? bidHolds(league, p.pid) : 0) + holds.reduce((a, h) => a + (h.kind === 'sheet' ? h.amount : 0), 0);
+  const held = heldOffers + heldRfa;
   const pay = payroll(league, tid, season) + held;
   const space = cap.salaryCap - pay;
   const after = pay + amount;
   // re-signing him clears his own cap hold; the other expiring players still hold their room
   const otherHolds = mode === 'resign' ? capHolds(league, tid).reduce((a, h) => a + (h.p.pid === p.pid ? 0 : h.amount), 0) : 0;
   // re-signing counts next season's contracts: the other expiring deals are leaving or re-signing too
-  const pendingN = mode === 'fa' ? (league.faBids ?? []).filter((b) => b.pid !== p.pid).length : 0;
+  const pendingN = mode === 'fa' ? (league.faBids ?? []).filter((b) => b.pid !== p.pid).length + pendingSheets(league, tid).filter((x) => x.pid !== p.pid).length : 0;
   const rosterN = mode === 'resign' ? resignRoster(league) : standardRoster(league, tid).length + pendingN;
   const rosterMax = rosterMaxNow(league);
-  // signing windows: free agents in the preseason, regular season and free agency; own players in the re-sign period
-  const closed = mode === 'fa' ? signingClosedReason(league) : league.phase !== 'resign' ? 'Re-signing happens between the draft and free agency.' : null;
+  // signing windows: free agents in the preseason, regular season and free agency; own players in the
+  // re-sign period, and a restricted free agent of yours in free agency until he signs an offer sheet
+  const closed =
+    mode === 'fa'
+      ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, Math.max(years, SHEET_MIN_YEARS)) : null))
+      : ownRfa
+        ? p.rfa?.sheet
+          ? `${p.lastName} has signed an offer sheet with the ${league.teams[p.rfa.sheet.tid].name}: match it or let him go.`
+          : null
+        : league.phase !== 'resign'
+          ? 'Re-signing happens between the draft and free agency.'
+          : null;
   const rosterBlocked = rosterN >= rosterMax;
   const route = mode === 'fa' ? offerRoute(league, p, amount, season) : signingRoute(league, tid, amount, season, p);
   // his own minimum, as signing counts it (below the veteran minimum in his first three seasons)
@@ -103,7 +130,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const capBlocked = mode === 'fa' && !route;
   const mleTooLong = mode === 'fa' && route === 'mle' && years > MLE_YEARS;
   const floor = bidding ? bidFloor(league, p, years) : 0;
-  const blocked = !!closed || rosterBlocked || capBlocked || mleTooLong || amount < floor;
+  const blocked = !!closed || rosterBlocked || capBlocked || mleTooLong || amount < floor || (sheet && years < SHEET_MIN_YEARS);
   // as signed: each season at least his minimum
   const contract = makeContract(league, amount, years, season, p.experience);
   const total = contract.salaries.reduce((a, b) => a + b, 0);
@@ -220,13 +247,16 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         <div className="tiny dim upper bold">Years</div>
         <div className="row" style={{ gap: 6 }}>
           {[1, 2, 3, 4, 5].map((y) => (
-            <button key={y} className={`fo-yr ${years === y ? 'on' : ''}`} aria-pressed={years === y} onClick={() => setYears(y)}>
+            <button key={y} className={`fo-yr ${years === y ? 'on' : ''}`} aria-pressed={years === y} disabled={sheet && y < SHEET_MIN_YEARS} onClick={() => setYears(y)}>
               {y}
               <small>{y === ask.years ? 'wants' : shortSeason(season + y - 1)}</small>
             </button>
           ))}
         </div>
-        <div className="tiny dim">Runs through {seasonLabel(season + years - 1)} with 5% annual raises. Each year away from what he wants adds ~3% to his price.</div>
+        <div className="tiny dim">
+          Runs through {seasonLabel(season + years - 1)} with 5% annual raises. Each year away from what he wants adds ~3% to his price.
+          {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS} to 5 years, with no options.` : ''}
+        </div>
       </div>
 
       {closed && (
@@ -293,11 +323,18 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
       {bidding && !closed && !rosterBlocked && !capBlocked && !mleTooLong && <BidPanel p={p} amount={amount} years={years} floor={floor} onAmount={set} />}
 
+      {sheet && !closed && p.rfa && (
+        <Callout icon={<ShieldCheck size={18} />}>
+          <b>Restricted free agent.</b> This is an offer sheet: the {league.teams[p.rfa.tid].name} have until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it
+          and keep him on exactly these terms. Until they decide it holds your {route === 'mle' ? 'mid-level exception' : 'cap room'} and a roster spot; not matched, he's yours.
+        </Callout>
+      )}
+
       {!blocked &&
         !bidding &&
         (verdict.ok ? (
           <Callout tone="good" icon={<CircleCheck size={18} className="good" />}>
-            <b>He'll sign at this number.</b>
+            <b>{sheet ? "He'll sign this offer sheet." : "He'll sign at this number."}</b>
             {needed !== null && amount > needed + 2 * STEP && <span className="dim2"> You could go as low as {fmtM(needed, 2)}.</span>}
           </Callout>
         ) : (
@@ -344,7 +381,12 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           {isMin && after > cap.salaryCap && <div className="tiny dim">Minimum deals (up to {fmtM(minAmt, 2)} for him) can be signed even when you're over the cap.</div>}
           {route === 'mle' && <div className="tiny dim">Uses your mid-level exception: once a season, up to {MLE_YEARS} years, and it keeps you under the tax line.</div>}
-          {held > 0 && <div className="tiny dim">Counts {fmtM(held)} of cap space held for your other pending offers.</div>}
+          {held > 0 && (
+            <div className="tiny dim">
+              Counts {fmtM(held)} of cap space held for{' '}
+              {[heldOffers > 0 ? 'your other pending offers and offer sheets' : '', heldRfa > 0 ? "your restricted free agents' cap holds" : ''].filter(Boolean).join(' and ')}.
+            </div>
+          )}
         </div>
       ) : (
         <div className="card tight col" style={{ gap: 8 }}>
@@ -354,7 +396,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           </div>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           <div className="tiny dim">
-            You can go over the cap to keep your own players.
+            You can go over the cap to keep your own players.{ownRfa && p.rfa ? ` His ${fmtM(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this contract.` : ''}
             {taxBill > 0 ? (
               <span className="bad">
                 {' '}
@@ -381,7 +423,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           Profile
         </Link>
         <button className={`btn grow ${(verdict.ok || bidding) && !blocked ? 'primary' : ''}`} disabled={blocked} onClick={submit}>
-          {mode === 'fa' ? (bidding ? (bid ? 'Update offer' : 'Submit offer') : 'Offer') : 'Re-sign'} {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
+          {mode === 'fa' ? (bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Sign offer sheet' : 'Offer') : 'Re-sign'} {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
         </button>
       </div>
     </div>

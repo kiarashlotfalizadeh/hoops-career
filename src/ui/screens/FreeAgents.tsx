@@ -28,6 +28,8 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet } from '../components/ui';
 import { Callout, OvrPot, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
+import { MyRfas, MySheets, rfaTag } from '../office/RfaPanel';
+import { MATCH_DAYS, SHEET_MIN_YEARS, pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
 
@@ -40,7 +42,9 @@ export default function FreeAgents() {
   // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet),
   // and in free agency so do the user's pending offers to top free agents
   const bids = league.faBids ?? [];
+  // (in free agency capPayroll counts the market's holds: your restricted free agents' and your offer sheets')
   const holds = capPayroll(league, tid, s) - pay + bidHolds(league);
+  const sheetsOut = pendingSheets(league, tid);
   const space = cap.salaryCap - pay - holds;
   const mle = userMleRoom(league, s);
   // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
@@ -95,7 +99,14 @@ export default function FreeAgents() {
   // what the user could actually do today: the window is open and there's a spot to fill
   const canAdd = !closed && (twoWayMode ? tw < TWO_WAY_MAX : n < max);
   const rows = all
-    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!twoWayMode || r.twoWay) && (!onlySignable || (!r.p.waivers && canAdd && (twoWayMode || r.route))))
+    .filter(
+      (r) =>
+        (pos === 'all' || r.p.pos === pos) &&
+        r.p.ovr >= minOvr &&
+        (!twoWayMode || r.twoWay) &&
+        // (your own restricted free agent re-signs with Bird rights; one who signed an offer sheet waits on it)
+        (!onlySignable || (!r.p.waivers && !r.p.rfa?.sheet && canAdd && (twoWayMode || r.route || (r.p.rfa?.tid === tid && !r.p.mood.tradeRequest)))),
+    )
     .sort((a, b) => {
       switch (sort) {
         case 'ovr':
@@ -116,6 +127,7 @@ export default function FreeAgents() {
   const advance = async (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
     const offered = bids.map((b) => b.pid);
+    const sheeted = sheetsOut.map((p) => p.pid);
     const from = faDayNumber(league) + 1;
     // behind the progress bar, like the Play menu's: a second tap while it runs is a no-op
     if (!(await useStore.getState().task('Free agency', (l) => faAdvance(l, days)))) return;
@@ -128,11 +140,17 @@ export default function FreeAgents() {
     const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
     // the players who decided on your offers lead (the details are in the inbox)
     const decided = offered.filter((pid) => !l.faBids?.some((b) => b.pid === pid)).map((pid) => l.players[pid]);
-    const won = decided.some((p) => p?.tid === l.userTid);
-    const verdicts = decided
-      .filter(Boolean)
-      .map((p) => (p.tid === l.userTid ? `${p.lastName} chose you!` : p.tid >= 0 ? `${p.lastName} chose ${l.teams[p.tid].abbrev}.` : `${p.lastName} passed on your offer.`))
-      .join(' ');
+    // your offer sheets that were decided, and sheets on your restricted free agents that came in (the market stops for those)
+    const settled = sheeted.map((pid) => l.players[pid]).filter((p) => p && !p.rfa?.sheet);
+    const incoming = restrictedFreeAgents(l, l.userTid).filter((p) => p.rfa!.sheet?.day === l.faDay);
+    const won = decided.some((p) => p?.tid === l.userTid) || settled.some((p) => p.tid === l.userTid);
+    const verdicts = [
+      ...decided
+        .filter(Boolean)
+        .map((p) => (p.tid === l.userTid ? `${p.lastName} chose you!` : p.tid >= 0 ? `${p.lastName} chose ${l.teams[p.tid].abbrev}.` : `${p.lastName} passed on your offer.`)),
+      ...settled.map((p) => (p.tid === l.userTid ? `${p.lastName}'s offer sheet wasn't matched: he's yours!` : `${l.teams[p.tid].abbrev} matched ${p.lastName}'s offer sheet.`)),
+      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${p.lastName} to an offer sheet: match it or let him go.`),
+    ].join(' ');
     useStore.getState().toast(
       `${verdicts ? `${verdicts} ` : ''}${
         signed.length
@@ -140,9 +158,9 @@ export default function FreeAgents() {
               .slice(0, 2)
               .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
               .join(', ')}${signed.length > 2 ? '…' : ''}`
-          : `${when}: ${day > from ? 'a quiet week' : 'a quiet day'} on the market.`
+          : `${when}: ${day > from ? (day - from >= 6 ? 'a quiet week' : 'a few quiet days') : 'a quiet day'} on the market.`
       }`,
-      won ? 'good' : 'neutral',
+      won ? 'good' : incoming.length ? 'bad' : 'neutral',
     );
   };
 
@@ -184,6 +202,13 @@ export default function FreeAgents() {
               space, mid-level and roster spot until he decides; raise or withdraw them any time.
             </p>
             <p style={{ margin: 0 }}>
+              <b>Restricted free agents.</b> A young player whose team extended him a qualifying offer can only be signed to an offer sheet: {SHEET_MIN_YEARS} to 5 years, no
+              options, at his asking price, paid for with cap space, the mid-level or the minimum like any signing. His team has {MATCH_DAYS} days to match it and keep him on
+              exactly those terms; until then the sheet holds your cap room (or mid-level) and a roster spot. Your own restricted free agents can be re-signed with Bird rights
+              until they sign a sheet, their cap holds stay on your books meanwhile, and free agency stops when another team signs one, so you can match or let him go. Unsigned
+              when the market closes, a restricted free agent plays a season on his qualifying offer.
+            </p>
+            <p style={{ margin: 0 }}>
               <b>Timing.</b> The summer market lasts {FA_DAYS} days, and you get the first look: AI teams start signing on day 2, and stars go fast. Unsigned players cut their
               price every few days, and during the season they are still available.
             </p>
@@ -217,7 +242,7 @@ export default function FreeAgents() {
           v={fmtM(space)}
           color={space > 0 ? 'var(--good)' : 'var(--warn)'}
           sub={
-            bids.some((b) => b.route === 'space')
+            bids.some((b) => b.route === 'space') || sheetsOut.length
               ? 'after pending offers'
               : holds > 0
                 ? 'after cap holds'
@@ -256,6 +281,7 @@ export default function FreeAgents() {
           <div style={{ margin: '10px 0' }}>
             <Bar value={faDayNumber(league)} max={FA_DAYS} />
           </div>
+          <MySheets onOpen={setSel} />
           {bids.length > 0 && (
             <div className="col" style={{ gap: 6, marginBottom: 10 }}>
               <div className="row tiny dim upper bold" style={{ gap: 6 }}>
@@ -304,6 +330,8 @@ export default function FreeAgents() {
           )}
         </Card>
       )}
+
+      <MyRfas onResign={setSel} />
 
       <div className="col" style={{ gap: 8 }}>
         <Chips value={pos} onChange={(x) => (setPos(x), setLimit(40))} options={[{ id: 'all' as const, label: 'All' }, ...POSITIONS.map((p) => ({ id: p, label: p }))]} />
@@ -357,6 +385,8 @@ export default function FreeAgents() {
               const ai = appealInfo(appeal);
               const bid = bids.find((b) => b.pid === p.pid);
               const w = p.waivers;
+              const rfa = rfaTag(league, p);
+              const own = p.rfa?.tid === tid;
               return (
                 <button key={p.pid} className="fo-prow" onClick={() => (w ? setWaiverSel(p.pid) : twoWayMode ? setTwoWaySel(p.pid) : setSel(p.pid))}>
                   <OvrPot p={p} />
@@ -365,8 +395,9 @@ export default function FreeAgents() {
                       <span className="fo-name">{playerName(p)}</span>
                       {p.injury && <span className="tag bad">INJ</span>}
                     </div>
-                    {(bid || w) && (
+                    {(bid || w || rfa) && (
                       <div className="row wrap" style={{ gap: 6, marginTop: 3 }}>
+                        {rfa && <span className={`tag ${rfa.tone}`}>{rfa.label}</span>}
                         {bid && <span className="tag info">Bidding · {bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}</span>}
                         {w && (
                           <span className="tag warn">
@@ -387,6 +418,10 @@ export default function FreeAgents() {
                       )}
                       {w ? (
                         <span className="tiny dim">Claim his contract</span>
+                      ) : p.rfa?.sheet ? (
+                        <span className="tiny dim">Waiting on his team</span>
+                      ) : own ? (
+                        <span className="tiny good">Bird rights</span>
                       ) : twoWayMode ? (
                         <span className="tiny good">Two-way</span>
                       ) : route === 'min' ? (

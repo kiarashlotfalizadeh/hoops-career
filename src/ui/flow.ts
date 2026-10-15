@@ -2,7 +2,7 @@
 import type { League, ScheduledGame } from '../core/types';
 import { allStarStop, type SimTarget } from '../state/store';
 import { liveInProgress } from '../state/live';
-import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, regularGamesLeft } from '../core/league/season';
+import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, newSeasonBlockedReason, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { seasonLabel } from '../core/constants';
@@ -143,12 +143,15 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });
         a.push({ id: 'faweek', label: 'Advance 1 week', cmd: 'faWeek' });
       }
+      // an offer sheet on one of the user's restricted free agents waits for his call first
+      const blocked = newSeasonBlockedReason(league) ?? undefined;
       a.push({
         id: 'new',
         label: `Start ${seasonLabel(league.season + 1)} season`,
-        sub: 'Training camp: players develop and age.',
+        sub: blocked ?? 'Training camp: players develop and age.',
         primary: over,
         cmd: 'newSeason',
+        disabled: blocked,
       });
       break;
     }

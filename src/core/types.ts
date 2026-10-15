@@ -60,6 +60,8 @@ export interface Contract {
   twoWay?: boolean;
   /** A two-way deal converted to a standard one: the same contract, not a new signing. */
   converted?: boolean;
+  /** A qualifying offer he took at the close of free agency: when it runs out he is unrestricted (see rfa.ts). */
+  qualifying?: boolean;
   /**
    * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
    * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
@@ -232,6 +234,8 @@ export interface Player {
   promise?: PlayerPromise;
   /** His last meeting with the GM (one every MEET_DAYS days), and the season a promise to him was broken: he takes no more that season. */
   meeting?: { season: number; day: number; broken?: number };
+  /** Restricted free agency: his team extended a qualifying offer as his deal ran out, so it can match any offer sheet he signs (see rfa.ts). */
+  rfa?: Rfa;
 }
 
 /**
@@ -252,6 +256,37 @@ export interface PlayerPromise {
   minutes?: number;
   /** Trade: judged the day after this season's deadline, or on next season's opening night. */
   by?: 'deadline' | 'opening';
+}
+
+/**
+ * A restricted free agent's rights (see src/core/league/rfa.ts). Set when his team extends the
+ * qualifying offer in the re-sign period (he is still on its roster then); from the day free
+ * agency opens he is a free agent until he re-signs, signs an offer sheet that isn't matched, or
+ * takes the qualifying offer as the market closes.
+ */
+export interface Rfa {
+  /** The team holding his rights: it can re-sign him with Bird rights or match an offer sheet. */
+  tid: number;
+  /** The qualifying offer: one season at this salary ($K, next season's money). */
+  qo: number;
+  /** His cap hold on that team from the day the market opens (the larger of the QO and his asking price then) until he signs or the QO is withdrawn. */
+  hold?: number;
+  /** An offer sheet he signed with another team, waiting for his team's decision. */
+  sheet?: OfferSheet;
+}
+
+/** Another team's offer sheet for a restricted free agent: his team matches it and keeps him on exactly these terms, or he joins that team on them. */
+export interface OfferSheet {
+  /** The team that signed him to it. */
+  tid: number;
+  /** First-season salary ($K, next season's money; the usual 5% raises follow) and length: 2-5 seasons, no options. */
+  amount: number;
+  years: number;
+  /** How the offering team pays for it: its cap space or mid-level stays held for it until his team decides. */
+  route: 'min' | 'space' | 'mle';
+  /** The free-agency day (faDay) it was signed on, and the last one his team can match on: unmatched at the end of that day, he joins the other team. */
+  day: number;
+  until: number;
 }
 
 export interface Waivers {
@@ -802,8 +837,30 @@ export interface NewsItem {
   pids: number[];
 }
 
-/** A kind of roster move in the transaction log ('swap': a pick swap exercised when the lottery set the order). */
-export type TxnKind = 'trade' | 'swap' | 'sign' | 'resign' | 'extend' | 'release' | 'waive' | 'claim' | 'buyout' | 'twoWay' | 'convert' | 'renounce' | 'option' | 'draft';
+/**
+ * A kind of roster move in the transaction log. 'swap': a pick swap exercised when the lottery set
+ * the order. Restricted free agency: 'qualify' (a qualifying offer extended, withdrawn or taken),
+ * 'offerSheet' (signed with another team) and 'match' (his team matched it, or declined and he
+ * joined the other team).
+ */
+export type TxnKind =
+  | 'trade'
+  | 'swap'
+  | 'sign'
+  | 'resign'
+  | 'extend'
+  | 'release'
+  | 'waive'
+  | 'claim'
+  | 'buyout'
+  | 'twoWay'
+  | 'convert'
+  | 'renounce'
+  | 'option'
+  | 'draft'
+  | 'qualify'
+  | 'offerSheet'
+  | 'match';
 
 /** What one team sent in a trade (or gave up in an exercised swap), as it was: names and pick labels at the time. */
 export interface TxnSide {
@@ -834,13 +891,17 @@ export interface Txn {
   pid?: number;
   name?: string;
   /**
-   * $K: the first-year salary of a signing, re-signing, extension, two-way deal, conversion or
-   * claim (this season's); the dead money a release leaves; what a buyout gave back; the salary of
-   * an option year.
+   * $K: the first-year salary of a signing, re-signing, extension, two-way deal, conversion,
+   * claim, offer sheet or match (this season's); the dead money a release leaves; what a buyout
+   * gave back; the salary of an option year or a qualifying offer.
    */
   amount?: number;
   years?: number;
-  /** An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option); a draft pick: its overall number ('#5'). */
+  /**
+   * An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option);
+   * a draft pick: its overall number ('#5'); a qualifying offer: 'extended' / 'withdrawn' /
+   * 'accepted'; a match (tids: his team, then the offering team): 'matched' / 'declined'.
+   */
   note?: string;
   /** The user's team was in it: kept for good, even after he moves on to another team. */
   user?: true;
@@ -861,6 +922,8 @@ export interface InboxMessage {
   important?: boolean;
   /** The AI trade offer (Proposal id) this message carries: the inbox offers Accept and Review while it stands. */
   proposal?: number;
+  /** The user's restricted free agent (pid) whose offer sheet this message is about: the inbox offers Match and Let him go while it stands. */
+  sheet?: number;
 }
 
 /**

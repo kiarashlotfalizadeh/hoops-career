@@ -8,6 +8,7 @@ import * as S from '../src/core/league/season';
 import * as H from '../src/core/league/helpers';
 import * as C from '../src/core/league/contracts';
 import * as FA from '../src/core/league/freeAgency';
+import * as R from '../src/core/league/rfa';
 import { nextPick } from '../src/core/league/draft';
 import { finalsHomeCourt, standings } from '../src/core/league/standings';
 import { cupTables } from '../src/core/league/cup';
@@ -114,6 +115,8 @@ function check() {
   }
   if (ph !== 'freeAgency' && L.faBids?.length) bad('offers to free agents outside free agency', L.faBids.map((b) => nm(b.pid)).join(', '));
   for (const b of L.faBids ?? []) if (L.players[b.pid]?.tid !== -1) bad('offer to a player off the market', nm(b.pid));
+  for (const b of L.faBids ?? []) if (L.players[b.pid]?.rfa) bad('top-free-agent offer to a restricted free agent', nm(b.pid));
+  checkRfa();
   const first = ['resign', 'freeAgency'].includes(ph) ? season + 1 : season;
   const cnt = new Map<string, number>();
   for (const d of L.draftPicks) {
@@ -465,6 +468,110 @@ function checkTransactions() {
   if (last && !((L.nextTxnId ?? 0) > last)) bad('transaction id reused', `next ${L.nextTxnId}, last ${last}`);
 }
 
+/**
+ * Restricted free agency: a qualifying offer only on an expiring player of the team that made it
+ * (re-sign period) or on a free agent (free agency), never on a roster otherwise and never outside
+ * the summer; offer sheets 2-5 years within the min and max, from another team, decided by their
+ * last match day; an AI team with one sheet pending at most; and every team's cap holds in free
+ * agency exactly its restricted free agents' holds plus the offer sheets it signed, in capPayroll too.
+ */
+function checkRfa() {
+  const ph = L.phase;
+  const next = L.season + 1;
+  const cap = H.CAP_FOR(L, next);
+  const held = new Map<number, number>();
+  const sheets = new Map<number, number>();
+  for (const p of Object.values(L.players)) {
+    const r = p.rfa;
+    if (!r) continue;
+    if (ph !== 'resign' && ph !== 'freeAgency') bad('restricted free agent outside the summer', `${nm(p.pid)} ${ph}`);
+    else if (ph === 'resign' ? p.tid !== r.tid || contractExp(p.contract) > L.season || !!r.sheet : p.tid !== -1)
+      bad('restricted free agent on a roster', `${nm(p.pid)} tid ${p.tid} rfa ${JSON.stringify(r)}`);
+    if (!L.teams[r.tid] || !(r.qo > 0) || (ph === 'freeAgency' && !((r.hold ?? 0) >= r.qo)))
+      bad('qualifying offer without a team, amount or hold', `${nm(p.pid)} ${JSON.stringify(r)}`);
+    if (ph === 'freeAgency') held.set(r.tid, (held.get(r.tid) ?? 0) + (r.hold ?? r.qo));
+    const s = r.sheet;
+    if (!s) continue;
+    sheets.set(s.tid, (sheets.get(s.tid) ?? 0) + 1);
+    held.set(s.tid, (held.get(s.tid) ?? 0) + s.amount);
+    if (s.tid === r.tid || !L.teams[s.tid]) bad('offer sheet from his own team', nm(p.pid));
+    if (s.years < 2 || s.years > 5 || s.amount < cap.minContract - 1 || s.amount > cap.maxContract(p.experience) + 10)
+      bad('offer sheet outside 2-5 yrs or min/max', `${nm(p.pid)} ${JSON.stringify(s)}`);
+    if (s.until < s.day || s.until > FA.FA_DAYS - 1 || s.until < L.faDay) bad('offer sheet past its match day', `${nm(p.pid)} ${JSON.stringify(s)} faDay ${L.faDay}`);
+  }
+  for (const [tid, n] of sheets) if (n > 1 && tid !== L.userTid) bad('AI team with two offer sheets pending', `${L.teams[tid].abbrev} ${n}`);
+  if (ph !== 'freeAgency') return;
+  for (const t of L.teams) {
+    const want = held.get(t.tid) ?? 0;
+    const holds = FA.capHolds(L, t.tid).reduce((a, h) => a + h.amount, 0);
+    if (holds !== want || FA.capPayroll(L, t.tid, next) !== H.payroll(L, t.tid, next) + want) bad('cap holds off in free agency', `${t.abbrev} holds ${holds} want ${want}`);
+  }
+}
+
+/** Offer sheets pending now, to check how each is settled (see settledSheets). */
+const sheetSnapshot = () =>
+  new Map(
+    Object.values(L.players)
+      .filter((p) => p.rfa?.sheet)
+      .map((p) => [p.pid, { own: p.rfa!.tid, ...p.rfa!.sheet! }]),
+  );
+
+/**
+ * The sheets in `before` that were decided since (contracts starting `next`): each player is with
+ * his team or the offering one, on exactly the sheet's terms. Returns how many were matched and declined.
+ */
+function settledSheets(before: ReturnType<typeof sheetSnapshot>, next: number): { matched: number; declined: number } {
+  const out = { matched: 0, declined: 0 };
+  for (const [pid, s] of before) {
+    const p = L.players[pid];
+    if (p.rfa?.sheet) continue;
+    const c = C.makeContract(L, s.amount, s.years, next, p.experience);
+    if ((p.tid !== s.own && p.tid !== s.tid) || p.contract.start !== next || p.contract.salaries.join() !== c.salaries.join())
+      bad('offer sheet settled off its terms', `${nm(pid)} tid ${p.tid} ${JSON.stringify(p.contract)} vs ${JSON.stringify(s)}`);
+    out[p.tid === s.own ? 'matched' : 'declined']++;
+  }
+  return out;
+}
+
+/** Restricted free agents now, with the team holding their rights. */
+const rfaSnapshot = () => new Map(R.restrictedFreeAgents(L).map((p) => [p.pid, p.rfa!.tid]));
+
+/** Restricted free agents in `before` who left the market since went only to their own team, or to one whose offer sheet wasn't matched (or are free agents after a withdrawal). */
+function checkRfaMoves(before: Map<number, number>, sheets: ReturnType<typeof sheetSnapshot>) {
+  for (const [pid, own] of before) {
+    const p = L.players[pid];
+    if (p.rfa || p.tid === own || (p.tid === -1 && !p.rfa) || p.tid === sheets.get(pid)?.tid) continue;
+    bad('restricted free agent signed without an offer sheet', `${nm(pid)} -> ${p.tid} (rights ${own})`);
+  }
+}
+
+/** The user's restricted free agents with an offer sheet: he matches when his team's AI would (roster and budget allowing), else lets them go. */
+function decideUserSheets() {
+  for (const p of R.restrictedFreeAgents(L, L.userTid).filter((x) => x.rfa!.sheet)) {
+    const match = R.aiMatchVerdict(L, p).match && !R.sheetDecisionBlocked(L, p.pid, true);
+    const res = R.userDecideSheet(L, p.pid, match);
+    if (!res.ok) bad('offer sheet decision refused', `${nm(p.pid)} ${res.reason}`);
+  }
+}
+
+/** The user signs the best AI restricted free agent he can pay to an offer sheet at his asking price (at least two years). */
+function sheetOnRfa(): number | null {
+  const u = L.userTid;
+  const rfas = R.restrictedFreeAgents(L)
+    .filter((p) => p.rfa!.tid !== u && !p.rfa!.sheet)
+    .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a));
+  for (const p of rfas) {
+    const a = C.askingContract(L, p, u);
+    const years = Math.max(R.SHEET_MIN_YEARS, Math.min(4, a.years));
+    const amount = Math.ceil((a.amount * (1 + Math.abs(years - a.years) * 0.03)) / 50) * 50;
+    if (FA.userOffer(L, p.pid, amount, years).ok) {
+      if (!L.players[p.pid].rfa?.sheet || L.players[p.pid].rfa!.sheet!.tid !== u) bad('user offer sheet not pending', nm(p.pid));
+      return p.pid;
+    }
+  }
+  return null;
+}
+
 function checkOptions(user: boolean) {
   for (const p of Object.values(L.players)) if (C.pendingOption(L, p) && (user || p.tid !== L.userTid)) bad('undecided contract option', `${nm(p.pid)} ${p.contract.option}`);
 }
@@ -597,37 +704,87 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     S.finishDraftPhase(L);
     check();
     checkOptions(false);
+    const firstRfa = L.nextTxnId ?? 1;
+    // young players who can be made restricted and are worth a spot get qualifying offers (so
+    // offer sheets come in for the user to decide); the other 70+ players are re-signed
     for (const p of FA.expiringPlayers(L, L.userTid))
-      if (p.ovr >= 70) {
+      if (R.rfaEligible(L, p) && C.valueScore(L, p) >= 64) {
+        const res = R.userQualify(L, p.pid);
+        if (!res.ok || !p.rfa) bad('qualifying offer refused', `${nm(p.pid)} ${res.reason}`);
+      } else if (p.ovr >= 70) {
         const a = C.askingContract(L, p, L.userTid);
         FA.userResign(L, p.pid, a.amount, a.years);
       }
+    check();
     S.startFreeAgency(L);
     check();
     checkOptions(true);
+    // one withdrawn when there are two or more: an unrestricted free agent, his hold gone
+    const mine = R.restrictedFreeAgents(L, L.userTid);
+    if (mine.length >= 2) {
+      const w = mine[mine.length - 1];
+      if (!R.userWithdrawQualifying(L, w.pid).ok || w.rfa || FA.capHolds(L, L.userTid).some((h) => h.p.pid === w.pid)) bad('qualifying offer not withdrawn', nm(w.pid));
+    }
     const star = bidOnStar();
-    S.faAdvance(L, 10);
+    const sheet = sheetOnRfa();
+    const next = L.season + 1;
+    const settled = { matched: 0, declined: 0 };
+    // day by day, deciding offer sheets on the user's restricted free agents as they come (free agency stops for them)
+    const day = () => {
+      const sheets = sheetSnapshot();
+      const rfas = rfaSnapshot();
+      S.faAdvance(L, 1);
+      for (const [pid, s] of sheetSnapshot()) sheets.set(pid, s);
+      decideUserSheets();
+      const x = settledSheets(sheets, next);
+      settled.matched += x.matched;
+      settled.declined += x.declined;
+      checkRfaMoves(rfas, sheets);
+    };
+    for (let d = 0; d < 10 && !S.faOver(L); d++) day();
     check();
     if (L.faBids?.some((b) => b.decideDay < L.faDay)) bad('offer past its decision day', L.faBids.map((b) => `${nm(b.pid)} d${b.decideDay}`).join(', '));
     const bid =
       star === null
         ? 'none'
         : `${H.playerName(L.players[star])} ${L.players[star].tid >= 0 ? `-> ${L.teams[L.players[star].tid].abbrev}${L.players[star].tid === L.userTid ? '*' : ''}` : 'unsigned'}`;
-    S.faAdvance(L, 30);
+    for (let d = 0; d < 40 && !S.faOver(L); d++) day();
     if (S.faDayNumber(L) !== S.FA_DAYS || !S.faOver(L)) bad('free agency past its last day', String(L.faDay));
-    S.newSeason(L);
+    decideUserSheets();
+    if (S.newSeasonBlockedReason(L)) bad('new season blocked at the close', S.newSeasonBlockedReason(L)!);
+    // the close: the sheets left are decided, and restricted free agents still unsigned take their qualifying offers
+    const closing = sheetSnapshot();
+    const qos = R.restrictedFreeAgents(L)
+      .filter((p) => !p.rfa!.sheet)
+      .map((p) => ({ p, ...p.rfa! }));
+    const rfas = rfaSnapshot();
+    if (!S.newSeason(L)) bad('new season refused', '');
+    const x = settledSheets(closing, next);
+    settled.matched += x.matched;
+    settled.declined += x.declined;
+    checkRfaMoves(rfas, closing);
+    for (const { p, tid, qo } of qos)
+      if (!(p.tid === tid && p.contract.qualifying && p.contract.start === next && p.contract.salaries.join() === String(qo)) && !(p.tid === -1 && !p.rfa))
+        bad('qualifying offer not taken as offered', `${nm(p.pid)} ${p.tid} ${JSON.stringify(p.contract)} qo ${qo}`);
     check();
+    const rfaLog = (L.transactions ?? []).filter((t) => t.id >= firstRfa);
+    const count = (kind: string, note?: string, user?: boolean) => rfaLog.filter((t) => t.kind === kind && (!note || t.note === note) && (!user || t.tids[0] === L.userTid)).length;
+    const outcomes = { matched: count('match', 'matched'), declined: count('match', 'declined') };
+    if (outcomes.matched !== settled.matched || outcomes.declined !== settled.declined)
+      bad('offer sheet outcomes off the log', `${JSON.stringify(settled)} vs ${JSON.stringify(outcomes)}`);
+    const rfaLine = `QOs ${count('qualify', 'extended')} (yours ${count('qualify', 'extended', true)}), offer sheets ${count('offerSheet')} (yours ${count('offerSheet', undefined, true)}${sheet !== null ? `: ${H.playerName(L.players[sheet])} -> ${L.teams[L.players[sheet].tid]?.abbrev ?? 'FA'}` : ''}), on yours ${rfaLog.filter((t) => t.kind === 'offerSheet' && t.tids[1] === L.userTid).length}, matched ${settled.matched}, not matched ${settled.declined}, came to terms ${rfaLog.filter((t) => t.kind === 'resign' && t.phase === 'freeAgency').length}, QOs taken ${count('qualify', 'accepted')}`;
     const sz = L.teams.map((t) => std(t.tid).length);
     console.log(
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
+    console.log(`   restricted free agency: ${rfaLine}`);
     // the user's swaps settled at last season's lottery (he hears about each), and how many were used
-    const settled = L.inbox.filter((m) => m.season === L.season - 1 && m.subject.startsWith('Pick swap')).length;
+    const swapsSettled = L.inbox.filter((m) => m.season === L.season - 1 && m.subject.startsWith('Pick swap')).length;
     const swapped = (L.transactions ?? []).filter((t) => t.kind === 'swap' && t.season === L.season - 1).length;
     const kept = L.inbox.filter((m) => m.season === L.season - 1 && /likes his new role|has settled down/.test(m.subject)).length;
     const broken = L.inbox.filter((m) => m.season >= L.season - 1 && /says you broke your word|goes public|wants a trade again/.test(m.subject)).length;
     console.log(
-      `   deal terms: ${termsTally.trades} trades (${termsTally.swaps} swap rights given, $${(termsTally.cash / 1000).toFixed(1)}M cash), ${settled} swaps settled at the lottery (${swapped} used), ${termsTally.promises} promises (${kept} kept, ${broken} broken or back)`,
+      `   deal terms: ${termsTally.trades} trades (${termsTally.swaps} swap rights given, $${(termsTally.cash / 1000).toFixed(1)}M cash), ${swapsSettled} swaps settled at the lottery (${swapped} used), ${termsTally.promises} promises (${kept} kept, ${broken} broken or back)`,
     );
     const log = L.transactions ?? [];
     const kinds = new Map<string, number>();

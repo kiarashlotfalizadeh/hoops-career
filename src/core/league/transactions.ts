@@ -1,8 +1,9 @@
 // The transaction log: a durable record of roster moves (trades, signings, re-signings,
 // extensions, releases and waivers, waiver claims, buyouts, two-way deals and conversions,
-// renounced rights, options, draft picks and exercised pick swaps) behind the team and player
-// histories. The news log keeps about a year of stories; this keeps every trade (and pick swap)
-// and every move of the user's team for good, and other teams' moves for two seasons. Entries hold names and pick labels as they were, so they
+// renounced rights, options, draft picks, exercised pick swaps, and restricted free agency's
+// qualifying offers, offer sheets and matches) behind the team and player histories. The news log
+// keeps about a year of stories; this keeps every trade (and pick swap) and every move of the
+// user's team for good, and other teams' moves for two seasons. Entries hold names and pick labels as they were, so they
 // read the same after the player retires and his record is compacted away, or the pick is made.
 
 import type { League, Player, Txn, TxnKind, TxnSide } from '../types';
@@ -198,6 +199,24 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
     }
     case 'draft':
       return forPlayer ? [t.note ? `Drafted ${t.note} by ` : 'Drafted by ', T] : ['Drafted ', P, t.note ? ` (${t.note})` : ''];
+    case 'qualify':
+      if (t.note === 'accepted') return forPlayer ? ['Took his qualifying offer from ', T, `: ${deal(t)}`] : [P, ` took his qualifying offer: ${deal(t)}`];
+      if (t.note === 'withdrawn') return forPlayer ? ['Qualifying offer withdrawn by ', T] : ['Withdrew ', P, "'s qualifying offer"];
+      return forPlayer ? ['Qualifying offer from ', T, money$] : ['Extended a qualifying offer to ', P, money$];
+    case 'offerSheet': {
+      // [the team that signed him to it, his team]
+      const own: TxnPart = { tid: t.tids[1] };
+      if (forPlayer) return ['Signed an offer sheet with ', T, `: ${deal(t)}`];
+      return view.tid === tid ? ['Signed ', P, ` to an offer sheet: ${deal(t)} (`, own, ' can match)'] : [P, ' signed an offer sheet with ', T, `: ${deal(t)}`];
+    }
+    case 'match': {
+      // [his team, the team that signed him to the offer sheet]
+      const by: TxnPart = { tid: t.tids[1] };
+      const matched = t.note !== 'declined';
+      if (forPlayer) return matched ? ['Offer sheet from ', by, ' matched by ', T, `: ${deal(t)}`] : ['Joined ', by, ' when ', T, ` declined to match his offer sheet: ${deal(t)}`];
+      if (view.tid === tid) return matched ? ['Matched ', by, "'s offer sheet for ", P, `: ${deal(t)}`] : ['Declined to match ', by, "'s offer sheet for ", P];
+      return matched ? [T, ' matched the offer sheet for ', P] : ['Got ', P, ' when ', T, ` declined to match the offer sheet: ${deal(t)}`];
+    }
   }
 }
 
