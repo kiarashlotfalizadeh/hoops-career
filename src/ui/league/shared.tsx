@@ -207,7 +207,7 @@ export function careerTotals(p: Player, tid?: number) {
 }
 
 /** Accolade counts such as "2× MVP", ordered by prestige. */
-export function accolades(p: Player): { label: string; n: number; gold?: boolean }[] {
+export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number; gold?: boolean }[] {
   const count = (pred: (t: string) => boolean) => p.awards.filter((a) => pred(a.type)).length;
   const out: { label: string; n: number; gold?: boolean }[] = [
     { label: 'Champion', n: count((t) => t === 'Champion'), gold: true },

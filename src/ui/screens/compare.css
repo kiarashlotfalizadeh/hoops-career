@@ -1,0 +1,240 @@
+/* Player comparison (/compare): two heads side by side, a strip naming the sides that stays in view,
+   then tables with each row's label in the middle (the scouting profile's above its bars). The
+   middle column's width is shared by the strip and the tables, so each value sits under its name. */
+.cmp-page {
+  --cmp-l: 92px;
+}
+@media (min-width: 380px) {
+  .cmp-page {
+    --cmp-l: 104px;
+  }
+}
+@media (min-width: 760px) {
+  .cmp-page {
+    --cmp-l: 180px;
+  }
+}
+
+/* ------------------------------------------------------------ heads */
+.cmp-heads {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.cmp-head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+.cmp-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 4px;
+  line-height: 1.15;
+}
+.cmp-name > span:last-child {
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+/* a long archetype or injury ellipsizes inside its column instead of widening it */
+.cmp-tag {
+  display: block;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 20px;
+}
+.cmp-deal {
+  min-width: 0;
+  margin-top: 2px;
+}
+/* both Change buttons on one line, whatever each head holds */
+.cmp-foot {
+  margin-top: auto;
+  padding-top: 6px;
+}
+.cmp-empty {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 170px;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------ the sides, in view while scrolling */
+.cmp-strip {
+  position: sticky;
+  /* flush under the top bar and its border, so nothing scrolls by between them */
+  top: calc(var(--top-h) + var(--safe-t) + 1px);
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--cmp-l) minmax(0, 1fr);
+  align-items: center;
+  /* the cards' border and padding, so its columns line up with the tables' */
+  padding: 7px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  /* solid fallback first, as the top bar does */
+  background: rgba(22, 29, 40, 0.96);
+  background: color-mix(in srgb, var(--surface-2) 96%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+.cmp-vs {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ tables */
+.cmp-note {
+  margin: -4px 0 8px;
+  line-height: 1.4;
+}
+.cmp-t {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+/* the headers are for screen readers: no height, but the middle one sets the label column's width */
+.cmp-t thead th {
+  height: 0;
+  padding: 0;
+  border: 0;
+}
+.cmp-t:not(.cmp-skills) thead th:nth-child(2) {
+  width: var(--cmp-l);
+}
+.cmp-t td,
+.cmp-t tbody th {
+  padding: 6px 2px;
+}
+.cmp-t tbody tr:not(.cmp-group):not(:first-child) > * {
+  border-top: 1px solid var(--line);
+}
+.cmp-l {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-dim);
+  text-align: center;
+}
+.cmp-v {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmp-n {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 7px;
+}
+/* the better side: the good colour in a pill (ties and rows with no better way stay plain) */
+.cmp-t .win .cmp-n {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 15%, transparent);
+  font-weight: 800;
+}
+.cmp-t .none {
+  color: var(--text-dim);
+}
+.cmp-group th {
+  padding: 12px 0 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  text-align: center;
+}
+.cmp-t tbody tr.cmp-group:first-child th {
+  padding-top: 2px;
+}
+
+/* scouting profile: the skill above, each side's percentile and a bar growing out from the middle */
+.cmp-skills tbody tr:not(.cmp-sl) > * {
+  border-top: none;
+}
+.cmp-skills .cmp-sl th {
+  padding: 8px 0 3px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-align: center;
+}
+.cmp-skills tbody tr.cmp-sl:first-child th {
+  padding-top: 0;
+}
+.cmp-bar {
+  padding: 2px 0 8px;
+}
+.cmp-bar.a {
+  padding-right: 5px;
+}
+.cmp-bar.b {
+  padding-left: 5px;
+}
+.cmp-bw {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cmp-bar.b .cmp-bw {
+  flex-direction: row-reverse;
+}
+.cmp-bar .cmp-n {
+  flex: none;
+  min-width: 46px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.cmp-track {
+  flex: 1;
+  min-width: 0;
+}
+.cmp-bar.a .cmp-track .bar {
+  transform: scaleX(-1);
+}
+
+/* tablets: bigger heads and type */
+@media (min-width: 760px) {
+  .cmp-heads {
+    gap: 14px;
+  }
+  .cmp-head {
+    padding: 14px 16px;
+  }
+  .cmp-head .avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+  .cmp-name > span:last-child {
+    font-size: 25px;
+  }
+  .cmp-v {
+    font-size: 15px;
+  }
+  .cmp-l {
+    font-size: 13px;
+  }
+}
