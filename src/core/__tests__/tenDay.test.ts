@@ -21,6 +21,7 @@ import {
   tenDayOpenDay,
   tenDayPay,
   tenDaySpot,
+  tenDaysWith,
   userEndTenDay,
   userTenDay,
   userTenDayRest,
@@ -141,7 +142,7 @@ describe('10-day contracts', () => {
     expect(userTenDay(l, p.pid).reason).toMatch(/signs a second 10-day contract/);
     expect(p.contract.tenDay!.until).toBe(until + TEN_DAYS);
     expect(p.contract.salaries[0]).toBe(first + tenDayPay(l, p, TEN_DAYS));
-    expect(p.tenDays).toEqual({ tid: U, season: l.season, n: 2 });
+    expect(p.tenDays).toEqual({ season: l.season, by: { [U]: 2 } });
     expect(l.transactions!.at(-1)).toMatchObject({ kind: 'tenDay', note: 'second' });
     expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-day contracts with you/);
     l.day = until + TEN_DAYS;
@@ -149,6 +150,40 @@ describe('10-day contracts', () => {
     expect(p.tid).toBe(FREE_AGENT);
     expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two/);
     // another team can still give him one
+    expect(tenDayBlockedReason(l, AI, p) ?? '').not.toMatch(/had his two/);
+  });
+
+  it("counts each team's on their own: a 10-day with another team in between doesn't give a team a third", () => {
+    const l = league();
+    rosterOf(l, U, 14);
+    rosterOf(l, AI, 13);
+    const p = minGuy(l);
+    // the best free agent who'd take the minimum, so the AI team short of healthy players takes him
+    const atMin = () => {
+      p.ovr = p.pot = 80;
+      p.asking = { amount: CAP_FOR(l).vetMin, years: 1 };
+    };
+    expect(userTenDay(l, p.pid).ok).toBe(true);
+    l.day = p.contract.tenDay!.until;
+    tenDayDaily(l);
+    expect(p.tid).toBe(FREE_AGENT);
+    atMin();
+    out(standardRoster(l, AI)[0]);
+    tenDayDaily(l);
+    expect(p.tid).toBe(AI);
+    expect([tenDaysWith(l, p, U), tenDaysWith(l, p, AI)]).toEqual([1, 1]);
+    for (const x of standardRoster(l, AI)) x.injury = null;
+    l.day = p.contract.tenDay!.until;
+    tenDayDaily(l);
+    expect(p.tid).toBe(FREE_AGENT);
+    // back with the user: his second there, and no third
+    atMin();
+    expect(userTenDay(l, p.pid).reason).toMatch(/signs a second 10-day contract/);
+    expect(p.tenDays).toEqual({ season: l.season, by: { [U]: 2, [AI]: 1 } });
+    l.day = p.contract.tenDay!.until;
+    tenDayDaily(l);
+    atMin();
+    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-day contracts with you/);
     expect(tenDayBlockedReason(l, AI, p) ?? '').not.toMatch(/had his two/);
   });
 

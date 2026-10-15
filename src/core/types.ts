@@ -245,8 +245,8 @@ export interface Player {
   rfa?: Rfa;
   /** His contract talks with the user's team (see negotiation.ts): cleared when he signs anywhere. */
   talks?: Talks;
-  /** The 10-day contracts he has signed with one team this season: two at most (see tenDay.ts). */
-  tenDays?: { tid: number; season: number; n: number };
+  /** The 10-day contracts he has signed this season, by team (tid -> count): two at most with each (see tenDay.ts). */
+  tenDays?: { season: number; by: Record<number, number> };
   /** His regular-season career highs in this league (see records.ts): the whole career's when it's all on record. */
   highs?: Partial<Record<RecStat, HighRow>>;
 }

@@ -319,8 +319,12 @@ export const exceptionAmount = (league: League, kind: Exception, season = contra
 /**
  * Why a team can't use this exception at all this contract season, or null (the tax line is
  * exceptionRoom's call). The mid-level once a season, and not once the team has signed a free agent
- * with cap space: it gets the room exception instead, once. The bi-annual not two seasons running,
- * and it and the room exception don't mix in a season.
+ * with cap space: it gets the room exception instead, once. An offer sheet it signed on cap space
+ * counts as using its space while it waits for a decision (the user's pending offers on cap space
+ * do the same, see userExceptionRoom), as a pending mid-level offer keeps the space shut: otherwise
+ * a team could hold its space, sign over the cap with the mid-level, and then land the space
+ * signing too. The bi-annual not two seasons running, and it and the room exception don't mix in
+ * a season.
  */
 export function exceptionUsedReason(league: League, tid: number, kind: Exception, season = contractSeason(league)): string | null {
   const t = league.teams[tid];
@@ -328,6 +332,7 @@ export function exceptionUsedReason(league: League, tid: number, kind: Exception
     case 'mle':
       if (t.mleSeason === season) return 'Used this season.';
       if (t.spaceSeason === season || t.roomSeason === season) return 'Gone this season: a free agent was signed with cap space, so the room exception replaces it.';
+      if (spaceSheetPending(league, tid, season)) return 'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.';
       return null;
     case 'room':
       if (t.roomSeason === season) return 'Used this season.';
@@ -450,6 +455,10 @@ export function marketHolds(league: League, tid: number, season = contractSeason
   }
   return out;
 }
+
+/** Has the team signed an offer sheet on cap space that waits for a decision (see marketHolds)? */
+export const spaceSheetPending = (league: League, tid: number, season = contractSeason(league)) =>
+  marketHolds(league, tid, season).some((h) => h.kind === 'sheet' && h.p.rfa?.sheet?.route === 'space');
 
 /** Total of a team's market holds (see marketHolds). */
 export const heldSalary = (league: League, tid: number, season = contractSeason(league)) => marketHolds(league, tid, season).reduce((a, h) => a + h.amount, 0);
@@ -676,9 +685,14 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   p.contract = { start: league.season, salaries: [0] };
   leaveTeam(team, p.pid);
   if (league.untouchable?.includes(p.pid)) league.untouchable = league.untouchable.filter((x) => x !== p.pid);
-  // a free agent like any other: the trade-back rule and the trade lock went with the old contract
+  // a free agent like any other: the trade-back rule and the trade lock went with the old contract,
+  // his old team's rights to him (a qualifying offer) with it, and, as after a trade, what his old
+  // GM promised him and their meetings stay behind
   delete p.tradedFrom;
   delete p.tradeLock;
+  delete p.rfa;
+  delete p.promise;
+  delete p.meeting;
   if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead, ...(lock ? { lock } : {}) };
   else delete p.waivers;
   // a free agent again: whatever he was talking about with the user is over
@@ -711,13 +725,16 @@ export function waiverOrder(league: League): Team[] {
 
 /**
  * Why team `tid` can't claim him, or null. A claim takes over his contract, so it needs a roster
- * spot and either cap room for this season's salary or a minimum salary, as a signing would.
+ * spot and either cap room for this season's salary or a minimum salary, as a signing would, and
+ * like a signing it is made in the regular season: once the postseason starts, a player still on
+ * waivers clears to free agency (see resolveWaivers).
  */
 export function claimBlockedReason(league: League, tid: number, p: Player): string | null {
   const w = p.waivers;
   if (!w || p.tid !== FREE_AGENT) return `${playerName(p)} isn't on waivers.`;
   if (tid === w.from) return "A team can't claim a player it released.";
   if (tid === league.userTid && league.fired) return FIRED_REASON;
+  if (league.phase !== 'regular') return 'Waiver claims close with the regular season, as signings do.';
   if (standardRoster(league, tid).length >= CAP.rosterMax) return `No open roster spot (${CAP.rosterMax}). Release someone first.`;
   const cap = CAP_FOR(league, league.season);
   const salary = waiverSalary(league, p);
@@ -764,19 +781,19 @@ function claimPlayer(league: League, p: Player, tid: number) {
 /**
  * Players whose waiver days are up go to the first team in waiver order (the worst record first)
  * that claims them: the user's team when he has put in a claim, an AI team when the contract is
- * worth having and it fits. The rest clear to free agency. Outside the season everyone clears.
+ * worth having and it fits. The rest clear to free agency. Claims are made in the regular season,
+ * as signings are: once it's over (the play-in and playoffs included) everyone left clears.
  */
 export function resolveWaivers(league: League) {
-  const due = onWaivers(league).filter((p) => p.waivers!.until <= league.day || !inSeason(league));
+  const claims = league.phase === 'regular';
+  const due = onWaivers(league).filter((p) => p.waivers!.until <= league.day || !claims);
   if (!due.length) return;
   const order = waiverOrder(league);
   const user = league.userTid;
   for (const p of due) {
     const w = p.waivers!;
     const dead = w.dead.reduce((a, d) => a + d.amount, 0);
-    const claimer = inSeason(league)
-      ? order.find((t) => t.tid !== w.from && (t.tid === user ? !!w.claim && !claimBlockedReason(league, user, p) : aiClaims(league, t, p)))
-      : undefined;
+    const claimer = claims ? order.find((t) => t.tid !== w.from && (t.tid === user ? !!w.claim && !claimBlockedReason(league, user, p) : aiClaims(league, t, p))) : undefined;
     const name = playerName(p);
     if (claimer) {
       // (read before the claim moves him)

@@ -427,7 +427,7 @@ function checkContracts() {
     if (L.phase !== 'regular' || p.tid < 0) bad('10-day contract outside the regular season', `${nm(p.pid)} ${L.phase} tid ${p.tid}`);
     else if (!(td.until > L.day && td.until <= L.day + 2 * TD.TEN_DAYS && td.until <= L.regularSeasonDays + 1) || !(p.contract.salaries[0] > 0 && p.contract.salaries[0] < min))
       bad('10-day contract off its terms', `${nm(p.pid)} ${JSON.stringify(p.contract)} day ${L.day}`);
-    if (!p.tenDays || p.tenDays.tid !== p.tid || p.tenDays.season !== L.season || p.tenDays.n > TD.TEN_DAY_MAX)
+    if (!p.tenDays || p.tenDays.season !== L.season || !p.tenDays.by[p.tid] || Object.values(p.tenDays.by).some((n) => n > TD.TEN_DAY_MAX))
       bad('10-day count off', `${nm(p.pid)} ${JSON.stringify(p.tenDays)}`);
   }
   for (const t of L.teams) {
