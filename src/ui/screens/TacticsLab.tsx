@@ -359,6 +359,9 @@ export default function TacticsLab() {
                 const sig = familySigmas(all.length);
                 const good = c.delta > sig * c.se;
                 const bad = c.delta < -sig * c.se;
+                // a counter that only names their players (attacking one defender) has nothing to keep for every game
+                const mine = league.teams[league.userTid].tactics;
+                const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch))) !== JSON.stringify(persistableTactics(mine));
                 return (
                   <div key={c.id} className="card tight" style={{ borderColor: good ? 'color-mix(in srgb, var(--good) 45%, transparent)' : undefined }}>
                     <div className="row between">
@@ -386,9 +389,11 @@ export default function TacticsLab() {
                           <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c, 'game', shown.opp)}>
                             Vs {league.teams[shown.opp].abbrev}
                           </button>
-                          <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
-                            Always
-                          </button>
+                          {always && (
+                            <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
+                              Always
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

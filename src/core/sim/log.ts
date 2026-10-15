@@ -1,4 +1,4 @@
-import type { ActionType, PnrCoverage, ShotZone } from '../types';
+import type { ActionType, DefScheme, PnrCoverage, ShotZone } from '../types';
 
 export type FinishType = 'pnrBH' | 'pnrRoll' | 'iso' | 'post' | 'spotup' | 'offscreen' | 'handoff' | 'cut' | 'transition' | 'putback' | 'misc';
 
@@ -83,7 +83,9 @@ export interface PossLog {
   /** Offensive pid -> defender pid at possession start. */
   guards: Record<number, number>;
   /** Defensive scheme in use (for drawing zones). */
-  scheme: 'man' | 'zone23' | 'zone32';
+  scheme: DefScheme;
+  /** A junk defense's chased players (offensive pids), face-guarded by their defenders while the rest play the zone. */
+  chase?: number[];
   help: number;
   /** A called play this possession ran, and the side that called it. */
   call?: PlayCall & { t: 0 | 1 };

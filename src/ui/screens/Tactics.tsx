@@ -4,7 +4,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
-import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, cloneTactics } from '../../core/sim/tactics';
+import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, chasers, cloneTactics, isJunk, schemesFor } from '../../core/sim/tactics';
+import { effectiveTactics } from '../../core/league/gamePlans';
+import { nextUserGame } from '../../core/analysis/preview';
 import { autoTactics } from '../../core/ai/coachAI';
 import { playbookLabel } from '../../core/sim/playbooks';
 import { PresetPicker } from '../components/PresetPicker';
@@ -75,6 +77,15 @@ export default function Tactics() {
     .slice(0, 5);
   const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt)[0];
   const bigC = big ? composites(big.ratings) : null;
+  // the defender the game plan for the next opponent attacks (game by game: never in these tactics)
+  const hunt = useLeagueMemo(() => {
+    const g = nextUserGame(league);
+    if (!g) return null;
+    const opp = g.home === league.userTid ? g.away : g.home;
+    const pid = effectiveTactics(league, opp, g).offense.huntTarget;
+    return pid != null && league.players[pid] ? { opp, name: league.players[pid].lastName } : null;
+  }, [league]);
+  const schemes = schemesFor(complexity).concat(schemesFor(complexity).includes(t.defense.scheme) ? [] : [t.defense.scheme]);
 
   return (
     <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
@@ -232,8 +243,17 @@ export default function Tactics() {
                 on={t.offense.huntMismatch}
                 onChange={(x) => edit((tt) => void (tt.offense.huntMismatch = x))}
                 label="Hunt mismatches"
-                help="Target the weakest defender with isolations and ball screens. Strong against switching defenses."
+                help="Target the weakest defender with isolations and ball screens. Strong against switching defenses. A game plan can name the defender to attack instead (Attack)."
               />
+              {hunt && (
+                <div className="small dim2" style={{ marginTop: -6 }}>
+                  Next game:{' '}
+                  <Link to={`/gameplan/${hunt.opp}`} style={{ color: 'var(--accent-text)', fontWeight: 650 }}>
+                    your game plan vs {league.teams[hunt.opp].abbrev}
+                  </Link>{' '}
+                  attacks {hunt.name} while he plays (in place of Hunt mismatches).
+                </div>
+              )}
               <Toggle
                 on={t.offense.hotHand}
                 onChange={(x) => edit((tt) => void (tt.offense.hotHand = x))}
@@ -247,16 +267,35 @@ export default function Tactics() {
 
       {tab === 'defense' && (
         <>
-          <Card title="Base scheme">
+          <Card
+            title="Base scheme"
+            right={
+              <Help title="Schemes">
+                {schemes.map((k) => (
+                  <p key={k}>
+                    <b>{SCHEME_META[k].label}:</b> {SCHEME_META[k].help}
+                  </p>
+                ))}
+              </Help>
+            }
+          >
             <Chips
               label="Base scheme"
               value={t.defense.scheme}
               onChange={(x: DefScheme) => edit((tt) => void (tt.defense.scheme = x))}
-              options={(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))}
+              options={schemes.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
             />
             <div className="small dim" style={{ marginTop: 8 }}>
               {SCHEME_META[t.defense.scheme].help}
             </div>
+            {isJunk(t.defense.scheme) && (
+              <div className="small" style={{ marginTop: 8 }}>
+                <span className="dim">
+                  As your base scheme the chaser{chasers(t.defense.scheme) === 2 ? 's take their two main creators' : ' takes their main creator'} on the floor, every game. To name
+                  who, and play it only while {chasers(t.defense.scheme) === 2 ? 'they are' : "he's"} on the floor, use a game plan (Junk defense) or the live Adjust sheet.
+                </span>
+              </div>
+            )}
           </Card>
           <Card
             title="Pick-and-roll coverage"
@@ -586,6 +625,14 @@ function ManageTab({ t, edit }: { t: TacticsT; edit: (fn: (t: TacticsT) => void)
               onChange={(x) => edit((tt) => void (tt.manage.foulUp3 = x))}
               label="Foul when up 3"
               help="In the final seconds, foul before the opponent can attempt a tying three."
+            />,
+          )}
+          {row(
+            <Toggle
+              on={!!t.manage.foulToGive}
+              onChange={(x) => edit((tt) => void (tt.manage.foulToGive = x))}
+              label="Foul to give"
+              help="With 3 to 8 seconds left in a quarter and the ball theirs, foul at once when it's only a side out (it won't put them in the bonus): they inbound with less time and a worse first look. In the 4th and overtime only when you're tied or up by 3 or less (Foul when up 3 goes first). About one in twenty is called on the shot: two free throws."
             />,
           )}
           {row(

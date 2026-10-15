@@ -1,9 +1,9 @@
 // Post-game "why" report: turns engine impact tags, four factors, play types, runs and
 // lineups into ranked, plain-language factors with concrete advice.
 
-import type { GameResult, League, TacticImpact, Tactics, TeamBox } from '../types';
+import type { GameResult, League, PlayerDefense, TacticImpact, Tactics, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
-import { hacks } from '../sim/tactics';
+import { hacks, isJunk } from '../sim/tactics';
 import { wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
 
@@ -28,6 +28,8 @@ interface Tpl {
 }
 
 const dropping = (t: Tactics) => t.defense.scheme === 'man' && t.defense.pnr === 'drop';
+/** Whether the tactics give this instruction on any of tonight's opponents. */
+const instructs = (t: Tactics, d: PlayerDefense) => Object.values(t.defense.playerD ?? {}).includes(d);
 
 /** Team nicknames are plural, so their possessive drops the extra s: "the Celtics" → "the Celtics'", "your team" → "your team's". */
 export const possessive = (x: string) => (x.endsWith('s') ? `${x}'` : `${x}'s`);
@@ -217,6 +219,63 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     text: (_X, Y) => `${Y} wore down: tired legs cost them shooting accuracy.`,
     advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Game Mgmt) to sub tired players out sooner; heavy minutes cost shooting.',
     cat: 'fatigue',
+  },
+  'box_chase:d': {
+    text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, late catches, few clean looks${w}.`,
+    advice:
+      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Offense > Motion & Cuts, Handoffs & Screens).',
+    uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
+  },
+  'box_open:o': {
+    text: (X, _Y, w) => `${X} found open threes and gaps against the junk defense${w}.`,
+    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Defense > Base scheme).',
+    uses: (t) => isJunk(t.defense.scheme),
+  },
+  'box_beat:o': {
+    text: (X, _Y, w) => `${possessive(X)} chased player beat a defender caught high, on the catch and backdoor${w}.`,
+    advice: 'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Defense > Base scheme).',
+    uses: (t) => isJunk(t.defense.scheme),
+  },
+  'pd_under:o': {
+    text: (X, _Y, w) => `${X} made you pay for going under screens with pull-up jumpers${w}.`,
+    advice: 'Stop going under on a handler who can shoot off the dribble (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'under'),
+  },
+  'pd_under:d': { text: (X, _Y, w) => `${X} went under screens and kept the handler out of the paint${w}.` },
+  'pd_tight:o': {
+    text: (X, _Y, w) => `${X} beat your top-locks with drives and back-cuts${w}.`,
+    advice: 'Stop running a shooter off the line when he can put it on the floor (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'tight'),
+  },
+  'pd_tight:d': { text: (X, _Y, w) => `${X} ran their shooters off the three-point line${w}.` },
+  'pd_sag:o': {
+    text: (X, _Y, w) => `${X} made you pay for sagging off them with open kick-out shots${w}.`,
+    advice: 'Stop sagging off a player who makes open threes (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'sag'),
+  },
+  'pd_sag:d': { text: (X) => `${X} sagged off non-shooters and walled off the rim.` },
+  'pd_body:o': {
+    text: (X, _Y, w) => `${X} drew fouls against your physical defense${w}.`,
+    advice: 'Stop getting physical with a player who draws fouls and makes his free throws (Game plan > How to guard them).',
+    uses: (t) => instructs(t, 'body'),
+    cat: 'fouls',
+  },
+  'pd_body:d': { text: (X, _Y, w) => `${possessive(X)} physical defense made post-ups and drives hard work${w}.` },
+  'hunt:o': {
+    text: (X, _Y, w) => `${X} hunted a weak link in the defense with isolations and ball screens${w}.`,
+    advice: 'Hide the defender they hunt on their weakest scorer (Matchups), or sub him out.',
+  },
+  'hunt:d': {
+    text: (_X, Y) => `${possessive(Y)} hunt for one defender cost them ball movement and good looks.`,
+    advice: 'Hunting one defender costs ball movement: keep it for a real weak link, or stop the hunt (Game plan > Attack).',
+    uses: (t) => t.offense.huntTarget != null,
+  },
+  'foul_give:d': { text: (X) => `${possessive(X)} fouls to give broke up last-shot plays.` },
+  'foul_give:o': {
+    text: (X, _Y, w) => `${X} got free throws when a foul to give came on the shot${w}.`,
+    advice: 'A foul to give has to come before the shot: turn it off if it keeps sending them to the line (Game Mgmt).',
+    uses: (t) => !!t.manage.foulToGive,
+    cat: 'fouls',
   },
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a strategy paid off${w}.` },
   'hack:o': {

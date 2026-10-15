@@ -11,12 +11,14 @@ import { progressCallback, resetLab, withLab } from '../../state/labClient';
 import type { LabSide, LabSummary } from '../../core/ai/lab';
 import { counterCandidates } from '../../core/ai/advisor';
 import { buildSimInput, ensureRotation } from '../../core/league/games';
-import { planFor, removePlanItem, setPlanItem, setPlanMatchup } from '../../core/league/gamePlans';
+import { planFor, removePlanItem, setPlanItem, setPlanMatchup, setPlanPlayerD } from '../../core/league/gamePlans';
+import { guardAdvice } from '../../core/analysis/guarding';
+import { PLAYER_D_META } from '../../core/sim/tactics';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate, teamPlayers } from '../../core/league/helpers';
 import { hashString } from '../../core/random';
 import { countdownLabel, matchupPreview, nextUserGame, type MatchupPreview, type SidePreview } from '../../core/analysis/preview';
-import type { GameType, League, ScheduledGame } from '../../core/types';
+import { PLAYER_DEFENSES, type GameType, type League, type PlayerDefense, type ScheduledGame } from '../../core/types';
 import { storylines, type StorylineKind } from '../../core/analysis/storylines';
 import { GAME_TIME_PERF, injuryText, setGameTime } from '../../core/league/injuries';
 import { K } from '../../core/sim/engine';
@@ -551,7 +553,7 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
       right={
         <Help title="Key matchups">
           Their key players and who guards them when the game tips off. Pick a defender to plan the matchup for this opponent: he takes that assignment whenever both are on the
-          floor. Staff lets the coaches decide.
+          floor. Staff lets the coaches decide.{canPlan ? ' You can also say how to guard each one (go under, top-lock, sag off, get physical); ★ is the staff’s suggestion.' : ''}
         </Help>
       }
     >
@@ -559,6 +561,9 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
         {threats.map((th) => {
           const planned = plan?.matchups?.[th.pid];
           const open = editing === th.pid;
+          const how = plan?.playerD?.[th.pid];
+          const them = league.players[th.pid];
+          const suggest = canPlan && them ? guardAdvice(league, them).suggest : undefined;
           return (
             <div key={th.pid} className="col" style={{ gap: 6 }}>
               <div className="row top" style={{ gap: 10 }}>
@@ -567,6 +572,11 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
                     {th.name}
                   </Link>
                   <div className="tiny dim">{th.why}</div>
+                  {canPlan && how && (
+                    <div style={{ marginTop: 4 }}>
+                      <Tag tone="info">{PLAYER_D_META[how].label}</Tag>
+                    </div>
+                  )}
                 </div>
                 <div className="small right" style={{ flex: 'none', maxWidth: '45%' }}>
                   {th.resting ? (
@@ -593,12 +603,21 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
                 </div>
               </div>
               {open && (
-                <Chips
-                  label={`Who guards ${th.name}`}
-                  value={planned ?? -1}
-                  onChange={(pid) => useStore.getState().mutate((l) => setPlanMatchup(l, opp, th.pid, pid === -1 ? null : pid))}
-                  options={[{ id: -1, label: 'Staff' }, ...mine.map((p) => ({ id: p.pid, label: nameOf(p.pid) }))]}
-                />
+                <>
+                  <Chips
+                    label={`Who guards ${th.name}`}
+                    value={planned ?? -1}
+                    onChange={(pid) => useStore.getState().mutate((l) => setPlanMatchup(l, opp, th.pid, pid === -1 ? null : pid))}
+                    options={[{ id: -1, label: 'Staff' }, ...mine.map((p) => ({ id: p.pid, label: nameOf(p.pid) }))]}
+                  />
+                  <div className="tiny upper dim bold">How to guard him</div>
+                  <Chips
+                    label={`How to guard ${th.name}`}
+                    value={how ?? ('' as PlayerDefense)}
+                    onChange={(d: PlayerDefense) => useStore.getState().mutate((l) => setPlanPlayerD(l, opp, th.pid, d === how ? null : d))}
+                    options={PLAYER_DEFENSES.map((d) => ({ id: d, label: `${PLAYER_D_META[d].short}${d === suggest ? ' ★' : ''}` }))}
+                  />
+                </>
               )}
             </div>
           );

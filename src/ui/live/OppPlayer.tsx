@@ -1,10 +1,13 @@
-import type { Settings, Tactics } from '../../core/types';
+import { PLAYER_DEFENSES, type PlayerDefense, type Settings, type Tactics } from '../../core/types';
 import { Kpi } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
 import { HACK_BELOW, hackThreshold } from './pills';
-import { hacks, startHacking, stopHacking } from '../../core/sim/tactics';
+import { PLAYER_D_META, hacks, startHacking, stopHacking } from '../../core/sim/tactics';
 
-/** One of their players on the floor: his line tonight, his free throws, and the shortcuts to go after him (or stop). */
+/**
+ * One of their players on the floor: his line tonight, his free throws, and the shortcuts to go after
+ * him (or stop): Hack-a, deny or double him, how to guard him, attack the man he guards.
+ */
 export function OppPlayer({
   p,
   name,
@@ -27,6 +30,16 @@ export function OppPlayer({
   const ft = Math.round(p.ftPct * 100);
   const hacking = hacks(tactics.manage, p);
   const target = tactics.defense.starTarget === p.pid ? tactics.defense.starPlan : 'none';
+  const how = tactics.defense.playerD?.[p.pid];
+  const hunting = tactics.offense.huntTarget === p.pid;
+  const setHow = (d: PlayerDefense) =>
+    apply((t) => {
+      const pd = { ...t.defense.playerD };
+      if (pd[p.pid] === d) delete pd[p.pid];
+      else pd[p.pid] = d;
+      if (Object.keys(pd).length) t.defense.playerD = pd;
+      else delete t.defense.playerD;
+    });
   return (
     <div className="col" style={{ gap: 12 }}>
       <div className="grid4">
@@ -81,6 +94,29 @@ export function OppPlayer({
             </button>
           ))}
         </div>
+      )}
+      {complexity !== 'simple' && (
+        <>
+          <div className="col" style={{ gap: 6 }}>
+            <div className="tiny upper dim bold">Guard him</div>
+            <div className="chips" role="group" aria-label={`How to guard ${name}`}>
+              {PLAYER_DEFENSES.map((d) => (
+                <button key={d} className={`chip ${how === d ? 'on' : ''}`} aria-pressed={how === d} title={PLAYER_D_META[d].help} onClick={() => setHow(d)}>
+                  {PLAYER_D_META[d].label}
+                </button>
+              ))}
+            </div>
+            <div className="tiny dim">{how ? PLAYER_D_META[how].help : 'Straight up. Tap an instruction for his defender; tap it again to take it off.'}</div>
+          </div>
+          <button className={`btn block ${hunting ? 'primary' : ''}`} aria-pressed={hunting} onClick={() => apply((t) => void (t.offense.huntTarget = hunting ? null : p.pid))}>
+            {hunting ? `Attacking ${name}: stop` : `Attack ${name}`}
+          </button>
+          <div className="tiny dim">
+            {hunting
+              ? 'Your isolations, post-ups and ball screens go at the player he guards while he plays, at some cost in ball movement.'
+              : 'Run isolations, post-ups and ball screens at the player he guards while he plays: worth it against a weak defender, costly against a good one.'}
+          </div>
+        </>
       )}
     </div>
   );

@@ -212,6 +212,43 @@ function userStar(league: League, userTid: number, day: number) {
 
 const lastName = (p: Player) => p.lastName || p.firstName;
 
+/**
+ * The three-point shooting of a team's players other than its star(s): what a junk defense dares.
+ * Their regular-season lines with the team this season once it has played five games, else each
+ * one's last season; null without 150 attempts to go on.
+ */
+export function castThrees(league: League, tid: number, stars: number | number[]): { tpa: number; pct: number } | null {
+  const skip = new Set(Array.isArray(stars) ? stars : [stars]);
+  const ts = league.teams[tid].seasons.find((s) => s.season === league.season);
+  const now = !!ts && ts.won + ts.lost >= SCOUT_MIN_GAMES;
+  let tpa = 0;
+  let tpm = 0;
+  for (const pl of teamPlayers(league, tid)) {
+    if (skip.has(pl.pid)) continue;
+    const s = now ? pl.stats.find((x) => x.season === league.season && x.tid === tid && !x.playoffs) : seasonTotals(pl, league.season - 1);
+    if (!s) continue;
+    tpa += s.tpa;
+    tpm += s.tpm;
+  }
+  return tpa >= 150 ? { tpa, pct: tpm / tpa } : null;
+}
+
+/** The league's three-point percentage this regular season (last season's until 2,000 attempts are in), NaN without either. */
+export function leagueThreePct(league: League): number {
+  for (const season of [league.season, league.season - 1]) {
+    let tpa = 0;
+    let tpm = 0;
+    for (const t of league.teams) {
+      const ts = t.seasons.find((x) => x.season === season);
+      if (!ts) continue;
+      tpa += ts.t.tpa;
+      tpm += ts.t.tpm;
+    }
+    if (tpa >= 2000) return tpm / tpa;
+  }
+  return NaN;
+}
+
 const COVERAGE_TEXT: Partial<Record<PnrCoverage, string>> = { hedge: 'hedges ball screens', ice: 'ices ball screens', drop: 'drops the big on ball screens' };
 
 /** Everything the coach could plan against the user's team tonight, each weighted by how strong the numbers behind it are. */
@@ -321,6 +358,18 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
   }
   // ---- the player the user's offense runs through: doubled when he carries it, denied the ball otherwise
   const star = userStar(league, userTid, day);
+  // ...or chased in a box-and-one when the players around him don't make their threes
+  const cast = star && p ? castThrees(league, userTid, star.p.pid) : null;
+  const lgTp = p ? div(p.lg.tpm, p.lg.tpa) : NaN;
+  if (star && star.usg >= 0.28 && cast && lgTp - cast.pct >= 0.02 && d.scheme === 'man')
+    out.push({
+      id: 'box1',
+      group: 'star',
+      text: `plays a box-and-one on ${lastName(star.p)}`,
+      why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions, and the rest of your team makes ${pct1(cast.pct)} of its threes (league ${pct1(lgTp)}).`,
+      patch: { defense: { scheme: 'box1', chase: [star.p.pid] } },
+      w: 1.5 + (star.usg - 0.28) * 25 + (lgTp - cast.pct) / 0.01,
+    });
   if (star && star.usg >= 0.28 && d.starPlan === 'none') {
     const iso = p ? ptRead(p, p.off, 'iso') : null;
     const spot = p ? ptRead(p, p.off, 'spotup') : null;

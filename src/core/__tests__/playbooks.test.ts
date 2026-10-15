@@ -79,6 +79,31 @@ describe('saved playbooks', () => {
     expect(after.playbook).toEqual({ id: pb.id, name: pb.name });
   });
 
+  it('never saves the chase and hunt targets or instructions by player, and keeps a junk scheme and the foul to give', () => {
+    const l = testLeague();
+    const t = tactics(l);
+    t.defense.scheme = 'box1';
+    t.defense.chase = [999];
+    t.defense.playerD = { 999: 'sag' };
+    t.offense.huntTarget = 998;
+    t.manage.foulToGive = true;
+    expect(savePlaybook(l, 'Junk')).toBeNull();
+    const pb = l.playbooks![0];
+    expect(pb.defense).not.toHaveProperty('chase');
+    expect(pb.defense).not.toHaveProperty('playerD');
+    expect(pb.offense).not.toHaveProperty('huntTarget');
+    expect(pb.defense.scheme).toBe('box1');
+    expect(pb.manage.foulToGive).toBe(true);
+    // loading leaves tonight's targets and instructions as they are, and names what it changes
+    const now = cloneTactics(t);
+    now.defense.scheme = 'man';
+    now.manage.foulToGive = false;
+    now.defense.chase = [5];
+    const loaded = loadPlaybook(now, pb, roster(l));
+    expect(loaded.defense.chase).toEqual([5]);
+    expect(tacticsChanges(now, loaded).map(changeText)).toEqual(['Scheme Man-to-Man → Box-and-one', 'Foul to give Off → On']);
+  });
+
   it('roles, shot freedom and screeners only come back for players still on the roster', () => {
     const l = testLeague();
     const t = tactics(l);

@@ -85,6 +85,29 @@ const ZONE32: Pt[] = [
   { x: 7, y: 8 },
 ];
 
+// the junk defenses' zones behind their chasers: a 2-2 box (box-and-one), a triangle with its point at
+// the free-throw line and its base on the blocks (triangle-and-two)
+// (the low spots sit inside the posts, so a big posting up isn't drawn under a defender)
+const BOX: Pt[] = [
+  { x: -8, y: 17 },
+  { x: 8, y: 17 },
+  { x: -4.5, y: 9 },
+  { x: 4.5, y: 9 },
+];
+const TRIANGLE: Pt[] = [
+  { x: 0, y: 18 },
+  { x: -4.5, y: 9 },
+  { x: 4.5, y: 9 },
+];
+
+/** A chaser face-guarding his man off the ball: between him and the ball, a step off him. */
+function chaseSpot(o: Pt, ball: Pt): Pt {
+  const dx = ball.x - o.x;
+  const dy = ball.y - o.y;
+  const d = Math.hypot(dx, dy) || 1;
+  return { x: o.x + (dx / d) * 2.2, y: o.y + (dy / d) * 2.2 };
+}
+
 // free throws: the defense takes the spots nearest the basket and the top ones, the shooter's teammates the middle
 // ones, one defender stays back for the break (lane spots 3.5 ft apart, so no two players overlap)
 const FT_OFF: Pt[] = [
@@ -118,6 +141,12 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
   const spots = baseSpots(oInfo, holder);
   const guardOf = new Map<number, number>(Object.entries(log.guards).map(([o, d]) => [Number(o), d]));
   const zone = log.scheme === 'zone32' ? ZONE32 : log.scheme === 'zone23' ? ZONE23 : null;
+  // a junk defense: its chasers stay with their men, the others hold the box or triangle
+  const junk = log.scheme === 'box1' ? BOX : log.scheme === 'tri2' ? TRIANGLE : null;
+  const chasers = new Map<number, number>();
+  if (junk) for (const c of log.chase ?? []) if (guardOf.has(c)) chasers.set(guardOf.get(c)!, c);
+  const zoneSlot = new Map<number, number>();
+  if (junk) dPids.filter((pid) => !chasers.has(pid)).forEach((pid, i) => zoneSlot.set(pid, i));
 
   // current positions
   const o = new Map<number, Pt>();
@@ -129,6 +158,12 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
   });
   const defendSpot = (dpid: number, i: number): Pt => {
     if (zone) return zone[i] ?? { x: 0, y: 10 };
+    if (junk) {
+      const man = chasers.get(dpid);
+      const op = man !== undefined ? o.get(man) : undefined;
+      if (op) return man === holder ? guardSpot(op, true, log.help) : chaseSpot(op, o.get(holder) ?? op);
+      return junk[zoneSlot.get(dpid) ?? 0] ?? { x: 0, y: 10 };
+    }
     const opid = [...guardOf.entries()].find(([, dd]) => dd === dpid)?.[0];
     const op = opid !== undefined ? o.get(opid) : undefined;
     return op ? guardSpot(op, opid === holder, log.help) : { x: 0, y: 12 };
