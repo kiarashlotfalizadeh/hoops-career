@@ -63,6 +63,12 @@ export interface Contract {
   /** A qualifying offer he took at the close of free agency: when it runs out he is unrestricted (see rfa.ts). */
   qualifying?: boolean;
   /**
+   * A 10-day contract (see tenDay.ts): its one salary is the minimum prorated for its days, paid when
+   * he signs; it ends by itself when season day `until` begins. `hardship`: signed beyond 15 players
+   * under the hardship exception.
+   */
+  tenDay?: { until: number; hardship?: boolean };
+  /**
    * A signed extension: salaries from the season after this deal's last one. `salaryFor` and
    * `contractExp` count it; at that season's start it becomes the contract (see newSeason).
    */
@@ -236,6 +242,45 @@ export interface Player {
   meeting?: { season: number; day: number; broken?: number };
   /** Restricted free agency: his team extended a qualifying offer as his deal ran out, so it can match any offer sheet he signs (see rfa.ts). */
   rfa?: Rfa;
+  /** His contract talks with the user's team (see negotiation.ts): cleared when he signs anywhere. */
+  talks?: Talks;
+  /** The 10-day contracts he has signed with one team this season: two at most (see tenDay.ts). */
+  tenDays?: { tid: number; season: number; n: number };
+}
+
+/** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
+export interface TalkTerms {
+  amount: number;
+  years: number;
+  option?: 'player' | 'team';
+}
+
+/**
+ * The user's contract talks with one player (see src/core/league/negotiation.ts): his ask is open,
+ * his walk-away price isn't. Offers below it get a counter and cost patience; out of patience, talks
+ * break down for a while (in the re-sign period his ask goes up instead).
+ */
+export interface Talks {
+  /** The user's team when they started. */
+  tid: number;
+  /** The contract season they're about (next season's from the draft through free agency). */
+  season: number;
+  /** A contract as a free agent or an offer sheet ('fa'), re-signing his own player ('resign'), or an extension ('extend'). */
+  kind: 'fa' | 'resign' | 'extend';
+  /** The stretch of the calendar they're in: patience and his counter start over in the next one. */
+  period: 'resign' | 'fa' | 'season';
+  /** Offers below his price he'll still hear before he breaks off talks. */
+  patience: number;
+  /** His standing counter-offer: an offer on exactly these terms, for at least this much, signs him. */
+  counter?: TalkTerms;
+  /** Lowballs he has heard (offers under 85% of his ask for the terms). */
+  lowballs?: number;
+  /** Interest in the team lost to lowballs: comes off his appeal (see teamAppeal) for the season. */
+  sour?: number;
+  /** Talks broke down: he hears no offer before this season and day (the next season's day 0: the rest of the summer). */
+  closed?: { season: number; day: number };
+  /** Re-sign period, talks broke down: his ask went up by this factor and he takes nothing less. */
+  firm?: number;
 }
 
 /**
@@ -282,8 +327,8 @@ export interface OfferSheet {
   /** First-season salary ($K, next season's money; the usual 5% raises follow) and length: 2-5 seasons, no options. */
   amount: number;
   years: number;
-  /** How the offering team pays for it: its cap space or mid-level stays held for it until his team decides. */
-  route: 'min' | 'space' | 'mle';
+  /** How the offering team pays for it: its cap space or exception stays held for it until his team decides. */
+  route: SigningRoute;
   /** The free-agency day (faDay) it was signed on, and the last one his team can match on: unmatched at the end of that day, he joins the other team. */
   day: number;
   until: number;
@@ -296,13 +341,20 @@ export interface Waivers {
   until: number;
   /** The contract a claiming team takes over. */
   contract: Contract;
-  /** The dead money the release left his old team, which a claim takes off its books. */
-  dead: { season: number; amount: number }[];
+  /** The dead money the release left his old team (stretched or not), which a claim takes off its books. */
+  dead: { season: number; amount: number; stretched?: true }[];
   /** The user has put in a claim. */
   claim?: boolean;
   /** His trade lock when he was waived: a claiming team takes it over with the contract. */
   lock?: { season: number; day: number };
 }
+
+/**
+ * How a team pays a free agent: his minimum, cap space, or an exception over the cap: the mid-level,
+ * the room exception (instead of the mid-level, once a team has used cap space that season) or the
+ * bi-annual (see contracts.ts).
+ */
+export type SigningRoute = 'min' | 'space' | 'mle' | 'room' | 'bae';
 
 /** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
 export interface FaBid {
@@ -312,8 +364,8 @@ export interface FaBid {
   /** faDay it was made (a raised offer keeps the first one's day and decision day). */
   day: number;
   decideDay: number;
-  /** How it is paid for: cap space is held for it, the mid-level is reserved for it. */
-  route?: 'space' | 'mle' | 'min';
+  /** How it is paid for: cap space is held for it, an exception (mid-level, room or bi-annual) is reserved for it. */
+  route?: SigningRoute;
   /** Salary the user signed over the cap (minimum and mid-level deals) while it was pending: those could have come after it, so they don't count against it. */
   slack?: number;
 }
@@ -600,10 +652,16 @@ export interface Team {
   /** Coach personality bias for AI tactics. */
   coach: CoachProfile;
   seasons: TeamSeason[];
-  /** Dead money from released players: season -> amount. */
-  deadMoney: { pid: number; name: string; season: number; amount: number }[];
+  /** Dead money from released players: season -> amount (`stretched`: spread by the stretch provision, see stretchDeadMoney). */
+  deadMoney: { pid: number; name: string; season: number; amount: number; stretched?: true }[];
   /** Contract season the team last used its mid-level exception. */
   mleSeason?: number;
+  /** Contract season the team last signed a free agent with cap space: no mid-level that season, the room exception instead. */
+  spaceSeason?: number;
+  /** Contract season the team last used its room exception. */
+  roomSeason?: number;
+  /** Contract season the team last used its bi-annual exception (not two seasons running). */
+  baeSeason?: number;
   /** Players whose jersey numbers were settled at the team's last game: they keep them over arrivals. */
   numbered?: number[];
   practice: 'light' | 'normal' | 'intense';
@@ -841,7 +899,7 @@ export interface NewsItem {
  * A kind of roster move in the transaction log. 'swap': a pick swap exercised when the lottery set
  * the order. Restricted free agency: 'qualify' (a qualifying offer extended, withdrawn or taken),
  * 'offerSheet' (signed with another team) and 'match' (his team matched it, or declined and he
- * joined the other team).
+ * joined the other team). 'tenDay': a 10-day contract signed (or, for the user's team, ended).
  */
 export type TxnKind =
   | 'trade'
@@ -860,7 +918,8 @@ export type TxnKind =
   | 'draft'
   | 'qualify'
   | 'offerSheet'
-  | 'match';
+  | 'match'
+  | 'tenDay';
 
 /** What one team sent in a trade (or gave up in an exercised swap), as it was: names and pick labels at the time. */
 export interface TxnSide {
@@ -900,7 +959,9 @@ export interface Txn {
   /**
    * An option: 'exercised' / 'declined' (team option) or 'opted in' / 'opted out' (player option);
    * a draft pick: its overall number ('#5'); a qualifying offer: 'extended' / 'withdrawn' /
-   * 'accepted'; a match (tids: his team, then the offering team): 'matched' / 'declined'.
+   * 'accepted'; a match (tids: his team, then the offering team): 'matched' / 'declined'; a
+   * release, waiver or buyout: 'stretched' (`years`: the seasons its dead money is spread over); a
+   * 10-day contract: 'second' (his second with the team), 'hardship', 'ended'.
    */
   note?: string;
   /** The user's team was in it: kept for good, even after he moves on to another team. */
@@ -924,6 +985,8 @@ export interface InboxMessage {
   proposal?: number;
   /** The user's restricted free agent (pid) whose offer sheet this message is about: the inbox offers Match and Let him go while it stands. */
   sheet?: number;
+  /** The user's player (pid) whose 10-day contract is ending: the inbox offers a second 10-day, the rest of the season or letting him go while it runs. */
+  tenDay?: number;
 }
 
 /**

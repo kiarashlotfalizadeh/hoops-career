@@ -1,15 +1,26 @@
 // Shared Front Office helpers: money formatting, cap bar, owner mood visuals and
 // small player-row building blocks used by Office, Trade, Free Agents, Re-sign,
 // Draft, Finances and Settings.
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import type { League, Phase, Player, Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
-import { playerName, standardRoster } from '../../core/league/helpers';
-import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releasePlayer, userBuyout } from '../../core/league/contracts';
+import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
+import {
+  WAIVER_DAYS,
+  buyoutTerms,
+  nonGuaranteed,
+  releaseDeadMoney,
+  releasePlayer,
+  releaseSchedule,
+  stretchDeadMoney,
+  stretchPhrase,
+  stretchedSeasons,
+  userBuyout,
+} from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { useStore } from '../../state/store';
@@ -254,7 +265,11 @@ export function Callout({ tone, icon, children }: { tone?: 'good' | 'bad' | 'war
   );
 }
 
-/** Releasing one of your players: what it leaves on the books, and the buttons (the Office contract sheet and the player page). */
+/**
+ * Releasing one of your players: what it leaves on the books, as it is and stretched side by side
+ * when the stretch provision applies, a buyout for a veteran, and the buttons (the Office contract
+ * sheet and the player page).
+ */
 export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; p: Player; onKeep: () => void; onDone: () => void }) {
   const remaining = releaseDeadMoney(league, p);
   const owed = remaining.reduce((a, r) => a + r.amount, 0);
@@ -262,25 +277,36 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
   // in the regular season, a release that leaves dead money goes through waivers first (see releasePlayer)
   const waive = league.phase === 'regular' && owed > 0;
   const buyout = buyoutTerms(league, p);
-  const release = () => {
+  // the stretch provision: the same money over twice the seasons left plus one (null: nothing to stretch)
+  const stretch = stretchDeadMoney(league, remaining);
+  const spread = stretch ? stretchedSeasons(stretch) : 0;
+  const buyoutStretch = buyout ? stretchedSeasons(releaseSchedule(league, p, { giveback: buyout.giveback, stretch: true })) : 0;
+  const release = (stretchIt: boolean) => {
     const name = playerName(p);
-    useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid]));
+    useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid], { stretch: stretchIt }));
+    const how = stretchIt && spread ? `, ${stretchPhrase(league, spread)}` : '';
     useStore
       .getState()
       .toast(
-        waive ? `${name} waived. ${fmtM(owed)} stays on your books unless a team claims him.` : `${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books.` : ''}`,
+        waive
+          ? `${name} waived. ${fmtM(owed)} stays on your books${how} unless a team claims him.`
+          : `${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books${how}.` : ''}`,
         'neutral',
       );
     onDone();
   };
-  const buyOut = () => {
+  const buyOut = (stretchIt: boolean) => {
     let res = { ok: false, reason: '' };
     useStore.getState().mutate((l) => {
-      res = userBuyout(l, p.pid);
+      res = userBuyout(l, p.pid, stretchIt);
     });
     useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
     if (res.ok) onDone();
   };
+  // every season either schedule touches, in order
+  const seasons = [...new Set([...remaining, ...(stretch ?? [])].map((d) => d.season))].sort((a, b) => a - b);
+  const amountIn = (xs: { season: number; amount: number }[] | null, s: number) => xs?.find((d) => d.season === s)?.amount;
+  const grid = { display: 'grid', gridTemplateColumns: stretch ? '1fr auto auto' : '1fr auto', columnGap: 16, rowGap: 3 } as const;
   // why he'd give back more than a little
   const why = buyout
     ? [
@@ -297,6 +323,8 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
           : `${playerName(p)} becomes a free agent immediately and can sign with any team.`}{' '}
         {p.contract.twoWay ? (
           'Two-way pay sits outside the cap, so there is no dead money.'
+        ) : p.contract.tenDay ? (
+          'His 10-day pay was paid when he signed, so there is no dead money.'
         ) : nonGuaranteed(league, p) ? (
           "His minimum deal isn't guaranteed until opening night, so there is no dead money."
         ) : owed > 0 ? (
@@ -309,18 +337,46 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
         )}
       </p>
       {remaining.length > 0 && (
-        <div className="card tight">
-          {remaining.map((r) => (
-            <div key={r.season} className="row between small" style={{ padding: '3px 0' }}>
-              <span className="dim2">{seasonLabel(r.season)}</span>
-              <span className="num bold">{fmtM(r.amount)}</span>
-            </div>
+        <div className="card tight" style={grid}>
+          <span className="tiny dim upper bold">Dead money</span>
+          <span className="tiny dim upper bold" style={{ textAlign: 'right' }}>
+            Release
+          </span>
+          {stretch && (
+            <span className="tiny dim upper bold" style={{ textAlign: 'right' }}>
+              Stretched
+            </span>
+          )}
+          {seasons.map((s) => (
+            <Fragment key={s}>
+              <span className="small dim2">{seasonLabel(s)}</span>
+              <span className="small num bold" style={{ textAlign: 'right' }}>
+                {amountIn(remaining, s) ? fmtM(amountIn(remaining, s)!) : '—'}
+              </span>
+              {stretch && (
+                <span className="small num bold" style={{ textAlign: 'right' }}>
+                  {amountIn(stretch, s) ? fmtM(amountIn(stretch, s)!) : '—'}
+                </span>
+              )}
+            </Fragment>
           ))}
-          <div className="divider" />
-          <div className="row between small">
-            <span className="bold">Dead money</span>
-            <span className="num bold bad">{fmtM(owed)}</span>
-          </div>
+          <span className="small bold" style={{ borderTop: '1px solid var(--line)', paddingTop: 4 }}>
+            Total
+          </span>
+          <span className="small num bold bad" style={{ textAlign: 'right', borderTop: '1px solid var(--line)', paddingTop: 4 }}>
+            {fmtM(owed)}
+          </span>
+          {stretch && (
+            <span className="small num bold bad" style={{ textAlign: 'right', borderTop: '1px solid var(--line)', paddingTop: 4 }}>
+              {fmtM(owed)}
+            </span>
+          )}
+        </div>
+      )}
+      {stretch && (
+        <div className="tiny dim">
+          <b>Stretch provision:</b> the same money{contractSeason(league) === league.season ? ', past this season,' : ''} spread evenly over {spread} seasons (twice the{' '}
+          {(spread - 1) / 2} left, plus one): less dead money each season, for longer.{waive ? ' A claim off waivers still takes all of it off your books.' : ''}
         </div>
       )}
       {buyout && (
@@ -345,9 +401,14 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
               <div className="tiny dim">dead money</div>
             </div>
           </div>
-          <button className="btn block" onClick={buyOut}>
+          <button className="btn block" onClick={() => buyOut(false)}>
             Buy out · save {fmtM(buyout.saved)}
           </button>
+          {buyoutStretch > 0 && (
+            <button className="btn block" onClick={() => buyOut(true)}>
+              Buy out and stretch it over {buyoutStretch} seasons
+            </button>
+          )}
         </div>
       )}
       {!p.contract.twoWay && n - 1 < CAP.rosterMin && (
@@ -362,10 +423,15 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
         <button className="btn grow" onClick={onKeep}>
           Keep him
         </button>
-        <button className="btn danger grow" onClick={release}>
+        <button className="btn danger grow" onClick={() => release(false)}>
           Release
         </button>
       </div>
+      {stretch && (
+        <button className="btn danger block" onClick={() => release(true)}>
+          Release and stretch over {spread} seasons
+        </button>
+      )}
     </>
   );
 }

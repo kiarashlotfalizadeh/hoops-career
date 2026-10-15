@@ -62,7 +62,9 @@ function summer(rngSeed = 5) {
   const cap = CAP_FOR(l, s);
   for (const t of l.teams) {
     t.deadMoney = [{ pid: -1, name: 'x', season: s, amount: cap.salaryCap }];
+    // (no exceptions either: the mid-level and the bi-annual used)
     t.mleSeason = s;
+    t.baeSeason = s;
   }
   const open = (tid: number, won: number, hype: number, space?: number) => {
     const t = l.teams[tid];

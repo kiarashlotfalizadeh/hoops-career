@@ -19,9 +19,9 @@ import {
   signPlayer,
   userBuyout,
   userClaim,
-  userExtend,
   wantsTwoWay,
 } from '../league/contracts';
+import { userExtend } from '../league/negotiation';
 import { FA_DAYS, fillRosters, renouncePlayer, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
 import { executeTrade, pickLabel } from '../league/trades';
 import { draftPlayer } from '../league/draft';

@@ -25,7 +25,7 @@ import {
   twoWayRoster,
   winPct,
 } from './helpers';
-import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, tradeValue, valueScore } from './contracts';
+import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, taxCapped, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { logTrade } from './transactions';
 
@@ -743,10 +743,12 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
         `${abbrev} would be over the cap after the trade, so it can take back at most 125% of outgoing salary plus $0.1M ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`,
       );
     }
-    // the mid-level is for teams under the tax, so using it caps the team at the tax line for that season
+    // the mid-level and the bi-annual are for teams under the tax, so using one caps the team at the tax line for that season
     const tax = CAP_FOR(league, s).luxuryTax;
-    if (league.teams[mine.tid].mleSeason === s && inSal > outSal && capPayroll(league, mine.tid, s) - outSal + inSal > tax)
-      errors.push(`${abbrev} used the mid-level exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`);
+    if (taxCapped(league.teams[mine.tid], s) && inSal > outSal && capPayroll(league, mine.tid, s) - outSal + inSal > tax)
+      errors.push(
+        `${abbrev} used the ${league.teams[mine.tid].mleSeason === s ? 'mid-level' : 'bi-annual'} exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`,
+      );
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
     errors.push(...termErrors(league, offer, mine, other));
@@ -1796,10 +1798,10 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   // an over-the-cap seller can only take back so much salary
   const sellerFits = (p: Player) => salaryMatchGap(league, offer(p), 'b') === 0;
   // an over-the-cap buyer must send back salary first (125% rule), and one that used the
-  // mid-level enough to stay under the tax: the smallest contract that covers the gap, else the
-  // biggest and keep going
+  // mid-level or the bi-annual enough to stay under the tax: the smallest contract that covers the
+  // gap, else the biggest and keep going
   const s = contractSeason(league);
-  const taxGap = () => (league.teams[buyer].mleSeason === s ? capPayroll(league, buyer, s) + sal(vet) - pkg.reduce((a, p) => a + sal(p), 0) - CAP_FOR(league, s).luxuryTax : 0);
+  const taxGap = () => (taxCapped(league.teams[buyer], s) ? capPayroll(league, buyer, s) + sal(vet) - pkg.reduce((a, p) => a + sal(p), 0) - CAP_FOR(league, s).luxuryTax : 0);
   const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), taxGap());
   while (gapNow() > 0) {
     const gap = gapNow();

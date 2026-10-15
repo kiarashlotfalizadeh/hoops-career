@@ -7,8 +7,8 @@ import { FileSignature, PenLine, ShieldCheck } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { OFFSEASON_ROSTER_MAX, contractSeason, playerName, standardRoster } from '../../core/league/helpers';
-import { askingContract, makeContract } from '../../core/league/contracts';
+import { OFFSEASON_ROSTER_MAX, contractSeason, playerName } from '../../core/league/helpers';
+import { askingContract, makeContract, summerRoster, wantsOut } from '../../core/league/contracts';
 import {
   MATCH_DAYS,
   deadlineLabel,
@@ -135,7 +135,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
   const [withdraw, setWithdraw] = useState<Player | null>(null);
   const mine = restrictedFreeAgents(league, league.userTid);
   if (league.phase !== 'freeAgency' || !mine.length) return null;
-  const full = standardRoster(league, league.userTid).length >= OFFSEASON_ROSTER_MAX;
+  const full = summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX;
   return (
     <>
       <SecTitle>Your restricted free agents · {mine.length}</SecTitle>
@@ -168,7 +168,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
               <>
                 <div className="small dim2">
                   No offer sheet yet ·{' '}
-                  {p.mood.tradeRequest ? (
+                  {wantsOut(p) ? (
                     <span className="warn">wants out: won't re-sign, but you can match a sheet</span>
                   ) : (
                     <>
@@ -180,7 +180,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                   <button className="btn sm grow" onClick={() => setWithdraw(p)}>
                     Withdraw offer
                   </button>
-                  <button className="btn sm primary grow" disabled={p.mood.tradeRequest} onClick={() => onResign(p.pid)}>
+                  <button className="btn sm primary grow" disabled={wantsOut(p)} onClick={() => onResign(p.pid)}>
                     <PenLine size={15} /> Re-sign
                   </button>
                 </div>

@@ -1,7 +1,7 @@
 // The transaction log: a durable record of roster moves (trades, signings, re-signings,
-// extensions, releases and waivers, waiver claims, buyouts, two-way deals and conversions,
-// renounced rights, options, draft picks, exercised pick swaps, and restricted free agency's
-// qualifying offers, offer sheets and matches) behind the team and player histories. The news log
+// extensions, releases and waivers (stretched or not), waiver claims, buyouts, two-way deals and
+// conversions, renounced rights, options, draft picks, exercised pick swaps, restricted free
+// agency's qualifying offers, offer sheets and matches, and 10-day contracts) behind the team and player histories. The news log
 // keeps about a year of stories; this keeps every trade (and pick swap) and every move of the
 // user's team for good, and other teams' moves for two seasons. Entries hold names and pick labels as they were, so they
 // read the same after the player retires and his record is compacted away, or the pick is made.
@@ -103,6 +103,9 @@ export function txnTotal(amount: number, years: number): number {
 
 const deal = (t: Txn) => (t.amount !== undefined && t.years ? `${yrs(t.years)} / ${money(txnTotal(t.amount, t.years))}` : '');
 
+/** A stretched release's dead money: ", stretched over 7 seasons". */
+const stretched = (t: Txn) => (t.note === 'stretched' && t.years ? `, stretched over ${t.years} seasons` : '');
+
 /** "A", "A and B", "A, B and C" over parts. */
 function listParts(items: TxnPart[]): TxnPart[] {
   return items.flatMap((x, i) => (i === 0 ? [x] : [i === items.length - 1 ? ' and ' : ', ', x]));
@@ -174,7 +177,7 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
     case 'release':
     case 'waive': {
       const verb = t.kind === 'waive' ? 'Waived' : 'Released';
-      const dead = t.amount ? ` (${money(t.amount)} in dead money)` : '';
+      const dead = t.amount ? ` (${money(t.amount)} in dead money${stretched(t)})` : '';
       return forPlayer ? [`${verb} by `, T, dead] : [`${verb} `, P, dead];
     }
     case 'claim': {
@@ -185,7 +188,13 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
     }
     case 'buyout': {
       const back = t.amount ? `, ${forPlayer ? 'giving' : 'who gave'} back ${money(t.amount)}` : '';
-      return forPlayer ? ['Bought out by ', T, back] : ['Bought out ', P, back];
+      const rest = t.note === 'stretched' && t.years ? ` (the rest stretched over ${t.years} seasons)` : '';
+      return forPlayer ? ['Bought out by ', T, back, rest] : ['Bought out ', P, back, rest];
+    }
+    case 'tenDay': {
+      if (t.note === 'ended') return forPlayer ? ['10-day contract with ', T, ' ended'] : [P, "'s 10-day contract ended"];
+      const which = t.note === 'second' ? 'a second 10-day contract' : t.note === 'hardship' ? 'a 10-day contract (hardship)' : 'a 10-day contract';
+      return forPlayer ? [`Signed ${which} with `, T, money$] : ['Signed ', P, ` to ${which}${money$}`];
     }
     case 'renounce':
       return forPlayer ? ['Rights renounced by ', T] : ['Renounced the rights to ', P];

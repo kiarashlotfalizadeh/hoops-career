@@ -18,7 +18,8 @@ import {
   statsLine,
   teamPlayers,
 } from '../league/helpers';
-import { askingContract, capSpace, leaveTeam, makeContract, marketHolds, signPlayer, signingRoute, wantsTwoWay } from '../league/contracts';
+import { askingContract, capSpace, leaveTeam, makeContract, marketHolds, signPlayer, signingRoute, summerRoster, wantsTwoWay } from '../league/contracts';
+import { contractExp } from '../playerGen';
 import { capHolds, capPayroll, fillRosters, marqueeFA, offerRoute, renouncePlayer, userBid, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
 import {
   AI_TERMS_DAY,
@@ -260,7 +261,8 @@ describe('offer sheets', () => {
     open(U, 40_000);
     const p = rfa(l, R);
     expect(userOffer(l, p.pid, atAsk(l, p, 1), 1).reason).toBe('Offer sheets run 2 to 5 years.');
-    expect(userOffer(l, p.pid, atAsk(l, p, 3) - 500, 3).reason).toMatch(/^Asking for about/);
+    // well under his ask: he counters (see negotiation.test.ts)
+    expect(userOffer(l, p.pid, Math.round((atAsk(l, p, 3) * 0.8) / 50) * 50, 3).reason).toMatch(/counters at/);
     const amount = atAsk(l, p, 3);
     const space = capSpace(l, U, s);
     const [t] = logged(l, () => expect(userOffer(l, p.pid, amount, 3).reason).toMatch(/Offer sheet signed: the .* have until the end of day 2 to match/));
@@ -360,11 +362,11 @@ describe('offer sheets', () => {
     signOfferSheet(l, p, R, 12_000, 4, 'space', 1);
     expect(l.inbox[0]).toMatchObject({ important: true, sheet: p.pid, tone: 'alert' });
     expect(l.inbox[0].body).toMatch(/Match it by the end of day 3 and he stays with us on exactly those terms/);
-    // full roster: no match until a spot opens
-    while (standardRoster(l, U).length < OFFSEASON_ROSTER_MAX) signPlayer(l, freeAgents(l).filter((x) => !x.rfa)[0], U, cap.vetMin, 1, { news: false, start: s });
+    // full roster for next season (players under contract for it): no match until a spot opens
+    while (summerRoster(l, U) < OFFSEASON_ROSTER_MAX) signPlayer(l, freeAgents(l).filter((x) => !x.rfa)[0], U, cap.vetMin, 1, { news: false, start: s });
     expect(sheetDecisionBlocked(l, p.pid, true)).toMatch(/roster spot: yours is full \(21\)/);
     expect(userDecideSheet(l, p.pid, true).ok).toBe(false);
-    teamPlayers(l, U).find((x) => x.pid !== p.pid)!.tid = RETIRED;
+    teamPlayers(l, U).find((x) => contractExp(x.contract) >= s)!.tid = RETIRED;
     const [t] = logged(l, () => expect(userDecideSheet(l, p.pid, true).reason).toMatch(/^Matched: .* stays on 4 yrs/));
     expect(text(l, t, { tid: U })).toMatch(new RegExp(`^Matched ${l.teams[R].abbrev}'s offer sheet for ${playerName(p)}: 4 yrs`));
     expect(p.tid).toBe(U);
@@ -489,7 +491,7 @@ describe('the close of free agency', () => {
     const mine = rfa(l, U);
     const theirs = rfa(l, R);
     const lapses = rfa(l, B);
-    while (standardRoster(l, B).length < OFFSEASON_ROSTER_MAX) signPlayer(l, freeAgents(l).filter((x) => !x.rfa)[0], B, cap.vetMin, 1, { news: false, start: s });
+    while (summerRoster(l, B) < OFFSEASON_ROSTER_MAX) signPlayer(l, freeAgents(l).filter((x) => !x.rfa)[0], B, cap.vetMin, 1, { news: false, start: s });
     const qo = mine.rfa!.qo;
     const log = logged(l, () => acceptQualifyingOffers(l));
     expect(log.map((t) => [t.pid, t.kind, t.note, t.years]).sort((a, b) => (a[0] as number) - (b[0] as number))).toEqual(

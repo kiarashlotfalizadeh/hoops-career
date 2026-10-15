@@ -22,16 +22,20 @@ import { clamp } from '../random';
 import { contractExp, salaryFor } from '../playerGen';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, addInbox, addNews, andList, contractSeason, freeAgents, payroll, playerName, revenueScale, standardRoster, teamPlayers } from './helpers';
 import {
+  EXCEPTIONS,
   FA_DAYS,
   FIRED_REASON,
   type SigningRoute,
   askingContract,
+  isException,
   makeContract,
   marketSalary,
   payrollBudget,
   rookieScaleDeal,
   signPlayer,
+  summerRoster,
   tradeValue,
+  spendRoute,
   valueScore,
 } from './contracts';
 import { logMove } from './transactions';
@@ -175,7 +179,7 @@ export function aiRfaTerms(league: League) {
     const t = league.teams[r.tid];
     const ask = askingContract(league, p, t.tid);
     const amount = Math.max(ask.amount, r.qo);
-    if (standardRoster(league, t.tid).length >= OFFSEASON_ROSTER_MAX || payroll(league, t.tid, next) + amount > keepBudget(league, t, valueScore(league, p))) continue;
+    if (summerRoster(league, t.tid) >= OFFSEASON_ROSTER_MAX || payroll(league, t.tid, next) + amount > keepBudget(league, t, valueScore(league, p))) continue;
     signPlayer(league, p, t.tid, amount, ask.years, { start: next });
   }
 }
@@ -250,14 +254,15 @@ const notable = (league: League, p: Player, amount: number, tids: number[]) =>
 /**
  * Team `tid` signs restricted free agent `p` to an offer sheet on free-agency day `day`; the caller
  * has checked the terms (sheetBlockedReason, his asking price) and how it is paid for (`route`).
- * A mid-level sheet reserves the exception; cap space is held by marketHolds. His team has until
- * the end of the next day to match, and the user is asked when it's his player.
+ * A sheet on an exception reserves it; cap space is held by marketHolds (and counts as used only
+ * if he joins, see settleSheet). His team has until the end of the next day to match, and the user
+ * is asked when it's his player.
  */
 export function signOfferSheet(league: League, p: Player, tid: number, amount: number, years: number, route: SigningRoute, day: number) {
   const r = p.rfa!;
   const sheet: OfferSheet = { tid, amount, years, route, day, until: matchDeadline(day) };
   r.sheet = sheet;
-  if (route === 'mle') league.teams[tid].mleSeason = contractSeason(league);
+  if (isException(route)) spendRoute(league, tid, route, contractSeason(league));
   logMove(league, 'offerSheet', [tid, r.tid], p, { amount, years });
   const name = playerName(p);
   const total = sheetTotal(league, p, sheet);
@@ -284,7 +289,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
 
 /**
  * Would an AI team match this offer sheet, and why: it needs a roster spot under the offseason
- * limit, the contract has to fit what it will pay to keep him (keepBudget), and be worth having
+ * limit (its own pending offer sheets hold theirs), the contract has to fit what it will pay to keep him (keepBudget), and be worth having
  * (its trade value to the team, under its strategy, contract surplus or burden included, at least
  * MATCH_VALUE: about a rotation player on a fair deal).
  */
@@ -293,7 +298,7 @@ export function aiMatchVerdict(league: League, p: Player): { match: boolean; why
   const sh = r.sheet!;
   const t = league.teams[r.tid];
   const next = contractSeason(league);
-  if (standardRoster(league, t.tid).length >= OFFSEASON_ROSTER_MAX) return { match: false, why: `they had no roster spot left (${OFFSEASON_ROSTER_MAX})` };
+  if (summerRoster(league, t.tid) >= OFFSEASON_ROSTER_MAX) return { match: false, why: `they had no roster spot left (${OFFSEASON_ROSTER_MAX})` };
   const v = valueScore(league, p);
   if (payroll(league, t.tid, next) + sh.amount > keepBudget(league, t, v)) return { match: false, why: 'it would take their payroll past what they will spend' };
   if (tradeValue(league, { ...p, contract: sheetContract(league, p, sh) }, t.strategy) < MATCH_VALUE) return { match: false, why: "they don't think he's worth that contract" };
@@ -302,16 +307,21 @@ export function aiMatchVerdict(league: League, p: Player): { match: boolean; why
 
 /**
  * The offer sheet is decided: matched, he re-signs with his team on exactly its terms (the offering
- * team gets back the room it held, and its mid-level if the sheet used it); not matched, he joins
- * the offering team on them. Either way it's a signing: the trade lock until December 15 applies. A
- * player who asked out of his team and is matched still wants out.
+ * team gets back the room it held, and the exception if the sheet used one); not matched, he joins
+ * the offering team on them, and a sheet on cap space counts as the team using its space (no
+ * mid-level for it this season, the room exception instead). Either way it's a signing: the trade
+ * lock until December 15 applies. A player who asked out of his team and is matched still wants out.
  */
 function settleSheet(league: League, p: Player, matched: boolean) {
   const r = p.rfa!;
   const sh = r.sheet!;
   const next = contractSeason(league);
   const offerer = league.teams[sh.tid];
-  if (matched && sh.route === 'mle' && offerer.mleSeason === next) delete offerer.mleSeason;
+  if (matched) {
+    if (sh.route === 'mle' && offerer.mleSeason === next) delete offerer.mleSeason;
+    if (sh.route === 'room' && offerer.roomSeason === next) delete offerer.roomSeason;
+    if (sh.route === 'bae' && offerer.baeSeason === next) delete offerer.baeSeason;
+  } else if (sh.route === 'space') spendRoute(league, sh.tid, 'space', next);
   const wantsOut = p.mood.tradeRequest;
   signPlayer(league, p, matched ? r.tid : sh.tid, sh.amount, sh.years, { start: next, news: false, log: false });
   if (matched) p.mood.tradeRequest = wantsOut;
@@ -337,8 +347,8 @@ export function sheetDecisionBlocked(league: League, pid: number, match: boolean
   if (!p || !r?.sheet || p.tid !== FREE_AGENT || league.phase !== 'freeAgency') return 'This offer sheet has been decided.';
   // (the user took over another team since it was signed)
   if (r.tid !== league.userTid) return `His rights belong to the ${league.teams[r.tid].name}: they decide on it.`;
-  if (match && standardRoster(league, league.userTid).length >= OFFSEASON_ROSTER_MAX)
-    return `Matching needs a roster spot: yours is full (${OFFSEASON_ROSTER_MAX}). Release or trade someone first.`;
+  if (match && summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX)
+    return `Matching needs a roster spot: yours is full (${OFFSEASON_ROSTER_MAX}${league.faBids?.length || pendingSheets(league, league.userTid).length ? ', counting your pending offers and offer sheets' : ''}). Release or trade someone first.`;
   return null;
 }
 
@@ -389,7 +399,7 @@ export function resolveOfferSheets(league: League, through = Infinity) {
       from: 'Assistant GM',
       subject: verdict.match ? `${own.abbrev} matched our offer sheet for ${name}` : `${name} is ours`,
       body: verdict.match
-        ? `The ${teamName(league, r.tid)} matched our offer sheet for ${name} (${terms}): ${verdict.why}. He stays with them, and the room the sheet held is free again${sh.route === 'mle' ? ', mid-level exception included' : ''}.`
+        ? `The ${teamName(league, r.tid)} matched our offer sheet for ${name} (${terms}): ${verdict.why}. He stays with them, and the room the sheet held is free again${isException(sh.route) ? `, ${EXCEPTIONS[sh.route].name} included` : ''}.`
         : `The ${teamName(league, r.tid)} declined to match our offer sheet: ${verdict.why}. ${name} joins us on it (${terms}) and has been added to the end of your rotation.`,
       tone: verdict.match ? 'neutral' : 'good',
       link: `/player/${p.pid}`,
@@ -410,7 +420,7 @@ export function acceptQualifyingOffers(league: League) {
   for (const p of restrictedFreeAgents(league)) {
     const r = p.rfa!;
     if (r.sheet) continue;
-    if (standardRoster(league, r.tid).length >= OFFSEASON_ROSTER_MAX) {
+    if (summerRoster(league, r.tid) >= OFFSEASON_ROSTER_MAX) {
       if (r.tid === league.userTid) lapsed.push(p);
       delete p.rfa;
       continue;

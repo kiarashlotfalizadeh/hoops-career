@@ -25,6 +25,7 @@ import { BBREF_TO_TID } from '../../core/teams';
 import { PlayerMoves } from '../league/MovesTab';
 import { deadlineLabel } from '../../core/league/rfa';
 import { sheetTerms } from '../office/RfaPanel';
+import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -391,6 +392,7 @@ export default function PlayerView() {
                     </>
                   )}
                   {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
+                  {p.contract.tenDay && <div className="small dim2">{tenDayLine(league, p)}</div>}
                   {p.rfa && (
                     <div className="small dim2">
                       Qualifying offer extended ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): he becomes a restricted free agent when free agency opens.
@@ -463,6 +465,11 @@ export default function PlayerView() {
                   {(tradeWhy || releaseWhy || extendWhy) && (
                     <div className="tiny dim" style={{ marginTop: 6 }}>
                       {[...new Set([tradeWhy, releaseWhy, extendWhy])].filter(Boolean).join(' ')}
+                    </div>
+                  )}
+                  {p.contract.tenDay && (
+                    <div style={{ marginTop: 10 }}>
+                      <TenDayActions league={league} p={p} />
                     </div>
                   )}
                 </>
