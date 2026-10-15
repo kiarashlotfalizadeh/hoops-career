@@ -19,7 +19,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useLeague, useStore, useVersion } from '../../state/store';
-import { prepareLive, clearLive, playedElsewhere, CLUTCH_SEC, type LiveGame } from '../../state/live';
+import { prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, CLUTCH_SEC, type LiveGame } from '../../state/live';
 import { buildScript, captionAt, type Script } from '../live/choreo';
 import { Court } from '../live/Court';
 import { Card, Empty, PageHeader, Sheet, Toggle, scrollBehavior } from '../components/ui';
@@ -378,10 +378,22 @@ export default function Live() {
   /** What became of the game this screen is coaching: null while it's still the screen's to finish. */
   const fate = useCallback((lg: LiveGame) => playedElsewhere(lg, useStore.getState().league!), []);
 
+  /**
+   * The league went back to how it was before setting up or recording the game threw (see the store's
+   * attempt): forget any game set up along the way and go Home, where the Play menu picks the game up
+   * from its journal again.
+   */
+  const leave = useCallback(() => {
+    dropLive();
+    liveRef.current = null;
+    nav('/', { replace: true });
+  }, [nav]);
+
   const start = useCallback(() => {
     let lg: LiveGame | null = null;
     const notes: string[] = [];
-    useStore.getState().mutate((l) => {
+    const st = useStore.getState();
+    const setUp = (l: League) => {
       lg = prepareLive(l);
       const found = lg as LiveGame | null;
       if (!found || found.committed) return;
@@ -398,7 +410,12 @@ export default function Live() {
       }
       if (seen && seen[1] !== now.seen[1]) notes.push('Rotation changes apply from the next game.');
       found.markSeen(now.seen);
-    });
+    };
+    // setting up today's game plays the day's other games first (or the journal back): if that throws,
+    // the league goes back to before it (and the screen to Home) rather than keep half a day. The game
+    // already open in this session needs none of that.
+    if (st.league && pendingLive(st.league)) st.mutate(setUp);
+    else if (!st.attempt('Setting up the game', setUp)) return leave();
     const found = lg as LiveGame | null;
     // the app was closed mid-game: say where it picked up (or that it couldn't)
     if (found?.resumed) {
@@ -410,7 +427,7 @@ export default function Live() {
     }
     if (notes.length) useStore.getState().toast(notes.join(' '));
     attach(found);
-  }, [attach]);
+  }, [attach, leave]);
 
   // a fresh visit to /live (also from the final card or the Play menu) picks up today's game; one in progress keeps going
   useEffect(() => {
@@ -467,7 +484,9 @@ export default function Live() {
     // its league went back to the last save: today's game there starts over
     if (now === 'gone') return start();
     if (now === null) {
-      useStore.getState().mutate((l) => void lg.commit(l));
+      // recording it plays out the day (the standings, the playoff series, the league's moves): if that
+      // throws, the league goes back to before it rather than keep a game recorded on a day that never ended
+      if (!useStore.getState().attempt('Recording the game', (l) => void lg.commit(l))) return leave();
       clearLive();
     }
     // the box score and the strip show the final numbers
@@ -475,7 +494,7 @@ export default function Live() {
     setView(viewRef.current);
     if (lg.committed) showFinal(lg);
     else showSimmed(lg);
-  }, [fate, start, showFinal, showSimmed]);
+  }, [fate, start, leave, showFinal, showSimmed]);
 
   // another screen finished this game (the Play menu's sims), or a sim error reloaded the last save: stop animating a ghost
   const v = useVersion();

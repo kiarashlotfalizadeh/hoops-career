@@ -54,7 +54,8 @@ export default function Settings() {
 
   const saveNow = async () => {
     setBusy(true);
-    const ok = await useStore.getState().save();
+    // (flush: a live game in progress goes in as far as it has got)
+    const ok = await useStore.getState().flush();
     setBusy(false);
     const problem = useStore.getState().saveProblem;
     useStore.getState().toast(ok ? 'Saved to this device.' : `Not saved. ${problem?.text ?? ''}`, ok ? 'good' : 'bad');
@@ -68,10 +69,11 @@ export default function Settings() {
 
   const exit = async () => {
     setBusy(true);
-    const ok = await useStore.getState().save();
+    // (a live game in progress is brought up to date first, as every other way out of a league does)
+    const ok = await useStore.getState().saveBeforeLeaving();
     setBusy(false);
     // the league only lives in this window until a save works (a newer copy from another window is fine to drop)
-    if (ok || useStore.getState().saveProblem?.kind === 'conflict') leave();
+    if (ok) leave();
     else setSheet('unsaved');
   };
 

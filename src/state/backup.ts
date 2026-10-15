@@ -55,8 +55,11 @@ async function deliver(json: string, name: string): Promise<boolean> {
 
 /** Hand the league to the user as a JSON file. Resolves false if they cancelled the share sheet. */
 export function exportLeague(league: League): Promise<boolean> {
-  // a live game in progress goes in as far as it has got, to be picked up there after an import
-  checkpointLive(league);
+  // a live game in progress goes in as far as it has got, to be picked up there after an import; for
+  // the open league, a save follows (see flush), so the device isn't left further back than the file
+  const st = useStore.getState();
+  if (st.league === league) void st.flush();
+  else checkpointLive(league);
   // in this build's format, even before its first save writes the version (a new league starts at 1)
   return deliver(JSON.stringify({ ...league, version: SAVE_VERSION }), fileName(league.name, league.season));
 }

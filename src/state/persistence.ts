@@ -3,8 +3,9 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense } from '../core/types';
+import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense, type Tactics } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
+import { defaultTactics } from '../core/sim/tactics';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { MAX_STEPS } from './live';
@@ -216,9 +217,7 @@ export function isLeague(x: unknown): x is League {
     obj(l.settings) &&
     Array.isArray(l.teams) &&
     l.teams.length >= 2 &&
-    l.teams.every(
-      (t, i) => obj(t) && t.tid === i && str(t.abbrev) && str(t.region) && str(t.name) && Array.isArray(t.colors) && Array.isArray(t.seasons) && obj(t.rotation) && obj(t.tactics),
-    ) &&
+    l.teams.every((t, i) => obj(t) && t.tid === i && str(t.abbrev) && str(t.region) && str(t.name) && Array.isArray(t.colors) && Array.isArray(t.seasons) && obj(t.rotation)) &&
     !!l.teams[l.userTid as number] &&
     obj(l.players) &&
     Object.values(l.players).every((p) => obj(p) && num(p.pid) && num(p.tid) && str(p.firstName) && str(p.lastName) && obj(p.ratings) && Array.isArray(p.stats)) &&
@@ -308,6 +307,81 @@ function cleanTactics(t: unknown) {
   if (Array.isArray(t.situations)) for (const s of t.situations) if (obj(s) && obj(s.patch)) cleanTacticsParts(s.patch.offense, s.patch.defense, s.patch.manage, false);
 }
 
+/** The sliders the engine does its arithmetic with, by part of the tactics. */
+const OFFENSE_NUMS = ['pace', 'transition', 'threePoint', 'rimAttack', 'crashBoards'] as const;
+const DEFENSE_NUMS = ['help', 'pressure', 'getBack', 'physicality'] as const;
+const MANAGE_NUMS = ['hackThreshold', 'timeoutRun', 'fatigueSub'] as const;
+/** The optional settings each part may carry beyond the defaults' (checked by cleanTacticsParts, or below). */
+const OFFENSE_EXTRAS = ['huntTarget', 'sets'] as const;
+const DEFENSE_EXTRAS = ['chase', 'playerD'] as const;
+const MANAGE_EXTRAS = ['goTo', 'ato', 'atoPid', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
+
+const record = (v: unknown): v is Record<string, unknown> => obj(v) && !Array.isArray(v);
+const situationsIntact = (v: unknown) => v === undefined || (Array.isArray(v) && v.every((s) => obj(s) && obj(s.when) && obj(s.patch)));
+
+/**
+ * Whole tactics in the shape the engine and the screens read them: the three parts, the sliders as
+ * numbers, the action weights, roles, shot freedom and matchups as records, the screeners (and any
+ * hack-a targets) as lists of player ids, and situational plans with a trigger and a patch.
+ */
+function isTactics(t: unknown): t is Tactics {
+  if (!record(t) || !record(t.offense) || !record(t.defense) || !record(t.manage)) return false;
+  const { offense: o, defense: d, manage: m } = t;
+  return (
+    OFFENSE_NUMS.every((k) => num(o[k])) &&
+    record(o.actions) &&
+    ACTIONS.every((a) => num((o.actions as Record<string, unknown>)[a])) &&
+    record(o.roles) &&
+    record(o.freedom) &&
+    nums(o.screeners) &&
+    DEFENSE_NUMS.every((k) => num(d[k])) &&
+    record(d.matchups) &&
+    MANAGE_NUMS.every((k) => num(m[k])) &&
+    (m.hackTargets === undefined || nums(m.hackTargets)) &&
+    situationsIntact(t.situations)
+  );
+}
+
+/** A setting read from a save is the same kind of value as the default it stands in for. */
+function sameKind(was: unknown, v: unknown): boolean {
+  if (was === null) return v === null || int(v);
+  if (Array.isArray(was)) return nums(v);
+  if (typeof was === 'object') return record(v);
+  return typeof v === typeof was && (typeof v !== 'number' || num(v));
+}
+
+/** Copy into a default part each of its settings the save has in shape, and the optional ones it carries. */
+function keepSettings(into: object, from: unknown, extras: readonly string[]) {
+  if (!record(from)) return;
+  const to = into as Record<string, unknown>;
+  for (const k of Object.keys(to)) if (k !== 'actions' && sameKind(to[k], from[k])) to[k] = from[k];
+  for (const k of extras) if (from[k] !== undefined) to[k] = from[k];
+}
+
+/**
+ * Tactics that aren't in shape (see isTactics), rebuilt from the defaults with whatever settings of
+ * theirs still are: a damaged team plays on instead of crashing every game it's in. The roles the
+ * defaults lack are filled in before the team's next game (ensureRotation), its assistant refitting
+ * the playbook unless the coach set it by hand.
+ */
+function repairTactics(t: unknown): Tactics {
+  const src = record(t) ? t : {};
+  const out = defaultTactics(str(src.offPreset) ? (src.offPreset as string) : undefined, str(src.defPreset) ? (src.defPreset as string) : undefined);
+  keepSettings(out.offense, src.offense, OFFENSE_EXTRAS);
+  keepSettings(out.defense, src.defense, DEFENSE_EXTRAS);
+  keepSettings(out.manage, src.manage, MANAGE_EXTRAS);
+  const actions = record(src.offense) ? src.offense.actions : undefined;
+  if (record(actions)) for (const a of ACTIONS) if (num(actions[a])) out.offense.actions[a] = actions[a] as number;
+  if (out.manage.hackTargets !== undefined && !nums(out.manage.hackTargets)) delete out.manage.hackTargets;
+  if (typeof src.manual === 'boolean') out.manual = src.manual;
+  if (src.playbook === null || (record(src.playbook) && str(src.playbook.id) && str(src.playbook.name))) out.playbook = src.playbook as Tactics['playbook'];
+  if (Array.isArray(src.situations)) {
+    const kept = src.situations.filter((s) => obj(s) && obj(s.when) && obj(s.patch));
+    if (kept.length) out.situations = kept as Tactics['situations'];
+  }
+  return out;
+}
+
 /** Game plans' new parts: instructions by player, and their items' patches (see cleanTacticsParts). */
 function cleanGamePlans(x: League) {
   if (!obj(x.gamePlans)) {
@@ -344,8 +418,13 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateGamePlan(x, !num(version) || (version as number) < 3);
   // junk defenses, chase and hunt targets, instructions by player and the foul to give: a damaged
   // setting goes (an unknown scheme is man-to-man), in every team's tactics, the saved playbooks
-  // and the game plans; a live journal's tactics are checked with the journal below
-  for (const t of x.teams) cleanTactics(t.tactics);
+  // and the game plans; a live journal's tactics are checked with the journal below (one out of
+  // shape there drops the journal: its game starts over)
+  for (const t of x.teams) {
+    // tactics out of shape are rebuilt (see repairTactics), so one damaged team doesn't stop every game it's in
+    if (!isTactics(t.tactics)) t.tactics = repairTactics(t.tactics);
+    cleanTactics(t.tactics);
+  }
   if (Array.isArray(x.playbooks)) for (const pb of x.playbooks) if (obj(pb)) cleanTacticsParts(pb.offense, pb.defense, pb.manage, true);
   cleanGamePlans(x);
   // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the
@@ -572,7 +651,6 @@ function migrateDealTerms(x: League) {
 const int = (v: unknown): v is number => Number.isInteger(v);
 const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const numValues = (v: unknown) => obj(v) && Object.values(v).every(num);
-const isTactics = (t: unknown) => obj(t) && obj(t.offense) && obj(t.defense) && obj(t.manage);
 /** More moves than any coach makes in a game: a journal with more was crafted. */
 const MAX_LIVE_OPS = 5000;
 const PLAY_CALLS = new Set(['three', 'two', 'hold', 'foul', 'iso', 'set']);
@@ -616,7 +694,9 @@ function liveIntact(l: League, j: unknown): boolean {
   if (j.edge !== undefined && !num(j.edge)) return false;
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
-  if ((j.keep !== undefined && !isTactics(j.keep)) || (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2))) return false;
+  if (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2)) return false;
+  // "Keep changes" with a base out of shape is turned off (the saved tactics already hold what it kept): the game goes on
+  if (j.keep !== undefined && !isTactics(j.keep)) delete j.keep;
   const o = j.opp;
   if (
     o !== undefined &&

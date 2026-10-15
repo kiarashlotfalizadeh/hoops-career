@@ -349,4 +349,48 @@ describe('reading a league', () => {
     expect(isLeague(null)).toBe(false);
     expect(() => migrate({ id: 'x' })).toThrow('damaged');
   });
+
+  it("reads every team's tactics in real and fictional saves as they are", () => {
+    const real = testLeague('tactics as saved');
+    for (let i = 0; i < 4; i++) simDay(real);
+    // the user's own: a situational plan, a set package, an after-timeout play, hack-a targets
+    const mine = real.teams[real.userTid].tactics;
+    mine.situations = [{ id: 's1', label: 'Protect a lead', enabled: true, when: { fromQ: 4, maxClock: 300, minLead: 1 }, patch: { offense: { pace: 30 } } }];
+    mine.offense.sets = ['horns', 'spain'];
+    mine.manage.ato = 'horns';
+    mine.manage.hackTargets = [Number(Object.keys(real.players)[0])];
+    const fictional = createLeague({ name: 'f', userTid: 3, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 1 });
+    for (const l of [real, fictional]) {
+      const file = JSON.parse(JSON.stringify(l)) as League;
+      const tactics = file.teams.map((t) => structuredClone(t.tactics));
+      expect(migrate(file).teams.map((t) => t.tactics)).toEqual(tactics);
+      expect(migrate(structuredClone(l)).teams.map((t) => t.tactics)).toEqual(l.teams.map((t) => t.tactics));
+    }
+  });
+
+  it('rebuilds tactics out of shape from the defaults, keeping what is in shape, so the league plays on', () => {
+    const l = testLeague('hollow tactics');
+    const [a, b, c] = [1, 2, 4].map((k) => (l.userTid + k) % l.teams.length);
+    const file = JSON.parse(JSON.stringify(l));
+    // hollowed out, partly damaged (the sliders and roles it still has stay), and missing altogether
+    file.teams[a].tactics = { offense: {}, defense: {}, manage: {} };
+    Object.assign(file.teams[b].tactics.offense, { pace: 77, screeners: 'x', roles: null });
+    file.teams[b].tactics.manage.hackTargets = 5;
+    file.teams[b].tactics.situations = [{ id: 'broken' }];
+    const roles = file.teams[c].tactics.offense.roles;
+    file.teams[c].tactics.defense.matchups = [];
+    file.teams[c].tactics.offense.actions = { pnr: 'lots' };
+    file.teams[(l.userTid + 5) % l.teams.length].tactics = null;
+    const back = migrate(file);
+    const tb = back.teams[b].tactics;
+    expect([tb.offense.pace, tb.offense.screeners, tb.offense.roles, tb.manage.hackTargets, tb.situations]).toEqual([77, [], {}, undefined, undefined]);
+    expect(back.teams[c].tactics.offense.roles).toEqual(roles);
+    expect(back.teams[c].tactics.defense.matchups).toEqual({});
+    expect(Object.values(back.teams[c].tactics.offense.actions).every((v) => typeof v === 'number')).toBe(true);
+    expect(back.teams[a].tactics).toMatchObject({ offense: { roles: {}, freedom: {}, screeners: [] }, defense: { matchups: {} }, manage: { timeoutRun: 8 } });
+    // every game those teams are in is played (the assistants fill in the roles first)
+    for (let i = 0; i < 8; i++) simDay(back);
+    expect(back.games.length).toBeGreaterThan(l.games.length);
+    expect(Object.keys(back.teams[a].tactics.offense.roles).length).toBeGreaterThan(0);
+  });
 });

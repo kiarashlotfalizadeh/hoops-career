@@ -147,3 +147,30 @@ export function drawnPlayer(d: Drawn, pid: number): DrawnPlayer | undefined {
   }
   return undefined;
 }
+
+/** What the Subs sheet needs of the sim's player: his own numbers, for one the drawing doesn't have. */
+export interface SubsSource {
+  pid: number;
+  energy: number;
+  fouls: number;
+  out: 0 | 1 | 2;
+  b: { pts: number; sec: number };
+}
+
+/**
+ * One of a side's players as the Subs sheet lists him, as the court has drawn the game: his energy,
+ * fouls, points and minutes, and whether he can't play (1 fouled out, 2 hurt or resting). The sim
+ * runs a possession ahead, so read from it a foul-out or an injury in the play still being drawn
+ * would show before it happens. The sim's own numbers only stand in for a player the drawing lacks.
+ */
+export function subsLine(d: Drawn, side: 0 | 1, sp: SubsSource): { energy: number; fouls: number; pts: number; min: number; out: 0 | 1 | 2 } {
+  const p = d.sides[side].players.find((x) => x.pid === sp.pid);
+  const box = (side === 0 ? d.box.home : d.box.away).players.find((x) => x.pid === sp.pid);
+  return {
+    energy: Math.round((p?.energy ?? sp.energy) * 100),
+    fouls: p?.fouls ?? sp.fouls,
+    pts: p?.pts ?? sp.b.pts,
+    min: Math.round(box?.min ?? sp.b.sec / 60),
+    out: p?.out ?? sp.out,
+  };
+}
