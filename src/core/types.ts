@@ -881,6 +881,13 @@ export interface GameResult {
   stakes?: { tid: number; before: StandingLine; after: StandingLine };
   /** The user's games: the keys to the game set before it (see analysis/keys.ts) and how each went. */
   keys?: KeyGrade[];
+  /**
+   * The user's games, for the recap's quotes (see recapFacts): his players hurt in it (empty: none),
+   * and the winner's lowest chance once it was under way, when that fell below his chance at tip-off.
+   * Older results have neither (the quotes read the play-by-play and the flow then).
+   */
+  hurt?: number[];
+  wpLow?: number;
 }
 
 /** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */

@@ -15,7 +15,7 @@ import { statsLine, teamPlayers } from '../league/helpers';
 import { matchupPreview } from '../analysis/preview';
 import { careerOnRecord, careerTotals, marksCrossed, milestonesIn, newsworthy } from '../analysis/milestones';
 import { storylines } from '../analysis/storylines';
-import { postGameQuotes, threeStars } from '../analysis/quotes';
+import { postGameQuotes, recapFacts, threeStars } from '../analysis/quotes';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
 import { seasonLabel } from '../constants';
@@ -286,6 +286,9 @@ describe('the three stars and the comeback quotes', () => {
     r.ot = 0;
     const [us, them] = usHome ? [r.home, r.away] : [r.away, r.home];
     us.pts = them.pts + 3;
+    // (what the quotes read is kept as the game is recorded: taken again from this flow, nobody hurt)
+    Object.assign(r, recapFacts(r, []));
+    expect(r.wpLow).toBeLessThanOrEqual(0.15);
     l.games[l.games.findIndex((x) => x.gid === r.gid)] = r;
     const [voice, coach] = postGameQuotes(l, r);
     expect([

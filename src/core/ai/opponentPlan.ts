@@ -193,13 +193,17 @@ interface Cand extends OppPlanItem {
   w: number;
 }
 
+/** The user's players who rest tonight, the second night of a back-to-back: none of them is worth a plan. */
+function restingTonight(league: League, userTid: number, day: number): Set<number> {
+  const b2b = league.schedule.some((g) => g.type === 'regular' && g.day === day - 1 && (g.home === userTid || g.away === userTid));
+  return new Set(b2b ? league.teams[userTid].rotation.restB2B : []);
+}
+
 /** The player the user's team runs its offense through, by usage (this season's numbers, else last season's). */
 function userStar(league: League, userTid: number, day: number) {
-  const team = league.teams[userTid];
-  // a player resting on the second night of a back-to-back isn't worth a plan
-  const b2b = league.schedule.some((g) => g.type === 'regular' && g.day === day - 1 && (g.home === userTid || g.away === userTid));
+  const rest = restingTonight(league, userTid, day);
   const rows = teamPlayers(league, userTid)
-    .filter((p) => !p.injury && !(b2b && team.rotation.restB2B.includes(p.pid)))
+    .filter((p) => !p.injury && !rest.has(p.pid))
     .map((p) => {
       const here = p.stats.find((s) => s.season === league.season && s.tid === userTid && !s.playoffs && s.gp >= SCOUT_MIN_GAMES);
       const s = here ?? seasonTotals(p, league.season - 1);
@@ -368,7 +372,8 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
   }
   // ---- the user's weakest perimeter defender, when he gives up a lot to the rest of the rotation:
   // isolations, post-ups and ball screens at the man he guards (it costs them some ball movement)
-  const hunt = huntPick(league, userTid);
+  const resting = restingTonight(league, userTid, day);
+  const hunt = huntPick(league, userTid, 8, resting);
   const victim = hunt?.worth ? league.players[hunt.pid] : undefined;
   if (hunt && victim && base.offense.huntTarget == null)
     out.push({
@@ -384,7 +389,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
   // (go under on a handler who can't shoot off the dribble, top-lock a shooter who can't drive, sag
   // off a non-shooter, get physical with a poor free-throw shooter inside); a man-to-man thing
   if (d.scheme === 'man' && !d.playerD) {
-    const read = guardingPlan(league, userTid)
+    const read = guardingPlan(league, userTid, resting)
       .slice(0, 7)
       .find((a) => a.suggest && (a.suggest !== 'under' || (d.pnr !== 'switch' && d.pnr !== 'blitz')));
     const who = read && league.players[read.pid];

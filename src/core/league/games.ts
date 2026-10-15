@@ -16,6 +16,7 @@ import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneStat } from '../analysis/milestones';
 import { gameKeys, gradeKey } from '../analysis/keys';
+import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 
 export function wearPerf(p: Player) {
@@ -326,6 +327,14 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   if (g.type !== 'allstar' && (g.home === league.userTid || g.away === league.userTid)) {
     const keys = gameKeys(league, g);
     if (keys.length) res.keys = keys.map((k) => gradeKey(k, res, g.home === league.userTid ? 0 : 1));
+    // and what its quotes read that the save doesn't keep for good (who got hurt, the winner's low point)
+    Object.assign(
+      res,
+      recapFacts(
+        res,
+        sim.injuries.filter((i) => i.tid === league.userTid).map((i) => i.pid),
+      ),
+    );
   }
   g.played = true;
   // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
@@ -431,9 +440,12 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     delete res.adjustments;
     for (const side of [res.home, res.away]) side.players = side.players.filter((b) => b.min > 0);
   } else {
+    const side = g.home === league.userTid ? 0 : 1;
     // the game plan the other coach brought (kept before the first save: a stored result isn't written again)
-    const plan = oppPlanIn(sim, g.home === league.userTid ? 1 : 0);
+    const plan = oppPlanIn(sim, (1 - side) as 0 | 1);
     if (plan) res.oppPlan = plan.items.map((it) => it.text);
+    // the lineup screen reads the user's own units, every one of them (the other side's aren't read)
+    if (res.lineups) res.lineups = res.lineups.filter((l) => l.t === side);
   }
   league.games.push(res);
   if (stakesTid !== undefined && before) res.stakes = { tid: stakesTid, before, after: standingLine(league, stakesTid) };

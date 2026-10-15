@@ -4107,7 +4107,8 @@ export class GameSim {
       ot: Math.max(0, this.q - 4),
       shots: this.shots,
       impacts: [...this.impacts.values()].filter((i) => i.pts >= 0.05).map((i) => ({ ...i, pts: Math.round(i.pts * 100) / 100 })),
-      lineups: [...this.lineups.values()].filter((l) => l.sec >= 60),
+      // every unit, however short its stints (the lineup lab's pairs and trios add them all up)
+      lineups: [...this.lineups.values()],
       flow: this.flow,
       flowPeriods: this.flowPeriods,
       flowT: this.flowT,

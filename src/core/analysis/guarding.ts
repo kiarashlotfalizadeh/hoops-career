@@ -35,6 +35,8 @@ export interface GuardAdvice {
 
 const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
 const per = (v: number) => v.toFixed(1);
+/** Threes a game under which his percentage says nothing ("100.0% from three on 0.1 a game"). */
+const FEW_THREES = 0.5;
 
 /** His numbers this season with his team (five games or more), else last season's, else none. */
 export function guardLine(league: League, p: Player): GuardLine {
@@ -67,7 +69,14 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
   const line = guardLine(league, p);
   const c = composites(p.ratings);
   const games = line.source !== 'ratings';
-  const shoots = games ? `${pct1(line.tpPct || 0)} from three on ${per(line.tpa)} a game` : `three-point shooting ${attrDisplay(c.c3)}`;
+  // his threes as his games show them: a percentage only on enough of them to mean something, else how many he took
+  const few = games && line.tpa < FEW_THREES;
+  const taken = Math.round(line.tpa * line.gp);
+  const shoots = !games
+    ? `three-point shooting ${attrDisplay(c.c3)}`
+    : !few
+      ? `${pct1(line.tpPct)} from three on ${per(line.tpa)} a game`
+      : `${taken ? `${taken} three${taken === 1 ? '' : 's'}` : 'no threes'} in his ${line.gp} games`;
   // a ball handler who runs their screens and is no threat to pull up (about the bottom third of
   // pull-up shooters on the ratings' 40-99 scale)
   if (c.pnrHandle >= 60 && c.pu3 < 45 && (!games || line.tpa < 3 || line.tpPct < 0.33))
@@ -93,13 +102,22 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     };
   // a rotation player who doesn't shoot threes (by his games; by his ratings, about the bottom sixth)
   if (games ? c.c3 < 45 && (line.tpa < 1 || line.tpPct < 0.28) : c.c3 < 38)
-    return { pid: p.pid, suggest: 'sag', why: games ? `Doesn't shoot threes (${shoots}).` : `Can't shoot from three (three-point shooting ${attrDisplay(c.c3)}).`, line };
+    return {
+      pid: p.pid,
+      suggest: 'sag',
+      why: !games
+        ? `Can't shoot from three (three-point shooting ${attrDisplay(c.c3)}).`
+        : few && taken
+          ? `Rarely shoots threes (${shoots}).`
+          : `Doesn't shoot threes (${shoots}).`,
+      line,
+    };
   return { pid: p.pid, line };
 }
 
-/** Their projected top eight, each with the staff's read on guarding him. */
-export function guardingPlan(league: League, tid: number): GuardAdvice[] {
-  return projectedRotation(league, tid, 8).map((p) => guardAdvice(league, p));
+/** Their projected top eight, each with the staff's read on guarding him (`out`: players who sit tonight). */
+export function guardingPlan(league: League, tid: number, out?: Set<number>): GuardAdvice[] {
+  return projectedRotation(league, tid, 8, out).map((p) => guardAdvice(league, p));
 }
 
 export interface HuntPick {
@@ -111,9 +129,9 @@ export interface HuntPick {
   worth: boolean;
 }
 
-/** The weakest perimeter defender in their projected rotation (of its top `n`), against the rest of it. */
-export function huntPick(league: League, tid: number, n = 8): HuntPick | null {
-  const rot = projectedRotation(league, tid, n);
+/** The weakest perimeter defender in their projected rotation (of its top `n`, without `out`: players who sit tonight), against the rest of it. */
+export function huntPick(league: League, tid: number, n = 8, out?: Set<number>): HuntPick | null {
+  const rot = projectedRotation(league, tid, n, out);
   if (rot.length < 5) return null;
   const pd = rot.map((p) => ({ p, v: composites(p.ratings).perDef }));
   // the starters and first players off the bench play the minutes worth hunting

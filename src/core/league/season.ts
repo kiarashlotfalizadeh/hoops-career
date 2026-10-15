@@ -594,7 +594,7 @@ export function newSeason(league: League): boolean {
   }
   league.games = league.games
     .filter((g) => g.season === prevSeason && (g.home.tid === league.userTid || g.away.tid === league.userTid))
-    // (lineups stay, about 2 KB a game: the lineup screen looks back a season)
+    // (lineups stay, about 1.4 KB a game: the lineup screen looks back a season)
     .map((g) => ({ ...g, pbp: undefined, shots: undefined, flow: undefined, flowPeriods: undefined, flowT: undefined, flowPoss: undefined }));
   league.playIn = [];
   league.playoffs = [];

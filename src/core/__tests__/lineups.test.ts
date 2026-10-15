@@ -34,6 +34,23 @@ describe('lineup units', () => {
     expect(trios.every((u, i) => i === 0 || trios[i - 1].min >= u.min)).toBe(true);
   });
 
+  it("keeps every one of the user's units, however short: a game's add up to his possessions, points and minutes", () => {
+    let games = 0;
+    for (const g of l.games) {
+      const side = g.home.tid === l.userTid ? 0 : g.away.tid === l.userTid ? 1 : -1;
+      if (side < 0) continue;
+      games++;
+      const box = side === 0 ? g.home : g.away;
+      const ls = g.lineups ?? [];
+      // (the other side's aren't read, so they aren't kept)
+      expect(ls.every((x) => x.t === side)).toBe(true);
+      expect(ls.reduce((a, x) => a + x.poss, 0)).toBe(box.poss);
+      expect(ls.reduce((a, x) => a + x.ptsFor, 0)).toBe(box.pts);
+      expect(Math.abs(ls.reduce((a, x) => a + x.sec, 0) - (2880 + 300 * g.ot))).toBeLessThan(1);
+    }
+    expect(games).toBeGreaterThan(4);
+  });
+
   it('rates a unit per 100 of its possessions, as a hand count of its stints does', () => {
     const unit = seasonLineups(l)[0];
     let poss = 0;

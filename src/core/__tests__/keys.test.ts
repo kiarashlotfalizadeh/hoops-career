@@ -6,9 +6,10 @@ import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
 import { clearLive, prepareLive } from '../../state/live';
 import { migrate } from '../../state/persistence';
 import { userGameOnDay } from '../league/games';
+import { teamSeason } from '../league/helpers';
 import { simDay } from '../league/season';
 import { gameKeys, gradeKey, keyState, keyValue } from '../analysis/keys';
-import type { GameResult } from '../types';
+import type { GameResult, ScheduledGame } from '../types';
 
 afterEach(() => clearLive());
 
@@ -50,6 +51,27 @@ describe('keys to the game', () => {
       expect(res.keys![i].value).toBe(v);
       if (v !== null) expect(res.keys![i].met).toBe(k.dir === 'max' ? v <= k.target : v >= k.target);
     }
+  });
+
+  it("on a new season's first nights read last season's team totals, not the few meetings its results keep", () => {
+    const l = testLeague('keys-last', 5);
+    for (let i = 0; i < 30; i++) simDay(l);
+    // what was played becomes last season, its results kept as a new season keeps them: the user's only
+    const S = l.season;
+    for (const t of l.teams) for (const s of t.seasons) s.season = S - 1;
+    for (const p of Object.values(l.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
+    l.games = l.games.filter((g) => g.home.tid === l.userTid || g.away.tid === l.userTid).map((g) => ({ ...g, season: S - 1 }));
+    for (const t of l.teams) teamSeason(t, S);
+    // five meetings with one opponent (the Cup can make five): enough for a team's own sample
+    const meeting = l.games.find((g) => g.type === 'regular')!;
+    const opp = meeting.home.tid === l.userTid ? meeting.away.tid : meeting.home.tid;
+    for (let i = l.games.filter((g) => g.home.tid === opp || g.away.tid === opp).length; i < 5; i++) l.games.push({ ...structuredClone(meeting), gid: l.nextGid++ });
+    const g: ScheduledGame = { gid: l.nextGid++, day: 0, home: l.userTid, away: opp, type: 'regular' };
+    const keys = gameKeys(l, g);
+    expect(keys.length).toBe(3);
+    expect(keys.some((k) => /of 30 last season|last season, the most/.test(k.why))).toBe(true);
+    // the same with no results kept at all: they come from the season's totals
+    expect(gameKeys({ ...l, games: [] }, g)).toEqual(keys);
   });
 
   it('say where a key stands live: decided early, on pace, behind, and void for a player who sat', () => {

@@ -120,7 +120,8 @@ export interface ScoutData {
   players: ScoutPlayer[];
   /** The player they run their offense through (30%+ usage), when the numbers show one. */
   star?: number;
-  h2h: { games: HeadToHeadGame[]; won: number; lost: number; effects: ScoutEffect[] };
+  /** `tracked`: the meetings whose tactical effects were kept, which the effects' per-game numbers are over. */
+  h2h: { games: HeadToHeadGame[]; won: number; lost: number; effects: ScoutEffect[]; tracked: number };
   tendencies: string[];
   exploits: string[];
   /** Counter ids (see counterCandidates) the numbers back, with the evidence for each. */
@@ -255,14 +256,16 @@ function buildSeason(league: League, season: number): SeasonAgg {
     const ranks = rankOf(values, st.high);
     ranked[k] = values.map((v, tid) => ({ v, rank: ranks[tid] }));
   }
+  // play types are ranked among the teams with enough stored games: an earlier season keeps only the
+  // user's, so his opponents then have just their meetings with him (see playTypeRows)
   const ptRanks = (side: 'off' | 'def') => {
     const out: SeasonAgg['off'] = {};
     for (const key of Object.keys(FINISH_LABEL)) {
       const share = teams.map((tm) => {
         const total = Object.values(tm[side]).reduce((a, x) => a + x.poss, 0);
-        return total ? (tm[side][key]?.poss ?? 0) / total : NaN;
+        return total && tm.ptGames >= SCOUT_MIN_GAMES ? (tm[side][key]?.poss ?? 0) / total : NaN;
       });
-      const ppp = teams.map((tm) => (tm[side][key]?.poss ? tm[side][key].pts / tm[side][key].poss : NaN));
+      const ppp = teams.map((tm) => (tm[side][key]?.poss && tm.ptGames >= SCOUT_MIN_GAMES ? tm[side][key].pts / tm[side][key].poss : NaN));
       out[key] = { share, shareRank: rankOf(share, true), pppRank: rankOf(ppp, side === 'off') };
     }
     return out;
@@ -289,12 +292,12 @@ function seasonAgg(league: League, season: number): SeasonAgg {
 
 // ---------------------------------------------------------------- one team
 
-/** A team's healthy players the way its rotation plans them: most planned minutes first. */
-export function projectedRotation(league: League, tid: number, n: number) {
+/** A team's healthy players the way its rotation plans them, most planned minutes first (`out`: others who sit tonight). */
+export function projectedRotation(league: League, tid: number, n: number, out?: Set<number>) {
   const team = league.teams[tid];
   const order = new Map(team.rotation.order.map((pid, i) => [pid, i]));
   return teamPlayers(league, tid)
-    .filter((p) => !p.injury)
+    .filter((p) => !p.injury && !out?.has(p.pid))
     .sort((a, b) => (team.rotation.minutes[b.pid] ?? 0) - (team.rotation.minutes[a.pid] ?? 0) || (order.get(a.pid) ?? 99) - (order.get(b.pid) ?? 99) || b.ovr - a.ovr)
     .slice(0, n);
 }
@@ -328,10 +331,11 @@ function playerLine(league: League, s: PlayerStats, ts: TeamSeason | null, elsew
   return out;
 }
 
+/** A team's play types at one end: none from fewer than SCOUT_MIN_GAMES stored games (last season's opponents of the user's, on opening nights). */
 function playTypeRows(agg: SeasonAgg, tid: number, side: 'off' | 'def'): PlayTypeRow[] {
   const pt = agg.teams[tid]?.[side] ?? {};
   const total = Object.values(pt).reduce((a, x) => a + x.poss, 0);
-  if (!total) return [];
+  if (!total || agg.teams[tid].ptGames < SCOUT_MIN_GAMES) return [];
   return (Object.entries(pt) as [FinishType, { poss: number; pts: number }][])
     .filter(([k, v]) => FINISH_LABEL[k] && v.poss > 0)
     .map(([key, v]) => {
@@ -467,7 +471,7 @@ function headToHead(league: League, tid: number): ScoutData['h2h'] {
   const games: HeadToHeadGame[] = [];
   const sums = new Map<string, number>();
   let tracked = 0;
-  if (tid === me) return { games, won: 0, lost: 0, effects: [] };
+  if (tid === me) return { games, won: 0, lost: 0, effects: [], tracked: 0 };
   for (const g of league.games) {
     if (g.type === 'allstar' || g.season < league.season - 1) continue;
     const home = g.home.tid === me && g.away.tid === tid;
@@ -491,13 +495,14 @@ function headToHead(league: League, tid: number): ScoutData['h2h'] {
     })
     .filter((e) => IMPACT_TEXT[e.key])
     .sort((a, b) => b.perGame - a.perGame);
-  return { games, won: games.filter((g) => g.won).length, lost: games.filter((g) => !g.won).length, effects };
+  return { games, won: games.filter((g) => g.won).length, lost: games.filter((g) => !g.won).length, effects, tracked };
 }
 
 /** Evidence from the user's own games against them: the effects that went their way. */
 function readHeadToHead(league: League, d: ScoutData, counters: Map<string, Signal>) {
   const opp = league.teams[d.tid];
-  const n = d.h2h.games.filter((g) => g.season === league.season).length || d.h2h.games.length;
+  // (the meetings the per-game numbers are over: this season's and last, playoffs included)
+  const n = d.h2h.tracked;
   for (const e of d.h2h.effects) {
     if (e.forUser || e.perGame < 1 || !IMPACT_COUNTER[e.key]) continue;
     const text = `In your games against them: ${impactSentence(e.key, teamRef(opp), 'your team').replace(/\.$/, '')} (+${e.perGame.toFixed(1)} points a game for them over ${n === 1 ? 'one game' : `${n} games`}).`;
