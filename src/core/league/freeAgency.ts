@@ -222,11 +222,17 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
 /**
  * A player whose contract ran out joins the free agent pool like a released one: with an asking
  * price and the price-cut clock, and without the trade-back rule and trade lock of his old deal.
+ * Unless his old team kept his rights (a restricted free agent), what its GM promised him and their
+ * meetings stay behind too, as after a trade or a release.
  */
 function toFreeAgent(league: League, p: Player) {
   p.tid = FREE_AGENT;
   delete p.tradedFrom;
   delete p.tradeLock;
+  if (!p.rfa) {
+    delete p.promise;
+    delete p.meeting;
+  }
   p.asking = undefined;
   p.asking = askingContract(league, p);
   p.faDays = FA_PRICE_CUT_DAYS;
@@ -508,6 +514,11 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
     const baeBid = others.find((b) => b.route === 'bae');
     if (baeBid) return `That would take your pending bi-annual offer to ${playerName(league.players[baeBid.pid])} past the tax line. Withdraw it first, or offer less.`;
   }
+  // the mid-level would pay him, but a pending offer on cap space has ended it
+  const spaceBid = bidOnException(league, 'mle', p.pid);
+  const exceptionBids = otherBids(league, p.pid).reduce((a, b) => a + (isException(b.route) ? b.amount : 0), 0);
+  if (spaceBid?.route === 'space' && years <= EXCEPTIONS.mle.years && amount <= exceptionRoom(league, tid, 'mle', season, bidHolds(league, p.pid) + exceptionBids))
+    return `Your pending offer to ${playerName(league.players[spaceBid.pid])} uses your cap space, and a team that uses its space loses the mid-level exception (it gets the smaller room exception instead). Withdraw that offer first.`;
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const rooms = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, season, p.pid) }))
     .filter((r) => r.room > 0)
@@ -553,13 +564,23 @@ export function bidHolds(league: League, exceptPid = -1): number {
 }
 
 /**
+ * The user's pending offer (but `exceptPid`'s) that keeps an exception from another signing: one
+ * made on it, or for the mid-level one on cap space (using the space ends the mid-level, so while
+ * an offer holds the space the mid-level is gone, as a pending mid-level offer keeps the space shut).
+ */
+export function bidOnException(league: League, kind: Exception, exceptPid = -1): FaBid | undefined {
+  return otherBids(league, exceptPid).find((b) => b.route === kind || (kind === 'mle' && b.route === 'space'));
+}
+
+/**
  * The user's room on an exception for an offer to `exceptPid`: none while another pending offer
- * leans on it; for the mid-level and the bi-annual, his pending offers on cap space and on the other
- * exceptions count against the tax line too, since they land on his payroll if they're taken.
+ * leans on it (see bidOnException); for the mid-level and the bi-annual, his pending offers on cap
+ * space and on the other exceptions count against the tax line too, since they land on his payroll
+ * if they're taken.
  */
 export function userExceptionRoom(league: League, kind: Exception, season = contractSeason(league), exceptPid = -1): number {
+  if (bidOnException(league, kind, exceptPid)) return 0;
   const others = otherBids(league, exceptPid);
-  if (others.some((b) => b.route === kind)) return 0;
   const extra = bidHolds(league, exceptPid) + others.reduce((a, b) => a + (isException(b.route) ? b.amount : 0), 0);
   return exceptionRoom(league, league.userTid, kind, season, extra);
 }
@@ -590,10 +611,15 @@ export function offerRoute(league: League, p: Player, amount: number, season = c
   return null;
 }
 
-/** The user signed someone over the cap (the minimum or an exception): his pending offers on space (and, for a minimum, on an exception) could have come first, so it doesn't count against them. */
+/**
+ * The user signed someone for the minimum: his pending offers (on cap space or an exception) could
+ * have come first, since a minimum deal fits over the cap and past the tax, so it doesn't count
+ * against them. An exception signing does count: it is only legal over the cap, so had a pending
+ * space offer come first it would have been made on what was left (the mid-level not at all).
+ */
 function slackForBids(league: League, route: SigningRoute | null, salary: number) {
-  if (route === 'space' || !route) return;
-  for (const b of league.faBids ?? []) if (b.route === 'space' || (route === 'min' && isException(b.route))) b.slack = (b.slack ?? 0) + salary;
+  if (route !== 'min') return;
+  for (const b of league.faBids ?? []) if (b.route === 'space' || isException(b.route)) b.slack = (b.slack ?? 0) + salary;
 }
 
 /** The least a top free agent will consider from the user for this many years: 90% of his asking price. */
@@ -616,6 +642,8 @@ export interface FaOffer {
   tid: number;
   amount: number;
   years: number;
+  /** How the team pays for it: a route the rules allow for this money and length now (see aiRoute). */
+  route: SigningRoute;
   /** How much he likes it: see offerUtility. */
   utility: number;
 }
@@ -647,7 +675,8 @@ function aiWants(league: League, t: Team, p: Player, season: number): boolean {
 /**
  * The AI teams that would bid for a top free agent now, most attractive offer first: each one
  * that wants him and can pay his asking price for it offers that, a contender up to 5% more if
- * its space or mid-level covers it.
+ * its space (net of what the summer market holds, see capSpace) or its exception covers it. Every
+ * offer is one the team can make: `route` pays for it as it stands.
  */
 export function faInterest(league: League, p: Player): FaOffer[] {
   const season = contractSeason(league);
@@ -659,13 +688,20 @@ export function faInterest(league: League, p: Player): FaOffer[] {
     const ask = askingContract(league, p, t.tid);
     const route = aiRoute(league, t.tid, ask.amount, season, p, ask.years);
     if (!route) continue;
-    let amount = ask.amount;
-    if (t.strategy === 'contend' && route !== 'min') {
-      const room = route === 'space' ? cap.salaryCap - payroll(league, t.tid, season) : exceptionRoom(league, t.tid, route, season);
-      amount = Math.max(ask.amount, Math.min(Math.round((ask.amount * 1.05) / 50) * 50, room, cap.maxContract(p.experience)));
-    }
     const years = route === 'min' ? ask.years : Math.min(routeYears(route), ask.years);
-    out.push({ tid: t.tid, amount, years, utility: offerUtility(league, p, t.tid, amount, years, prefs) });
+    let amount = ask.amount;
+    let paid: SigningRoute = route;
+    if (t.strategy === 'contend' && route !== 'min') {
+      const room = route === 'space' ? capSpace(league, t.tid, season) : exceptionRoom(league, t.tid, route, season);
+      const more = Math.max(ask.amount, Math.min(Math.round((ask.amount * 1.05) / 50) * 50, room, cap.maxContract(p.experience)));
+      // (and only as much more as a route the rules allow for that length still pays)
+      const r = more > ask.amount ? signingRoute(league, t.tid, more, season, p, years) : route;
+      if (r) {
+        amount = more;
+        paid = r;
+      }
+    }
+    out.push({ tid: t.tid, amount, years, route: paid, utility: offerUtility(league, p, t.tid, amount, years, prefs) });
   }
   return out.sort((a, b) => b.utility - a.utility || a.tid - b.tid);
 }
@@ -744,7 +780,7 @@ function bidRouteNow(league: League, b: FaBid, p: Player): { route: SigningRoute
   // (offer sheets we signed hold their roster spots)
   if (standardRoster(league, tid).length + pendingSheets(league, tid).length >= max) return { route: null, why: `our roster is full (${max})` };
   if (b.amount <= (p.experience < 3 ? cap.minContract : cap.vetMin) + 1) return { route: 'min', why: '' };
-  // over-the-cap signings made while it was pending (its slack) could have come after it; our
+  // minimum signings made while it was pending (its slack) could have come after it; our
   // restricted free agents' cap holds count against the cap, our offer sheets against the tax too
   const market = userHeld(league, season);
   const others = otherBids(league, b.pid);
@@ -754,7 +790,7 @@ function bidRouteNow(league: League, b: FaBid, p: Player): { route: SigningRoute
   // the exception it was made on first, then the others that cover it (each other pending offer
   // keeps the one it leans on, and they all count against the tax line)
   const extra = bidHolds(league, b.pid) + others.reduce((a, x) => a + (isException(x.route) ? x.amount : 0), 0) - (b.slack ?? 0);
-  const room = (k: Exception) => (others.some((x) => x.route === k) ? 0 : exceptionRoom(league, tid, k, season, extra));
+  const room = (k: Exception) => (bidOnException(league, k, b.pid) ? 0 : exceptionRoom(league, tid, k, season, extra));
   const order = isException(b.route) ? [b.route, ...EXCEPTION_ORDER.filter((k) => k !== b.route)] : EXCEPTION_ORDER;
   const fits = order.find((k) => b.amount <= room(k) && b.years <= EXCEPTIONS[k].years);
   if (fits) return { route: fits, why: '' };
@@ -798,10 +834,10 @@ function decideBid(league: League, b: FaBid) {
   }
   const ours = `Our offer: ${yrs(b.years)} at ${money(b.amount)}.`;
   if (best) {
+    // (on the route faInterest found for it just now: every offer there is one the team can make)
     const t = league.teams[best.tid];
-    const theirs = aiRoute(league, t.tid, best.amount, season, p, best.years);
-    spendRoute(league, t.tid, theirs, season);
-    const years = theirs ? Math.min(routeYears(theirs), best.years) : best.years;
+    const years = best.years;
+    spendRoute(league, t.tid, best.route, season);
     signPlayer(league, p, t.tid, best.amount, years, { start: season });
     const top = (Object.keys(PREF_LABEL) as (keyof PlayerPrefs)[]).sort((x, y) => prefs[y] - prefs[x])[0];
     const appealT = teamAppeal(league, t.tid, p, prefs);

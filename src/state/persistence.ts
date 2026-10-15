@@ -561,8 +561,9 @@ const OPTIONS = new Set(['player', 'team']);
  * damaged piece is dropped. Talks need a real team, season, kind and period, patience 0-5, a
  * counter with a positive salary for 1-5 years, and lost interest and a firm ask in range; a 10-day
  * contract is only kept on a rostered player in the regular season (without it, his one prorated
- * salary runs to the season's end like any deal); the 10-day count names a real team and one or two
- * contracts; a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
+ * salary runs to the season's end like any deal); the 10-day count holds one or two contracts for
+ * each real team (an older save's count, for the one team he last signed with, becomes that
+ * team's); a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
  * or an exception are whole numbers; and an inbox message's 10-day link is a player id.
  */
 function migrateContracts(x: League) {
@@ -589,7 +590,12 @@ function migrateContracts(x: League) {
       if (!ok) delete p.talks;
     }
     const n = p.tenDays as unknown;
-    if (n !== undefined && !(obj(n) && teamOk(n.tid) && int(n.season) && int(n.n) && n.n >= 1 && n.n <= 2)) delete p.tenDays;
+    if (n !== undefined) {
+      // (saves from before the count was kept by team held one team's: { tid, season, n })
+      if (obj(n) && n.by === undefined && teamOk(n.tid) && int(n.season) && int(n.n) && n.n >= 1 && n.n <= 2) p.tenDays = { season: n.season, by: { [n.tid as number]: n.n } };
+      else if (!(obj(n) && int(n.season) && obj(n.by) && !Array.isArray(n.by) && Object.entries(n.by).every(([tid, c]) => teamOk(Number(tid)) && int(c) && c >= 1 && c <= 2)))
+        delete p.tenDays;
+    }
     const td = p.contract?.tenDay as unknown;
     if (td !== undefined && !(obj(td) && int(td.until) && (td.hardship === undefined || td.hardship === true) && p.tid >= 0 && x.phase === 'regular')) delete p.contract.tenDay;
     if (p.waivers && Array.isArray(p.waivers.dead)) for (const d of p.waivers.dead) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;

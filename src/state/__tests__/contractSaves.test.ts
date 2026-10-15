@@ -35,8 +35,12 @@ describe('contract saves', () => {
     c.talks = { ...talks(l), counter: { amount: 4_000, years: 0 } };
     d.talks = { ...talks(l), kind: 'trade' as never };
     e.talks = { ...talks(l), tid: 99 };
-    a.tenDays = { tid: 3, season: l.season, n: 2 };
-    b.tenDays = { tid: 3, season: l.season, n: 3 };
+    // (c and d: a count from before it was kept by team, for the one team he last signed with)
+    a.tenDays = { season: l.season, by: { 3: 2, 7: 1 } };
+    b.tenDays = { season: l.season, by: { 3: 3 } };
+    c.tenDays = { tid: 3, season: l.season, n: 2 } as never;
+    d.tenDays = { tid: 99, season: l.season, n: 1 } as never;
+    e.tenDays = { season: l.season, by: { 99: 1 } };
     mine[0].contract.tenDay = { until: l.day + 5, hardship: true };
     mine[1].contract.tenDay = { until: l.day + 5, hardship: 'yes' as never };
     const t = l.teams[l.userTid];
@@ -52,7 +56,7 @@ describe('contract saves', () => {
     const by = (pid: number) => once.players[pid];
     expect(by(a.pid).talks).toEqual({ ...talks(l), closed: { season: l.season, day: l.day + 3 } });
     expect([b, c, d, e].map((p) => by(p.pid).talks)).toEqual([undefined, undefined, undefined, undefined]);
-    expect([by(a.pid).tenDays, by(b.pid).tenDays]).toEqual([{ tid: 3, season: l.season, n: 2 }, undefined]);
+    expect([a, b, c, d, e].map((p) => by(p.pid).tenDays)).toEqual([{ season: l.season, by: { 3: 2, 7: 1 } }, undefined, { season: l.season, by: { 3: 2 } }, undefined, undefined]);
     expect([by(mine[0].pid).contract.tenDay, by(mine[1].pid).contract.tenDay]).toEqual([{ until: l.day + 5, hardship: true }, undefined]);
     expect(once.teams[l.userTid].deadMoney.map((x) => x.stretched)).toEqual([true, undefined]);
     expect([once.teams[l.userTid].roomSeason, once.teams[l.userTid].baeSeason]).toEqual([l.season, undefined]);

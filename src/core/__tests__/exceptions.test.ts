@@ -22,7 +22,7 @@ import {
   spendRoute,
 } from '../league/contracts';
 import { offerBlockedReason, offerRoute, userExceptionRoom, userOffer } from '../league/freeAgency';
-import { signOfferSheet, resolveOfferSheets } from '../league/rfa';
+import { signOfferSheet, resolveOfferSheets, userDecideSheet } from '../league/rfa';
 import { validateTrade } from '../league/trades';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
@@ -164,6 +164,36 @@ describe('exceptions in the market', () => {
     resolveOfferSheets(l);
     expect(p.tid).toBe(R);
     expect(l.teams[U].baeSeason).toBeUndefined();
+  });
+
+  it("an offer sheet on cap space ends the team's mid-level while it waits: matched, it's back; not, the room exception replaces it", () => {
+    const l = league();
+    const s = contractSeason(l);
+    const cap = CAP_FOR(l, s);
+    payTo(l, AI, cap.salaryCap - 20_000);
+    const [p, p2] = [0, 2].map((i) => {
+      const x = freeAgent(l, 74, i);
+      x.bornYear = l.season - 23;
+      x.rfa = { tid: U, qo: 3_000, hold: 3_000 };
+      return x;
+    });
+    const q = freeAgent(l, 70, 1);
+    signOfferSheet(l, p, AI, 15_000, 3, 'space', l.faDay);
+    // the $5M of space it leaves can't be topped up with the mid-level
+    expect(exceptionUsedReason(l, AI, 'mle', s)).toMatch(/offer sheet on cap space is pending/);
+    expect(mleRoom(l, AI, s)).toBe(0);
+    expect(signingRoute(l, AI, 10_000, s, q)).toBeNull();
+    // matched: the space was never used
+    expect(userDecideSheet(l, p.pid, true).ok).toBe(true);
+    expect(exceptionUsedReason(l, AI, 'mle', s)).toBeNull();
+    expect(signingRoute(l, AI, 10_000, s, q)).toBe('space');
+    // not matched: he joins on the space, and the room exception replaces the mid-level
+    signOfferSheet(l, p2, AI, 15_000, 3, 'space', l.faDay);
+    expect(userDecideSheet(l, p2.pid, false).ok).toBe(true);
+    expect(p2.tid).toBe(AI);
+    expect(l.teams[AI].spaceSeason).toBe(s);
+    expect(exceptionUsedReason(l, AI, 'mle', s)).toMatch(/room exception replaces it/);
+    expect(payroll(l, AI, s)).toBeLessThanOrEqual(cap.salaryCap);
   });
 
   it("a pending offer leans on its exception, and cap space can't be used while one needs the mid-level", () => {

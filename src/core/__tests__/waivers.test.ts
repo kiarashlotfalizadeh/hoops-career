@@ -192,6 +192,29 @@ describe('waivers', () => {
     expect(freeAgents(l).some((x) => x.pid === p.pid)).toBe(true);
   });
 
+  it('claims close with the regular season: a player still on waivers in the play-in clears, and a claim on him falls through', () => {
+    const l = league();
+    const vetMin = CAP_FOR(l).vetMin;
+    const from = 7;
+    const p = shape(l, standardRoster(l, from)[0], 70, 26, vetMin, 2);
+    // a team that would claim him first, and the user's claim
+    const claimer = 5;
+    cutTo(l, claimer, 14);
+    record(l, claimer, 2);
+    cutTo(l, U, 14);
+    releasePlayer(l, p);
+    expect(userClaim(l, p.pid).ok).toBe(true);
+    // the regular season ends while he's on waivers
+    l.phase = 'playin';
+    expect(claimBlockedReason(l, U, p)).toMatch(/close with the regular season/);
+    expect(claimBlockedReason(l, claimer, p)).toMatch(/close with the regular season/);
+    passDays(l, 1);
+    expect(p.tid).toBe(FREE_AGENT);
+    expect(p.waivers).toBeUndefined();
+    expect(deadFor(l, from, p.pid)).toBe(2 * vetMin);
+    expect(l.inbox[0].body).toMatch(/fell through \(Waiver claims close with the regular season/);
+  });
+
   it('everyone left on waivers clears when the season is over', () => {
     const l = league();
     const p = shape(l, standardRoster(l, U)[0], 70, 26, CAP_FOR(l).vetMin, 2);
