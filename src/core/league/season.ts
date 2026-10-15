@@ -228,6 +228,8 @@ export function advanceDay(league: League) {
       periodic(league, rng);
       if (league.day === league.allStarDay) {
         selectAllStars(league);
+        // a knock short enough to keep an All-Star his place heals over the break, for everyone
+        for (const p of Object.values(league.players)) if (p.tid >= 0 && p.injury && !missesAllStarGame(p)) while (p.injury) healOneGame(league, p, rng);
         playAllStarGame(league, rng);
       }
     }

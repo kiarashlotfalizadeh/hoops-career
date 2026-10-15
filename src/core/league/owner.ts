@@ -23,6 +23,9 @@ export function takeOverTeam(league: League, tid: number) {
   nu.coach.name = league.coachName;
   old.coach.name = theirCoach;
   old.rotation.manual = false;
+  // and the minute caps and back-to-back rests the user set: the AI staff never sets or clears these
+  old.rotation.caps = {};
+  old.rotation.restB2B = [];
   // the old team's new staff fits its own playbook from scratch: the user's custom one (late-game
   // rules, roles, screeners, star plan) doesn't stay behind with the players
   old.tactics = autoTactics({ ...old, tactics: defaultTactics(old.coach.offPhilosophy, old.coach.defPhilosophy) }, teamPlayers(league, old.tid), false);

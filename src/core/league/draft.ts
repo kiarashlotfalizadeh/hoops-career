@@ -110,16 +110,17 @@ export interface LotteryResult {
 
 /**
  * Every team, worst record first. Like the NBA, ties are broken by a random draw, seeded by the
- * league and season so the Draft screen shows the same pre-lottery order the lottery used.
+ * league and season so the Draft screen shows the same pre-lottery order the lottery used; in the
+ * second round teams on the same record pick in the reverse of that draw.
  */
-export function draftStandings(league: League): { tid: number; playoff: boolean }[] {
+export function draftStandings(league: League, round: 1 | 2 = 1): { tid: number; playoff: boolean }[] {
   const draw = (tid: number) => hashString(`${league.id}:${league.season}:${tid}`);
   return league.teams
     .map((t) => {
       const ts = curTeamSeason(league, t.tid);
       return { tid: t.tid, wp: winPct(ts), playoff: ts.playoffRound >= 1, draw: draw(t.tid) };
     })
-    .sort((a, b) => a.wp - b.wp || a.draw - b.draw)
+    .sort((a, b) => a.wp - b.wp || (round === 1 ? a.draw - b.draw : b.draw - a.draw))
     .map(({ tid, playoff }) => ({ tid, playoff }));
 }
 
@@ -152,8 +153,8 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   }
   const lotteryOrder = [...winners, ...remaining];
   const firstRound = [...lotteryOrder.map((x) => x.tid), ...playoff.map((r) => r.tid)];
-  // the second round has no lottery: straight reverse order of record across the whole league
-  const secondRound = recs.map((r) => r.tid);
+  // the second round has no lottery: straight reverse order of record across the whole league, ties the other way round
+  const secondRound = draftStandings(league, 2).map((r) => r.tid);
   const assign = (round: 1 | 2, order: number[]) => {
     order.forEach((origTid, i) => {
       const dp = league.draftPicks.find((d) => d.season === season && d.round === round && d.originalTid === origTid);

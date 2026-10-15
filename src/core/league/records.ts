@@ -243,8 +243,10 @@ export function freezeRecordNames(league: League, p: Player) {
 
 /**
  * The records a game set make the news once the book has a full season behind it (on the first
- * nights every big game is "a record"): league records in every stat, a franchise's scoring
- * records, and every franchise record of the user's team, which the GM hears about too.
+ * nights every big game is "a record"): league records in every stat (and a share of the league's
+ * scoring record), a franchise's scoring record of 40 or more, and the user's team's franchise
+ * records in points, rebounds, assists and threes and its team scoring and winning margin, which
+ * the GM hears about too. About 25 a season once the book has a season in it, fewer each season after.
  */
 export function recordNews(league: League, res: GameResult, notes: RecordNote[]) {
   const book = league.records;
@@ -255,7 +257,10 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
   // one line per player (or team): the league's records before the franchise's
   const byWho = new Map<string, RecordNote[]>();
   for (const n of notes) {
-    const newsworthy = n.scope === 'league' ? n.kind === 'record' || (n.stat === 'pts' && !n.team) : n.kind === 'record' && (n.tid === user || n.stat === 'pts');
+    const newsworthy =
+      n.scope === 'league'
+        ? n.kind === 'record' || (n.stat === 'pts' && !n.team)
+        : n.kind === 'record' && (n.tid === user ? !['stl', 'blk'].includes(n.stat) && !(n.team && n.stat === 'tpm') : n.stat === 'pts' && !n.team && n.v >= 40);
     if (!newsworthy) continue;
     const key = n.team ? `t${n.tid}` : `p${n.pid}`;
     byWho.set(key, [...(byWho.get(key) ?? []), n]);

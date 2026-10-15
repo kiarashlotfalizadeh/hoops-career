@@ -172,7 +172,7 @@ export const PROJECTION_NOTE = 'Projected slots follow the current standings, wo
 export function pickProjection(league: League): (d: DraftPick) => number | undefined {
   const played = league.teams.some((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost > 0);
   const recs = draftStandings(league);
-  const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: recs };
+  const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: draftStandings(league, 2) };
   return (d) => (!played || d.pick || d.season !== league.season ? undefined : overallPick(league, d.round, order[d.round].findIndex((r) => r.tid === d.originalTid) + 1));
 }
 
