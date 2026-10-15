@@ -80,3 +80,14 @@
 .gp-note-input:focus {
   border-color: var(--accent-text);
 }
+/* how to guard them: the four instructions in one row on a phone */
+.gp-guard .chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.gp-guard .chip {
+  justify-content: center;
+  padding: 0 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}

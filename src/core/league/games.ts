@@ -11,7 +11,7 @@ import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
 import { consumePlans, effectiveTactics, planFor } from './gamePlans';
 import { confStandings } from './standings';
-import { withoutCoachPlans } from '../sim/tactics';
+import { hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
 
 export function wearPerf(p: Player) {
@@ -194,7 +194,7 @@ export function buildSimInput(
   if (tid !== league.userTid) {
     // an AI coach never plays the situational plans or crunch-time calls a user left on this team
     const t = team.tactics;
-    const userPlans = t.situations || t.manage.goTo != null || t.manage.ato || t.manage.hackTargets || t.manage.hackFromQ !== undefined;
+    const userPlans = hasCoachPlans(t);
     const tactics = userPlans ? withoutCoachPlans(t) : t;
     // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
     const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;

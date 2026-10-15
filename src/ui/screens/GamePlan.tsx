@@ -1,5 +1,6 @@
 // The game plan for one opponent: how long it lasts, what the scouting numbers say, the plan's
-// items (with the counters the assistant suggests), the star plan, matchups and a note.
+// items (with the counters the assistant suggests), the star plan, a junk defense, matchups, how to
+// guard each of their players, a defender to attack, hack-a targets and a note.
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, FlaskConical, Plus, X } from 'lucide-react';
@@ -17,6 +18,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { OppPlanNote, RankStrip, scoutSource } from '../components/scouting';
 import { aiGamePlan, nextMeeting } from '../../core/ai/opponentPlan';
 import { MatchupPlanner } from '../components/MatchupPlanner';
+import { AttackCard, GuardCard, JunkCard } from '../components/GuardPlanner';
 import { rosterNames } from '../stats';
 import '../components/scouting.css';
 
@@ -223,9 +225,9 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
             {DEF_PRESETS.find((x) => x.id === base.defPreset)?.name ?? 'Custom'}).
           </div>
         )}
-        {plan?.matchups && Object.keys(plan.matchups).length > 0 && (
+        {plan && (Object.keys(plan.matchups ?? {}).length > 0 || Object.keys(plan.playerD ?? {}).length > 0) && (
           <div className="tiny dim2" style={{ marginTop: 8 }}>
-            Plus {Object.keys(plan.matchups).length} planned matchup{Object.keys(plan.matchups).length === 1 ? '' : 's'}.
+            Plus {plannedExtras(plan)}.
           </div>
         )}
       </Card>
@@ -271,6 +273,8 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
 
       <StarPlanCard league={league} opp={opp} />
 
+      {complexity !== 'simple' && <JunkCard league={league} opp={opp} />}
+
       {complexity !== 'simple' && (
         <Card
           title="Matchups"
@@ -285,11 +289,22 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
         </Card>
       )}
 
+      {complexity !== 'simple' && <GuardCard league={league} opp={opp} />}
+
+      {complexity !== 'simple' && <AttackCard league={league} opp={opp} />}
+
       {complexity === 'expert' && <HackCard league={league} opp={opp} />}
 
       <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
     </main>
   );
+}
+
+/** "2 planned matchups and 3 instructions on their players". */
+function plannedExtras(plan: { matchups?: Record<number, number>; playerD?: Record<number, unknown> }) {
+  const m = Object.keys(plan.matchups ?? {}).length;
+  const d = Object.keys(plan.playerD ?? {}).length;
+  return [m ? `${m} planned matchup${m === 1 ? '' : 's'}` : '', d ? `${d} instruction${d === 1 ? '' : 's'} on how to guard their players` : ''].filter(Boolean).join(' and ');
 }
 
 /** Their offense's biggest play types against the league (Expert). */

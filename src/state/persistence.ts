@@ -3,7 +3,7 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import type { GamePlanItem, GameResult, League } from '../core/types';
+import { PLAYER_DEFENSES, type GamePlanItem, type GameResult, type League, type PlayerDefense } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
 import { MAX_STEPS } from './live';
@@ -251,6 +251,64 @@ function migrateGamePlan(x: League, fromV2: boolean) {
   if (items.length) x.gamePlans = { ...x.gamePlans, [old.oppTid as number]: { oppTid: old.oppTid as number, items, scope: 'next' } };
 }
 
+const SCHEMES = new Set<string>(['man', 'zone23', 'zone32', 'box1', 'tri2']);
+const PD = new Set<string>(PLAYER_DEFENSES);
+
+/** Instructions by player in shape (opponent pid -> one of the four), or undefined when nothing valid is left. */
+function cleanPlayerD(v: unknown): Record<number, PlayerDefense> | undefined {
+  if (!obj(v)) return undefined;
+  const out: Record<number, PlayerDefense> = {};
+  for (const [k, d] of Object.entries(v)) if (Number.isInteger(Number(k)) && typeof d === 'string' && PD.has(d)) out[Number(k)] = d as PlayerDefense;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * The junk-defense, hunt, instruction and foul-to-give settings in a part of some tactics (a whole
+ * defense / offense / management block, or a patch's) kept only when in shape: an unknown scheme,
+ * chase targets that aren't up to two pids, a hunt target that isn't a pid, damaged instructions or
+ * a foul to give that isn't a switch are dropped (a scheme falls back to man-to-man when `whole`).
+ */
+function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
+  if (obj(d)) {
+    if (d.scheme !== undefined && !SCHEMES.has(d.scheme as string)) {
+      if (whole) d.scheme = 'man';
+      else delete d.scheme;
+    }
+    if (d.chase !== undefined && !(Array.isArray(d.chase) && d.chase.length <= 2 && d.chase.every(int))) delete d.chase;
+    if (d.playerD !== undefined) {
+      const pd = cleanPlayerD(d.playerD);
+      if (pd) d.playerD = pd;
+      else delete d.playerD;
+    }
+  }
+  if (obj(o) && o.huntTarget !== undefined && o.huntTarget !== null && !int(o.huntTarget)) delete o.huntTarget;
+  if (obj(m) && m.foulToGive !== undefined && typeof m.foulToGive !== 'boolean') delete m.foulToGive;
+}
+
+/** Whole tactics read from a save (see cleanTacticsParts), their situational plans' patches included. */
+function cleanTactics(t: unknown) {
+  if (!obj(t)) return;
+  cleanTacticsParts(t.offense, t.defense, t.manage, true);
+  if (Array.isArray(t.situations)) for (const s of t.situations) if (obj(s) && obj(s.patch)) cleanTacticsParts(s.patch.offense, s.patch.defense, s.patch.manage, false);
+}
+
+/** Game plans' new parts: instructions by player, and their items' patches (see cleanTacticsParts). */
+function cleanGamePlans(x: League) {
+  if (!obj(x.gamePlans)) {
+    if (x.gamePlans !== undefined) delete x.gamePlans;
+    return;
+  }
+  for (const p of Object.values(x.gamePlans)) {
+    if (!obj(p)) continue;
+    if (p.playerD !== undefined) {
+      const pd = cleanPlayerD(p.playerD);
+      if (pd) p.playerD = pd;
+      else delete p.playerD;
+    }
+    if (Array.isArray(p.items)) for (const it of p.items) if (obj(it) && obj(it.patch)) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
+  }
+}
+
 /**
  * Bring a league read from the device or a backup up to the current format. Refuses saves from a
  * newer version of the app (they may hold data this one would drop) and anything that isn't a league.
@@ -268,6 +326,12 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
   // 2 → 3: new data is optional (absent in older saves); the steps below read old data into it
   migrateGamePlan(x, !num(version) || (version as number) < 3);
+  // junk defenses, chase and hunt targets, instructions by player and the foul to give: a damaged
+  // setting goes (an unknown scheme is man-to-man), in every team's tactics, the saved playbooks
+  // and the game plans; a live journal's tactics are checked with the journal below
+  for (const t of x.teams) cleanTactics(t.tactics);
+  if (Array.isArray(x.playbooks)) for (const pb of x.playbooks) if (obj(pb)) cleanTacticsParts(pb.offense, pb.defense, pb.manage, true);
+  cleanGamePlans(x);
   // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the
   // inbox then says the offer is closed), and so is an untouchable mark on a player who is gone
   if (x.proposals !== undefined) x.proposals = Array.isArray(x.proposals) ? x.proposals.filter((p) => proposalIntact(x, p)) : [];
@@ -293,7 +357,9 @@ function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
     case 'sub':
       return int(a.out) && int(a.in);
     case 'tactics':
-      return isTactics(a.tactics) && (a.plan === undefined || typeof a.plan === 'boolean');
+      if (!isTactics(a.tactics) || (a.plan !== undefined && typeof a.plan !== 'boolean')) return false;
+      cleanTactics(a.tactics);
+      return true;
     case 'timeout':
       return a.reason === undefined || (str(a.reason) && (a.reason as string).length <= 80);
     case 'manualSubs':
@@ -326,6 +392,9 @@ function liveIntact(l: League, j: unknown): boolean {
   )
     return false;
   if (!Array.isArray(j.ops) || j.ops.length > MAX_LIVE_OPS) return false;
+  for (const t of [u.tactics, j.keep, obj(o) ? o.tactics : undefined]) cleanTactics(t);
+  if (obj(o) && obj(o.plan) && Array.isArray(o.plan.items))
+    for (const it of o.plan.items) if (obj(it) && obj(it.patch)) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
   let at = 0;
   for (const o of j.ops as unknown[]) {
     if (!obj(o) || !int(o.at) || o.at < at || o.at > j.steps || !obj(o.args) || !liveArgs(o.op, o.args)) return false;

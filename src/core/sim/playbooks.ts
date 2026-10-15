@@ -1,8 +1,9 @@
 // The coach's saved playbooks (League.playbooks): his own library of tactics, which goes with him
 // when he takes over another team. A playbook keeps the schemes, sliders and game management;
 // roles, shot freedom and screeners are kept by player and only come back for players still on the
-// roster, and the game-specific parts (matchups, the star target) are never saved. Also here: the
-// names the screens give a team's playbook, which say "Custom" once the sliders leave the preset.
+// roster, and the game-specific parts (matchups, the star, chase and hunt targets, instructions by
+// player, hack-a targets) are never saved. Also here: the names the screens give a team's playbook,
+// which say "Custom" once the sliders leave the preset.
 
 import { ACTIONS, type ActionType, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
 import { ROLE_META } from '../ratings';
@@ -62,8 +63,9 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
     id: meta.id,
     name: meta.name,
     saved: { ...meta.saved },
-    offense: omit(c.offense, ['roles', 'freedom', 'screeners']) as SavedPlaybook['offense'],
-    defense: omit(c.defense, ['matchups', 'starTarget']) as SavedPlaybook['defense'],
+    // (the hunt, chase targets and instructions by player name one night's opponents, like the matchups)
+    offense: omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget']) as SavedPlaybook['offense'],
+    defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD']) as SavedPlaybook['defense'],
     // hack-a-player targets are one opponent's players: they belong in game plans
     manage: omit(c.manage, ['hackTargets', 'hackFromQ']) as SavedPlaybook['manage'],
     offPreset: c.offPreset,
@@ -78,7 +80,7 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
 /**
  * Tactics `t` with a playbook loaded, for a team whose roster is `roster` (pids): its roles, shot
  * freedom and screeners apply to players still on it (the others keep theirs), and tonight's
- * matchups and star target stay. Fields newer than the playbook keep their current values. The
+ * matchups, star, chase and hunt targets and instructions by player stay. Fields newer than the playbook keep their current values. The
  * result shares no objects with the playbook or with `t`, and is the coach's (manual).
  */
 export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<number>): Tactics {
@@ -146,6 +148,7 @@ const MANAGE_FIELDS: Field<string>[] = [
   ['twoForOne', 'Go for 2-for-1', onOff],
   ['garbageTime', 'Rest starters in blowouts', onOff],
   ['hackThreshold', 'Hack-a-player', (v) => (v ? `< ${v}% FT` : 'Off')],
+  ['foulToGive', 'Foul to give', onOff],
   ['autoTimeouts', 'Auto timeouts', onOff],
   ['timeoutRun', 'Timeout after a run of', (v) => `${v}-0`],
   ['foulTrouble', 'Foul trouble', (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1)],
@@ -154,7 +157,21 @@ const MANAGE_FIELDS: Field<string>[] = [
   ['assistantAdjusts', 'Assistant adjusts in simmed games', onOff],
 ];
 /** Parts of the tactics that aren't settings to compare (game by game, or bookkeeping; the go-to player is named below). */
-const NOT_COMPARED = new Set(['actions', 'roles', 'freedom', 'screeners', 'matchups', 'starTarget', 'goTo', 'hackTargets', 'hackFromQ', ...KNOWN]);
+const NOT_COMPARED = new Set([
+  'actions',
+  'roles',
+  'freedom',
+  'screeners',
+  'matchups',
+  'starTarget',
+  'chase',
+  'playerD',
+  'huntTarget',
+  'goTo',
+  'hackTargets',
+  'hackFromQ',
+  ...KNOWN,
+]);
 
 /** "hackTargets" → "Hack targets", for settings this module doesn't know by name. */
 const humanize = (k: string) => {

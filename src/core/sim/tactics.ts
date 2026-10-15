@@ -4,6 +4,7 @@ import type {
   DefenseTactics,
   GameManagement,
   OffenseTactics,
+  PlayerDefense,
   PnrCoverage,
   PressMode,
   SituationTrigger,
@@ -165,6 +166,45 @@ export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
     label: '3-2 Zone',
     help: 'Three defenders on the arc: ball movement finds far fewer open threes than against the 2-3, but the paint, post-ups, cuts and the offensive glass are softer. A choice against shooting teams, not against bigs and drivers.',
   },
+  box1: {
+    label: 'Box-and-one',
+    help: 'One of your best perimeter defenders face-guards their main creator (fewer touches, late catches, few catch-and-shoot looks, a tiring chase) while the other four play a 2-2 zone. Everyone else gets more open threes and gaps, and the glass is softer: a weapon against one star with poor shooters around him, a loser against teams that shoot.',
+  },
+  tri2: {
+    label: 'Triangle-and-two',
+    help: 'Two chasers face-guard their top two creators while three play a zone. Even more open threes for the other three and a weaker glass: only against two scorers surrounded by players who can’t shoot.',
+  },
+};
+
+/** Junk defenses: a zone behind one or two chasers. */
+export const isJunk = (s: DefScheme) => s === 'box1' || s === 'tri2';
+/** How many players a junk defense chases (none for man-to-man or a zone). */
+export const chasers = (s: DefScheme) => (s === 'box1' ? 1 : s === 'tri2' ? 2 : 0);
+/** Schemes from Advanced coaching depth: the junk defenses. */
+export const schemesFor = (complexity: 'simple' | 'advanced' | 'expert'): DefScheme[] =>
+  (Object.keys(SCHEME_META) as DefScheme[]).filter((k) => complexity !== 'simple' || !isJunk(k));
+
+export const PLAYER_D_META: Record<PlayerDefense, { label: string; short: string; help: string }> = {
+  under: {
+    label: 'Go under screens',
+    short: 'Go under',
+    help: 'His defender goes under ball screens and handoffs (in man-to-man, unless you switch or blitz): his pull-ups get more room, his drives off the screen get harder, and the screener’s man can stay home on the roll and the pop. Right against a handler who can’t shoot off the dribble.',
+  },
+  tight: {
+    label: 'Run him off the line',
+    short: 'Top-lock',
+    help: 'His defender top-locks him off the ball: his catch-and-shoot and off-screen threes are rarer and tougher, but he gets more room to drive on the catch and to cut backdoor. Right against a shooter who can’t put it on the floor.',
+  },
+  sag: {
+    label: 'Sag off him',
+    short: 'Sag off',
+    help: 'His defender sags into the paint when he’s off the ball: better help at the rim on everyone else’s drives, cuts and rolls, but kick-outs to him are more open. Right against a player who can’t shoot.',
+  },
+  body: {
+    label: 'Get physical',
+    short: 'Physical',
+    help: 'His defender plays him physically: his post-ups, drives, rolls and cuts are tougher, but he draws more fouls. Right against a post scorer or driver who misses his free throws.',
+  },
 };
 
 export const PRESS_META: Record<PressMode, { label: string; help: string }> = {
@@ -249,21 +289,56 @@ export function cloneTactics(t: Tactics): Tactics {
       freedom: { ...t.offense.freedom },
       screeners: [...t.offense.screeners],
     },
-    defense: { ...t.defense, matchups: { ...t.defense.matchups } },
+    defense: {
+      ...t.defense,
+      matchups: { ...t.defense.matchups },
+      ...(t.defense.chase && { chase: [...t.defense.chase] }),
+      ...(t.defense.playerD && { playerD: { ...t.defense.playerD } }),
+    },
     manage: t.manage.hackTargets ? { ...t.manage, hackTargets: [...t.manage.hackTargets] } : { ...t.manage },
     ...(t.situations && { situations: t.situations.map(cloneSituation) }),
   };
 }
 
+/** The coach-only management settings an AI coach never plays (see withoutCoachPlans). */
+const COACH_MANAGE = ['goTo', 'ato', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
+
+/** Whether tactics carry anything only the user's bench uses (see withoutCoachPlans). */
+export function hasCoachPlans(t: Tactics): boolean {
+  return (
+    !!t.situations ||
+    COACH_MANAGE.some((k) => t.manage[k] !== undefined && t.manage[k] !== null && t.manage[k] !== false) ||
+    t.offense.huntTarget != null ||
+    t.defense.chase !== undefined ||
+    t.defense.playerD !== undefined
+  );
+}
+
 /**
  * The tactics without what only the user's bench uses: situational plans, the crunch-time go-to
- * player and after-timeout play, hack targets and the assistant's adjustments. An AI coach who
- * inherits a team (the user took over another) plays its playbook, not those.
+ * player and after-timeout play, hack targets, the foul to give, the assistant's adjustments, and
+ * the game-specific hunt target, chase targets and instructions on tonight's opponents. An AI coach
+ * who inherits a team (the user took over another) plays its playbook, not those.
  */
 export function withoutCoachPlans(t: Tactics): Tactics {
   const out = cloneTactics(t);
   delete out.situations;
-  for (const k of ['goTo', 'ato', 'hackTargets', 'hackFromQ', 'assistantAdjusts'] as const) delete out.manage[k];
+  for (const k of COACH_MANAGE) delete out.manage[k];
+  delete out.offense.huntTarget;
+  delete out.defense.chase;
+  delete out.defense.playerD;
+  return out;
+}
+
+/** The parts of the tactics that name one night's opponents: kept in a game or its plan, never in saved tactics. */
+export function withoutGameSpecific(t: Tactics): Tactics {
+  const out = cloneTactics(t);
+  out.defense.matchups = {};
+  out.defense.starTarget = null;
+  delete out.defense.chase;
+  delete out.defense.playerD;
+  delete out.offense.huntTarget;
+  delete out.manage.hackTargets;
   return out;
 }
 
@@ -293,26 +368,30 @@ export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
   return cloneTactics(out);
 }
 
+/** Defense settings that name tonight's opponents (matchups, the star and chase targets, instructions by player). */
+const GAME_DEFENSE = new Set<keyof DefenseTactics>(['matchups', 'starTarget', 'chase', 'playerD']);
+
 /** Same value, objects (roles, freedom, screeners) compared by content. */
 const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && JSON.stringify(a) === JSON.stringify(b));
 
 /**
  * What changed from `a` to `b`, as a patch of fixed values: applyPatch(a, tacticsDiff(a, b)) gives
- * `b` back. Matchups and the star target name tonight's opponents, so they're never part of it, and
- * the playbook labels and the manual flag aren't tactics a patch carries.
+ * `b` back. Matchups, the star and chase targets, instructions by player, the hunt target and
+ * hack-a targets name tonight's opponents, so they're never part of it, and the playbook labels and
+ * the manual flag aren't tactics a patch carries.
  */
 export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   const patch: TacticsPatch = {};
   const offense: NonNullable<TacticsPatch['offense']> = {};
   for (const k of Object.keys(b.offense) as (keyof OffenseTactics)[]) {
-    if (k === 'actions' || same(a.offense[k], b.offense[k])) continue;
+    if (k === 'actions' || k === 'huntTarget' || same(a.offense[k], b.offense[k])) continue;
     (offense as Record<string, unknown>)[k] = structuredClone(b.offense[k]);
   }
   for (const k of Object.keys(b.offense.actions) as ActionType[]) if (a.offense.actions[k] !== b.offense.actions[k]) (offense.actions ??= {})[k] = b.offense.actions[k];
   if (Object.keys(offense).length) patch.offense = offense;
   const defense: Partial<DefenseTactics> = {};
   for (const k of Object.keys(b.defense) as (keyof DefenseTactics)[]) {
-    if (k === 'matchups' || k === 'starTarget' || same(a.defense[k], b.defense[k])) continue;
+    if (GAME_DEFENSE.has(k) || same(a.defense[k], b.defense[k])) continue;
     (defense as Record<string, unknown>)[k] = b.defense[k];
   }
   if (Object.keys(defense).length) patch.defense = defense;

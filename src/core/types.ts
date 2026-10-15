@@ -311,9 +311,16 @@ export type ActionType = 'pnr' | 'iso' | 'post' | 'handoff' | 'motion';
 export const ACTIONS: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
 
 export type PnrCoverage = 'drop' | 'switch' | 'hedge' | 'blitz' | 'ice';
-export type DefScheme = 'man' | 'zone23' | 'zone32';
+/** Man-to-man, the zones, and the junk defenses: box-and-one (four in a 2-2 zone, one chaser) and triangle-and-two (three in a zone, two chasers). */
+export type DefScheme = 'man' | 'zone23' | 'zone32' | 'box1' | 'tri2';
 export type PressMode = 'none' | 'afterMade' | 'always';
 export type StarPlan = 'none' | 'deny' | 'double';
+/**
+ * A scouting-report instruction for guarding one opponent: go under screens on him, run him off
+ * the line (top-lock), sag off him into the paint, or get physical with him.
+ */
+export type PlayerDefense = 'under' | 'tight' | 'sag' | 'body';
+export const PLAYER_DEFENSES: PlayerDefense[] = ['under', 'tight', 'sag', 'body'];
 
 export interface OffenseTactics {
   /** 0..100: 0 = grind every possession, 100 = run-and-gun. */
@@ -330,6 +337,11 @@ export interface OffenseTactics {
   crashBoards: number;
   /** Hunt the weakest defender with isolations/PnR. */
   huntMismatch: boolean;
+  /**
+   * Attack one of tonight's opponents (pid, game-specific): while he's on the floor the offense runs
+   * its isolations, post-ups and ball screens at the player he guards, at some cost in ball movement.
+   */
+  huntTarget?: number | null;
   /** Feed whoever is hot. */
   hotHand: boolean;
   roles: Record<number, OffRole>;
@@ -358,6 +370,14 @@ export interface DefenseTactics {
   matchups: Record<number, number>;
   /** 0..100 foul aggressiveness (physicality). */
   physicality: number;
+  /**
+   * Junk defenses: the opponents the chasers face-guard, in order (game-specific). A box-and-one
+   * chases the first, a triangle-and-two the first two; anyone missing (none named, or on the bench)
+   * is their main creator on the floor, picked as the star plan picks one.
+   */
+  chase?: number[];
+  /** Scouting-report instructions by opponent pid (game-specific). */
+  playerD?: Record<number, PlayerDefense>;
 }
 
 export interface GameManagement {
@@ -389,6 +409,12 @@ export interface GameManagement {
   hackFromQ?: number;
   /** The assistant adjusts at breaks in simmed games, as AI coaches do. */
   assistantAdjusts?: boolean;
+  /**
+   * Foul to give: when they have the ball for a period's last shot (3 to 8 seconds left; in the 4th
+   * quarter and overtime only when tied or up by three or less) and a foul won't put them in the
+   * bonus, foul at once so they inbound with less time. Off unless the coach turns it on.
+   */
+  foulToGive?: boolean;
 }
 
 /** When a situational plan applies: every condition given must hold. Overtime counts as the 4th quarter. */
@@ -453,8 +479,8 @@ export interface SavedPlaybook {
   name: string;
   /** When it was saved or last overwritten. */
   saved: { season: number; day: number };
-  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners'>;
-  defense: Omit<DefenseTactics, 'matchups' | 'starTarget'>;
+  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners' | 'huntTarget'>;
+  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'playerD'>;
   manage: GameManagement;
   offPreset: string;
   defPreset: string;
@@ -1095,6 +1121,8 @@ export interface GamePlan {
   seriesId?: string;
   /** Planned matchups against this opponent: their pid -> my defender pid. */
   matchups?: Record<number, number>;
+  /** How to guard their players: their pid -> a scouting-report instruction. */
+  playerD?: Record<number, PlayerDefense>;
   note?: string;
 }
 

@@ -8,6 +8,7 @@
 import type {
   ActionType,
   BoxLine,
+  DefScheme,
   GameAdjustment,
   GameResult,
   GameType,
@@ -15,6 +16,7 @@ import type {
   OffRole,
   PbpEntry,
   Player,
+  PlayerDefense,
   PnrCoverage,
   Pos,
   Ratings,
@@ -77,6 +79,11 @@ export const K = {
   denyTouch: 0.62,
   denyCatch: 0.3,
   denyDrain: 1.3,
+  /** A junk defense's chaser, with a zone behind him, denies harder than a man-to-man deny: his man's share of actions, and the advantage he loses on the catch. */
+  chaseTouch: 0.4,
+  chaseCatch: 0.45,
+  /** ...and the usage share past which the defense loads up on him comes this much sooner (see usageWeight). */
+  chaseCap: 0.14,
   /** Run-outs against a team that crashed the glass: chance multiplier per unit of crash above 50, and the runners' edge. */
   crashLeak: 1.5,
   crashRunOut: 0.5,
@@ -188,7 +195,84 @@ export const K = {
       glass: 1.22,
       glassTag: 0.22,
     },
-  } as Record<'zone23' | 'zone32', ZoneK>,
+    // the junk defenses' zones behind their chasers: four in a 2-2 box, three in a triangle. Fewer
+    // bodies wall off less of the paint and the glass and leave more of the arc open for everyone
+    // the chasers aren't on
+    box1: {
+      pnr: 0.28,
+      pnrTag: 0.028,
+      iso: 0.3,
+      isoTag: 0.03,
+      post: 0.22,
+      postTag: 0.022,
+      drive: 0.28,
+      kick: 0.45,
+      pop: 0.35,
+      handoff: 0.3,
+      cutW: 0.15,
+      cut: 0.1,
+      swingW: 1.4,
+      swing: 0.45,
+      corner: 0.5,
+      glass: 1.08,
+      glassTag: 0.08,
+    },
+    tri2: {
+      pnr: 0.2,
+      pnrTag: 0.02,
+      iso: 0.22,
+      isoTag: 0.022,
+      post: 0.18,
+      postTag: 0.018,
+      drive: 0.2,
+      kick: 0.5,
+      pop: 0.4,
+      handoff: 0.35,
+      cutW: 0.08,
+      cut: 0.04,
+      swingW: 1.45,
+      swing: 0.5,
+      corner: 0.55,
+      glass: 1.1,
+      glassTag: 0.1,
+    },
+  } as Record<Exclude<DefScheme, 'man'>, ZoneK>,
+  /**
+   * Top-locking a player off the ball, by a junk defense's chaser or a "tight" instruction (on top
+   * of the deny's fewer touches and late catches for a chased player): his weight as a kick-out
+   * target, the openness taken off his catch-and-shoot threes, the edge lost coming off screens and
+   * handoffs, and what a defender caught high gives back on his drives on the catch, his curls and
+   * his back-cuts (the openness, and his cut weight multiplier).
+   */
+  lock: {
+    box: { kickW: 0.45, c3: 0.4, offScreen: 0.3, beat: 0.3, cutW: 1.6 },
+    tight: { kickW: 0.6, c3: 0.3, offScreen: 0.25, beat: 0.3, cutW: 1.4 },
+  },
+  /**
+   * Scouting-report instructions on one player: going under screens on him (openness his pull-ups
+   * gain, the edge his drives off the screen lose, the roll and pop openness the screener's defender
+   * takes away by staying home); sagging off him (rim openness taken off teammates' drives, cuts and
+   * rolls while he's off the ball, openness his own catch-and-shoot looks gain); getting physical
+   * with him (the edge his post-ups and drives lose, and his shooting and reach-in fouls drawn).
+   */
+  pd: {
+    under: { pull: 0.4, drive: 0.5, roll: 0.25 },
+    sag: { help: 0.2, kick: 0.6 },
+    body: { post: 0.35, drive: 0.25, foul: 1.35 },
+  },
+  /**
+   * Hunting one defender: how much more often the player he guards gets the isolations, post-ups and
+   * ball-handler reps, the chance he's the screener when he isn't handling, the handler's edge per
+   * this much of the hunted screen defender's gap to his teammates (see huntGap), and the edge motion
+   * and handoffs lose while the ball sticks to the hunted matchup.
+   */
+  hunt: { pick: 1.8, screen: 0.75, screenEdge: 20, flow: 0.08 },
+  /**
+   * Foul to give: the most seconds left it's used with (and the fewest: under that there's no shot to
+   * take away), the openness the inbounds play's first action loses, and the chance the whistle
+   * comes on the shot anyway (two free throws).
+   */
+  ftg: { max: 8, min: 2.5, open: 0.35, inAct: 0.05 },
 };
 
 interface ZoneK {
@@ -451,6 +535,8 @@ interface ShotOpts {
 }
 
 const ACTION_LIST: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
+/** No players (shared: never added to). */
+const NONE: SP[] = [];
 
 /** Usage multiplier for a player's shot freedom: green light (1), normal (0) or limited (-1). */
 function freedomMult(fr: number) {
@@ -512,6 +598,8 @@ export class GameSim {
   private calledActor: SP | null = null;
   /** A called "go for three": every option that ends in a two is all but ruled out this trip. */
   private go3 = false;
+  /** The defense fouled to give: this trip's first half-court action is an inbounds play. */
+  private inbound = false;
   /** Game seed: every random stream in the game derives from it. */
   private seed: number;
   /** Cosmetic draws (shot spots, play-by-play wording) never touch the simulation stream. */
@@ -733,12 +821,25 @@ export class GameSim {
       return;
     }
     // threat: how much the offense runs through him
+    const scorers = O.map((o) => ({ pid: o.pid, hgt: o.r.hgt, big: o.big, threat: this.threat(o, off) }));
+    // a junk defense sends its best perimeter defenders to chase: the chased count as its top
+    // threats, guarded on the perimeter whatever their size
+    const chased = this.chased(def, off);
+    if (chased.length) {
+      const top = Math.max(...scorers.map((s) => s.threat)) * 1.5 || 1;
+      for (const s of scorers) if (chased.some((c) => c.pid === s.pid)) Object.assign(s, { threat: top, big: false });
+    }
     const best = solveMatchups(
-      O.map((o) => ({ pid: o.pid, hgt: o.r.hgt, big: o.big, threat: this.usageWeight(o, off, 'iso') + this.usageWeight(o, off, 'pnr') })),
+      scorers,
       D.map((d) => ({ pid: d.pid, hgt: d.r.hgt, intDef: d.c.intDef, perDef: d.c.perDef })),
       def.t.defense.matchups,
     );
     O.forEach((o, i) => def.guardOf.set(o.pid, D[best[i]]));
+  }
+
+  /** How much the offense runs through a player, as the matchups weigh it: his isolations and ball screens. */
+  private threat(o: SP, off: ST) {
+    return this.usageWeight(o, off, 'iso') + this.usageWeight(o, off, 'pnr');
   }
 
   refreshMatchups() {
@@ -869,8 +970,19 @@ export class GameSim {
     // outlasts a situational plan coming or going
     let what = '';
     let change = (x: Tactics) => void x;
-    if (d.scheme !== 'man') {
-      if (rate('zone_3pt:o') + rate('zone_glass:o') >= 1) {
+    // a defender the other bench hunts with success gets hidden on their weakest scorer on the floor
+    // (only ever when the opponent hunts one: never in a game between AI teams)
+    const huntedD = rate('hunt:o') >= 0.5 ? t.byId.get(opp.t.offense.huntTarget ?? -1) : undefined;
+    const weak = huntedD?.on ? opp.on.filter((p) => t.guardOf.get(p.pid) !== huntedD).sort((a, b) => this.threat(a, opp) - this.threat(b, opp) || a.pid - b.pid)[0] : undefined;
+    const junk = d.scheme === 'box1' || d.scheme === 'tri2';
+    if (huntedD && weak) {
+      change = (x) => {
+        for (const k of Object.keys(x.defense.matchups)) if (x.defense.matchups[+k] === huntedD.pid) delete x.defense.matchups[+k];
+        x.defense.matchups[weak.pid] = huntedD.pid;
+      };
+      what = `hides ${huntedD.name} on ${weak.name}`;
+    } else if (d.scheme !== 'man') {
+      if (rate('zone_3pt:o') + rate('zone_glass:o') + rate('box_open:o') + rate('box_beat:o') >= 1) {
         change = (x) => void (x.defense.scheme = 'man');
         what = 'goes back to man-to-man';
       }
@@ -908,6 +1020,8 @@ export class GameSim {
     if (!what) return;
     change(t.t);
     change(t.base);
+    // a hidden defender and chasers called off are new assignments
+    if ((huntedD && weak) || junk) this.refreshMatchups();
     t.adjustedQ = this.q;
     this.adjustments.push({ t: t.side, q: this.q, clock: Math.round(this.clock), text: what });
     this.addPbp(t.side, `${t.team.abbrev} adjusts: ${what}.`, 'other');
@@ -1186,17 +1300,18 @@ export class GameSim {
     for (const t of this.T) {
       const press = this.T[1 - t.side].t.defense.press !== 'none' || t.t.defense.press !== 'none';
       const paceMult = 0.9 + (t.t.offense.pace / 100) * 0.2;
-      // face-guarding the star on defense wears out his defender
+      // face-guarding the star on defense wears out his defender, and so does chasing in a junk defense
       const off = this.T[1 - t.side];
       const denier = t.side !== this.poss && t.t.defense.starPlan === 'deny' ? this.starTarget(t, off) : null;
       const denyD = denier ? t.guardOf.get(denier.pid) : undefined;
+      const chased = t.side !== this.poss ? this.chased(t, off) : NONE;
       for (const p of t.players) {
         if (p.on) {
           p.b.sec += dt;
           let drain = K.drain * (1.4 - 0.75 * (p.r.end / 100)) * paceMult;
           if (press) drain *= 1.15;
           if (t.t.defense.press === 'always') drain *= 1.12;
-          if (p === denyD) drain *= K.denyDrain;
+          if (p === denyD || (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p))) drain *= K.denyDrain;
           p.energy = Math.max(0.2, p.energy - drain * dt);
         } else if (p.out === 0 || p.out === 1) {
           p.energy = Math.min(1, p.energy + K.recover * dt);
@@ -1249,11 +1364,12 @@ export class GameSim {
     }
     let w = roleU * p.freedom * p.tu * p.tcr * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
-    // defenses load up on a high-usage player as the game goes on
+    // defenses load up on a high-usage player as the game goes on (a junk defense's chaser sooner)
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
     if (teamUse >= 12.5) {
       const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
-      if (share > p.useCap) w *= Math.exp(-p.useDamp * (share - p.useCap));
+      const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - K.chaseCap : p.useCap;
+      if (share > cap) w *= Math.exp(-p.useDamp * (share - cap));
     }
     // even a heliocentric offense moves the ball: past ~2/3 of his team's actions, others get it
     if (p.b.tActs >= 20) {
@@ -1289,20 +1405,26 @@ export class GameSim {
       return called;
     }
     const ws = t.on.map((p) => (p === exclude ? 0 : this.usageWeight(p, t, action)));
+    // hunting one defender: the player he guards gets the isolations, post-ups and ball screens (in
+    // place of the automatic mismatch hunt)
+    const hunted = action === 'iso' || action === 'post' || action === 'pnr' ? this.hunted(t, this.T[1 - t.side]) : null;
+    if (hunted) ws[t.on.indexOf(hunted)] *= K.hunt.pick;
     // mismatch hunting: favor the player with the weakest defender
-    if (t.t.offense.huntMismatch && (action === 'iso' || action === 'pnr')) {
+    else if (t.t.offense.huntMismatch && (action === 'iso' || action === 'pnr')) {
       const def = this.T[1 - t.side];
       t.on.forEach((p, i) => {
         const d = def.guardOf.get(p.pid);
         if (d) ws[i] *= Math.exp(clamp((p.c.create - d.c.perDef) / 40, -0.5, 0.9));
       });
     }
-    // star plan "deny": face-guarding keeps the ball out of his hands
+    // star plan "deny": face-guarding keeps the ball out of his hands, as a junk defense's chasers do
     const def = this.T[1 - t.side];
+    const denied = def.t.defense.starPlan === 'deny' ? this.starTarget(def, t) : null;
     if (def.t.defense.starPlan === 'deny') {
-      const i = t.on.indexOf(this.starTarget(def, t)!);
+      const i = t.on.indexOf(denied!);
       if (i >= 0) ws[i] *= K.denyTouch;
     }
+    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= c === denied ? K.chaseTouch / K.denyTouch : K.chaseTouch;
     // crunch time: the ball finds the go-to player
     const go = this.goTo(t);
     if (go) ws[t.on.indexOf(go)] *= K.goToPick;
@@ -1326,9 +1448,14 @@ export class GameSim {
       return off.on.find((p) => p.pid === def.t.defense.starTarget) ?? null;
     }
     // auto: the opponent's main creator on the floor
+    return this.mainCreator(off.on);
+  }
+
+  /** The main creator among `players` (the star plan's and the junk defenses' automatic pick): the first of the best. */
+  private mainCreator(players: SP[]): SP | null {
     let best: SP | null = null;
     let bw = 0;
-    for (const p of off.on) {
+    for (const p of players) {
       const w = ROLE_USAGE[p.role] * p.freedom * (p.c.create + p.c.pnrHandle + p.c.postScore);
       if (w > bw) {
         bw = w;
@@ -1336,6 +1463,89 @@ export class GameSim {
       }
     }
     return best;
+  }
+
+  /**
+   * The players a junk defense chases on the floor (a box-and-one one, a triangle-and-two two), named
+   * ones first, then their main creators; none in man-to-man or a zone. A junk defense named for
+   * players is only played while one of them is on the floor: without them it's man-to-man.
+   */
+  private chased(def: ST, off: ST): SP[] {
+    const s = def.t.defense.scheme;
+    const n = s === 'box1' ? 1 : s === 'tri2' ? 2 : 0;
+    if (!n) return NONE;
+    const out: SP[] = [];
+    const named = def.t.defense.chase ?? [];
+    for (const pid of named) {
+      const p = off.on.find((x) => x.pid === pid);
+      if (p && !out.includes(p) && out.length < n) out.push(p);
+    }
+    if (named.length && !out.length) return NONE;
+    while (out.length < n) {
+      const p = this.mainCreator(off.on.filter((x) => !out.includes(x)));
+      if (!p) break;
+      out.push(p);
+    }
+    return out;
+  }
+
+  /** How often a player gets the ball in the half court where nobody runs a play for him: a junk defense's chased players far less. */
+  private touch(def: ST, off: ST, p: SP): number {
+    return def.t.defense.scheme !== 'box1' && def.t.defense.scheme !== 'tri2' ? 1 : this.chased(def, off).includes(p) ? K.chaseTouch : 1;
+  }
+
+  /** The scouting-report instruction for guarding offensive player `p`, if any. */
+  private pd(def: ST, p: SP): PlayerDefense | undefined {
+    return def.t.defense.playerD?.[p.pid];
+  }
+
+  /**
+   * Whether offensive player `p` is top-locked off the ball, and how hard: a junk defense's chaser
+   * face-guards him, or a "tight" instruction runs him off the line. With the impact tags for what
+   * it takes away (his catch-and-shoot and off-screen looks) and what it gives back (drives on the
+   * catch, curls and back-cuts against a defender caught high).
+   */
+  private lock(def: ST, off: ST, p: SP): { k: (typeof K.lock)['box']; tag: string; beatTag: string } | null {
+    if (def.t.defense.scheme === 'box1' || def.t.defense.scheme === 'tri2') {
+      if (this.chased(def, off).includes(p)) return { k: K.lock.box, tag: 'box_chase', beatTag: 'box_beat' };
+    }
+    if (this.pd(def, p) === 'tight') return { k: K.lock.tight, tag: 'pd_tight', beatTag: 'pd_tight' };
+    return null;
+  }
+
+  /**
+   * Rim openness taken off a shot at the basket by `sh` because the defense sags off non-shooters
+   * ("sag" instructions on teammates of his who are off the ball), up to two of them.
+   */
+  private sagHelp(def: ST, off: ST, ...onBall: SP[]): number {
+    const pd = def.t.defense.playerD;
+    if (!pd) return 0;
+    let n = 0;
+    for (const p of off.on) if (pd[p.pid] === 'sag' && !onBall.includes(p)) n++;
+    return Math.min(2, n) * K.pd.sag.help;
+  }
+
+  /** The offensive player the defender being hunted guards (while both are on the floor), or null. */
+  private hunted(off: ST, def: ST): SP | null {
+    const pid = off.t.offense.huntTarget;
+    if (pid == null) return null;
+    const target = def.byId.get(pid);
+    if (!target?.on) return null;
+    return off.on.find((p) => def.guardOf.get(p.pid) === target) ?? null;
+  }
+
+  /**
+   * Tag what attacking the hunted defender `d` is worth on this action: his defense against the
+   * average of his teammates on the floor (negative when he's no weak link: hunting him costs).
+   */
+  private huntEdge(def: ST, d: SP, kind: 'iso' | 'post' | 'pnr', pid: number) {
+    this.impact('hunt', (1 - def.side) as 0 | 1, (this.huntGap(def, d, kind) / 20) * K.advPts[kind], pid);
+  }
+
+  /** How far a defender's perimeter (or, on a post-up, interior) defense is below his teammates' on the floor. */
+  private huntGap(def: ST, d: SP, kind: 'iso' | 'post' | 'pnr') {
+    const q = (x: SP) => (kind === 'post' ? x.c.intDef : x.c.perDef) * this.dq(x);
+    return def.on.reduce((a, x) => a + q(x), 0) / def.on.length - q(d);
   }
 
   private defOf(def: ST, o: SP): SP {
@@ -1400,6 +1610,7 @@ export class GameSim {
     const def = this.T[1 - o];
     let ctx = this.ctx;
     this.go3 = false;
+    this.inbound = false;
     this.possPts = 0;
     this.secondChance = false;
     this.inTransition = false;
@@ -1421,10 +1632,12 @@ export class GameSim {
         lines: [],
         on: [this.T[0].on.map((p) => p.pid), this.T[1].on.map((p) => p.pid)],
         guards: Object.fromEntries(off.on.map((p) => [p.pid, this.defOf(def, p).pid])),
-        scheme: def.t.defense.scheme,
+        scheme: this.schemeNow(def),
         help: def.t.defense.help,
       };
       if (this.T[0].sit || this.T[1].sit) this.cur.sit = [this.T[0].sit?.label ?? '', this.T[1].sit?.label ?? ''];
+      const chased = this.chased(def, off);
+      if (chased.length) this.cur.chase = chased.map((p) => p.pid);
     }
     this.timeoutStep = false;
     off.poss++;
@@ -1485,8 +1698,8 @@ export class GameSim {
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
     if (late.hurry) transP *= 1.5;
-    // a set play is walked up and run in the half court
-    if (call?.kind === 'three' || call?.kind === 'iso') transP = 0;
+    // a set play is walked up and run in the half court, and so is the inbounds play after a foul to give
+    if (call?.kind === 'three' || call?.kind === 'iso' || this.inbound) transP = 0;
 
     if (this.clock > 2 && this.rng.chance(clamp(transP, 0, 0.85))) {
       // each setting's share of the run-outs, at ~0.25-0.35 pts per run-out over a half-court trip
@@ -1582,6 +1795,21 @@ export class GameSim {
       fouled = off.on[this.rng.weighted(ws)];
       tag = 'foul_up3';
     }
+    // a foul to give: they have the ball for the period's last shot, and a foul is only a side out, so
+    // the ball handler is fouled at once and they inbound with less time (in the 4th quarter and
+    // overtime only when up three or less, or tied)
+    if (
+      !fouled &&
+      def.t.manage.foulToGive &&
+      clock <= K.ftg.max &&
+      clock > K.ftg.min &&
+      (!final || (defDiff >= 0 && defDiff <= 3)) &&
+      def.fouls + 1 < GAME.bonusFouls - (this.q > 4 ? 1 : 0) &&
+      !(clock < 120 && def.foulsLast2 >= 1)
+    ) {
+      fouled = off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]);
+      tag = 'foul_give';
+    }
     // NBA: an away-from-the-play foul in the last two minutes of any period costs a free throw and the
     // ball; a game plan can name its targets (whatever they shoot) and the quarter it starts in
     const hack = def.t.manage.hackThreshold;
@@ -1597,7 +1825,7 @@ export class GameSim {
     if (!fouled) return null;
     if (this.cur) {
       this.cur.kind = 'ft';
-      this.cur.label = tag === 'hack' ? `Hack-a-${fouled.name}` : 'Intentional foul';
+      this.cur.label = tag === 'hack' ? `Hack-a-${fouled.name}` : tag === 'foul_give' ? 'Foul to give' : 'Intentional foul';
     }
     // late-game fouls come right on the catch and never let the clock run out; short of the
     // penalty a foul is only a side out, so a late foul is repeated until it sends him to the line
@@ -1607,9 +1835,21 @@ export class GameSim {
       const fouler = def.on.reduce((a, p) => (p.fouls < a.fouls ? p : a), def.on[0]);
       if (this.record) {
         this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: fouled.pid });
-        this.addPbp(def.side, `${fouler.name} intentional foul on ${fouled.name}.`, 'foul');
+        this.addPbp(def.side, tag === 'foul_give' ? `${fouler.name} fouls ${fouled.name} (a foul to give).` : `${fouler.name} intentional foul on ${fouled.name}.`, 'foul');
       }
       this.addFoul(def, fouler);
+      if (tag === 'foul_give') {
+        // now and then the whistle comes on the shot: two free throws instead of a worse last look
+        if (this.rng.chance(K.ftg.inAct)) {
+          this.impact('foul_give', off.side, 2 * fouled.ftPct - 1, fouled.pid);
+          this.freeThrows(off, def, fouled, 2, 'misc');
+          return 'ft';
+        }
+        // the inbounds play's worse first look, at about 0.15 points per unit of openness
+        this.impact('foul_give', def.side, K.ftg.open * 0.15, fouled.pid);
+        this.inbound = true;
+        break;
+      }
       if (this.bonus(def)) {
         // expected value vs a normal possession (~1.12)
         if (tag === 'hack') this.impact('hack', def.side, 1.12 - fouled.ftPct * 2, fouled.pid);
@@ -1722,7 +1962,9 @@ export class GameSim {
 
   /** `first`: an action the trip opens with (an after-timeout play, a called isolation for `isoFor`). */
   private halfCourt(off: ST, def: ST, shotClock: number, late: ReturnType<GameSim['lateMode']>, paceF: number, first: ActionType | null = null, isoFor: SP | null = null) {
-    let carryOpen = 0;
+    // an inbounds play after a foul to give starts from a worse look
+    let carryOpen = this.inbound ? -K.ftg.open : 0;
+    this.inbound = false;
     let ballFrom: SP | null = null;
     let forced = false;
     for (let n = 0; n < 6; n++) {
@@ -1836,7 +2078,27 @@ export class GameSim {
   /** The zone the defense plays (its table in K.zone), or null for man-to-man. */
   private zone(def: ST): ZoneK | null {
     const s = def.t.defense.scheme;
-    return s === 'man' ? null : K.zone[s];
+    if (s === 'man') return null;
+    // a junk defense whose chased players are all on the bench plays man-to-man
+    if ((s === 'box1' || s === 'tri2') && !this.chased(def, this.T[1 - def.side]).length) return null;
+    return K.zone[s];
+  }
+  /** The scheme played now: the one set, or man-to-man while a junk defense has nobody to chase. */
+  private schemeNow(def: ST): DefScheme {
+    return this.zone(def) ? def.t.defense.scheme : 'man';
+  }
+  /** The zone being played, as the court's captions name it. */
+  private zoneName(def: ST) {
+    const s = def.t.defense.scheme;
+    return s === 'box1' ? 'box-and-one' : s === 'tri2' ? 'triangle-and-two' : 'zone';
+  }
+  /** The impact key for the open looks a zone leaves: a junk defense's are 'box_open' (and its chased players never get them). */
+  private openKey(def: ST) {
+    return def.t.defense.scheme === 'box1' || def.t.defense.scheme === 'tri2' ? 'box_open' : 'zone_3pt';
+  }
+  /** "Get physical with him": the shooting fouls he draws, as a shot's options take them (none without the instruction). */
+  private body(def: ST, p: SP): { forcedFoulMult: number; foulTag: [string, number] } | undefined {
+    return this.pd(def, p) === 'body' ? { forcedFoulMult: K.pd.body.foul, foulTag: ['pd_body', K.pd.body.foul] } : undefined;
   }
   private prefs(off: ST, late: ReturnType<GameSim['lateMode']>) {
     const t3 = off.t.offense.threePoint / 100;
@@ -1866,8 +2128,15 @@ export class GameSim {
     if (this.q >= 4 && this.clock < K.clutchSec && m !== 0 && Math.abs(m) <= 6) x += K.clutchEase;
     return m > 0 ? -x : x;
   }
-  /** Star plan "deny": when the face-guarded star does get the ball, he catches it late and further out. */
+  /**
+   * Star plan "deny", and a junk defense's chaser: when the face-guarded player does get the ball,
+   * he catches it late and further out (the chaser's doing when both are on him).
+   */
   private denyCatch(def: ST, off: ST, p: SP, from: 'pnr' | 'handoff' | 'iso' | 'post'): number {
+    if (this.chased(def, off).includes(p)) {
+      this.impact('box_chase', def.side, K.chaseCatch * K.advPts[from], p.pid);
+      return K.chaseCatch;
+    }
     if (def.t.defense.starPlan !== 'deny' || this.starTarget(def, off) !== p) return 0;
     this.impact('star_deny', def.side, K.denyCatch * K.advPts[from], p.pid);
     return K.denyCatch;
@@ -1914,18 +2183,22 @@ export class GameSim {
 
   private pnr(off: ST, def: ST, open: number, late: ReturnType<GameSim['lateMode']>, forced: boolean): 'done' | { carry: number; ball: SP | null } {
     const H = this.pickActor(off, 'pnr');
+    // hunting a defender: the player he guards sets the screen more often than not, so a switch
+    // puts him on the ball handler
+    const hunted = this.hunted(off, def);
+    let S: SP | undefined = hunted && hunted !== H && this.rng.chance(K.hunt.screen) ? hunted : undefined;
     // screener: the first preferred screener on the floor, else bigs / rollers / poppers
-    let S: SP | undefined;
-    for (const pid of off.t.offense.screeners) {
-      S = off.on.find((p) => p.pid === pid && p !== H);
-      if (S) break;
-    }
+    if (!S)
+      for (const pid of off.t.offense.screeners) {
+        S = off.on.find((p) => p.pid === pid && p !== H);
+        if (S) break;
+      }
     if (!S) {
       const ws = off.on.map((p) => {
         if (p === H) return 0;
         let w = Math.max(p.c.roll, p.c.pop * 0.9) * (p.big ? 2 : 0.6);
         if (p.role === 'roller' || p.role === 'stretch' || p.role === 'hub') w *= 1.6;
-        if (off.t.offense.huntMismatch) {
+        if (off.t.offense.huntMismatch && !hunted) {
           const d = this.defOf(def, p);
           w *= Math.exp(clamp((60 - d.c.perDef) / 30, -0.4, 0.9));
         }
@@ -1942,7 +2215,7 @@ export class GameSim {
     if (star === H && def.t.defense.starPlan === 'double' && !zone) cov = 'blitz';
     if (this.cur) {
       this.cur.coverage = cov;
-      this.cur.label = `P&R: ${H.name} + ${S.name}${cov === 'zone' ? ' vs zone' : ` vs ${cov}`}`;
+      this.cur.label = `P&R: ${H.name} + ${S.name} vs ${cov === 'zone' ? this.zoneName(def) : cov}`;
       this.cur.steps.push({ k: 'screen', pid: S.pid, pid2: H.pid });
     }
     const pf = this.prefs(off, late);
@@ -1972,6 +2245,13 @@ export class GameSim {
     // a denied star catches it late (a switch has already traded his matchup for another)
     advH -= this.denyCatch(def, off, H, 'pnr');
     if (cov !== 'blitz') advH += this.blowBy(def, H, 'pnr');
+    if (hunted === H) this.huntEdge(def, dH, 'pnr', H.pid);
+    // screen-hunting: a weak defender dragged into the two-man game can't hold up his end of the coverage
+    if (hunted === S && cov !== 'zone') {
+      const edge = clamp(this.huntGap(def, dS, 'pnr') / K.hunt.screenEdge, -0.4, 0.8);
+      advH += edge;
+      this.impact('hunt', off.side, edge * K.advPts.pnr, H.pid);
+    }
     let pullOpen = 0;
     let rimOpen = 0;
     let rollOpen = 0;
@@ -2034,9 +2314,39 @@ export class GameSim {
       advH -= zone.pnr;
       this.impact('zone_paint', def.side, zone.pnrTag);
       kickOpen += zone.kick;
-      tagsKick.push(['zone_3pt', zone.kick]);
-      popOpen += zone.pop;
-      tagsPop.push(['zone_3pt', zone.pop]);
+      tagsKick.push([this.openKey(def), zone.kick]);
+      // (a chased screener's chaser stays with him)
+      if (!this.chased(def, off).includes(S)) {
+        popOpen += zone.pop;
+        tagsPop.push([this.openKey(def), zone.pop]);
+      }
+    }
+    // going under the screen on this handler: room for his pull-ups, none for his drive, and the
+    // screener's man stays home
+    if (cov !== 'blitz' && cov !== 'zone' && this.pd(def, H) === 'under') {
+      const u = K.pd.under;
+      pullOpen += u.pull;
+      tagsPull.push(['pd_under', u.pull]);
+      rimOpen -= u.drive;
+      tagsRim.push(['pd_under', -u.drive]);
+      rollOpen -= u.roll;
+      tagsRoll.push(['pd_under', -u.roll]);
+      popOpen -= u.roll;
+      tagsPop.push(['pd_under', -u.roll]);
+    }
+    // a screener top-locked off the ball pops into a hand in his face
+    const sLock = this.lock(def, off, S);
+    if (sLock) {
+      popOpen -= sLock.k.c3;
+      tagsPop.push([sLock.tag, -sLock.k.c3]);
+    }
+    // defenders sagging off non-shooters help at the rim
+    const sag = this.sagHelp(def, off, H, S);
+    if (sag) {
+      rimOpen -= sag;
+      tagsRim.push(['pd_sag', -sag]);
+      rollOpen -= sag;
+      tagsRoll.push(['pd_sag', -sag]);
     }
 
     // help defense / spacing on drives
@@ -2077,7 +2387,15 @@ export class GameSim {
         (1 + rollOpen) *
         (S.c.pop > S.c.roll ? 0.4 : 1), // roll
       S.c.pop > 50
-        ? Math.pow(H.c.passing / 50, 1.2) * this.passT(H) * Math.pow(S.c.pop / 50, 2) * (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) * 0.45 * pf.three * S.t3 * (1 + popOpen)
+        ? Math.pow(H.c.passing / 50, 1.2) *
+          this.passT(H) *
+          Math.pow(S.c.pop / 50, 2) *
+          (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) *
+          0.45 *
+          pf.three *
+          S.t3 *
+          (1 + popOpen) *
+          (sLock?.k.kickW ?? 1)
         : 0.01, // pop
       Math.pow(H.c.passing / 50, 1.3) * this.passT(H) * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
@@ -2105,14 +2423,16 @@ export class GameSim {
       case 2: {
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: H.pid });
         const zone: ShotZone = this.rimOr(H, 0.68);
+        const body = this.body(def, H);
         this.shoot(off, def, {
           shooter: H,
           zone,
-          open: advOpen + rimOpen + open,
+          open: advOpen + rimOpen + open - (body ? K.pd.body.drive : 0),
           contest: zone === 'rim' ? this.rimContester(def, dH, cov === 'drop' ? 1.5 : 1) : dS,
           assister: null,
           finish: 'pnrBH',
-          tags: tagsRim,
+          tags: body ? [...tagsRim, ['pd_body', -K.pd.body.drive]] : tagsRim,
+          ...body,
         });
         return 'done';
       }
@@ -2136,14 +2456,16 @@ export class GameSim {
           return 'done';
         }
         const rollAdv = (S.c.roll - dS.c.intDef * this.dq(dS)) / 25;
+        const body = this.body(def, S);
         this.shoot(off, def, {
           shooter: S,
           zone: this.rimOr(S, 0.75),
-          open: rollAdv * 0.4 + rollOpen - 0.32 + open,
+          open: rollAdv * 0.4 + rollOpen - 0.32 + open - (body ? K.pd.body.drive : 0),
           contest: cov === 'blitz' ? this.rimContester(def, null, 1) : this.rimContester(def, dS, cov === 'drop' ? 1.3 : 1),
           assister: H,
           finish: 'pnrRoll',
-          tags: tagsRoll,
+          tags: body ? [...tagsRoll, ['pd_body', -K.pd.body.drive]] : tagsRoll,
+          ...body,
         });
         return 'done';
       }
@@ -2174,11 +2496,14 @@ export class GameSim {
   }
 
   private kickTarget(off: ST, ...exclude: SP[]): SP {
+    const def = this.T[1 - off.side];
     const ws = off.on.map((p) =>
       exclude.includes(p)
         ? 0
-        : (Math.pow(Math.max(5, p.c.c3) / 50, 2) * Math.sqrt(p.t3) * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)) /
-          Math.sqrt(p.tcr),
+        : ((Math.pow(Math.max(5, p.c.c3) / 50, 2) * Math.sqrt(p.t3) * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)) /
+            Math.sqrt(p.tcr)) *
+          // a top-locked shooter is hard to find
+          (this.lock(def, off, p)?.k.kickW ?? 1),
     );
     return off.on[this.rng.weighted(ws)];
   }
@@ -2220,6 +2545,7 @@ export class GameSim {
     const help = this.help(def);
     let adv = (A.c.create * A.perf - D.c.perDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 140 + this.rng.normal(0, 0.6) + open;
     if (!fixed) adv -= this.denyCatch(def, off, A, 'iso');
+    if (!fixed && def.byId.get(off.t.offense.huntTarget ?? -1) === D) this.huntEdge(def, D, 'iso', A.pid);
     const pr = this.pressure(def);
     // pressure: aggressive defenders get blown by, quick creators most of all
     adv += this.blowBy(def, A, 'iso');
@@ -2267,17 +2593,23 @@ export class GameSim {
       case 0: {
         const zone: ShotZone = this.rimOr(A, 0.62);
         const hp = -help * 0.25;
+        const tags: [string, number][] = [
+          ['help_paint', hp],
+          ['spacing', spacing * 0.5],
+        ];
+        const body = this.body(def, A);
+        if (body) tags.push(['pd_body', -K.pd.body.drive]);
+        const sag = this.sagHelp(def, off, A);
+        if (sag) tags.push(['pd_sag', -sag]);
         this.shoot(off, def, {
           shooter: A,
           zone,
-          open: advOpen + spacing * 0.5 + hp - 0.08,
+          open: advOpen + spacing * 0.5 + hp - 0.08 - (body ? K.pd.body.drive : 0) - sag,
           contest: zone === 'rim' ? this.rimContester(def, D) : D,
           assister: null,
           finish,
-          tags: [
-            ['help_paint', hp],
-            ['spacing', spacing * 0.5],
-          ],
+          tags,
+          ...body,
         });
         return 'done';
       }
@@ -2369,6 +2701,13 @@ export class GameSim {
     const help = this.help(def);
     let adv = (A.c.postScore * A.perf - D.c.intDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 80 + (A.r.hgt - D.r.hgt) / 70 + this.rng.normal(0, 0.55) + open;
     if (!fixed) adv -= this.denyCatch(def, off, A, 'post');
+    if (!fixed && def.byId.get(off.t.offense.huntTarget ?? -1) === D) this.huntEdge(def, D, 'post', A.pid);
+    // getting physical with him: a tougher post-up, at the price of more shooting fouls
+    const body = this.body(def, A);
+    if (body) {
+      adv -= K.pd.body.post;
+      this.impact('pd_body', def.side, K.pd.body.post * K.advPts.post, A.pid);
+    }
     const zd = this.zone(def);
     if (zd) {
       adv -= zd.post;
@@ -2385,8 +2724,13 @@ export class GameSim {
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
     // a small switched onto a big can only hold his ground by fouling
-    const reach = fixed?.tag === 'switch_mismatch' ? 1 + Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul : 1;
-    const foulTag: [string, number] | undefined = reach > 1 ? ['switch_mismatch', reach] : undefined;
+    let reach = fixed?.tag === 'switch_mismatch' ? 1 + Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul : 1;
+    let foulTag: [string, number] | undefined = reach > 1 ? ['switch_mismatch', reach] : undefined;
+    // (the physical defender's extra fouls go to the instruction unless a switch already put a small on him)
+    if (body) {
+      reach *= K.pd.body.foul;
+      foulTag ??= body.foulTag;
+    }
     const ss = this.selfShot(A);
     const opts = [
       Math.pow(A.c.close / 50, 2) * 1.1 * ss, // hook / short shot
@@ -2444,7 +2788,10 @@ export class GameSim {
     const Sh = this.pickActor(off, 'handoff');
     // the hub: best passing big, else best passer
     const hubs = off.on.filter((p) => p !== Sh);
-    const B = hubs[this.rng.weighted(hubs.map((p) => Math.pow((p.c.passing + (p.big ? 15 : 0) + (p.role === 'hub' ? 20 : 0)) / 50, 2.5) * Math.sqrt(this.passT(p))))];
+    const B =
+      hubs[
+        this.rng.weighted(hubs.map((p) => Math.pow((p.c.passing + (p.big ? 15 : 0) + (p.role === 'hub' ? 20 : 0)) / 50, 2.5) * Math.sqrt(this.passT(p)) * this.touch(def, off, p)))
+      ];
     const D = this.defOf(def, Sh);
     const dB = this.defOf(def, B);
     const pf = this.prefs(off, late);
@@ -2466,10 +2813,25 @@ export class GameSim {
       adv += 0.18;
       tags.push(['drop_handoff', 0.18 * 0.35]);
     }
-    if (zd) {
+    // (a chased shooter's chaser trails him off the screen: none of the zone's room)
+    if (zd && !this.chased(def, off).includes(Sh)) {
       adv += zd.handoff;
-      tags.push(['zone_3pt', zd.handoff * 0.35]);
+      tags.push([this.openKey(def), zd.handoff * 0.35]);
     }
+    // top-locked coming off the screen: a tougher catch, but a defender caught high gives up the
+    // curl and the back-cut
+    const lk = this.lock(def, off, Sh);
+    if (lk) {
+      adv -= lk.k.offScreen;
+      tags.push([lk.tag, -lk.k.offScreen * 0.35]);
+    }
+    // the ball sticks while the offense waits on the matchup it hunts
+    if (this.hunted(off, def)) {
+      adv -= K.hunt.flow;
+      tags.push(['hunt', -K.hunt.flow * 0.35]);
+    }
+    // going under the handoff: room for his jumper, none for his drive
+    const under = !zd && !sw && this.pd(def, Sh) === 'under';
     // the switch puts the shooter's man on the hub and the hub's man on the shooter: a big switched
     // onto a guard gets attacked off the dribble, a guard switched onto a big gets posted up
     if (sw) {
@@ -2497,32 +2859,60 @@ export class GameSim {
     const opts = [
       Math.pow(Sh.c.c3 / 50, 2.6) * pf.three * 1.25 * Sh.freedom * Sh.t3,
       Math.pow(Sh.c.midShot / 50, 2) * pf.mid * 0.45,
-      Math.pow(Sh.c.rim / 50, 1.6) * pf.rim * 0.45 * (1 + this.spacingBonus(off)),
+      Math.pow(Sh.c.rim / 50, 1.6) * pf.rim * 0.45 * (1 + this.spacingBonus(off)) * (lk ? 1 + 2 * lk.k.beat : 1),
       Math.pow(B.c.roll / 50, 1.5) * Math.pow(Sh.c.passing / 50, 1.2) * 0.3,
       forced ? 0 : K.continueBase * (adv < 0 ? 1.4 : 0.6),
     ];
     if (this.go3) opts[3] *= 0.05;
     const c = this.rng.weighted(opts);
     switch (c) {
-      case 0:
-        this.shoot(off, def, { shooter: Sh, zone: this.rng.chance(0.2) ? 'c3' : 'ab3', open: advOpen - 0.02, contest: D, assister: B, finish, tags });
-        return 'done';
-      case 1:
-        // the zone's open threes are for shooters who stay outside
-        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05, contest: D, assister: B, finish, tags: tags.filter(([k]) => k !== 'zone_3pt') });
-        return 'done';
-      case 2:
-        if (this.record) this.cur!.steps.push({ k: 'drive', pid: Sh.pid });
+      case 0: {
+        const u = under ? K.pd.under.pull : 0;
         this.shoot(off, def, {
           shooter: Sh,
-          zone: 'rim',
-          open: advOpen * 0.6 - this.help(def) * 0.2,
-          contest: this.rimContester(def, D),
+          zone: this.rng.chance(0.2) ? 'c3' : 'ab3',
+          open: advOpen - 0.02 + u,
+          contest: D,
           assister: B,
           finish,
-          tags: [['help_paint', -this.help(def) * 0.2]],
+          tags: u ? [...tags, ['pd_under', u]] : tags,
         });
         return 'done';
+      }
+      case 1: {
+        // the zone's open threes are for shooters who stay outside
+        const u = under ? K.pd.under.pull : 0;
+        const key = this.openKey(def);
+        const mt = tags.filter(([k]) => k !== key);
+        if (u) mt.push(['pd_under', u]);
+        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05 + u, contest: D, assister: B, finish, tags: mt });
+        return 'done';
+      }
+      case 2: {
+        if (this.record) this.cur!.steps.push({ k: 'drive', pid: Sh.pid });
+        const rt: [string, number][] = [['help_paint', -this.help(def) * 0.2]];
+        let o = advOpen * 0.6 - this.help(def) * 0.2;
+        if (lk) {
+          o += lk.k.beat;
+          rt.push([lk.beatTag, lk.k.beat]);
+        }
+        if (under) {
+          o -= K.pd.under.drive;
+          rt.push(['pd_under', -K.pd.under.drive]);
+        }
+        const body = this.body(def, Sh);
+        if (body) {
+          o -= K.pd.body.drive;
+          rt.push(['pd_body', -K.pd.body.drive]);
+        }
+        const sag = this.sagHelp(def, off, Sh, B);
+        if (sag) {
+          o -= sag;
+          rt.push(['pd_sag', -sag]);
+        }
+        this.shoot(off, def, { shooter: Sh, zone: 'rim', open: o, contest: this.rimContester(def, D), assister: B, finish, tags: rt, ...body });
+        return 'done';
+      }
       case 3:
         this.passStep(Sh, B);
         this.shoot(off, def, { shooter: B, zone: 'rim', open: 0.1 + advOpen * 0.4, contest: dB, assister: Sh, finish: 'pnrRoll' });
@@ -2545,9 +2935,17 @@ export class GameSim {
       adv -= 0.15;
       this.impact('switch_deny', def.side, 0.15 * 0.1);
     }
-    if (this.cur) this.cur.label = zone ? 'Ball movement vs zone' : 'Motion offense';
+    // the ball sticks while the offense waits on the matchup it hunts
+    if (this.hunted(off, def)) {
+      adv -= K.hunt.flow;
+      this.impact('hunt', def.side, K.hunt.flow * 0.1);
+    }
+    if (this.cur) this.cur.label = zone ? `Ball movement vs ${this.zoneName(def)}` : 'Motion offense';
     // the ball swings: after a reset it often finds the offense's hub before the next action
-    const passer = ballFrom && this.rng.chance(0.5) ? ballFrom : off.on[this.rng.weighted(off.on.map((p) => Math.pow(Math.max(5, p.c.passing) / 50, 2) * this.passT(p)))];
+    const passer =
+      ballFrom && this.rng.chance(0.5)
+        ? ballFrom
+        : off.on[this.rng.weighted(off.on.map((p) => Math.pow(Math.max(5, p.c.passing) / 50, 2) * this.passT(p) * this.touch(def, off, p)))];
     const pTO = this.toChance(K.toBase * 0.8, passer, def);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, passer, this.stealBy(this.stealer(def), 0.6), 'spotup');
@@ -2569,7 +2967,11 @@ export class GameSim {
       }
     }
     const cutters = off.on.filter((p) => p !== passer);
-    const cutW = cutters.map((p) => (Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1)) / Math.sqrt(p.tcr));
+    // (a top-locked player back-cuts the defender caught high)
+    const cutW = cutters.map(
+      (p) =>
+        ((Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1)) / Math.sqrt(p.tcr)) * (this.lock(def, off, p)?.k.cutW ?? 1),
+    );
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
     // backdoor cuts punish ball pressure / denial
     const backdoor = Math.max(0, pr) * 0.3;
@@ -2591,8 +2993,23 @@ export class GameSim {
         if (backdoor > 0) tags.push(['pressure_backdoor', backdoor * 0.8]);
         if (zone) tags.push(['zone_paint', -zone.cut]);
         const cd = this.defOf(def, cutter);
-        const o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -zone.cut : 0);
-        this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rimContester(def, cd), assister: passer, finish: 'cut', tags });
+        let o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -zone.cut : 0);
+        const lk = this.lock(def, off, cutter);
+        if (lk) {
+          o += lk.k.beat;
+          tags.push([lk.beatTag, lk.k.beat]);
+        }
+        const sag = this.sagHelp(def, off, cutter, passer);
+        if (sag) {
+          o -= sag;
+          tags.push(['pd_sag', -sag]);
+        }
+        const body = this.body(def, cutter);
+        if (body) {
+          o -= K.pd.body.drive;
+          tags.push(['pd_body', -K.pd.body.drive]);
+        }
+        this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rimContester(def, cd), assister: passer, finish: 'cut', tags, ...body });
         return 'done';
       }
       case 1: {
@@ -2602,7 +3019,7 @@ export class GameSim {
         let o = advOpen + 0.05;
         if (zone) {
           o += zone.swing;
-          tags.push(['zone_3pt', zone.swing]);
+          tags.push([this.openKey(def), zone.swing]);
         }
         if (help !== 0) {
           o += help * 0.15;
@@ -2622,7 +3039,8 @@ export class GameSim {
       }
       case 2: {
         const drivers = off.on.filter((p) => p !== passer);
-        const dr = drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr)))];
+        const dr =
+          drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr) * this.touch(def, off, p)))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
         const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -zone.drive : 0);
@@ -2642,23 +3060,27 @@ export class GameSim {
           });
         } else {
           const zoneS: ShotZone = this.rimOr(dr, 0.6);
-          this.shoot(off, def, {
-            shooter: dr,
-            zone: zoneS,
-            open: dAdv * 0.35 - help * 0.25 + this.spacingBonus(off) * 0.4,
-            contest: zoneS === 'rim' ? this.rimContester(def, d) : d,
-            assister: passer,
-            finish: 'spotup',
-            tags: [
-              ['help_paint', -help * 0.25],
-              ['spacing', this.spacingBonus(off) * 0.4],
-            ],
-          });
+          const tags: [string, number][] = [
+            ['help_paint', -help * 0.25],
+            ['spacing', this.spacingBonus(off) * 0.4],
+          ];
+          let o = dAdv * 0.35 - help * 0.25 + this.spacingBonus(off) * 0.4;
+          const body = this.body(def, dr);
+          if (body) {
+            o -= K.pd.body.drive;
+            tags.push(['pd_body', -K.pd.body.drive]);
+          }
+          const sag = this.sagHelp(def, off, dr, passer);
+          if (sag) {
+            o -= sag;
+            tags.push(['pd_sag', -sag]);
+          }
+          this.shoot(off, def, { shooter: dr, zone: zoneS, open: o, contest: zoneS === 'rim' ? this.rimContester(def, d) : d, assister: passer, finish: 'spotup', tags, ...body });
         }
         return 'done';
       }
       case 3: {
-        const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom * Math.pow(p.tu, 0.75) * p.tm))];
+        const sh = off.on[this.rng.weighted(off.on.map((p) => Math.pow(p.c.midShot / 50, 3) * p.freedom * Math.pow(p.tu, 0.75) * p.tm * this.touch(def, off, p)))];
         if (sh !== passer) this.passStep(passer, sh);
         this.shoot(off, def, { shooter: sh, zone: 'mid', open: advOpen * 0.5, contest: this.defOf(def, sh), assister: sh === passer ? null : passer, finish: 'spotup' });
         return 'done';
@@ -2674,7 +3096,9 @@ export class GameSim {
   private nonShootingFoul(off: ST, def: ST, handler: SP, defender: SP, finish: FinishType): boolean {
     const phys = (def.t.defense.physicality - 50) / 50;
     const pr = this.pressure(def);
-    const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250) * this.env.fouls;
+    // (getting physical with him: more reach-ins on him too)
+    const body = this.pd(def, handler) === 'body' ? K.pd.body.foul : 1;
+    const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * body;
     if (!this.rng.chance(p)) return false;
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
     if (this.record) {
@@ -2687,6 +3111,7 @@ export class GameSim {
       const mult = 1 + 0.3 * phys + 0.25 * pr;
       if (phys !== 0) this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, (0.45 * 0.3 * phys) / mult, handler.pid);
       if (pr !== 0) this.impact('pressure_foul', off.side, (0.45 * 0.25 * pr) / mult, handler.pid);
+      if (body !== 1) this.impact('pd_body', off.side, (0.45 * (body - 1)) / body, handler.pid);
       this.freeThrows(off, def, handler, 2, finish);
       return true;
     }
@@ -2993,9 +3418,22 @@ export class GameSim {
   /** Catch on a kick-out: let it fly, or attack a hard closeout. */
   private spotUp(off: ST, def: ST, s: ShotOpts) {
     const sh = s.shooter;
+    // top-locked (a junk defense's chaser, or run off the line): a hand in his face on the catch (none
+    // of a junk zone's open looks reach him), but his man closes out high and can be driven past
+    const lk = this.lock(def, off, sh);
+    if (lk) {
+      const key = this.openKey(def);
+      const zoneOpen = lk.tag === 'box_chase' ? (s.tags ?? []).reduce((a, [k, x]) => (k === key ? a + x : a), 0) : 0;
+      s = { ...s, open: s.open - zoneOpen - lk.k.c3, tags: [...(s.tags ?? []).filter(([k]) => lk.tag !== 'box_chase' || k !== key), [lk.tag, -lk.k.c3]] };
+    } else if (this.pd(def, sh) === 'sag') {
+      // sagged off: the kick-out finds him open
+      s = { ...s, open: s.open + K.pd.sag.kick, tags: [...(s.tags ?? []), ['pd_sag', K.pd.sag.kick]] };
+    }
     const t3 = off.t.offense.threePoint / 100;
     const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
+    // (a defender closing out high gets attacked off the catch)
+    if (lk) wDrive *= 1 + 2 * lk.k.beat;
     if (this.go3) wDrive *= 0.05;
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
@@ -3008,15 +3446,23 @@ export class GameSim {
     const pMid = (0.15 * sh.tm) / (0.15 * sh.tm + 0.85);
     const zone: ShotZone = r < pMid ? 'mid' : this.rimOr(sh, 0.65);
     const help = this.help(def);
-    this.shoot(off, def, {
-      shooter: sh,
-      zone,
-      open: adv * 0.3 + this.spacingBonus(off) * 0.4 - help * 0.2,
-      contest: zone === 'rim' ? this.rimContester(def, d) : d,
-      assister: s.assister,
-      finish: 'spotup',
-      tags: [['help_paint', -help * 0.2]],
-    });
+    const tags: [string, number][] = [['help_paint', -help * 0.2]];
+    let o = adv * 0.3 + this.spacingBonus(off) * 0.4 - help * 0.2;
+    if (lk) {
+      o += lk.k.beat;
+      tags.push([lk.beatTag, lk.k.beat]);
+    }
+    const body = this.body(def, sh);
+    if (body) {
+      o -= K.pd.body.drive;
+      tags.push(['pd_body', -K.pd.body.drive]);
+    }
+    const sag = zone !== 'mid' ? this.sagHelp(def, off, sh) : 0;
+    if (sag) {
+      o -= sag;
+      tags.push(['pd_sag', -sag]);
+    }
+    this.shoot(off, def, { shooter: sh, zone, open: o, contest: zone === 'rim' ? this.rimContester(def, d) : d, assister: s.assister, finish: 'spotup', tags, ...body });
   }
 
   /** Chance a made shot off a pass is credited as an assist (NBA: ~85% of threes, ~65% at the rim, ~40% of mid-range). */

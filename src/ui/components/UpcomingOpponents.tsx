@@ -43,7 +43,16 @@ export function UpcomingOpponents() {
           const plan = planFor(league, opp, g);
           const n = plan ? plan.items.length : 0;
           const matchups = plan?.matchups ? Object.keys(plan.matchups).length : 0;
-          const status = plan ? [n ? `${n} change${n === 1 ? '' : 's'}` : '', matchups ? `${matchups} matchup${matchups === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') : '';
+          const guards = plan?.playerD ? Object.keys(plan.playerD).length : 0;
+          const status = plan
+            ? [
+                n ? `${n} change${n === 1 ? '' : 's'}` : '',
+                matchups ? `${matchups} matchup${matchups === 1 ? '' : 's'}` : '',
+                guards ? `${guards} instruction${guards === 1 ? '' : 's'}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : '';
           return (
             <Link
               key={opp}

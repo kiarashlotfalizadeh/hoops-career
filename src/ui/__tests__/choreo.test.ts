@@ -74,6 +74,26 @@ describe('live court choreography', () => {
     const set = s.frames[s.frames.length - 1].d;
     expect(set.filter((p) => p.y >= 18).length).toBe(3);
   });
+
+  it('draws a junk defense: the chasers on their men, the others in the box or the triangle', () => {
+    for (const [scheme, chase, zone] of [
+      ['box1', [3], 4],
+      ['tri2', [3, 4], 3],
+    ] as const) {
+      const s = buildScript({ ...log([{ k: 'advance', pid: 1 }], scheme), chase: [...chase] }, info);
+      const f = s.frames[s.frames.length - 1];
+      // chasers: within a few feet of their men (guards[o] = the defender at the same index)
+      for (const o of chase) {
+        const i = off.indexOf(o);
+        expect(Math.hypot(f.d[i].x - f.o[i].x, f.d[i].y - f.o[i].y)).toBeLessThan(3);
+      }
+      // the rest hold their spots around the paint
+      const rest = f.d.filter((_, i) => !(chase as readonly number[]).includes(off[i]));
+      expect(rest).toHaveLength(zone);
+      for (const p of rest) expect(Math.abs(p.x) <= 9 && p.y <= 20).toBe(true);
+      expect(closest(f)).toBeGreaterThan(1.45);
+    }
+  });
 });
 
 describe('the live court score', () => {
