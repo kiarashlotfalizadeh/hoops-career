@@ -302,7 +302,7 @@ const partsList = (parts: string[]) => (parts.length <= 1 ? (parts[0] ?? '') : `
 export function backfillRecords(league: League) {
   if (league.records) return;
   const games = [...league.games].filter((g) => bookOf(g.type)).sort((a, b) => a.season - b.season || a.day - b.day || a.gid - b.gid);
-  league.records = emptyBook(games[0]?.season ?? league.season);
+  // (with nothing to read the book starts with the first game, as a new league's does: a save comes back as it went)
   for (const g of games) recordGame(league, g);
 }
 
