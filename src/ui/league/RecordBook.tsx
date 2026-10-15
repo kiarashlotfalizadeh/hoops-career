@@ -75,7 +75,7 @@ export function RecordBook({ league }: { league: League }) {
         <BookOpen size={20} className="dim" />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="bold ellipsis">{team ? `${team.region} ${team.name}` : 'League records'}</div>
-          <div className="tiny dim ellipsis">Since {seasonLabel(since)} · seasons played in this league</div>
+          <div className="tiny dim ellipsis">Since {seasonLabel(since)} · this league's seasons only</div>
         </div>
         <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book" style={{ maxWidth: 110 }}>
           <option value="league">League</option>

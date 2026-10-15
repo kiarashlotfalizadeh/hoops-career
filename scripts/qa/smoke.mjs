@@ -137,6 +137,8 @@ try {
     '/inbox',
     '/settings',
     '/history',
+    '/history?view=records',
+    '/history?view=records&part=season',
   ];
   for (const [w, h] of [
     [390, 844],
