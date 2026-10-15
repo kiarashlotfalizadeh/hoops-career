@@ -5,7 +5,7 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { simDay } from '../league/season';
 import { scoutData, SCOUT_MIN_GAMES, type Ranked, type ScoutData } from '../analysis/scouting';
 import { counterCandidates, scoutTeam, tacticsWithCounter } from '../ai/advisor';
-import { effectiveTactics, setPlanItem } from '../league/gamePlans';
+import { effectiveTactics, ensurePlan, setPlanItem } from '../league/gamePlans';
 import { buildSimInput, ensureRotation } from '../league/games';
 import { teamSeason } from '../league/helpers';
 import { previewMatchups } from '../analysis/matchupPreview';
@@ -122,6 +122,55 @@ describe('scouting data', () => {
     expect(scoutData(fresh, tid).tendencies).toEqual([]);
   });
 
+  it("on a new season's opening nights reads no play types from last season's few stored meetings, and ranks only teams with enough games", () => {
+    const m = playedLeague(14);
+    const S = m.season;
+    for (const t of m.teams) for (const s of t.seasons) s.season = S - 1;
+    for (const p of Object.values(m.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
+    // as a new season keeps them: only the user's results
+    m.games = m.games.filter((g) => g.home.tid === m.userTid || g.away.tid === m.userTid).map((g) => ({ ...g, season: S - 1 }));
+    for (const t of m.teams) teamSeason(t, S);
+    let read = 0;
+    for (const t of m.teams) {
+      if (t.tid === m.userTid) continue;
+      const d = scoutData(m, t.tid);
+      if (!d.enough) continue;
+      read++;
+      expect(d.lastSeason).toBe(true);
+      expect(d.ptGames).toBeLessThan(SCOUT_MIN_GAMES);
+      expect([d.playTypes, d.defPlayTypes]).toEqual([[], []]);
+      // (play types read as "1.09 points each (league 1.02)", "score 1.14 per possession (league 1.02)")
+      for (const x of [...d.tendencies, ...d.exploits, ...Object.values(d.counters)]) expect(x).not.toMatch(/points each|per possession \(league/);
+    }
+    expect(read).toBeGreaterThan(20);
+    // the user's own team has all its games: it ranks first of the one team with enough
+    const mine = scoutData(m, m.userTid);
+    expect(mine.ptGames).toBeGreaterThanOrEqual(SCOUT_MIN_GAMES);
+    expect(mine.playTypes.length).toBeGreaterThan(0);
+    for (const r of [...mine.playTypes, ...mine.defPlayTypes]) expect([r.shareRank, r.pppRank]).toEqual([1, 1]);
+  });
+
+  it('says how many meetings the head-to-head numbers are over, last season and playoffs included', () => {
+    const m = playedLeague(14);
+    const mine = (g: League['games'][number]) => g.home.tid === m.userTid || g.away.tid === m.userTid;
+    // an opponent met once this season, and once more last season
+    const met = new Map<number, League['games']>();
+    for (const g of m.games.filter(mine)) {
+      const opp = g.home.tid === m.userTid ? g.away.tid : g.home.tid;
+      met.set(opp, [...(met.get(opp) ?? []), g]);
+    }
+    const [opp, [g]] = [...met].find(([, gs]) => gs.length === 1)!;
+    const before = structuredClone(g);
+    m.games.push({ ...before, gid: m.nextGid++, season: m.season - 1 });
+    // in both, their popping big punished the drop for three points
+    const side = g.home.tid === opp ? 0 : 1;
+    for (const x of m.games.filter((y) => y.gid === g.gid || y.season === m.season - 1)) x.impacts = [{ key: 'drop_pop:o', t: side, count: 6, pts: 3, players: {} }];
+    const d = scoutData(m, opp);
+    expect(d.h2h.games.length).toBe(2);
+    expect(d.h2h.tracked).toBe(2);
+    expect(d.counters['cov-switch']).toMatch(/\(\+3\.0 points a game for them over 2 games\)\.$/);
+  });
+
   it("backs counters with evidence when their P&R ball handlers' numbers are inflated, and lists those first", () => {
     const m = playedLeague();
     const tid = scoutable(m, m.userTid + 5);
@@ -174,6 +223,26 @@ describe('counters for a game plan', () => {
     const a = base.offense.actions;
     expect(t.offense.actions).toEqual({ ...a, pnr: Math.min(100, a.pnr + 20), handoff: Math.min(100, a.handoff + 20), motion: Math.min(100, a.motion + 25) });
     expect(t.offense.threePoint).toBe(Math.min(100, base.offense.threePoint + 18));
+    delete l.gamePlans;
+  });
+
+  it("keeps the plan's guarding instructions with a counter, and offers none that changes nothing", () => {
+    const pid = Object.values(l.players).find((p) => p.tid === opp)!.pid;
+    const saved = l.teams[l.userTid].tactics;
+    // every action and the shot profile at the top: the counters that nudge them change nothing
+    const maxed = structuredClone(saved);
+    for (const k of Object.keys(maxed.offense.actions) as (keyof typeof maxed.offense.actions)[]) maxed.offense.actions[k] = 100;
+    Object.assign(maxed.offense, { threePoint: 100, rimAttack: 100 });
+    l.teams[l.userTid].tactics = maxed;
+    const plain = counterCandidates(l, l.userTid, opp).map((c) => c.id);
+    expect(plain).not.toContain('vs-drop');
+    expect(plain).not.toContain('vs-pack');
+    // a plan that only says how to guard one of theirs
+    ensurePlan(l, opp).playerD = { [pid]: 'sag' };
+    const cands = counterCandidates(l, l.userTid, opp);
+    expect(cands.map((c) => c.id)).toEqual(plain);
+    for (const c of cands) expect(tacticsWithCounter(l, opp, c).defense.playerD).toEqual({ [pid]: 'sag' });
+    l.teams[l.userTid].tactics = saved;
     delete l.gamePlans;
   });
 

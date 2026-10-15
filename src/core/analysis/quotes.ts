@@ -42,7 +42,7 @@ interface Facts {
   hurt: BoxLine | undefined;
   /** What the game report says decided it (the biggest factor that went the winner's way). */
   decided?: Factor['category'];
-  /** The winner's lowest win probability during the game, when its flow is stored. */
+  /** The winner's lowest win probability during the game, as the result keeps it (or its flow shows it). */
   low?: number;
 }
 
@@ -131,10 +131,16 @@ function injuredIn(league: League, b: BoxLine, text: string) {
   return !first || !!p?.firstName.startsWith(first);
 }
 
-/** A player of ours hurt in this game: from the play-by-play, or (for the latest game) a fresh injury on someone who played. */
+/**
+ * A player of ours hurt in this game: as the result keeps it, or for an older result from our side's
+ * play-by-play, or (for the latest game) a fresh injury on someone who played.
+ */
 function hurtInGame(league: League, res: GameResult, us: TeamBox): BoxLine | undefined {
   const played = us.players.filter((b) => b.min > 0);
-  const named = res.pbp?.filter((e) => e.text.endsWith('is injured and leaves the game.'));
+  if (res.hurt) return played.find((b) => res.hurt!.includes(b.pid));
+  // (their player who shares one of our names isn't ours)
+  const side = us === res.home ? 0 : 1;
+  const named = res.pbp?.filter((e) => e.t === side && e.text.endsWith('is injured and leaves the game.'));
   if (named?.length) return played.find((b) => named.some((e) => injuredIn(league, b, e.text)));
   if (!isLatestUserGame(league, res)) return undefined;
   return played.find((b) => {
@@ -143,10 +149,26 @@ function hurtInGame(league: League, res: GameResult, us: TeamBox): BoxLine | und
   });
 }
 
-/** The winner's lowest win probability once the game was under way (a low at tip-off is an upset, not a comeback). */
+/**
+ * The winner's lowest win probability once the game was under way (a low at tip-off is an upset,
+ * not a comeback): as the result keeps it (none kept: there was none), else from its flow.
+ */
 function comebackLow(res: GameResult): number | undefined {
+  if (res.hurt) return res.wpLow;
   const low = wpStory(res)?.low;
   return low && low.point.i >= 0 ? low.wp : undefined;
+}
+
+/**
+ * What the quotes read that the save doesn't keep for good, kept with one of the user's results as
+ * it's recorded (see applyResult): his players hurt in it (the play-by-play is kept for the latest
+ * few games, and an injury heals), and the winner's low point (the flow goes at the season's end).
+ * So a game always reads the same.
+ */
+export function recapFacts(res: GameResult, hurt: number[]): Pick<GameResult, 'hurt' | 'wpLow'> {
+  const low = comebackLow({ ...res, hurt: undefined });
+  // (rounded up: a low at the comeback line stays on the same side of it)
+  return { hurt, ...(low !== undefined ? { wpLow: Math.ceil(low * 1e4) / 1e4 } : {}) };
 }
 
 function facts(league: League, res: GameResult, report?: GameReport | null): Facts | null {
@@ -240,7 +262,7 @@ function voiceLine(f: Facts, gid: number, league: League): string {
       `We stopped playing the way that got us the lead. Lesson learned, the hard way.`,
     ]);
   if (v.pts >= 30) return pick(gid, 'l30', [`The points don't matter when we lose. I've got to make the right plays late.`, `I'd trade every one of those points for the win.`]);
-  if (f.upset <= -10)
+  if (f.upset >= 10)
     return pick(gid, 'lup', [`We can't take anybody lightly in this league. Tonight showed that.`, `They wanted it more, and that's on us. It can't happen again.`]);
   if (f.streak <= -3)
     return pick(gid, 'lstreak', [`${-f.streak} in a row hurts. We have to look in the mirror and fix it together.`, `Nobody's coming to save us. We dig out of this as a group.`]);
@@ -282,7 +304,7 @@ function coachLine(f: Facts, gid: number, league: League): string {
         `${lastName(league, f.theirStar)} was special tonight. When he gets going like that, we're tough to beat.`,
         `We rode ${lastName(league, f.theirStar)}, and he delivered.`,
       ]);
-    if (f.upset <= -10) return pick(gid, 'cup', [`People counted us out against a team like ${us}. Our guys believed.`, `Nobody gave us a chance tonight. I love this group.`]);
+    if (f.upset >= 10) return pick(gid, 'cup', [`People counted us out against a team like ${us}. Our guys believed.`, `Nobody gave us a chance tonight. I love this group.`]);
     if (f.margin >= 20) return pick(gid, 'cbig', [`Our guys came out ready. That was as complete a game as we've played.`, `Everything clicked tonight, on both ends.`]);
     const why = f.decided && WON_ON[f.decided];
     if (why) return why;

@@ -369,6 +369,9 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (g.sets !== undefined && !setsIntact(g.sets)) delete g.sets;
     // keys to the game: a damaged list goes (the recap then has none)
     if (g.keys !== undefined && !keysIntact(g.keys)) delete g.keys;
+    // what the recap's quotes read: damaged, they go (the quotes read the play-by-play and the flow, as for older games)
+    if (g.hurt !== undefined && !(Array.isArray(g.hurt) && g.hurt.every(int))) delete g.hurt;
+    if (g.wpLow !== undefined && !(num(g.wpLow) && g.wpLow >= 0 && g.wpLow <= 1)) delete g.wpLow;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
