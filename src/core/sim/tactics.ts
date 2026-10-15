@@ -143,6 +143,40 @@ export const DEF_PRESETS: DefPreset[] = [
   },
 ];
 
+// ---------------------------------------------------------------- five-level settings
+
+/** The five settings each 0-100 tactic offers on the screens, low to high. */
+export const LEVEL_VALUES = [0, 25, 50, 75, 100] as const;
+
+/**
+ * Which of the five settings a value reads as: the nearest one. Presets, the staff's in-game
+ * adjustments and situational nudges can land between them, and the engine plays the value itself.
+ */
+export function levelIndex(v: number): number {
+  return Math.round(clamp(v, 0, 100) / 25);
+}
+
+export type LevelNames = readonly [string, string, string, string, string];
+/** The 0-100 tactics, and every action's frequency as one. */
+export type LeveledTactic = 'pace' | 'transition' | 'threePoint' | 'rimAttack' | 'crashBoards' | 'help' | 'pressure' | 'physicality' | 'getBack' | 'action';
+
+/** What each setting is called, low to high. */
+export const TACTIC_LEVELS: Record<LeveledTactic, LevelNames> = {
+  pace: ['Grind it out', 'Patient', 'Balanced', 'Up-tempo', 'Run & gun'],
+  transition: ['Walk it up', 'Pick spots', 'Balanced', 'Push often', 'Always run'],
+  threePoint: ['Lots of twos', 'Fewer threes', 'Balanced', 'More threes', 'Rim & 3s only'],
+  rimAttack: ['Jump shots', 'Few drives', 'Balanced', 'Drive often', 'All downhill'],
+  crashBoards: ['Never crash', 'Rarely crash', 'Balanced', 'Crash often', 'Crash hard'],
+  help: ['Never help', 'Stay home', 'Balanced', 'Pack the paint', 'Wall off paint'],
+  pressure: ['Sag off', 'Contain', 'Balanced', 'Pressure', 'Swarm'],
+  physicality: ['Hands off', 'Play clean', 'Balanced', 'Physical', 'Rough it up'],
+  getBack: ['Jog back', 'Trot back', 'Balanced', 'Hustle back', 'Sprint back'],
+  action: ['Almost never', 'Rarely', 'Normal', 'Often', 'Heavily'],
+};
+
+/** The name of the setting a value reads as ("Up-tempo" for a pace of 72). */
+export const levelName = (k: LeveledTactic, v: number) => TACTIC_LEVELS[k][levelIndex(v)];
+
 export const ACTION_META: Record<ActionType, { label: string; help: string }> = {
   pnr: { label: 'Pick-and-roll', help: 'Ball screen for a creator; the screener rolls or pops. Coverage choice decides who gets open.' },
   iso: { label: 'Isolation', help: 'Clear out for a one-on-one. Efficient only for elite creators or vs a mismatch.' },

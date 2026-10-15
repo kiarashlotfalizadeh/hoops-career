@@ -3,7 +3,7 @@
 // sim.baseTactics → setTactics.
 
 import type { Settings, Tactics } from '../../core/types';
-import { cloneTactics, hacks, startHacking, stopHacking } from '../../core/sim/tactics';
+import { cloneTactics, hacks, levelName, startHacking, stopHacking } from '../../core/sim/tactics';
 
 export interface Pill {
   id: string;
@@ -51,8 +51,9 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
   const offense = (k: 'pace' | 'crashBoards') => [(x: Tactics) => x.offense[k], (x: Tactics, v: number) => void (x.offense[k] = v)] as const;
   const defense = (k: 'help') => [(x: Tactics) => x.defense[k], (x: Tactics, v: number) => void (x.defense[k] = v)] as const;
 
-  pair('push', ...offense('pace'), (v) => v >= 70, 80, 50, 'Push pace', 'Pace 80: more possessions, more run-outs and more fatigue.');
-  pair('slow', ...offense('pace'), (v) => v <= 30, 20, 50, 'Slow it down', 'Pace 20: fewer possessions, deep in the shot clock.');
+  // the help names the setting each pill lands on, as the Adjust sheet shows it
+  pair('push', ...offense('pace'), (v) => v >= 70, 80, 50, 'Push pace', `Pace: ${levelName('pace', 80)}. More possessions, more run-outs and more fatigue.`);
+  pair('slow', ...offense('pace'), (v) => v <= 30, 20, 50, 'Slow it down', `Pace: ${levelName('pace', 20)}. Fewer possessions, deep in the shot clock.`);
   const zone = t.defense.scheme !== 'man';
   out.push(
     zone
@@ -65,8 +66,8 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
           apply: (x) => void (x.defense.scheme = 'zone23'),
         },
   );
-  pair('pack', ...defense('help'), (v) => v >= 70, 78, 50, 'Pack the paint', 'Help defense 78: wall off drives, live with kick-out threes.');
-  pair('home', ...defense('help'), (v) => v <= 30, 25, 50, 'Stay home', 'Help defense 25: stay on the shooters, give up more drives.');
+  pair('pack', ...defense('help'), (v) => v >= 70, 78, 50, 'Pack the paint', `Help defense: ${levelName('help', 78)}. Wall off drives, live with kick-out threes.`);
+  pair('home', ...defense('help'), (v) => v <= 30, 25, 50, 'Stay home', `Help defense: ${levelName('help', 25)}. Stay on the shooters, give up more drives.`);
   out.push({
     id: 'hot',
     label: 'Feed hot hand',
@@ -94,14 +95,14 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
       id: 'crash',
       label: 'Crash glass',
       on: crashing,
-      help: 'Crash the offensive glass (80): second chances, fewer players back on defense.',
+      help: `Crash the offensive glass: ${levelName('crashBoards', 80)}. Second chances, fewer players back on defense.`,
       apply: (x) => void (x.offense.crashBoards = crashing ? (plan.offense.crashBoards >= 70 ? 50 : plan.offense.crashBoards) : 80),
     });
     out.push({
       id: 'getback',
       label: 'Get back',
       on: back,
-      help: 'Crash glass 20 and transition defense 85: no run-outs, fewer offensive boards.',
+      help: `Crash the glass: ${levelName('crashBoards', 20)}; transition defense: ${levelName('getBack', 85)}. No run-outs, fewer offensive boards.`,
       apply: (x) => {
         if (back) {
           x.offense.crashBoards = plan.offense.crashBoards <= 30 ? 50 : plan.offense.crashBoards;

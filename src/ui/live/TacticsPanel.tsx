@@ -1,11 +1,11 @@
 import { Hand } from 'lucide-react';
 import type { DefScheme, PnrCoverage, PressMode, Settings, StarPlan, Tactics } from '../../core/types';
-import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, chasers, schemesFor, startHacking, stopHacking } from '../../core/sim/tactics';
-import { Chips, Slider, Tag, Toggle } from '../components/ui';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, schemesFor, startHacking, stopHacking } from '../../core/sim/tactics';
+import { Chips, Levels, Slider, Tag, Toggle } from '../components/ui';
 
 /**
  * The in-game adjustments sheet, as deep as the coaching depth: Simple gets the big levers,
- * Advanced the junk defenses, the press, star plan and the rest of the sliders, Expert the matchups
+ * Advanced the junk defenses, the press, star plan and the rest of the settings, Expert the matchups
  * and late-game rules.
  */
 export function TacticsPanel({
@@ -128,12 +128,12 @@ export function TacticsPanel({
           </>
         )}
       </div>
-      <Slider label="Help defense" value={t.defense.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} left="Stay home" right="Pack the paint" />
+      <Levels label="Help defense" value={t.defense.help} names={TACTIC_LEVELS.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} />
       {adv && (
         <>
-          <Slider label="Ball pressure" value={t.defense.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} left="Contain" right="Swarm" />
-          <Slider label="Physicality" value={t.defense.physicality} onChange={(x) => set((tt) => void (tt.defense.physicality = x))} left="Clean" right="Physical" />
-          <Slider label="Transition defense" value={t.defense.getBack} onChange={(x) => set((tt) => void (tt.defense.getBack = x))} left="Jog back" right="Sprint back" />
+          <Levels label="Ball pressure" value={t.defense.pressure} names={TACTIC_LEVELS.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} />
+          <Levels label="Physicality" value={t.defense.physicality} names={TACTIC_LEVELS.physicality} onChange={(x) => set((tt) => void (tt.defense.physicality = x))} />
+          <Levels label="Transition defense" value={t.defense.getBack} names={TACTIC_LEVELS.getBack} onChange={(x) => set((tt) => void (tt.defense.getBack = x))} />
           <Toggle on={t.defense.switchOffBall} onChange={(x) => set((tt) => void (tt.defense.switchOffBall = x))} label="Switch off-ball screens" />
           <div>
             <div className="small bold" style={{ marginBottom: 6 }}>
@@ -226,13 +226,13 @@ export function TacticsPanel({
         </div>
       )}
       {head('Offense')}
-      <Slider label="Pace" value={t.offense.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} left="Grind" right="Run & gun" />
-      <Slider label="Three-point emphasis" value={t.offense.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} left="Mid-range ok" right="Rim & 3s only" />
-      <Slider label="Crash the offensive glass" value={t.offense.crashBoards} onChange={(x) => set((tt) => void (tt.offense.crashBoards = x))} left="Get back" right="Crash" />
+      <Levels label="Pace" value={t.offense.pace} names={TACTIC_LEVELS.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} />
+      <Levels label="Three-point emphasis" value={t.offense.threePoint} names={TACTIC_LEVELS.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} />
+      <Levels label="Crash the offensive glass" value={t.offense.crashBoards} names={TACTIC_LEVELS.crashBoards} onChange={(x) => set((tt) => void (tt.offense.crashBoards = x))} />
       {adv && (
         <>
-          <Slider label="Attack the rim" value={t.offense.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} left="Settle" right="Downhill" />
-          <Slider label="Push in transition" value={t.offense.transition} onChange={(x) => set((tt) => void (tt.offense.transition = x))} left="Walk it up" right="Run" />
+          <Levels label="Attack the rim" value={t.offense.rimAttack} names={TACTIC_LEVELS.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} />
+          <Levels label="Push in transition" value={t.offense.transition} names={TACTIC_LEVELS.transition} onChange={(x) => set((tt) => void (tt.offense.transition = x))} />
           <Toggle on={t.offense.huntMismatch} onChange={(x) => set((tt) => void (tt.offense.huntMismatch = x))} label="Hunt mismatches" />
           <Toggle on={t.offense.hotHand} onChange={(x) => set((tt) => void (tt.offense.hotHand = x))} label="Feed the hot hand" />
         </>

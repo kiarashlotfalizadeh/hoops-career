@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { ovrColor } from '../../core/ratings';
+import { LEVEL_VALUES, levelIndex, type LevelNames } from '../../core/sim/tactics';
 import { FRANCHISES } from '../../core/teams';
 import { useBack } from '../nav';
 import { inkOn } from '../teamColors';
@@ -248,6 +249,69 @@ export function Slider({
         </div>
       )}
       {help && <div className="small dim">{help}</div>}
+    </div>
+  );
+}
+
+/**
+ * A 0-100 tactic as five named settings, low to high, in place of a slider. The setting nearest the
+ * value is the one marked (presets and the staff's adjustments can land between them); picking one
+ * sets its value. The settings below the chosen one are tinted, like a slider's fill.
+ */
+export function Levels({
+  label,
+  value,
+  names,
+  onChange,
+  help,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  names: LevelNames;
+  onChange: (v: number) => void;
+  help?: ReactNode;
+  disabled?: boolean;
+}) {
+  const id = useId();
+  const ref = useRef<HTMLDivElement>(null);
+  const cur = levelIndex(value);
+  // a radio group: arrows move along the scale (no wrapping from one end to the other), Home and End jump to its ends
+  const onKey = (e: ReactKeyboardEvent, i: number) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? names.length - 1 : step ? Math.min(names.length - 1, Math.max(0, i + step)) : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    if (j !== cur) onChange(LEVEL_VALUES[j]);
+    ref.current?.querySelectorAll<HTMLElement>('button')[j]?.focus();
+  };
+  return (
+    <div className="levels" style={{ opacity: disabled ? 0.5 : 1 }}>
+      <span id={`${id}l`} className="slider-label">
+        {label}
+      </span>
+      <div className="levels-row" role="radiogroup" aria-labelledby={`${id}l`} aria-describedby={help ? `${id}h` : undefined} ref={ref}>
+        {names.map((n, i) => (
+          <button
+            key={i}
+            type="button"
+            role="radio"
+            aria-checked={i === cur}
+            tabIndex={i === cur ? 0 : -1}
+            disabled={disabled}
+            className={i === cur ? 'on' : i < cur ? 'below' : undefined}
+            onClick={() => onChange(LEVEL_VALUES[i])}
+            onKeyDown={(e) => onKey(e, i)}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      {help && (
+        <div id={`${id}h`} className="small dim">
+          {help}
+        </div>
+      )}
     </div>
   );
 }

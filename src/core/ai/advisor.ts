@@ -64,7 +64,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   const team = league.teams[tid];
   const { cs, creators, spacing, security } = readRotation(league, tid);
   const t = team.tactics;
-  // a playbook whose sliders have moved reads "Custom (Balanced base)", not the preset's name
+  // a playbook whose settings have moved reads "Custom (Balanced base)", not the preset's name
   const offName = offenseLabel(t);
   const defName = defenseLabel(t);
   const shooters = [...cs].sort((a, b) => b.c.c3 - a.c.c3);

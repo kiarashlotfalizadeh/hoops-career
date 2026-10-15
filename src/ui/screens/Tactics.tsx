@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
-import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, chasers, cloneTactics, isJunk, schemesFor } from '../../core/sim/tactics';
+import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, cloneTactics, isJunk, schemesFor } from '../../core/sim/tactics';
 import { effectiveTactics } from '../../core/league/gamePlans';
 import { nextUserGame } from '../../core/analysis/preview';
 import { autoTactics } from '../../core/ai/coachAI';
@@ -13,7 +13,7 @@ import { PresetPicker } from '../components/PresetPicker';
 import { MyPlaybooksCard, PlaybookLine } from '../components/MyPlaybooks';
 import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype, attrDisplay, composites } from '../../core/ratings';
-import { Avatar, Card, Chips, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
+import { Avatar, Card, Chips, Help, Levels, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
 import { UpcomingOpponents } from '../components/UpcomingOpponents';
 import { teamAlerts } from '../../core/ai/advisor';
@@ -155,12 +155,11 @@ export default function Tactics() {
           </Card>
           {complexity === 'simple' && (
             <Card title="Tempo">
-              <Slider
+              <Levels
                 label="Pace"
                 value={t.offense.pace}
+                names={TACTIC_LEVELS.pace}
                 onChange={(x) => edit((tt) => void (tt.offense.pace = x))}
-                left="Grind"
-                right="Run & gun"
                 help="Faster pace means more possessions and transition chances, but more turnovers and fatigue."
               />
             </Card>
@@ -173,20 +172,18 @@ export default function Tactics() {
         <>
           <Card title="Tempo">
             <div className="col" style={{ gap: 16 }}>
-              <Slider
+              <Levels
                 label="Pace"
                 value={t.offense.pace}
+                names={TACTIC_LEVELS.pace}
                 onChange={(x) => edit((tt) => void (tt.offense.pace = x))}
-                left="Grind"
-                right="Run & gun"
                 help="Seconds you take per half-court possession. Faster = more possessions, slightly more turnovers, more fatigue."
               />
-              <Slider
+              <Levels
                 label="Push in transition"
                 value={t.offense.transition}
+                names={TACTIC_LEVELS.transition}
                 onChange={(x) => edit((tt) => void (tt.offense.transition = x))}
-                left="Walk it up"
-                right="Always run"
                 help="How often you attack before the defense sets after rebounds and steals. Transition is the most efficient offense in basketball."
               />
             </div>
@@ -195,20 +192,19 @@ export default function Tactics() {
             title="Actions"
             right={
               <Help title="How actions are chosen">
-                Each half-court trip, the offense picks an action weighted by these sliders and by how well the players on the floor can run it. A pick-and-roll-heavy plan with no
+                Each half-court trip, the offense picks an action weighted by these settings and by how well the players on the floor can run it. A pick-and-roll-heavy plan with no
                 ball handler on the floor will naturally drift to other actions.
               </Help>
             }
           >
             <div className="col" style={{ gap: 16 }}>
               {(Object.keys(ACTION_META) as ActionType[]).map((a) => (
-                <Slider
+                <Levels
                   key={a}
                   label={ACTION_META[a].label}
                   value={t.offense.actions[a]}
+                  names={TACTIC_LEVELS.action}
                   onChange={(x) => edit((tt) => void (tt.offense.actions[a] = x))}
-                  left="Rarely"
-                  right="Constantly"
                   help={ACTION_META[a].help}
                 />
               ))}
@@ -217,28 +213,25 @@ export default function Tactics() {
           <SetPackageCard t={t} edit={edit} players={players} />
           <Card title="Shot profile">
             <div className="col" style={{ gap: 16 }}>
-              <Slider
+              <Levels
                 label="Three-point emphasis"
                 value={t.offense.threePoint}
+                names={TACTIC_LEVELS.threePoint}
                 onChange={(x) => edit((tt) => void (tt.offense.threePoint = x))}
-                left="Mid-range ok"
-                right="Rim & 3s only"
-                help="Higher values turn mid-range looks into threes. Great with shooters; bad shooting teams lose efficiency."
+                help="Higher settings turn mid-range looks into threes. Great with shooters; bad shooting teams lose efficiency."
               />
-              <Slider
+              <Levels
                 label="Attack the rim"
                 value={t.offense.rimAttack}
+                names={TACTIC_LEVELS.rimAttack}
                 onChange={(x) => edit((tt) => void (tt.offense.rimAttack = x))}
-                left="Settle"
-                right="Downhill"
                 help="How often ball handlers drive to the basket. Draws fouls and opens kick-outs, but runs into rim protectors."
               />
-              <Slider
+              <Levels
                 label="Crash the offensive glass"
                 value={t.offense.crashBoards}
+                names={TACTIC_LEVELS.crashBoards}
                 onChange={(x) => edit((tt) => void (tt.offense.crashBoards = x))}
-                left="Get back"
-                right="Crash"
                 help="More offensive rebounds and second chances, but more fast breaks allowed the other way."
               />
               <Toggle
@@ -346,36 +339,32 @@ export default function Tactics() {
           </Card>
           <Card title="Help & pressure">
             <div className="col" style={{ gap: 16 }}>
-              <Slider
+              <Levels
                 label="Help defense"
                 value={t.defense.help}
+                names={TACTIC_LEVELS.help}
                 onChange={(x) => edit((tt) => void (tt.defense.help = x))}
-                left="Stay home"
-                right="Pack the paint"
                 help="Packing the paint walls off drives and post-ups but gives up kick-out threes. Stay home against good shooting teams."
               />
-              <Slider
+              <Levels
                 label="Ball pressure"
                 value={t.defense.pressure}
+                names={TACTIC_LEVELS.pressure}
                 onChange={(x) => edit((tt) => void (tt.defense.pressure = x))}
-                left="Contain"
-                right="Swarm"
                 help="More steals and turnovers, but quick creators blow by and backdoor cuts open up. Also more fouls."
               />
-              <Slider
+              <Levels
                 label="Physicality"
                 value={t.defense.physicality}
+                names={TACTIC_LEVELS.physicality}
                 onChange={(x) => edit((tt) => void (tt.defense.physicality = x))}
-                left="Clean"
-                right="Physical"
                 help="Tighter contests vs more free throws for the opponent."
               />
-              <Slider
+              <Levels
                 label="Transition defense"
                 value={t.defense.getBack}
+                names={TACTIC_LEVELS.getBack}
                 onChange={(x) => edit((tt) => void (tt.defense.getBack = x))}
-                left="Jog back"
-                right="Sprint back"
                 help="How hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash the offensive glass (Offense) sets how many players go after them."
               />
             </div>
