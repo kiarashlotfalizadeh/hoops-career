@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Lightbulb } from 'lucide-react';
 import { useLeague } from '../../state/store';
-import { buildGameReport } from '../../core/analysis/gameReport';
+import { buildGameReport, setLineText } from '../../core/analysis/gameReport';
 import { Card, Chips, Empty, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart, WinProbChart } from '../components/charts';
@@ -152,6 +152,23 @@ export default function GameView() {
               ))}
             </div>
           </Card>
+          {report.sets.length > 0 && (
+            <Card title="Sets" right={<span className="tiny dim">runs · points per possession</span>}>
+              <div className="col" style={{ gap: 6 }}>
+                {report.sets.map((s) => (
+                  <div key={s.id} className="row small" style={{ gap: 8 }}>
+                    <span className="grow">{s.name}</span>
+                    <span className="num dim2" style={{ textAlign: 'right' }}>
+                      {setLineText(s)}
+                    </span>
+                  </div>
+                ))}
+                <div className="tiny dim">
+                  The possessions each set opened, second chances included. Read by: the run by which their defense had taken a good part of its look away.
+                </div>
+              </div>
+            </Card>
+          )}
           <div className="md-grid2">
             <Card title="Player grades">
               <div className="col" style={{ gap: 6 }}>

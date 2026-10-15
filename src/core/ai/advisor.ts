@@ -1,7 +1,8 @@
 // The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
 // in a worker), and alerts about rotation/tactics issues on your own team.
 
-import type { ActionType, League, Player, PlayerDefense, PnrCoverage, Tactics } from '../types';
+import type { ActionType, League, Player, PlayerDefense, PnrCoverage, SetId, Tactics } from '../types';
+import { SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { composites, ROLE_META } from '../ratings';
 import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking } from '../sim/tactics';
@@ -15,6 +16,7 @@ import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
+import { SETS } from '../sim/sets';
 
 export interface Threat {
   pid: number;
@@ -430,7 +432,16 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'pd_body:o': { label: 'Less physical', apply: (t) => dropInstruction(t, 'body') },
   'hunt:d': { label: 'Stop the hunt', apply: (t) => void (t.offense.huntTarget = null) },
   'foul_give:o': { label: 'No foul to give', apply: (t) => void (t.manage.foulToGive = false) },
+  // a set the defense takes away comes out of the package
+  ...Object.fromEntries(SET_IDS.map((id) => [`set_${id}:d`, { label: `Drop ${SETS[id].short}`, apply: (t: Tactics) => dropSet(t, id) }])),
 };
+
+/** Take a set out of the package (the package goes when it's empty). */
+function dropSet(t: Tactics, id: SetId) {
+  const left = (t.offense.sets ?? []).filter((x) => x !== id);
+  if (left.length) t.offense.sets = left;
+  else delete t.offense.sets;
+}
 
 /** Take one kind of instruction off every opponent it's on. */
 function dropInstruction(t: Tactics, d: PlayerDefense) {

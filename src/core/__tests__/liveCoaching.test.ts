@@ -5,7 +5,7 @@ import { IMPACT_TEXT } from '../analysis/gameReport';
 import { impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, defaultTactics, emptyPatch, namedJunk, tacticsDiff } from '../sim/tactics';
 import { Rng } from '../random';
-import { PLAYER_DEFENSES, type DefScheme, type PlayerDefense, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
+import { PLAYER_DEFENSES, SET_IDS, type DefScheme, type PlayerDefense, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
 
 /** Tactics with every setting an impact's `uses` reads spread over its range. */
 function randomTactics(rng: Rng): Tactics {
@@ -30,6 +30,9 @@ function randomTactics(rng: Rng): Tactics {
   t.offense.crashBoards = rng.int(0, 100);
   t.offense.transition = rng.int(0, 100);
   t.manage.hackThreshold = rng.chance(0.5) ? 0 : rng.int(40, 65);
+  // a set package now and then: up to four of the sets
+  const pkg = SET_IDS.filter(() => rng.chance(0.3)).slice(0, 4);
+  if (pkg.length) t.offense.sets = pkg;
   return t;
 }
 

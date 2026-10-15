@@ -20,6 +20,8 @@ import type {
   PnrCoverage,
   Pos,
   Ratings,
+  SetId,
+  SetStat,
   ShotRecord,
   ShotZone,
   SituationalPlan,
@@ -33,9 +35,27 @@ import { Rng, clamp } from '../random';
 import { archetype, composites, type Composites, ROLE_USAGE } from '../ratings';
 import { GAME } from '../constants';
 import { buildMinutePlan, planInputs, planRoles } from './rotationPlan';
-import { FINISH_LABEL, type FinishType, type PlayCall, type PossLog } from './log';
+import { FINISH_LABEL, type FinishType, type PlayCall, type PossLog, type PossStep } from './log';
 import { MAX_SITUATIONS, applyPatch, cloneTactics } from './tactics';
 import { solveMatchups } from './matchups';
+import {
+  READ_ON_IT,
+  SETS,
+  SET_K,
+  SPLIT_DOUBLE,
+  castFor,
+  fitsFloor,
+  isSetId,
+  readAfter,
+  readSlots,
+  setEdges,
+  setLabel,
+  setLook,
+  setPackage,
+  type Cast,
+  type DefRead,
+  type Slot,
+} from './sets';
 
 // ---------------------------------------------------------------- tuning constants
 
@@ -489,6 +509,23 @@ export interface ST {
   call: PlayCall | null;
   /** One of the team's timeouts was called: its next trip runs the after-timeout play. */
   atoNext: boolean;
+  /** Times each set has been run tonight: what the other defense has read of it. */
+  setRuns: Map<SetId, number>;
+}
+
+/**
+ * A set being run on this action (see sets.ts): its cast, and what it does to the action's options
+ * (by name): openness from its edges against this defense and the defense's read of it, the tags
+ * behind that openness, and the weight multipliers that send the team to its look.
+ */
+interface SetPlay {
+  cast: Cast<SP>;
+  label: string;
+  /** The openness the defense's read takes off its look (already in `open` for its look's options). */
+  read: number;
+  open: Partial<Record<Slot, number>>;
+  tags: Partial<Record<Slot, [string, number][]>>;
+  w: Partial<Record<Slot, number>>;
 }
 
 export interface SimTeamInput {
@@ -613,6 +650,12 @@ export class GameSim {
   private go3 = false;
   /** The defense fouled to give: this trip's first half-court action is an inbounds play. */
   private inbound = false;
+  /** A set handed to the action about to run (it takes it: see takePlay). */
+  private play: SetPlay | null = null;
+  /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
+  private possSet: SetStat | null = null;
+  /** Each side's sets tonight, by `${side}:${id}`. */
+  private setStats = new Map<string, SetStat>();
   /** Game seed: every random stream in the game derives from it. */
   private seed: number;
   /** Cosmetic draws (shot spots, play-by-play wording) never touch the simulation stream. */
@@ -766,6 +809,7 @@ export class GameSim {
       hacked: new Map(),
       call: null,
       atoNext: false,
+      setRuns: new Map(),
     };
   }
 
@@ -891,12 +935,23 @@ export class GameSim {
   callPlay(side: 0 | 1, call: PlayCall): boolean {
     const t = this.T[side];
     if (call.kind === 'iso' && !t.byId.has(call.pid)) return false;
+    // a set for a player is run for him while he's on the floor (else for the best fit there)
+    if (call.kind === 'set' && (!isSetId(call.set) || (call.pid != null && !t.byId.has(call.pid)))) return false;
     t.call = { ...call };
     return true;
   }
 
   cancelPlay(side: 0 | 1) {
     this.T[side].call = null;
+  }
+
+  /**
+   * The sets the team on `side` has run tonight: how often, and the openness the other defense's read
+   * would take off each one's look on its next run (see readAfter).
+   */
+  setReads(side: 0 | 1): { id: SetId; runs: number; read: number }[] {
+    const coach = this.T[1 - side].team.coach?.tactics ?? 50;
+    return [...this.T[side].setRuns].map(([id, runs]) => ({ id, runs, read: readAfter(id, runs, coach) }));
   }
 
   /** The first enabled situational plan whose trigger matches the game right now. */
@@ -1638,6 +1693,7 @@ export class GameSim {
     this.inTransition = false;
     this.possFinish = 'misc';
     this.lastShooter = null;
+    this.possSet = null;
     this.possCtxForTOPts = ctx;
     const clockStart = this.clock;
     if (this.record) {
@@ -1679,12 +1735,18 @@ export class GameSim {
     const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
     off.atoNext = false;
     const call = off.call && off.call.kind !== 'foul' ? off.call : null;
-    let first: ActionType | null = ato;
-    let isoFor: SP | null = null;
+    // an after-timeout set is run for its player (the best fit when he's off the floor), and an
+    // after-timeout isolation named for a player is a clear-out for him
+    const atoPid = off.t.manage.atoPid ?? null;
+    let set: { id: SetId; pid: number | null } | null = ato && isSetId(ato) ? { id: ato, pid: atoPid } : null;
+    let first: ActionType | null = ato && !isSetId(ato) ? ato : null;
+    let isoFor: SP | null = first === 'iso' && atoPid !== null ? (off.byId.get(atoPid) ?? null) : null;
     if (call) {
       off.call = null;
       // a play called from the bench (after a timeout too) replaces the standing after-timeout play
       first = null;
+      set = null;
+      isoFor = null;
       if (this.cur) this.cur.call = { ...call, t: off.side };
       if (call.kind === 'three') late.need3 = this.go3 = true;
       else if (call.kind === 'two') {
@@ -1694,7 +1756,7 @@ export class GameSim {
       else if (call.kind === 'iso') {
         first = 'iso';
         isoFor = off.byId.get(call.pid) ?? null;
-      }
+      } else if (call.kind === 'set') set = { id: call.set, pid: call.pid ?? null };
     }
 
     // ---- full court press
@@ -1721,7 +1783,7 @@ export class GameSim {
     if (late.hold || late.milk) transP *= 0.2;
     if (late.hurry) transP *= 1.5;
     // a set play is walked up and run in the half court, and so is the inbounds play after a foul to give
-    if (call?.kind === 'three' || call?.kind === 'iso' || this.inbound) transP = 0;
+    if (call?.kind === 'three' || call?.kind === 'iso' || call?.kind === 'set' || this.inbound) transP = 0;
 
     if (this.clock > 2 && this.rng.chance(clamp(transP, 0, 0.85))) {
       // each setting's share of the run-outs, at ~0.25-0.35 pts per run-out over a half-court trip
@@ -1758,7 +1820,7 @@ export class GameSim {
       this.clockOut(off);
       return;
     }
-    this.halfCourt(off, def, shotClock, late, paceF, first, isoFor);
+    this.halfCourt(off, def, shotClock, late, paceF, first, isoFor, set, true);
   }
 
   /** The period runs out before the offense gets a shot off: the trip counts for its last shot, if it had one. */
@@ -1982,9 +2044,25 @@ export class GameSim {
 
   // ------------------------------------------------------------ half court
 
-  /** `first`: an action the trip opens with (an after-timeout play, a called isolation for `isoFor`). */
-  private halfCourt(off: ST, def: ST, shotClock: number, late: ReturnType<GameSim['lateMode']>, paceF: number, first: ActionType | null = null, isoFor: SP | null = null) {
+  /**
+   * `first`: an action the trip opens with (an after-timeout play, a called isolation for `isoFor`);
+   * `set`: a set it opens with instead (called, or after a timeout), for a player or the best fit;
+   * `fresh`: a trip from the start (not a reset after an offensive board), on which the set package
+   * may run one of its sets.
+   */
+  private halfCourt(
+    off: ST,
+    def: ST,
+    shotClock: number,
+    late: ReturnType<GameSim['lateMode']>,
+    paceF: number,
+    first: ActionType | null = null,
+    isoFor: SP | null = null,
+    set: { id: SetId; pid: number | null } | null = null,
+    fresh = false,
+  ) {
     // an inbounds play after a foul to give starts from a worse look
+    const inbound = this.inbound;
     let carryOpen = this.inbound ? -K.ftg.open : 0;
     this.inbound = false;
     let ballFrom: SP | null = null;
@@ -1998,10 +2076,20 @@ export class GameSim {
       }
       const left = Math.min(shotClock, this.clock);
       forced = left <= 4.5 || n === 5;
-      const action = n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off);
+      // the trip opens with its set: the one called, or now and then one of the package's when it's a
+      // fresh trip with the time to run it and nothing else to do (no late-game situation)
+      let play: SetPlay | null = null;
+      if (n === 0) {
+        const quiet = !first && !inbound && !forced && left >= 14 && !late.hold && !late.quick && !late.milk && !late.need3 && !late.need2 && !late.hurry && !this.go3;
+        const want = set ?? (fresh && quiet ? this.packageSet(off, def) : null);
+        if (want) play = this.setPlay(off, def, want.id, want.pid);
+      }
+      const action = play ? play.cast.action : n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off);
       let dt = forced ? Math.max(0.5, left - this.rng.uniform(0.3, 1.5)) : K.actionTime * paceF * this.rng.uniform(0.6, 1.4);
       if (late.quick && n === 0) dt = Math.min(dt, 3.5);
       if (late.hurry) dt = Math.min(dt, 4);
+      // a set takes longer to run than whatever the team would do: with too little clock it's rushed
+      if (play) dt += SETS[play.cast.id].time;
       let buzzer = false;
       if (dt >= left - 0.3) {
         dt = Math.max(0, left - this.rng.uniform(0.2, 0.9));
@@ -2011,9 +2099,15 @@ export class GameSim {
       shotClock -= dt;
       const urgency = buzzer || forced ? -0.45 : 0;
       const ctxOpen = carryOpen + urgency;
-      if (n === 0 && isoFor) this.calledActor = isoFor;
+      if (n === 0 && isoFor) {
+        this.calledActor = isoFor;
+        // a clear-out for a player on the floor: its possession counts for the night's tally of them
+        if (isoFor.on) this.possSet = this.setStat(off.side, 'iso');
+      }
+      this.play = play;
       const res = this.runAction(action, off, def, ctxOpen, ballFrom, late, forced || buzzer);
       this.calledActor = null;
+      this.play = null;
       if (res === 'done') return;
       // continue: ball reversed, maybe with a small residual advantage
       carryOpen = res.carry;
@@ -2038,6 +2132,108 @@ export class GameSim {
       ws[ACTION_LIST.indexOf(best)] *= K.goToAction;
     }
     return ACTION_LIST[this.rng.weighted(ws)];
+  }
+
+  // sets --------------------------------------------------------------
+
+  /**
+   * Now and then (SET_K.rate a trip for each set in the package) a fresh trip runs one of the
+   * package's sets the five on the floor fit, favoring the ones run least tonight; the staff stops
+   * running one once the defense is on it (only a call from the bench runs it again). No package, no
+   * draws.
+   */
+  private packageSet(off: ST, def: ST): { id: SetId; pid: null } | null {
+    const pkg = off.t.offense.sets;
+    if (!pkg?.length) return null;
+    const ids = setPackage(off.t);
+    if (!ids.length || !this.rng.chance(SET_K.rate * ids.length)) return null;
+    const coach = def.team.coach?.tactics ?? 50;
+    const fit = ids.filter((id) => readAfter(id, off.setRuns.get(id) ?? 0, coach) < READ_ON_IT && fitsFloor(id, off.on));
+    if (!fit.length) return null;
+    return { id: fit[this.rng.weighted(fit.map((id) => 1 / (1 + (off.setRuns.get(id) ?? 0))))], pid: null };
+  }
+
+  /**
+   * Set `id` run now for player `pid` (the best fit when he isn't on the floor): its cast, its edges
+   * against this defense, the defense's read of it from the runs before, and the look the team goes
+   * for. Counts the run (the possession's points go to its tally) and records it on the possession.
+   */
+  private setPlay(off: ST, def: ST, id: SetId, pid: number | null): SetPlay | null {
+    const cast = castFor(id, off.on, pid !== null ? off.on.find((p) => p.pid === pid) : undefined);
+    if (!cast) return null;
+    const runs = off.setRuns.get(id) ?? 0;
+    off.setRuns.set(id, runs + 1);
+    const read = readAfter(id, runs, def.team.coach?.tactics ?? 50);
+    const zone = this.zone(def);
+    const d: DefRead = {
+      cov: zone ? 'zone' : def.t.defense.pnr,
+      scheme: this.schemeNow(def),
+      switches: !zone && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall),
+      help: this.help(def),
+      pressure: this.pressure(def),
+      locked: !!this.lock(def, off, cast.star),
+    };
+    const open: SetPlay['open'] = {};
+    const tags: SetPlay['tags'] = {};
+    for (const [slot, e] of Object.entries(setEdges(cast, d)) as [Slot, number][]) {
+      if (!e) continue;
+      open[slot] = e;
+      tags[slot] = [[`set_${id}`, e]];
+    }
+    if (read > 0)
+      for (const slot of readSlots(cast)) {
+        open[slot] = (open[slot] ?? 0) - read;
+        (tags[slot] ??= []).push(['set_read', -read]);
+      }
+    const st = this.setStat(off.side, id);
+    if (read >= READ_ON_IT && st.readAt === undefined) st.readAt = st.runs;
+    this.possSet = st;
+    if (this.cur) this.cur.set = { id, pid: cast.star.pid, n: runs + 1 };
+    return { cast, label: setLabel(id, cast.star.name), read, open, tags, w: setLook(cast, d.locked) };
+  }
+
+  /** The night's tally of a side's set (or clear-out isolations), with this run counted. */
+  private setStat(side: 0 | 1, id: SetId | 'iso'): SetStat {
+    const key = `${side}:${id}`;
+    let st = this.setStats.get(key);
+    if (!st) {
+      st = { t: side, id, runs: 0, pts: 0 };
+      this.setStats.set(key, st);
+    }
+    st.runs++;
+    return st;
+  }
+
+  /** The set handed to this action, if it's one of its: taken, so actions it hands on to never see it. */
+  private takePlay(action: ActionType): SetPlay | null {
+    const play = this.play?.cast.action === action ? this.play : null;
+    this.play = null;
+    return play;
+  }
+
+  /** A set's fixed actor takes the ball, counted in the usage tallies as pickActor counts its pick. */
+  private useActor(t: ST, p: SP): SP {
+    for (const x of t.on) x.b.tActs++;
+    p.b.acts++;
+    return p;
+  }
+
+  /**
+   * A set the defense has read gets its passes jumped: the turnover chance its read adds to the action
+   * (tagged as the read's cost). Nothing without a set, or on its first run.
+   */
+  private setJump(play: SetPlay | null, def: ST, h: SP): number {
+    if (!play?.read) return 0;
+    const x = play.read * SET_K.jump;
+    this.impact('set_read', def.side, x * h.ttv * K.toPts, h.pid);
+    return x;
+  }
+
+  /** The openness a set adds to one of the action's options, its tags added to `tags`. */
+  private setOpen(play: SetPlay, slot: Slot, tags: [string, number][]): number {
+    const t = play.tags[slot];
+    if (t) tags.push(...t);
+    return play.open[slot] ?? 0;
   }
 
   /** How well the current lineup can run an action (0.2..~1.6). */
@@ -2204,11 +2400,13 @@ export class GameSim {
   // PICK AND ROLL -------------------------------------------------
 
   private pnr(off: ST, def: ST, open: number, late: ReturnType<GameSim['lateMode']>, forced: boolean): 'done' | { carry: number; ball: SP | null } {
-    const H = this.pickActor(off, 'pnr');
+    // a set (Spain, Horns for a shooting big) names the handler and the screener
+    const play = this.takePlay('pnr');
+    const H = play ? this.useActor(off, play.cast.a) : this.pickActor(off, 'pnr');
     // hunting a defender: the player he guards sets the screen more often than not, so a switch
     // puts him on the ball handler
     const hunted = this.hunted(off, def);
-    let S: SP | undefined = hunted && hunted !== H && this.rng.chance(K.hunt.screen) ? hunted : undefined;
+    let S: SP | undefined = play ? play.cast.b : hunted && hunted !== H && this.rng.chance(K.hunt.screen) ? hunted : undefined;
     // screener: the first preferred screener on the floor, else bigs / rollers / poppers
     if (!S)
       for (const pid of off.t.offense.screeners) {
@@ -2237,8 +2435,11 @@ export class GameSim {
     if (star === H && def.t.defense.starPlan === 'double' && !zone) cov = 'blitz';
     if (this.cur) {
       this.cur.coverage = cov;
-      this.cur.label = `P&R: ${H.name} + ${S.name} vs ${cov === 'zone' ? this.zoneName(def) : cov}`;
+      // (a trip a set opened keeps its name when it resets into another action)
+      if (play || !this.cur.set) this.cur.label = play ? play.label : `P&R: ${H.name} + ${S.name} vs ${cov === 'zone' ? this.zoneName(def) : cov}`;
       this.cur.steps.push({ k: 'screen', pid: S.pid, pid2: H.pid });
+      // Spain: the shooter screens the roll man's defender as he dives
+      if (play?.cast.id === 'spain') this.cur.steps.push({ k: 'pin', pid: play.cast.c.pid, pid2: S.pid });
     }
     const pf = this.prefs(off, late);
     const screen = (S.r.str * 0.5 + S.r.hgt * 0.3 + S.r.oiq * 0.2 - 50) / 100;
@@ -2379,9 +2580,16 @@ export class GameSim {
       tagsKick.push(['help_kick', help * 0.3]);
     }
     if (spacing !== 0) tagsRim.push(['spacing', spacing * 0.6]);
+    // a set's edges against this coverage, and what the defense has read of it
+    if (play) {
+      rollOpen += this.setOpen(play, 'roll', tagsRoll);
+      popOpen += this.setOpen(play, 'pop', tagsPop);
+      kickOpen += this.setOpen(play, 'kick', tagsKick);
+      rimOpen += this.setOpen(play, 'drive', tagsRim);
+    }
 
     // turnover
-    const pTO = this.toChance(K.toBase * 1.05, H, def, toExtra);
+    const pTO = this.toChance(K.toBase * 1.05, H, def, toExtra + this.setJump(play, def, H));
     if (this.rng.chance(pTO)) {
       // the screener's man makes the play: the pocket pass to the roller (a roll-man turnover)
       const onRoll = !this.rng.chance(0.6);
@@ -2424,6 +2632,8 @@ export class GameSim {
     ];
     if (cov === 'blitz') opts[2] *= 0.3;
     if (this.go3) opts[3] *= 0.05;
+    // a set goes for its look
+    if (play) (['pull3', 'pull2', 'drive', 'roll', 'pop', 'kick'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);
     const advOpen = clamp(advH * 0.35, -0.6, 0.7);
     switch (c) {
@@ -2497,7 +2707,8 @@ export class GameSim {
         return 'done';
       }
       case 5: {
-        const sh = this.kickTarget(off, H, S);
+        // Spain: the kick-out is the back screener's three (his man helped on the roll)
+        const sh = play?.cast.id === 'spain' ? play.cast.c : this.kickTarget(off, H, S);
         this.passStep(H, sh);
         const d = this.defOf(def, sh);
         const closeout = (d.c.perDef * this.dq(d) - 50) / 200;
@@ -2561,7 +2772,7 @@ export class GameSim {
     const A = fixed?.actor ?? this.pickActor(off, 'iso');
     let D = fixed?.defender ?? this.defOf(def, A);
     const finish: FinishType = fixed?.fromPnr ? 'pnrBH' : 'iso';
-    if (this.cur && !fixed) this.cur.label = `Isolation: ${A.name} on ${D.name}`;
+    if (this.cur && !fixed && !this.cur.set) this.cur.label = `Isolation: ${A.name} on ${D.name}`;
     if (this.cur && fixed) this.cur.label = `Switch! ${A.name} attacks ${D.name}`;
     const pf = this.prefs(off, late);
     const help = this.help(def);
@@ -2663,8 +2874,12 @@ export class GameSim {
     }
   }
 
-  /** A double team; only the Star plan's doubles are tagged as the plan's doing. */
-  private doubleTeam(off: ST, def: ST, A: SP, from: 'iso' | 'post', star: boolean): 'done' {
+  /**
+   * A double team; only the Star plan's doubles are tagged as the plan's doing. Doubling Post split's
+   * post player sends the ball out to the pair splitting around him: the cutter or the flare, with the
+   * split's edge on the 4-on-3.
+   */
+  private doubleTeam(off: ST, def: ST, A: SP, from: 'iso' | 'post', star: boolean, play: SetPlay | null = null): 'done' {
     if (this.cur) this.cur.label = `${A.name} gets doubled!`;
     if (this.record) this.cur!.steps.push({ k: 'trap', pid: A.pid });
     const escape = (A.c.passing - 55) / 100;
@@ -2676,14 +2891,19 @@ export class GameSim {
     }
     // forced to give it up: 4-on-3 for teammates
     if (this.rng.chance(0.82)) {
-      const sh = this.kickTarget(off, A);
+      const split = play?.cast.id === 'postSplit' ? play.cast : null;
+      const sh = split ? (this.rng.chance(0.5) ? split.c : split.d!) : this.kickTarget(off, A);
       this.passStep(A, sh);
       const o = 0.5 + escape * 0.5;
       this.impact('double_kick', off.side, o * 0.06 * 3 * 0.35, sh.pid);
-      if (this.rng.chance(0.3) && sh.c.rim > 52) {
-        this.shoot(off, def, { shooter: sh, zone: 'rim', open: o * 0.6, contest: this.rimContester(def, this.defOf(def, sh), 1.2), assister: A, finish: 'cut' });
+      // (what the defense has read of the split takes its share off this look too)
+      const read = split ? play!.read : 0;
+      const tags: [string, number][] | undefined = split ? [['set_postSplit', SPLIT_DOUBLE], ...(read ? [['set_read', -read] as [string, number]] : [])] : undefined;
+      const so = split ? SPLIT_DOUBLE - read : 0;
+      if (split ? sh === split.c : this.rng.chance(0.3) && sh.c.rim > 52) {
+        this.shoot(off, def, { shooter: sh, zone: 'rim', open: o * 0.6 + so, contest: this.rimContester(def, this.defOf(def, sh), 1.2), assister: A, finish: 'cut', tags });
       } else {
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o, contest: this.defOf(def, sh), assister: A, finish: 'spotup' });
+        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o + so, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags });
       }
       return 'done';
     }
@@ -2709,17 +2929,22 @@ export class GameSim {
     forced: boolean,
     fixed: { actor: SP; defender: SP; tag: string; entry: SP | null } | null,
   ): 'done' | { carry: number; ball: SP | null } {
-    const A = fixed?.actor ?? this.pickActor(off, 'post');
+    // Post split: its post player, its entry passer, and the pair splitting around him
+    const play = fixed ? null : this.takePlay('post');
+    const A = fixed?.actor ?? (play ? this.useActor(off, play.cast.a) : this.pickActor(off, 'post'));
     const D = fixed?.defender ?? this.defOf(def, A);
     // the entry pass: a post score off a good feed counts as an assisted basket now and then
     let entry: SP | null = null;
     if (fixed) entry = fixed.entry;
+    else if (play) entry = play.cast.b;
     else {
       const feeders = off.on.filter((p) => p !== A);
       entry = feeders[this.rng.weighted(feeders.map((p) => Math.pow(Math.max(5, p.c.passing) / 50, 2) * p.tp))] ?? null;
     }
-    if (this.cur && !fixed) this.cur.label = `Post-up: ${A.name} vs ${D.name}`;
+    if (this.cur && !fixed && (play || !this.cur.set)) this.cur.label = play ? play.label : `Post-up: ${A.name} vs ${D.name}`;
     if (this.record) this.cur!.steps.push({ k: 'post', pid: A.pid });
+    // the split: one screens for the other off the ball
+    if (play && this.record) this.cur!.steps.push({ k: 'pin', pid: play.cast.d!.pid, pid2: play.cast.c.pid });
     const help = this.help(def);
     let adv = (A.c.postScore * A.perf - D.c.intDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 80 + (A.r.hgt - D.r.hgt) / 70 + this.rng.normal(0, 0.55) + open;
     if (!fixed) adv -= this.denyCatch(def, off, A, 'post');
@@ -2738,8 +2963,8 @@ export class GameSim {
     if (fixed?.tag === 'mismatch_post') this.impact(fixed.tag, off.side, Math.max(0, (A.r.hgt - D.r.hgt) / 70) * K.advPts.post, A.pid);
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
     const doubleP = starDouble ? 0.75 : 0.08 + Math.max(0, help) * 0.15 + (adv > 0.6 ? 0.15 : 0);
-    if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble);
-    const pTO = this.toChance(K.toBase * 1.1, A, def);
+    if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble, play);
+    const pTO = this.toChance(K.toBase * 1.1, A, def, this.setJump(play, def, A));
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, A, this.stealBy(D, 0.4), 'post');
       return 'done';
@@ -2761,6 +2986,8 @@ export class GameSim {
       Math.pow(A.c.passing / 50, 1.4) * 0.45 * this.passT(A), // pass out
       forced ? 0 : K.continueBase * 0.6,
     ];
+    // a set goes for its look
+    if (play) (['post', 'post', 'post', 'pass'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);
     switch (c) {
       case 0:
@@ -2782,21 +3009,36 @@ export class GameSim {
         this.shoot(off, def, { shooter: A, zone: 'mid', open: advOpen - 0.2, contest: D, assister: entry, finish: 'post' });
         return 'done';
       case 3: {
-        const cutter = this.rng.chance(0.3);
-        const tgt = cutter ? off.on.filter((p) => p !== A).sort((a, b) => b.c.cut - a.c.cut)[0] : this.kickTarget(off, A);
+        // (Post split: the split sends one cutting and one flaring, the cut more often than not)
+        const cutter = this.rng.chance(play ? 0.55 : 0.3);
+        const tgt = play ? (cutter ? play.cast.c : play.cast.d!) : cutter ? off.on.filter((p) => p !== A).sort((a, b) => b.c.cut - a.c.cut)[0] : this.kickTarget(off, A);
+        if (play && cutter && this.record) this.cur!.steps.push({ k: 'cut', pid: tgt.pid });
         this.passStep(A, tgt);
-        if (cutter)
-          this.shoot(off, def, { shooter: tgt, zone: 'rim', open: 0.25 + advOpen * 0.3, contest: this.rimContester(def, this.defOf(def, tgt), 1.2), assister: A, finish: 'cut' });
-        else
+        if (cutter) {
+          const ct: [string, number][] = [];
+          const so = play ? this.setOpen(play, 'cut', ct) : 0;
+          this.shoot(off, def, {
+            shooter: tgt,
+            zone: 'rim',
+            open: 0.25 + advOpen * 0.3 + so,
+            contest: this.rimContester(def, this.defOf(def, tgt), 1.2),
+            assister: A,
+            finish: 'cut',
+            ...(ct.length ? { tags: ct } : {}),
+          });
+        } else {
+          const kt: [string, number][] = [['help_kick', Math.max(0, help) * 0.25]];
+          const so = play ? this.setOpen(play, 'kick', kt) : 0;
           this.spotUp(off, def, {
             shooter: tgt,
             zone: this.cornerOrWing(off, tgt),
-            open: 0.2 + Math.max(0, help) * 0.25,
+            open: 0.2 + Math.max(0, help) * 0.25 + so,
             contest: this.defOf(def, tgt),
             assister: A,
             finish: 'spotup',
-            tags: [['help_kick', Math.max(0, help) * 0.25]],
+            tags: kt,
           });
+        }
         return 'done';
       }
       default:
@@ -2807,20 +3049,32 @@ export class GameSim {
   // HANDOFFS / OFF-BALL SCREENS --------------------------------------
 
   private handoff(off: ST, def: ST, open: number, late: ReturnType<GameSim['lateMode']>, forced: boolean): 'done' | { carry: number; ball: SP | null } {
-    const Sh = this.pickActor(off, 'handoff');
+    // a set (Floppy, Elevator, Chicago, Horns for a passing big) names the player coming off it and the passer
+    const play = this.takePlay('handoff');
+    const Sh = play ? this.useActor(off, play.cast.a) : this.pickActor(off, 'handoff');
     // the hub: best passing big, else best passer
     const hubs = off.on.filter((p) => p !== Sh);
-    const B =
-      hubs[
-        this.rng.weighted(hubs.map((p) => Math.pow((p.c.passing + (p.big ? 15 : 0) + (p.role === 'hub' ? 20 : 0)) / 50, 2.5) * Math.sqrt(this.passT(p)) * this.touch(def, off, p)))
-      ];
+    const B = play
+      ? play.cast.b
+      : hubs[
+          this.rng.weighted(
+            hubs.map((p) => Math.pow((p.c.passing + (p.big ? 15 : 0) + (p.role === 'hub' ? 20 : 0)) / 50, 2.5) * Math.sqrt(this.passT(p)) * this.touch(def, off, p)),
+          )
+        ];
     const D = this.defOf(def, Sh);
     const dB = this.defOf(def, B);
     const pf = this.prefs(off, late);
-    const finish: FinishType = Sh.role === 'shooter' || this.rng.chance(0.4) ? 'offscreen' : 'handoff';
+    // (Floppy and Elevator are off-ball screens; Chicago and the elbow handoff are handoffs)
+    const finish: FinishType = play
+      ? play.cast.id === 'floppy' || play.cast.id === 'elevator'
+        ? 'offscreen'
+        : 'handoff'
+      : Sh.role === 'shooter' || this.rng.chance(0.4)
+        ? 'offscreen'
+        : 'handoff';
     if (this.cur) {
-      this.cur.label = `${finish === 'offscreen' ? 'Off-ball screen' : 'Handoff'}: ${B.name} to ${Sh.name}`;
-      this.cur.steps.push({ k: 'handoff', pid: B.pid, pid2: Sh.pid });
+      if (play || !this.cur.set) this.cur.label = play ? play.label : `${finish === 'offscreen' ? 'Off-ball screen' : 'Handoff'}: ${B.name} to ${Sh.name}`;
+      this.cur.steps.push(...(play ? this.handoffSetSteps(play.cast) : [{ k: 'handoff' as const, pid: B.pid, pid2: Sh.pid }]));
     }
     let adv = (Sh.c.offBall * Sh.perf - (D.c.perDef * 0.6 + D.c.helpD * 0.4) * this.dq(D)) / 22 + (B.r.str + B.r.hgt - 100) / 200 + this.rng.normal(0, 0.55) + open;
     adv += this.blowBy(def, Sh, 'handoff') - this.denyCatch(def, off, Sh, 'handoff');
@@ -2872,7 +3126,7 @@ export class GameSim {
         return this.iso(off, def, open + K.switchScramble, late, forced, { actor: Sh, defender: dB, tag: 'switch_mismatch' });
       }
     }
-    const pTO = this.toChance(K.toBase * 0.7, B, def);
+    const pTO = this.toChance(K.toBase * 0.7, B, def, this.setJump(play, def, B));
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, this.rng.chance(B.ttv / (B.ttv + Sh.ttv)) ? B : Sh, this.stealBy(D, 0.5), finish);
       return 'done';
@@ -2886,18 +3140,23 @@ export class GameSim {
       forced ? 0 : K.continueBase * (adv < 0 ? 1.4 : 0.6),
     ];
     if (this.go3) opts[3] *= 0.05;
+    // a set goes for its look
+    if (play) (['three', 'mid', 'rim', 'roll'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);
     switch (c) {
       case 0: {
         const u = under ? K.pd.under.pull : 0;
+        const st: [string, number][] = u ? [...tags, ['pd_under', u]] : [...tags];
+        const so = play ? this.setOpen(play, 'three', st) : 0;
         this.shoot(off, def, {
           shooter: Sh,
-          zone: this.rng.chance(0.2) ? 'c3' : 'ab3',
-          open: advOpen - 0.02 + u,
+          // (Elevator's doors are at the top of the key)
+          zone: play?.cast.id === 'elevator' ? 'ab3' : this.rng.chance(0.2) ? 'c3' : 'ab3',
+          open: advOpen - 0.02 + u + so,
           contest: D,
           assister: B,
           finish,
-          tags: u ? [...tags, ['pd_under', u]] : tags,
+          tags: st,
         });
         return 'done';
       }
@@ -2907,7 +3166,8 @@ export class GameSim {
         const key = this.openKey(def);
         const mt = tags.filter(([k]) => k !== key);
         if (u) mt.push(['pd_under', u]);
-        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05 + u, contest: D, assister: B, finish, tags: mt });
+        const so = play ? this.setOpen(play, 'mid', mt) : 0;
+        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05 + u + so, contest: D, assister: B, finish, tags: mt });
         return 'done';
       }
       case 2: {
@@ -2932,21 +3192,52 @@ export class GameSim {
           o -= sag;
           rt.push(['pd_sag', -sag]);
         }
+        if (play) o += this.setOpen(play, 'rim', rt);
         this.shoot(off, def, { shooter: Sh, zone: 'rim', open: o, contest: this.rimContester(def, D), assister: B, finish, tags: rt, ...body });
         return 'done';
       }
-      case 3:
+      case 3: {
         this.passStep(Sh, B);
-        this.shoot(off, def, { shooter: B, zone: 'rim', open: 0.1 + advOpen * 0.4, contest: dB, assister: Sh, finish: 'pnrRoll' });
+        const rt: [string, number][] = [];
+        const so = play ? this.setOpen(play, 'roll', rt) : 0;
+        this.shoot(off, def, { shooter: B, zone: 'rim', open: 0.1 + advOpen * 0.4 + so, contest: dB, assister: Sh, finish: 'pnrRoll', ...(rt.length ? { tags: rt } : {}) });
         return 'done';
+      }
       default:
         return { carry: clamp(advOpen * 0.25, -0.1, 0.2), ball: B };
+    }
+  }
+
+  /** The court's beats for a set run as a handoff: its screens, then the catch or the handoff. */
+  private handoffSetSteps(c: Cast<SP>): PossStep[] {
+    switch (c.id) {
+      case 'floppy':
+      case 'elevator': {
+        // off the stagger (Floppy) or between the doors (Elevator), and the pass
+        const pins: PossStep[] = [{ k: 'pin', pid: c.c.pid, pid2: c.a.pid }];
+        if (c.d) pins.push({ k: 'pin', pid: c.d.pid, pid2: c.a.pid });
+        return [...pins, { k: 'pass', pid: c.b.pid, pid2: c.a.pid }];
+      }
+      case 'chicago':
+        // the pin-down, straight into the handoff
+        return [
+          { k: 'pin', pid: c.c.pid, pid2: c.a.pid },
+          { k: 'handoff', pid: c.b.pid, pid2: c.a.pid },
+        ];
+      default:
+        // Horns from the elbow: the handler hits the big at the elbow and gets it back on the handoff
+        return [
+          { k: 'pass', pid: c.a.pid, pid2: c.b.pid },
+          { k: 'handoff', pid: c.b.pid, pid2: c.a.pid },
+        ];
     }
   }
 
   // MOTION / CUTS / DRIVE & KICK ------------------------------------
 
   private motion(off: ST, def: ST, open: number, ballFrom: SP | null, late: ReturnType<GameSim['lateMode']>, forced: boolean): 'done' | { carry: number; ball: SP | null } {
+    // Hammer: its driver starts it with the ball, and the drive's kick-out goes to its corner shooter
+    const play = this.takePlay('motion');
     const pf = this.prefs(off, late);
     const help = this.help(def);
     const pr = this.pressure(def);
@@ -2962,20 +3253,21 @@ export class GameSim {
       adv -= K.hunt.flow;
       this.impact('hunt', def.side, K.hunt.flow * 0.1);
     }
-    if (this.cur) this.cur.label = zone ? `Ball movement vs ${this.zoneName(def)}` : 'Motion offense';
+    if (this.cur && (play || !this.cur.set)) this.cur.label = play ? play.label : zone ? `Ball movement vs ${this.zoneName(def)}` : 'Motion offense';
     // the ball swings: after a reset it often finds the offense's hub before the next action
-    const passer =
-      ballFrom && this.rng.chance(0.5)
+    const passer = play
+      ? this.useActor(off, play.cast.a)
+      : ballFrom && this.rng.chance(0.5)
         ? ballFrom
         : off.on[this.rng.weighted(off.on.map((p) => Math.pow(Math.max(5, p.c.passing) / 50, 2) * this.passT(p) * this.touch(def, off, p)))];
-    const pTO = this.toChance(K.toBase * 0.8, passer, def);
+    const pTO = this.toChance(K.toBase * 0.8, passer, def, this.setJump(play, def, passer));
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, passer, this.stealBy(this.stealer(def), 0.6), 'spotup');
       return 'done';
     }
     // a guard-to-big cross-screen against a switching defense now and then leaves the smallest
-    // defender on the best post scorer
-    if (sw) {
+    // defender on the best post scorer (not in a set: it's a play of its own)
+    if (sw && !play) {
       const P = off.on.filter((p) => p !== passer && p.big).sort((a, b) => b.c.postScore - a.c.postScore)[0];
       const small = off.on.filter((p) => p !== P && p !== passer).sort((a, b) => a.r.hgt - b.r.hgt)[0];
       const own = P && this.defOf(def, P);
@@ -3005,6 +3297,8 @@ export class GameSim {
       Math.pow(Math.max(...off.on.map((p) => p.c.midShot)) / 50, 2) * 0.25 * pf.mid, // flare/mid
       forced ? 0 : K.continueBase * (adv < 0 ? 1.5 : 0.7),
     ];
+    // a set goes for its look
+    if (play) (['cut', 'swing', 'drive', 'mid'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);
     switch (c) {
       case 0: {
@@ -3061,24 +3355,30 @@ export class GameSim {
       }
       case 2: {
         const drivers = off.on.filter((p) => p !== passer);
-        const dr =
-          drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr) * this.touch(def, off, p)))];
+        const dr = play
+          ? passer
+          : drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr) * this.touch(def, off, p)))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
         const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -zone.drive : 0);
-        if (this.go3 || this.rng.chance(clamp(0.45 + dr.c.passing / 200 + help * 0.15, 0.2, 0.8))) {
+        // (Hammer's baseline drive is run to kick it to the corner)
+        const kickP = play ? 0.75 + help * 0.15 : 0.45 + dr.c.passing / 200 + help * 0.15;
+        if (this.go3 || this.rng.chance(clamp(kickP, 0.2, play ? 0.9 : 0.8))) {
           // kick out after collapsing the defense
-          const sh = this.kickTarget(off, dr);
+          const sh = play ? play.cast.b : this.kickTarget(off, dr);
+          // the hammer screen on the help side frees the corner
+          if (play && this.record) this.cur!.steps.push({ k: 'pin', pid: play.cast.c.pid, pid2: sh.pid });
           this.passStep(dr, sh);
-          const ko = 0.12 + Math.max(0, help) * 0.3 + Math.max(0, dAdv) * 0.2;
+          const tags: [string, number][] = [['help_kick', Math.max(0, help) * 0.3]];
+          const ko = 0.12 + Math.max(0, help) * 0.3 + Math.max(0, dAdv) * 0.2 + (play ? this.setOpen(play, 'kick', tags) : 0);
           this.spotUp(off, def, {
             shooter: sh,
-            zone: this.cornerOrWing(off, sh),
+            zone: play ? 'c3' : this.cornerOrWing(off, sh),
             open: ko,
             contest: this.defOf(def, sh),
             assister: dr,
             finish: 'spotup',
-            tags: [['help_kick', Math.max(0, help) * 0.3]],
+            tags,
           });
         } else {
           const zoneS: ShotZone = this.rimOr(dr, 0.6);
@@ -3682,6 +3982,9 @@ export class GameSim {
     const pt = off.pt[finish] ?? (off.pt[finish] = { poss: 0, pts: 0 });
     pt.poss++;
     pt.pts += this.possPts;
+    // the possession a set opened (second chances included) counts for its tally
+    if (this.possSet) this.possSet.pts += this.possPts;
+    this.possSet = null;
     if (this.cur) {
       this.cur.clockEnd = this.clock;
       this.cur.pts = this.possPts;
@@ -3809,6 +4112,8 @@ export class GameSim {
       pbp: this.record ? this.pbp : undefined,
       adjustments: this.adjustments.length ? this.adjustments.map((a) => ({ ...a })) : undefined,
       pog,
+      // (only a game where a set or a clear-out was run has them: nobody else's result changes shape)
+      ...(this.setStats.size ? { sets: [...this.setStats.values()].map((s) => ({ ...s })) } : {}),
     };
   }
 

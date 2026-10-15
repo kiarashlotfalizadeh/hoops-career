@@ -54,6 +54,8 @@ export interface LabSummary {
   players: Record<number, { min: number; pts: number; usg: number; ts: number }>;
   /** Points per game each tactical effect earned each side: both can gain from the same one (each side's drop coverage conceding pull-ups). */
   impacts: Record<string, { us: number; them: number }>;
+  /** Side A's sets (and clear-out isolations) per game: runs, and the points those possessions scored. */
+  sets: Record<string, { runs: number; pts: number }>;
   /** Per-game point margins (side A minus side B), in seed order, for paired comparisons. */
   margins: number[];
 }
@@ -97,6 +99,7 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   const opt: Record<string, { poss: number; pts: number }> = {};
   const pl: Record<number, { sec: number; pts: number; use: number; teamUse: number; fga: number; fta: number }> = {};
   const impacts: Record<string, { us: number; them: number }> = {};
+  const sets: Record<string, { runs: number; pts: number }> = {};
   for (let g = 0; g < req.games; g++) {
     // each game gets its own seed so two configurations can be compared game by game
     const rng = new Rng((req.seed + Math.imul(g + 1, 2654435761)) >>> 0);
@@ -147,6 +150,12 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
       if (im.t === aSide) e.us += im.pts;
       else e.them += im.pts;
     }
+    for (const st of res.sets ?? []) {
+      if (st.t !== aSide) continue;
+      const e = (sets[st.id] ??= { runs: 0, pts: 0 });
+      e.runs += st.runs;
+      e.pts += st.pts;
+    }
     onGame?.();
   }
   const n = req.games;
@@ -177,6 +186,10 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     e.us /= n;
     e.them /= n;
   }
+  for (const e of Object.values(sets)) {
+    e.runs /= n;
+    e.pts /= n;
+  }
   return {
     games: n,
     wins,
@@ -194,6 +207,7 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     oppPlayTypes: freq(opt),
     players: playerOut(pl),
     impacts,
+    sets,
     margins,
   };
 }

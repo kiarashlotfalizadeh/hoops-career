@@ -3,7 +3,7 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import { FREE_AGENT, PLAYER_DEFENSES, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense } from '../core/types';
+import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { FRANCHISES } from '../core/teams';
 import { MAX_STEPS } from './live';
@@ -262,11 +262,17 @@ function cleanPlayerD(v: unknown): Record<number, PlayerDefense> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+const KNOWN_SETS = new Set<string>(SET_IDS);
+/** After-timeout plays: an action or a set. */
+const ATOS = new Set<string>([...ACTIONS, ...SET_IDS]);
+
 /**
- * The junk-defense, hunt, instruction and foul-to-give settings in a part of some tactics (a whole
- * defense / offense / management block, or a patch's) kept only when in shape: an unknown scheme,
- * chase targets that aren't up to two pids, a hunt target that isn't a pid, damaged instructions or
- * a foul to give that isn't a switch are dropped (a scheme falls back to man-to-man when `whole`).
+ * The junk-defense, hunt, instruction, foul-to-give and set settings in a part of some tactics (a
+ * whole defense / offense / management block, or a patch's) kept only when in shape: an unknown
+ * scheme, chase targets that aren't up to two pids, a hunt target that isn't a pid, damaged
+ * instructions, a foul to give that isn't a switch, an after-timeout play that's no action or set
+ * (or a player for it who isn't a pid) are dropped (a scheme falls back to man-to-man when `whole`),
+ * and a set package keeps the sets this version knows, at most four and each once.
  */
 function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
   if (obj(d)) {
@@ -282,7 +288,16 @@ function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
     }
   }
   if (obj(o) && o.huntTarget !== undefined && o.huntTarget !== null && !int(o.huntTarget)) delete o.huntTarget;
+  if (obj(o) && o.sets !== undefined) {
+    const known = Array.isArray(o.sets)
+      ? (o.sets as unknown[]).filter((id, i, all): id is string => typeof id === 'string' && KNOWN_SETS.has(id) && all.indexOf(id) === i).slice(0, 4)
+      : [];
+    if (known.length) o.sets = known;
+    else delete o.sets;
+  }
   if (obj(m) && m.foulToGive !== undefined && typeof m.foulToGive !== 'boolean') delete m.foulToGive;
+  if (obj(m) && m.ato !== undefined && m.ato !== null && !ATOS.has(m.ato as string)) delete m.ato;
+  if (obj(m) && m.atoPid !== undefined && m.atoPid !== null && !int(m.atoPid)) delete m.atoPid;
 }
 
 /** Whole tactics read from a save (see cleanTacticsParts), their situational plans' patches included. */
@@ -348,6 +363,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (x.gameTime !== undefined && !(obj(x.gameTime) && int(x.gameTime.gid) && nums(x.gameTime.play))) delete x.gameTime;
   // win-probability data of the user's games: a damaged list goes (the charts fall back as for older games)
   for (const g of x.games) {
+    if (g.sets !== undefined && !setsIntact(g.sets)) delete g.sets;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
@@ -404,6 +420,24 @@ function migrateContracts(x: League) {
     for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
   }
   for (const m of x.inbox) if (m.tenDay !== undefined && !int(m.tenDay)) delete m.tenDay;
+}
+
+/** A result's set tallies in shape (see SetStat): a side, a known set or 'iso', runs and points, and the run it was read by. */
+function setsIntact(v: unknown): boolean {
+  return (
+    Array.isArray(v) &&
+    v.every(
+      (s) =>
+        obj(s) &&
+        (s.t === 0 || s.t === 1) &&
+        (s.id === 'iso' || KNOWN_SETS.has(s.id as string)) &&
+        int(s.runs) &&
+        (s.runs as number) > 0 &&
+        int(s.pts) &&
+        (s.pts as number) >= 0 &&
+        (s.readAt === undefined || int(s.readAt)),
+    )
+  );
 }
 
 const PROMISES = new Set(['role', 'trade', 'patience']);
@@ -467,7 +501,7 @@ const numValues = (v: unknown) => obj(v) && Object.values(v).every(num);
 const isTactics = (t: unknown) => obj(t) && obj(t.offense) && obj(t.defense) && obj(t.manage);
 /** More moves than any coach makes in a game: a journal with more was crafted. */
 const MAX_LIVE_OPS = 5000;
-const PLAY_CALLS = new Set(['three', 'two', 'hold', 'foul', 'iso']);
+const PLAY_CALLS = new Set(['three', 'two', 'hold', 'foul', 'iso', 'set']);
 
 /** A journaled coaching move's arguments in shape. */
 function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
@@ -483,7 +517,12 @@ function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
     case 'manualSubs':
       return typeof a.on === 'boolean';
     case 'call':
-      return obj(a.call) && PLAY_CALLS.has(a.call.kind as string) && (a.call.kind !== 'iso' || int(a.call.pid));
+      return (
+        obj(a.call) &&
+        PLAY_CALLS.has(a.call.kind as string) &&
+        (a.call.kind !== 'iso' || int(a.call.pid)) &&
+        (a.call.kind !== 'set' || (KNOWN_SETS.has(a.call.set as string) && (a.call.pid === undefined || int(a.call.pid))))
+      );
     case 'cancelCall':
       return true;
   }
@@ -511,6 +550,9 @@ function liveIntact(l: League, j: unknown): boolean {
   )
     return false;
   if (!Array.isArray(j.ops) || j.ops.length > MAX_LIVE_OPS) return false;
+  // a set call this version doesn't know is dropped (the replay then has to land on the journal's
+  // score and clock without it, or the game starts over)
+  j.ops = j.ops.filter((x) => !(obj(x) && x.op === 'call' && obj(x.args) && obj(x.args.call) && x.args.call.kind === 'set' && !KNOWN_SETS.has(x.args.call.set as string)));
   for (const t of [u.tactics, j.keep, obj(o) ? o.tactics : undefined]) cleanTactics(t);
   if (obj(o) && obj(o.plan) && Array.isArray(o.plan.items))
     for (const it of o.plan.items) if (obj(it) && obj(it.patch)) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);

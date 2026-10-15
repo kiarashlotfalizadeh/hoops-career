@@ -151,6 +151,19 @@
   white-space: normal;
   text-align: left;
 }
+/* five coaching buttons (Plays from Advanced depth): still one row on a 360px phone, the icon over the word */
+.live-ctl.five {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.live-ctl.five .btn.sm {
+  flex-direction: column;
+  height: auto;
+  min-height: 42px;
+  padding: 4px 2px;
+  gap: 1px;
+  font-size: 12px;
+}
 /* the transport row (pause, speed, key plays, skip) stays one line on a 360px phone */
 .live-transport .btn.sm {
   padding: 0 10px;

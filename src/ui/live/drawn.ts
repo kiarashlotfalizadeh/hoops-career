@@ -3,7 +3,7 @@
 // tallies) would give away the play still being drawn: the Live screen takes this snapshot just
 // before each step and shows it until the court has drawn the next one.
 
-import type { GameResult, TacticImpact } from '../../core/types';
+import type { GameResult, SetId, TacticImpact } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 
 export interface DrawnPlayer {
@@ -38,6 +38,8 @@ export interface DrawnSide {
   players: DrawnPlayer[];
   /** Possessions and points per play type so far. */
   pt: Record<string, { poss: number; pts: number }>;
+  /** The sets this side has run so far: how often, and the openness the other defense's read takes off each one's look next time. */
+  sets: { id: SetId; runs: number; read: number }[];
 }
 
 export interface Drawn {
@@ -118,6 +120,7 @@ export function snapshot(sim: GameSim): Drawn {
         ftPct: p.ftPct,
       })),
       pt: (i === 0 ? box.home : box.away).playTypes,
+      sets: sim.setReads(i),
     };
   };
   return {
