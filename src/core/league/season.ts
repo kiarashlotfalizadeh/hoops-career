@@ -57,6 +57,7 @@ import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openi
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
+import { coachingCarousel } from './coaches';
 import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
 import { retireNumbers } from './jerseys';
@@ -405,6 +406,8 @@ function endPlayoffs(league: League) {
     });
   }
   ownerEvaluation(league);
+  // AI owners review their coaches too (on a random stream of their own)
+  coachingCarousel(league);
   withRng(league, (rng) => {
     retirements(league, rng);
     league.phase = 'draftLottery';

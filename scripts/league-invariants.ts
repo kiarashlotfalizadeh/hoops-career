@@ -19,6 +19,7 @@ import { takeOverTeam } from '../src/core/league/owner';
 import * as TR from '../src/core/league/trades';
 import * as MO from '../src/core/league/morale';
 import * as P from '../src/core/league/proposals';
+import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
@@ -173,6 +174,8 @@ function check() {
   checkTransactions();
   checkContracts();
   checkRetiredNumbers();
+  // the coach registry: one open job per team, held by its coach (the user's with his team), names unique
+  for (const p of registryProblems(L)) bad('coach registry', p);
   try {
     if (JSON.stringify(structuredClone(L)) !== JSON.stringify(L)) bad('structuredClone mismatch', '');
   } catch (e) {
@@ -701,8 +704,19 @@ function fireAndMove() {
   const to = L.teams.filter((t) => t.tid !== old).sort((a, b) => H.winPct(H.curTeamSeason(L, a.tid)) - H.winPct(H.curTeamSeason(L, b.tid)))[0].tid;
   takeOverTeam(L, to);
   const coached = L.teams.filter((t) => t.coach.name === L.coachName).map((t) => t.tid);
-  if (L.fired || L.userTid !== to || coached.join() !== String(to) || L.teams[old].rotation.manual || L.teams[old].tactics.manual || L.tenureStart !== L.season + 1)
-    bad('take-over', `${L.teams[old].abbrev} -> ${L.teams[to].abbrev}, coaching ${coached.join()}`);
+  // his job with the new team starts next season, as his tenure does
+  const job = openStint(userCoach(L)!);
+  if (
+    L.fired ||
+    L.userTid !== to ||
+    coached.join() !== String(to) ||
+    L.teams[old].rotation.manual ||
+    L.teams[old].tactics.manual ||
+    L.tenureStart !== L.season + 1 ||
+    job?.tid !== to ||
+    job.from !== L.season + 1
+  )
+    bad('take-over', `${L.teams[old].abbrev} -> ${L.teams[to].abbrev}, coaching ${coached.join()}, job ${JSON.stringify(job)}`);
 }
 
 /** Preseason: the user extends his best player in a final season who'll talk, at his asking price. */
@@ -965,6 +979,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) S.simDay(L);
     check();
     checkSeasonEnd();
+    // the coaching carousel after the playoffs: AI coaches fired, and their replacements (first-time head coaches or former ones)
+    const carousel = L.news.filter((x) => x.kind === 'coach' && x.season === L.season);
+    const coachLine = `coaching changes ${carousel.filter((x) => / (fired|parted ways with) /.test(x.text)).length} (${carousel.filter((x) => x.text.includes('first-time')).length} first-time head coaches)`;
     const taxpayers = L.teams.filter((t) => H.curTeamSeason(L, t.tid).payroll > H.CAP_FOR(L).luxuryTax).length;
     // exceptions used in the season itself (the summer's are counted at the close of free agency)
     const inSeasonRoutes = routeUse(L.season);
@@ -1061,6 +1078,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     );
     const raised = L.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.season === L.season - 1).map((r) => `${t.abbrev} #${r.jersey} ${r.name}`));
     console.log(`   retired numbers: ${raised.length}${raised.length ? ` (${raised.join(', ')})` : ''}, ${L.teams.reduce((a, t) => a + (t.retired?.length ?? 0), 0)} in all`);
+    console.log(`   coaches: ${coachLine}, registry ${L.coaches?.length ?? 0} coaches, ${(JSON.stringify(L.coaches ?? []).length / 1e3).toFixed(1)}KB`);
     const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
       `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,

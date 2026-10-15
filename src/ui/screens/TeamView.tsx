@@ -23,6 +23,7 @@ import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
 import { MovesTab } from '../league/MovesTab';
 import { RetiredBanners } from '../league/RetiredBanners';
+import { activeCoach, coachCareer, coyWinners, stintTotals } from '../../core/league/coaches';
 
 const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'moves', 'history'] as const;
 type Tab = (typeof TABS)[number];
@@ -463,6 +464,38 @@ function Meter({ label, value, max = 100, color }: { label: string; value: numbe
   );
 }
 
+/**
+ * The head coach's line on the team page, from the coach registry: his time with this team ("In
+ * charge since 2027-28 · 120-126 · 1 title"), his career when he has coached elsewhere, and the
+ * team's last three coaches before him.
+ */
+function coachingStaff(league: League, tid: number) {
+  const r = activeCoach(league, tid);
+  if (!r) return null;
+  const coy = coyWinners(league);
+  const k = coachCareer(league, r, coy);
+  const here = k.stints.find((j) => !j.stint.to && j.stint.tid === tid);
+  if (!here) return null;
+  const titles = (n: number) => (n ? ` · ${n} title${n === 1 ? '' : 's'}` : '');
+  const start = here.lines[0]?.season ?? here.stint.from;
+  const line =
+    start > league.season
+      ? `Takes charge for ${seasonLabel(start)}`
+      : `In charge since ${seasonLabel(start)}${here.won + here.lost ? ` · ${here.won}-${here.lost}` : ''}${titles(here.titles)}`;
+  const elsewhere = k.stints.some((j) => j !== here && j.lines.length);
+  const career = elsewhere || k.coy.length ? `Career ${k.won}-${k.lost}${titles(k.titles)}${k.coy.length ? ` · Coach of the Year ×${k.coy.length}` : ''}` : '';
+  const before = (league.coaches ?? [])
+    .flatMap((c) => c.stints.filter((s) => s.tid === tid && s.to).map((s) => ({ c, j: stintTotals(league, s) })))
+    .filter(({ j }) => j.lines.length)
+    .sort((a, b) => b.j.lines[b.j.lines.length - 1].season - a.j.lines[a.j.lines.length - 1].season || b.j.stint.from - a.j.stint.from)
+    .slice(0, 3)
+    .map(({ c, j }) => {
+      const [first, last] = [j.lines[0].season, j.lines[j.lines.length - 1].season];
+      return `${c.name} (${first === last ? seasonLabel(first) : `${seasonLabel(first)} – ${seasonLabel(last)}`}, ${j.won}-${j.lost}${titles(j.titles)})`;
+    });
+  return { id: r.id, here: line, career, before };
+}
+
 function TacticsTab({ league, tid }: { league: League; tid: number }) {
   const team = league.teams[tid];
   const t = team.tactics;
@@ -474,6 +507,8 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
   const minNames = rosterNames(roster, { initial: true });
   const byMin = [...roster].filter((p) => (team.rotation.minutes[p.pid] ?? 0) > 0).sort((a, b) => (team.rotation.minutes[b.pid] ?? 0) - (team.rotation.minutes[a.pid] ?? 0));
   const star = t.defense.starTarget !== null ? league.players[t.defense.starTarget] : undefined;
+  const staff = useLeagueMemo(() => coachingStaff(league, tid), [league, tid]);
+  const coachName = tid === league.userTid ? league.coachName : team.coach.name;
   return (
     <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
       <Card
@@ -569,11 +604,14 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
         }
       >
         <div className="row" style={{ gap: 12 }}>
-          <div className="grow">
+          <div className="grow" style={{ minWidth: 0 }}>
             <div className="bold" style={{ fontSize: 16 }}>
-              {tid === league.userTid ? league.coachName : team.coach.name}
+              {/* his history: jobs, record, titles (History → Coaches) */}
+              {staff ? <Link to={`/history?view=coaches&coach=${staff.id}`}>{coachName}</Link> : coachName}
             </div>
             <div className="small dim">Head coach{tid === league.userTid ? ' (you)' : ''}</div>
+            {staff && <div className="small dim2">{staff.here}</div>}
+            {staff?.career && <div className="tiny dim">{staff.career}</div>}
           </div>
         </div>
         <div className="col" style={{ gap: 0, marginTop: 10 }}>
@@ -593,6 +631,11 @@ function TacticsTab({ league, tid }: { league: League; tid: number }) {
         <div className="lg-note" style={{ marginTop: 8 }}>
           Practice intensity: {PRACTICE.find((x) => x.id === team.practice)?.label ?? '—'}. Development boosts young players' growth; adjustments drive in-game counters.
         </div>
+        {staff && staff.before.length > 0 && (
+          <div className="lg-note" style={{ marginTop: 6 }}>
+            Before: {staff.before.join(' · ')}.
+          </div>
+        )}
       </Card>
       <Card title="Rotation minutes">
         {byMin.length === 0 ? (

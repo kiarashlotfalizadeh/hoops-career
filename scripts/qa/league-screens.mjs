@@ -112,6 +112,7 @@ const visit = async (prefix) => {
     ['team5-history', '#/team/5?tab=history', 1],
     ['history', '#/history', 2],
     ['history-league', '#/history?view=league', 1],
+    ['history-coaches', '#/history?view=coaches', 2],
     ['history-hof', '#/history?view=hof', 1],
     ['inbox', '#/inbox', 2],
   ];

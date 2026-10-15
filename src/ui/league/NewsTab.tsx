@@ -1,6 +1,21 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeftRight, BookOpen, ChevronDown, Flame, HeartPulse, Hourglass, ListOrdered, Megaphone, Newspaper, PenLine, Trophy, UserMinus, type LucideIcon } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  BookOpen,
+  ChevronDown,
+  ClipboardList,
+  Flame,
+  HeartPulse,
+  Hourglass,
+  ListOrdered,
+  Megaphone,
+  Newspaper,
+  PenLine,
+  Trophy,
+  UserMinus,
+  type LucideIcon,
+} from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
@@ -21,11 +36,12 @@ export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: s
   draft: { label: 'Draft', icon: ListOrdered, color: 'var(--tier-star)' },
   milestone: { label: 'Milestones', icon: Flame, color: 'var(--warn)' },
   record: { label: 'Records', icon: BookOpen, color: 'var(--tier-elite)' },
+  coach: { label: 'Coaches', icon: ClipboardList, color: 'var(--info)' },
   retire: { label: 'Retirements', icon: Hourglass, color: 'var(--text-2)' },
   general: { label: 'General', icon: Newspaper, color: 'var(--text-2)' },
 };
 
-const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'award', 'draft', 'milestone', 'record', 'release', 'retire', 'general'];
+const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'award', 'draft', 'milestone', 'record', 'coach', 'release', 'retire', 'general'];
 const PAGE = 50;
 
 export function NewsTab({ league }: { league: League }) {

@@ -9,6 +9,7 @@ import { defaultTactics } from '../core/sim/tactics';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
+import { registryProblems, seedCoaches } from '../core/league/coaches';
 import { MAX_STEPS } from './live';
 
 export interface LeagueMeta {
@@ -461,6 +462,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // All-Star Saturday's results: a damaged set goes (the Awards tab then shows the All-Stars alone)
   for (const a of x.awards) if (obj(a) && a.saturday !== undefined && !saturdayIntact(x, a.saturday)) delete a.saturday;
   migrateNumbers(x);
+  migrateCoaches(x);
   x.version = SAVE_VERSION;
   return x;
 }
@@ -536,6 +538,44 @@ function recordsIntact(x: League, r: unknown): boolean {
   const shelf = (s: unknown) => obj(s) && list(REC_STATS, s.players, mark) && list(TEAM_REC_STATS, s.teams, teamMark);
   const both = (b: unknown) => obj(b) && shelf(b.reg) && shelf(b.post);
   return obj(r) && int(r.since) && both(r.league) && obj(r.teams) && Object.entries(r.teams).every(([tid, b]) => !!x.teams[Number(tid)] && both(b));
+}
+
+/**
+ * The coach registry: a damaged one (out of shape, or out of step with the teams' coaches: see
+ * registryProblems) is started again, as is a save's from before the registry: every team's coach
+ * from the league's first season, the user from his current job's (see seedCoaches). A team's coach
+ * out of shape gets a plain one first (the registry is built from them).
+ */
+function migrateCoaches(x: League) {
+  for (const t of x.teams)
+    if (!(obj(t.coach) && str(t.coach.name) && str(t.coach.offPhilosophy) && str(t.coach.defPhilosophy) && num(t.coach.development) && num(t.coach.tactics)))
+      t.coach = { name: `Coach ${t.abbrev}`, offPhilosophy: 'balanced', defPhilosophy: 'drop', development: 50, tactics: 50 };
+  if (x.coaches !== undefined && !coachesIntact(x, x.coaches)) delete x.coaches;
+  seedCoaches(x);
+}
+
+const pair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(int);
+
+function coachesIntact(x: League, reg: unknown): boolean {
+  const stint = (s: unknown) =>
+    obj(s) &&
+    int(s.tid) &&
+    !!x.teams[s.tid] &&
+    int(s.from) &&
+    (s.at === undefined || pair(s.at)) &&
+    (s.to === undefined || (obj(s.to) && int(s.to.season) && pair(s.to.wl) && (s.to.post === undefined || s.to.post === true)));
+  const coach = (r: unknown) =>
+    obj(r) &&
+    int(r.id) &&
+    str(r.name) &&
+    str(r.off) &&
+    str(r.def) &&
+    num(r.dev) &&
+    num(r.tac) &&
+    (r.user === undefined || r.user === true) &&
+    Array.isArray(r.stints) &&
+    r.stints.every(stint);
+  return Array.isArray(reg) && reg.every(coach) && registryProblems(x).length === 0;
 }
 
 /** The latest live game's highlights, in shape for the court: possessions with their fives, steps and scores. */

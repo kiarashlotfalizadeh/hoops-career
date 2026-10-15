@@ -1,6 +1,7 @@
 // Core league data model. Everything here is plain, structured-clone-safe data so
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
+import type { CoachRecord } from './league/coaches';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PlayCall, PossLog } from './sim/log';
 
@@ -995,8 +996,8 @@ export interface NewsItem {
   id: number;
   season: number;
   day: number;
-  /** 'rumor': who is listening on a player before the trade deadline, and who has called. */
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record';
+  /** 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts). */
+  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record' | 'coach';
   text: string;
   tids: number[];
   pids: number[];
@@ -1283,6 +1284,8 @@ export interface League {
   gameTime?: { gid: number; play: number[] };
   /** The record book: the best single-game performances since the league began, the league's and each franchise's (see records.ts). */
   records?: RecordBook;
+  /** Every head coach the league has had, the user among them, with his jobs (see coaches.ts): the coaching carousel and coach histories. */
+  coaches?: CoachRecord[];
 }
 
 /**
