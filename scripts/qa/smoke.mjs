@@ -138,6 +138,16 @@ try {
     '/settings',
     '/history',
   ];
+  // two real players side by side: the league leaders' links
+  await page.goto(`${base}/#/league?tab=stats`);
+  const leaders = page.locator('a.lg-lead-top[href^="#/player/"]');
+  await leaders
+    .first()
+    .waitFor({ timeout: 15_000 })
+    .catch(() => {});
+  const pids = [...new Set((await leaders.evaluateAll((as) => as.map((a) => a.getAttribute('href')))).map((h) => h.split('/').pop()))];
+  if (pids.length >= 2) routes.push(`/compare?a=${pids[0]}&b=${pids[1]}`);
+  else fail.push('no league leaders to compare');
   for (const [w, h] of [
     [390, 844],
     [820, 1180],

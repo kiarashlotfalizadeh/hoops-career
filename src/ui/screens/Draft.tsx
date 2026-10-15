@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Gavel, Play, SkipForward, Ticket } from 'lucide-react';
+import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Gavel, Play, Scale, SkipForward, Ticket } from 'lucide-react';
 import type { CombineResults, DraftPick, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
@@ -17,6 +17,7 @@ import { OvrPot, SecTitle, ordinal } from '../office/common';
 import { PickTradeSheet } from '../office/PickTradeSheet';
 import { blockOffers } from '../office/tradeBlock';
 import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
+import { boardNeighbors, compareHref } from '../compare';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mine' | 'results';
 
@@ -762,6 +763,10 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                 Drafted #{overallPick(league, p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}
               </span>
             )}
+            {/* side by side with the prospect ranked next to him (either can be changed there) */}
+            <Link to={compareHref(p.pid, boardNeighbors(league, p, 1)[0]?.pid)} className="btn xs" style={{ marginLeft: 'auto' }} onClick={onClose}>
+              <Scale size={13} /> Compare
+            </Link>
           </div>
           {p.prospect?.blurb && (
             <div className="dim2" style={{ lineHeight: 1.45 }}>

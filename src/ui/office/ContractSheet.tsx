@@ -4,7 +4,7 @@
 // player page and Re-sign) is in ExtendBody.tsx.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Ban, Minus, Plus, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Ban, Minus, Plus, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { Player, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
@@ -46,6 +46,7 @@ import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, p
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
+import { compareHref, counterpart } from '../compare';
 
 export type OfferMode = 'fa' | 'resign' | 'extend';
 
@@ -92,6 +93,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const sheet = mode === 'fa' && !!p.rfa;
   const ownRfa = mode === 'resign' && p.tid === FREE_AGENT;
   const kind: TalkKind = mode === 'resign' ? 'resign' : 'fa';
+  const mine = mode === 'fa' ? counterpart(league, p) : null;
   // his ask on his own terms (up after re-sign talks broke down)
   const ask = bidding ? askingContract(league, p, tid) : talkAsk(league, p, kind);
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
@@ -202,6 +204,12 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             {playerName(p)}
           </h2>
           <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+          {/* a free agent weighed against your own player at his position */}
+          {mode === 'fa' && (
+            <Link to={compareHref(p.pid, mine?.pid)} className="btn xs" style={{ marginTop: 8, maxWidth: '100%' }} onClick={onClose}>
+              <Scale size={13} style={{ flex: 'none' }} /> <span className="ellipsis">{mine ? `Compare with ${mine.lastName}` : 'Compare'}</span>
+            </Link>
+          )}
         </div>
         <OvrPot p={p} />
       </div>

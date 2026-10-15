@@ -26,6 +26,7 @@ const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
 const Home = lazyRetry(() => import('./screens/Home'));
 const Roster = lazyRetry(() => import('./screens/Roster'));
 const PlayerView = lazyRetry(() => import('./screens/PlayerView'));
+const Compare = lazyRetry(() => import('./screens/Compare'));
 const Rotation = lazyRetry(() => import('./screens/Rotation'));
 const Lineups = lazyRetry(() => import('./screens/Lineups'));
 const Tactics = lazyRetry(() => import('./screens/Tactics'));
@@ -253,7 +254,7 @@ function TopBar() {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game', '/preview'] },
-  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player'] },
+  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player', '/compare'] },
   { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab', '/gameplan'] },
   { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
   { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
@@ -453,6 +454,7 @@ function GameShell() {
             <Route path="/" element={<Home />} />
             <Route path="/roster" element={<Roster />} />
             <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
+            <Route path="/compare" element={<Compare />} />
             <Route path="/rotation" element={<Rotation />} />
             <Route path="/lineups" element={<Lineups />} />
             <Route path="/tactics" element={<Tactics />} />
