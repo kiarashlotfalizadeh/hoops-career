@@ -1,4 +1,4 @@
-// Turn three seasons of per-game + advanced stats into internal ratings.
+// Turn three seasons of per-game + advanced stats (and Dunks & Threes EPM) into internal ratings.
 // Seasons are weighted by recency and minutes, then regressed toward a size-appropriate
 // mean in proportion to sample size. Ratings are a first guess; calibrate.ts then nudges
 // them until each player reproduces his real per-36 profile in the engine.
@@ -9,6 +9,7 @@ import { Rng, clamp, hashString } from '../../src/core/random';
 import { genRatings } from '../../src/core/playerGen';
 import type { AdvRow, PerGameRow } from './parse';
 import type { PbpAgg } from './nba/profile';
+import type { EpmAgg } from './epm';
 import { SEED_SEASON } from './sources';
 
 /** Recency weights for the stat seasons (box scores and play-by-play alike). */
@@ -30,6 +31,8 @@ export interface Agg {
   pos: string;
   /** NBA.com play-by-play profile (shot zones, creation, defense, RAPM), when matched. */
   pbp?: PbpAgg;
+  /** Dunks & Threes EPM, when the player is in the exports. */
+  epm?: EpmAgg;
 }
 
 const STATS = ['fga', 'fg3a', 'fg3', 'fg2a', 'fg2', 'fta', 'ft', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'pf', 'pts'] as const;
@@ -98,7 +101,7 @@ export interface Bio {
   pos: string;
 }
 
-interface PopStats {
+export interface PopStats {
   mean: Record<string, number>;
   sd: Record<string, number>;
 }
@@ -127,6 +130,9 @@ export function features(a: Agg) {
     ast36: p.ast,
     mpg: a.mpg,
     ...pbpFeatures(a.pbp),
+    // NaN without EPM (z-scores treat NaN as 0, and the impact ratings below fall back to box plus-minus)
+    epmO: a.epm ? a.epm.off : NaN,
+    epmD: a.epm ? a.epm.def : NaN,
   };
 }
 
@@ -235,6 +241,14 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
   const wz = ((bio.weightLb || 220) - 220) / 25;
   const rng = new Rng(hashString(seedKey));
   const age = bio.age || a.lastAge || 26;
+  // Impact: Dunks & Threes EPM, when he has it, takes box plus-minus's place in the impact ratings
+  // (offensive and defensive IQ; perimeter and interior defense read no box plus-minus with the
+  // play-by-play). It is box plus-minus done better, a box and tracking prior refined by lineup
+  // data, while our own RAPM keeps its weight. Weighed in 20 simulated seasons against leaning
+  // on EPM harder or splitting RAPM's weight with it, this kept simulated team results closest to
+  // the players' real impact and moved OVR toward both EPM and RAPM.
+  const ob = Number.isFinite(f.epmO) ? 'epmO' : 'obpm';
+  const db = Number.isFinite(f.epmD) ? 'epmD' : 'dbpm';
   const r: Ratings = {
     hgt: h,
     spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
@@ -257,16 +271,16 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
       ? 50 + 6 * z('usg') + 6 * z('unast') + 3 * z('pullupShare') + 4 * z('astPct') - 4 * z('lostBallRate') - 5 * hz
       : 50 + 8 * z('usg') + 8 * z('astPct') - 3 * z('tovPct') - 6 * hz,
     pas: has ? 50 + 12 * z('astPct') + 2 * z('obpm') - 3 * z('badPassRate') : 50 + 13 * z('astPct') + 2 * z('obpm'),
-    oiq: has ? 50 + 5 * z('obpm') + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg') : 50 + 8 * z('obpm') + 4 * z('ts') + 3 * z('usg'),
+    oiq: has ? 50 + 5 * z(ob) + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg') : 50 + 8 * z(ob) + 4 * z('ts') + 3 * z('usg'),
     drw: has ? 48 + 9 * z('sfdRate') + 5 * z('fta36') : 48 + 11 * z('fta36') + 3 * z('ftr'),
     post: has ? 30 + 8 * hz + 9 * z('postShare') + 4 * z('usg') + 4 * wz : 30 + 9 * hz + 6 * z('usg') + 5 * wz - 4 * z('tpar'),
-    perD: has ? 50 + 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 50 + 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz,
+    perD: has ? 50 + 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 50 + 6 * z(db) + 6 * z('stlPct') - 3 * hz,
     intD: has
       ? 46 + 5 * z('rapmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct')
-      : 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
+      : 46 + 6 * z(db) + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
     stl: 50 + 14 * z('stlPct'),
     blk: 46 + 13 * z('blkPct') + 4 * hz,
-    diq: has ? 50 + 5 * z('dbpm') + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 50 + 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct'),
+    diq: has ? 50 + 5 * z(db) + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 50 + 9 * z(db) + 2 * z('stlPct') + 2 * z('blkPct'),
     oreb: 48 + 14 * z(has && Number.isFinite(f.orbTrue) ? 'orbTrue' : 'orbPct') + 3 * hz,
     dreb: 48 + 14 * z(has && Number.isFinite(f.drbTrue) ? 'drbTrue' : 'drbPct') + 3 * hz,
   };

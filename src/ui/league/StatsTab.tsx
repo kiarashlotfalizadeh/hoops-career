@@ -342,6 +342,13 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
       c.push(
         { key: 'per', label: 'PER', get: (r) => r.s.adv?.per ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)) },
         { key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)) },
+        {
+          key: 'epm',
+          label: 'EPM',
+          get: (r) => r.s.adv?.epm ?? -99,
+          fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)),
+          help: 'Estimated plus-minus (Dunks & Threes): points per 100 possessions he adds over an average player, offense and defense.',
+        },
         { key: 'ws', label: 'WS', get: (r) => r.s.adv?.ws ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)) },
       );
     }

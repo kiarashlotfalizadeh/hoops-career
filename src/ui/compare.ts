@@ -180,6 +180,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     stat('net', 'Net on court', (t) => (t.onPoss ? pg(t).onOff : null), 'high', 'signed'),
     stat('per', 'PER', (t) => t.adv?.per ?? null, 'high', 'f1'),
     stat('bpm', 'BPM', (t) => t.adv?.bpm ?? null, 'high', 'signed'),
+    stat('epm', 'EPM', (t) => t.adv?.epm ?? null, 'high', 'signed'),
     stat('ws', 'Win shares', (t) => t.adv?.ws ?? null, 'high', 'f1'),
   ];
 

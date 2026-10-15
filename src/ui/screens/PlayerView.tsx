@@ -574,6 +574,7 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
     { key: 'per', label: 'PER', get: (r) => r.tot.adv?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
+    { key: 'epm', label: 'EPM', get: (r) => r.tot.adv?.epm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
     { key: 'ws', label: 'WS', get: (r) => r.tot.adv?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     // imported seasons carry no plus-minus: "—", not 0.0 (as in the league stats)
     { key: 'pm', label: '+/-', get: (r) => (r.tot.real && !r.tot.pm ? NaN : pg(r).pm), fmt: (v) => signed(v as number) },
@@ -590,7 +591,9 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
         ]}
       />
       {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
-      <div className="tiny dim">“real” seasons are imported from Basketball Reference; PER, BPM and WS exist only for those, +/- only for simulated seasons.</div>
+      <div className="tiny dim">
+        “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes; PER, BPM, EPM and WS exist only for those, +/- only for simulated seasons.
+      </div>
       {!po && <CareerHighs p={p} league={league} />}
     </>
   );
