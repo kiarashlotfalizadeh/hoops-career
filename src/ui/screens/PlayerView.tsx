@@ -26,7 +26,7 @@ import { PlayerMoves } from '../league/MovesTab';
 import { deadlineLabel } from '../../core/league/rfa';
 import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
-import { REC_LABEL, REC_STATS } from '../../core/league/records';
+import { REC_LABEL, REC_STATS, careerHighOf } from '../../core/league/records';
 import { careerOnRecord } from '../../core/analysis/milestones';
 import { fmtDate } from '../../core/league/helpers';
 
@@ -638,7 +638,7 @@ function CareerHighs({ p, league }: { p: Player; league: League }) {
     <Card title={whole ? 'Career highs' : `Highs since ${seasonLabel(since)}`}>
       <div className="lg-team5">
         {REC_STATS.filter((k) => highs[k]).map((k) => {
-          const h = highs[k]!;
+          const h = careerHighOf(p, k)!;
           const text = `vs ${league.teams[h.opp]?.abbrev ?? '?'} · ${fmtDate(h.season, h.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
           return (
             <div key={k} className="lg-rec-row lbl">

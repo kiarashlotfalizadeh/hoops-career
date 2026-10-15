@@ -18,7 +18,9 @@ import {
   TEAM_REC_STATS,
   TEAM_SEASON_LABEL,
   careerLeaders,
+  gameMark,
   seasonRecords,
+  teamMark,
   teamSeasonRecords,
   type CareerStat,
   type GameMark,
@@ -153,7 +155,9 @@ function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid
   const book = league.records;
   const shelf = book ? (tid !== undefined ? book.teams[tid]?.[kind] : book.league[kind]) : undefined;
   const isTeam = stat.startsWith('team-');
-  const list: (GameMark | TeamMark)[] = (isTeam ? shelf?.teams[stat.slice(5) as TeamRecStat] : shelf?.players[stat as RecStat]) ?? [];
+  const list: (GameMark | TeamMark)[] = isTeam
+    ? (shelf?.teams[stat.slice(5) as TeamRecStat] ?? []).map(teamMark)
+    : (shelf?.players[stat as RecStat] ?? []).map((r) => gameMark(league, r));
   const keep = tid !== undefined ? KEEP.team[kind] : KEEP.league[kind];
   return (
     <>

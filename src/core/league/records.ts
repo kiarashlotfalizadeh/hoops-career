@@ -32,7 +32,7 @@ export const REC_LABEL: Record<RecStat, [string, string]> = {
 };
 export const TEAM_REC_LABEL: Record<TeamRecStat, string> = { pts: 'Points', margin: 'Winning margin', tpm: 'Threes made' };
 
-/** One player's night in the record book: frozen like the transaction log, so it reads the same after he's gone. */
+/** One player's night in the record book. */
 export interface GameMark {
   v: number;
   pid: number;
@@ -55,9 +55,20 @@ export interface TeamMark {
   score: [number, number];
 }
 
+/**
+ * A player's night as the book stores it (a few thousand of these would be a tenth of the save as
+ * objects): his name is frozen into it only when he leaves the save (see freezeRecordNames), so it
+ * reads the same after he's gone.
+ */
+export type MarkRow = [v: number, pid: number, tid: number, opp: number, season: number, day: number, gid: number, name?: string];
+/** A team's night as the book stores it, with the final score. */
+export type TeamRow = [v: number, tid: number, opp: number, season: number, day: number, gid: number, pts: number, oppPts: number];
+/** A career high as a player's record stores it. */
+export type HighRow = [v: number, season: number, day: number, opp: number, gid: number];
+
 export interface RecordShelf {
-  players: Partial<Record<RecStat, GameMark[]>>;
-  teams: Partial<Record<TeamRecStat, TeamMark[]>>;
+  players: Partial<Record<RecStat, MarkRow[]>>;
+  teams: Partial<Record<TeamRecStat, TeamRow[]>>;
 }
 
 export interface RecordBook {
@@ -75,6 +86,20 @@ export interface CareerHigh {
   day: number;
   opp: number;
   gid: number;
+}
+
+export function gameMark(league: League, r: MarkRow): GameMark {
+  const p = league.players[r[1]];
+  return { v: r[0], pid: r[1], name: r[7] ?? (p ? playerName(p) : 'Unknown'), tid: r[2], opp: r[3], season: r[4], day: r[5], gid: r[6] };
+}
+
+export function teamMark(r: TeamRow): TeamMark {
+  return { v: r[0], tid: r[1], opp: r[2], season: r[3], day: r[4], gid: r[5], score: [r[6], r[7]] };
+}
+
+export function careerHighOf(p: Player, stat: RecStat): CareerHigh | undefined {
+  const h = p.highs?.[stat];
+  return h ? { v: h[0], season: h[1], day: h[2], opp: h[3], gid: h[4] } : undefined;
 }
 
 /** How many marks each list keeps: the league's top ten (five in the postseason), each franchise's top three (its best in the postseason). */
@@ -97,26 +122,43 @@ export function lineStat(b: Pick<BoxLine, 'pts' | 'orb' | 'drb' | 'ast' | 'stl' 
   return stat === 'reb' ? b.orb + b.drb : b[stat];
 }
 
+/** What ranks a row on its list: the number, when it happened, and whose it is (a night recorded twice counts once). */
+export interface RowKey {
+  v: number;
+  season: number;
+  day: number;
+  gid: number;
+  who: number;
+}
+export const markKey = (r: MarkRow): RowKey => ({ v: r[0], season: r[4], day: r[5], gid: r[6], who: r[1] });
+export const teamKey = (r: TeamRow): RowKey => ({ v: r[0], season: r[3], day: r[4], gid: r[5], who: r[1] });
+
 /** Earlier first among equals: a record tied isn't taken from whoever set it. */
-const earlier = (a: { season: number; day: number; gid: number }, b: { season: number; day: number; gid: number }) => a.season - b.season || a.day - b.day || a.gid - b.gid;
+const earlier = (a: Omit<RowKey, 'v' | 'who'>, b: Omit<RowKey, 'v' | 'who'>) => a.season - b.season || a.day - b.day || a.gid - b.gid;
 
 /**
  * Put a mark on a list kept best first, at most `keep` long. Returns how it stands against the list
  * as it was: 'record' (it beats the best), 'tie' (it equals it), 'listed' (it made the list) or null.
  */
-export function insertMark<M extends { v: number; tid: number; pid?: number; season: number; day: number; gid: number }>(
-  list: M[],
-  m: M,
-  keep: number,
-): 'record' | 'tie' | 'listed' | null {
+export function insertMark<R>(list: R[], row: R, keep: number, key: (r: R) => RowKey): 'record' | 'tie' | 'listed' | null {
+  const m = key(row);
   if (m.v <= 0) return null;
   // the same night recorded again changes nothing
-  if (list.some((x) => x.gid === m.gid && x.season === m.season && x.tid === m.tid && x.pid === m.pid)) return null;
-  const best = list[0]?.v;
-  if (list.length >= keep && m.v <= list[list.length - 1].v) return null;
-  let i = list.findIndex((x) => x.v < m.v || (x.v === m.v && earlier(m, x) < 0));
+  if (
+    list.some((x) => {
+      const k = key(x);
+      return k.gid === m.gid && k.season === m.season && k.who === m.who;
+    })
+  )
+    return null;
+  const best = list.length ? key(list[0]).v : undefined;
+  if (list.length >= keep && m.v <= key(list[list.length - 1]).v) return null;
+  let i = list.findIndex((x) => {
+    const k = key(x);
+    return k.v < m.v || (k.v === m.v && earlier(m, k) < 0);
+  });
   if (i < 0) i = list.length;
-  list.splice(i, 0, m);
+  list.splice(i, 0, row);
   if (list.length > keep) list.length = keep;
   return best === undefined || m.v > best ? 'record' : m.v === best ? 'tie' : 'listed';
 }
@@ -157,24 +199,24 @@ export function recordGame(league: League, res: GameResult): RecordNote[] {
     for (const b of us.players) {
       if (!(b.min > 0)) continue;
       const p = league.players[b.pid];
-      const name = p ? playerName(p) : b.name;
       for (const stat of REC_STATS) {
         const v = lineStat(b, stat);
         if (v <= 0) continue;
-        const mark: GameMark = { v, pid: b.pid, name, tid: us.tid, opp: them.tid, season: res.season, day: res.day, gid: res.gid };
-        const atL = insertMark((lg.players[stat] ??= []), mark, KEEP.league[kind]);
-        const atT = insertMark((fr.players[stat] ??= []), { ...mark }, KEEP.team[kind]);
+        // a player no longer in the save (a backfill from older results) carries his name from the box score
+        const row = (): MarkRow => (p ? [v, b.pid, us.tid, them.tid, res.season, res.day, res.gid] : [v, b.pid, us.tid, them.tid, res.season, res.day, res.gid, b.name]);
+        const atL = insertMark((lg.players[stat] ??= []), row(), KEEP.league[kind], markKey);
+        const atT = insertMark((fr.players[stat] ??= []), row(), KEEP.team[kind], markKey);
         if (atL === 'record' || atL === 'tie') notes.push({ scope: 'league', book: kind, kind: atL, stat, tid: us.tid, pid: b.pid, v });
         if (atT === 'record' || atT === 'tie') notes.push({ scope: 'team', book: kind, kind: atT, stat, tid: us.tid, pid: b.pid, v });
-        if (kind === 'reg' && p) careerHigh(p, stat, { v, season: res.season, day: res.day, opp: them.tid, gid: res.gid });
+        if (kind === 'reg' && p) careerHigh(p, stat, [v, res.season, res.day, them.tid, res.gid]);
       }
     }
     for (const stat of TEAM_REC_STATS) {
       const v = stat === 'pts' ? us.pts : stat === 'margin' ? us.pts - them.pts : us.t.tpm;
       if (v <= 0) continue;
-      const mark: TeamMark = { v, tid: us.tid, opp: them.tid, season: res.season, day: res.day, gid: res.gid, score: [us.pts, them.pts] };
-      const atL = insertMark((book.league[kind].teams[stat] ??= []), mark, KEEP.league[kind]);
-      const atT = insertMark((fr.teams[stat] ??= []), { ...mark }, KEEP.team[kind]);
+      const row = (): TeamRow => [v, us.tid, them.tid, res.season, res.day, res.gid, us.pts, them.pts];
+      const atL = insertMark((book.league[kind].teams[stat] ??= []), row(), KEEP.league[kind], teamKey);
+      const atT = insertMark((fr.teams[stat] ??= []), row(), KEEP.team[kind], teamKey);
       if (atL === 'record' || atL === 'tie') notes.push({ scope: 'league', book: kind, kind: atL, stat, team: true, tid: us.tid, v });
       if (atT === 'record' || atT === 'tie') notes.push({ scope: 'team', book: kind, kind: atT, stat, team: true, tid: us.tid, v });
     }
@@ -183,10 +225,20 @@ export function recordGame(league: League, res: GameResult): RecordNote[] {
 }
 
 /** A new career high replaces the old one; one equalled keeps the first. */
-function careerHigh(p: Player, stat: RecStat, h: CareerHigh) {
+function careerHigh(p: Player, stat: RecStat, h: HighRow) {
   const cur = p.highs?.[stat];
-  if (cur && (cur.v > h.v || (cur.v === h.v && earlier(cur, h) <= 0))) return;
+  const at = (r: HighRow) => ({ season: r[1], day: r[2], gid: r[4] });
+  if (cur && (cur[0] > h[0] || (cur[0] === h[0] && earlier(at(cur), at(h)) <= 0))) return;
   (p.highs ??= {})[stat] = h;
+}
+
+/** A player leaving the save (a fringe retiree compacted away) leaves his name on his marks in the book. */
+export function freezeRecordNames(league: League, p: Player) {
+  const book = league.records;
+  if (!book) return;
+  const name = playerName(p);
+  const shelves = [book.league.reg, book.league.post, ...Object.values(book.teams).flatMap((t) => [t.reg, t.post])];
+  for (const sh of shelves) for (const list of Object.values(sh.players)) for (const r of list ?? []) if (r[1] === p.pid && r[7] === undefined) r[7] = name;
 }
 
 /**
@@ -476,21 +528,25 @@ export function recordsHeld(league: League, res: GameResult): HeldRecord[] {
   const kind = bookOf(res.type);
   if (!book || !kind || res.season <= book.since) return [];
   const out: HeldRecord[] = [];
-  const top = <M extends { gid: number; season: number }>(list: M[] | undefined) => (list?.[0] && list[0].gid === res.gid && list[0].season === res.season ? list[0] : undefined);
+  const top = <R>(list: R[] | undefined, key: (r: R) => RowKey) => {
+    const k = list?.[0] !== undefined ? key(list[0]) : undefined;
+    return k && k.gid === res.gid && k.season === res.season ? k : undefined;
+  };
   for (const stat of REC_STATS) {
-    const lg = top(book.league[kind].players[stat]);
-    if (lg) out.push({ scope: 'league', book: kind, stat, tid: lg.tid, pid: lg.pid, v: lg.v });
+    const lg = top(book.league[kind].players[stat], markKey);
+    const lgTid = book.league[kind].players[stat]?.[0]?.[2];
+    if (lg && lgTid !== undefined) out.push({ scope: 'league', book: kind, stat, tid: lgTid, pid: lg.who, v: lg.v });
     for (const tid of [res.home.tid, res.away.tid]) {
-      const m = top(book.teams[tid]?.[kind].players[stat]);
-      if (m && !(lg && lg.pid === m.pid)) out.push({ scope: 'team', book: kind, stat, tid, pid: m.pid, v: m.v });
+      const m = top(book.teams[tid]?.[kind].players[stat], markKey);
+      if (m && !(lg && lg.who === m.who)) out.push({ scope: 'team', book: kind, stat, tid, pid: m.who, v: m.v });
     }
   }
   for (const stat of TEAM_REC_STATS) {
-    const lg = top(book.league[kind].teams[stat]);
-    if (lg) out.push({ scope: 'league', book: kind, stat, team: true, tid: lg.tid, v: lg.v });
+    const lg = top(book.league[kind].teams[stat], teamKey);
+    if (lg) out.push({ scope: 'league', book: kind, stat, team: true, tid: lg.who, v: lg.v });
     for (const tid of [res.home.tid, res.away.tid]) {
-      const m = top(book.teams[tid]?.[kind].teams[stat]);
-      if (m && !(lg && lg.tid === m.tid)) out.push({ scope: 'team', book: kind, stat, team: true, tid, v: m.v });
+      const m = top(book.teams[tid]?.[kind].teams[stat], teamKey);
+      if (m && !(lg && lg.who === m.who)) out.push({ scope: 'team', book: kind, stat, team: true, tid, v: m.v });
     }
   }
   return out;

@@ -22,7 +22,12 @@ import {
   recordsHeld,
   seasonRecords,
   teamSeasonRecords,
-  type GameMark,
+  careerHighOf,
+  freezeRecordNames,
+  gameMark,
+  markKey,
+  teamMark,
+  type MarkRow,
 } from '../league/records';
 import { blankStats } from '../playerGen';
 import type { GameResult, League } from '../types';
@@ -33,27 +38,28 @@ function played(name: string, days: number): League {
   return l;
 }
 
-const mark = (v: number, gid: number, day = gid): GameMark => ({ v, pid: gid, name: `P${gid}`, tid: 0, opp: 1, season: 2027, day, gid });
+const mark = (v: number, gid: number, day = gid): MarkRow => [v, gid, 0, 1, 2027, day, gid];
+const ins = (list: MarkRow[], m: MarkRow, keep = 3) => insertMark(list, m, keep, markKey);
 
 describe('insertMark', () => {
   it('keeps the list best first and at most `keep` long, and says how a mark stands', () => {
-    const list: GameMark[] = [];
-    expect(insertMark(list, mark(30, 1), 3)).toBe('record');
-    expect(insertMark(list, mark(40, 2), 3)).toBe('record');
-    expect(insertMark(list, mark(35, 3), 3)).toBe('listed');
-    expect(list.map((m) => m.v)).toEqual([40, 35, 30]);
+    const list: MarkRow[] = [];
+    expect(ins(list, mark(30, 1))).toBe('record');
+    expect(ins(list, mark(40, 2))).toBe('record');
+    expect(ins(list, mark(35, 3))).toBe('listed');
+    expect(list.map((m) => m[0])).toEqual([40, 35, 30]);
     // not good enough for a full list, and nothing for a zero
-    expect(insertMark(list, mark(30, 4), 3)).toBeNull();
-    expect(insertMark(list, mark(0, 5), 3)).toBeNull();
-    expect(insertMark(list, mark(31, 6), 3)).toBe('listed');
-    expect(list.map((m) => m.v)).toEqual([40, 35, 31]);
+    expect(ins(list, mark(30, 4))).toBeNull();
+    expect(ins(list, mark(0, 5))).toBeNull();
+    expect(ins(list, mark(31, 6))).toBe('listed');
+    expect(list.map((m) => m[0])).toEqual([40, 35, 31]);
   });
 
   it('a record tied stays with whoever set it first, and a night recorded twice counts once', () => {
-    const list: GameMark[] = [mark(40, 2)];
-    expect(insertMark(list, mark(40, 7), 3)).toBe('tie');
-    expect(list.map((m) => m.gid)).toEqual([2, 7]);
-    expect(insertMark(list, mark(40, 7), 3)).toBeNull();
+    const list: MarkRow[] = [mark(40, 2)];
+    expect(ins(list, mark(40, 7))).toBe('tie');
+    expect(list.map((m) => m[6])).toEqual([2, 7]);
+    expect(ins(list, mark(40, 7))).toBeNull();
     expect(list).toHaveLength(2);
   });
 });
@@ -70,7 +76,7 @@ describe('the book over a stretch of games', () => {
 
   it("each league list is the best of the season's box lines, best first", () => {
     for (const stat of REC_STATS) {
-      const list = book.league.reg.players[stat] ?? [];
+      const list = (book.league.reg.players[stat] ?? []).map((r) => gameMark(l, r));
       const all = counted.flatMap((g) => [...g.home.players, ...g.away.players].filter((b) => b.min > 0).map((b) => lineStat(b, stat))).sort((a, b) => b - a);
       expect(list.map((m) => m.v)).toEqual(all.slice(0, KEEP.league.reg).filter((v) => v > 0));
       for (const m of list) {
@@ -88,21 +94,21 @@ describe('the book over a stretch of games', () => {
       const fr = book.teams[t.tid]?.reg;
       expect(fr, t.abbrev).toBeDefined();
       for (const stat of REC_STATS) {
-        const list = fr!.players[stat] ?? [];
+        const list = (fr!.players[stat] ?? []).map((r) => gameMark(l, r));
         expect(list.length).toBeLessThanOrEqual(KEEP.team.reg);
         for (const m of list) expect(m.tid).toBe(t.tid);
-        if (list[0]) expect(list[0].v).toBeLessThanOrEqual(book.league.reg.players[stat]![0].v);
+        if (list[0]) expect(list[0].v).toBeLessThanOrEqual(book.league.reg.players[stat]![0][0]);
       }
-      for (const stat of TEAM_REC_STATS) for (const m of fr!.teams[stat] ?? []) expect(m.tid).toBe(t.tid);
+      for (const stat of TEAM_REC_STATS) for (const m of (fr!.teams[stat] ?? []).map(teamMark)) expect(m.tid).toBe(t.tid);
     }
   });
 
   it('team marks: the most points, the biggest win and the most threes, with the score', () => {
-    const pts = book.league.reg.teams.pts!;
+    const pts = book.league.reg.teams.pts!.map(teamMark);
     const best = Math.max(...counted.flatMap((g) => [g.home.pts, g.away.pts]));
     expect(pts[0].v).toBe(best);
     expect(pts[0].score[0]).toBe(best);
-    const margin = book.league.reg.teams.margin!;
+    const margin = book.league.reg.teams.margin!.map(teamMark);
     expect(margin[0].v).toBe(Math.max(...counted.map((g) => Math.abs(g.home.pts - g.away.pts))));
     expect(margin[0].score[0] - margin[0].score[1]).toBe(margin[0].v);
   });
@@ -114,7 +120,7 @@ describe('the book over a stretch of games', () => {
       for (const stat of REC_STATS) {
         const best = Math.max(0, ...lines.map((b) => lineStat(b, stat)));
         if (best > 0) {
-          expect(p.highs?.[stat]?.v, `${p.lastName} ${stat}`).toBe(best);
+          expect(careerHighOf(p, stat)?.v, `${p.lastName} ${stat}`).toBe(best);
           checked++;
         } else expect(p.highs?.[stat]).toBeUndefined();
       }
@@ -136,8 +142,8 @@ describe('the book over a stretch of games', () => {
     const back = (await loadLeague(l.id))!;
     expect(back.records).toEqual(book);
     const bad = structuredClone(l);
-    (bad.records!.league.reg.players.pts![0] as unknown as { v: string }).v = 'lots';
-    const pid = book.league.reg.players.pts![0].pid;
+    (bad.records!.league.reg.players.pts![0] as unknown[])[0] = 'lots';
+    const pid = book.league.reg.players.pts![0][1];
     (bad.players[pid] as unknown as { highs: unknown }).highs = { pts: 'x' };
     const fixed = migrate(bad);
     expect(fixed.records).toEqual(book);
@@ -145,7 +151,7 @@ describe('the book over a stretch of games', () => {
     expect(fixed.players[pid].highs).toEqual(l.players[pid].highs);
     // damaged highs on their own just go
     const odd = structuredClone(l);
-    (odd.players[pid] as unknown as { highs: unknown }).highs = { pts: { v: 3 } };
+    (odd.players[pid] as unknown as { highs: unknown }).highs = { pts: [3, 2027] };
     expect(migrate(odd).players[pid].highs).toBeUndefined();
   });
 });
@@ -219,5 +225,18 @@ describe('records a game holds', () => {
     expect(held.filter((r) => r.stat === 'pts' && !r.team)).toHaveLength(1);
     expect(recordWhat({ stat: 'margin', team: true, v: 41 })).toBe('a 41-point win');
     expect(recordWhat({ stat: 'reb', v: 25 })).toBe('25 rebounds');
+  });
+});
+
+describe('a player who leaves the save', () => {
+  it('leaves his name on his marks, and the book reads the same', () => {
+    const l = played('records-names', 12);
+    const row = l.records!.league.reg.players.pts![0];
+    const p = l.players[row[1]];
+    const before = gameMark(l, row);
+    freezeRecordNames(l, p);
+    delete l.players[p.pid];
+    expect(gameMark(l, row)).toEqual(before);
+    expect(row[7]).toBe(before.name);
   });
 });

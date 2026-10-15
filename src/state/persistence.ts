@@ -390,14 +390,17 @@ function migrateRecords(x: League) {
   backfillRecords(x);
 }
 
-const highIntact = (h: unknown) => obj(h) && num(h.v) && int(h.season) && num(h.day) && int(h.opp) && int(h.gid);
+/** A career high: [value, season, day, opponent, game id], all whole numbers. */
+const highIntact = (h: unknown) => Array.isArray(h) && h.length === 5 && h.every(int);
 
 function recordsIntact(x: League, r: unknown): boolean {
-  const mark = (m: unknown, team: boolean) =>
-    highIntact(m) && obj(m) && int(m.tid) && !!x.teams[m.tid as number] && (team ? nums(m.score) && m.score.length === 2 : int(m.pid) && str(m.name));
-  const list = (keys: readonly string[], o: unknown, team: boolean) =>
-    obj(o) && Object.entries(o).every(([k, l]) => keys.includes(k) && Array.isArray(l) && l.length <= 10 && l.every((m) => mark(m, team)));
-  const shelf = (s: unknown) => obj(s) && list(REC_STATS, s.players, false) && list(TEAM_REC_STATS, s.teams, true);
+  const tid = (v: unknown) => int(v) && !!x.teams[v];
+  // a player's night: [value, pid, team, opponent, season, day, game id] and his name once he's gone; a team's: [value, team, opponent, season, day, game id, its points, theirs]
+  const mark = (m: unknown) => Array.isArray(m) && (m.length === 7 || (m.length === 8 && str(m[7]))) && m.slice(0, 7).every(int) && tid(m[2]) && tid(m[3]);
+  const teamMark = (m: unknown) => Array.isArray(m) && m.length === 8 && m.every(int) && tid(m[1]) && tid(m[2]);
+  const list = (keys: readonly string[], o: unknown, ok: (m: unknown) => boolean) =>
+    obj(o) && Object.entries(o).every(([k, l]) => keys.includes(k) && Array.isArray(l) && l.length <= 10 && l.every(ok));
+  const shelf = (s: unknown) => obj(s) && list(REC_STATS, s.players, mark) && list(TEAM_REC_STATS, s.teams, teamMark);
   const both = (b: unknown) => obj(b) && shelf(b.reg) && shelf(b.post);
   return obj(r) && int(r.since) && both(r.league) && obj(r.teams) && Object.entries(r.teams).every(([tid, b]) => !!x.teams[Number(tid)] && both(b));
 }

@@ -27,6 +27,7 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
+import { freezeRecordNames } from './records';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -701,6 +702,8 @@ function compactRetired(league: League) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
     const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
     if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5))) {
+      // a night of his in the record book keeps his name
+      freezeRecordNames(league, p);
       delete league.players[p.pid];
       continue;
     }
