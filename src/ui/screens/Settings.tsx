@@ -9,6 +9,7 @@ import { CAP_FOR, curTeamSeason, payroll, teamPlayers } from '../../core/league/
 import { contractExp } from '../../core/playerGen';
 import { deleteLeague } from '../../state/persistence';
 import { seasonsInCharge, takeOverTeam } from '../../core/league/owner';
+import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
 import { useLeague, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Chips, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
@@ -42,14 +43,14 @@ export default function Settings() {
     if (v && v !== league.name) mutate((l) => (l.name = v));
     else setName(league.name);
   };
+  // the coach registry takes the new name too; no two head coaches in the league's history share one
   const commitCoach = () => {
     const v = coach.trim();
-    if (v && v !== league.coachName)
-      mutate((l) => {
-        l.coachName = v;
-        l.teams[l.userTid].coach.name = v;
-      });
-    else setCoach(league.coachName);
+    if (v && v !== league.coachName && !coachNameTaken(league, v)) mutate((l) => void renameUserCoach(l, v));
+    else {
+      if (v && v !== league.coachName) useStore.getState().toast(`${v} is another head coach's name in this league.`, 'bad');
+      setCoach(league.coachName);
+    }
   };
 
   const saveNow = async () => {

@@ -5,6 +5,7 @@ import { profit } from './finances';
 import { clearAllPlans } from './gamePlans';
 import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
+import { swapJobs } from './coaches';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
 export function seasonsInCharge(league: League): number {
@@ -12,16 +13,16 @@ export function seasonsInCharge(league: League): number {
 }
 
 /**
- * The user takes over another team (after a firing or by choice): the coaches swap jobs, the old
- * team goes back to the AI staff, and the new owner starts a fresh evaluation with a new grace
- * period. Taken over after the season, the job starts with next season.
+ * The user takes over another team (after a firing or by choice): the coaches swap jobs, each with his
+ * own profile (the user's development and adjustments ratings go with him), the old team goes back to
+ * the AI staff, and the new owner starts a fresh evaluation with a new grace period. Taken over after
+ * the season, the job starts with next season. The coach registry records both moves (see swapJobs).
  */
 export function takeOverTeam(league: League, tid: number) {
   const old = league.teams[league.userTid];
   const nu = league.teams[tid];
-  const theirCoach = nu.coach.name;
-  nu.coach.name = league.coachName;
-  old.coach.name = theirCoach;
+  swapJobs(league, old.tid, tid);
+  [old.coach, nu.coach] = [nu.coach, old.coach];
   old.rotation.manual = false;
   // the old team's new staff fits its own playbook from scratch: the user's custom one (late-game
   // rules, roles, screeners, star plan) doesn't stay behind with the players
