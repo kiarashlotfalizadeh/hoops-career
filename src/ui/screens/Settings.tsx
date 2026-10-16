@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Database, Download, HardDrive, LogOut, Save, Shuffle, Trash2, TriangleAlert } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Database, Download, HardDrive, LogOut, Save, Shuffle, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
 import { exportLeague } from '../../state/backup';
 import { ImportButton } from '../components/ImportButton';
 import type { League } from '../../core/types';
@@ -157,6 +157,12 @@ export default function Settings() {
             <span>Started {seasonLabel(league.startSeason)}</span>
             <span>{Object.values(league.players).filter((p) => p.tid >= 0).length} players under contract</span>
             <span>Save format v{league.version}</span>
+            {/* an edited league says so, whether god mode is on now or not */}
+            {league.godEdits ? (
+              <span>
+                {league.godEdits} god-mode edit{league.godEdits === 1 ? '' : 's'}
+              </span>
+            ) : null}
           </div>
         </div>
       </Card>
@@ -244,6 +250,18 @@ export default function Settings() {
             label="Pre-game screen"
             help="Watch & coach on Home opens the matchup preview first: injuries, starting fives, their tendencies and your game plan. The Play menu's Watch & coach live always goes straight to the game."
           />
+          <div className="divider" />
+          <Toggle
+            on={!!st.godMode}
+            onChange={(v) => mutate((l) => (l.settings.godMode = v))}
+            label="God mode"
+            help="An in-game editor: change any player's ratings, health, contract or team, edit teams, create players and force trades. Turn it off at any time; your edits stay."
+          />
+          {st.godMode && (
+            <Link to="/god" className="btn sm" style={{ alignSelf: 'flex-start' }}>
+              <Wand2 size={16} /> Open the editor
+            </Link>
+          )}
         </div>
       </Card>
 

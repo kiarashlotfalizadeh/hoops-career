@@ -92,7 +92,7 @@ export default function Start() {
         ) : (
           <div className="list" style={{ margin: '0 -14px' }}>
             {leagues.map((m) => {
-              const tid = FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
+              const tid = m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
               return (
                 <div key={m.id} className="listrow clickable">
                   {/* open and Delete are sibling buttons; this one reaches the row's edges, as the whole row used to */}
@@ -102,7 +102,8 @@ export default function Start() {
                     style={{ minWidth: 0, textAlign: 'left', margin: '-10px 0 -10px -12px', padding: '10px 0 10px 12px' }}
                     onClick={() => void open(m.id)}
                   >
-                    <TeamLogo tid={tid >= 0 ? tid : 0} size={38} decorative />
+                    {/* as the league has it (god mode can rename and recolour a team) */}
+                    <TeamLogo tid={tid >= 0 ? tid : 0} size={38} abbrev={m.teamAbbrev} colors={m.colors} decorative />
                     <div className="grow" style={{ minWidth: 0 }}>
                       <div className="bold ellipsis">{m.name}</div>
                       {/* two lines, so the record isn't the part a phone cuts off */}

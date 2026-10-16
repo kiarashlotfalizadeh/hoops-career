@@ -136,6 +136,7 @@ try {
     '/finances',
     '/inbox',
     '/settings',
+    '/god',
     '/history',
     '/history?view=records',
     '/history?view=records&part=season',

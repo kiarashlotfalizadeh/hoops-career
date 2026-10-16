@@ -1,0 +1,61 @@
+/* God mode: the in-game editor's sheets and hub. */
+.god-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.god-field > .lg-select,
+.god-field > .input {
+  width: 100%;
+}
+.god-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+}
+.god-sliders {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 20px;
+}
+@media (min-width: 560px) {
+  .god-sliders {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.god-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+/* Save and Cancel stay in reach at the bottom of a long sheet (the sheet's own padding is 20px + the safe area) */
+.god-foot {
+  position: sticky;
+  bottom: calc(-20px - var(--safe-b));
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 calc(-20px - var(--safe-b));
+  padding: 10px 0 calc(16px + var(--safe-b));
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+}
+.god-colors {
+  display: flex;
+  gap: 8px;
+}
+.god-colors input[type='color'] {
+  width: 48px;
+  height: 40px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  cursor: pointer;
+}

@@ -18,6 +18,8 @@ export interface LeagueMeta {
   teamName: string;
   teamAbbrev: string;
   colors: [string, string, string];
+  /** The user's team id (absent on saves from before it was kept: the list finds the franchise by abbreviation). */
+  userTid?: number;
   season: number;
   phase: string;
   record: string;
@@ -151,6 +153,7 @@ export function metaFor(league: League): LeagueMeta {
     teamName: `${t.region} ${t.name}`,
     teamAbbrev: t.abbrev,
     colors: t.colors,
+    userTid: league.userTid,
     season: league.season,
     phase: league.phase,
     record: ts ? `${ts.won}-${ts.lost}` : '0-0',
@@ -463,6 +466,9 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   for (const a of x.awards) if (obj(a) && a.saturday !== undefined && !saturdayIntact(x, a.saturday)) delete a.saturday;
   migrateNumbers(x);
   migrateCoaches(x);
+  // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
+  if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
+  if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
   x.version = SAVE_VERSION;
   return x;
 }
