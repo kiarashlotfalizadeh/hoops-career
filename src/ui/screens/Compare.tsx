@@ -46,6 +46,11 @@ function contractOf(league: League, p: Player): { main: string; sub?: string } {
   return { main: '—' };
 }
 
+/** The letters in a name's longest unbreakable run ("Alexander-"): the name is sized so it fits its column whole. */
+function longestRun(name: string): number {
+  return Math.max(1, ...(name.match(/[^\s-]+-?/g) ?? [name]).map((w) => w.length));
+}
+
 /** The colour a side is known by: his team's, or a neutral one for a player without a team. */
 function sideColor(league: League, p: Player | undefined): string | undefined {
   if (!p || p.tid < 0) return undefined;
@@ -81,7 +86,9 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
       </div>
       <Link to={`/player/${p.pid}`} className="cmp-name">
         <span className="cmp-first ellipsis">{p.firstName || ' '}</span>
-        <span className="cmp-last">{p.lastName}</span>
+        <span className="cmp-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+          {p.lastName}
+        </span>
       </Link>
       <div className="cmp-team">
         {team ? (
@@ -266,9 +273,14 @@ export default function Compare() {
         <>
           {/* which side is which, kept in view while the rows scroll by */}
           <div className="cmp-strip" aria-hidden>
-            <span style={edges[0] ? { ['--cmp-edge' as string]: edges[0] } : undefined}>{pa ? shortName(pa) : '—'}</span>
-            <span className="cmp-vs">vs</span>
-            <span style={edges[1] ? { ['--cmp-edge' as string]: edges[1] } : undefined}>{pb ? shortName(pb) : '—'}</span>
+            {[pa, pb].map((p, i) => (
+              <Fragment key={i}>
+                {i === 1 && <span className="cmp-vs">vs</span>}
+                <span className="cmp-side" style={edges[i] ? { ['--cmp-edge' as string]: edges[i] } : undefined}>
+                  <span style={{ ['--run' as string]: p ? longestRun(shortName(p)) : 1 }}>{p ? shortName(p) : '—'}</span>
+                </span>
+              </Fragment>
+            ))}
           </div>
           {sections.map((s) => (
             <Block key={s.id} s={s} names={names} />

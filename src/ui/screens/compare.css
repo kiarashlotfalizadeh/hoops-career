@@ -79,6 +79,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  container-type: inline-size;
   margin-top: 2px;
   line-height: 1.1;
 }
@@ -87,10 +88,12 @@
   font-weight: 600;
   color: var(--text-2);
 }
+/* 22px, or smaller until the name's longest run (--run letters) fits the column */
 .cmp-last {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 22px;
+  font-size: 20px;
+  font-size: clamp(15px, 100cqi / (var(--run, 8) * 0.62), 22px);
   font-weight: 800;
   line-height: 1;
   text-transform: uppercase;
@@ -175,14 +178,19 @@
   letter-spacing: 0.03em;
   text-align: center;
 }
-/* a long name wraps (at its hyphen if it has one) rather than lose its end; its team colour under it */
-.cmp-strip > :not(.cmp-vs) {
+/* a long name wraps (at its hyphen if it has one), and steps down until its longest run fits; its
+   team colour under it */
+.cmp-side {
   --cmp-edge: var(--line-3);
   min-width: 0;
+  container-type: inline-size;
   overflow-wrap: anywhere;
   line-height: 1.15;
   padding-bottom: 3px;
   background: linear-gradient(var(--cmp-edge), var(--cmp-edge)) center bottom / 28px 2px no-repeat;
+}
+.cmp-side > span {
+  font-size: clamp(11px, 100cqi / (var(--run, 8) * 0.62), 16px);
 }
 .cmp-vs {
   font-size: 11px;
@@ -328,7 +336,7 @@
     height: 56px;
   }
   .cmp-last {
-    font-size: 26px;
+    font-size: clamp(15px, 100cqi / (var(--run, 8) * 0.62), 26px);
   }
   .cmp-v {
     font-size: 15px;

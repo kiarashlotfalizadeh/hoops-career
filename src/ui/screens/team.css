@@ -192,6 +192,7 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  container-type: inline-size;
 }
 .tm-first {
   font-size: 15px;
@@ -199,17 +200,13 @@
   color: var(--text-2);
   line-height: 1.15;
 }
+/* 34px, or smaller until the name's longest run (--run letters, at most about 0.62em each) fits the column */
 .tm-last {
-  font-size: 34px;
+  font-size: 28px;
+  font-size: clamp(18px, 100cqi / (var(--run, 8) * 0.62), 34px);
   line-height: 0.95;
   letter-spacing: 0.01em;
   overflow-wrap: anywhere;
-}
-.tm-last.l {
-  font-size: 29px;
-}
-.tm-last.xl {
-  font-size: 25px;
 }
 .tm-hero .tm-ovr {
   gap: 4px;
@@ -722,16 +719,15 @@ a.tm-hi:active {
 .tm-ed {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 .tm-ed-who {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: var(--raised);
-  border: 1px solid var(--line);
+  margin-top: -6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
 }
 .tm-ed-group {
   display: flex;

@@ -96,10 +96,12 @@ function seasonsOf(p: Player) {
   return rows.sort((a, b) => b.season - a.season || Number(a.playoffs) - Number(b.playoffs));
 }
 
-/** A long last name steps down a size or two, so it fits beside the jersey and the badge. */
-function nameSize(last: string): string {
-  const longest = Math.max(...last.split(/[\s-]/).map((w) => w.length));
-  return longest > 11 ? 'xl' : longest > 9 || last.length > 16 ? 'l' : '';
+/**
+ * The letters in a name's longest unbreakable run ("Alexander-" in Alexander-Walker): the CSS sizes the
+ * name so that run fits its column, rather than splitting it mid-word.
+ */
+function longestRun(name: string): number {
+  return Math.max(1, ...(name.match(/[^\s-]+-?/g) ?? [name]).map((w) => w.length));
 }
 
 export default function PlayerView() {
@@ -225,7 +227,9 @@ export default function PlayerView() {
           <Avatar p={p} size="lg" />
           <div className="tm-names">
             <span className="tm-first">{p.firstName}</span>
-            <h1 className={`tm-last ${nameSize(p.lastName)}`}>{p.lastName}</h1>
+            <h1 className="tm-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+              {p.lastName}
+            </h1>
           </div>
           <div className="tm-ovr">
             <Ovr v={p.ovr} size="lg" />
