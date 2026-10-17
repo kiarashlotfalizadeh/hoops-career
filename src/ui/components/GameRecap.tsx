@@ -31,7 +31,7 @@ import { confStandings } from '../../core/league/standings';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { useStore } from '../../state/store';
-import { teamLook } from '../teamColors';
+import { matchupLooks } from '../teamColors';
 import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
 import { Avatar, Section, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
@@ -59,7 +59,8 @@ export function gameTypeLabel(league: League, g: GameResult): string {
 export function FinalSlab({ res, league, children }: { res: GameResult; league: League; children?: ReactNode }) {
   const home = league.teams[res.home.tid];
   const away = league.teams[res.away.tid];
-  const [la, lh] = [teamLook(away.colors), teamLook(home.colors)];
+  // (on a clash the away side wears its second colour, so the two halves never read as one)
+  const [lh, la] = matchupLooks(home.colors, away.colors);
   const us = res.home.tid === league.userTid ? res.home : res.away.tid === league.userTid ? res.away : null;
   const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
   const side = (t: typeof home, pts: number, win: boolean, isHome: boolean) => (

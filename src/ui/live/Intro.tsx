@@ -6,7 +6,7 @@ import { Play } from 'lucide-react';
 import type { League, Team } from '../../core/types';
 import { FRANCHISES } from '../../core/teams';
 import { seasonTotals } from '../../core/league/helpers';
-import { inkOn, teamLook } from '../teamColors';
+import { inkOn, matchupLooks } from '../teamColors';
 
 /** How long the lineups stay up before the tip at 1× (faster speeds shorten it). */
 export const INTRO_MS = 9000;
@@ -77,10 +77,12 @@ export function Intro({
   // opening nights read last season's lines (said once, at the top); a starter yet to play this season says so on his line
   const withLines = [...lines.values()].filter((l) => l.text && l.text !== 'Rookie');
   const lastSeason = withLines.length > 0 && withLines.every((l) => l.last);
+  // the two headers never read as one colour: on a clash the away side wears its second
+  const looks = matchupLooks(home.colors, away.colors);
   const col = (side: 0 | 1) => {
     const t = teams[side];
     const kit = kits[side];
-    const look = teamLook(t.colors);
+    const look = looks[side];
     return (
       <div className="li-col">
         {/* the name alone, as a broadcast has it: "Oklahoma City Thunder" doesn't fit half a phone's court */}

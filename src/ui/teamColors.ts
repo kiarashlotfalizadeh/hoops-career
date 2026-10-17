@@ -104,6 +104,20 @@ export function identityColor(colors: [string, string, string]): string {
   return l > 0.03 && l < 0.6 ? colors[0] : teamAccent(colors);
 }
 
+/**
+ * Two teams' looks side by side (a scorebug, a final, a pre-game slab): when their slabs would read as
+ * the same colour, the away side leads with its second colour (then its third, then a neutral slate).
+ */
+export function matchupLooks(home: [string, string, string], away: [string, string, string]): [TeamLook, TeamLook] {
+  const h = teamLook(home);
+  const tries: [string, string, string][] = [away, [away[1], away[0], away[2]], [away[2], away[0], away[1]]];
+  for (const c of tries) {
+    const a = teamLook(c);
+    if (colorDistance(a.slab, h.slab) >= CLASH) return [h, a];
+  }
+  return [h, { ...teamLook(away), slab: '#2a3441' }];
+}
+
 /** A slab in another team's colours: the custom properties `.slab` reads. */
 export function slabVars(colors: [string, string, string]): Record<string, string> {
   const l = teamLook(colors);

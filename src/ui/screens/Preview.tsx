@@ -27,7 +27,7 @@ import { K } from '../../core/sim/engine';
 import { Avatar, Chips, Empty, Help, Ovr, PageHeader, Section, Spinner, Statline, Tag } from '../components/ui';
 import { OppPlanNote } from '../components/scouting';
 import { TeamLogo } from '../components/TeamLogo';
-import { matchupColors, slabVars } from '../teamColors';
+import { matchupColors, matchupLooks } from '../teamColors';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
 import { f1, ordinal, p0, rosterNames, signed } from '../stats';
@@ -103,10 +103,9 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
   const resume = inProgress ? actions.find((a) => a.cmd === 'watchLive') : undefined;
   const finish = inProgress ? actions.find((a) => a.cmd === 'quickGame') : undefined;
   const them = league.teams[opp];
-  // each half of the slab in its team's colours
-  const a = slabVars(league.teams[away.tid].colors);
-  const h = slabVars(league.teams[home.tid].colors);
-  const slab = { '--pv-a': a['--slab'], '--pv-a2': a['--slab-2'], '--pv-h': h['--slab'], '--pv-h2': h['--slab-2'] } as CSSProperties;
+  // each half of the slab in its team's colours (the away side's second colour when they'd read as one)
+  const [h, a] = matchupLooks(league.teams[home.tid].colors, league.teams[away.tid].colors);
+  const slab = { '--pv-a': a.slab, '--pv-a2': a.trim, '--pv-h': h.slab, '--pv-h2': h.trim } as CSSProperties;
   const last = pv.series.games[pv.series.games.length - 1];
   const tags = [
     pv.playoff && <Tag key="po">{pv.playoff.tag}</Tag>,

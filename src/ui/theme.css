@@ -351,7 +351,7 @@ h3 {
   gap: 8px;
 }
 @media (max-width: 359px) {
-  .grid4:not(.live-ctl) {
+  .grid4 {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -779,7 +779,6 @@ table.stats tr.me,
 .lg-g-row.today,
 .bk-s.me,
 .fo-asset.on,
-.gd-pog.mine,
 .card.accent,
 .slab {
   --text-dim: var(--text-2);
@@ -1751,20 +1750,6 @@ body:has(.dockbar, .fo-dock, .gd-dock) .continue {
 .more > :not(summary) {
   margin-top: 6px;
 }
-.scorebug {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-.scorebug .score {
-  font-family: var(--display);
-  font-stretch: 70%;
-  font-weight: 800;
-  font-size: clamp(30px, 10vw, 44px);
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
 .hscroll {
   display: flex;
   gap: 10px;
@@ -1809,22 +1794,6 @@ body:has(.dockbar, .fo-dock, .gd-dock) .continue {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.live-bug .score {
-  font-size: clamp(28px, 9vw, 44px);
-}
-.live-ctl .btn.sm::after,
-.live-ctl .seg button::after {
-  content: '';
-  position: absolute;
-  inset: -4px -1px;
-}
-.live-ctl .seg {
-  overflow: visible;
-}
-.live-ctl.grid4 .btn.sm {
-  padding: 0 6px;
-  gap: 5px;
 }
 @media (min-width: 760px) and (orientation: landscape) {
   .live-grid {
@@ -1936,12 +1905,5 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   }
   .help-btn::after {
     inset: -11px;
-  }
-  .live-ctl .seg button {
-    height: 34px;
-  }
-  .live-ctl .btn.sm::after,
-  .live-ctl .seg button::after {
-    inset: -5px -1px;
   }
 }

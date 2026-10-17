@@ -2,7 +2,7 @@ import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { finalLabel, fmtClock, periodLabel } from '../stats';
-import { matchupColors, teamLook } from '../teamColors';
+import { matchupColors, matchupLooks } from '../teamColors';
 import { wpText } from '../../core/analysis/winProb';
 import type { Drawn } from './drawn';
 import type { Ticker } from './ticker';
@@ -81,12 +81,14 @@ export function ScoreBug({
       : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.n}-0 run` : ''}`;
   const wp = !over && wpHome !== undefined ? wpHome : null;
   const [homeKit, awayKit] = matchupColors(home.colors, away.colors);
+  // the two colour blocks never read as one: on a clash the away side wears its second colour
+  const looks = matchupLooks(home.colors, away.colors);
   const pct = wpText;
   // after the final the loser's score steps back
   const lost = (s: 0 | 1) => over && score[s] < score[1 - s];
   // a team's fouls light up once they put the other team in the bonus
   const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean, dim: boolean) => {
-    const look = teamLook(t.colors);
+    const look = looks[isHome ? 0 : 1];
     return (
       <div className={`lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
         <div className="lb-id">
