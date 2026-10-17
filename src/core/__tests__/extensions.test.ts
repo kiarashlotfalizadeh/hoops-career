@@ -38,7 +38,10 @@ const U = 0;
 const AI = 1;
 
 function league(rngSeed = 5): League {
-  return createLeague({ name: `ext${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  const l = createLeague({ name: `ext${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
+  // a fixed id: the AI's extension rolls are drawn from it (a league's own id reads the clock)
+  l.id = `ext${rngSeed}`;
+  return l;
 }
 
 /**
