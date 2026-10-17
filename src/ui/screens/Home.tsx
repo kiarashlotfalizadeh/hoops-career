@@ -233,11 +233,9 @@ export default function Home() {
           <span className="slab-mark">
             <TeamLogo tid={league.userTid} size={210} decorative />
           </span>
+          {/* (the slab's colours and mark say whose it is) */}
           <div className="hm-over">
             <span>{phaseTitle(league)[0]}</span>
-            <span>
-              {team.region} {team.name}
-            </span>
           </div>
           <h2 className="hm-phase-title">{phaseTitle(league)[1]}</h2>
           {primary && <p className="hm-phase-sub">{primary.disabled ?? primary.sub ?? `Next: ${primary.label}.`}</p>}

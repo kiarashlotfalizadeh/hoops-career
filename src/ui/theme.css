@@ -616,6 +616,15 @@ h3 {
   place-items: center;
   border-left: 1px solid rgba(0, 0, 0, 0.18);
 }
+/* on the screen the next step names: just the options, a round button at the side */
+.continue-inner.compact {
+  width: var(--cont-h);
+  border-radius: 50%;
+}
+.continue-inner.compact .continue-more {
+  width: 100%;
+  border-left: none;
+}
 .continue-go:active,
 .continue-more:active {
   background: rgba(0, 0, 0, 0.1);

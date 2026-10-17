@@ -297,6 +297,8 @@ function ContinueBar() {
     void run(a);
   };
   const label = primary ? (primary.cmd === 'watchLive' && primary.label === 'Watch & coach live' ? 'Watch & coach' : primary.label) : '';
+  // the next step is the screen you're on (the draft board, free agents, re-signing): only the options button stays, out of the way
+  const here = !!primary?.to && pathname === primary.to.split('?')[0];
   return (
     <>
       <div className="sr-only" role="status">
@@ -325,14 +327,16 @@ function ContinueBar() {
         !onLive &&
         primary && (
           <div className="continue">
-            <div className="continue-inner">
-              <button className="continue-go" disabled={!!primary.disabled} onClick={() => go(primary)}>
-                <Play size={18} fill="currentColor" aria-hidden="true" />
-                <span className="grow">
-                  <span className="cg-label ellipsis">{label}</span>
-                  {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{primary.disabled ?? primary.sub}</span>}
-                </span>
-              </button>
+            <div className={`continue-inner ${here ? 'compact' : ''}`}>
+              {!here && (
+                <button className="continue-go" disabled={!!primary.disabled} onClick={() => go(primary)}>
+                  <Play size={18} fill="currentColor" aria-hidden="true" />
+                  <span className="grow">
+                    <span className="cg-label ellipsis">{label}</span>
+                    {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{primary.disabled ?? primary.sub}</span>}
+                  </span>
+                </button>
+              )}
               <button className="continue-more" onClick={() => setOpen(true)} aria-label="Play options">
                 <ChevronUp size={22} />
               </button>
