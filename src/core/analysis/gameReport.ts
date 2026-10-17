@@ -101,7 +101,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'ice_contain:d': { text: (X) => `${possessive(X)} ice coverage kept ball handlers out of the middle.` },
   'zone_paint:d': {
     text: (X) => `${possessive(X)} zone clogged driving lanes and post-ups.`,
-    advice: 'Beat zones with Motion & Cuts (Offense > Actions), shooters in the corners and a high-post passer.',
+    advice: 'Beat zones with Motion & cuts (Offense > Actions), shooters in the corners and a high-post passer.',
   },
   'zone_3pt:o': {
     text: (X, _Y, w) => `${X} found open threes against the zone${w}.`,
@@ -136,7 +136,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'pressure_to:d': {
     text: (X) => `${possessive(X)} ball pressure forced turnovers.`,
-    advice: 'Give the ball to your most secure handlers, or run more Handoffs & Screens (Offense > Actions) against pressure.',
+    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Offense > Actions) against pressure.',
   },
   'pressure_to:o': {
     text: (X, Y) => `${Y} played soft on the ball, so ${X} rarely turned it over.`,
@@ -224,7 +224,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'box_chase:d': {
     text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, late catches, few clean looks${w}.`,
     advice:
-      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Offense > Motion & Cuts, Handoffs & Screens).',
+      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Offense > Motion & cuts, Handoffs & screens).',
     uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
   },
   'box_open:o': {
