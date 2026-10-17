@@ -406,6 +406,24 @@ describe('engine rules', () => {
     }
   });
 
+  it("books a switched pick-and-roll's isolation to the handler's play type, its turnovers included", () => {
+    type In = {
+      poss: 0 | 1;
+      T: { on: unknown[]; pt: Record<string, { poss: number }> }[];
+      toChance(): number;
+      iso(off: unknown, def: unknown, open: number, late: unknown, forced: boolean, fixed: unknown): unknown;
+    };
+    // no star plan or help to double him
+    const s = new GameSim(side(6), side(7, { defense: { help: 50, starPlan: 'none' } }), { rng: new Rng(4), type: 'regular', injuries: false }) as unknown as In;
+    const off = s.T[s.poss];
+    const def = s.T[1 - s.poss];
+    s.toChance = () => 1;
+    const late = { hold: false, quick: false, milk: false, need3: false, hurry: false, need2: false };
+    s.iso(off, def, 0, late, false, { actor: off.on[0], defender: def.on[0], tag: 'switch_mismatch', fromPnr: true });
+    expect(off.pt.pnrBH?.poss).toBe(1);
+    expect(off.pt.iso).toBeUndefined();
+  });
+
   it('counts fast-break points whether or not the game is recorded', () => {
     let quiet = 0;
     let recorded = 0;
