@@ -71,8 +71,15 @@ export async function exportRawSave(id: string): Promise<boolean> {
   return deliver(JSON.stringify(raw), fileName(typeof raw.name === 'string' ? raw.name : 'league', raw.season ?? 'save'));
 }
 
-/** Read a backup file and store it as a league; a league already on the device is kept, the import becomes a copy. */
-export async function importLeague(file: File): Promise<League> {
+/** The open league couldn't be saved before an import would replace it: offer an export of it first. */
+export class UnsavedLeagueError extends Error {}
+
+/**
+ * Read a backup file and store it as a league; a league already on the device is kept, the import
+ * becomes a copy. `force`: go ahead even if the open league can't be saved first (after the user
+ * was offered an export of it).
+ */
+export async function importLeague(file: File, { force = false } = {}): Promise<League> {
   if (useStore.getState().sim) throw new Error('Wait for the simulation to finish, then import.');
   if (file.size > MAX_IMPORT_BYTES) throw new Error('That file is too big to be a Hoops Career backup.');
   let data: unknown;
@@ -84,7 +91,7 @@ export async function importLeague(file: File): Promise<League> {
   const league = migrate(data, NOT_A_BACKUP);
   // the import replaces the open league: don't drop changes of it that never reached the disk
   const st = useStore.getState();
-  if (st.league && !(await st.saveBeforeLeaving())) throw new Error('Your current league could not be saved. Export a backup of it first.');
+  if (st.league && !force && !(await st.saveBeforeLeaving())) throw new UnsavedLeagueError('Your current league could not be saved. Export a backup of it first.');
   const existing = await listLeagues();
   if (existing.some((m) => m.id === league.id)) {
     league.id = `${league.id}-${Date.now().toString(36)}`;

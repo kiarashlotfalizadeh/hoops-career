@@ -483,6 +483,12 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   migrateOwner(x);
+  // leftovers of the Rising Stars game and of suspensions, both since removed: the MVP award would
+  // count toward a career's honors as a full award, and the news would tell of rules the game no longer has
+  const risingMvp = (a: unknown) => obj(a) && a.type === 'Rising Stars MVP';
+  for (const p of Object.values(x.players)) if (Array.isArray(p.awards) && p.awards.some(risingMvp)) p.awards = p.awards.filter((a) => !risingMvp(a));
+  const suspension = (n: unknown) => obj(n) && n.kind === 'discipline';
+  if (x.news.some(suspension)) x.news = x.news.filter((n) => !suspension(n));
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;

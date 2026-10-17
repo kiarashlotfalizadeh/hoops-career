@@ -338,6 +338,23 @@ describe('reading a league', () => {
     expect(isLeague(JSON.parse(JSON.stringify(fictional)))).toBe(true);
   });
 
+  it('drops what the removed Rising Stars game and suspensions left in a save, and keeps the rest', () => {
+    const l = testLeague('leftovers');
+    const file = JSON.parse(JSON.stringify(l));
+    const p = Object.values(file.players as League['players'])[0];
+    p.awards = [
+      { season: l.season - 1, type: 'Rising Stars MVP' },
+      { season: l.season - 1, type: 'All-Star' },
+    ];
+    file.news = [
+      { id: 1, season: l.season, day: 1, kind: 'discipline', text: 'X is suspended for one game.', tids: [], pids: [] },
+      { id: 2, season: l.season, day: 1, kind: 'general', text: 'Opening night.', tids: [], pids: [] },
+    ];
+    const m = migrate(file);
+    expect(m.players[p.pid].awards.map((a) => a.type)).toEqual(['All-Star']);
+    expect(m.news.map((n) => n.kind)).toEqual(['general']);
+  });
+
   it('rejects damaged leagues instead of crashing on them later', () => {
     const l = testLeague('damaged');
     expect(isLeague(structuredClone(l))).toBe(true);
