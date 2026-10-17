@@ -36,8 +36,19 @@ export function SubsPanel({
   const [, force] = useState(0);
   const bench = t.players.filter((p) => !p.on);
   const line = (p: (typeof t.players)[number]) => subsLine(view, side, p);
+  // the energy bar's colour, against the staff's sub-out mark
+  const fat = t.t.manage.fatigueSub;
+  const tone = (e: number) => (e / 100 < fat ? 'bad' : e / 100 < fat + 0.15 ? 'warn' : 'good');
+  const head = (
+    <div className="sp-head" aria-hidden="true">
+      <span>Energy</span>
+      <span>F</span>
+      <span>Pts</span>
+      <span>Min</span>
+    </div>
+  );
   return (
-    <div className="col" style={{ gap: 12 }}>
+    <div className="sp">
       <Toggle
         on={t.manualSubs}
         onChange={(v) => {
@@ -46,70 +57,106 @@ export function SubsPanel({
           onChange();
         }}
         label="I'll handle substitutions"
-        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted), and the staff calls no timeouts to stop runs."
+        help="On: only your subs change the lineup (injuries and foul-outs aside), and the staff calls no timeouts for runs. Off: the staff follows the rotation plan."
       />
-      <div className="small dim">{outPid === null ? 'Tap a player on the floor, then a bench player.' : `${nameOf(outPid)} comes out: now pick who comes in.`}</div>
-      {/* the rows' shorthand spelled out once */}
-      <div className="tiny dim">Each player: energy, then fouls (F), points (p) and minutes (m) tonight.</div>
-      <div className="col" style={{ gap: 6 }}>
-        {t.on.map((p) => {
-          const l = line(p);
-          return (
-            <button key={p.pid} className={`card tight row ${outPid === p.pid ? 'accent' : ''}`} style={{ gap: 8 }} aria-pressed={outPid === p.pid} onClick={() => setOut(p.pid)}>
-              <Tag tone="info">ON</Tag>
-              <span className="bold grow" style={{ textAlign: 'left' }}>
-                {nameOf(p.pid)}
-              </span>
-              <span className="small num">{l.energy}%</span>
-              <span className="small dim num" aria-hidden="true">
-                {l.fouls}F · {l.pts}p · {l.min}m
-              </span>
-              <span className="sr-only">
-                , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.pts} point{l.pts === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
-              </span>
-            </button>
-          );
-        })}
+      <div className={`sp-step${outPid === null ? '' : ' on'}`} role="status">
+        {outPid === null ? 'Tap a player on the floor, then one from the bench.' : `${nameOf(outPid)} comes out: pick who comes in.`}
       </div>
-      <div className="col" style={{ gap: 6 }}>
-        {bench.map((p) => {
-          const l = line(p);
-          return (
-            <button
-              key={p.pid}
-              className="card tight row"
-              style={{ gap: 8, opacity: l.out ? 0.45 : undefined }}
-              disabled={!!l.out || outPid === null}
-              onClick={() => {
-                if (outPid === null) return;
-                // the game plays on while this sheet is open: the staff may have made a change first
-                if (!substitute(outPid, p.pid)) {
-                  const why = !t.on.some((x) => x.pid === outPid)
-                    ? `${nameOf(outPid)} is already on the bench.`
-                    : p.on
-                      ? `${nameOf(p.pid)} is already on the floor.`
-                      : `${nameOf(p.pid)} can't come in right now.`;
-                  useStore.getState().toast(why, 'bad');
-                }
-                setOut(null);
-                onChange();
-              }}
-            >
-              <Tag>{l.out === 1 ? 'FOULED OUT' : l.out === 2 ? (p.dnp === 'Rest' ? 'REST' : 'OUT') : 'BENCH'}</Tag>
-              <span className="grow" style={{ textAlign: 'left' }}>
-                {nameOf(p.pid)}
-              </span>
-              <span className="small num">{l.energy}%</span>
-              <span className="small dim num" aria-hidden="true">
-                {l.fouls}F · {l.min}m
-              </span>
-              <span className="sr-only">
-                , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <section className="sec">
+        <div className="sec-h">
+          <h3>On the floor</h3>
+          {head}
+        </div>
+        <div className="card flush list">
+          {t.on.map((p) => {
+            const l = line(p);
+            return (
+              <button key={p.pid} className={`sp-row${outPid === p.pid ? ' picked' : ''}`} aria-pressed={outPid === p.pid} onClick={() => setOut(p.pid)}>
+                <span className="sp-name bold">{nameOf(p.pid)}</span>
+                <span className="sp-e num">
+                  <span className="sp-bar" aria-hidden="true">
+                    <span className={tone(l.energy)} style={{ width: `${l.energy}%` }} />
+                  </span>
+                  {l.energy}%
+                </span>
+                <span className="sp-n num" aria-hidden="true">
+                  {l.fouls}
+                </span>
+                <span className="sp-n num" aria-hidden="true">
+                  {l.pts}
+                </span>
+                <span className="sp-n num" aria-hidden="true">
+                  {l.min}
+                </span>
+                <span className="sr-only">
+                  , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.pts} point{l.pts === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      <section className="sec">
+        <div className="sec-h">
+          <h3>Bench</h3>
+        </div>
+        <div className="card flush list">
+          {bench.map((p) => {
+            const l = line(p);
+            return (
+              <button
+                key={p.pid}
+                className={`sp-row${l.out ? ' out' : ''}`}
+                disabled={!!l.out || outPid === null}
+                onClick={() => {
+                  if (outPid === null) return;
+                  // the game plays on while this sheet is open: the staff may have made a change first
+                  if (!substitute(outPid, p.pid)) {
+                    const why = !t.on.some((x) => x.pid === outPid)
+                      ? `${nameOf(outPid)} is already on the bench.`
+                      : p.on
+                        ? `${nameOf(p.pid)} is already on the floor.`
+                        : `${nameOf(p.pid)} can't come in right now.`;
+                    useStore.getState().toast(why, 'bad');
+                  }
+                  setOut(null);
+                  onChange();
+                }}
+              >
+                <span className="sp-name">
+                  {nameOf(p.pid)}
+                  {l.out ? (
+                    <>
+                      {' '}
+                      <Tag tone={l.out === 1 ? 'bad' : undefined}>{l.out === 1 ? 'Fouled out' : p.dnp === 'Rest' ? 'Rest' : 'Out'}</Tag>
+                    </>
+                  ) : (
+                    <span className="sr-only">, bench</span>
+                  )}
+                </span>
+                <span className="sp-e num">
+                  <span className="sp-bar" aria-hidden="true">
+                    <span className={tone(l.energy)} style={{ width: `${l.energy}%` }} />
+                  </span>
+                  {l.energy}%
+                </span>
+                <span className="sp-n num" aria-hidden="true">
+                  {l.fouls}
+                </span>
+                <span className="sp-n num" aria-hidden="true">
+                  {l.pts}
+                </span>
+                <span className="sp-n num" aria-hidden="true">
+                  {l.min}
+                </span>
+                <span className="sr-only">
+                  , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.pts} point{l.pts === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

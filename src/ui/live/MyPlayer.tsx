@@ -2,8 +2,25 @@ import { Users } from 'lucide-react';
 import type { League, OffRole, Settings, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
-import { Chips, Kpi, Toggle } from '../components/ui';
+import { Chips, Statline, Toggle } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
+
+/** A player's night so far, at the top of his sheet (yours or theirs). */
+export function PlayerLine({ p }: { p: DrawnPlayer }) {
+  const e = Math.round(p.energy * 100);
+  return (
+    <div className="card ps-fig">
+      <Statline
+        items={[
+          { k: 'Pts', v: p.pts },
+          { k: 'FG', v: `${p.fgm}/${p.fga}` },
+          { k: 'Fouls', v: p.fouls, color: p.fouls >= 5 ? 'var(--bad)' : p.fouls >= 4 ? 'var(--warn)' : undefined },
+          { k: 'Energy', v: `${e}%` },
+        ]}
+      />
+    </div>
+  );
+}
 import { callLabel, fitPlayers, setsFor, type Calls } from './plays';
 
 const FREEDOM: { id: ShotFreedom; label: string }[] = [
@@ -58,19 +75,14 @@ export function MyPlayer({
   const pending = calls.pending;
   const isOn = (c: Parameters<Calls['call']>[0]) => !!pending && JSON.stringify(pending) === JSON.stringify(c);
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="grid4">
-        <Kpi k="PTS" v={p.pts} />
-        <Kpi k="FG" v={`${p.fgm}/${p.fga}`} />
-        <Kpi k="Fouls" v={p.fouls} />
-        <Kpi k="Energy" v={`${Math.round(p.energy * 100)}%`} />
-      </div>
+    <div className="ps">
+      <PlayerLine p={p} />
       <button className="btn block" onClick={onSub}>
         <Users size={16} /> Sub him out
       </button>
 
-      <div className="col" style={{ gap: 6 }}>
-        <div className="tiny upper dim bold">Shot freedom tonight</div>
+      <div className="ps-blk">
+        <div className="over">Shot freedom tonight</div>
         <Chips label={`Shot freedom for ${name}`} value={freedom} onChange={(v: ShotFreedom) => apply((t) => void (t.offense.freedom[pid] = v))} options={FREEDOM} />
         <div className="tiny dim">
           {freedom === 1
@@ -82,8 +94,8 @@ export function MyPlayer({
       </div>
 
       {adv && role && (
-        <div className="col" style={{ gap: 6 }}>
-          <div className="tiny upper dim bold">Role</div>
+        <div className="ps-blk">
+          <div className="over">Role</div>
           <Chips
             label={`Role for ${name}`}
             value={role}
@@ -104,8 +116,8 @@ export function MyPlayer({
       )}
 
       {adv && (
-        <div className="col" style={{ gap: 6 }}>
-          <div className="tiny upper dim bold">Run a play for him</div>
+        <div className="ps-blk">
+          <div className="over">Run a play for him</div>
           {pending && <div className="small">Called: {callLabel(pending, nameOf)}</div>}
           <div className="chips" role="group" aria-label={`Plays for ${name}`}>
             {fits.map((id) => {
@@ -121,15 +133,16 @@ export function MyPlayer({
             </button>
           </div>
           <div className="tiny dim">
-            {fits.length ? `The sets he fits best, run on your next half-court trip.` : `No set fits him well; a clear-out isolation always does.`} Their defense reads a set a
-            little better every time you run it.
+            {fits.length
+              ? 'His best sets, run on your next half-court trip. Each run, their defense reads it a little better.'
+              : 'No set fits him well; a clear-out isolation always does.'}
           </div>
         </div>
       )}
 
       {expert && oppOn.length > 0 && (
-        <div className="col" style={{ gap: 6 }}>
-          <div className="tiny upper dim bold">Who he guards</div>
+        <div className="ps-blk">
+          <div className="over">Who he guards</div>
           <div className="chips" role="group" aria-label={`Who ${name} guards`}>
             <button
               className={`chip ${assigned === undefined ? 'on' : ''}`}

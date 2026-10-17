@@ -7,7 +7,7 @@ import { wpText } from '../../core/analysis/winProb';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { impactCounter } from '../../core/ai/advisor';
 import { fmtClock, periodLabel } from '../stats';
-import { Kpi } from '../components/ui';
+import { Section, Statline } from '../components/ui';
 import { foulLimit, type LiveAlert } from './alerts';
 import type { Drawn } from './drawn';
 import { PlayPicker } from './PlayPicker';
@@ -85,50 +85,56 @@ export function Huddle({
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? nameOf(tactics.manage.atoPid) : undefined) : null;
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="grid3">
-        <Kpi k={meTeam.abbrev} v={`${me.score}-${them.score}`} />
-        <Kpi k={periodLabel(view.q)} v={fmtClock(view.clock)} />
-        <Kpi k="Win prob." v={win === undefined ? '—' : wpText(win)} />
-      </div>
-      <div className="tiny dim">
-        {me.timeouts} timeout{me.timeouts === 1 ? '' : 's'} left.
+    <div className="hd">
+      <div className="card hd-fig">
+        <Statline
+          items={[
+            { k: meTeam.abbrev, v: `${me.score}-${them.score}`, color: me.score > them.score ? 'var(--good)' : me.score < them.score ? 'var(--bad)' : undefined },
+            { k: periodLabel(view.q), v: fmtClock(view.clock) },
+            { k: 'To win', v: win === undefined ? '—' : wpText(win) },
+            { k: 'TO left', v: me.timeouts },
+          ]}
+        />
       </div>
 
-      <div className="col" style={{ gap: 8 }}>
-        <div className="tiny dim upper bold">On the floor</div>
+      <Section title="On the floor">
         {trouble.length === 0 ? (
           <div className="small dim">Nobody is tired or in foul trouble.</div>
         ) : (
-          trouble.map(({ p, tired, fouls }) => {
-            const sub = subFor(p.pid);
-            return (
-              <div key={p.pid} className="row" style={{ gap: 8 }}>
-                <div className="grow small">
-                  <b>{nameOf(p.pid)}</b> <span className={tired ? 'warn' : 'dim'}>{Math.round(p.energy * 100)}% energy</span>
-                  {' · '}
-                  <span className={fouls ? 'warn' : 'dim'}>
-                    {p.fouls} foul{p.fouls === 1 ? '' : 's'}
-                  </span>
+          <div className="card flush list">
+            {trouble.map(({ p, tired, fouls }) => {
+              const sub = subFor(p.pid);
+              return (
+                <div key={p.pid} className="hd-row">
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="bold ellipsis">{nameOf(p.pid)}</div>
+                    <div className="small">
+                      <span className={tired ? 'warn' : 'dim'}>{Math.round(p.energy * 100)}% energy</span>
+                      <span className="dim"> · </span>
+                      <span className={fouls ? 'warn' : 'dim'}>
+                        {p.fouls} foul{p.fouls === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+                  {sub !== undefined ? (
+                    <button className="btn sm" onClick={() => substitute(p.pid, sub)}>
+                      {nameOf(sub)} in
+                    </button>
+                  ) : (
+                    <span className="tiny dim">No rested sub</span>
+                  )}
                 </div>
-                {sub !== undefined ? (
-                  <button className="btn xs" onClick={() => substitute(p.pid, sub)}>
-                    {nameOf(sub)} in
-                  </button>
-                ) : (
-                  <span className="tiny dim">No rested sub</span>
-                )}
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
-      </div>
+      </Section>
 
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, view.q)} compact />}
 
       {suggestion && (
-        <div className="row top" style={{ gap: 8 }}>
-          <Lightbulb size={16} style={{ color: 'var(--warn)', flex: 'none', marginTop: 2 }} aria-hidden="true" />
+        <div className="card hd-tip">
+          <Lightbulb size={16} className="warn" aria-hidden="true" />
           <div className="grow small">{suggestion.text}</div>
           <button className="btn xs primary" onClick={suggestion.run}>
             {suggestion.label}
@@ -136,8 +142,7 @@ export function Huddle({
         </div>
       )}
 
-      <div className="col" style={{ gap: 8 }}>
-        <div className="tiny dim upper bold">Out of the timeout</div>
+      <Section title="Out of the timeout">
         <div className="small">
           {calls.pending ? (
             <>
@@ -166,10 +171,10 @@ export function Huddle({
             <ClipboardList size={16} /> Draw up a play
           </button>
         )}
-      </div>
+      </Section>
 
-      <button className="btn primary block" onClick={onResume}>
-        <Play size={16} fill="currentColor" /> Resume
+      <button className="btn primary block big" onClick={onResume}>
+        <Play size={18} fill="currentColor" /> Resume
       </button>
     </div>
   );

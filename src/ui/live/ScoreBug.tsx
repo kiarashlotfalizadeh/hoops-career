@@ -1,16 +1,16 @@
-import { useSyncExternalStore, type ReactNode } from 'react';
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
-import { TeamLogo } from '../components/TeamLogo';
-import { shade } from '../components/ui';
 import { finalLabel, fmtClock, periodLabel } from '../stats';
-import { matchupColors } from '../teamColors';
+import { matchupColors, teamLook } from '../teamColors';
 import { wpText } from '../../core/analysis/winProb';
 import type { Drawn } from './drawn';
 import type { Ticker } from './ticker';
 
 /** A run this long gets a chip under the clock. */
 const RUN_CHIP = 6;
+/** Timeouts a team starts a game with: the bars under its name (overtimes add to them). */
+const TIMEOUTS = 7;
 
 /**
  * What's at stake beyond the regular season, for the scorebug's subtitle: "Playoffs · R1 G5 ·
@@ -32,9 +32,10 @@ export function gameContext(league: League, g: ScheduledGame, gameNo?: number): 
 }
 
 /**
- * The live scorebug: the clock and score as the court animates them (`ticker`), and timeouts,
- * team fouls, the bonus, runs and each team's chance to win (`wpHome`, unless switched off) as of
- * the possession the court last finished drawing (`view`).
+ * The live scorebug, as a broadcast has it: each team's colour block (its name, timeouts and team
+ * fouls), the scores, the period and the clock as the court animates them (`ticker`), a run, and
+ * each team's chance to win (`wpHome`, unless switched off); everything but the clock and score as
+ * of the possession the court last finished drawing (`view`).
  */
 export function ScoreBug({
   ticker,
@@ -81,74 +82,70 @@ export function ScoreBug({
   const wp = !over && wpHome !== undefined ? wpHome : null;
   const [homeKit, awayKit] = matchupColors(home.colors, away.colors);
   const pct = wpText;
+  // after the final the loser's score steps back
+  const lost = (s: 0 | 1) => over && score[s] < score[1 - s];
   // a team's fouls light up once they put the other team in the bonus
-  const side = (t: Team, s: Drawn['sides'][number], penalty: boolean, right: boolean) => (
-    <div className={right ? 'right' : ''} style={{ minWidth: 0 }}>
-      <div className="bold">{t.abbrev}</div>
-      <div className="tiny nowrap">
-        <span className="dim">TO {s.timeouts}</span>
-        {!over && (
-          <>
-            <span className="dim"> · </span>
-            <span className={penalty ? 'warn bold' : 'dim'} title={penalty ? 'In the penalty' : undefined}>
-              TF {s.fouls}
+  const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean, dim: boolean) => {
+    const look = teamLook(t.colors);
+    return (
+      <div className={`lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
+        <div className="lb-id">
+          <span className="lb-ab">{t.abbrev}</span>
+          <span className="lb-meta">
+            <span className="lb-to" aria-hidden="true">
+              {Array.from({ length: Math.max(TIMEOUTS, s.timeouts) }, (_, i) => (
+                <i key={i} className={i < s.timeouts ? 'on' : ''} />
+              ))}
             </span>
-          </>
-        )}
+            <span className="sr-only">
+              {s.timeouts} timeout{s.timeouts === 1 ? '' : 's'} left
+            </span>
+            {!over && (
+              <span className={`lb-tf${penalty ? ' on' : ''}`} title={penalty ? 'In the penalty' : undefined}>
+                <span className="sr-only">, </span>TF {s.fouls}
+                {penalty && <span className="sr-only"> (in the penalty)</span>}
+              </span>
+            )}
+          </span>
+        </div>
+        <span className={`lb-score num${dim ? ' dim' : ''}`} aria-hidden="true">
+          {pts}
+        </span>
       </div>
-    </div>
-  );
+    );
+  };
   return (
-    <div
-      className="card tight live-bugcard"
-      // (on the page's own colour: on a phone the strip and the play-by-play scroll under it)
-      style={{ background: `linear-gradient(90deg, ${shade(away.colors[0], -0.25)}cc, var(--surface) 40%, var(--surface) 60%, ${shade(home.colors[0], -0.25)}cc), var(--bg)` }}
-    >
-      {context && <div className="tiny dim2 center ellipsis live-context">{context}</div>}
+    // (on the page's own colour: on a phone the strip and the play-by-play scroll under it)
+    <div className="live-bugcard lb">
+      {context && <div className="lb-ctx ellipsis">{context}</div>}
       <div
-        className="scorebug live-bug"
+        className="live-bug lb-main"
         role="group"
         aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. Win probability: ${away.abbrev} ${pct(1 - wp)}, ${home.abbrev} ${pct(wp)}` : ''}`}
       >
-        <div className="row" style={{ gap: 6, minWidth: 0 }}>
-          <TeamLogo tid={away.tid} size={28} decorative />
-          {side(away, a, h.bonus, false)}
-          <span className="score" style={{ marginLeft: 'auto' }}>
-            {score[1]}
-          </span>
-        </div>
-        <div className="col center" style={{ gap: 0, minWidth: 56 }}>
-          <span className="display bold" style={{ fontSize: 15 }}>
-            {over ? finalLabel(ot) : brk ? (quarter === 2 ? 'HALF' : `END ${qLabel}`) : qLabel}
-          </span>
-          <span className="display num" style={{ fontSize: 20 }}>
-            {over || brk ? '' : fmtClock(clock)}
-          </span>
+        {side(away, a, score[1], h.bonus, false, lost(1))}
+        <div className="lb-mid" aria-hidden="true">
+          <span className="lb-q">{over ? finalLabel(ot) : brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : qLabel}</span>
+          {!over && !brk && <span className="lb-clock num">{fmtClock(clock)}</span>}
           {run && (
-            <span className="tiny warn bold nowrap" aria-hidden="true">
+            <span className="lb-run num">
               {run.abbrev} {run.n}-0
             </span>
           )}
         </div>
-        <div className="row" style={{ gap: 6, flexDirection: 'row-reverse', minWidth: 0 }}>
-          <TeamLogo tid={home.tid} size={28} decorative />
-          {side(home, h, a.bonus, true)}
-          <span className="score" style={{ marginRight: 'auto' }}>
-            {score[0]}
-          </span>
-        </div>
+        {side(home, h, score[0], a.bonus, true, lost(0))}
       </div>
       {wp !== null && (
-        <div className="live-wp" aria-hidden="true" title="Win probability">
-          <span className="tiny nowrap">
-            <span className="dim">{away.abbrev}</span> <b className="num">{pct(1 - wp)}</b>
+        <div className="lb-wp" aria-hidden="true" title="Win probability">
+          <span className="num">
+            {away.abbrev} <b>{pct(1 - wp)}</b>
           </span>
-          <span className="live-wp-bar">
+          <span className="lb-wp-bar">
             <span style={{ width: `${(1 - wp) * 100}%`, background: awayKit }} />
             <span style={{ width: `${wp * 100}%`, background: homeKit }} />
           </span>
-          <span className="tiny nowrap">
-            <b className="num">{pct(wp)}</b> <span className="dim">{home.abbrev}</span>
+          <span className="num">
+            <b>{pct(wp)}</b> {home.abbrev}
           </span>
         </div>
       )}

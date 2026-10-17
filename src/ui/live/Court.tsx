@@ -1,6 +1,20 @@
 import { useEffect, useRef } from 'react';
 import type { Frame, Pt, Script } from './choreo';
-import { inkOn } from '../teamColors';
+import type { Team } from '../../core/types';
+import { FRANCHISES, type FranchiseDef } from '../../core/teams';
+import { inkOn, teamLook } from '../teamColors';
+
+/**
+ * The floor the game is played on: the home team's (its colours in the paint and the apron, its mark
+ * at center court, its name behind the basket), or a neutral one (the Cup final).
+ */
+export type CourtFloor = { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; mark: FranchiseDef['mark'] } | { kind: 'neutral'; name: string };
+
+/** The floor of a game at `home`'s arena, or a neutral one; `neutralName` goes behind the basket there. */
+export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'colors'>, neutral: boolean, neutralName = ''): CourtFloor {
+  if (neutral) return { kind: 'neutral', name: neutralName };
+  return { kind: 'home', abbrev: home.abbrev, name: home.name, colors: home.colors, mark: FRANCHISES[home.tid]?.mark ?? 'circle' };
+}
 
 export interface CourtProps {
   script: Script | null;
@@ -16,23 +30,40 @@ export interface CourtProps {
   names?: (pid: number) => string;
   /** [home, away]: the team with the ball is named along the baseline it attacks. */
   abbrevs?: [string, string];
+  /** Whose floor it is (a plain neutral floor without it). */
+  floor?: CourtFloor;
   /** What the court shows, for screen readers. */
   label: string;
 }
 
 const W_FT = 50;
 const H_FT = 47;
+/** The apron around the half court: a band along each sideline, and a deeper one behind the baseline for the scoreboards. */
+const SIDE = 1.6;
+const TOP = 2.4;
+/** The canvas in feet, apron included: the Live screen's layouts size the court by this ratio (live.css). */
+export const FLOOR_W = W_FT + 2 * SIDE;
+export const FLOOR_H = H_FT + TOP;
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
-export function Court({ script, speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, label }: CourtProps) {
+/** Canvas text in the app's face, condensed like its scoreboard figures. */
+function setFont(ctx: CanvasRenderingContext2D, weight: number, px: number, stretch: 'condensed' | 'semi-condensed' = 'condensed') {
+  // (an engine that doesn't take the width keyword in the shorthand ignores that line and keeps the first;
+  // the property says it again where there is one)
+  ctx.font = `${weight} ${px}px "Archivo Variable", system-ui, sans-serif`;
+  ctx.font = `${weight} ${stretch} ${px}px "Archivo Variable", system-ui, sans-serif`;
+  if ('fontStretch' in ctx) (ctx as CanvasRenderingContext2D & { fontStretch: string }).fontStretch = stretch;
+}
+
+export function Court({ script, speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, label }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, score: null as [number, number] | null, beat: -1 });
-  const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs });
-  props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs };
+  const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor });
+  props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor };
 
   // how far each possession got: a replay shown in between doesn't make the one it interrupted start over
   // (or a finished one play again)
@@ -50,8 +81,14 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
     const ctx = canvas.getContext('2d')!;
     let drawn = '';
     let lastScript: typeof state.current.script | undefined;
-    // the floor, its lines and the vignette never change: drawn once per canvas size, then copied each frame
+    // the floor, its lines and its marks never change: drawn once per canvas size, then copied each frame
     const floor = document.createElement('canvas');
+    let floorKey = '';
+    let floorWas: CourtFloor | undefined;
+    let floorId = '';
+    // the floor's lettering waits for the font: drawn again once it's in
+    let fontsIn = 0;
+    document.fonts?.ready.then(() => void (fontsIn = 1));
     // reduced motion: players and the ball jump from spot to spot instead of gliding, and nothing flashes over the court
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     const loop = (now: number) => {
@@ -59,7 +96,7 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       const s = state.current;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const cssW = canvas.clientWidth;
-      const cssH = (cssW * H_FT) / W_FT;
+      const cssH = (cssW * FLOOR_H) / FLOOR_W;
       if (canvas.width !== Math.round(cssW * dpr)) {
         canvas.width = Math.round(cssW * dpr);
         canvas.height = Math.round(cssH * dpr);
@@ -68,29 +105,37 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       const dt = s.last ? Math.min(100, now - s.last) : 0;
       s.last = now;
       if (!props.current.paused && !s.done) s.t += dt * props.current.speed;
+      const fl = props.current.floor;
+      if (fl !== floorWas) {
+        floorWas = fl;
+        floorId = fl ? JSON.stringify(fl) : '';
+      }
+      const key = `${canvas.width}x${canvas.height}|${fontsIn}|${floorId}`;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
-      const sig = `${canvas.width}|${s.t}|${s.done}`;
+      const sig = `${key}|${s.t}|${s.done}`;
       if (sig === drawn && s.script === lastScript) return;
       drawn = sig;
       lastScript = s.script;
-      const k = cssW / W_FT;
-      if (floor.width !== canvas.width || floor.height !== canvas.height) {
+      const k = cssW / FLOOR_W;
+      if (key !== floorKey) {
+        floorKey = key;
         floor.width = canvas.width;
         floor.height = canvas.height;
         const fctx = floor.getContext('2d')!;
         fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawCourt(fctx, cssW, cssH, k);
+        drawFloor(fctx, cssW, cssH, k, fl);
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       // (a hidden, zero-size canvas can't be copied, but the possession still has to play out)
       if (floor.width && floor.height) ctx.drawImage(floor, 0, 0);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // everything on the floor is placed in court feet, from the corner where the baseline meets the left sideline
+      ctx.setTransform(dpr, 0, 0, dpr, SIDE * k * dpr, TOP * k * dpr);
       const sc = s.script;
       if (sc && sc.frames.length > 0) drawScript(sc);
     };
     const drawScript = (sc: Script) => {
       const s = state.current;
-      const k = canvas.clientWidth / W_FT;
+      const k = canvas.clientWidth / FLOOR_W;
       // locate segment
       let acc = 0;
       let i = 1;
@@ -122,7 +167,7 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       }
       const offColors = props.current.colors[sc.off];
       const defColors = props.current.colors[1 - sc.off];
-      // the team with the ball, along the baseline it attacks
+      // the team with the ball, on the boards behind the baseline it attacks
       const ab = props.current.abbrevs;
       if (ab) drawBaseline(ctx, k, ab[sc.off], offColors);
       const calm = !!still?.matches;
@@ -148,12 +193,12 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       const z = b.ballZ ? Math.sin(Math.PI * u) * 7 : 0;
       // a shot's flight leaves a faint trail behind the ball
       if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, k, a.ball, b.ball, u);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath();
       ctx.ellipse(bp.x * k + (W_FT / 2) * k + 2, bp.y * k + 2, 0.55 * k, 0.4 * k, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ff8c2b';
-      ctx.strokeStyle = '#5a2a00';
+      ctx.strokeStyle = '#4a2200';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(bp.x * k + (W_FT / 2) * k, (bp.y - z) * k, (0.62 + z * 0.04) * k, 0, Math.PI * 2);
@@ -174,31 +219,88 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  return <canvas ref={ref} role="img" aria-label={label} style={{ width: '100%', display: 'block', borderRadius: 12, touchAction: 'pan-y' }} />;
+  return <canvas ref={ref} className="court-cv" role="img" aria-label={label} style={{ width: '100%', display: 'block', touchAction: 'pan-y' }} />;
 }
 
-function drawCourt(ctx: CanvasRenderingContext2D, w: number, h: number, k: number) {
+/** A small, steady hash: each plank and joint of the floor sits in the same place on every draw. */
+const grain = (n: number) => {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/** The colours a floor is painted in: the wood (top, bottom), the paint and apron, the pinstripe, and the lines. */
+function palette(floor: CourtFloor | undefined) {
+  if (floor?.kind !== 'home') return { wood: ['#a8774a', '#8a5d36'], paint: '#26303b', apron: '#151b22', trim: '#c9a24a', mark: null };
+  const look = teamLook(floor.colors);
+  // a darker stain under the team's colours, so the paint and the jerseys stand out from the wood
+  return { wood: ['#7e5232', '#5f3c22'], paint: look.slab, apron: look.slab, trim: look.trim, mark: floor };
+}
+
+function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: number, floor: CourtFloor | undefined) {
+  const pal = palette(floor);
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#c58a52');
-  g.addColorStop(1, '#a8703f');
+  g.addColorStop(0, pal.wood[0]);
+  g.addColorStop(1, pal.wood[1]);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
-  // planks
-  ctx.strokeStyle = 'rgba(80,40,10,0.12)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < w; x += k * 2.2) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
+  // planks along the court's length, each a shade apart, with their joints staggered
+  const plank = k * 1.9;
+  for (let i = 0, x = 0; x < w; i++, x += plank) {
+    const r = grain(i);
+    ctx.fillStyle = r > 0.5 ? `rgba(255,236,210,${(r - 0.5) * 0.09})` : `rgba(30,12,0,${(0.5 - r) * 0.12})`;
+    ctx.fillRect(x, 0, plank, h);
+    ctx.fillStyle = 'rgba(30,12,0,0.22)';
+    ctx.fillRect(x, 0, 1, h);
+    for (let y = -grain(i + 99) * 14 * k; y < h; y += 14 * k) ctx.fillRect(x, y, plank, 1);
   }
-  const X = (x: number) => (x + W_FT / 2) * k;
-  const Y = (y: number) => y * k;
-  // paint
-  ctx.fillStyle = 'rgba(30, 20, 60, 0.35)';
+  const X = (x: number) => (x + W_FT / 2 + SIDE) * k;
+  const Y = (y: number) => (y + TOP) * k;
+  // the apron: the sidelines' bands and the deeper one behind the baseline, a pinstripe where it meets the court
+  ctx.fillStyle = pal.apron;
+  ctx.globalAlpha = 0.94;
+  ctx.fillRect(0, 0, w, Y(0));
+  ctx.fillRect(0, Y(0), X(-25), h - Y(0));
+  ctx.fillRect(X(25), Y(0), w - X(25), h - Y(0));
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = pal.trim;
+  ctx.lineWidth = Math.max(1, k * 0.12);
+  ctx.beginPath();
+  const pin = 0.55 * k;
+  ctx.moveTo(X(-25) - pin, h);
+  ctx.lineTo(X(-25) - pin, Y(0) - pin);
+  ctx.lineTo(X(25) + pin, Y(0) - pin);
+  ctx.lineTo(X(25) + pin, h);
+  ctx.stroke();
+  // the home team's name behind the basket, between the scoreboards
+  if (floor?.name) {
+    setFont(ctx, 800, Math.max(9, TOP * k * 0.5));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.72;
+    ctx.fillText(floor.name.toUpperCase(), X(0), Y(0) / 2 - pin / 2 + 0.5);
+    ctx.globalAlpha = 1;
+  }
+  // the paint
+  ctx.fillStyle = pal.paint;
+  ctx.globalAlpha = 0.92;
   ctx.fillRect(X(-8), Y(0), 16 * k, 19 * k);
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.globalAlpha = 1;
+  // center court: the mark in the half of the circle this end shows
+  const markR = 2.9;
+  if (pal.mark) drawMark(ctx, X(0), Y(H_FT - markR - 0.35), markR * 2 * k, pal.mark);
+  else drawNeutralMark(ctx, X(0), Y(H_FT - markR - 0.35), markR * k, pal.trim, pal.paint);
+  // the lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
   ctx.lineWidth = Math.max(1.5, k * 0.17);
+  ctx.lineJoin = 'miter';
+  // baseline and sidelines
+  ctx.beginPath();
+  ctx.moveTo(X(-25), Y(47));
+  ctx.lineTo(X(-25), Y(0));
+  ctx.lineTo(X(25), Y(0));
+  ctx.lineTo(X(25), Y(47));
+  ctx.stroke();
   ctx.strokeRect(X(-8), Y(0), 16 * k, 19 * k);
   // FT circle
   ctx.beginPath();
@@ -221,8 +323,8 @@ function drawCourt(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.stroke();
   // half court
   ctx.beginPath();
-  ctx.moveTo(0, Y(46.8));
-  ctx.lineTo(w, Y(46.8));
+  ctx.moveTo(X(-25), Y(46.8));
+  ctx.lineTo(X(25), Y(46.8));
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(X(0), Y(47), 6 * k, Math.PI, 0);
@@ -239,19 +341,87 @@ function drawCourt(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.beginPath();
   ctx.arc(X(0), Y(by), 0.75 * k, 0, Math.PI * 2);
   ctx.stroke();
-  // vignette
-  const v = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.9);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.35)');
+  // arena light: brighter under the basket, falling off toward the corners
+  const v = ctx.createRadialGradient(X(0), Y(12), h * 0.15, X(0), Y(16), h * 0.95);
+  v.addColorStop(0, 'rgba(255,240,220,0.05)');
+  v.addColorStop(0.55, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.4)');
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, w, h);
+}
+
+/** The team's mark as TeamLogo draws it (its shape in its colours, the abbreviation inside), `size` across. */
+function drawMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, f: Extract<CourtFloor, { kind: 'home' }>) {
+  const [c1, c2, c3] = f.colors;
+  const ring = c2.toLowerCase() === c1.toLowerCase() ? c3 : c2;
+  ctx.save();
+  ctx.translate(cx - size / 2, cy - size / 2);
+  ctx.scale(size / 100, size / 100);
+  // (TeamLogo's shapes, in its 100-unit square)
+  const shape = new Path2D();
+  switch (f.mark) {
+    case 'shield':
+      shape.addPath(new Path2D('M50 4 L92 16 L88 58 Q84 82 50 96 Q16 82 12 58 L8 16 Z'));
+      break;
+    case 'hex':
+      shape.addPath(new Path2D('M50 4 L91 27 L91 73 L50 96 L9 73 L9 27 Z'));
+      break;
+    case 'diamond':
+      shape.addPath(new Path2D('M50 3.3 L96.7 50 L50 96.7 L3.3 50 Z'));
+      break;
+    case 'round-square':
+      shape.addPath(new Path2D('M31 7 H69 A24 24 0 0 1 93 31 V69 A24 24 0 0 1 69 93 H31 A24 24 0 0 1 7 69 V31 A24 24 0 0 1 31 7 Z'));
+      break;
+    default:
+      shape.arc(50, 50, 44, 0, Math.PI * 2);
+  }
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = c1;
+  ctx.fill(shape);
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = ring;
+  ctx.stroke(shape);
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(22, 62);
+  ctx.quadraticCurveTo(50, 40, 78, 62);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  const text = f.abbrev.slice(0, 3);
+  setFont(ctx, 800, text.length === 3 ? 30 : 36);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = inkOn(c1);
+  ctx.fillText(text, 50, 58);
+  ctx.restore();
+}
+
+/** A neutral floor's center: a disc in the apron's colour with a star. */
+function drawNeutralMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, trim: string, fill: string) {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = trim;
+  ctx.lineWidth = Math.max(1.5, r * 0.12);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = trim;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 ? r * 0.26 : r * 0.62;
+    ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [string, string], num: string, offense: boolean) {
   const x = (p.x + W_FT / 2) * k;
   const y = p.y * k;
   const r = 1.45 * k;
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillStyle = 'rgba(0,0,0,0.42)';
   ctx.beginPath();
   ctx.ellipse(x + 2, y + 3, r, r * 0.8, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -262,38 +432,45 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  // a dark hairline around the trim: a dark jersey still reads on the stained wood
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r + Math.max(1, k * 0.14), 0, Math.PI * 2);
+  ctx.stroke();
   if (!offense) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
+    ctx.arc(x, y, r + 3, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.fillStyle = inkOn(colors[0]);
-  ctx.font = `800 ${Math.max(10, r * 1.05)}px "Barlow Condensed", sans-serif`;
+  setFont(ctx, 800, Math.max(10, r * 1.1));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(num, x, y + 0.5);
 }
 
-/** The team with the ball, in its colours, on the baseline under the basket it attacks (both sides of the backboard). */
+/** The team with the ball, in its colours, on the boards behind the baseline it attacks (both sides of the basket). */
 function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, colors: [string, string]) {
-  const h = 1.15 * k;
+  const h = (TOP - 0.7) * k;
   const w = 7 * k;
-  ctx.font = `800 ${Math.max(9, h * 0.78)}px "Barlow Condensed", sans-serif`;
+  setFont(ctx, 800, Math.max(9, h * 0.72));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const cx of [-14.5, 14.5]) {
     const x = (cx + W_FT / 2) * k - w / 2;
-    ctx.globalAlpha = 0.82;
+    const y = -TOP * k + 0.25 * k;
     ctx.fillStyle = colors[0];
+    ctx.strokeStyle = colors[1];
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect?.(x, 0, w, h, [0, 0, h / 2, h / 2]);
-    if (!ctx.roundRect) ctx.rect(x, 0, w, h);
+    ctx.rect(x, y, w, h);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.stroke();
     ctx.fillStyle = inkOn(colors[0]);
-    ctx.fillText(abbrev, x + w / 2, h / 2 + 0.5);
+    ctx.fillText(abbrev, x + w / 2, y + h / 2 + 0.5);
   }
 }
 
@@ -340,14 +517,14 @@ function drawTag(ctx: CanvasRenderingContext2D, k: number, p: Pt, name: string) 
   if (!name) return;
   const x = (p.x + W_FT / 2) * k;
   const y = p.y * k + 1.45 * k + Math.max(7, k * 1.05);
-  ctx.font = `700 ${Math.max(10, k * 1.25)}px Inter, system-ui, sans-serif`;
+  setFont(ctx, 700, Math.max(10.5, k * 1.3), 'semi-condensed');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const w = ctx.measureText(name).width + 8;
-  const h = Math.max(14, k * 1.75);
-  ctx.fillStyle = 'rgba(6,8,12,0.78)';
+  const w = ctx.measureText(name).width + 10;
+  const h = Math.max(15, k * 1.85);
+  ctx.fillStyle = 'rgba(6,8,12,0.84)';
   ctx.beginPath();
-  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, h / 2);
+  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, 3);
   if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
   ctx.fill();
   ctx.fillStyle = '#ffffff';
@@ -359,12 +536,13 @@ function drawFlash(ctx: CanvasRenderingContext2D, k: number, text: string, kind:
   const x = (clamp(fx, -13, 13) + W_FT / 2) * k;
   const y = fy * k;
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  ctx.font = `800 ${Math.max(16, k * 2.6)}px "Barlow Condensed", sans-serif`;
+  setFont(ctx, 800, Math.max(17, k * 2.8));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const color = kind === 'make' ? '#2fd27a' : kind === 'miss' ? '#ffffff' : kind === 'block' || kind === 'to' ? '#ff5468' : kind === 'foul' ? '#ffb547' : '#e8ecf3';
   ctx.lineWidth = 4;
-  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
   ctx.strokeText(text, x, y);
   ctx.fillStyle = color;
   ctx.fillText(text, x, y);

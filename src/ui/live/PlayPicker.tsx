@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import type { League, SetId, Tactics } from '../../core/types';
 import type { PlayCall } from '../../core/sim/log';
 import { CLEAR_OUT, SETS, SET_IDS, bestFor, setFit } from '../../core/sim/sets';
-import { Tag } from '../components/ui';
+import { Help, More, Section, Tag } from '../components/ui';
 import type { DrawnSide } from './drawn';
 import { callLabel, fitPlayers, readStatus, type Calls } from './plays';
 
@@ -40,9 +40,9 @@ export function PlayPicker({
   const call = (c: PlayCall) => calls.call(c);
   const on = (c: PlayCall) => !!pending && JSON.stringify(pending) === JSON.stringify(c);
   return (
-    <div className="col" style={{ gap: 12 }}>
+    <div className="pp">
       {pending ? (
-        <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <div className="pp-called">
           <span className="pill" role="status">
             Called: {callLabel(pending, nameOf)}
           </span>
@@ -51,20 +51,29 @@ export function PlayPicker({
           </button>
         </div>
       ) : (
-        <div className="small dim">Pick a play for your next half-court trip. It replaces any call still waiting and lasts until it's run or the period ends.</div>
+        <div className="small dim">For your next half-court trip, until it&apos;s run or the period ends. A new call replaces the one waiting.</div>
       )}
       {sets && (
-        <>
-          <div className="tiny dim upper bold">Sets</div>
-          <div className="col" style={{ gap: 10 }}>
+        <Section
+          title={
+            <h3>
+              Sets
+              <Help title="Calling sets">
+                <p>A call changes who gets the ball and what the team looks for, never how well it plays.</p>
+                <p>Each set has its own edges against some defenses and none against others.</p>
+                <p>Every time you run one their defense reads it a little better: its look is less open and its passes get jumped more (a good coach reads faster).</p>
+              </Help>
+            </h3>
+          }
+        >
+          <div className="card flush list">
             {SET_IDS.map((id) => (
               <SetRow key={id} id={id} five={five} me={me} on={on} call={call} nameOf={nameOf} />
             ))}
           </div>
-        </>
+        </Section>
       )}
-      <div className="col" style={{ gap: 6 }}>
-        <div className="tiny dim upper bold">{CLEAR_OUT.name}</div>
+      <Section title={CLEAR_OUT.name}>
         <div className="chips" role="group" aria-label="Isolation for">
           {me.on.map((pid) => {
             const c: PlayCall = { kind: 'iso', pid };
@@ -78,10 +87,9 @@ export function PlayPicker({
         <div className="tiny dim">
           {CLEAR_OUT.what} {CLEAR_OUT.note}
         </div>
-      </div>
+      </Section>
       {late && (
-        <div className="col" style={{ gap: 6 }}>
-          <div className="tiny dim upper bold">Situations</div>
+        <Section title="Situations">
           <div className="chips">
             {(['three', 'two', 'hold', 'foul'] as const).map((kind) => (
               <button key={kind} className={`chip ${on({ kind }) ? 'on' : ''}`} aria-pressed={on({ kind })} onClick={() => call({ kind })}>
@@ -90,12 +98,8 @@ export function PlayPicker({
             ))}
           </div>
           <div className="tiny dim">Foul now is for their next trip; the others for yours.</div>
-        </div>
+        </Section>
       )}
-      <div className="tiny dim">
-        A call changes who gets the ball and what the team looks for, never how well it plays. Each set has its own edges against some defenses and none against others, and every
-        time you run one their defense reads it a little better: its look is less open and its passes get jumped more (a good coach reads faster).
-      </div>
     </div>
   );
 }
@@ -121,14 +125,17 @@ function SetRow({
   const status = readStatus(me, id);
   const auto: PlayCall = { kind: 'set', set: id };
   return (
-    <div className="col" style={{ gap: 4 }}>
-      <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <span className="small bold">{s.name}</span>
+    <div className="pp-set">
+      <div className="pp-set-h">
+        <span className="pp-set-name">{s.name}</span>
         <Tag tone={status.onIt ? 'bad' : status.runs ? 'warn' : undefined}>{status.text}</Tag>
       </div>
-      <div className="tiny dim">
-        The look: {s.look}. Works against {s.beats}; not against {s.killedBy}.
-      </div>
+      <div className="pp-look">{s.look.replace(/^./, (c) => c.toUpperCase())}.</div>
+      <More label="Works against">
+        <div className="tiny dim2">
+          Works against {s.beats}; not against {s.killedBy}.
+        </div>
+      </More>
       <div className="chips" role="group" aria-label={`${s.name} for`}>
         {best && (
           <button className={`chip ${on(auto) ? 'on' : ''}`} aria-pressed={on(auto)} aria-label={`${s.name} for the best fit, ${nameOf(best.pid)} now`} onClick={() => call(auto)}>

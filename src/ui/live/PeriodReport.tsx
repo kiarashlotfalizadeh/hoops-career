@@ -5,7 +5,7 @@ import { buildGameReport, setLineText, setLines } from '../../core/analysis/game
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
-import { Card } from '../components/ui';
+import { Statline } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { periodLabel, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
@@ -86,21 +86,32 @@ export function PeriodReport({
     .sort((a, b) => zScore(b[1], baselines[b[0]]) - zScore(a[1], baselines[a[0]]))
     .slice(0, 2);
   return (
-    <Card title={q === 2 ? 'Halftime report' : `End of ${periodLabel(q)}`} accent>
-      <div className="col" style={{ gap: 12 }}>
-        {report && <div className="bold">{report.headline}</div>}
-        {win !== undefined && (
-          <div className="small">
-            <span className="dim2">Win probability:</span>{' '}
-            <b className="num">
-              {meTeam.abbrev} {wpText(win)}
-            </b>
-          </div>
-        )}
-        <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
-        {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, q)} />}
+    <section className="card pr" aria-label={q === 2 ? 'Halftime report' : `End of ${periodLabel(q)} report`}>
+      <div className="pr-head">
+        <span className="over">{q === 2 ? 'Halftime report' : `End of ${periodLabel(q)}`}</span>
+        {report && <div className="pr-headline">{report.headline}</div>}
+      </div>
+      <div className="pr-fig">
+        <Statline
+          items={[
+            { k: `${meTeam.abbrev} score`, v: `${me.score}-${them.score}`, color: me.score > them.score ? 'var(--good)' : me.score < them.score ? 'var(--bad)' : undefined },
+            ...(win !== undefined ? [{ k: `${meTeam.abbrev} to win`, v: wpText(win) }] : []),
+            { k: `TO for ${next}`, v: timeouts },
+          ]}
+        />
+      </div>
+      <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+      {keys && keys.length > 0 && (
+        <div className="pr-blk">
+          <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, q)} />
+        </div>
+      )}
+      <div className="pr-blk">
+        <div className="over">
+          {away.abbrev} · {home.abbrev}
+        </div>
         <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov']} />
-        <div className="col small" style={{ gap: 2 }}>
+        <div className="pr-scorers">
           <div>
             <b>{away.abbrev}</b> <span className="dim2">{scorers(1)}</span>
           </div>
@@ -108,100 +119,104 @@ export function PeriodReport({
             <b>{home.abbrev}</b> <span className="dim2">{scorers(0)}</span>
           </div>
         </div>
-        {(fouls.length > 0 || tired.length > 0) && (
-          <div className="col small" style={{ gap: 2 }}>
-            {fouls.length > 0 && (
-              <div>
-                <span className="warn bold">Foul trouble:</span> {fouls.map((p) => `${names(p.pid)} (${p.fouls})`).join(', ')}
-                <span className="dim">
-                  {' '}
-                  · your staff sits players at {limit} in {next}
-                </span>
-              </div>
-            )}
-            {tired.length > 0 && (
-              <div>
-                <span className="warn bold">Tired legs:</span> {tired.map((p) => `${names(p.pid)} (${Math.round(Math.min(1, p.energy + rest) * 100)}%)`).join(', ')}
-              </div>
-            )}
-          </div>
-        )}
-        {factors.length > 0 && (
-          <div className="col" style={{ gap: 8 }}>
-            <div className="tiny dim upper bold">What's deciding it</div>
-            {factors.map((f, i) => {
-              const fix = f.pts < 0 && f.key ? impactCounter(f.key, tactics) : undefined;
-              return (
-                <div key={i} className="row top" style={{ gap: 8 }}>
-                  <span className={`num bold ${f.pts >= 0 ? 'good' : 'bad'}`} style={{ width: 40, flex: 'none' }}>
-                    {signed(f.pts)}
-                  </span>
-                  <div className="grow small">
-                    <div>{f.title}</div>
-                    {f.advice && !fix && (
-                      <div className="tiny" style={{ color: 'var(--warn)', marginTop: 2 }}>
-                        <Lightbulb size={12} style={{ verticalAlign: -2 }} /> {adviceFor(f.advice, league.settings.complexity)}
-                      </div>
-                    )}
-                  </div>
-                  {fix && (
-                    <button className="btn xs primary" onClick={() => apply(fix.apply)}>
-                      {fix.label}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {hot.length > 0 && (
-          <div className="col" style={{ gap: 8 }}>
-            <div className="tiny dim upper bold">Hurting you</div>
-            {hot.map(([k, v]) => {
-              const c = liveCounter(k as FinishType, tactics);
-              return (
-                <div key={k} className="row top" style={{ gap: 8 }}>
-                  <div className="grow small">
-                    {FINISH_LABEL[k as FinishType]}: {(v.pts / v.poss).toFixed(2)} per possession on {v.poss} (league {baselines[k].toFixed(2)}).{c?.note ? ` ${c.note}` : ''}
-                  </div>
-                  {c && (
-                    <button className="btn xs primary" onClick={() => apply(c.apply)}>
-                      {c.label}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {sets.length > 0 && (
-          <div className="col" style={{ gap: 4 }}>
-            <div className="tiny dim upper bold">Your sets so far</div>
-            {sets.map((s) => {
-              const read = s.id === 'iso' ? null : readStatus(me, s.id);
-              return (
-                <div key={s.id} className="row small" style={{ gap: 8 }}>
-                  <span className="grow">
-                    {s.name} <span className="dim">· {setLineText({ ...s, readAt: undefined })}</span>
-                  </span>
-                  {read?.onIt && <span className="tag bad">They're on it</span>}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {oppPlan && oppPlan.length > 0 && (
-          <div className="small">
-            <span className="dim2">Their game plan:</span> {oppPlan.map((x) => x.text).join(', ')}.
-          </div>
-        )}
-        <div className="tiny dim">
-          {meTeam.abbrev}: {timeouts} timeout{timeouts === 1 ? '' : 's'} for {next}. Subs and adjustments you make now apply from its first possession.
-        </div>
-        <button className="btn primary block" onClick={onStart}>
-          <Play size={16} fill="currentColor" /> Start {next}
-        </button>
       </div>
-    </Card>
+      {(fouls.length > 0 || tired.length > 0) && (
+        <div className="pr-blk small">
+          {fouls.length > 0 && (
+            <div>
+              <span className="warn bold">Foul trouble:</span> {fouls.map((p) => `${names(p.pid)} (${p.fouls})`).join(', ')}
+              <span className="dim">
+                {' '}
+                · the staff sits players at {limit} in {next}
+              </span>
+            </div>
+          )}
+          {tired.length > 0 && (
+            <div>
+              <span className="warn bold">Tired legs:</span> {tired.map((p) => `${names(p.pid)} (${Math.round(Math.min(1, p.energy + rest) * 100)}%)`).join(', ')}
+            </div>
+          )}
+        </div>
+      )}
+      {factors.length > 0 && (
+        <div className="pr-blk">
+          <div className="over">What&apos;s deciding it</div>
+          {factors.map((f, i) => {
+            const fix = f.pts < 0 && f.key ? impactCounter(f.key, tactics) : undefined;
+            return (
+              <div key={i} className="pr-factor">
+                <span className={`pr-pts num ${f.pts >= 0 ? 'good' : 'bad'}`}>{signed(f.pts)}</span>
+                <div className="grow small">
+                  <div>{f.title}</div>
+                  {f.advice && !fix && (
+                    <div className="pr-advice">
+                      <Lightbulb size={12} aria-hidden="true" /> {adviceFor(f.advice, league.settings.complexity)}
+                    </div>
+                  )}
+                </div>
+                {fix && (
+                  <button className="btn xs primary" onClick={() => apply(fix.apply)}>
+                    {fix.label}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {hot.length > 0 && (
+        <div className="pr-blk">
+          <div className="over">Hurting you</div>
+          {hot.map(([k, v]) => {
+            const c = liveCounter(k as FinishType, tactics);
+            return (
+              <div key={k} className="pr-factor">
+                <div className="grow small">
+                  <div>
+                    <b>{FINISH_LABEL[k as FinishType]}</b>{' '}
+                    <span className="dim2 num">
+                      {(v.pts / v.poss).toFixed(2)} per possession on {v.poss} (league {baselines[k].toFixed(2)})
+                    </span>
+                  </div>
+                  {c?.note && <div className="tiny dim">{c.note}</div>}
+                </div>
+                {c && (
+                  <button className="btn xs primary" onClick={() => apply(c.apply)}>
+                    {c.label}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {sets.length > 0 && (
+        <div className="pr-blk">
+          <div className="over">Your sets so far</div>
+          {sets.map((s) => {
+            const read = s.id === 'iso' ? null : readStatus(me, s.id);
+            return (
+              <div key={s.id} className="row small" style={{ gap: 8 }}>
+                <span className="grow">
+                  {s.name} <span className="dim">· {setLineText({ ...s, readAt: undefined })}</span>
+                </span>
+                {read?.onIt && <span className="tag bad">They&apos;re on it</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {oppPlan && oppPlan.length > 0 && (
+        <div className="pr-blk small">
+          <span className="dim2">Their game plan:</span> {oppPlan.map((x) => x.text).join(', ')}.
+        </div>
+      )}
+      <div className="pr-go">
+        <button className="btn primary block big" onClick={onStart}>
+          <Play size={18} fill="currentColor" /> Start {next}
+        </button>
+        <div className="tiny dim center">Subs and changes now count from its first possession.</div>
+      </div>
+    </section>
   );
 }

@@ -47,34 +47,36 @@ export function TeamComparison({ g, colors, only }: { g: Pick<GameResult, 'home'
   );
 }
 
-/** Points by period, away over home. */
+/** Points by period, away over home: a broadcast's linescore. */
 export function QuarterTable({ g, abbrevs }: { g: Pick<GameResult, 'home' | 'away'>; abbrevs: Record<number, string> }) {
   const n = Math.max(g.home.quarters.length, g.away.quarters.length);
   const label = (i: number) => (i < 4 ? `${i + 1}` : periodLabel(i + 1));
   return (
-    <div className="tablewrap" style={{ marginTop: 12, background: 'transparent', border: 'none' }}>
-      <table className="stats">
-        <thead>
-          <tr>
-            <th className="l">Team</th>
-            {Array.from({ length: n }, (_, i) => (
-              <th key={i}>{label(i)}</th>
-            ))}
-            <th>T</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[g.away, g.home].map((t) => (
-            <tr key={t.tid}>
-              <td className="l bold">{abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}</td>
-              {Array.from({ length: n }, (_, i) => (
-                <td key={i}>{t.quarters[i] ?? '—'}</td>
-              ))}
-              <td className="bold">{t.pts}</td>
-            </tr>
+    <table className="gd-ls num">
+      <thead>
+        <tr>
+          <th className="l">
+            <span className="sr-only">Team</span>
+          </th>
+          {Array.from({ length: n }, (_, i) => (
+            <th key={i}>{label(i)}</th>
           ))}
-        </tbody>
-      </table>
-    </div>
+          <th>T</th>
+        </tr>
+      </thead>
+      <tbody>
+        {[g.away, g.home].map((t) => (
+          <tr key={t.tid}>
+            <th className="l" scope="row">
+              {abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}
+            </th>
+            {Array.from({ length: n }, (_, i) => (
+              <td key={i}>{t.quarters[i] ?? '—'}</td>
+            ))}
+            <td className="gd-ls-t">{t.pts}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
