@@ -1,7 +1,7 @@
 // The game plan for one opponent: how long it lasts, what the scouting numbers say, the plan's
 // items (with the counters the assistant suggests), the star plan, a junk defense, matchups, how to
 // guard each of their players, a defender to attack, hack-a targets and a note.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, FlaskConical, Plus, X } from 'lucide-react';
 import type { GamePlanItem, League, PlanScope, StarPlan } from '../../core/types';
@@ -11,7 +11,9 @@ import type { Candidate } from '../../core/ai/lab';
 import { projectedRotation, scoutData } from '../../core/analysis/scouting';
 import { clearPlan, defaultScope, effectiveTactics, ensurePlan, itemGroup, planFor, removePlanItem, setPlanItem, setPlanScope } from '../../core/league/gamePlans';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
-import { DEF_PRESETS, OFF_PRESETS, STAR_PLAN_META } from '../../core/sim/tactics';
+import { neutralSite } from '../../core/league/games';
+import { STAR_PLAN_META } from '../../core/sim/tactics';
+import { playbookLabel } from '../../core/sim/playbooks';
 import { FINISH_LABEL } from '../../core/sim/log';
 import { Card, Chips, Empty, Help, PageHeader, Segmented, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
@@ -104,7 +106,7 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
             </div>
             <div className="small dim2">
               {next.length
-                ? `Next: ${fmtDate(league.season, next[0].day, { weekday: 'short', month: 'short', day: 'numeric' })}${next[0].day === league.day ? ' (today)' : ''}, ${next[0].home === league.userTid ? 'at home' : 'away'}${
+                ? `Next: ${fmtDate(league.season, next[0].day, { weekday: 'short', month: 'short', day: 'numeric' })}${next[0].day === league.day ? ' (today)' : ''}, ${neutralSite(next[0]) ? 'on a neutral floor' : next[0].home === league.userTid ? 'at home' : 'away'}${
                     next.length > 1
                       ? ` · then ${next
                           .slice(1, 3)
@@ -220,10 +222,7 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
             ))}
           </div>
         ) : (
-          <div className="small dim">
-            No changes yet: against them you play your playbook ({OFF_PRESETS.find((x) => x.id === base.offPreset)?.name ?? 'Custom'} ·{' '}
-            {DEF_PRESETS.find((x) => x.id === base.defPreset)?.name ?? 'Custom'}).
-          </div>
+          <div className="small dim">No changes yet: against them you play your playbook ({playbookLabel(base)}).</div>
         )}
         {plan && (Object.keys(plan.matchups ?? {}).length > 0 || Object.keys(plan.playerD ?? {}).length > 0) && (
           <div className="tiny dim2" style={{ marginTop: 8 }}>
@@ -352,7 +351,8 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
         for (const it of items) removePlanItem(l, opp, it.id);
         return;
       }
-      const who = tgt !== null ? l.players[tgt]?.lastName : 'their top creator';
+      // (named as the chips name him: "R. McBride" when two of them share the name)
+      const who = tgt !== null ? names(tgt) || l.players[tgt]?.lastName : 'their top creator';
       const label = plan === 'none' ? 'Play their stars straight' : plan === 'double' ? `Double-team ${who}` : `Deny ${who}`;
       setPlanItem(l, opp, { id: `star-${plan}`, label, group: 'star', patch: { defense: { starPlan: plan, starTarget: plan === 'none' ? null : tgt } } });
     });
@@ -368,7 +368,8 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
       <Chips
         label="Star plan"
         value={sp}
-        onChange={(x: StarPlan) => set(x, x === 'none' ? null : (target ?? suggested))}
+        // from no star plan it goes after the suggested star; between deny and double the target picked (Top creator too) stays
+        onChange={(x: StarPlan) => set(x, x === 'none' ? null : sp === 'none' ? suggested : target)}
         options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
       />
       <div className="small dim" style={{ marginTop: 8 }}>
@@ -414,7 +415,7 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
         removePlanItem(l, opp, 'hack');
         return;
       }
-      const who = pids.map((pid) => l.players[pid]?.lastName ?? '').join(', ');
+      const who = pids.map((pid) => names(pid) || (l.players[pid]?.lastName ?? '')).join(', ');
       setPlanItem(l, opp, { id: 'hack', label: `Hack-a-${who}${q > 1 ? ` from Q${q}` : ''}`, group: 'hack', patch: { manage: { hackTargets: pids, hackFromQ: q } } });
     });
   return (
@@ -461,18 +462,32 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
   );
 }
 
+/** Keeps a note with the plan against `opp`, if it changed and its league is still the one open. */
+function saveNote(leagueId: string, opp: number, text: string) {
+  const { league, mutate } = useStore.getState();
+  const note = text.trim();
+  if (league?.id !== leagueId || note === (league.gamePlans?.[opp]?.note ?? '')) return;
+  mutate((l) => {
+    const p = ensurePlan(l, opp);
+    if (note) p.note = note;
+    else delete p.note;
+  });
+}
+
 /** A free-text note kept with the plan. */
 function NoteCard({ league, opp }: { league: League; opp: number }) {
   const saved = league.gamePlans?.[opp]?.note ?? '';
   const [text, setText] = useState(saved);
-  const save = () => {
-    if (text.trim() === saved) return;
-    useStore.getState().mutate((l) => {
-      const p = ensurePlan(l, opp);
-      if (text.trim()) p.note = text.trim();
-      else delete p.note;
-    });
-  };
+  // typing not saved yet: kept when the screen closes with the note still focused (Android's back
+  // button, a swipe back), where no blur comes; null once saved, so a cleared plan stays cleared
+  const unsaved = useRef<string | null>(null);
+  const id = league.id;
+  useEffect(
+    () => () => {
+      if (unsaved.current !== null) saveNote(id, opp, unsaved.current);
+    },
+    [id, opp],
+  );
   return (
     <Card title="Notes">
       <textarea
@@ -481,8 +496,14 @@ function NoteCard({ league, opp }: { league: League; opp: number }) {
         maxLength={500}
         placeholder={`Anything to remember against the ${league.teams[opp].name}`}
         aria-label="Notes for this game plan"
-        onChange={(e) => setText(e.target.value)}
-        onBlur={save}
+        onChange={(e) => {
+          setText(e.target.value);
+          unsaved.current = e.target.value;
+        }}
+        onBlur={() => {
+          unsaved.current = null;
+          saveNote(id, opp, text);
+        }}
       />
     </Card>
   );

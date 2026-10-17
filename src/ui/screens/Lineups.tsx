@@ -162,7 +162,7 @@ export default function Lineups() {
           {filterPeople.length > 0 && (
             <select
               className="lg-select"
-              aria-label="Show lineups with a player"
+              aria-label={view === 'onoff' ? 'Show one player' : 'Show lineups with a player'}
               value={only ?? ''}
               onChange={(e) => setOnly(e.target.value ? Number(e.target.value) : null)}
               style={{ alignSelf: 'flex-start' }}
@@ -182,7 +182,7 @@ export default function Lineups() {
       {!any ? (
         <Empty>
           {view === 'onoff'
-            ? `No on/off numbers for the ${team.name} ${season === league.season ? 'yet this season' : 'last season'}: they come from regular-season games.`
+            ? `No on-off numbers for the ${team.name} ${season === league.season ? 'yet this season' : 'last season'}: they come from regular-season games.`
             : season === league.season
               ? 'No lineup data yet: lineups are tracked in your games, from the first one this season.'
               : `No lineups kept for the ${team.name} last season (only your own games keep them).`}

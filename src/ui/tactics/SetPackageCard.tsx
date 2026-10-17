@@ -48,7 +48,9 @@ export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
     >
       <div className="col" style={{ gap: 12 }}>
         <div className="small dim">
-          {pkg.length ? `${pkg.length} of ${MAX_SETS}: ${pkg.map((id) => SETS[id].short).join(', ')}.` : `Pick up to ${MAX_SETS}. With none, your offense runs no sets on its own.`}
+          {pkg.length
+            ? `${pkg.length} of ${MAX_SETS}: ${pkg.map((id) => SETS[id].short).join(', ')}.${pkg.length >= MAX_SETS ? ' Take one out to pick another.' : ''}`
+            : `Pick up to ${MAX_SETS}. With none, your offense runs no sets on its own.`}
         </div>
         {SET_IDS.map((id) => {
           const s = SETS[id];

@@ -97,6 +97,8 @@ export default function TacticsLab() {
   const mounted = useRef(true);
   const busyRef = useRef(false);
   busyRef.current = busy;
+  // a run stopped with Stop fails as one stopped by leaving does
+  const stopped = useRef(false);
   // leaving mid-run stops the worker so the next visit isn't queued behind stale sims
   useEffect(() => {
     mounted.current = true;
@@ -123,6 +125,7 @@ export default function TacticsLab() {
 
   const start = async () => {
     setBusy(true);
+    stopped.current = false;
     const job: Run = { opp, mode };
     try {
       useStore.getState().mutate((l) => {
@@ -165,8 +168,11 @@ export default function TacticsLab() {
       });
       if (mounted.current) setRun(job);
     } catch (e) {
-      console.error(e);
-      if (mounted.current) useStore.getState().toast(`The lab could not finish: ${e instanceof Error ? e.message : 'unknown error'}`, 'bad');
+      // (not a run stopped with Stop, or by leaving the Lab: nothing went wrong there)
+      if (mounted.current && !stopped.current) {
+        console.error(e);
+        useStore.getState().toast(`The lab could not finish: ${e instanceof Error ? e.message : 'unknown error'}`, 'bad');
+      }
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -312,8 +318,25 @@ export default function TacticsLab() {
             <span className="small num dim">
               {Math.min(progress, total)}/{total}
             </span>
+            <button
+              className="btn xs ghost"
+              onClick={() => {
+                stopped.current = true;
+                resetLab();
+              }}
+            >
+              Stop
+            </button>
           </div>
-          <div className="bar" style={{ marginTop: 10 }} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(progress, total)}>
+          <div
+            className="bar"
+            style={{ marginTop: 10 }}
+            role="progressbar"
+            aria-label="Games simulated"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={Math.min(progress, total)}
+          >
             <div style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%`, transition: 'width 0.2s' }} />
           </div>
         </Card>
@@ -360,6 +383,7 @@ export default function TacticsLab() {
             }
           >
             <div className="col" style={{ gap: 8 }}>
+              {!shown.cands.length && <div className="small dim">Nothing new to test: your plan already covers what the staff sees.</div>}
               {shown.cands.map((c, _, all) => {
                 const sig = familySigmas(all.length);
                 const good = c.delta > sig * c.se;
@@ -391,11 +415,15 @@ export default function TacticsLab() {
                         </Tag>
                       ) : (
                         <div className="row" style={{ gap: 6 }}>
-                          <button className={`btn xs ${good ? 'primary' : ''}`} onClick={() => applyCand(c, 'game', shown.opp)}>
+                          <button
+                            className={`btn xs ${good ? 'primary' : ''}`}
+                            onClick={() => applyCand(c, 'game', shown.opp)}
+                            aria-label={`Vs ${league.teams[shown.opp].abbrev}: ${c.label}, in your game plan for them`}
+                          >
                             Vs {league.teams[shown.opp].abbrev}
                           </button>
                           {always && (
-                            <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)}>
+                            <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)} aria-label={`Always: ${c.label}, in your tactics for every game`}>
                               Always
                             </button>
                           )}

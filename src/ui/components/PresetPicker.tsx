@@ -21,7 +21,7 @@ import { rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
 import { Sheet, Tag } from './ui';
 
-export function FitTag({ v }: { v: number }) {
+function FitTag({ v }: { v: number }) {
   const tone = v >= 88 ? 'good' : v >= 70 ? 'info' : v >= 58 ? 'warn' : 'bad';
   return <Tag tone={tone}>Fit {v}</Tag>;
 }
@@ -210,6 +210,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               </button>
               <button
                 aria-label={`Fit ${shown(p.id)}: why, for ${p.name}`}
+                aria-haspopup="dialog"
                 onClick={() => setWhy(p.id)}
                 style={{ position: 'absolute', top: 2, right: 2, padding: 8, borderRadius: 10 }}
               >

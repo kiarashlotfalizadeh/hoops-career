@@ -363,6 +363,8 @@ function EditPlayer({
                     <span className="dim tiny">{j + 1}</span>
                   )}{' '}
                   {names(pid)}
+                  {/* the S badge and spot number spelled out: "S Dixon, starter", "9 Warren, 9th on the depth chart" */}
+                  <span className="sr-only">{starters.has(pid) ? ', starter' : `, ${ordinal(j + 1)} on the depth chart`}</span>
                 </button>
               );
             })}
@@ -389,7 +391,11 @@ function EditPlayer({
           })
         }
         format={(x) => (x ? `${x} min` : 'None')}
-        help="Load management: never exceed this, even in close games."
+        help={
+          cap && cap < m
+            ? `Load management: never exceed this, even in close games. It's under his ${m}-minute target: he plays ${cap} at most.`
+            : 'Load management: never exceed this, even in close games.'
+        }
       />
       <Toggle
         on={rot.closers.includes(p.pid)}
