@@ -205,4 +205,28 @@ describe('game plans', () => {
     // a save without any of it loads as it was
     expect(migrate(structuredClone(l))).toEqual({ ...l, version: out.version });
   });
+  it('drops damaged plans from a save: one without items or with an unknown scope, damaged items, matchups and notes', () => {
+    const l = testLeague();
+    const raw = structuredClone(l) as unknown as { gamePlans: Record<number, unknown> };
+    raw.gamePlans = {
+      3: { oppTid: 3, scope: 'next' },
+      4: 5,
+      5: { oppTid: 5, items: [], scope: 'forever' },
+      6: {
+        oppTid: 6,
+        scope: 'season',
+        items: [{ id: 'a', label: 'A', patch: { defense: { scheme: 'box1', chase: [3] } } }, { id: 'b' }, 7],
+        matchups: { 10: 11, 12: 'x' },
+        note: 4,
+      },
+      7: { oppTid: 7, items: [], matchups: [1, 2], note: 'keep' },
+    };
+    const out = migrate(raw);
+    expect(Object.keys(out.gamePlans!).sort()).toEqual(['6', '7']);
+    expect(out.gamePlans![6]).toEqual({ oppTid: 6, scope: 'season', items: [{ id: 'a', label: 'A', patch: { defense: { scheme: 'box1', chase: [3] } } }], matchups: { 10: 11 } });
+    expect(out.gamePlans![7]).toEqual({ oppTid: 7, items: [], note: 'keep' });
+    // and the games against them go on
+    expect(planFor(out, 3)).toBeNull();
+    expect(planFor(out, 6)?.items).toHaveLength(1);
+  });
 });

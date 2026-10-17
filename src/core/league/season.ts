@@ -29,7 +29,7 @@ import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
-import { resolvePromises, updateMorale } from './morale';
+import { resolvePromises, settleExpiringPromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { allStarSaturday } from './allStarSaturday';
@@ -411,6 +411,8 @@ function endPlayoffs(league: League) {
       link: '/history',
     });
   }
+  // a promise that can't run its games before his deal is up ends with the season
+  settleExpiringPromises(league);
   ownerEvaluation(league);
   // AI owners review their coaches too (on a random stream of their own), and the teams that changed look at the user
   makeJobOffers(league, coachingCarousel(league));

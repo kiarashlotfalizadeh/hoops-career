@@ -345,7 +345,7 @@ export function resolvePromises(league: League) {
       if (teamGames(league, pr) < PATIENCE_GAMES) continue;
       delete p.promise;
       if (!pr.request) continue;
-      const settled = p.mood.score > -2;
+      const settled = p.mood.score >= -2;
       p.mood.tradeRequest = !settled;
       addInbox(league, {
         important: !settled,
@@ -383,5 +383,37 @@ export function resolvePromises(league: League) {
         link: `/player/${p.pid}`,
       });
     }
+  }
+}
+
+/**
+ * The season is over and his deal is up: a bigger role or patience promise that hasn't run its
+ * games can't run them now, and he won't re-sign while one holds his request. So it ends with the
+ * season, held against nobody (call after the playoffs, before the re-sign period): a role he got
+ * over the games he had counts as kept, and otherwise a request it held stands only if he is still
+ * unhappy, by the weekly rule's line (see updateMorale). The GM hears which.
+ */
+export function settleExpiringPromises(league: League) {
+  for (const p of teamPlayers(league, league.userTid)) {
+    const pr = p.promise;
+    if (!pr || pr.kind === 'trade' || pr.tid !== p.tid || contractExp(p.contract) > league.season) continue;
+    delete p.promise;
+    const games = pr.kind === 'role' ? roleGames(league, p, pr) : [];
+    const avg = games.length ? games.reduce((a, m) => a + m, 0) / games.length : 0;
+    const kept = games.length > 0 && avg >= pr.minutes! - 1 && !wantsTheBall(league, p);
+    if (kept) p.mood.score = clamp(Math.max(p.mood.score, -2) + 2, -10, 10);
+    if (!pr.request) continue;
+    const settled = kept || p.mood.score >= -2;
+    p.mood.tradeRequest = !settled;
+    const name = playerName(p);
+    addInbox(league, {
+      from: 'Assistant GM',
+      subject: settled ? `${name} will talk about a new deal` : `${name} still wants out`,
+      body: settled
+        ? `The season ran out on your promise to ${p.lastName}${kept ? `, and he got what you said he would (${avg.toFixed(1)} minutes a night)` : ''}. He has dropped his trade request, and his agent will talk about a new contract.`
+        : `The season ran out on your promise to ${p.lastName}, and nothing has changed for him: his trade request stands, and he won't re-sign with you.`,
+      tone: settled ? 'good' : 'bad',
+      link: `/player/${p.pid}`,
+    });
   }
 }

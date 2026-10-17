@@ -403,14 +403,25 @@ function cleanGamePlans(x: League) {
     if (x.gamePlans !== undefined) delete x.gamePlans;
     return;
   }
-  for (const p of Object.values(x.gamePlans)) {
-    if (!obj(p)) continue;
+  const scopes = new Set(['next', 'series', 'season']);
+  for (const [k, p] of Object.entries(x.gamePlans as Record<string, unknown>)) {
+    // a plan without its items or with a scope the app doesn't know would break every game against that team: it goes
+    if (!obj(p) || Array.isArray(p) || !Array.isArray(p.items) || (p.scope !== undefined && !scopes.has(p.scope as string))) {
+      delete (x.gamePlans as Record<string, unknown>)[k];
+      continue;
+    }
+    p.items = p.items.filter((it) => obj(it) && str(it.id) && str(it.label) && obj(it.patch));
+    if (p.matchups !== undefined) {
+      if (!obj(p.matchups) || Array.isArray(p.matchups)) delete p.matchups;
+      else for (const [pid, d] of Object.entries(p.matchups)) if (!int(d)) delete p.matchups[pid];
+    }
+    if (p.note !== undefined && !str(p.note)) delete p.note;
     if (p.playerD !== undefined) {
       const pd = cleanPlayerD(p.playerD);
       if (pd) p.playerD = pd;
       else delete p.playerD;
     }
-    if (Array.isArray(p.items)) for (const it of p.items) if (obj(it) && obj(it.patch)) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
+    for (const it of p.items as { patch: Record<string, unknown> }[]) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
   }
 }
 

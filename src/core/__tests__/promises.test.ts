@@ -20,6 +20,7 @@ import {
   promiseStatus,
   resolvePromises,
   seasonsWithTeam,
+  settleExpiringPromises,
   updateMorale,
 } from '../league/morale';
 import { archetype } from '../ratings';
@@ -270,6 +271,49 @@ describe('meeting a player who wants out', () => {
     expect(no.text).toBe(`${p.lastName} isn't having it, and he's angrier for being asked.`);
     expect(p.mood.score).toBeCloseTo(before - 1.5, 9);
     expect([p.mood.tradeRequest, p.promise]).toEqual([true, undefined]);
+  });
+
+  it("patience settles at a mood of -2, the weekly rule's line", () => {
+    const { l, p } = setup();
+    agreeing(l, p);
+    play(l, p, Array(PATIENCE_GAMES - 1).fill(30));
+    p.mood.score = -2;
+    play(l, p, [30]);
+    expect([p.promise, p.mood.tradeRequest]).toEqual([undefined, false]);
+    updateMorale(l, U);
+    expect(p.mood.tradeRequest).toBe(false);
+  });
+
+  it("a promise that can't run its games before his deal is up ends with the season: kept if he got his role, else his mood decides", () => {
+    const expiring = (l: League, p: Player) => (p.contract = { start: l.season - 1, salaries: [10_000, 10_000] });
+    // patience, eight games in: the request goes if he has come round, and stands if not
+    for (const mood of [-1, -4]) {
+      const { l, p } = setup();
+      expiring(l, p);
+      agreeing(l, p);
+      play(l, p, Array(8).fill(30));
+      p.mood.score = mood;
+      settleExpiringPromises(l);
+      expect(p.promise).toBeUndefined();
+      expect(wantsOut(p)).toBe(mood < -2);
+      expect(mail(l, `${p.firstName} ${p.lastName} ${mood < -2 ? 'still wants out' : 'will talk about a new deal'}`)).toBeDefined();
+    }
+    // a bigger role he has had over the games so far counts as kept, however he feels
+    const { l, p } = setup();
+    expiring(l, p);
+    meetPlayer(l, p.pid, 'role');
+    play(l, p, [31, 30, 32, 30, 31]);
+    p.mood.score = -5;
+    settleExpiringPromises(l);
+    expect([p.promise, wantsOut(p)]).toEqual([undefined, false]);
+    expect(p.mood.score).toBe(0);
+    expect(mail(l, `${p.firstName} ${p.lastName} will talk about a new deal`)?.body).toMatch(/he got what you said he would \(30\.8 minutes a night\)/);
+    // signed past this season, his promise runs on into the next
+    const o = setup();
+    meetPlayer(o.l, o.p.pid, 'role');
+    play(o.l, o.p, [31]);
+    settleExpiringPromises(o.l);
+    expect(o.p.promise?.kind).toBe('role');
   });
 
   it("ends with his release, and AI teams' players never get one", () => {
