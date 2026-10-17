@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
-import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
+import { evaluateLineup } from '../../core/ai/coachAI';
+import { ensureRotation } from '../../core/league/games';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { League, Player, Rotation as RotationT } from '../../core/types';
@@ -89,8 +90,10 @@ export default function Rotation() {
             className="btn sm"
             onClick={() => {
               setUndo(structuredClone(rot));
+              // the assistant's rotation as the next game would have it: two-way players at the end of the bench too
               useStore.getState().mutate((l) => {
-                l.teams[l.userTid].rotation = autoRotation(rosterSorted(l, l.userTid), l.teams[l.userTid].rotation);
+                l.teams[l.userTid].rotation.manual = false;
+                ensureRotation(l, l.userTid);
               });
             }}
           >

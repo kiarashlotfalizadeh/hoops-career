@@ -14,7 +14,7 @@ import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES } from '../analysis/scouting';
 import { guardingPlan, huntPick } from '../analysis/guarding';
-import { playerName, seasonTotals, teamPlayers } from '../league/helpers';
+import { playerName, seasonLine, seasonTotals, teamPlayers } from '../league/helpers';
 import { defPresetFit, rosterProfile } from './coachAI';
 
 export interface OppPlanItem {
@@ -207,7 +207,8 @@ function userStar(league: League, userTid: number, day: number) {
     .filter((p) => !p.injury && !rest.has(p.pid))
     .map((p) => {
       const here = p.stats.find((s) => s.season === league.season && s.tid === userTid && !s.playoffs && s.gp >= SCOUT_MIN_GAMES);
-      const s = here ?? seasonTotals(p, league.season - 1);
+      // (seasonLine: a real season split by a trade keeps its imported usage)
+      const s = here ?? seasonLine(p, league.season - 1);
       if (!s || s.gp < SCOUT_MIN_GAMES || s.min / s.gp < 20) return { p, usg: 0 };
       const teamUse = s.teamFga + 0.44 * s.teamFta + s.teamTov;
       const usg = s.adv ? s.adv.usg / 100 : teamUse ? (s.fga + 0.44 * s.fta + s.tov) / teamUse : 0;

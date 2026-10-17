@@ -28,6 +28,10 @@ describe('around the league', () => {
     expect(tipMinute(l, tid('SAS'), 2)).toBe(60);
     expect(tipMinute(l, tid('DEN'), 2)).toBe(120);
     expect(tipMinute(l, tid('LAL'), 3)).toBe(210);
+    // a team god mode renames still plays in its city
+    const lal = tid('LAL');
+    l.teams[lal].abbrev = 'LAX';
+    expect(tipMinute(l, lal, 3)).toBe(210);
     expect(tipLabel(0)).toBe('7:00 PM');
     expect(tipLabel(210)).toBe('10:30 PM');
   });
