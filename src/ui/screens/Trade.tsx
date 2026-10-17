@@ -15,6 +15,7 @@ import {
   evaluateTrade,
   executeTrade,
   fmtCash,
+  hardCapGap,
   makeItWork,
   pickLabel,
   swapSeasons,
@@ -33,7 +34,7 @@ import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '../components/ui';
-import { STRATEGY_META, Callout, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
+import { STRATEGY_META, Callout, capSeason, capTag, contractYearsLabel, deadlineLabel, fmtM, fmtMs, hardCapLabel, payTone, twoWayGames } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { isUntouchable, openProposals } from '../../core/league/proposals';
 import { OffersTab } from '../office/OffersTab';
@@ -234,7 +235,8 @@ export default function Trade() {
     // (a small gap can be closed with a little of your cash)
     const { offer: r, why } = makeItWork(league, offer, [], { cash: true });
     if (!r) {
-      const gap = salaryMatchGap(league, offer, 'a');
+      // (the matching rule, or a hard cap: whichever needs more salary going out)
+      const gap = Math.max(salaryMatchGap(league, offer, 'a'), hardCapGap(league, offer, 'a'));
       const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
       useStore
         .getState()
@@ -273,8 +275,15 @@ export default function Trade() {
           <Help title="Trade rules">
             <p style={{ margin: 0 }}>
               <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out,
-              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level exception this season can't take on salary past the tax line (
-              {fmtM(CAP_FOR(league, s).luxuryTax)}).
+              plus $0.1M; over the first apron ({fmtM(CAP_FOR(league, s).apron1)}), no more than it sends. Teams under the cap can absorb salary freely.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Second apron.</b> A team over {fmtM(CAP_FOR(league, s).apron2)} after the trade also can't combine two or more players' salaries to take back a player paid more
+              than the best-paid one it sends, and can't send cash.
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>Hard caps.</b> A team that used the mid-level or the bi-annual this season can't take its payroll past the first apron in a trade; after the taxpayer mid-level,
+              past the second.
             </p>
             <p style={{ margin: 0 }}>
               <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season
@@ -302,16 +311,16 @@ export default function Trade() {
             </p>
             <p style={{ margin: 0 }}>
               <b>Cash.</b> Each team can send, and receive, up to {fmtCash(cashRoom(league, user).limit)} in cash in trades a season (about 5% of the cap). Cash isn't salary: it
-              doesn't match or count against the cap. It comes out of the sender's profit and goes onto the receiver's. AI GMs value $2-3M about like a typical second-round pick,
-              rebuilders a little more and contenders less.
+              doesn't match or count against the cap. It comes out of the sender's profit and goes onto the receiver's. A team over the second apron after the trade can't send any.
+              AI GMs value $2-3M about like a typical second-round pick, rebuilders a little more and contenders less.
             </p>
             <p style={{ margin: 0 }}>
               <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens after the playoffs, with the draft lottery.
             </p>
             <p style={{ margin: 0 }}>
-              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract: a bad contract counts against a package, and taking on salary over the tax costs them.
-              Contenders want help now; rebuilders pay more for youth and picks and less for veterans. A star is worth more than several lesser players, and players they'd have to
-              waive to fit the roster count for nothing.
+              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract: a bad contract counts against a package, and taking on salary over the tax costs them,
+              more the deeper into the tax's brackets it goes (a repeater's most). Contenders want help now; rebuilders pay more for youth and picks and less for veterans. A star
+              is worth more than several lesser players, and players they'd have to waive to fit the roster count for nothing.
               {league.settings.difficulty === 'casual' ? ' On casual they take a little less than fair value, but not for players or picks you got in a trade this season.' : ''}
             </p>
             <p style={{ margin: 0 }}>
@@ -451,6 +460,18 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   const st = STRATEGY_META[t.strategy];
   // standard contracts the deal counts, as the dock does: two-way deals sit outside the 15, and after the season expiring ones are leaving
   const n = tradeRoster(league, tid).length;
+  // what the aprons and a hard cap hold them to in a deal
+  const hard = hardCapLabel(league, tid, season);
+  const aprons = [
+    pay > cap.apron2
+      ? "Over the 2nd apron: they take back no more salary than they send, and can't combine salaries or send cash."
+      : pay > cap.apron1
+        ? 'Over the 1st apron: they take back no more salary than they send.'
+        : '',
+    hard ? `${hard}.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
@@ -467,7 +488,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
           </div>
         </div>
         <div className="fo-money">
-          <div className="a" style={{ color: pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+          <div className="a" style={{ color: payTone(cap, pay) }}>
             {pay > cap.salaryCap ? `${fmtM(pay - cap.salaryCap)} over` : `${fmtM(cap.salaryCap - pay)} space`}
           </div>
           <div className="b">payroll {fmtM(pay)}</div>
@@ -477,6 +498,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
         {st.help}
         {ts.won + ts.lost >= 10 ? ` Winning ${Math.round(winPct(ts) * 100)}% this season.` : ''}
         {holds > 0 ? ` Payroll includes ${fmtM(holds)} in cap holds for players they plan to re-sign.` : ''}
+        {aprons ? ` ${aprons}` : ''}
       </div>
       <RecentDeals league={league} tid={tid} />
     </Card>
@@ -710,6 +732,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
           )}
           {p.pos} · {playerAge(p, league.season)} · {p.archetype}
           {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''}
+          {twoWayGames(league, p) ? ` · ${twoWayGames(league, p)}` : ''}
         </div>
         <TierLine tier={valueTier(league, p)} avail={availability(league, p)} />
       </div>
@@ -775,7 +798,7 @@ function Dock({
     () =>
       withHoldsMemo(() => ({
         capPay: capPayroll(league, user, season),
-        theyreOver: !empty && salaryMatchGap(league, offer, 'b') > 0,
+        theyreOver: !empty && (salaryMatchGap(league, offer, 'b') > 0 || hardCapGap(league, offer, 'b') > 0),
         workable: !empty && canMakeWork(league, offer),
       })),
     // key stands for the offer (a new object every render)
@@ -846,10 +869,12 @@ function Dock({
         </div>
         <div>
           <div className="tiny dim upper bold">Payroll after</div>
-          <div className="small num bold" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+          <div className="small num bold" style={{ color: payTone(cap, after) }}>
             {fmtM(after)}
           </div>
-          <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
+          <div className="tiny dim num">
+            {after > cap.apron1 ? capTag(cap, after).label : after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}
+          </div>
           {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
         </div>
         <div>

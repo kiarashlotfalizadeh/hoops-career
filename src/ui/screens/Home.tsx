@@ -7,6 +7,7 @@ import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../.
 import { normalizeLink } from '../league/shared';
 import { inAppPath } from '../nav';
 import { userGameOnDay } from '../../core/league/games';
+import { CAP_STATUS_LABEL, capStatus } from '../../core/league/contracts';
 import { cupLabel } from '../../core/league/cup';
 import { confStandings } from '../../core/league/standings';
 import { openProposals } from '../../core/league/proposals';
@@ -607,12 +608,7 @@ function SeasonOutlook({ league }: { league: League }) {
     >
       <div className="grid3">
         <Kpi k="Talent" v={`#${leagueRank}`} sub={`${ordinal(confRank)} in ${team.conf === 'E' ? 'East' : 'West'}`} />
-        <Kpi
-          k="Payroll"
-          v={`$${(pay / 1000).toFixed(0)}M`}
-          sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
-          color={pay > cap.luxuryTax ? 'var(--bad)' : undefined}
-        />
+        <Kpi k="Payroll" v={`$${(pay / 1000).toFixed(0)}M`} sub={CAP_STATUS_LABEL[capStatus(cap, pay)]} color={pay > cap.luxuryTax ? 'var(--bad)' : undefined} />
         <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length - twoWays} players${twoWays ? ` + ${twoWays} two-way` : ''}`} />
       </div>
       <div className="small dim2" style={{ marginTop: 10 }}>

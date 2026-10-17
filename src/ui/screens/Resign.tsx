@@ -21,7 +21,8 @@ import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/pl
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
+import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, payTone, playerMeta, repeaterLabel, shortSeason } from '../office/common';
+import { REPEATER_SEASONS, luxuryTaxBill } from '../../core/league/finances';
 import { ContractSheet } from '../office/ContractSheet';
 import { QualifyRow } from '../office/RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE, restrictedFreeAgents } from '../../core/league/rfa';
@@ -80,6 +81,9 @@ function ResignPhase() {
   const holders = capHolds(league, tid);
   const holds = holders.reduce((a, h) => a + h.amount, 0);
   const ifAll = committed + holds;
+  // by the luxury tax's brackets, at the repeater rates if next season they apply
+  const taxIfAll = luxuryTaxBill(league, tid, ifAll, next);
+  const repeater = repeaterLabel(league, tid, next);
   const resigned = signedThisSummer(league).sort((a, b) => b.ovr - a.ovr);
   const options = useLeagueMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   // in the final season of their deals next season (a rookie whose option was just exercised among them)
@@ -125,8 +129,9 @@ function ResignPhase() {
         right={
           <Help title="Re-signing your players">
             <p style={{ margin: 0 }}>
-              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. In free agency, a team over the cap can only add players on
-              minimum deals or with its mid-level exception.
+              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap or past the aprons. In free agency, a team over the cap can
+              only add players on minimum deals or with an exception: the mid-level up to the first apron ({fmtM(cap.apron1)}), the taxpayer mid-level up to the second (
+              {fmtM(cap.apron2)}).
             </p>
             <p style={{ margin: 0 }}>
               <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs
@@ -138,7 +143,8 @@ function ResignPhase() {
               (yours) adds about 6%.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
+              <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} at the end of the regular season is taxed by {fmtM(cap.taxBracket)} brackets at {CAP.taxRates.join(', ')}× and{' '}
+              {CAP.taxRateStep} more for each bracket after; a team that paid tax in {REPEATER_SEASONS} of the 4 seasons before pays {CAP.repeaterRates.join(', ')}× and up.
             </p>
             <p style={{ margin: 0 }}>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens. Other teams may sign him.</p>
             <p style={{ margin: 0 }}>
@@ -169,14 +175,19 @@ function ResignPhase() {
           </div>
           <div className="right">
             <div className="tiny dim upper bold">If you keep everyone</div>
-            <div className="fo-mid" style={{ color: ifAll > cap.luxuryTax ? 'var(--bad)' : ifAll > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+            <div className="fo-mid" style={{ color: payTone(cap, ifAll) }}>
               {fmtM(ifAll)}
             </div>
           </div>
         </div>
         <div style={{ marginTop: 4 }}>
-          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} />
+          <CapBar pay={committed} lines={cap} add={ifAll - committed} />
         </div>
+        {taxIfAll > 0 && (
+          <div className="tiny bad" style={{ marginTop: 4 }}>
+            Keeping everyone: about {fmtM(taxIfAll)} in luxury tax{repeater ? ` at repeater rates (${repeater.replace('Repeater: ', '')})` : ''}.
+          </div>
+        )}
         <div className="grid2" style={{ marginTop: 12 }}>
           <Kpi
             k="Cap space"

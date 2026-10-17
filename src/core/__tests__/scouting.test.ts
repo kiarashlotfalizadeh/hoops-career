@@ -104,9 +104,12 @@ describe('scouting data', () => {
   it("falls back to last season's numbers (labelled) until this season has enough games", () => {
     const m = playedLeague();
     const tid = scoutable(m, m.userTid + 1);
-    // what was played becomes last season, and the new one hasn't started
+    // what was played becomes last season, and the new one hasn't started (the seed's real lines for
+    // that season go: a played season has only its simulated ones, and which key players have a real
+    // line to shadow theirs was down to who is healthy that day)
     const S = m.season;
     for (const t of m.teams) for (const s of t.seasons) s.season = S - 1;
+    for (const p of Object.values(m.players)) p.stats = p.stats.filter((s) => !(s.real && s.season === S - 1));
     for (const p of Object.values(m.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
     for (const g of m.games) g.season = S - 1;
     for (const t of m.teams) teamSeason(t, S);

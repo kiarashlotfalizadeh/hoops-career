@@ -7,7 +7,7 @@ import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { capSalary, evaluateTrade, fmtCash, pickLabel, type CounterOffer, type TradeOffer } from '../../core/league/trades';
 import { useLeagueMemo } from '../../state/store';
 import { Sheet } from '../components/ui';
-import { capSeason, fmtM, fmtMs } from '../office/common';
+import { capSeason, capTag, fmtM, fmtMs, payTone } from '../office/common';
 import { TradeNotes } from './common';
 
 const KIND = {
@@ -113,9 +113,8 @@ function CounterCard({
         <Side title="You get" items={items(c.offer.b, base.b)} />
       </div>
       <div className="tiny dim num" style={{ marginTop: 6 }}>
-        Net salary {fmtMs(info.inc - info.out)} · payroll after{' '}
-        <b style={{ color: info.after > cap.luxuryTax ? 'var(--bad)' : info.after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>{fmtM(info.after)}</b>
-        {info.after > cap.luxuryTax ? ' (over the tax)' : info.after > cap.salaryCap ? ' (over the cap)' : ''}
+        Net salary {fmtMs(info.inc - info.out)} · payroll after <b style={{ color: payTone(cap, info.after) }}>{fmtM(info.after)}</b>
+        {info.after > cap.salaryCap ? ` (${capTag(cap, info.after).label.toLowerCase()})` : ''}
       </div>
       {info.warn.length > 0 && (
         <div style={{ marginTop: 6 }}>

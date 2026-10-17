@@ -1,6 +1,6 @@
-// Trades: validation (roster size, 125% salary matching when over the cap, cap holds, the Stepien
-// rule), AI valuation with team strategy and difficulty, the reasons behind a verdict and the
-// counter-offers an AI team would take instead, a "what would make this work?" helper, value tiers
+// Trades: validation (roster size, salary matching by the cap and the aprons, hard caps, cap holds,
+// the Stepien rule), AI valuation with team strategy and difficulty, the reasons behind a verdict and
+// the counter-offers an AI team would take instead, a "what would make this work?" helper, value tiers
 // for the trade finder, the best package a team would give for the user's assets, and AI-to-AI
 // deals (the AI's offers to the user are in proposals.ts).
 
@@ -25,7 +25,8 @@ import {
   twoWayRoster,
   winPct,
 } from './helpers';
-import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, summerRoster, taxCapped, tradeValue, valueScore } from './contracts';
+import { type Strategy, apronName, hardCap, leaveTeam, marketSalary, pendingOption, rookieContract, salaryForScore, summerRoster, tradeValue, valueScore } from './contracts';
+import { luxuryTaxBill, taxRepeater } from './finances';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
@@ -524,7 +525,8 @@ function moneyCost(league: League, tid: number, inSal: number, outSal: number): 
   const cap = CAP_FOR(league, s);
   const before = capPayroll(league, tid, s);
   const after = before + inSal - outSal;
-  const tax = (x: number) => Math.max(0, x - cap.luxuryTax) * CAP.taxRate;
+  // by the brackets, at the repeater rates for a repeater: a deal deep in the tax costs far more a dollar
+  const tax = (x: number) => luxuryTaxBill(league, tid, x, s);
   const room = (x: number) => Math.max(0, cap.salaryCap - x);
   const taxCost = tax(after) - tax(before);
   return { value: (taxCost * TAX_VALUE + (room(before) - room(after)) * ROOM_VALUE) / 1000, payBefore: before, payAfter: after, taxCost };
@@ -664,17 +666,68 @@ export function tradeRoster(league: League, tid: number): Player[] {
 const assetName = (league: League, a: Player | DraftPick) => ('pid' in a ? playerName(a) : `the ${pickLabel(league, a)}`);
 
 /**
- * Extra salary a side must send for its team to pass the 125% rule (0 when it passes). Payroll
- * includes cap holds between the season and free agency.
+ * Salary matching by where a team's payroll lands after a trade (cap holds included between the
+ * season and free agency): under the cap, anything; over it, at most 125% of the salary it sends
+ * plus $0.1M; over the first apron, no more than it sends. Is taking back `inSal` for `outSal` from
+ * payroll `pay` within the rule?
+ */
+function matched(cap: ReturnType<typeof CAP_FOR>, pay: number, inSal: number, outSal: number): boolean {
+  const after = pay - outSal + inSal;
+  if (after <= cap.salaryCap) return true;
+  return inSal <= (after <= cap.apron1 ? outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer : outSal);
+}
+
+/**
+ * Extra salary a side must send for its team to pass the matching rule (0 when it passes; see
+ * matched). Sending more only lowers the payroll after the deal, which loosens the rule, so the
+ * least that works is one of the points where a rule changes.
  */
 export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b'): number {
   const mine = offer[side];
   const other = offer[side === 'a' ? 'b' : 'a'];
   const s = contractSeason(league);
-  const outSal = sideSalary(league, mine);
-  const inSal = sideSalary(league, other);
-  if (capPayroll(league, mine.tid, s) - outSal + inSal <= CAP_FOR(league, s).salaryCap) return 0;
-  return Math.max(0, (inSal - CAP.tradeMatchBuffer) / CAP.tradeMatchPct - outSal);
+  const cap = CAP_FOR(league, s);
+  const out = sideSalary(league, mine);
+  const inc = sideSalary(league, other);
+  const pay = capPayroll(league, mine.tid, s);
+  // nothing more; the 125% rule met; under the first apron, or the cap, after it; dollar for dollar
+  const steps = [0, (inc - CAP.tradeMatchBuffer) / CAP.tradeMatchPct - out, pay - out + inc - cap.apron1, pay - out + inc - cap.salaryCap, inc - out];
+  return steps
+    .filter((x) => x >= 0)
+    .sort((a, b) => a - b)
+    .find((x) => matched(cap, pay, inc, out + x))!;
+}
+
+/**
+ * Extra salary a side must send to keep its team under its hard cap (see hardCap): 0 without one,
+ * or when the deal doesn't add salary or stays under it.
+ */
+export function hardCapGap(league: League, offer: TradeOffer, side: 'a' | 'b'): number {
+  const mine = offer[side];
+  const s = contractSeason(league);
+  const hard = hardCap(league, mine.tid, s);
+  if (!hard) return 0;
+  const out = sideSalary(league, mine);
+  const inc = sideSalary(league, offer[side === 'a' ? 'b' : 'a']);
+  return Math.max(0, Math.min(inc - out, capPayroll(league, mine.tid, s) - out + inc - hard.amount));
+}
+
+/** Where a team's payroll lands after taking in `inSal` for `outSal` this contract season (cap holds included), and the second apron's rules if it is past it. */
+function afterTrade(league: League, tid: number, inSal: number, outSal: number) {
+  const s = contractSeason(league);
+  const cap = CAP_FOR(league, s);
+  const after = capPayroll(league, tid, s) - outSal + inSal;
+  return { cap, after, apron2: after > cap.apron2 };
+}
+
+/**
+ * Past the second apron after a trade a team can't aggregate: send two or more players' salaries to
+ * take back a player paid more than the highest-paid single player it sends.
+ */
+export function aggregates(league: League, mine: TradeSide, other: TradeSide): boolean {
+  const out = mine.pids.map((pid) => capSalary(league, pid)).filter((x) => x > 0);
+  const top = Math.max(0, ...out);
+  return out.length >= 2 && other.pids.some((pid) => capSalary(league, pid) > top);
 }
 
 /**
@@ -751,18 +804,27 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players (max ${TWO_WAY_MAX}).`);
     const inSal = sideSalary(league, other);
     const outSal = sideSalary(league, mine);
+    const { cap, after, apron2 } = afterTrade(league, mine.tid, inSal, outSal);
     if (salaryMatchGap(league, offer, key) > 0) {
       const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
       errors.push(
-        `${abbrev} would be over the cap after the trade, so it can take back at most 125% of outgoing salary plus $0.1M ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`,
+        after > cap.apron1
+          ? `${abbrev} would be over the first apron ($${(cap.apron1 / 1000).toFixed(1)}M) after the trade, so it can take back no more salary than it sends ($${(outSal / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`
+          : `${abbrev} would be over the cap after the trade, so it can take back at most 125% of outgoing salary plus $0.1M ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`,
       );
     }
-    // the mid-level and the bi-annual are for teams under the tax, so using one caps the team at the tax line for that season
-    const tax = CAP_FOR(league, s).luxuryTax;
-    if (taxCapped(league.teams[mine.tid], s) && inSal > outSal && capPayroll(league, mine.tid, s) - outSal + inSal > tax)
+    // a team that used the mid-level, the bi-annual or the taxpayer mid-level is hard-capped at an apron for the season
+    const hard = hardCap(league, mine.tid, s);
+    if (hard && inSal > outSal && after > hard.amount)
       errors.push(
-        `${abbrev} used the ${league.teams[mine.tid].mleSeason === s ? 'mid-level' : 'bi-annual'} exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`,
+        `${abbrev} used the ${hard.route === 'mle' ? 'mid-level' : hard.route === 'bae' ? 'bi-annual' : 'taxpayer mid-level'} exception this season, so it is hard-capped at ${apronName(hard.apron)}: a trade can't take its payroll past $${(hard.amount / 1000).toFixed(1)}M.`,
       );
+    // past the second apron: no combining salaries, and no cash out
+    if (apron2 && aggregates(league, mine, other))
+      errors.push(
+        `${abbrev} would be over the second apron ($${(cap.apron2 / 1000).toFixed(1)}M) after the trade, so it can't combine salaries: nobody coming in may earn more than the best-paid player it sends.`,
+      );
+    if (apron2 && (mine.cash ?? 0) > 0) errors.push(`${abbrev} would be over the second apron ($${(cap.apron2 / 1000).toFixed(1)}M) after the trade, so it can't send cash.`);
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
     errors.push(...termErrors(league, offer, mine, other));
@@ -972,12 +1034,15 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
 
   if (matters(x.money)) {
     const net = x.salaryIn - x.salaryOut;
-    const tax = CAP_FOR(league, contractSeason(league)).luxuryTax;
+    const cs = contractSeason(league);
+    const tax = CAP_FOR(league, cs).luxuryTax;
+    // (the cost is by the tax's brackets, a repeater's higher still)
+    const repeater = x.taxCost > 0 && taxRepeater(league, t.tid, cs) ? ' at repeater rates' : '';
     if (x.money > 0)
       add(
         'bad',
         x.taxCost > 0
-          ? `Taking on ${fmtK(net)} ${x.payBefore <= tax ? `puts them ${fmtK(x.payAfter - tax)} into the tax` : `takes them to ${fmtK(x.payAfter - tax)} over the tax line`}`
+          ? `Taking on ${fmtK(net)} ${x.payBefore <= tax ? `puts them ${fmtK(x.payAfter - tax)} into the tax` : `takes them to ${fmtK(x.payAfter - tax)} over the tax line`}${repeater}`
           : `Taking on ${fmtK(net)} uses cap room they'd rather keep`,
         x.money,
       );
@@ -1157,10 +1222,10 @@ function aRosterOver(league: League, o: TradeOffer): boolean {
   return std(o.b.pids) > std(o.a.pids) && tradeRoster(league, o.a.tid).length - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
 }
 
-/** Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding side A's players can fix (its salary matching, a full roster)? */
+/** Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding side A's players can fix (its salary matching, its hard cap, a full roster)? */
 export function canMakeWork(league: League, o: TradeOffer): boolean {
-  if (salaryMatchGap(league, o, 'b') > 0) return false;
-  return validateTrade(league, o).length <= (salaryMatchGap(league, o, 'a') > 0 ? 1 : 0) + (aRosterOver(league, o) ? 1 : 0);
+  if (salaryMatchGap(league, o, 'b') > 0 || hardCapGap(league, o, 'b') > 0) return false;
+  return validateTrade(league, o).length <= (salaryMatchGap(league, o, 'a') > 0 ? 1 : 0) + (hardCapGap(league, o, 'a') > 0 ? 1 : 0) + (aRosterOver(league, o) ? 1 : 0);
 }
 
 /** A deal the AI would take, or why none was found: no player (or pair) of A's fixes the salary matching, or not enough value. */
@@ -1168,10 +1233,10 @@ export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null;
 
 /**
  * Ask the AI what it would need from side A to accept. When A is over the cap and takes back too
- * much salary, first add the least valuable player (or pair) whose salary fixes the matching, then
- * top up the value: each round adds the smallest pick or player that covers what's missing, else
- * the most valuable one (a full roster takes a player). See salaryMatchGap for the salary A would
- * need to send. The user's untouchables are never asked for, nor anyone in `keep`. With `cash`, a
+ * much salary (or more than its hard cap leaves room for), first add the least valuable player (or
+ * pair) whose salary fixes the matching, then top up the value: each round adds the smallest pick
+ * or player that covers what's missing, else the most valuable one (a full roster takes a player).
+ * See salaryMatchGap and hardCapGap for the salary A would need to send. The user's untouchables are never asked for, nor anyone in `keep`. With `cash`, a
  * gap that a little of A's cash covers (within what both teams can still move this season) is
  * closed with cash before any pick or player is added.
  */
@@ -1195,7 +1260,7 @@ function cashToClose(league: League, o: TradeOffer, need: number): number | null
 function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean } = {}): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
-  const gapA = salaryMatchGap(league, cur, 'a');
+  const gapA = Math.max(salaryMatchGap(league, cur, 'a'), hardCapGap(league, cur, 'a'));
   if (!canMakeWork(league, cur)) return { offer: null, why: 'value' };
   const legal = (o: TradeOffer) => validateTrade(league, o).length === 0;
   const off = new Set([...keep, ...(cur.a.tid === league.userTid ? (league.untouchable ?? []) : [])]);
@@ -1481,18 +1546,26 @@ export function filterTargets(rows: TradeTarget[], f: TargetFilter): TradeTarget
 }
 
 /**
- * The most salary a team can take back in one deal right now, sending at most two of its
- * tradeable contracts (as "what would make this work?" does to match salaries): what fits under
- * the cap after they leave, or 125% of them plus $0.1M.
+ * The most salary a team can take back for one player in a deal right now, sending at most two of
+ * its tradeable contracts (as "what would make this work?" does to match salaries): what fits
+ * under the cap after they leave, 125% of them plus $0.1M while that keeps it at or under the first
+ * apron, else as much as they make. Two can't take back more than the best-paid of them past the
+ * second apron (no aggregating there), and no deal takes a hard-capped team past its hard cap.
  */
 export function maxTakeBack(league: League, tid: number): number {
   const s = contractSeason(league);
+  const cap = CAP_FOR(league, s);
+  const pay = capPayroll(league, tid, s);
   const sals = standardRoster(league, tid)
     .filter((p) => !untradeable(league, p))
     .map((p) => capSalary(league, p.pid))
     .sort((a, b) => b - a);
-  const out = (sals[0] ?? 0) + (sals[1] ?? 0);
-  return Math.max(CAP_FOR(league, s).salaryCap - capPayroll(league, tid, s) + out, out * CAP.tradeMatchPct + CAP.tradeMatchBuffer);
+  const limit = (out: number) => Math.max(cap.salaryCap - pay + out, Math.min(out * CAP.tradeMatchPct + CAP.tradeMatchBuffer, cap.apron1 - pay + out), out);
+  const one = sals[0] ?? 0;
+  const two = one + (sals[1] ?? 0);
+  const most = Math.max(limit(one), Math.min(limit(two), Math.max(one, cap.apron2 - pay + two)));
+  const hard = hardCap(league, tid, s);
+  return hard ? Math.min(most, Math.max(two, hard.amount - pay + two)) : most;
 }
 
 // ---------------------------------------------------------------- packages for the user's assets
@@ -1758,11 +1831,11 @@ function sellable(league: League, tid: number): Player[] {
 /**
  * AI-to-AI deals (a few a season, most near the deadline): contenders buy rebuilding teams'
  * veterans and other teams' players who asked out. The buyer matches salary first (without sending
- * an over-the-cap seller more than it can take back, or taking its own payroll past the tax after
- * using the mid-level), then adds its two most valuable young players and picks from the cheapest
- * up (three at most, so better ones replace the cheapest; two firsts at most) until the seller
- * agrees, and the deal only goes through if the buyer likes it too. Only assets the rules let move
- * are offered. Up to three players are tried.
+ * an over-the-cap seller more than it can take back, or taking its own payroll past a hard cap),
+ * then adds its two most valuable young players and picks from the cheapest up (three at most, so
+ * better ones replace the cheapest; two firsts at most) until the seller agrees, and the deal only
+ * goes through if the buyer likes it too. Only assets the rules let move are offered. Up to three
+ * players are tried.
  */
 export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
@@ -1836,12 +1909,11 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   });
   // an over-the-cap seller can only take back so much salary
   const sellerFits = (p: Player) => salaryMatchGap(league, offer(p), 'b') === 0;
-  // an over-the-cap buyer must send back salary first (125% rule), and one that used the
-  // mid-level or the bi-annual enough to stay under the tax: the smallest contract that covers the
-  // gap, else the biggest and keep going
-  const s = contractSeason(league);
-  const taxGap = () => (taxCapped(league.teams[buyer], s) ? capPayroll(league, buyer, s) + sal(vet) - pkg.reduce((a, p) => a + sal(p), 0) - CAP_FOR(league, s).luxuryTax : 0);
-  const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), taxGap());
+  // an over-the-cap buyer must send back salary first (by the matching rule for where its payroll
+  // lands, see salaryMatchGap), and a hard-capped one enough to stay under its hard cap: the smallest
+  // contract that covers the gap, else the biggest and keep going (past the second apron a deal that
+  // needs two of them is aggregating, which validateTrade turns down)
+  const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), hardCapGap(league, offer(), 'a'));
   while (gapNow() > 0) {
     const gap = gapNow();
     const rest = avail.filter((x) => !pkg.includes(x) && sellerFits(x));

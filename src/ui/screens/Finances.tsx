@@ -26,12 +26,15 @@ import {
   NATIONAL_REVENUE,
   OPERATIONS_PER_SEASON,
   PLAYOFF_PRICE_MULT,
+  REPEATER_SEASONS,
   REVENUE_SHARING,
   TAX_SHARE_TO_NON_TAXPAYERS,
   attendanceFor,
   budgetCostPerSeason,
+  luxuryTaxBill,
   profit,
   referencePrice,
+  taxRepeater,
 } from '../../core/league/finances';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Bar, Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Tag, Toggle, type Col } from '../components/ui';
@@ -83,7 +86,9 @@ function Overview({ team }: { team: Team }) {
   const pay = payroll(league, team.tid, s);
   const scale = revenueScale(league, s);
   const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0) * (scale / revenueScale(league));
-  const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
+  // by the luxury tax's brackets, at the repeater rates when they apply
+  const tax = luxuryTaxBill(league, team.tid, pay, s);
+  const repeater = taxRepeater(league, team.tid, s);
   const shortfall = Math.max(0, cap.minPayroll - pay);
   // two-way deals sit outside the cap and the tax, but they are still paid
   const twoWayPay = twoWayRoster(league, team.tid).reduce((a, p) => a + salaryFor(p, s), 0);
@@ -91,7 +96,7 @@ function Overview({ team }: { team: Team }) {
     { k: twoWayPay > 0 ? 'Payroll (incl. two-way)' : 'Payroll', v: pay + twoWayPay, c: 'var(--accent)' },
     { k: 'Staff & facilities budgets', v: budgets, c: 'var(--tier-star)' },
     { k: 'Arena & operations', v: OPERATIONS_PER_SEASON * scale, c: 'var(--tier-low)' },
-    ...(tax > 0 ? [{ k: 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
+    ...(tax > 0 ? [{ k: repeater ? 'Luxury tax (repeater)' : 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
     ...(shortfall > 0 ? [{ k: 'Salary floor shortfall', v: shortfall, c: 'var(--warn)' }] : []),
   ];
   const totalExp = expenses.reduce((a, e) => a + e.v, 0);
@@ -159,10 +164,11 @@ function Overview({ team }: { team: Team }) {
           </div>
         </div>
         <div className="tiny dim" style={{ marginTop: 8 }}>
-          National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay {CAP.taxRate}
-          × on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among teams under the line), and teams under the {fmtM(cap.minPayroll)}{' '}
-          salary floor pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives {Math.round(REVENUE_SHARING * 100)}% of the gap between
-          its local revenue (gate, merchandise, local TV) and the league average.
+          National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the {fmtM(cap.luxuryTax)} tax
+          line pay luxury tax by {fmtM(cap.taxBracket)} brackets above it, at {CAP.taxRates.join(', ')}× and {CAP.taxRateStep} more for each bracket after (a repeater, with tax in{' '}
+          {REPEATER_SEASONS} of the 4 seasons before, at {CAP.repeaterRates.join(', ')}× and up; {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot is shared among teams
+          under the line), and teams under the {fmtM(cap.minPayroll)} salary floor pay the shortfall to their players. Revenue sharing evens out market size: each team pays or
+          receives {Math.round(REVENUE_SHARING * 100)}% of the gap between its local revenue (gate, merchandise, local TV) and the league average.
         </div>
       </Card>
 
@@ -668,6 +674,8 @@ function HistoryTab({ team }: { team: Team }) {
       fmt: (v) => (Number(v) ? Math.round(Number(v)).toLocaleString() : '—'),
     },
     { key: 'pay', label: 'Payroll', get: (r) => r.payroll, fmt: (v) => (Number(v) ? fmtM(Number(v)) : '—') },
+    // (seasons from before bills were recorded show none)
+    { key: 'tax', label: 'Tax', get: (r) => r.tax ?? 0, fmt: (v) => (Number(v) ? <span className="bad">{fmtM(Number(v))}</span> : '—') },
   ];
   // after the playoffs this season's books are closed
   const inProgress = !isOffseason(league);

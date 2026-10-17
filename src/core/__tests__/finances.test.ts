@@ -78,7 +78,7 @@ describe('finances (L1, L15)', () => {
     expect(l.teams[0].budget.ticketPrice).toBe(Math.round(mine * (1 + CAP.growth)));
   });
 
-  it('taxpayers pay CAP.taxRate, half the pot goes to the rest, and teams under the floor pay the shortfall', () => {
+  it('taxpayers pay by the brackets, half the pot goes to the rest, and teams under the floor pay the shortfall', () => {
     const l = league();
     const cap = CAP_FOR(l);
     const pay = (tid: number) => payroll(l, tid);
@@ -91,11 +91,15 @@ describe('finances (L1, L15)', () => {
     setPayroll(2, cap.minPayroll - 4_000);
     const cash = l.teams.map((t) => t.cash);
     const bills = assessLuxuryTax(l);
-    expect(bills.find((b) => b.tid === 1)?.tax).toBe(Math.round(10_000 * CAP.taxRate));
+    // $10M over: the first $5M bracket at 1.5, the second at 1.75
+    const tax = 5_000 * 1.5 + 5_000 * 1.75;
+    expect(bills.find((b) => b.tid === 1)?.tax).toBe(tax);
+    expect(curTeamSeason(l, 1).tax).toBe(tax);
+    expect(curTeamSeason(l, 2).tax).toBe(0);
     expect(bills.find((b) => b.tid === 2)?.shortfall).toBe(4_000);
-    expect(l.teams[1].cash).toBeCloseTo(cash[1] - 10_000 * CAP.taxRate);
+    expect(l.teams[1].cash).toBeCloseTo(cash[1] - tax);
     // the floor team doesn't pay tax, so it gets a share too
-    const share = (10_000 * CAP.taxRate * TAX_SHARE_TO_NON_TAXPAYERS) / 29;
+    const share = (tax * TAX_SHARE_TO_NON_TAXPAYERS) / 29;
     expect(l.teams[2].cash).toBeCloseTo(cash[2] - 4_000 + share);
     expect(l.teams[5].cash).toBeCloseTo(cash[5] + share);
   });

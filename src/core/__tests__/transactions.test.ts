@@ -346,8 +346,8 @@ describe('AI trade valuation', () => {
     const l = league(11);
     l.phase = 'regular';
     l.teams[AI].strategy = 'retool';
-    // we're over the cap, asking for a $12M player while sending nothing
-    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: CAP_FOR(l).salaryCap });
+    // we're over the cap (but nowhere near the first apron, where the matching is dollar for dollar), asking for a $12M player while sending nothing
+    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: CAP_FOR(l).salaryCap + 5_000 - payroll(l, U) });
     const target = shape(l, standardRoster(l, AI)[0], 74, 27, 12_000);
     const ask = offer([], [target.pid]);
     expect(salaryMatchGap(l, ask, 'a')).toBeGreaterThan(0);
@@ -553,14 +553,14 @@ describe('AI trade valuation', () => {
     expect(releaseDeadMoney(l, bust).map((d) => d.season)).toEqual([l.season]);
   });
 
-  it('using the mid-level caps a team at the tax line in trades that season', () => {
+  it('using the mid-level hard-caps a team at the first apron in trades that season', () => {
     const l = league();
     l.phase = 'regular';
     const cap = CAP_FOR(l);
-    // just under the tax, taking a $10M player for a $9M one
+    // just under the first apron (the tax line before the aprons), taking a $10M player for a $9M one
     const mine = shape(l, standardRoster(l, U)[0], 70, 27, 9_000);
     const theirs = shape(l, standardRoster(l, AI)[0], 72, 27, 10_000);
-    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.luxuryTax - 500 - payroll(l, U) });
+    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.apron1 - 500 - payroll(l, U) });
     const deal = offer([mine.pid], [theirs.pid]);
     expect(validateTrade(l, deal).some((e) => /mid-level/.test(e))).toBe(false);
     l.teams[U].mleSeason = l.season;

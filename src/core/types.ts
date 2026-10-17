@@ -244,6 +244,8 @@ export interface Player {
   faDays?: number;
   /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
   waivers?: Waivers;
+  /** Waived or bought out during this regular season with a salary over the mid-level: the buyout market's rule applies to him (see buyoutBlockedReason). */
+  waivedSalary?: { season: number; salary: number };
   /** What the GM promised him at their last meeting, while it's open (the user's players only; see meetPlayer in morale.ts). */
   promise?: PlayerPromise;
   /** His last meeting with the GM (one every MEET_DAYS days), and the season a promise to him was broken: he takes no more that season. */
@@ -363,10 +365,11 @@ export interface Waivers {
 
 /**
  * How a team pays a free agent: his minimum, cap space, or an exception over the cap: the mid-level,
- * the room exception (instead of the mid-level, once a team has used cap space that season) or the
- * bi-annual (see contracts.ts).
+ * the taxpayer mid-level (for a signing the mid-level can't take under the first apron), the room
+ * exception (instead of the mid-level, once a team has used cap space that season) or the bi-annual
+ * (see contracts.ts).
  */
-export type SigningRoute = 'min' | 'space' | 'mle' | 'room' | 'bae';
+export type SigningRoute = 'min' | 'space' | 'mle' | 'tmle' | 'room' | 'bae';
 
 /** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
 export interface FaBid {
@@ -656,6 +659,8 @@ export interface TeamSeason {
   playIn?: boolean;
   /** Cash received in trades this season ($K): booked as revenue, but not local revenue that revenue sharing evens out. */
   cashIn?: number;
+  /** Luxury tax paid at the end of the regular season ($K, 0 for none): the repeater rule reads it (see taxRepeater). */
+  tax?: number;
   /** Team totals for advanced team stats. */
   t: TeamTotals;
   o: TeamTotals; // opponent totals
@@ -714,6 +719,8 @@ export interface Team {
   roomSeason?: number;
   /** Contract season the team last used its bi-annual exception (not two seasons running). */
   baeSeason?: number;
+  /** Contract season the team last used its taxpayer mid-level exception (hard-capped at the second apron for it, see hardCap). */
+  tmleSeason?: number;
   /** Players whose jersey numbers were settled at the team's last game or arrival (see numberTeam): they keep them over arrivals. */
   numbered?: number[];
   /**
