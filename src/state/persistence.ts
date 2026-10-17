@@ -3,25 +3,12 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import {
-  ACTIONS,
-  FREE_AGENT,
-  PLAYER_DEFENSES,
-  SET_IDS,
-  type GamePlanItem,
-  type GameResult,
-  type League,
-  type Player,
-  type PlayerDefense,
-  type RisingStar,
-  type Tactics,
-} from '../core/types';
+import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense, type Tactics } from '../core/types';
 import { SAVE_VERSION } from '../core/constants';
 import { defaultTactics } from '../core/sim/tactics';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
-import { RISING_ROSTER } from '../core/league/risingStars';
 import { registryProblems, seedCoaches } from '../core/league/coaches';
 import { REVIEWS_KEPT, type OwnerGoalKind } from '../core/league/ownerGoals';
 import { MAX_STEPS } from './live';
@@ -486,8 +473,6 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateRecords(x);
   // All-Star Saturday's results: a damaged set goes (the Awards tab then shows the All-Stars alone)
   for (const a of x.awards) if (obj(a) && a.saturday !== undefined && !saturdayIntact(x, a.saturday)) delete a.saturday;
-  // the Rising Stars game: a damaged one goes (the Awards tab then shows no game)
-  for (const a of x.awards) if (obj(a) && a.risingStars !== undefined && !risingIntact(x, a.risingStars)) delete a.risingStars;
   migrateNumbers(x);
   migrateCoaches(x);
   // the summer's job offers: a damaged list goes (the job market still lists every team)
@@ -523,15 +508,6 @@ function trailIntact(x: League, t: unknown): boolean {
     t.pts.length <= 60 &&
     t.pts.every((p) => Array.isArray(p) && p.length === 3 && int(p[0]) && permille(p[1]) && permille(p[2]))
   );
-}
-
-/** The Rising Stars game in shape: two rosters of at most RISING_ROSTER with their names, teams and lines, a score, and an MVP who played in it. */
-function risingIntact(x: League, r: unknown): boolean {
-  const star = (e: unknown) => obj(e) && int(e.pid) && str(e.name) && int(e.tid) && !!x.teams[e.tid as number] && [e.pts, e.reb, e.ast].every((v) => int(v) && (v as number) >= 0);
-  const side = (v: unknown) => Array.isArray(v) && v.length <= RISING_ROSTER && v.every(star);
-  if (!obj(r) || !side(r.rookies) || !side(r.sophomores) || !(Array.isArray(r.score) && r.score.length === 2 && r.score.every(int))) return false;
-  const all = [...(r.rookies as RisingStar[]), ...(r.sophomores as RisingStar[])];
-  return r.mvp === undefined || (int(r.mvp) && all.some((e) => e.pid === r.mvp));
 }
 
 /**

@@ -33,7 +33,6 @@ import { resolvePromises, settleExpiringPromises, updateMorale } from './morale'
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { allStarSaturday } from './allStarSaturday';
-import { risingStars } from './risingStars';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
@@ -243,8 +242,7 @@ export function advanceDay(league: League) {
         selectAllStars(league);
         // a knock short enough to keep an All-Star his place heals over the break, for everyone
         for (const p of Object.values(league.players)) if (p.tid >= 0 && p.injury && !missesAllStarGame(p)) while (p.injury) healOneGame(league, p, rng);
-        // the Rising Stars game, then the Three-Point and Slam Dunk Contests, each on a random stream of its own
-        risingStars(league);
+        // the Three-Point and Slam Dunk Contests, on a random stream of their own
         allStarSaturday(league);
         playAllStarGame(league, rng);
       }

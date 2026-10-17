@@ -87,9 +87,9 @@ export const PROFIT_PER_WIN = 2_000;
 /**
  * The playoff gates and the league's luxury-tax payouts a typical season brings beyond the budget, first-season $K:
  * fitted so that over sixteen simulated league-seasons the profit goals' results center on their targets (they had
- * come in $4.0M over at 8,000, and $3.7M over at 12,000 once the tax went to brackets and its payouts grew).
+ * come in $4.0M over at 8,000).
  */
-export const PROFIT_EXTRA = 15_500;
+export const PROFIT_EXTRA = 12_000;
 /** Payroll over or under its line, as a share of the tax line, that maxes out a payroll goal's grade. */
 export const PAYROLL_SCALE = 0.05;
 /** Games of the record so far that weigh as much as the roster's expectation in a projection. */
