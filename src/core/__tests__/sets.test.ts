@@ -252,23 +252,24 @@ describe('sets in the engine', () => {
   });
 
   it('has its edge against the defenses it beats and loses it against those that kill it', () => {
-    const cases: [SetId, string, string][] = [
-      ['floppy', 'drop', 'switch'],
-      ['spain', 'hedge', 'switch'],
-      ['elevator', 'hedge', 'zone32'],
-      ['chicago', 'drop', 'switch'],
+    // (Chicago's edge over a switch, about 0.14 a trip, takes 30 games to clear the noise for sure)
+    const cases: [SetId, string, string, number][] = [
+      ['floppy', 'drop', 'switch', 10],
+      ['spain', 'hedge', 'switch', 10],
+      ['elevator', 'hedge', 'zone32', 10],
+      ['chicago', 'drop', 'switch', 30],
     ];
-    for (const [id, beats, kills] of cases) {
+    for (const [id, beats, kills, games] of cases) {
       const o = teamFor(id);
-      const a = pairedValue(id, o, DEF[beats], 10, 500);
-      const b = pairedValue(id, o, DEF[kills], 10, 500);
+      const a = pairedValue(id, o, DEF[beats], games, 500);
+      const b = pairedValue(id, o, DEF[kills], games, 500);
       expect(a.mean, `${id} vs ${beats}`).toBeGreaterThan(0);
       expect(a.mean - b.mean, `${id}: ${beats} vs ${kills}`).toBeGreaterThan(2 * Math.hypot(a.se, b.se));
     }
-    // the more the defense helps, the more open Hammer's corner
+    // the more the defense helps, the more open Hammer's corner (about 0.1 a trip: sixty games to show it for sure)
     const o = teamFor('hammer');
-    const hi = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 90 } }, 10, 500);
-    const lo = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 10 } }, 10, 500);
+    const hi = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 90 } }, 60, 500);
+    const lo = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 10 } }, 60, 500);
     expect(hi.mean - lo.mean).toBeGreaterThan(2 * Math.hypot(hi.se, lo.se));
   });
 
@@ -330,17 +331,18 @@ describe('sets in the engine', () => {
   it('plays games with no sets exactly as before: AI teams never run one, and an empty package draws nothing', () => {
     // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
     // and a coached side with an after-timeout action, a go-to player and every call there was), taken again
-    // when side-out fouls started restarting the shot clock and timeouts started stopping play
+    // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when technical
+    // fouls came in (their free throws, and shooting fouls 2.5% rarer)
     const expected = {
       ai: [
-        [137, 136, 94, 49, 15, 17, 19, 1],
+        [118, 122, 83, 44, 15, 15, 19, 0],
         [111, 97, 97, 19, 14, 32, 10, 0],
-        [116, 106, 101, 32, 13, 16, 7, 0],
+        [117, 106, 101, 32, 13, 17, 7, 0],
       ],
       coached: [
-        [142, 104, 81, 20, 9, 20, 17, 0],
-        [123, 121, 95, 35, 12, 25, 17, 0],
-        [111, 133, 72, 28, 9, 46, 17, 0],
+        [124, 108, 74, 17, 4, 30, 15, 0],
+        [123, 120, 95, 36, 13, 26, 17, 0],
+        [109, 132, 73, 29, 9, 47, 18, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

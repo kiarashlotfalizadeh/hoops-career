@@ -58,7 +58,8 @@ export const OnCourt = memo(function OnCourt({
           const cold = !hot && isCold(p);
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
           // named by what it shows, number and name first ("7 Holmgren"), then the rest for a screen reader
-          const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
+          const tech = p.tf ? `, ${p.tf} technical${p.tf === 1 ? '' : 's'}` : '';
+          const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}${tech}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
           return (
             <button
               key={pid}
@@ -82,6 +83,12 @@ export const OnCourt = memo(function OnCourt({
                 {cold && (
                   <span className="oc-mark" style={{ color: 'var(--info)' }} aria-hidden="true">
                     <Snowflake size={12} />
+                  </span>
+                )}
+                {/* a technical tonight: one more and he's ejected */}
+                {p.tf > 0 && (
+                  <span className="oc-mark oc-tech" aria-hidden="true">
+                    {p.tf} T
                   </span>
                 )}
               </span>

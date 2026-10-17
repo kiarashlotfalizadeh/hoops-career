@@ -8,6 +8,7 @@
 
 import type { GameResult, KeyGrade, KeyStat, League, ScheduledGame, TeamBox, TeamTotals } from '../types';
 import { playerName } from '../league/helpers';
+import { isOut } from '../availability';
 
 export interface GameKey {
   id: string;
@@ -278,7 +279,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
   }
   // the player they run it through
   const star = [...agg.scorers.entries()]
-    .filter(([pid, s]) => s.gp >= MIN_GAMES && league.players[pid]?.tid === them && !(league.players[pid]?.injury?.gamesRemaining ?? 0))
+    .filter(([pid, s]) => s.gp >= MIN_GAMES && league.players[pid]?.tid === them && !isOut(league.players[pid]))
     .sort((a, b) => b[1].pts / b[1].gp - a[1].pts / a[1].gp)[0];
   if (star) {
     const ppg = star[1].pts / star[1].gp;
@@ -355,7 +356,7 @@ function fromPriors(league: League, them: number): Candidate[] {
   }
   // last season's top scorer among their players, if he scored
   const star = Object.values(league.players)
-    .filter((p) => p.tid === them && !(p.injury?.gamesRemaining ?? 0))
+    .filter((p) => p.tid === them && !isOut(p))
     .map((p) => {
       const s = p.stats.filter((x) => x.season === league.season - 1 && !x.playoffs);
       const gp = s.reduce((a, x) => a + x.gp, 0);

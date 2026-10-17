@@ -181,6 +181,8 @@ describe('counters and opposing plans', () => {
       if (!g) continue;
       l.teams[tid].tactics.defense.scheme = 'man';
       l.teams[tid].tactics.defense.pnr = 'drop';
+      // (and pressing the ball already, so a fortnight of the user's turnovers doesn't take the plan's other spot)
+      l.teams[tid].tactics.defense.pressure = 60;
       const plan = aiGamePlan(l, tid, l.userTid, g);
       const t = () => buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics;
       const hunt = plan?.items.find((it) => it.id === 'hunt');

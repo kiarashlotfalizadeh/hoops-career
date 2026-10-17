@@ -11,6 +11,7 @@ import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type PerGame } from '../stats';
 import type { Player } from '../../core/types';
+import { suspensionLabel } from '../../core/availability';
 import { CAP, seasonLabel } from '../../core/constants';
 import { tenDayLabel } from '../office/TenDayPanel';
 
@@ -183,6 +184,7 @@ export default function Roster() {
                           {p.injury.type} · {p.injury.gamesRemaining}g
                         </Tag>
                       )}
+                      {p.suspension && <Tag tone="bad">{suspensionLabel(p)}</Tag>}
                       {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
                       {pg ? (
                         <span className="tiny dim2 num">

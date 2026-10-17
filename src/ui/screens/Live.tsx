@@ -530,7 +530,8 @@ export default function Live() {
   const eventAhead = useCallback((lg: LiveGame, before: Drawn) => {
     const s = lg.sim;
     if (s.injuries.length > before.injuries || s.adjustments.length > before.adjustments) return true;
-    if (s.T.some((t) => t.players.some((p) => p.out === 1 && drawnPlayer(before, p.pid)?.out !== 1))) return true;
+    // (a foul-out or an ejection)
+    if (s.T.some((t) => t.players.some((p) => (p.out === 1 || p.out === 3) && drawnPlayer(before, p.pid)?.out !== p.out))) return true;
     const ahead = snapshot(s);
     // a play that puts up a graphic is worth seeing
     const g = loopHelpers.current.graphicFor(ahead, lg);

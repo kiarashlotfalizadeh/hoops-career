@@ -2,8 +2,8 @@
 // top six or the play-in), reach each round and win the title, and a lottery team's chances at the
 // top picks. The rest of the season is played out many times, game by game on the real schedule,
 // from each team's strength as the pre-game projection reads it (projection.ts: this season's net
-// rating regressed toward what its roster is worth, here counting injured players for the games
-// they'll be back for), with the strength itself uncertain (more so early in the season), then the
+// rating regressed toward what its roster is worth, here counting injured and suspended players
+// for the games they'll be back for), with the strength itself uncertain (more so early in the season), then the
 // play-in, the 2-2-1-1-1 playoffs and the lottery's drawing. It runs on a stream of its own seeded
 // from the league and the day: a pure read of the league, the same on every screen and after a
 // reload, and nothing in it touches the league's random stream or knows how the games will go.
@@ -13,6 +13,7 @@ import { Rng, clamp, hashString, mix32 } from '../random';
 import { HOME_EDGE, MARGIN_SD, PRIOR_GAMES, blendNet, leagueRatings, phi } from './projection';
 import { LOTTERY_ODDS } from '../league/draft';
 import { drawLot, finalsHomeCourt, standings } from '../league/standings';
+import { gamesOut } from '../availability';
 
 /** Simulated seasons in a forecast the screens show, and in the weekly point of the user's trail. */
 export const FORECAST_SIMS = 1000;
@@ -73,12 +74,12 @@ export function forecastable(league: League): boolean {
 
 /**
  * What a team's players are worth on the floor over what's left of its season (its OVR weighted by
- * a typical rotation's minutes): each injured player out for the games he'll miss and back after,
- * every combination of the most valuable ones weighed by how much of the stretch it covers.
+ * a typical rotation's minutes): each injured or suspended player out for the games he'll miss and
+ * back after, every combination of the most valuable ones weighed by how much of the stretch it covers.
  */
 export function rosterWorth(players: Player[], gamesLeft: number): number {
   const sorted = [...players].sort((a, b) => b.ovr - a.ovr);
-  const miss = (p: Player) => (p.injury ? clamp(p.injury.gamesRemaining / Math.max(1, gamesLeft), 0, 1) : 0);
+  const miss = (p: Player) => clamp(gamesOut(p) / Math.max(1, gamesLeft), 0, 1);
   const hurt = sorted.filter((p) => miss(p) > 0);
   const exact = hurt.slice(0, EXACT_INJURIES);
   // the rest: out when they'll miss most of it
@@ -475,10 +476,10 @@ const memo = new WeakMap<League, { key: string; value: Forecast | null }>();
 
 /**
  * The forecast the screens share: worked out once for the league as it is (a game played, a new day,
- * a roster move, an injury), not on every render.
+ * a roster move, an injury or a suspension), not on every render.
  */
 export function leagueForecast(league: League): Forecast | null {
-  const hurt = Object.values(league.players).reduce((a, p) => a + (p.tid >= 0 && p.injury ? p.pid * 7 + p.injury.gamesRemaining : 0), 0);
+  const hurt = Object.values(league.players).reduce((a, p) => a + (p.tid >= 0 && gamesOut(p) ? p.pid * 7 + gamesOut(p) : 0), 0);
   const key = `${league.season}|${league.phase}|${league.day}|${league.games.length}|${league.nextTxnId ?? 0}|${league.playIn.length}|${hurt}|${league.userTid}`;
   const hit = memo.get(league);
   if (hit && hit.key === key) return hit.value;

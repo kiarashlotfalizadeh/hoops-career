@@ -24,6 +24,7 @@ import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
 import * as REC from '../src/core/league/records';
+import { disciplineTotals } from '../src/core/league/discipline';
 import type { League, Player } from '../src/core/types';
 
 const [seasons, rngSeed, userTid, fictionalSeasons] = [5, 42, 19, 2].map((d, i) => Number(process.argv[i + 2] ?? d));
@@ -901,6 +902,58 @@ function bidOnStar(): number | null {
 }
 
 /** `realCalendar`: the first season plays the NBA's own schedule; `fire`: the coach loses his job after it. */
+/** Suspensions handed out this season (a player's games to sit going up), counted as the days are played. */
+let suspensions = 0;
+
+/**
+ * A day of games, checking suspensions: a player suspended at tip-off doesn't play his team's game
+ * (no box-score minutes) and has one game fewer to sit after it.
+ */
+function simDayChecked() {
+  const day = L.day;
+  const season = L.season;
+  const before = new Map(
+    Object.values(L.players)
+      .filter((p) => p.tid >= 0)
+      .map((p) => [p.pid, { tid: p.tid, games: p.suspension?.games ?? 0 }]),
+  );
+  S.simDay(L);
+  const played = L.games.filter((g) => g.season === season && g.day === day && g.type !== 'allstar');
+  for (const [pid, b] of before) {
+    const p = L.players[pid];
+    const after = p?.suspension?.games ?? 0;
+    const g = played.find((x) => x.home.tid === b.tid || x.away.tid === b.tid);
+    if (after > b.games - (g && b.games ? 1 : 0)) suspensions++;
+    if (!b.games || !g) continue;
+    const line = (g.home.tid === b.tid ? g.home : g.away).players.find((x) => x.pid === pid);
+    if (line && line.min > 0) bad('suspended player played', `${nm(pid)} gid ${g.gid}`);
+    if (p?.tid === b.tid && after !== b.games - 1) bad('suspension not served', `${nm(pid)} ${b.games} -> ${after}`);
+  }
+}
+
+/** This season's technicals, flagrants, ejections and suspensions so far (its regular season and postseason games). */
+function disciplineLine(): string {
+  const games = L.games.filter((g) => g.season === L.season && g.type !== 'allstar' && g.type !== 'cup');
+  const c = { tf: 0, ctf: 0, f1: 0, f2: 0, ej: 0 };
+  for (const g of games)
+    for (const tb of [g.home, g.away]) {
+      c.ctf += tb.coachTf ?? 0;
+      c.ej += tb.coachEj ? 1 : 0;
+      for (const b of tb.players) {
+        c.tf += b.tf ?? 0;
+        c.f1 += b.f1 ?? 0;
+        c.f2 += b.f2 ?? 0;
+        c.ej += b.ej ? 1 : 0;
+      }
+    }
+  const tg = 2 * games.length || 1;
+  const top = Object.values(L.players)
+    .map((p) => disciplineTotals(p, L.season, false).tf)
+    .sort((a, b) => b - a);
+  const f = (x: number) => (x / tg).toFixed(3);
+  return `technicals ${f(c.tf + c.ctf)} a team game (${((100 * c.ctf) / (c.tf + c.ctf || 1)).toFixed(0)}% coaches), F1 ${f(c.f1)}, F2 ${f(c.f2)}, ejections ${f(c.ej)}, suspensions ${suspensions}, most technicals ${top.slice(0, 3).join('/')} (${top.filter((x) => x >= 16).length} at 16+)`;
+}
+
 function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
   for (let s = 0; s < n; s++) {
     fixUserRoster();
@@ -918,6 +971,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const errs = S.startRegularSeason(L);
     if (errs.length) throw new Error(errs.join('; '));
     check();
+    suspensions = 0;
     const extended = Object.values(L.players).filter((p) => p.contract.next).length;
     checkOpeningNight();
     checkCalendar(!(opts.realCalendar && s === 0));
@@ -930,7 +984,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const firstTxn = L.nextTxnId ?? 1;
     for (let g = 0; L.phase === 'regular' && g < 400; g++) {
       const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from, contract: p.waivers!.contract }));
-      S.simDay(L);
+      simDayChecked();
       // 10-day contracts: the user's own, and the AI teams' (hardship ones among them)
       if (L.phase === 'regular') tenDayStep();
       for (const p of Object.values(L.players))
@@ -976,9 +1030,10 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     if (L.news.filter((x) => x.season === L.season && x.text.startsWith('Trade deadline recap')).length !== 1) bad('deadline recap not once', '');
     const logged = (L.transactions ?? []).filter((t) => t.kind === 'trade' && t.id >= firstTxn).length;
     if (logged !== trades) bad('trade missing from the transaction log', `${trades} made, ${logged} logged`);
-    for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) S.simDay(L);
+    for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) simDayChecked();
     check();
     checkSeasonEnd();
+    const discipline = disciplineLine();
     // the coaching carousel after the playoffs: AI coaches fired, and their replacements (first-time head coaches or former ones)
     const carousel = L.news.filter((x) => x.kind === 'coach' && x.season === L.season);
     const coachLine = `coaching changes ${carousel.filter((x) => / (fired|parted ways with) /.test(x.text)).length} (${carousel.filter((x) => x.text.includes('first-time')).length} first-time head coaches)`;
@@ -1079,6 +1134,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const raised = L.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.season === L.season - 1).map((r) => `${t.abbrev} #${r.jersey} ${r.name}`));
     console.log(`   retired numbers: ${raised.length}${raised.length ? ` (${raised.join(', ')})` : ''}, ${L.teams.reduce((a, t) => a + (t.retired?.length ?? 0), 0)} in all`);
     console.log(`   coaches: ${coachLine}, registry ${L.coaches?.length ?? 0} coaches, ${(JSON.stringify(L.coaches ?? []).length / 1e3).toFixed(1)}KB`);
+    console.log(`   discipline: ${discipline}`);
     const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
       `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,

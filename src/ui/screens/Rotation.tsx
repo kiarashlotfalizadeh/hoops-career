@@ -11,6 +11,7 @@ import type { League, Player, Rotation as RotationT } from '../../core/types';
 import { f1, gamesMemo, ordinal, playerSeason, rosterNames, signed, startingFive } from '../stats';
 import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
 import { swapSpots } from '../../core/analysis/lineups';
+import { isOut, suspendedGames } from '../../core/availability';
 
 export default function Rotation() {
   const league = useLeague();
@@ -37,9 +38,11 @@ export default function Rotation() {
     });
   };
 
-  const healthyOrder = order.filter((pid) => !byId.get(pid)?.injury);
+  // (out: hurt or suspended, as the engine sits them)
+  const out = (pid: number) => isOut(byId.get(pid)!);
+  const healthyOrder = order.filter((pid) => !out(pid));
   const total = healthyOrder.reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
-  const injuredMin = order.reduce((a, pid) => a + (byId.get(pid)?.injury ? (rot.minutes[pid] ?? 0) : 0), 0);
+  const injuredMin = order.reduce((a, pid) => a + (out(pid) ? (rot.minutes[pid] ?? 0) : 0), 0);
   const starters = healthyOrder.slice(0, 5).map((pid) => byId.get(pid)!);
   const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
   const closers = rot.closers.filter((pid) => byId.has(pid));
@@ -54,7 +57,7 @@ export default function Rotation() {
     const pp = planInputs(
       order.map((pid) => {
         const p = byId.get(pid)!;
-        return { pid, available: !p.injury, ...planRoles(p.ratings, p.pos), endurance: p.ratings.end };
+        return { pid, available: !isOut(p), ...planRoles(p.ratings, p.pos), endurance: p.ratings.end };
       }),
       rot,
       { playoffs },
@@ -103,7 +106,7 @@ export default function Rotation() {
           <div>
             <div className="bold">Minute targets: {total}</div>
             <div className="small dim">The stint plan below scales them to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
-            {injuredMin > 0 && <div className="small warn">Injured players' {injuredMin} minutes go to the healthy ones: the stint plan shows who gets them.</div>}
+            {injuredMin > 0 && <div className="small warn">Injured or suspended players' {injuredMin} minutes go to the others: the stint plan shows who gets them.</div>}
           </div>
           <Help title="How rotations work">
             <p>
@@ -159,16 +162,23 @@ export default function Rotation() {
                     <div className="grow" style={{ minWidth: 0 }}>
                       {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
                       <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
-                        <span className="bold ellipsis" style={{ minWidth: 0, color: p.injury ? 'var(--text-2)' : undefined }}>
+                        <span className="bold ellipsis" style={{ minWidth: 0, color: isOut(p) ? 'var(--text-2)' : undefined }}>
                           {fullNameOf(pid)}
                         </span>
-                        {p.injury && <Tag tone="bad">Out</Tag>}
+                        {suspendedGames(p) > 0 ? <Tag tone="bad">Suspended</Tag> : p.injury && <Tag tone="bad">Out</Tag>}
                         {closers.includes(pid) && <Tag>Closer</Tag>}
                         {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
                       </div>
                       <div className="tiny dim">
-                        {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina{' '}
-                        {attrDisplay(p.ratings.end)}
+                        {p.pos} ·{' '}
+                        {suspendedGames(p) > 0
+                          ? `suspended (${suspendedGames(p)}g)`
+                          : p.injury
+                            ? `${p.injury.type} (${p.injury.gamesRemaining}g)`
+                            : pg
+                              ? `${f1(pg.min)} mpg actual`
+                              : p.archetype}{' '}
+                        · stamina {attrDisplay(p.ratings.end)}
                         {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
                       </div>
                       <div className="bar" style={{ marginTop: 5, height: 5 }}>
@@ -176,7 +186,7 @@ export default function Rotation() {
                       </div>
                     </div>
                     <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
-                      <span className="display num" style={{ fontSize: 22, color: p.injury ? 'var(--text-dim)' : undefined }}>
+                      <span className="display num" style={{ fontSize: 22, color: isOut(p) ? 'var(--text-dim)' : undefined }}>
                         {m}
                         <span className="sr-only"> minutes</span>
                       </span>

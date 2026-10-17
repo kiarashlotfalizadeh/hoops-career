@@ -345,7 +345,8 @@ describe('engine rules', () => {
     // trips from one inbound (no press, run-out or second chance) with a non-shooting foul that was only a side out
     let sideOuts = 0;
     let longer = 0;
-    for (let g = 0; g < 24; g++) {
+    // (32 games: since the shooting-foul rates came down 2.5% for technical free throws, 24 left too few of these trips)
+    for (let g = 0; g < 32; g++) {
       const sim = new GameSim(side(10, { defense: { physicality: 90, pressure: 80 } }), side(11, { defense: { physicality: 90, pressure: 80 } }), {
         rng: new Rng(900 + g),
         type: 'regular',

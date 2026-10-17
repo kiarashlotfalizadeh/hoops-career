@@ -11,7 +11,7 @@ import { Rng, hashString } from '../random';
 import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
-import { gameScore } from './awards';
+import { gameScore, missesAllStarGame } from './awards';
 import { addInbox, addNews, andList, playerName, seasonTotals } from './helpers';
 
 /** Players on each side. */
@@ -22,15 +22,16 @@ const RISING_MIN = 8;
 const RISING_GAMES = 0.3;
 
 /**
- * The rookies (in their first season) and the sophomores (their second) the league picks: healthy,
- * on a roster, with 30% of the busiest team's games played, ranked by their production (game score a
+ * The rookies (in their first season) and the sophomores (their second) the league picks: healthy
+ * and not serving a suspension that keeps an All-Star out of the All-Star Game, on a roster, with 30%
+ * of the busiest team's games played, ranked by their production (game score a
  * game) and how good they are (OVR), best first.
  */
 export function risingField(league: League): { rookies: Player[]; sophomores: Player[] } {
   const games = Math.max(1, ...league.teams.map((t) => t.seasons.find((s) => s.season === league.season)).map((s) => (s ? s.won + s.lost : 0)));
   const ranked = (experience: number) =>
     Object.values(league.players)
-      .filter((p) => p.tid >= 0 && !p.injury && p.experience === experience)
+      .filter((p) => p.tid >= 0 && !p.injury && !missesAllStarGame(p) && p.experience === experience)
       .flatMap((p) => {
         const s = seasonTotals(p, league.season, false);
         return s && s.gp >= games * RISING_GAMES ? [{ p, v: gameScore(s) / s.gp + 0.15 * (p.ovr - 60) }] : [];

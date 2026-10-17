@@ -38,6 +38,7 @@ import { buildMinutePlan, planInputs, planRoles } from './rotationPlan';
 import { FINISH_LABEL, type FinishType, type PlayCall, type PossLog, type PossStep } from './log';
 import { MAX_SITUATIONS, applyPatch, cloneTactics } from './tactics';
 import { solveMatchups } from './matchups';
+import { DISC, coachTemperament, flagrantWeight, techWeight, temperament } from './discipline';
 import {
   READ_ON_IT,
   SETS,
@@ -66,7 +67,8 @@ export const K = {
   zoneBase: { rim: 0.638, paint: 0.458, mid: 0.42, c3: 0.383, ab3: 0.346 } as Record<ShotZone, number>,
   zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
-  foulRate: { rim: 0.208, paint: 0.106, mid: 0.041, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
+  /** (2.5% under what they were before technical fouls: their free throws, about 0.45 a team game, count in free-throw attempts as the NBA's do) */
+  foulRate: { rim: 0.203, paint: 0.1034, mid: 0.04, c3: 0.0137, ab3: 0.0156 } as Record<ShotZone, number>,
   /** Share of misses that are blocks, for an average contesting defender. */
   blockMiss: { rim: 0.24, paint: 0.154, mid: 0.04, c3: 0.0165, ab3: 0.0165 } as Record<ShotZone, number>,
   /** Extra share of misses blocked by the shooter's own defender (from behind, on the contest). */
@@ -366,6 +368,10 @@ interface Box {
   tActs: number;
   /** team field goals made while on the floor */
   tFgm: number;
+  /** Technical fouls, Flagrant 1s and Flagrant 2s. */
+  tf: number;
+  f1: number;
+  f2: number;
 }
 
 const newBox = (): Box => ({
@@ -401,6 +407,9 @@ const newBox = (): Box => ({
   acts: 0,
   tActs: 0,
   tFgm: 0,
+  tf: 0,
+  f1: 0,
+  f2: 0,
 });
 
 export interface SP {
@@ -415,9 +424,13 @@ export interface SP {
   energy: number;
   fouls: number;
   on: boolean;
-  out: 0 | 1 | 2; // 0 ok, 1 fouled out, 2 injured or held out (rest)
-  /** Game second he fouled out. */
+  out: 0 | 1 | 2 | 3; // 0 ok, 1 fouled out, 2 injured or held out (rest, a suspension), 3 ejected
+  /** Game second he fouled out (or was ejected). */
   outAt?: number;
+  /** Ejected: for two technicals, or a Flagrant 2. */
+  ej?: 'tech' | 'flagrant';
+  /** Temperament (0..1, see discipline.ts): how likely he is to draw a technical or foul hard. */
+  temper: number;
   starter: boolean;
   ftPct: number;
   hot: number;
@@ -515,6 +528,10 @@ export interface ST {
   atoNext: boolean;
   /** Times each set has been run tonight: what the other defense has read of it. */
   setRuns: Map<SetId, number>;
+  /** The head coach's temperament, technicals tonight, and whether he has been ejected. */
+  coachTemper: number;
+  coachT: number;
+  coachOut: boolean;
 }
 
 /**
@@ -541,6 +558,8 @@ export interface SimTeamInput {
   perf?: Record<number, number>;
   /** Players held out (rest / coach decision). */
   rest?: number[];
+  /** Players serving a suspension: held out like a rest, with "Suspended" for the box score. */
+  suspended?: number[];
   /**
    * Injured players who play anyway (game-time decisions on questionable players): dressed instead
    * of sitting out, at K.gameTimeRisk times the usual in-game injury risk. Their form is in `perf`.
@@ -558,6 +577,11 @@ export interface SimOptions {
   injuries?: boolean;
   /** Keep shot locations even when not recording play-by-play. */
   keepShots?: boolean;
+  /**
+   * Technical and flagrant fouls and ejections (on unless false; never in an All-Star Game). Off, a
+   * game plays exactly as it would if nobody were ever whistled for one.
+   */
+  discipline?: boolean;
 }
 
 export interface InGameInjury {
@@ -668,6 +692,16 @@ export class GameSim {
   private fx: Rng;
   /** Conditions both teams share in this game: tempo, shooting night, how tightly it's called. */
   private env: { pace: number; shoot: number; fouls: number };
+  /** Technical and flagrant fouls are called in this game (see SimOptions.discipline). */
+  private discOn: boolean;
+  /**
+   * The discipline stream (technicals, flagrants and their free throws): re-seeded for every
+   * possession from the game's seed and the possession count, like `rng` but never the same, so a
+   * game nobody is whistled for in draws exactly what it would without them (see step()).
+   */
+  private dis: Rng;
+  /** Court steps from a stoppage between possessions (a technical, an ejection): the next possession's log opens with them. */
+  private preSteps: PossStep[] = [];
 
   constructor(home: SimTeamInput, away: SimTeamInput, opts: SimOptions) {
     this.seed = Math.floor(opts.rng.next() * 4294967296) >>> 0;
@@ -680,6 +714,8 @@ export class GameSim {
       fouls: clamp(env.normal(1, K.envFouls), 0.7, 1.3),
     };
     this.opts = opts;
+    this.discOn = opts.discipline !== false && opts.type !== 'allstar';
+    this.dis = new Rng(mix(this.seed, 0x7ffffffc));
     this.record = !!opts.record;
     this.T = [this.makeTeam(home, 0), this.makeTeam(away, 1)];
     for (const t of this.T) {
@@ -710,6 +746,7 @@ export class GameSim {
     const roster = [...input.players].sort((a, b) => (orderIdx.get(a.pid) ?? 99 + (100 - a.ovr)) - (orderIdx.get(b.pid) ?? 99 + (100 - b.ovr)));
     const rest = new Set(input.rest ?? []);
     const play = new Set(input.play ?? []);
+    const suspended = new Set(input.suspended ?? []);
     const players: SP[] = roster.map((p) => {
       const role = tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
       const sp: SP = {
@@ -749,9 +786,14 @@ export class GameSim {
         played: false,
         planMin: 0,
         risk: 1,
+        temper: temperament(p),
       };
       const hurt = !!p.injury && p.injury.gamesRemaining > 0;
-      if (hurt && !play.has(p.pid)) {
+      if (suspended.has(p.pid)) {
+        // (a suspension is served whether or not he could have played)
+        sp.out = 2;
+        sp.dnp = 'Suspended';
+      } else if (hurt && !play.has(p.pid)) {
         sp.out = 2;
         sp.dnp = `Injured (${p.injury!.type})`;
       } else if (rest.has(p.pid)) {
@@ -818,6 +860,9 @@ export class GameSim {
       toWait: null,
       atoNext: false,
       setRuns: new Map(),
+      coachTemper: input.team.coach ? coachTemperament(input.team.coach) : 0,
+      coachT: 0,
+      coachOut: false,
     };
   }
 
@@ -844,14 +889,16 @@ export class GameSim {
       if (lineup.length >= 5) break;
       if (!lineup.includes(p)) lineup.push(p);
     }
-    // extreme emergency: fewer than 5 healthy players -> bring back injured/rested
-    for (const p of t.players) {
-      if (lineup.length >= 5) break;
-      if (!lineup.includes(p)) {
-        p.out = 0;
-        lineup.push(p);
+    // extreme emergency: fewer than 5 healthy players -> bring back injured/rested (a suspended
+    // player only if even that leaves them short)
+    for (const suspended of [false, true])
+      for (const p of t.players) {
+        if (lineup.length >= 5) break;
+        if (!lineup.includes(p) && (p.dnp === 'Suspended') === suspended) {
+          p.out = 0;
+          lineup.push(p);
+        }
       }
-    }
     return lineup.slice(0, 5);
   }
 
@@ -1172,6 +1219,8 @@ export class GameSim {
     // common random numbers: each team's n-th possession draws from its own stream, so two
     // versions of the same game (Tactics Lab comparisons) stay paired possession by possession
     this.rng = new Rng(mix(this.seed, 2 * this.T[this.poss].poss + this.poss));
+    // (and the discipline stream, on counters the possessions' streams never reach)
+    if (this.discOn) this.dis = new Rng(mix(this.seed, 0x40000000 + 2 * this.T[this.poss].poss + this.poss));
     // substitutions at stoppages
     if (this.ctx !== 'steal' && this.ctx !== 'dreb') {
       this.checkSubs(this.T[0]);
@@ -1182,6 +1231,8 @@ export class GameSim {
       this.checkSubs(this.T[1]);
     }
     this.autoTimeouts();
+    // a stoppage (a make, a made last free throw, a dead-ball turnover or side out, a timeout): a temper can flare
+    if (this.discOn && (this.timeoutStep || this.ctx === 'made' || this.ctx === 'ft' || this.ctx === 'deadTO')) this.techCheck(DISC.tech.dead, null);
     this.possession();
     this.takeWaitingTimeouts();
     return !this.over;
@@ -1770,7 +1821,7 @@ export class GameSim {
         clockStart,
         clockEnd: clockStart,
         kind: 'half',
-        steps: this.timeoutStep ? [{ k: 'timeout', t: this.timeoutSide }] : [],
+        steps: this.timeoutStep ? [{ k: 'timeout', t: this.timeoutSide }, ...this.preSteps] : [...this.preSteps],
         pts: 0,
         score: [this.T[0].score, this.T[1].score],
         label: '',
@@ -1784,6 +1835,7 @@ export class GameSim {
       const chased = this.chased(def, off);
       if (chased.length) this.cur.chase = chased.map((p) => p.pid);
     }
+    this.preSteps = [];
     this.timeoutStep = false;
     off.poss++;
     for (const p of off.on) p.b.onPoss++;
@@ -1997,11 +2049,17 @@ export class GameSim {
       const dt = tag === 'hack' ? this.rng.uniform(3, 7) : Math.min(this.clock - 0.3, this.rng.uniform(0.6, 2.4));
       this.tick(Math.max(0.2, dt));
       const fouler = def.on.reduce((a, p) => (p.fouls < a.fouls ? p : a), def.on[0]);
+      // (an intentional foul is hardly ever a flagrant, and nobody argues one)
+      const fl = this.flagrantOn(def, fouler, DISC.flagrant.intentional);
       if (this.record) {
-        this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: fouled.pid });
+        if (!fl) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: fouled.pid });
         this.addPbp(def.side, tag === 'foul_give' ? `${fouler.name} fouls ${fouled.name} (a foul to give).` : `${fouler.name} intentional foul on ${fouled.name}.`, 'foul');
       }
-      this.addFoul(def, fouler);
+      this.addFoul(def, fouler, false);
+      if (fl) {
+        this.flagrant(off, def, fouler, fouled, fl, 'misc');
+        return 'ft';
+      }
       if (tag === 'foul_give') {
         // now and then the whistle comes on the shot: two free throws instead of a worse last look
         if (this.rng.chance(K.ftg.inAct)) {
@@ -3516,11 +3574,17 @@ export class GameSim {
     const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * body;
     if (!this.rng.chance(p)) return false;
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
+    // (contact on a drive can be a flagrant: two free throws and the ball, in the penalty or not)
+    const fl = this.flagrantOn(def, fouler, DISC.flagrant.drive);
     if (this.record) {
       this.addPbp(def.side, `Foul on ${fouler.name}.`, 'foul');
-      this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: handler.pid });
+      if (!fl) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: handler.pid });
     }
     this.addFoul(def, fouler);
+    if (fl) {
+      this.flagrant(off, def, fouler, handler, fl, finish);
+      return true;
+    }
     if (this.bonus(def)) {
       // two free throws (~1.55) instead of the rest of the possession (~1.1)
       const mult = 1 + 0.3 * phys + 0.25 * pr;
@@ -3542,26 +3606,32 @@ export class GameSim {
     return this.rng.weighted([0.6 * c.tpf, 0.4 * md.tpf]) === 0 ? c : md;
   }
 
-  /** A defensive foul: counts toward the team's fouls for the penalty. */
-  private addFoul(def: ST, p: SP) {
+  /** A defensive foul: counts toward the team's fouls for the penalty. `argue`: false for an intentional foul (see chargeFoul). */
+  private addFoul(def: ST, p: SP, argue = true) {
     def.fouls++;
     if (this.clock < 120) def.foulsLast2++;
-    this.chargeFoul(def, p);
+    this.chargeFoul(def, p, argue);
   }
 
-  /** Charge a personal foul (offensive or defensive); the sixth fouls him out on the spot. */
-  private chargeFoul(t: ST, p: SP) {
+  /**
+   * Charge a personal foul (offensive or defensive); the sixth fouls him out on the spot. The whistle
+   * can draw a technical from someone arguing it (more likely he or his coach), unless it was an
+   * intentional foul nobody argues.
+   */
+  private chargeFoul(t: ST, p: SP, argue = true) {
     p.fouls++;
     p.b.pf++;
     t.tot.pf++;
-    if (p.fouls < GAME.foulOut) return;
-    if (p.out === 0) {
-      p.out = 1;
-      p.outAt = this.elapsed;
-      this.addPbp(t.side, `${p.name} has fouled out.`, 'foul');
+    if (p.fouls >= GAME.foulOut) {
+      if (p.out === 0) {
+        p.out = 1;
+        p.outAt = this.elapsed;
+        this.addPbp(t.side, `${p.name} has fouled out.`, 'foul');
+      }
+      // NBA rules: with nobody left to come in he stays on, and every foul from his sixth on adds a technical
+      if (!this.replace(t, p)) this.technical(t);
     }
-    // NBA rules: with nobody left to come in he stays on, and every foul from his sixth on adds a technical
-    if (!this.replace(t, p)) this.technical(t);
+    if (this.discOn && argue) this.techCheck(DISC.tech.whistle, { t, p });
   }
 
   /**
@@ -3571,7 +3641,8 @@ export class GameSim {
    */
   private replace(t: ST, p: SP): boolean {
     let bench = t.players.filter((x) => !x.on && x.out === 0);
-    if (!bench.length && p.out === 2)
+    // (an ejected player can't stay on either)
+    if (!bench.length && p.out !== 1)
       bench = t.players
         .filter((x) => !x.on && x.out === 1)
         .sort((a, b) => (b.outAt ?? 0) - (a.outAt ?? 0))
@@ -3591,14 +3662,24 @@ export class GameSim {
     return true;
   }
 
-  /** Technical foul on `t`: one free throw for the other side's best shooter on the floor; the possession carries on. */
+  /** Technical foul on `t` for a disqualified player who stays in: one free throw for the other side; the possession carries on. */
   private technical(t: ST) {
+    const { sh, made } = this.techFreeThrow(t, this.rng);
+    this.addPbp((1 - t.side) as 0 | 1, `Technical foul on ${t.team.abbrev} (a disqualified player stays in). ${sh.name} ${made ? 'makes' : 'misses'} the free throw.`, 'ft');
+  }
+
+  /**
+   * The free throw a technical on `t` gives the other side, shot by its best free-throw shooter on
+   * the floor (drawn from `rng`): a point for the game, not a team or personal foul, and not part of
+   * the possession it interrupts (the ball and the shot clock stay where they were).
+   */
+  private techFreeThrow(t: ST, rng: Rng): { sh: SP; made: boolean } {
     const opp = this.T[1 - t.side];
     const sh = opp.on.reduce((a, x) => (x.ftPct > a.ftPct ? x : a), opp.on[0]);
     sh.b.fta++;
     opp.tot.fta++;
     for (const x of opp.on) x.b.tFta++;
-    const made = this.rng.chance(sh.ftPct);
+    const made = rng.chance(sh.ftPct);
     if (made) {
       sh.b.ftm++;
       opp.tot.ftm++;
@@ -3612,7 +3693,147 @@ export class GameSim {
       this.inTransition = keep.trans;
       this.possCtxForTOPts = keep.ctx;
     }
-    this.addPbp(opp.side, `Technical foul on ${t.team.abbrev} (a disqualified player stays in). ${sh.name} ${made ? 'makes' : 'misses'} the free throw.`, 'ft');
+    return { sh, made };
+  }
+
+  // ------------------------------------------------------------ discipline
+
+  /** How heated the game is (1: an ordinary moment): both teams' physicality, close and late, the playoffs; garbage time cools it. */
+  private heat(): number {
+    const [h, a] = this.T;
+    const margin = Math.abs(h.score - a.score);
+    let x = 0.6 + 0.4 * ((h.t.defense.physicality + a.t.defense.physicality) / 100);
+    if (this.q >= 4 && this.clock < 300 && margin <= 6) x *= DISC.heat.clutch;
+    if (this.opts.type === 'playoffs') x *= DISC.heat.playoffs;
+    if (this.q >= 4 && (margin >= 25 || this.inGarbageTime(h) || this.inGarbageTime(a))) x *= DISC.heat.garbage;
+    return x;
+  }
+
+  /** Whether one of `t`'s players can leave the game for good now and someone take his place: a team never plays four. */
+  private canLeave(t: ST): boolean {
+    return t.players.some((x) => !x.on && (x.out === 0 || x.out === 1));
+  }
+
+  /** How frustrated `t` is: trailing big, or in the penalty. */
+  private frustration(t: ST): number {
+    const f = DISC.frustrated;
+    return (this.T[1 - t.side].score - t.score >= f.down ? f.mult : 1) * (this.bonus(t) ? f.penaltyMult : 1);
+  }
+
+  /**
+   * Now and then a stoppage (`rate`: a dead ball, or a whistle on `argue.p` of `argue.t`, which he and
+   * his coach argue more) ends in a technical foul: on one of the players on the floor who have played
+   * (a hothead far more often, more in foul trouble or a heated game; one with a technical already
+   * only when someone can take his place, and at a whistle only on the team it went against, so a
+   * player about to shoot free throws is never sent off first) or on a coach.
+   */
+  private techCheck(rate: number, argue: { t: ST; p: SP } | null) {
+    // (every stoppage asks, so the weights are summed without building anything, and only gone
+    // through again to find who it was on)
+    let total = 0;
+    for (const t of this.T) {
+      const frus = this.frustration(t);
+      for (const p of t.on) total += this.techW(t, p, frus, argue);
+      total += this.coachTechW(t, frus, argue);
+    }
+    if (!this.dis.chance(rate * this.heat() * total)) return;
+    let r = this.dis.next() * total;
+    for (const t of this.T) {
+      const frus = this.frustration(t);
+      for (const p of t.on) {
+        const w = this.techW(t, p, frus, argue);
+        if (w > 0 && (r -= w) < 0) return this.techFoul(t, p);
+      }
+      const w = this.coachTechW(t, frus, argue);
+      if (w > 0 && (r -= w) < 0) return this.techFoul(t, null);
+    }
+  }
+
+  /** How likely `p` of `t` (frustrated `frus`) is to be the one at a stoppage (see techCheck): 0 for one who can't be. */
+  private techW(t: ST, p: SP, frus: number, argue: { t: ST; p: SP } | null): number {
+    if (p.out !== 0 || p.b.sec <= 0 || (p.b.tf && ((argue && argue.t !== t) || !this.canLeave(t)))) return 0;
+    const trouble = p.fouls >= DISC.frustrated.fouls ? DISC.frustrated.foulMult : 1;
+    return techWeight(p.temper) * frus * trouble * (p.b.tf ? DISC.again : 1) * (argue?.p === p ? DISC.tech.fouler : 1);
+  }
+
+  /** The same for `t`'s coach, until he's ejected. */
+  private coachTechW(t: ST, frus: number, argue: { t: ST; p: SP } | null): number {
+    return t.coachOut ? 0 : DISC.tech.coach * techWeight(t.coachTemper) * frus * (argue?.t === t ? DISC.tech.coachArgue : 1);
+  }
+
+  /** A technical foul on `p` of `t` (null: its coach): one free throw for the other side; a second one ejects him. */
+  private techFoul(t: ST, p: SP | null) {
+    const n = p ? ++p.b.tf : ++t.coachT;
+    const coach = `${t.team.abbrev} coach ${t.team.coach?.name ?? ''}`.trim();
+    this.addPbp(t.side, `Technical foul on ${p ? p.full : coach} (${ordinal(n)}).`, 'foul');
+    const { sh, made } = this.techFreeThrow(t, this.dis);
+    const opp = (1 - t.side) as 0 | 1;
+    this.addPbp(opp, `${sh.name} ${made ? 'makes' : 'misses'} the technical free throw.`, 'ft');
+    if (this.record) this.logStep({ k: 'tech', pid: p?.pid, pid2: sh.pid, t: opp, made, v: made ? 1 : 0 });
+    if (n < 2) return;
+    if (p) this.eject(t, p, 'tech');
+    else {
+      // the game goes on without him: his assistant runs the bench
+      t.coachOut = true;
+      this.addPbp(t.side, `${coach} has been ejected (2 technicals).`, 'other');
+      if (this.record) this.logStep({ k: 'eject', t: t.side });
+    }
+  }
+
+  /** `p` of `t` is ejected: he leaves at once (replaced as a player who fouled out is) and can't come back. */
+  private eject(t: ST, p: SP, why: 'tech' | 'flagrant') {
+    const on = p.on;
+    p.ej = why;
+    p.out = 3;
+    p.outAt = this.elapsed;
+    this.addPbp(t.side, `${p.full} has been ejected (${why === 'tech' ? '2 technicals' : 'Flagrant 2'}).`, 'other');
+    if (this.record) this.logStep({ k: 'eject', pid: p.pid, t: t.side });
+    if (on) this.replace(t, p);
+  }
+
+  /**
+   * Whether a foul by `p` of `def` is a flagrant (0: no, 1 or 2): hard contact, more often from a
+   * hothead and a physical defense, `mult` for how hard (1 for a shot at the rim). A Flagrant 2 only
+   * when someone can take his place (else it's called a Flagrant 1).
+   */
+  private flagrantOn(def: ST, p: SP, mult: number): 0 | 1 | 2 {
+    if (!this.discOn) return 0;
+    const phys = 1 + 0.5 * ((def.t.defense.physicality - 50) / 50);
+    const w = flagrantWeight(p.temper);
+    const pr = DISC.flagrant.rim * mult * w.f1 * phys * (this.opts.type === 'playoffs' ? DISC.heat.playoffs : 1);
+    if (!this.dis.chance(pr)) return 0;
+    return this.canLeave(def) && this.dis.chance(DISC.flagrant.f2 * w.f2) ? 2 : 1;
+  }
+
+  /**
+   * A flagrant foul by `fouler` on `sh` (charged by the caller as a personal and team foul): two free
+   * throws whatever became of the shot, then the fouled team's ball out of bounds (the trip goes on); a
+   * Flagrant 2 ejects him first.
+   */
+  private flagrant(off: ST, def: ST, fouler: SP, sh: SP, kind: 1 | 2, finish: FinishType) {
+    // (a Flagrant 2 sends him off, so it stays one only while someone can still take his place: the
+    // whistle may have used up the bench since it was called, with a foul-out or a second technical)
+    if (kind === 2 && fouler.on && fouler.out !== 3 && !this.canLeave(def)) kind = 1;
+    if (kind === 1) fouler.b.f1++;
+    else fouler.b.f2++;
+    this.addPbp(def.side, `Flagrant foul ${kind} on ${fouler.full}: two free throws and possession.`, 'foul');
+    if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid, d: `flagrant${kind}` });
+    // (a second technical arguing it may have sent him off already)
+    if (kind === 2 && fouler.out !== 3) this.eject(def, fouler, 'flagrant');
+    this.freeThrows(off, def, sh, 2, finish, true);
+    if (this.clock <= 0.05) {
+      this.clockOut(off);
+      return;
+    }
+    // (the court sets the offense up again for the inbound)
+    if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
+    this.halfCourt(off, def, DISC.flagrantShotClock, this.lateMode(off, def), this.paceF(off));
+  }
+
+  /** A beat for the court: in the possession being played, or (at a stoppage between possessions) the next one's first. */
+  private logStep(st: PossStep) {
+    if (this.cur) this.cur.steps.push(st);
+    else this.preSteps.push(st);
   }
 
   private turnover(off: ST, def: ST, handler: SP, stealer: SP | null, finish: FinishType | 'press') {
@@ -3806,11 +4027,19 @@ export class GameSim {
       sh.hot = Math.min(5, sh.hot + 1);
       this.score(off, def, sh, value);
       const fouler = fouled ? this.shootingFouler(def, c, sh) : null;
-      if (this.record) this.addPbp(off.side, `${sh.name} ${desc} — good${ast ? ` (${ast.name} assist)` : ''}${fouler ? `, and one! Foul on ${fouler.name}.` : '.'}`, 'make');
+      // hard contact at the rim (or in the paint) can be a flagrant: the basket counts, two free throws and the ball
+      const fl = fouler && (zone === 'rim' || zone === 'paint') ? this.flagrantOn(def, fouler, zone === 'rim' ? 1 : DISC.flagrant.paint) : 0;
+      if (this.record)
+        this.addPbp(
+          off.side,
+          `${sh.name} ${desc} — good${ast ? ` (${ast.name} assist)` : ''}${fouler ? (fl ? `, fouled by ${fouler.name}.` : `, and one! Foul on ${fouler.name}.`) : '.'}`,
+          'make',
+        );
       if (fouler) {
-        if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
+        if (this.record && !fl) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
         this.addFoul(def, fouler);
-        this.freeThrows(off, def, sh, 1, s.finish);
+        if (fl) this.flagrant(off, def, fouler, sh, fl, s.finish);
+        else this.freeThrows(off, def, sh, 1, s.finish);
         return;
       }
       this.ctx = 'made';
@@ -3820,10 +4049,12 @@ export class GameSim {
     sh.hot = Math.max(0, sh.hot - 1);
     if (fouled) {
       const fouler = this.shootingFouler(def, c, sh);
+      const fl = zone === 'rim' || zone === 'paint' ? this.flagrantOn(def, fouler, zone === 'rim' ? 1 : DISC.flagrant.paint) : 0;
       if (this.record) this.addPbp(off.side, `${sh.name} fouled on ${desc} by ${fouler.name}.`, 'foul');
+      if (this.record && !fl) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
       this.addFoul(def, fouler);
-      if (this.record) this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: sh.pid });
-      this.freeThrows(off, def, sh, value, s.finish);
+      if (fl) this.flagrant(off, def, fouler, sh, fl, s.finish);
+      else this.freeThrows(off, def, sh, value, s.finish);
       return;
     }
     if (blocker) {
@@ -3928,8 +4159,8 @@ export class GameSim {
     }
   }
 
-  /** Free throws, booked to the play type that drew the foul (a missed last one included). */
-  private freeThrows(off: ST, def: ST, sh: SP, n: number, finish: FinishType) {
+  /** Free throws, booked to the play type that drew the foul (a missed last one included). `keep`: the trip goes on after them (a flagrant's). */
+  private freeThrows(off: ST, def: ST, sh: SP, n: number, finish: FinishType, keep = false) {
     this.possFinish = finish;
     if (this.cur && !this.cur.finish) this.cur.finish = finish;
     let made = 0;
@@ -3952,6 +4183,7 @@ export class GameSim {
       this.cur!.steps.push({ k: 'ft', pid: sh.pid, made: lastMade, v: made, n });
       this.addPbp(off.side, `${sh.name} ${made}/${n} from the line.`, 'ft');
     }
+    if (keep) return;
     if (lastMade) {
       this.ctx = 'ft';
       this.finishPoss(off, finish);
@@ -4153,6 +4385,11 @@ export class GameSim {
         pm: p.b.pm,
         energy: Math.round(p.energy * 100) / 100,
         dnp: p.played ? undefined : (p.dnp ?? "Coach's decision"),
+        // (only a player whistled for one has them: nobody else's line changes shape)
+        ...(p.b.tf ? { tf: p.b.tf } : {}),
+        ...(p.b.f1 ? { f1: p.b.f1 } : {}),
+        ...(p.b.f2 ? { f2: p.b.f2 } : {}),
+        ...(p.ej ? { ej: p.ej } : {}),
       }));
       return {
         tid: t.tid,
@@ -4164,6 +4401,8 @@ export class GameSim {
         timeoutsLeft: t.timeouts,
         playTypes: t.pt,
         extra: { ...t.ex },
+        ...(t.coachT ? { coachTf: t.coachT } : {}),
+        ...(t.coachOut ? { coachEj: true as const } : {}),
       };
     };
     // player of the game: game score

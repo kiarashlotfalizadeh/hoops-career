@@ -1,7 +1,7 @@
 // Keys to the game: three numbers for tonight read from the games before it, the same on the
 // pre-game screen, in the live game and in the stored result, graded with the result.
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
 import { clearLive, prepareLive } from '../../state/live';
 import { migrate } from '../../state/persistence';
@@ -32,7 +32,12 @@ describe('keys to the game', () => {
   });
 
   it('read the season once there are games, stay put through the day, and are graded with the result as the preview set them', () => {
+    // (created at a fixed time: the league's id, which seeds some of its own draws from opening night on,
+    // and so the month of games before this one are the same every run)
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-01T12:00:00Z'));
     const l = testLeague('keys-season', 5);
+    vi.useRealTimers();
     for (let i = 0; i < 30; i++) simDay(l);
     toGameDay(l);
     const g = userGameOnDay(l, l.day)!;

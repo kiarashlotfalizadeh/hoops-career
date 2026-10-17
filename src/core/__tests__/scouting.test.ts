@@ -107,6 +107,9 @@ describe('scouting data', () => {
     // what was played becomes last season, and the new one hasn't started
     const S = m.season;
     for (const t of m.teams) for (const s of t.seasons) s.season = S - 1;
+    // (the seed's real season is that one too: its lines go, or they'd stand in front of the played ones and their
+    // on-court numbers, as they never do in a real second season)
+    for (const p of Object.values(m.players)) p.stats = p.stats.filter((s) => !(s.real && s.season === S - 1));
     for (const p of Object.values(m.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
     for (const g of m.games) g.season = S - 1;
     for (const t of m.teams) teamSeason(t, S);

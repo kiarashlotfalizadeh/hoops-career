@@ -138,8 +138,8 @@ const FT_DEF: Pt[] = [
 
 /**
  * Keyframes for one possession. `before` is the score it started from: its log keeps only the score
- * it ended on and its own points, which leave out a technical free throw (a disqualified player
- * staying on), so working back from those is only right when no technical was made. `teams` are the
+ * it ended on and its own points, which leave out technical free throws, so working back from those
+ * is only right when no technical was made. `teams` are the
  * [home, away] abbreviations, to say whose timeout it is.
  */
 export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number], teams?: [string, string], name?: (pid: number) => string): Script {
@@ -223,7 +223,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
     stepFrames(st);
     prev = st;
   }
-  // a made technical free throw has no step of its own: the court ends on the scoreboard's score anyway
+  // a disqualified player's technical free throw has no step of its own: the court ends on the scoreboard's score anyway
   if (score[0] !== log.score[0] || score[1] !== log.score[1]) snap(600, { flash: { text: 'TECH FT', kind: 'make', x: 0, y: 9 }, score: [...log.score] });
   if (!frames.length || frames.length === 1) snap(500);
   return { off, oPids, dPids, frames, label: log.label, clockStart: log.clockStart, clockEnd: log.clockEnd, q: log.q, ...(moment && { moment }) };
@@ -482,6 +482,12 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         break;
       }
       case 'foul': {
+        // a flagrant: two shots and the ball, whatever became of the shot
+        if (st.d === 'flagrant1' || st.d === 'flagrant2') {
+          const n = st.d === 'flagrant1' ? 1 : 2;
+          snap(800, { flash: { text: `FLAGRANT ${n}`, kind: 'foul', x: ball.x, y: ball.y + 3 }, ...cap(`Flagrant foul ${n} on ${N(st.pid)}: two shots and the ball`) });
+          break;
+        }
         // fouled on a make: and one
         const andOne = prev?.k === 'shot' && !!prev.made;
         snap(380, {
@@ -509,6 +515,27 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         });
         break;
       }
+      case 'tech': {
+        // the whistle, then the other side's free throw (the ball and the shot clock stay where they were)
+        const t = st.t ?? ((1 - off) as 0 | 1);
+        snap(750, {
+          flash: { text: 'TECHNICAL', kind: 'foul', x: 0, y: 24 },
+          ...cap(st.pid !== undefined ? `Technical foul on ${N(st.pid)}` : `Technical on the ${abbrev((1 - t) as 0 | 1)} bench`),
+        });
+        score[t] += st.v ?? 0;
+        snap(650, {
+          flash: { text: st.made ? 'TECH FT' : 'MISS', kind: st.made ? 'make' : 'miss', x: 0, y: 9 },
+          score: [...score] as [number, number],
+          ...cap(`${N(st.pid2)} ${st.made ? 'makes' : 'misses'} the technical free throw`),
+        });
+        break;
+      }
+      case 'eject':
+        snap(950, {
+          flash: { text: 'EJECTED', kind: 'foul', x: 0, y: 24 },
+          ...cap(st.pid !== undefined ? `${N(st.pid)} is ejected!` : `The ${abbrev(st.t ?? off)} coach is ejected!`),
+        });
+        break;
       case 'timeout':
         // the one flash a timeout gets, naming the team that called it
         snap(900, {

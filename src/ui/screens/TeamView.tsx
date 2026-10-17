@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, BarChart3, ChevronRight, ClipboardList, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
+import { suspensionLabel } from '../../core/availability';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted, teamName } from '../../core/league/helpers';
 import { pickLabel, pickTermsNote } from '../../core/league/trades';
@@ -277,6 +278,11 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
         </div>
         {/* what's wrong leads the details: the name line has no room for it on a phone */}
         <div className="tiny dim ellipsis">
+          {p.suspension && (
+            <span className="bad" style={{ fontWeight: 700 }}>
+              {suspensionLabel(p)} ·{' '}
+            </span>
+          )}
           {p.injury && (
             <span className="bad" style={{ fontWeight: 700 }}>
               Out {p.injury.gamesRemaining}g ({p.injury.type}) ·{' '}

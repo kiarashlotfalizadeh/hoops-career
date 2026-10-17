@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ClipboardList,
   Flame,
+  Gavel,
   HeartPulse,
   Hourglass,
   ListOrdered,
@@ -37,11 +38,12 @@ export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: s
   milestone: { label: 'Milestones', icon: Flame, color: 'var(--warn)' },
   record: { label: 'Records', icon: BookOpen, color: 'var(--tier-elite)' },
   coach: { label: 'Coaches', icon: ClipboardList, color: 'var(--info)' },
+  discipline: { label: 'Discipline', icon: Gavel, color: 'var(--bad)' },
   retire: { label: 'Retirements', icon: Hourglass, color: 'var(--text-2)' },
   general: { label: 'General', icon: Newspaper, color: 'var(--text-2)' },
 };
 
-const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'award', 'draft', 'milestone', 'record', 'coach', 'release', 'retire', 'general'];
+const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'discipline', 'award', 'draft', 'milestone', 'record', 'coach', 'release', 'retire', 'general'];
 const PAGE = 50;
 
 export function NewsTab({ league }: { league: League }) {

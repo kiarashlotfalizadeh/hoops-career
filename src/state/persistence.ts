@@ -480,6 +480,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateCoaches(x);
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
+  migrateDiscipline(x);
   x.version = SAVE_VERSION;
   return x;
 }
@@ -619,6 +620,37 @@ function coachesIntact(x: League, reg: unknown): boolean {
     Array.isArray(r.stints) &&
     r.stints.every(stint);
   return Array.isArray(reg) && reg.every(coach) && registryProblems(x).length === 0;
+}
+
+/**
+ * Technical and flagrant fouls (all optional, see league/discipline.ts): a damaged suspension goes
+ * (he plays his team's next game), and so does a season count or a box-score mark out of shape: a
+ * count is a whole number (at least one in a box score, where none is no mark), an ejection is for
+ * two technicals or a Flagrant 2, and a coach's ejection mark is `true`.
+ */
+function migrateDiscipline(x: League) {
+  const count = (v: unknown, min = 0) => int(v) && v >= min && v <= 999;
+  for (const p of Object.values(x.players)) {
+    const s = p.suspension as unknown;
+    if (s !== undefined && !(obj(s) && count(s.games, 1) && str(s.why) && (s.why as string).length <= 200)) delete p.suspension;
+    for (const st of p.stats) {
+      if (!obj(st)) continue;
+      if (st.tf !== undefined && !count(st.tf)) delete st.tf;
+      if (st.fp !== undefined && !count(st.fp)) delete st.fp;
+    }
+  }
+  for (const g of x.games) {
+    for (const tb of [g.home, g.away]) {
+      if (tb.coachTf !== undefined && !count(tb.coachTf, 1)) delete tb.coachTf;
+      if (tb.coachEj !== undefined && tb.coachEj !== true) delete tb.coachEj;
+      if (!Array.isArray(tb.players)) continue;
+      for (const b of tb.players) {
+        if (!obj(b)) continue;
+        for (const k of ['tf', 'f1', 'f2'] as const) if (b[k] !== undefined && !count(b[k], 1)) delete b[k];
+        if (b.ej !== undefined && b.ej !== 'tech' && b.ej !== 'flagrant') delete b.ej;
+      }
+    }
+  }
 }
 
 /** The latest live game's highlights, in shape for the court: possessions with their fives, steps and scores. */

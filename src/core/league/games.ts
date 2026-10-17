@@ -19,6 +19,8 @@ import { gameKeys, gradeKey } from '../analysis/keys';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
+import { applyDiscipline } from './discipline';
+import { isOut, suspendedGames } from '../availability';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -44,7 +46,7 @@ function playedYesterday(league: League, tid: number, day: number): boolean {
  */
 function benchTwoWays(rot: Rotation, players: Player[]) {
   const twoWay = new Set(players.filter((p) => p.contract.twoWay).map((p) => p.pid));
-  if (!twoWay.size || players.filter((p) => !p.contract.twoWay && !p.injury).length < 9) return;
+  if (!twoWay.size || players.filter((p) => !p.contract.twoWay && !isOut(p)).length < 9) return;
   rot.order = [...rot.order.filter((pid) => !twoWay.has(pid)), ...rot.order.filter((pid) => twoWay.has(pid))];
   let freed = [...twoWay].reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
   for (const pid of twoWay) rot.minutes[pid] = 0;
@@ -132,6 +134,9 @@ export function buildSimInput(
       }
     }
   }
+  // a suspension is served in any of his team's games but the All-Star Game
+  const suspended = type === 'allstar' ? [] : players.filter((p) => suspendedGames(p) > 0).map((p) => p.pid);
+  const out = suspended.length ? { suspended } : {};
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
   // practice intensity: intense camps build skills but add wear and injury risk
@@ -148,7 +153,7 @@ export function buildSimInput(
       rotation = autoRotation(ready, team.rotation);
       benchTwoWays(rotation, ready);
     }
-    const extra = play.length ? { play } : {};
+    const extra = { ...(play.length ? { play } : {}), ...out };
     // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
     if (opp !== undefined && planFor(league, opp, game)) {
       const tactics = effectiveTactics(league, opp, game);
@@ -162,8 +167,8 @@ export function buildSimInput(
   const tactics = userPlans ? withoutCoachPlans(t) : t;
   // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
   const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
-  if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
-  return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
+  if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true, ...out };
+  return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true, ...out };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {
@@ -370,6 +375,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     updateHype(home, homeWon, playoffs);
     updateHype(away, !homeWon, playoffs);
   }
+  // technicals, flagrants, ejections and suspensions (read from every line that dressed, so before the trim below)
+  applyDiscipline(league, g, res);
   // storage policy: keep detail only for the user's games; a season of other games keeps only
   // the players who got on the floor (DNP lines were a fifth of the save mid-season)
   const userGame = g.home === league.userTid || g.away === league.userTid;
