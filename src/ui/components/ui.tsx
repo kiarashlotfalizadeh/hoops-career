@@ -490,7 +490,7 @@ export function Help({ title, children }: { title: string; children: ReactNode }
         <HelpCircle size={14} />
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={title}>
-        <div className="col" style={{ gap: 10, color: 'var(--text-2)' }}>
+        <div className="col help-body" style={{ gap: 10, color: 'var(--text-2)' }}>
           {children}
         </div>
         <button className="btn block" style={{ marginTop: 16 }} onClick={() => setOpen(false)}>

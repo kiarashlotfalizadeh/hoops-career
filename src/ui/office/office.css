@@ -1203,11 +1203,7 @@ table.stats.fo-contracts tr.clickable:active td {
     display: none;
   }
 }
-/* while a sim runs its progress shows where the Continue bar is, and a dock rides above it (theme.css
-   hides the Continue bar while a dock shows; the busy one stays) */
-body:has(.fo-dock) .continue.is-busy {
-  display: flex;
-}
+/* while a sim runs its progress shows where the Continue bar is (theme.css keeps the busy one), and the dock rides above it */
 body:has(.simbar) .fo-dock {
   bottom: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 16px);
 }

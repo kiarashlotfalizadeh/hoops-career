@@ -1615,7 +1615,8 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   gap: 10px;
   animation: cont-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-body:has(.dockbar, .fo-dock, .gd-dock) .continue {
+/* (a running sim's progress still shows: the docks ride above it) */
+body:has(.dockbar, .fo-dock, .gd-dock) .continue:not(.is-busy) {
   display: none;
 }
 
@@ -1722,6 +1723,11 @@ body:has(.dockbar, .fo-dock, .gd-dock) .continue {
   content: '';
   position: absolute;
   inset: -10px;
+}
+/* a Help sheet's paragraphs and lists: the sheet's gaps space them, not their own margins */
+.help-body > p,
+.help-body > ul {
+  margin: 0;
 }
 /* "More" under a short line: the rest of an explanation, one tap away */
 .more {
