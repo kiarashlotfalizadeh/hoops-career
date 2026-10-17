@@ -12,7 +12,7 @@ import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Empty, Ovr } from '../components/ui';
-import { STRATEGY_META, capSeason, capTag, fmtM, fmtMs, payTone } from './common';
+import { STRATEGY_META, capSeason, fmtM, fmtMs } from './common';
 import { continueDraft } from '../../core/league/season';
 
 const KIND_LABEL: Record<Proposal['kind'], string> = { buy: 'Wants your player', sell: 'Selling', dump: 'Salary dump', pick: 'Wants your pick' };
@@ -98,9 +98,9 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
         <Side league={league} title="You get" side={p.offer.b} />
       </div>
       <div className="tiny dim num" style={{ marginTop: 8 }}>
-        Salary out {fmtM(out)} · in {fmtM(inc)} · payroll after <b style={{ color: payTone(cap, after) }}>{fmtM(after)}</b> (
-        {after > cap.luxuryTax ? capTag(cap, after).label.toLowerCase() : after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}
-        )
+        Salary out {fmtM(out)} · in {fmtM(inc)} · payroll after{' '}
+        <b style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>{fmtM(after)}</b> (
+        {after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`})
       </div>
       {error && (
         <div className="fo-callout warn" style={{ marginTop: 8 }}>

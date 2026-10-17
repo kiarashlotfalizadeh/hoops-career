@@ -19,7 +19,6 @@ import { gameKeys, gradeKey } from '../analysis/keys';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
-import { twoWayGamesNote, twoWayLimitReached } from './contracts';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -59,9 +58,6 @@ function benchTwoWays(rot: Rotation, players: Player[]) {
   }
   rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
-
-/** The box-score note of a two-way player held out by his games limit (see twoWayLimitReached). */
-export const TWO_WAY_LIMIT_NOTE = 'Two-way limit';
 
 function bestPresetsChanged(team: Team, players: Player[]): boolean {
   const best = rankedPresets(team, players);
@@ -136,16 +132,6 @@ export function buildSimInput(
       }
     }
   }
-  // a two-way player who has played his 50 regular-season games sits until he's converted, on every
-  // team, whatever the rotation says
-  const held: Record<number, string> = {};
-  if (type === 'regular')
-    for (const p of players)
-      if (twoWayLimitReached(league, p) && !rest.includes(p.pid)) {
-        rest.push(p.pid);
-        held[p.pid] = TWO_WAY_LIMIT_NOTE;
-      }
-  const dnp = Object.keys(held).length ? { dnp: held } : {};
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
   // practice intensity: intense camps build skills but add wear and injury risk
@@ -162,7 +148,7 @@ export function buildSimInput(
       rotation = autoRotation(ready, team.rotation);
       benchTwoWays(rotation, ready);
     }
-    const extra = { ...(play.length ? { play } : {}), ...dnp };
+    const extra = play.length ? { play } : {};
     // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
     if (opp !== undefined && planFor(league, opp, game)) {
       const tactics = effectiveTactics(league, opp, game);
@@ -176,8 +162,8 @@ export function buildSimInput(
   const tactics = userPlans ? withoutCoachPlans(t) : t;
   // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
   const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
-  if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true, ...dnp };
-  return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true, ...dnp };
+  if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
+  return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
 }
 
 function addTotals(a: TeamTotals, b: TeamTotals) {
@@ -348,8 +334,6 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
       s.teamFga += b.tFga;
       s.teamFta += b.tFta;
       s.teamTov += b.tTov;
-      // a game more against a two-way deal's limit: the user hears at 40 and 50
-      if (g.type === 'regular') twoWayGamesNote(league, p);
     }
     // rested players
     for (const t of [home, away]) {

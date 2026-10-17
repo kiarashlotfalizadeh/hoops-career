@@ -5,11 +5,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, Minus, Plus } from 'lucide-react';
 import type { Player, TalkTerms } from '../../core/types';
-import { seasonLabel } from '../../core/constants';
+import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName } from '../../core/league/helpers';
 import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract } from '../../core/league/contracts';
-import { luxuryTaxBill, taxRepeater } from '../../core/league/finances';
 import { type OfferResult, askFor, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
@@ -41,9 +40,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const off = !!talkState(league, p, 'extend').closed;
   const pay = payroll(league, tid, season);
   const after = pay + amount;
-  // by the luxury tax's brackets (at the repeater rates if the team would pay them that season)
-  const taxBill = luxuryTaxBill(league, tid, after, season);
-  const repeater = taxRepeater(league, tid, season);
+  const taxBill = after > cap.luxuryTax ? (after - cap.luxuryTax) * CAP.taxRate : 0;
   // as signed: each season at least his minimum
   const total = makeContract(league, amount, years, season, p.experience).salaries.reduce((a, b) => a + b, 0);
 
@@ -186,14 +183,13 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           <div className="small bold">{seasonLabel(season)} payroll</div>
           <span className="tag info">Extension</span>
         </div>
-        <CapBar pay={pay} lines={cap} add={amount} />
+        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
         <div className="tiny dim">
           What's committed for {seasonLabel(season)} so far, plus his extension against that season's cap. Like a re-signing, it can take you over the cap.
           {taxBill > 0 ? (
             <span className="bad">
               {' '}
-              It puts you {fmtM(after - cap.luxuryTax)} over the tax line{after > cap.apron2 ? ' and past the second apron' : after > cap.apron1 ? ' and past the first apron' : ''}
-              : about {fmtM(taxBill)} in luxury tax{repeater ? ' at repeater rates' : ''} as things stand.
+              It puts you {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in luxury tax as things stand.
             </span>
           ) : after > cap.salaryCap ? (
             ' You would be over the cap that season, so free agents only on minimum deals or with an exception.'

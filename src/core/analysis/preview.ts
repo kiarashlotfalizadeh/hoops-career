@@ -375,10 +375,8 @@ export function matchupPreview(league: League, gid: number): MatchupPreview | nu
   const sim = new GameSim(homeIn, awayIn, { rng: new Rng(1), type: g.type, injuries: false, neutral });
   const ratings = leagueRatings(league);
   const rows = new Map(standings(league).map((r) => [r.tid, r]));
-  // (a two-way player held out by his games limit isn't resting)
-  const resting = (input: typeof homeIn) => (input.rest ?? []).filter((pid) => !input.dnp?.[pid]);
-  const sHome = side(league, sim, 0, g, resting(homeIn), ratings, rows.get(g.home));
-  const sAway = side(league, sim, 1, g, resting(awayIn), ratings, rows.get(g.away));
+  const sHome = side(league, sim, 0, g, homeIn.rest ?? [], ratings, rows.get(g.home));
+  const sAway = side(league, sim, 1, g, awayIn.rest ?? [], ratings, rows.get(g.away));
   const [us, them] = usHome ? [sHome, sAway] : [sAway, sHome];
   const usSide: 0 | 1 = usHome ? 0 : 1;
   const usT = sim.T[usSide];

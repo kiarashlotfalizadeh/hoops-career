@@ -8,12 +8,10 @@ import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, freeAgents, payroll, player
 import {
   EXCEPTIONS,
   EXCEPTION_ORDER,
-  TWO_WAY_GAMES,
   WAIVER_DAYS,
   askingContract,
   claimBlockedReason,
   exceptionAmount,
-  isException,
   onWaivers,
   teamAppeal,
   twoWaySalary,
@@ -32,7 +30,7 @@ import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, tenDayPay, tenDay
 import { contractExp, playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Bar, Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Sheet } from '../components/ui';
-import { Callout, OvrPot, appealInfo, capSeason, fmtM, hardCapLabel, playerMeta, shortSeason } from '../office/common';
+import { Callout, OvrPot, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { MyRfas, MySheets, rfaTag } from '../office/RfaPanel';
 import { TenDaySheet } from '../office/TenDayPanel';
@@ -57,7 +55,6 @@ export default function FreeAgents() {
   const exceptions = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, s) }))
     .filter((x) => x.room > 0)
     .sort((a, b) => b.room - a.room);
-  const hard = hardCapLabel(league, tid, s);
   // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;
   const max = rosterMaxNow(league);
@@ -203,18 +200,15 @@ export default function FreeAgents() {
               .
             </p>
             <p style={{ margin: 0 }}>
-              <b>Minimum deals.</b> Over the cap, you can still sign players for their minimum (a hard cap aside, see below): {fmtM(cap.minContract, 2)} in a player's first three
-              seasons, {fmtM(cap.vetMin, 2)} after. A minimum deal signed for the coming season isn't guaranteed until opening night.
+              <b>Minimum deals.</b> Over the cap, you can still sign players for their minimum: {fmtM(cap.minContract, 2)} in a player's first three seasons, {fmtM(cap.vetMin, 2)}{' '}
+              after. A minimum deal signed for the coming season isn't guaranteed until opening night.
             </p>
             <p style={{ margin: 0 }}>
               <b>Exceptions.</b> Over the cap, each pays for one signing a season. The <b>mid-level</b>: up to {fmtM(exceptionAmount(league, 'mle', s))} for up to{' '}
-              {EXCEPTIONS.mle.years} years, if the signing keeps you at or under the first apron ({fmtM(cap.apron1)}). The <b>taxpayer mid-level</b>, for a signing the mid-level
-              would take past the first apron: up to {fmtM(exceptionAmount(league, 'tmle', s))} for up to {EXCEPTIONS.tmle.years} years, staying at or under the second apron (
-              {fmtM(cap.apron2)}); a team gets one mid-level a season. The <b>bi-annual</b>: up to {fmtM(exceptionAmount(league, 'bae', s))} for up to {EXCEPTIONS.bae.years} years,
-              under the first apron too, and not two seasons running. The mid-level and the bi-annual hard-cap you at the first apron for the season, the taxpayer mid-level at the
-              second: no trade or signing can take you past it, a minimum deal included, unless it gets you back to {CAP.rosterMin} healthy players. Sign anyone with{' '}
-              <b>cap space</b> and the mid-levels are gone for the season: you get the <b>room exception</b> instead, up to {fmtM(exceptionAmount(league, 'room', s))} for up to{' '}
-              {EXCEPTIONS.room.years} years (a team uses the room exception or the bi-annual in a season, not both).{' '}
+              {EXCEPTIONS.mle.years} years, if the signing keeps you under the tax line ({fmtM(cap.luxuryTax)}). The <b>bi-annual</b>: up to{' '}
+              {fmtM(exceptionAmount(league, 'bae', s))} for up to {EXCEPTIONS.bae.years} years, under the tax line too, and not two seasons running. After either, trades can't take
+              you past the tax line that season. Sign anyone with <b>cap space</b> and the mid-level is gone for the season: you get the <b>room exception</b> instead, up to{' '}
+              {fmtM(exceptionAmount(league, 'room', s))} for up to {EXCEPTIONS.room.years} years (a team uses the room exception or the bi-annual in a season, not both).{' '}
               {exceptions.length ? `Open to you now: ${exceptions.map((x) => `${EXCEPTIONS[x.k].name} up to ${fmtM(x.room)}`).join(', ')}.` : 'None is open to you right now.'}
             </p>
             <p style={{ margin: 0 }}>
@@ -227,14 +221,14 @@ export default function FreeAgents() {
             <p style={{ margin: 0 }}>
               <b>Top free agents.</b> In the summer, players worth 78+ or asking 8% of the cap or more weigh offers: submit one (at least 90% of his ask) and a day or two later he
               picks between yours and other teams' by the money against what he asks each team, how much he likes each team, and the years. Your pending offers hold their cap
-              space, exception and roster spot until he decides; raise or withdraw them any time.
+              space, mid-level and roster spot until he decides; raise or withdraw them any time.
             </p>
             <p style={{ margin: 0 }}>
               <b>Restricted free agents.</b> A young player whose team extended him a qualifying offer can only be signed to an offer sheet: {SHEET_MIN_YEARS} to 5 years, no
-              options, at his asking price, paid for with cap space, an exception or the minimum like any signing. His team has {MATCH_DAYS} days to match it and keep him on
-              exactly those terms; until then the sheet holds your cap room (or exception) and a roster spot. Your own restricted free agents can be re-signed with Bird rights
-              until they sign a sheet, their cap holds stay on your books meanwhile, and free agency stops when another team signs one, so you can match or let him go (a hard cap
-              binds these too). Unsigned when the market closes, a restricted free agent plays a season on his qualifying offer.
+              options, at his asking price, paid for with cap space, the mid-level or the minimum like any signing. His team has {MATCH_DAYS} days to match it and keep him on
+              exactly those terms; until then the sheet holds your cap room (or mid-level) and a roster spot. Your own restricted free agents can be re-signed with Bird rights
+              until they sign a sheet, their cap holds stay on your books meanwhile, and free agency stops when another team signs one, so you can match or let him go. Unsigned
+              when the market closes, a restricted free agent plays a season on his qualifying offer.
             </p>
             <p style={{ margin: 0 }}>
               <b>Timing.</b> The summer market lasts {FA_DAYS} days, and you get the first look: AI teams start signing on day 2, and stars go fast. Unsigned players cut their
@@ -243,16 +237,13 @@ export default function FreeAgents() {
             <p style={{ margin: 0 }}>
               <b>Waivers.</b> A player released during the season with guaranteed money left spends {WAIVER_DAYS} days on waivers. Teams can claim him, the worst record first, and
               take over his contract (with a roster spot, and cap space for this season's salary unless it's a minimum deal), which takes his dead money off his old team's books.
-              The <b>buyout market</b>: a player waived or bought out in the regular season off a deal paying more than the mid-level can't sign with, or be claimed by, a team that
-              would be over the first apron with him.
             </p>
             <p style={{ margin: 0 }}>
               <b>Roster.</b> Up to {OFFSEASON_ROSTER_MAX} players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
             </p>
             <p style={{ margin: 0 }}>
               <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {fmtM(twoWaySalary(league, s), 2)}. They don't use a
-              roster spot or count against the cap, and sit at the end of the bench unless you run short. They play {TWO_WAY_GAMES} regular-season games at most: after that they
-              sit unless converted to a standard contract.
+              roster spot or count against the cap, and sit at the end of the bench unless you run short.
             </p>
             <p style={{ margin: 0 }}>
               <b>10-day contracts.</b> From January 5 to the end of the regular season, a free agent who'd sign for the minimum takes a {TEN_DAYS}-day contract: his minimum
@@ -303,7 +294,6 @@ export default function FreeAgents() {
           sub={exceptions.length ? exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') : `min ${fmtM(cap.vetMin, 2)} always`}
         />
       </div>
-      {hard && <div className="tiny bold warn">{hard}</div>}
 
       {fa && (
         <Card accent className="fo-hero">
@@ -492,7 +482,7 @@ export default function FreeAgents() {
                         <span className="tiny good">Min deal</span>
                       ) : route === 'space' ? (
                         <span className="tiny good">Fits your space</span>
-                      ) : isException(route) ? (
+                      ) : route === 'mle' || route === 'room' || route === 'bae' ? (
                         <span className="tiny good">{EXCEPTIONS[route].short}</span>
                       ) : space > 0 ? (
                         <span className="tiny warn">More than your space</span>

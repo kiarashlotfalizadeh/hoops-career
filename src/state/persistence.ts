@@ -752,9 +752,7 @@ const OPTIONS = new Set(['player', 'team']);
  * salary runs to the season's end like any deal); the 10-day count holds one or two contracts for
  * each real team (an older save's count, for the one team he last signed with, becomes that
  * team's); a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
- * or an exception are whole numbers, and so is the luxury tax a season paid (0 or more); the buyout
- * market's mark on a player has a season and a positive salary; and an inbox message's 10-day link
- * is a player id.
+ * or an exception are whole numbers; and an inbox message's 10-day link is a player id.
  */
 function migrateContracts(x: League) {
   const teamOk = (v: unknown) => int(v) && !!x.teams[v];
@@ -792,14 +790,7 @@ function migrateContracts(x: League) {
   }
   for (const t of x.teams) {
     for (const d of Array.isArray(t.deadMoney) ? t.deadMoney : []) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
-    for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason', 'tmleSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
-    // the luxury tax a season paid (the repeater rule falls back to its payroll without it)
-    for (const s of Array.isArray(t.seasons) ? t.seasons : []) if (obj(s) && s.tax !== undefined && !(int(s.tax) && s.tax >= 0)) delete s.tax;
-  }
-  // the buyout market's mark on a player waived this season off a big deal: a season and a salary, or gone
-  for (const p of Object.values(x.players)) {
-    const w = p.waivedSalary as unknown;
-    if (w !== undefined && !(obj(w) && int(w.season) && num(w.salary) && (w.salary as number) > 0)) delete p.waivedSalary;
+    for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
   }
   for (const m of x.inbox) if (m.tenDay !== undefined && !int(m.tenDay)) delete m.tenDay;
 }
@@ -948,7 +939,7 @@ function liveIntact(l: League, j: unknown): boolean {
   return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
 }
 
-const SHEET_ROUTES = new Set(['min', 'space', 'mle', 'tmle', 'room', 'bae']);
+const SHEET_ROUTES = new Set(['min', 'space', 'mle', 'room', 'bae']);
 
 /**
  * A restricted free agent's rights in shape (see src/core/league/rfa.ts), or dropped: a qualifying

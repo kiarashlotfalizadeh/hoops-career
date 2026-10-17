@@ -14,15 +14,7 @@ export const SAVE_VERSION = 3;
 export const CAP = {
   salaryCap: 165_000,
   luxuryTax: 201_000,
-  /** The 2023 CBA's aprons: past the first a team trades dollar for dollar and loses the mid-level, past the second it can't combine salaries or send cash either. */
-  apron1: 209_000,
-  apron2: 222_000,
-  /** The luxury tax is charged by brackets of this much over the tax line, each at a higher rate (see taxFor). */
-  taxBracket: 5_000,
-  /** Tax per dollar in the first four brackets, then +taxRateStep for each one after; a repeater (tax in 3 of the 4 seasons before) pays repeaterRates. */
-  taxRates: [1.5, 1.75, 2.5, 3.25],
-  repeaterRates: [2.5, 2.75, 3.5, 4.25],
-  taxRateStep: 0.5,
+  taxRate: 1.5,
   minPayroll: 148_500, // 90% of cap
   minContract: 1_300,
   vetMinContract: 2_400,

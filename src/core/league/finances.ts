@@ -123,52 +123,9 @@ export function shareRevenue(league: League): Map<number, number> {
 export const TAX_SHARE_TO_NON_TAXPAYERS = 0.5;
 
 /**
- * The luxury tax on a payroll `over` the tax line ($K), by the NBA's brackets: each $5.0M of it
- * (in the league's first-season money, grown with the cap by `scale`, see revenueScale) is taxed at
- * a higher rate, 1.5, 1.75, 2.5 and 3.25 a dollar and then 0.5 more for each bracket after; a
- * repeater pays 2.5, 2.75, 3.5 and 4.25, then 0.5 more a bracket. Rounded to the $1K.
- */
-export function taxFor(over: number, repeater: boolean, scale = 1): number {
-  const bracket = CAP.taxBracket * scale;
-  const rates = repeater ? CAP.repeaterRates : CAP.taxRates;
-  let left = over;
-  let tax = 0;
-  for (let i = 0; left > 0; i++) {
-    const rate = i < rates.length ? rates[i] : rates[rates.length - 1] + CAP.taxRateStep * (i - rates.length + 1);
-    tax += Math.min(left, bracket) * rate;
-    left -= bracket;
-  }
-  return Math.round(tax);
-}
-
-/** Seasons out of the four before it a team must have paid tax in to pay the repeater rates. */
-export const REPEATER_SEASONS = 3;
-
-/**
- * The seasons among the four before `season` in which team `tid` paid luxury tax: by the bill
- * assessLuxuryTax recorded, or for a season from before bills were recorded, by its payroll at the
- * end of that regular season against that season's tax line.
- */
-export function taxSeasons(league: League, tid: number, season = league.season): number {
-  let n = 0;
-  for (const ts of league.teams[tid].seasons)
-    if (ts.season < season && ts.season >= season - 4 && (ts.tax !== undefined ? ts.tax > 0 : ts.payroll > CAP_FOR(league, ts.season).luxuryTax)) n++;
-  return n;
-}
-
-/** Does team `tid` pay the repeater rates this season: tax in at least 3 of the 4 seasons before it? */
-export const taxRepeater = (league: League, tid: number, season = league.season) => taxSeasons(league, tid, season) >= REPEATER_SEASONS;
-
-/** The luxury tax team `tid` pays on payroll `pay` in a season: its brackets over that season's tax line, at the repeater rates when it is one. */
-export function luxuryTaxBill(league: League, tid: number, pay: number, season = league.season): number {
-  return taxFor(pay - CAP_FOR(league, season).luxuryTax, taxRepeater(league, tid, season), revenueScale(league, season));
-}
-
-/**
  * End of regular season: teams under the salary floor pay the shortfall (to their players, as in
- * the NBA), teams over the tax line pay the luxury tax by its brackets (see luxuryTaxBill; recorded
- * on the season for the repeater rule), and half of the tax is shared among the teams that didn't
- * pay any.
+ * the NBA), teams over the tax line pay CAP.taxRate on every dollar above it, and half of the tax
+ * is shared among the teams that didn't pay any.
  */
 export function assessLuxuryTax(league: League): { tid: number; tax: number; shortfall: number }[] {
   const cap = CAP_FOR(league);
@@ -178,8 +135,7 @@ export function assessLuxuryTax(league: League): { tid: number; tax: number; sho
     const pay = payroll(league, t.tid);
     const ts = curTeamSeason(league, t.tid);
     ts.payroll = pay;
-    const tax = luxuryTaxBill(league, t.tid, pay);
-    ts.tax = tax;
+    const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
     const shortfall = Math.max(0, cap.minPayroll - pay);
     if (!tax && !shortfall) continue;
     bills.push({ tid: t.tid, tax, shortfall });

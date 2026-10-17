@@ -11,22 +11,13 @@ import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { advancedView, f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
-import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote, twoWayLabel } from '../office/common';
+import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { moodLevel, MOOD_META, meetBlockedReason, promiseStatus, wantsMeeting } from '../../core/league/morale';
 import { MeetingPanel } from '../office/PlayerMeeting';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
-import {
-  TWO_WAY_GAMES,
-  askingContract,
-  convertTwoWay,
-  extensionBlockedReason,
-  marketSalary,
-  releaseBlockedReason,
-  rookieScaleDeal,
-  twoWayLimitReached,
-} from '../../core/league/contracts';
+import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
 import { untradeableReason } from '../../core/league/trades';
 import { liveInProgress } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
@@ -188,7 +179,7 @@ export default function PlayerView() {
             <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
               <Tag tone="info">{p.archetype}</Tag>
               <Tag>{tierLabel(p.ovr)}</Tag>
-              {p.contract.twoWay && p.tid >= 0 && <Tag tone={twoWayLimitReached(league, p) ? 'bad' : undefined}>{twoWayLabel(league, p)}</Tag>}
+              {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
               {p.injury && (
                 <Tag tone="bad">
                   {p.injury.type} · {p.injury.gamesRemaining}g
@@ -372,12 +363,7 @@ export default function PlayerView() {
                       </div>
                     </>
                   )}
-                  {p.contract.twoWay && (
-                    <div className="small dim2">
-                      Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed, and {TWO_WAY_GAMES} regular-season games at most
-                      {twoWayLimitReached(league, p) ? ': he has played them all, so he sits until he is converted to a standard contract.' : '.'}
-                    </div>
-                  )}
+                  {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
                   {p.contract.tenDay && <div className="small dim2">{tenDayLine(league, p)}</div>}
                   {p.rfa && (
                     <div className="small dim2">

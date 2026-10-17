@@ -97,14 +97,13 @@ function summer(rngSeed = 5) {
   l.faDay = 0;
   const s = contractSeason(l);
   const cap = CAP_FOR(l, s);
-  // every team far over the cap and past the aprons, where no exception is open (and, without one
-  // used, no hard cap keeps Bird rights from taking it further); an opened team near the cap has
-  // used its mid-level, which hard-caps it at the first apron, well above it
-  for (const t of l.teams) t.deadMoney = [{ pid: -1, name: 'x', season: s, amount: cap.salaryCap }];
+  for (const t of l.teams) {
+    t.deadMoney = [{ pid: -1, name: 'x', season: s, amount: cap.salaryCap }];
+    t.mleSeason = s;
+  }
   const open = (tid: number, space?: number) => {
     const t = l.teams[tid];
     t.deadMoney = [];
-    t.mleSeason = s;
     t.strategy = 'retool';
     for (const p of teamPlayers(l, tid)) p.contract = { start: s, salaries: [cap.vetMin] };
     if (space !== undefined) t.deadMoney.push({ pid: -2, name: 'y', season: s, amount: cap.salaryCap - payroll(l, tid, s) - space });

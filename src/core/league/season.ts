@@ -28,7 +28,7 @@ import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
-import { aiTicketPrice, assessLuxuryTax, shareRevenue, taxRepeater } from './finances';
+import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, settleExpiringPromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
@@ -42,7 +42,6 @@ import { MATCH_DAYS, acceptQualifyingOffers, resolveOfferSheets, restrictedFreeA
 import {
   FIRED_REASON,
   aiBuyouts,
-  aiTwoWayLimits,
   askingContract,
   capSpace,
   extensionAsk,
@@ -268,8 +267,6 @@ export function advanceDay(league: League) {
   resolvePromises(league);
   // 10-day contracts that are up end, and AI teams short of healthy players sign them
   tenDayDaily(league);
-  // AI teams convert the two-way players they lean on who have played their 50 games
-  aiTwoWayLimits(league);
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
   else if (league.phase === 'playin' && playInDone(league)) startPlayoffs(league);
   else if (league.phase === 'playoffs' && champion(league) !== undefined) endPlayoffs(league);
@@ -298,7 +295,7 @@ function endRegularSeason(league: League) {
   if (mine?.tax) {
     // the seeds are final: in the top six, in the play-in or out
     const rank = confStandings(league, league.teams[league.userTid].conf).findIndex((r) => r.tid === league.userTid) + 1;
-    const bill = `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season${taxRepeater(league, league.userTid) ? ', at the repeater rates' : ''}`;
+    const bill = `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season`;
     addInbox(league, {
       from: 'Owner',
       subject: 'Luxury tax bill',

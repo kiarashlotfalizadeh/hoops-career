@@ -1,9 +1,8 @@
-// The signing exceptions: the mid-level (8.5% of the cap, 4 years, under the first apron), the room
+// The signing exceptions: the mid-level (8.5% of the cap, 4 years, under the tax), the room
 // exception that replaces it once a team has used cap space (5.7%, 2 years) and the bi-annual
-// (3.3%, 2 years, under the first apron, not two seasons running, not after the room exception).
-// Signings look for the smallest exception that covers them; AI teams use them too; offer sheets
-// reserve them; the user's pending offers hold them; the mid-level and the bi-annual hard-cap the
-// team at the first apron. The taxpayer mid-level and the aprons' other rules are in aprons.test.ts.
+// (3.3%, 2 years, under the tax, not two seasons running, not after the room exception). Signings
+// look for the smallest exception that covers them; AI teams use them too; offer sheets reserve
+// them; the user's pending offers hold them; the mid-level and the bi-annual cap trades at the tax.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { CAP_FOR, contractSeason, freeAgents, payroll, standardRoster } from '../league/helpers';
@@ -19,7 +18,7 @@ import {
   mleRoom,
   routeYears,
   signingRoute,
-  hardCap,
+  taxCapped,
   spendRoute,
 } from '../league/contracts';
 import { offerBlockedReason, offerRoute, userExceptionRoom, userOffer } from '../league/freeAgency';
@@ -96,7 +95,7 @@ describe('the room exception', () => {
 });
 
 describe('the bi-annual exception', () => {
-  it('3.3% of the cap for two years, under the first apron after signing, the smallest exception first', () => {
+  it('3.3% of the cap for two years, under the tax after signing, the smallest exception first', () => {
     const l = league();
     const s = contractSeason(l);
     const cap = CAP_FOR(l, s);
@@ -110,28 +109,28 @@ describe('the bi-annual exception', () => {
     expect(signingRoute(l, U, bae, s, p, 3)).toBe('mle');
     expect(signingRoute(l, U, bae + 10, s, p)).toBe('mle');
     expect(signingRoute(l, U, bae, s, p, 2, 'mle')).toBe('mle');
-    // the first apron (the tax line was the limit before the aprons)
-    payTo(l, U, cap.apron1 - 2_000);
+    // the tax line
+    payTo(l, U, cap.luxuryTax - 2_000);
     expect(exceptionRoom(l, U, 'bae', s)).toBe(2_000);
     expect(mleRoom(l, U, s)).toBe(2_000);
   });
 
-  it('not two seasons running, and like the mid-level it hard-caps trades at the first apron', () => {
+  it('not two seasons running, and it caps trades at the tax like the mid-level', () => {
     const l = league('regular');
     const s = l.season;
     spendRoute(l, U, 'bae', s);
     expect(exceptionUsedReason(l, U, 'bae', s)).toBe('Used this season.');
     expect(exceptionUsedReason(l, U, 'bae', s + 1)).toMatch(/not two seasons running/);
     expect(exceptionUsedReason(l, U, 'bae', s + 2)).toBeNull();
-    expect(hardCap(l, U, s)).toEqual({ amount: CAP_FOR(l, s).apron1, apron: 1, route: 'bae' });
-    // a trade that takes the payroll past the first apron is refused
+    expect(taxCapped(l.teams[U], s)).toBe(true);
+    // a trade that takes the payroll past the tax line is refused
     const cap = CAP_FOR(l, s);
-    payTo(l, U, cap.apron1 - 1_000);
+    payTo(l, U, cap.luxuryTax - 1_000);
     const big = standardRoster(l, AI).sort((a, b) => b.contract.salaries[0] - a.contract.salaries[0])[0];
     big.contract = { start: s, salaries: [20_000, 20_000] };
     big.tradeLock = undefined;
     const errs = validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: AI, pids: [big.pid], dpids: [] } });
-    expect(errs.some((e) => /used the bi-annual exception this season, so it is hard-capped at the first apron: a trade can't take its payroll past \$209\.0M/.test(e))).toBe(true);
+    expect(errs.some((e) => /used the bi-annual exception this season, so a trade can't take its payroll past the tax line/.test(e))).toBe(true);
   });
 });
 

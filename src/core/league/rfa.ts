@@ -6,9 +6,7 @@
 // signing), and his team has two days to match it, keeping him on exactly those terms, or let him
 // go. Unsigned when the market closes, he plays a season on the qualifying offer and is
 // unrestricted after it. While the offer stands his team carries a cap hold for him through free
-// agency, and a pending offer sheet holds the other team's room. A team hard-capped by an exception
-// it used this summer can't go past its hard cap to re-sign him, match a sheet or take him back on
-// his qualifying offer (see hardCapBlockedReason).
+// agency, and a pending offer sheet holds the other team's room.
 //
 // Simplified: two-way players can't be made restricted; the qualifying offer is one formula (see
 // qualifyingOffer) rather than the CBA's table; a matched player can be traded to the team that
@@ -28,10 +26,7 @@ import {
   FA_DAYS,
   FIRED_REASON,
   type SigningRoute,
-  apronName,
   askingContract,
-  hardCap,
-  hardCapBlockedReason,
   isException,
   makeContract,
   marketSalary,
@@ -156,12 +151,12 @@ export function aiQualify(league: League, t: Team) {
 
 /**
  * The payroll an AI team will go to for keeping its restricted free agent worth `v` (matching an
- * offer sheet, or coming to terms): the budget re-signing uses (see payrollBudget), stretched to the
- * first apron, since the alternative is losing a young player for nothing.
+ * offer sheet, or coming to terms): the budget re-signing uses (see payrollBudget), stretched to 5%
+ * past the tax line, since the alternative is losing a young player for nothing.
  */
 const keepBudget = (league: League, t: Team, v: number) => {
   const cap = CAP_FOR(league, contractSeason(league));
-  return Math.max(payrollBudget(cap, t, v), cap.apron1);
+  return Math.max(payrollBudget(cap, t, v), cap.luxuryTax * 1.05);
 };
 
 /** The free-agency day from which an AI team and its restricted free agent come to terms if no offer sheet has come (see aiRfaTerms). */
@@ -171,8 +166,8 @@ export const AI_TERMS_DAY = 10;
  * An AI team's restricted free agent who has had the market for ten days without an offer sheet
  * comes to terms with it: his asking price from it (never under the qualifying offer, which he
  * could simply take) for the years he wants, when that fits what the team will pay to keep him
- * (keepBudget, and any hard cap) and there's a roster spot, unless he asked out. Otherwise he
- * waits, and takes the qualifying offer when the market closes.
+ * (keepBudget) and there's a roster spot, unless he asked out. Otherwise he waits, and takes the
+ * qualifying offer when the market closes.
  */
 export function aiRfaTerms(league: League) {
   if (league.phase !== 'freeAgency' || league.faDay < AI_TERMS_DAY) return;
@@ -185,7 +180,6 @@ export function aiRfaTerms(league: League) {
     const ask = askingContract(league, p, t.tid);
     const amount = Math.max(ask.amount, r.qo);
     if (summerRoster(league, t.tid) >= OFFSEASON_ROSTER_MAX || payroll(league, t.tid, next) + amount > keepBudget(league, t, valueScore(league, p))) continue;
-    if (hardCapBlockedReason(league, t.tid, amount, next)) continue;
     signPlayer(league, p, t.tid, amount, ask.years, { start: next });
   }
 }
@@ -295,8 +289,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
 
 /**
  * Would an AI team match this offer sheet, and why: it needs a roster spot under the offseason
- * limit (its own pending offer sheets hold theirs), the contract has to fit what it will pay to
- * keep him (keepBudget) and under any hard cap it has, and be worth having
+ * limit (its own pending offer sheets hold theirs), the contract has to fit what it will pay to keep him (keepBudget), and be worth having
  * (its trade value to the team, under its strategy, contract surplus or burden included, at least
  * MATCH_VALUE: about a rotation player on a fair deal).
  */
@@ -308,8 +301,6 @@ export function aiMatchVerdict(league: League, p: Player): { match: boolean; why
   if (summerRoster(league, t.tid) >= OFFSEASON_ROSTER_MAX) return { match: false, why: `they had no roster spot left (${OFFSEASON_ROSTER_MAX})` };
   const v = valueScore(league, p);
   if (payroll(league, t.tid, next) + sh.amount > keepBudget(league, t, v)) return { match: false, why: 'it would take their payroll past what they will spend' };
-  const hard = hardCapBlockedReason(league, t.tid, sh.amount, next) ? hardCap(league, t.tid, next) : null;
-  if (hard) return { match: false, why: `they are hard-capped at ${apronName(hard.apron)} for the season, and matching would take them past it` };
   if (tradeValue(league, { ...p, contract: sheetContract(league, p, sh) }, t.strategy) < MATCH_VALUE) return { match: false, why: "they don't think he's worth that contract" };
   return { match: true, why: "he's worth the money to them, and it fits their payroll" };
 }
@@ -328,7 +319,6 @@ function settleSheet(league: League, p: Player, matched: boolean) {
   const offerer = league.teams[sh.tid];
   if (matched) {
     if (sh.route === 'mle' && offerer.mleSeason === next) delete offerer.mleSeason;
-    if (sh.route === 'tmle' && offerer.tmleSeason === next) delete offerer.tmleSeason;
     if (sh.route === 'room' && offerer.roomSeason === next) delete offerer.roomSeason;
     if (sh.route === 'bae' && offerer.baeSeason === next) delete offerer.baeSeason;
   } else if (sh.route === 'space') spendRoute(league, sh.tid, 'space', next);
@@ -349,7 +339,7 @@ function settleSheet(league: League, p: Player, matched: boolean) {
   });
 }
 
-/** Why the user can't decide on this player's offer sheet now (or, `match`, match it: a roster spot, and room under a hard cap), or null. */
+/** Why the user can't decide on this player's offer sheet now (or, `match`, match it), or null. */
 export function sheetDecisionBlocked(league: League, pid: number, match: boolean): string | null {
   const p = league.players[pid];
   const r = p?.rfa;
@@ -359,8 +349,7 @@ export function sheetDecisionBlocked(league: League, pid: number, match: boolean
   if (r.tid !== league.userTid) return `His rights belong to the ${league.teams[r.tid].name}: they decide on it.`;
   if (match && summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX)
     return `Matching needs a roster spot: yours is full (${OFFSEASON_ROSTER_MAX}${league.faBids?.length || pendingSheets(league, league.userTid).length ? ', counting your pending offers and offer sheets' : ''}). Release or trade someone first.`;
-  // matching needs no cap room, but a hard cap binds it like any signing
-  return match ? hardCapBlockedReason(league, league.userTid, r.sheet.amount, contractSeason(league)) : null;
+  return null;
 }
 
 /** The user matches the offer sheet on his restricted free agent, or lets him go to the team that signed it. */
@@ -421,22 +410,18 @@ export function resolveOfferSheets(league: League, through = Infinity) {
 /**
  * Free agency closes (offer sheets decided first): each restricted free agent still unsigned takes
  * his qualifying offer, one season with his team, and is unrestricted after it. A team at the
- * offseason limit (21), or one the offer would take past its hard cap, can't take him back: his
- * offer lapses and he stays a free agent. The user hears about his own; the notable ones make the
- * news.
+ * offseason limit (21) can't take him back: his offer lapses and he stays a free agent. The user
+ * hears about his own; the notable ones make the news.
  */
 export function acceptQualifyingOffers(league: League) {
   const next = contractSeason(league);
   const took: Player[] = [];
   const lapsed: Player[] = [];
-  const capped: Player[] = [];
   for (const p of restrictedFreeAgents(league)) {
     const r = p.rfa!;
     if (r.sheet) continue;
-    // a full roster, or a hard cap the offer would break: it lapses
-    const full = summerRoster(league, r.tid) >= OFFSEASON_ROSTER_MAX;
-    if (full || hardCapBlockedReason(league, r.tid, r.qo, next)) {
-      if (r.tid === league.userTid) (full ? lapsed : capped).push(p);
+    if (summerRoster(league, r.tid) >= OFFSEASON_ROSTER_MAX) {
+      if (r.tid === league.userTid) lapsed.push(p);
       delete p.rfa;
       continue;
     }
@@ -460,24 +445,19 @@ export function acceptQualifyingOffers(league: League) {
       pids: news.map((p) => p.pid),
     });
   const mine = took.filter((p) => p.tid === league.userTid);
-  const gone = lapsed.length + capped.length;
-  const unrestricted = (n: number) => (n > 1 ? "they're unrestricted free agents" : "he's an unrestricted free agent");
-  if (mine.length || gone)
+  if (mine.length || lapsed.length)
     addInbox(league, {
       from: 'Assistant GM',
-      subject: mine.length === 1 && !gone ? `${playerName(mine[0])} takes his qualifying offer` : 'Qualifying offers',
+      subject: mine.length === 1 && !lapsed.length ? `${playerName(mine[0])} takes his qualifying offer` : 'Qualifying offers',
       body: [
         ...mine.map((p) => `${playerName(p)} signed his qualifying offer: one season at ${money(salaryFor(p, next))}. He'll be an unrestricted free agent next summer.`),
         lapsed.length
-          ? `${andList(lapsed.map(playerName))}'s qualifying offer${lapsed.length > 1 ? 's' : ''} lapsed: our roster was full (${OFFSEASON_ROSTER_MAX}) when free agency closed, so ${unrestricted(lapsed.length)}.`
-          : '',
-        capped.length
-          ? `${andList(capped.map(playerName))}'s qualifying offer${capped.length > 1 ? 's' : ''} lapsed: taking ${capped.length > 1 ? 'them' : 'him'} back would have put us past our hard cap, so ${unrestricted(capped.length)}.`
+          ? `${andList(lapsed.map(playerName))}'s qualifying offer${lapsed.length > 1 ? 's' : ''} lapsed: our roster was full (${OFFSEASON_ROSTER_MAX}) when free agency closed, so ${lapsed.length > 1 ? "they're unrestricted free agents" : "he's an unrestricted free agent"}.`
           : '',
       ]
         .filter(Boolean)
         .join('\n'),
-      tone: gone ? 'alert' : 'neutral',
-      link: mine.length === 1 && !gone ? `/player/${mine[0].pid}` : '/office',
+      tone: lapsed.length ? 'alert' : 'neutral',
+      link: mine.length === 1 && !lapsed.length ? `/player/${mine[0].pid}` : '/office',
     });
 }

@@ -24,7 +24,7 @@ import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { ARENA_CAPACITY } from '../src/core/league/finances';
 import * as REC from '../src/core/league/records';
-import type { League, Player, Txn } from '../src/core/types';
+import type { League, Player } from '../src/core/types';
 
 const [seasons, rngSeed, userTid, fictionalSeasons] = [5, 42, 19, 2].map((d, i) => Number(process.argv[i + 2] ?? d));
 let L: League;
@@ -55,8 +55,6 @@ function check() {
   const season = L.season;
   const ph = L.phase;
   walk(L, 'league');
-  watchTrades();
-  checkTwoWayGames();
   // the record book: every list best first and no longer than it keeps, a franchise's best never past the league's
   const book = L.records;
   if (book) {
@@ -464,116 +462,6 @@ function checkTerms() {
     for (const p of Object.values(L.players)) if (p.promise && (p.promise.tid !== L.userTid || (p.tid >= 0 && p.tid !== L.userTid))) bad("promise off the user's team", nm(p.pid));
 }
 
-/** Regular-season games each two-way player had at the last check, this season (`season:pid`). */
-const twoWaySeen = new Map<string, number>();
-
-/**
- * Two-way deals play 50 regular-season games at most: a player on one since the last check has no
- * more games now than the larger of 50 and what he had then (the limit counts all his games this
- * season, so one signed to a two-way deal after a standard one can already be past it; then he
- * plays no more). Summer two-way deals are for next season and start from nothing.
- */
-function checkTwoWayGames() {
-  if (H.contractSeason(L) !== L.season) return;
-  for (const p of Object.values(L.players)) {
-    const key = `${L.season}:${p.pid}`;
-    if (p.tid < 0 || !p.contract.twoWay) {
-      twoWaySeen.delete(key);
-      continue;
-    }
-    const n = C.seasonGames(p, L.season);
-    const before = twoWaySeen.get(key);
-    if (before !== undefined && n > Math.max(before, C.TWO_WAY_GAMES)) bad('two-way player past his games limit', `${nm(p.pid)} ${before} -> ${n}`);
-    twoWaySeen.set(key, n);
-  }
-}
-
-/** Trades checked against the aprons as they were made this season (see watchTrades): teams past each apron after one, and hard-capped teams in one. */
-const apronTally = { trades: 0, apron1: 0, apron2: 0, hardCapped: 0 };
-
-/**
- * Every trade is checked as it is logged, before anything moves (executeTrade logs it first), by a
- * hook on the log's push that the save never sees (not enumerable, and put back whenever a new
- * season's prune replaces the array): each team's payroll after the deal, cap holds included,
- * against the matching rule for where it lands (125% plus $0.1M over the cap, 100% over the first
- * apron), its hard cap when it took on salary, and past the second apron no aggregating (two or
- * more players out for one paid more than the best-paid of them) and no cash out.
- */
-function watchTrades() {
-  const log = (L.transactions ??= []);
-  if (Object.prototype.hasOwnProperty.call(log, 'push')) return;
-  Object.defineProperty(log, 'push', {
-    enumerable: false,
-    configurable: true,
-    writable: true,
-    value(this: Txn[], ...txns: Txn[]) {
-      for (const t of txns) if (t.kind === 'trade' && t.sides?.length === 2) checkTrade(t);
-      return Array.prototype.push.apply(this, txns);
-    },
-  });
-}
-
-function checkTrade(t: Txn) {
-  const cs = H.contractSeason(L);
-  const cap = H.CAP_FOR(L, cs);
-  const sal = (pid: number) => TR.capSalary(L, pid, cs);
-  const sum = (xs: number[]) => xs.reduce((a, x) => a + x, 0);
-  const [a, b] = t.sides!;
-  apronTally.trades++;
-  for (const [mine, other] of [
-    [a, b],
-    [b, a],
-  ]) {
-    const out = mine.players.map((x) => sal(x.pid)).filter((x) => x > 0);
-    const inc = other.players.map((x) => sal(x.pid)).filter((x) => x > 0);
-    const after = FA.capPayroll(L, mine.tid, cs) - sum(out) + sum(inc);
-    const who = `${L.teams[mine.tid].abbrev} in trade ${t.id}: ${(sum(out) / 1000).toFixed(1)}M out, ${(sum(inc) / 1000).toFixed(1)}M in, payroll after ${(after / 1000).toFixed(1)}M`;
-    const hard = C.hardCap(L, mine.tid, cs);
-    if (hard) apronTally.hardCapped++;
-    if (hard && sum(inc) > sum(out) && after > hard.amount) bad('trade past a hard cap', `${who}, hard cap ${(hard.amount / 1000).toFixed(1)}M`);
-    if (after > cap.salaryCap && sum(inc) > (after > cap.apron1 ? sum(out) : sum(out) * CAP.tradeMatchPct + CAP.tradeMatchBuffer) + 1e-6) bad('trade past its matching rule', who);
-    if (after > cap.apron2) {
-      apronTally.apron2++;
-      if (out.length >= 2 && Math.max(...inc, 0) > Math.max(...out)) bad('aggregated salaries past the second apron', who);
-      if ((mine.cash ?? 0) > 0) bad('cash sent past the second apron', who);
-    } else if (after > cap.apron1) apronTally.apron1++;
-  }
-}
-
-/** The luxury tax by the brackets, worked out again here: each $5M (grown with the cap) over the line at 1.5, 1.75, 2.5, 3.25, then 0.5 more; a repeater 1.0 more in the first four. */
-function bracketTax(over: number, repeater: boolean, scale: number): number {
-  const rates = repeater ? [2.5, 2.75, 3.5, 4.25] : [1.5, 1.75, 2.5, 3.25];
-  const step = 5_000 * scale;
-  let tax = 0;
-  for (let i = 0, left = over; left > 0; i++, left -= step) tax += Math.min(left, step) * (rates[i] ?? rates[3] + 0.5 * (i - 3));
-  return Math.round(tax);
-}
-
-/** What the season's luxury tax came to: taxpayers, repeaters among them, the total and the biggest bill. */
-const taxTally = { payers: 0, repeaters: 0, total: 0, top: 0 };
-
-/**
- * The end of the regular season: every team's recorded tax bill is the brackets' on its payroll,
- * at the repeater rates when it paid tax in 3 of the 4 seasons before (by the bills recorded then,
- * or its payroll against that season's line).
- */
-function checkTaxBills() {
-  Object.assign(taxTally, { payers: 0, repeaters: 0, total: 0, top: 0 });
-  for (const t of L.teams) {
-    const ts = H.curTeamSeason(L, t.tid);
-    const before = t.seasons.filter((x) => x.season < L.season && x.season >= L.season - 4);
-    const paid = before.filter((x) => (x.tax !== undefined ? x.tax > 0 : x.payroll > H.CAP_FOR(L, x.season).luxuryTax)).length;
-    const want = bracketTax(ts.payroll - H.CAP_FOR(L).luxuryTax, paid >= 3, H.revenueScale(L));
-    if (ts.tax !== want) bad('tax bill off the brackets', `${t.abbrev} payroll ${ts.payroll} tax ${ts.tax} want ${want}${paid >= 3 ? ' (repeater)' : ''}`);
-    if (want > 0) {
-      taxTally.payers++;
-      if (paid >= 3) taxTally.repeaters++;
-      taxTally.total += want;
-      taxTally.top = Math.max(taxTally.top, want);
-    }
-  }
-}
-
 /**
  * Contract talks, 10-day contracts and the exceptions: talks only with a real team and in range,
  * and over once he signs (no free-agent or re-sign talks left on a player who signed elsewhere); a
@@ -601,8 +489,6 @@ function checkContracts() {
   }
   for (const t of L.teams) {
     if (t.mleSeason === cs && t.roomSeason === cs) bad('mid-level and room exception in one season', t.abbrev);
-    if (t.mleSeason === cs && t.tmleSeason === cs) bad('both mid-levels in one season', t.abbrev);
-    if (t.tmleSeason === cs && (t.spaceSeason === cs || t.roomSeason === cs)) bad('taxpayer mid-level with cap space or the room exception', t.abbrev);
     if (t.roomSeason === cs && (t.spaceSeason !== cs || t.baeSeason === cs))
       bad('room exception without cap space, or with the bi-annual', `${t.abbrev} ${JSON.stringify([t.spaceSeason, t.baeSeason])}`);
   }
@@ -610,8 +496,8 @@ function checkContracts() {
 
 /** How many teams used cap space and each exception in a contract season (the last use each made). */
 function routeUse(season: number) {
-  const n = (k: 'spaceSeason' | 'mleSeason' | 'roomSeason' | 'baeSeason' | 'tmleSeason') => L.teams.filter((t) => t[k] === season).length;
-  return { space: n('spaceSeason'), mle: n('mleSeason'), tmle: n('tmleSeason'), room: n('roomSeason'), bae: n('baeSeason') };
+  const n = (k: 'spaceSeason' | 'mleSeason' | 'roomSeason' | 'baeSeason') => L.teams.filter((t) => t[k] === season).length;
+  return { space: n('spaceSeason'), mle: n('mleSeason'), room: n('roomSeason'), bae: n('baeSeason') };
 }
 
 /** What the user's contract moves came to this season: talks (offers, counters, signings under the ask, breakdowns), stretched releases and 10-days. */
@@ -1023,8 +909,6 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const best = std(L.userTid).sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
     if (best) P.setUntouchable(L, best.pid, true);
     Object.assign(termsTally, { trades: 0, swaps: 0, cash: 0, promises: 0 });
-    Object.assign(apronTally, { trades: 0, apron1: 0, apron2: 0, hardCapped: 0 });
-    watchTrades();
     Object.assign(contractTally, { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0, stretched: 0, tenDays: 0 });
     tenDayTally.ai.clear();
     tenDayTally.hardship.clear();
@@ -1088,18 +972,6 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       if (L.day === L.allStarDay + 1 && L.phase === 'regular') checkAllStars();
     }
     checkRegularSeasonOver();
-    checkTaxBills();
-    // hard-capped teams at the end of the regular season, and how far past it the minimum deals that
-    // filled a roster to 13 healthy players took them (no other signing or trade can)
-    const hardCapped = L.teams.flatMap((t) => {
-      const h = C.hardCap(L, t.tid, L.season);
-      return h ? [Math.max(0, H.payroll(L, t.tid, L.season) - h.amount)] : [];
-    });
-    // two-way players who played their 50 games, and those an AI team converted for it
-    const twoWayFull = Object.values(L.players).filter((p) => p.tid >= 0 && C.seasonGames(p, L.season) >= C.TWO_WAY_GAMES && p.contract.twoWay).length;
-    const converted = (L.transactions ?? []).filter(
-      (t) => t.kind === 'convert' && t.season === L.season && t.phase === 'regular' && t.id >= firstTxn && !t.tids.includes(L.userTid),
-    ).length;
     const offers = (L.nextProposalId ?? 1) - offers0;
     if (L.news.filter((x) => x.season === L.season && x.text.startsWith('Trade deadline recap')).length !== 1) bad('deadline recap not once', '');
     const logged = (L.transactions ?? []).filter((t) => t.kind === 'trade' && t.id >= firstTxn).length;
@@ -1200,9 +1072,6 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
     console.log(`   restricted free agency: ${rfaLine}`);
-    console.log(
-      `   aprons: ${apronTally.trades} trades checked (${apronTally.apron1} sides past the 1st apron, ${apronTally.apron2} past the 2nd, ${apronTally.hardCapped} hard-capped); hard caps ${hardCapped.length} at the season's end (${hardCapped.filter((x) => x > 0).length} past on roster fills, by $${(Math.max(0, ...hardCapped) / 1000).toFixed(1)}M at most); luxury tax ${taxTally.payers} payers (${taxTally.repeaters} repeaters), $${(taxTally.total / 1000).toFixed(1)}M in all, top bill $${(taxTally.top / 1000).toFixed(1)}M; two-way at the 50-game limit ${twoWayFull}, AI conversions in season ${converted}`,
-    );
     const highsKB = Object.values(L.players).reduce((a, p) => a + (p.highs ? JSON.stringify(p.highs).length : 0), 0) / 1000;
     console.log(
       `   record book: ${L.news.filter((n) => n.kind === 'record' && n.season === L.season - 1).length} record news in ${seasonLabel(L.season - 1)}, book ${(JSON.stringify(L.records ?? {}).length / 1000).toFixed(1)}KB, career highs ${highsKB.toFixed(1)}KB`,
@@ -1210,7 +1079,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const raised = L.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.season === L.season - 1).map((r) => `${t.abbrev} #${r.jersey} ${r.name}`));
     console.log(`   retired numbers: ${raised.length}${raised.length ? ` (${raised.join(', ')})` : ''}, ${L.teams.reduce((a, t) => a + (t.retired?.length ?? 0), 0)} in all`);
     console.log(`   coaches: ${coachLine}, registry ${L.coaches?.length ?? 0} coaches, ${(JSON.stringify(L.coaches ?? []).length / 1e3).toFixed(1)}KB`);
-    const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, taxpayer mid-level ${r.tmle}, room ${r.room}, bi-annual ${r.bae}`;
+    const routes = (r: ReturnType<typeof routeUse>) => `space ${r.space}, mid-level ${r.mle}, room ${r.room}, bi-annual ${r.bae}`;
     console.log(
       `   exceptions (teams): for ${seasonLabel(L.season)} this summer ${routes(summerRoutes)}; for ${seasonLabel(L.season - 1)} by its end ${routes(inSeasonRoutes)}; unsigned 66+ free agents ${unsigned}; 10-days: AI ${tenDayTally.ai.size} (hardship ${tenDayTally.hardship.size}), yours ${contractTally.tenDays}`,
     );

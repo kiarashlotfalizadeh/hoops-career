@@ -18,8 +18,7 @@ import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP } from '../constants';
 import { CAP_FOR, addInbox, curTeamSeason, dateToDay, fmtDate, freeAgents, playerName, standardRoster } from './helpers';
-import { FIRED_REASON, askingContract, buyoutBlockedReason, hardCapBlockedReason, releasePlayer, signPlayer, valueScore } from './contracts';
-import { salaryFor } from '../playerGen';
+import { FIRED_REASON, askingContract, releasePlayer, signPlayer, valueScore } from './contracts';
 import { logMove } from './transactions';
 
 /** Days a 10-day contract runs. */
@@ -83,9 +82,8 @@ export const tenDayEnds = (league: League, until: number) => fmtDate(league.seas
 
 /**
  * Why team `tid` can't sign him to a 10-day contract now, or null: the window, a free agent who'd
- * take the minimum (or a player on his first 10-day with the team, renewing it from when it ends;
- * not one the buyout market's rule keeps from the team), room under a hard cap, two at most with
- * one team a season, and a regular or hardship roster spot.
+ * take the minimum (or a player on his first 10-day with the team, renewing it from when it ends),
+ * two at most with one team a season, and a regular or hardship roster spot.
  */
 export function tenDayBlockedReason(league: League, tid: number, p: Player): string | null {
   const closed = tenDayClosedReason(league);
@@ -97,13 +95,7 @@ export function tenDayBlockedReason(league: League, tid: number, p: Player): str
     if (p.tid >= 0) return p.tid === tid ? `${name} is on a standard contract.` : `${name} isn't a free agent.`;
     if (p.waivers) return `${name} is on waivers: put in a claim instead.`;
     if (p.rfa || !wantsTenDay(league, p, tid)) return `${name} wants a standard contract (asking $${(askingContract(league, p, tid).amount / 1000).toFixed(1)}M).`;
-    const buyout = buyoutBlockedReason(league, tid, p, tenDayPay(league, p, tenDayUntil(league) - league.day));
-    if (buyout) return buyout;
   }
-  // its pay joins the payroll (a second one's too, from when the first ends): not past a hard cap,
-  // unless the team needs him to get back to 13 healthy players
-  const hard = hardCapBlockedReason(league, tid, tenDayPay(league, p, tenDayUntil(league, cur ? cur.until : league.day) - (cur ? cur.until : league.day)), league.season);
-  if (hard) return hard;
   if (tenDaysWith(league, p, tid) >= TEN_DAY_MAX)
     return `${name} has had his two 10-day contracts with ${tid === league.userTid ? 'you' : 'them'} this season: a deal for the rest of the season, or he leaves.`;
   if (cur && cur.until > league.regularSeasonDays) return 'His 10-day contract already runs to the end of the regular season.';
@@ -170,7 +162,7 @@ export function userTenDay(league: League, pid: number): { ok: boolean; reason: 
   };
 }
 
-/** Why the user can't sign his 10-day player for the rest of the season (or longer) now, or null: it takes a regular roster spot, and room for his minimum under a hard cap. */
+/** Why the user can't sign his 10-day player for the rest of the season (or longer) now, or null: it takes a regular roster spot. */
 export function tenDayRestBlockedReason(league: League, p: Player): string | null {
   if (league.fired) return FIRED_REASON;
   if (p.tid !== league.userTid || !p.contract.tenDay) return `${playerName(p)} isn't on a 10-day contract with you.`;
@@ -179,8 +171,7 @@ export function tenDayRestBlockedReason(league: League, p: Player): string | nul
   const hardshipOthers = roster.filter((x) => x.pid !== p.pid && x.contract.tenDay?.hardship).length;
   if (roster.length - hardshipOthers > CAP.rosterMax)
     return `He's on a hardship 10-day and your other ${CAP.rosterMax} spots are taken: release someone to give him a regular one.`;
-  // his minimum takes the 10-day's place on the payroll
-  return hardCapBlockedReason(league, p.tid, minFor(league, p) - salaryFor(p, league.season), league.season);
+  return null;
 }
 
 /**
@@ -227,11 +218,9 @@ const tenDayPool = (league: League) =>
  * user hears from his Assistant GM.
  */
 function fillAfterTenDay(league: League, tid: number, left: string) {
-  // (not a player the buyout market's rule keeps from the team)
-  const open = (x: Player) => !buyoutBlockedReason(league, tid, x, minFor(league, x));
   while (standardRoster(league, tid).length < CAP.rosterMin) {
-    const healthy = freeAgents(league).filter((x) => !x.injury && !x.rfa && open(x));
-    const willing = tenDayPool(league).filter(open);
+    const healthy = freeAgents(league).filter((x) => !x.injury && !x.rfa);
+    const willing = tenDayPool(league);
     const p = willing[0] ?? healthy.sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid)[0];
     if (!p) return;
     signPlayer(league, p, tid, minFor(league, p), 1, { news: false, log: tid === league.userTid });
@@ -259,10 +248,7 @@ function aiTenDays(league: League) {
     let healthy = standardRoster(league, t.tid).filter((p) => !p.injury).length;
     while (healthy < CAP.rosterMin && tenDaySpot(league, t.tid)) {
       pool ??= tenDayPool(league);
-      const i = pool.findIndex(
-        (p) =>
-          p.tid === FREE_AGENT && tenDaysWith(league, p, t.tid) < TEN_DAY_MAX && !buyoutBlockedReason(league, t.tid, p, tenDayPay(league, p, tenDayUntil(league) - league.day)),
-      );
+      const i = pool.findIndex((p) => p.tid === FREE_AGENT && tenDaysWith(league, p, t.tid) < TEN_DAY_MAX);
       if (i < 0) break;
       const [p] = pool.splice(i, 1);
       signTenDay(league, p, t.tid);
