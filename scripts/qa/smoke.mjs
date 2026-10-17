@@ -33,7 +33,8 @@ const fail = [];
 const step = (s) => console.log(`- ${s}`);
 
 async function waitForServer() {
-  for (let i = 0; i < 60; i++) {
+  // up to a minute: a machine busy with a build or a test run can take more than half of that
+  for (let i = 0; i < 120; i++) {
     try {
       if ((await fetch(base)).ok) return;
     } catch {
