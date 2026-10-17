@@ -8,9 +8,9 @@ import { seriesLabel } from '../../core/league/playoffs';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Segmented, Sheet } from '../components/ui';
+import { Section, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
-import { confName, ordinal, roundName, useQueryParam } from './shared';
+import { TitleSlab, Toolbar, confName, ordinal, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
 interface Slot {
@@ -91,25 +91,21 @@ export function PlayoffsTab({ league }: { league: League }) {
   if (phase === 'none') {
     return (
       <>
-        <Card>
-          <div className="col" style={{ alignItems: 'center', textAlign: 'center', gap: 8, padding: '12px 0' }}>
-            <Trophy size={30} className="dim" />
-            <h3>Playoffs start after the regular season</h3>
-            <div className="small dim" style={{ maxWidth: 340 }}>
-              The top six in each conference qualify directly; seeds 7-10 battle it out in the play-in tournament. A projected bracket appears once games are played.
-            </div>
-          </div>
-        </Card>
-        {lastAw?.champion !== undefined && <ChampionBanner league={league} season={lastAw.season} tid={lastAw.champion} runnerUp={lastAw.runnerUp} fmvp={lastAw.finalsMvp} />}
+        {lastAw?.champion !== undefined && <ChampionSlab league={league} season={lastAw.season} tid={lastAw.champion} runnerUp={lastAw.runnerUp} fmvp={lastAw.finalsMvp} />}
+        <div className="card lg-blank">
+          <Trophy size={26} aria-hidden="true" />
+          <h3>After the regular season</h3>
+          <p>The top six in each conference go straight in; seeds 7-10 play in. A projected bracket shows once games are played.</p>
+        </div>
       </>
     );
   }
 
   const status =
     phase === 'projected'
-      ? 'Projected bracket if the season ended today'
+      ? 'If the season ended today'
       : phase === 'playin'
-        ? 'Play-in tournament: seeds 7 and 8 are on the line'
+        ? 'Play-in: seeds 7 and 8 on the line'
         : phase === 'live'
           ? `${seasonLabel(league.season)} playoffs in progress`
           : `${seasonLabel(league.season)} playoffs complete`;
@@ -117,7 +113,7 @@ export function PlayoffsTab({ league }: { league: League }) {
   return (
     <>
       {champ !== undefined && (
-        <ChampionBanner
+        <ChampionSlab
           league={league}
           season={league.season}
           tid={champ}
@@ -125,10 +121,7 @@ export function PlayoffsTab({ league }: { league: League }) {
           fmvp={league.awards.find((a) => a.season === league.season)?.finalsMvp}
         />
       )}
-      <div className="row between" style={{ gap: 8 }}>
-        <span className="small dim">{status}</span>
-        {phase === 'projected' && <span className="tag info">Projected</span>}
-      </div>
+      <Toolbar right={phase === 'projected' ? <span className="tag info">Projected</span> : undefined}>{status}</Toolbar>
       <div className="bk-only-narrow">
         <Segmented
           label="Conference"
@@ -142,10 +135,12 @@ export function PlayoffsTab({ league }: { league: League }) {
       </div>
       <div className="bk-panel-wrap">
         {(['E', 'W'] as const).map((c) => (
-          <div key={c} className={`col ${c !== conf ? 'bk-hide-narrow' : ''}`} style={{ gap: 14 }}>
-            <Card title={`${confName(c)}ern Conference`}>
-              <Bracket league={league} slots={slots[c]} onOpen={setOpen} />
-            </Card>
+          <div key={c} className={`bk-conf ${c !== conf ? 'bk-hide-narrow' : ''}`}>
+            <Section title={`${confName(c)}ern Conference`}>
+              <div className="card bk-card">
+                <Bracket league={league} slots={slots[c]} onOpen={setOpen} />
+              </div>
+            </Section>
             <PlayIn league={league} conf={c} projected={phase === 'projected'} />
           </div>
         ))}
@@ -156,34 +151,20 @@ export function PlayoffsTab({ league }: { league: League }) {
   );
 }
 
-function ChampionBanner({ league, season, tid, runnerUp, fmvp }: { league: League; season: number; tid: number; runnerUp?: number; fmvp?: number }) {
-  const t = league.teams[tid];
+function ChampionSlab({ league, season, tid, runnerUp, fmvp }: { league: League; season: number; tid: number; runnerUp?: number; fmvp?: number }) {
   const p = fmvp !== undefined ? league.players[fmvp] : undefined;
   return (
-    <div className="lg-champ">
-      <div className="row" style={{ gap: 14 }}>
-        <TeamLogo tid={tid} size={60} decorative />
-        <div className="grow">
-          <div className="kicker">
-            <Trophy size={12} style={{ verticalAlign: -1 }} /> {seasonLabel(season)} Champions
-          </div>
-          <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase', lineHeight: 1.05 }}>
-            {t.region} {t.name}
-          </div>
-          <div className="small dim2" style={{ marginTop: 3 }}>
-            {runnerUp !== undefined && <>def. {league.teams[runnerUp].name}</>}
-            {p && (
-              <>
-                {runnerUp !== undefined ? ' · ' : ''}Finals MVP{' '}
-                <Link to={`/player/${p.pid}`} className="lg-name-link">
-                  {playerName(p)}
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} champions`}>
+      {runnerUp !== undefined && <>def. {league.teams[runnerUp].name}</>}
+      {p && (
+        <>
+          {runnerUp !== undefined ? ' · ' : ''}Finals MVP{' '}
+          <Link to={`/player/${p.pid}`} className="lg-slab-link">
+            {playerName(p)}
+          </Link>
+        </>
+      )}
+    </TitleSlab>
   );
 }
 
@@ -254,9 +235,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
           </>
         ) : (
           // no logo yet: "Play-in" gets the logo's room too, so it fits a phone-width bracket
-          <span className="tb ellipsis" style={{ gridColumn: 'span 2' }}>
-            {tbd ?? 'TBD'}
-          </span>
+          <span className="tb ellipsis bk-wide">{tbd ?? 'TBD'}</span>
         )}
         <span className="w">{s.series ? wins : ''}</span>
       </div>
@@ -287,43 +266,43 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
 function FinalsCard({ league, finals, onOpen }: { league: League; finals?: PlayoffSeries; onOpen: (s: PlayoffSeries) => void }) {
   const side = (tid: number | undefined, wins: number, conf: string) => (
     <div className={`side ${finals?.winner !== undefined && finals.winner !== tid ? 'lose' : ''}`}>
-      {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <div style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px dashed var(--line-2)' }} />}
-      <div className="bold ellipsis" style={{ maxWidth: '100%' }}>
-        {tid !== undefined ? league.teams[tid].name : `${conf} champion`}
-      </div>
-      {tid !== undefined && <div className="tiny dim">{conf}</div>}
+      {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
+      <div className="bk-fname ellipsis">{tid !== undefined ? league.teams[tid].name : `${conf} champion`}</div>
+      {tid !== undefined && <div className="bk-fconf">{conf}</div>}
       {finals && <div className="score">{wins}</div>}
     </div>
   );
   const eTid = finals ? (league.teams[finals.high].conf === 'E' ? finals.high : finals.low) : undefined;
   const wTid = finals ? (eTid === finals.high ? finals.low : finals.high) : undefined;
   const winsOf = (tid: number | undefined) => (finals && tid !== undefined ? (tid === finals.high ? finals.highWins : finals.lowWins) : 0);
+  const body = (
+    <div className="bk-finals">
+      {side(eTid, winsOf(eTid), 'East')}
+      <div className="bk-vs">vs</div>
+      {side(wTid, winsOf(wTid), 'West')}
+    </div>
+  );
   return (
-    <Card
+    <Section
       title={
         <h3>
-          <Trophy size={14} style={{ verticalAlign: -2 }} /> NBA Finals
+          <Trophy size={13} aria-hidden="true" /> NBA Finals
         </h3>
       }
       right={
-        finals ? (
-          <span className="small dim">
-            {finals.winner !== undefined ? 'Final' : finals.highWins + finals.lowWins ? `Game ${finals.highWins + finals.lowWins + 1} next` : 'Best of 7'}
-          </span>
-        ) : (
-          <span className="small dim">Best of 7</span>
-        )
+        <span className="lg-sec-meta">
+          {finals ? (finals.winner !== undefined ? 'Final' : finals.highWins + finals.lowWins ? `Game ${finals.highWins + finals.lowWins + 1} next` : 'Best of 7') : 'Best of 7'}
+        </span>
       }
-      onClick={finals ? () => onOpen(finals) : undefined}
     >
-      <div className="bk-finals">
-        {side(eTid, winsOf(eTid), 'East')}
-        <div className="display dim" style={{ fontSize: 18 }}>
-          vs
-        </div>
-        {side(wTid, winsOf(wTid), 'West')}
-      </div>
-    </Card>
+      {finals ? (
+        <button className="card bk-fcard" onClick={() => onOpen(finals)} aria-label={`${seriesLabel(finals)}: series details`}>
+          {body}
+        </button>
+      ) : (
+        <div className="card bk-fcard">{body}</div>
+      )}
+    </Section>
   );
 }
 
@@ -333,8 +312,8 @@ function piGameFor(league: League, id: string): GameResult | undefined {
 
 function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; projected: boolean }) {
   const META: Record<string, [string, string]> = {
-    '78': ['7 vs 8', 'Winner is the 7 seed'],
-    '910': ['9 vs 10', 'Loser is eliminated'],
+    '78': ['7 vs 8', 'Winner: 7 seed'],
+    '910': ['9 vs 10', 'Loser is out'],
     '8': ['For the 8 seed', 'Loser 7/8 vs winner 9/10'],
   };
   let games: { id: string; title: string; sub: string; home?: number; away?: number; pi?: PlayInGame }[];
@@ -353,8 +332,8 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
   }
   const seedOf = new Map(confStandings(league, conf).map((r) => [r.tid, r.confRank]));
   return (
-    <Card title={`${confName(conf)} play-in`} right={projected ? <span className="tag info">Projected</span> : undefined}>
-      <div className="lg-pi">
+    <Section title={`${confName(conf)} play-in`}>
+      <div className="card flush lg-pi">
         {games.map((g) => {
           const res = g.pi ? piGameFor(league, g.id) : undefined;
           const winner = g.pi?.winner;
@@ -365,16 +344,14 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
               {tid !== undefined ? (
                 <span className="ellipsis">
                   {league.teams[tid].abbrev}{' '}
-                  <span className="tiny dim">
+                  <span className="bk-rec">
                     {curTeamSeason(league, tid).won}-{curTeamSeason(league, tid).lost}
                   </span>
                 </span>
               ) : (
                 <span className="tb">{tbd}</span>
               )}
-              <span className="w" style={{ fontSize: 14 }}>
-                {pts ?? ''}
-              </span>
+              <span className="w">{pts ?? ''}</span>
             </div>
           );
           const card = (
@@ -390,7 +367,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
                 <span>{g.sub}</span>
               </span>
               {res ? (
-                <Link to={`/game/${res.gid}`} style={{ display: 'block' }}>
+                <Link to={`/game/${res.gid}`} className="bk-link">
                   {card}
                 </Link>
               ) : (
@@ -400,7 +377,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -437,29 +414,29 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
   const upcoming = league.schedule.find((g) => g.seriesId === series.id && !g.played);
   return (
     <Sheet open={!!series} onClose={onClose} title={seriesLabel(series)}>
-      <div className="col" style={{ gap: 14 }}>
+      <div className="col lg-sheet">
         <div className="bk-finals">
           {[series.high, series.low].map((tid, i) => (
-            <div key={tid} className={`side ${series.winner !== undefined && series.winner !== tid ? 'lose' : ''}`} style={{ order: i === 0 ? 0 : 2 }}>
+            <div key={tid} className={`side ${series.winner !== undefined && series.winner !== tid ? 'lose' : ''} ${i === 0 ? '' : 'second'}`}>
               <TeamLogo tid={tid} size={44} decorative />
-              <div className="bold">{league.teams[tid].name}</div>
-              <div className="tiny dim">{ordinal(i === 0 ? series.highSeed : series.lowSeed)} seed</div>
+              <div className="bk-fname">{league.teams[tid].name}</div>
+              <div className="bk-fconf">{ordinal(i === 0 ? series.highSeed : series.lowSeed)} seed</div>
             </div>
           ))}
-          <div className="col" style={{ alignItems: 'center', gap: 2, order: 1 }}>
-            <div className="display bold num" style={{ fontSize: 34, lineHeight: 1 }}>
+          <div className="bk-sscore">
+            <span className="num">
               {series.highWins}-{series.lowWins}
-            </div>
+            </span>
+            <span className="bk-fconf">{lead}</span>
           </div>
         </div>
-        <div className="center small dim2">{lead}</div>
-        <Card className="flush lg-flat">
+        <div className="card flush">
           {games.length === 0 && !upcoming && <div className="empty small">No games yet.</div>}
           {games.map((g, i) => {
             const homeWon = g.home.pts > g.away.pts;
             return (
-              <Link key={g.gid} to={`/game/${g.gid}`} className="lg-g-row" style={{ gridTemplateColumns: '34px minmax(0,1fr) auto 16px' }} onClick={onClose}>
-                <span className="small dim bold">G{i + 1}</span>
+              <Link key={g.gid} to={`/game/${g.gid}`} className="lg-sr-row" onClick={onClose}>
+                <span className="g">G{i + 1}</span>
                 <span className="small">
                   <span className={homeWon ? 'dim' : 'bold'}>
                     {league.teams[g.away.tid].abbrev} {g.away.pts}
@@ -476,30 +453,30 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
             );
           })}
           {upcoming && (
-            <div className="lg-g-row" style={{ gridTemplateColumns: '34px minmax(0,1fr) auto' }}>
-              <span className="small dim bold">G{games.length + 1}</span>
+            <div className="lg-sr-row">
+              <span className="g">G{games.length + 1}</span>
               <span className="small">
                 {league.teams[upcoming.away].abbrev} @ {league.teams[upcoming.home].abbrev}
               </span>
-              <span className="tiny" style={{ color: 'var(--accent-text)', fontWeight: 700 }}>
-                {upcoming.day === league.day ? 'Today' : fmtDate(league.season, upcoming.day)}
-              </span>
+              <span className="tiny lg-next">{upcoming.day === league.day ? 'Today' : fmtDate(league.season, upcoming.day)}</span>
+              <span />
             </div>
           )}
-        </Card>
+        </div>
         {leaders.length > 0 && (
-          <div className="col" style={{ gap: 6 }}>
-            <div className="lg-section-label">Series leaders</div>
-            {leaders.map((l) => (
-              <Link key={l.pid} to={`/player/${l.pid}`} className="row" onClick={onClose} style={{ gap: 8 }}>
-                <TeamLogo tid={l.tid} size={20} />
-                <span className="grow ellipsis bold small">{l.name}</span>
-                <span className="small num dim2">
-                  {(l.pts / l.gp).toFixed(1)} pts · {(l.reb / l.gp).toFixed(1)} reb · {(l.ast / l.gp).toFixed(1)} ast
-                </span>
-              </Link>
-            ))}
-          </div>
+          <Section title="Series leaders">
+            <div className="card flush">
+              {leaders.map((l) => (
+                <Link key={l.pid} to={`/player/${l.pid}`} className="lg-sr-lead" onClick={onClose}>
+                  <TeamLogo tid={l.tid} size={20} />
+                  <span className="grow ellipsis bold">{l.name}</span>
+                  <span className="num dim2">
+                    {(l.pts / l.gp).toFixed(1)} pts · {(l.reb / l.gp).toFixed(1)} reb · {(l.ast / l.gp).toFixed(1)} ast
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Section>
         )}
         <button className="btn block" onClick={onClose}>
           Close

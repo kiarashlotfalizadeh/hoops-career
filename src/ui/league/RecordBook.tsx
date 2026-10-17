@@ -31,9 +31,9 @@ import {
   type TeamSeasonStat,
 } from '../../core/league/records';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Chips, Empty, Segmented } from '../components/ui';
+import { Chips, Section, Segmented } from '../components/ui';
 import { f1, p1, rosterNames } from '../stats';
-import { SectionLabel, useQueryParam } from './shared';
+import { useQueryParam } from './shared';
 
 type Part = 'game' | 'season' | 'career';
 type GameKey = RecStat | `team-${TeamRecStat}`;
@@ -71,13 +71,13 @@ export function RecordBook({ league }: { league: League }) {
 
   return (
     <>
-      <div className="row" style={{ gap: 10 }}>
-        <BookOpen size={20} className="dim" />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="bold ellipsis">{team ? `${team.region} ${team.name}` : 'League records'}</div>
-          <div className="tiny dim ellipsis">Since {seasonLabel(since)} · this league's seasons only</div>
+      <div className="lg-book-h">
+        {team ? <TeamLogo tid={team.tid} size={32} decorative /> : <BookOpen size={22} className="dim" aria-hidden="true" />}
+        <div className="grow">
+          <div className="lg-book-t ellipsis">{team ? `${team.region} ${team.name}` : 'League records'}</div>
+          <div className="lg-book-s ellipsis">Since {seasonLabel(since)} · this league&apos;s seasons only</div>
         </div>
-        <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book" style={{ maxWidth: 110 }}>
+        <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">
           <option value="league">League</option>
           {[...league.teams]
             .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
@@ -114,6 +114,19 @@ export function RecordBook({ league }: { league: League }) {
   );
 }
 
+/** A record's stat picker: one line of chips that scrolls sideways. */
+function StatChips<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: { id: T; label: string }[] }) {
+  return (
+    <div className="lg-hscroll" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.id} className={`chip ${value === o.id ? 'on' : ''}`} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Names for the players a list shows ("S. Gilgeous-Alexander"), with as much of the first name as it
  * takes to tell two of them apart ("Jal. Williams", "Jay. Williams"), as on the roster. A player
@@ -129,7 +142,7 @@ function listNames(league: League, pids: number[]): (pid: number, frozen?: strin
 
 function When({ league, m }: { league: League; m: { season: number; day: number; opp: number } }) {
   return (
-    <span className="tiny dim ellipsis">
+    <span className="sub ellipsis">
       vs {league.teams[m.opp]?.abbrev ?? '?'} · {fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}
     </span>
   );
@@ -139,21 +152,26 @@ function When({ league, m }: { league: League; m: { season: number; day: number;
 function Row({ i, to, children, value }: { i: number; to?: string; children: ReactNode; value: ReactNode }) {
   const cells = (
     <>
-      <span className="tiny dim bold" style={{ textAlign: 'right' }}>
-        {i + 1}
-      </span>
-      <span className="col" style={{ minWidth: 0, gap: 1 }}>
-        {children}
-      </span>
-      <span className="num bold">{value}</span>
+      <span className="rk">{i + 1}</span>
+      <span className="who">{children}</span>
+      <span className="v num">{value}</span>
     </>
   );
   return to ? (
-    <Link to={to} className="lg-rec-row">
+    <Link to={to} className="lg-book-row">
       {cells}
     </Link>
   ) : (
-    <div className="lg-rec-row">{cells}</div>
+    <div className="lg-book-row">{cells}</div>
+  );
+}
+
+/** A list of the book's lines, or what it takes to get into it. */
+function Book({ title, right, empty, children }: { title: ReactNode; right?: ReactNode; empty: ReactNode | false; children: ReactNode }) {
+  return (
+    <Section title={title} right={right}>
+      {empty ? <div className="card empty">{empty}</div> : <div className="card flush list">{children}</div>}
+    </Section>
   );
 }
 
@@ -171,39 +189,34 @@ function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid
   );
   return (
     <>
-      <Chips label="Record" value={stat} onChange={setStat} options={GAME_KEYS.map((k) => ({ id: k, label: GAME_SHORT[k] }))} />
-      <SectionLabel right={<span className="tiny dim">top {keep}</span>}>
-        {isTeam ? TEAM_REC_LABEL[stat.slice(5) as TeamRecStat] : REC_LABEL[stat as RecStat][0]} in a game
-      </SectionLabel>
-      <Card>
-        {list.length === 0 ? (
-          <Empty>No games in the book yet: records are set as games are played.</Empty>
-        ) : (
-          <div className="lg-team5">
-            {list.map((m, i) =>
-              'pid' in m ? (
-                <Row key={`${m.gid}-${m.pid}`} i={i} to={league.players[m.pid] ? `/player/${m.pid}` : undefined} value={m.v}>
-                  <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <TeamLogo tid={m.tid} size={16} />
-                    <span className="bold ellipsis">{name(m.pid, m.name)}</span>
-                  </span>
-                  <When league={league} m={m} />
-                </Row>
-              ) : (
-                <Row key={`${m.gid}-${m.tid}`} i={i} to={league.teams[m.tid] ? `/team/${m.tid}` : undefined} value={stat === 'team-margin' ? `+${m.v}` : m.v}>
-                  <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <TeamLogo tid={m.tid} size={16} decorative />
-                    <span className="bold ellipsis">
-                      {league.teams[m.tid]?.abbrev ?? '?'} {m.score[0]}-{m.score[1]}
-                    </span>
-                  </span>
-                  <When league={league} m={m} />
-                </Row>
-              ),
-            )}
-          </div>
+      <StatChips label="Record" value={stat} onChange={setStat} options={GAME_KEYS.map((k) => ({ id: k, label: GAME_SHORT[k] }))} />
+      <Book
+        title={`${isTeam ? TEAM_REC_LABEL[stat.slice(5) as TeamRecStat] : REC_LABEL[stat as RecStat][0]} in a game`}
+        right={<span className="lg-sec-meta">Top {keep}</span>}
+        empty={list.length === 0 && 'No games in the book yet: records are set as games are played.'}
+      >
+        {list.map((m, i) =>
+          'pid' in m ? (
+            <Row key={`${m.gid}-${m.pid}`} i={i} to={league.players[m.pid] ? `/player/${m.pid}` : undefined} value={m.v}>
+              <span className="nm">
+                <TeamLogo tid={m.tid} size={16} />
+                <span className="ellipsis">{name(m.pid, m.name)}</span>
+              </span>
+              <When league={league} m={m} />
+            </Row>
+          ) : (
+            <Row key={`${m.gid}-${m.tid}`} i={i} to={league.teams[m.tid] ? `/team/${m.tid}` : undefined} value={stat === 'team-margin' ? `+${m.v}` : m.v}>
+              <span className="nm">
+                <TeamLogo tid={m.tid} size={16} decorative />
+                <span className="ellipsis">
+                  {league.teams[m.tid]?.abbrev ?? '?'} {m.score[0]}-{m.score[1]}
+                </span>
+              </span>
+              <When league={league} m={m} />
+            </Row>
+          ),
         )}
-      </Card>
+      </Book>
     </>
   );
 }
@@ -236,59 +249,52 @@ function SeasonRecords({
   );
   return (
     <>
-      <Chips label="Player record" value={stat} onChange={setStat} options={SEASON_STATS.map((k) => ({ id: k, label: SEASON_SHORT[k] }))} />
-      <SectionLabel>{SEASON_STAT_LABEL[stat]}</SectionLabel>
-      <Card>
-        {rows.length === 0 ? (
-          <Empty>
-            {/* the qualifying lines of records.ts's qualifies() */}
-            {playoffs
-              ? "No qualifying playoff runs yet. Per-game and percentage records need half the team's playoff games, four at least (and 30 field goals, 9 threes or 13 free throws made)."
-              : "No qualifying seasons yet. Per-game and percentage records need 70% of the team's games (and 300 field goals, 82 threes or 125 free throws made)."}
-          </Empty>
-        ) : (
-          <div className="lg-team5">
-            {rows.map((r, i) => (
-              <Row key={`${r.pid}-${r.season}`} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={fmtSeason(stat, r.v)}>
-                <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                  <TeamLogo tid={r.tid} size={16} />
-                  <span className="bold ellipsis">{name(r.pid)}</span>
+      <StatChips label="Player record" value={stat} onChange={setStat} options={SEASON_STATS.map((k) => ({ id: k, label: SEASON_SHORT[k] }))} />
+      <Book
+        title={SEASON_STAT_LABEL[stat]}
+        empty={
+          rows.length === 0 &&
+          // the qualifying lines of records.ts's qualifies()
+          (playoffs
+            ? "No qualifying playoff runs yet. Per-game and percentage records need half the team's playoff games, four at least (and 30 field goals, 9 threes or 13 free throws made)."
+            : "No qualifying seasons yet. Per-game and percentage records need 70% of the team's games (and 300 field goals, 82 threes or 125 free throws made).")
+        }
+      >
+        {rows.map((r, i) => (
+          <Row key={`${r.pid}-${r.season}`} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={fmtSeason(stat, r.v)}>
+            <span className="nm">
+              <TeamLogo tid={r.tid} size={16} />
+              <span className="ellipsis">{name(r.pid)}</span>
+            </span>
+            <span className="sub ellipsis">
+              {seasonLabel(r.season)} · {r.gp} game{r.gp === 1 ? '' : 's'}
+              {r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
+            </span>
+          </Row>
+        ))}
+      </Book>
+      {!playoffs && (
+        <>
+          <StatChips label="Team record" value={teamStat} onChange={setTeamStat} options={TEAM_SEASON_STATS.map((k) => ({ id: k, label: TEAM_SEASON_LABEL[k] }))} />
+          <Book
+            title={`Team seasons · ${TEAM_SEASON_LABEL[teamStat].toLowerCase()}`}
+            empty={teamRows.length === 0 && 'Team season records start when the first regular season is over.'}
+          >
+            {teamRows.map((r, i) => (
+              <Row key={`${r.tid}-${r.season}`} i={i} to={`/team/${r.tid}`} value={fmtTeam(teamStat, r.v) || `${r.won}-${r.lost}`}>
+                <span className="nm">
+                  <TeamLogo tid={r.tid} size={16} decorative />
+                  <span className="ellipsis">
+                    {league.teams[r.tid].region} {league.teams[r.tid].name}
+                  </span>
                 </span>
-                <span className="tiny dim ellipsis">
-                  {seasonLabel(r.season)} · {r.gp} game{r.gp === 1 ? '' : 's'}
-                  {r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
+                <span className="sub ellipsis">
+                  {seasonLabel(r.season)}
+                  {fmtTeam(teamStat, r.v) ? ` · ${r.won}-${r.lost}` : ''}
                 </span>
               </Row>
             ))}
-          </div>
-        )}
-      </Card>
-      {!playoffs && (
-        <>
-          <Chips label="Team record" value={teamStat} onChange={setTeamStat} options={TEAM_SEASON_STATS.map((k) => ({ id: k, label: TEAM_SEASON_LABEL[k] }))} />
-          <SectionLabel>Team seasons · {TEAM_SEASON_LABEL[teamStat].toLowerCase()}</SectionLabel>
-          <Card>
-            {teamRows.length === 0 ? (
-              <Empty>Team season records start when the first regular season is over.</Empty>
-            ) : (
-              <div className="lg-team5">
-                {teamRows.map((r, i) => (
-                  <Row key={`${r.tid}-${r.season}`} i={i} to={`/team/${r.tid}`} value={fmtTeam(teamStat, r.v) || `${r.won}-${r.lost}`}>
-                    <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                      <TeamLogo tid={r.tid} size={16} decorative />
-                      <span className="bold ellipsis">
-                        {league.teams[r.tid].region} {league.teams[r.tid].name}
-                      </span>
-                    </span>
-                    <span className="tiny dim ellipsis">
-                      {seasonLabel(r.season)}
-                      {fmtTeam(teamStat, r.v) ? ` · ${r.won}-${r.lost}` : ''}
-                    </span>
-                  </Row>
-                ))}
-              </div>
-            )}
-          </Card>
+          </Book>
         </>
       )}
     </>
@@ -303,27 +309,20 @@ function CareerRecords({ league, tid, playoffs, stat, setStat }: { league: Leagu
   );
   return (
     <>
-      <Chips label="Career stat" value={stat} onChange={setStat} options={CAREER_STATS.map((k) => ({ id: k, label: CAREER_LABEL[k] }))} />
-      <SectionLabel>
-        {tid !== undefined ? 'Franchise' : 'Career'} leaders · {CAREER_LABEL[stat].toLowerCase()}
-      </SectionLabel>
-      <Card>
-        {rows.length === 0 ? (
-          <Empty>No games recorded yet.</Empty>
-        ) : (
-          <div className="lg-team5">
-            {rows.map((r, i) => (
-              <Row key={r.pid} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={Math.round(r.v).toLocaleString('en-US')}>
-                <span className="bold ellipsis">{name(r.pid)}</span>
-                <span className="tiny dim ellipsis">
-                  {r.seasons} season{r.seasons === 1 ? '' : 's'}
-                  {r.active ? '' : ' · retired'}
-                </span>
-              </Row>
-            ))}
-          </div>
-        )}
-      </Card>
+      <StatChips label="Career stat" value={stat} onChange={setStat} options={CAREER_STATS.map((k) => ({ id: k, label: CAREER_LABEL[k] }))} />
+      <Book title={`${tid !== undefined ? 'Franchise' : 'Career'} leaders · ${CAREER_LABEL[stat].toLowerCase()}`} empty={rows.length === 0 && 'No games recorded yet.'}>
+        {rows.map((r, i) => (
+          <Row key={r.pid} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={Math.round(r.v).toLocaleString('en-US')}>
+            <span className="nm">
+              <span className="ellipsis">{name(r.pid)}</span>
+            </span>
+            <span className="sub ellipsis">
+              {r.seasons} season{r.seasons === 1 ? '' : 's'}
+              {r.active ? '' : ' · retired'}
+            </span>
+          </Row>
+        ))}
+      </Book>
     </>
   );
 }

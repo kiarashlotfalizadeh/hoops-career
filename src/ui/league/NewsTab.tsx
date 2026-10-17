@@ -21,7 +21,6 @@ import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty } from '../components/ui';
 import { shortName, useQueryParam } from './shared';
 
 type Kind = NewsItem['kind'];
@@ -74,18 +73,16 @@ export function NewsTab({ league }: { league: League }) {
           const M = NEWS_KIND[k];
           return (
             <button key={k} className={`chip ${kind === k ? 'on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>
-              <M.icon size={14} style={{ color: M.color }} />
+              <M.icon size={14} className="lg-kind" style={{ ['--k' as string]: M.color }} />
               {M.label}
             </button>
           );
         })}
       </div>
       {shown.length === 0 ? (
-        <Card>
-          <Empty>{sorted.length ? 'No stories match this filter.' : 'No news yet. Trades, signings, injuries and big performances will show up here.'}</Empty>
-        </Card>
+        <div className="card empty">{sorted.length ? 'No stories match this filter.' : 'No news yet: trades, signings, injuries and big games land here.'}</div>
       ) : (
-        <Card className="flush lg-flat">
+        <div className="card flush">
           {shown.map((n) => {
             const key = `${n.season}:${n.day}`;
             const header = key !== lastKey;
@@ -93,7 +90,7 @@ export function NewsTab({ league }: { league: League }) {
             return (
               <Fragment key={n.id}>
                 {header && (
-                  <div className="lg-date-h">
+                  <div className="list-divider">
                     {fmtDate(n.season, n.day, { weekday: 'short', month: 'short', day: 'numeric' })}
                     {n.season !== league.season ? ` · ${seasonLabel(n.season)}` : ''}
                   </div>
@@ -103,11 +100,11 @@ export function NewsTab({ league }: { league: League }) {
             );
           })}
           {filtered.length > shown.length && (
-            <button className="lg-more" style={{ borderBottom: 'none', borderTop: '1px solid var(--line)' }} onClick={() => setLimit(limit + PAGE)}>
+            <button className="lg-more" onClick={() => setLimit(limit + PAGE)}>
               <ChevronDown size={15} /> Show more ({filtered.length - shown.length})
             </button>
           )}
-        </Card>
+        </div>
       )}
     </>
   );
@@ -120,15 +117,15 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
   const showP = pids.slice(0, 3);
   return (
     <div className="lg-news">
-      <span className="lg-ic" style={{ background: `color-mix(in srgb, ${M.color} 16%, var(--surface-3))`, color: M.color }}>
-        <M.icon size={16} />
+      <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
+        <M.icon size={15} />
       </span>
-      <div style={{ minWidth: 0 }}>
+      <div className="lg-news-body">
         <div className="lg-news-text">{n.text}</div>
         {(tids.length > 0 || showP.length > 0) && (
           <div className="lg-news-meta">
             {tids.map((t) => (
-              <Link key={`t${t}`} to={`/team/${t}`} className="lg-pchip" style={{ paddingLeft: 3 }}>
+              <Link key={`t${t}`} to={`/team/${t}`} className="lg-pchip team">
                 <TeamLogo tid={t} size={18} decorative />
                 <span>{league.teams[t].abbrev}</span>
               </Link>
@@ -138,7 +135,7 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
                 <span>{shortName(league.players[pid])}</span>
               </Link>
             ))}
-            {pids.length > showP.length && <span className="tiny dim">+{pids.length - showP.length} more</span>}
+            {pids.length > showP.length && <span className="lg-news-more">+{pids.length - showP.length} more</span>}
           </div>
         )}
       </div>

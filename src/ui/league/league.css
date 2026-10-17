@@ -1,56 +1,88 @@
-/* League hub, team pages, history & inbox. Scoped with the `lg-` / `bk-` prefixes. */
+/* League hub, team pages, history & inbox. Scoped with the `lg-` / `bk-` prefixes. Tables and lists
+   read like a broadcast's: overline heads, hairlines between rows, figures in the display face; your
+   own rows carry your team's edge (--team-text), the controls the brand. */
 
-/* ------------------------------------------------------------------ sticky tab bar */
+/* ------------------------------------------------------------------ sticky page tabs */
 .lg-tabs {
   position: sticky;
   top: calc(var(--top-h) + var(--safe-t));
   z-index: 20;
-  /* edge to edge across the page's padding, which grows past a landscape notch */
-  margin: -6px calc(-1 * max(14px, var(--safe-r))) 0 calc(-1 * max(14px, var(--safe-l)));
-  padding: 6px max(14px, var(--safe-r)) 8px max(14px, var(--safe-l));
+  /* edge to edge across the page's gutters, which grow past a landscape notch */
+  margin: -6px calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
   /* solid fallback first: iOS before 16.2 has no color-mix */
-  background: rgba(6, 8, 12, 0.86);
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  background: rgba(7, 9, 12, 0.94);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--line);
 }
-.lg-tabs .seg button {
-  flex: 1 0 auto;
-  padding: 0 11px;
+.lg-tabs .seg.tabs {
+  border-bottom: none;
+  /* the first tab's label lines up with the page's gutter */
+  padding: 0 calc(var(--gut-r) - 12px) 0 calc(var(--gut-l) - 12px);
+  scroll-padding: 0 var(--gut-l);
+}
+.lg-tabs .seg.tabs button {
+  padding: 0 12px;
+}
+/* the scroller clips below its edge: the active tab's bar sits inside it */
+.lg-tabs .seg.tabs button.on::before {
+  bottom: 0;
 }
 .lg-tabs::before,
 .lg-tabs::after {
   content: '';
   position: absolute;
-  top: 7px;
-  bottom: 9px;
-  width: 30px;
+  top: 0;
+  bottom: 0;
+  width: 32px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
   z-index: 1;
 }
 .lg-tabs::before {
-  left: calc(max(14px, var(--safe-l)) + 1px);
-  border-radius: 12px 0 0 12px;
-  background: linear-gradient(90deg, var(--surface) 25%, transparent);
+  left: 0;
+  background: linear-gradient(90deg, var(--bg) 20%, transparent);
 }
 .lg-tabs::after {
-  right: calc(max(14px, var(--safe-r)) + 1px);
-  border-radius: 0 12px 12px 0;
-  background: linear-gradient(270deg, var(--surface) 25%, transparent);
+  right: 0;
+  background: linear-gradient(270deg, var(--bg) 20%, transparent);
 }
 .lg-tabs.fl::before,
 .lg-tabs.fr::after {
   opacity: 1;
 }
 
+/* ------------------------------------------------------------------ toolbars, filters, notes */
+/* what a list shows on the left, its switches and Help on the right */
+.lg-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: -6px;
+}
+.lg-bar-l {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.lg-bar-r {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
 .lg-sub {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
+/* a row of chips that scrolls sideways, edge to edge */
 .lg-hscroll {
   display: flex;
   gap: 6px;
@@ -58,8 +90,8 @@
   /* sideways only: room above and below for the chips' tap areas, so a vertical swipe scrolls the page */
   overflow-y: hidden;
   scrollbar-width: none;
-  margin: -4px -14px;
-  padding: 4px 14px;
+  margin: -4px calc(-1 * var(--gut-r)) -4px calc(-1 * var(--gut-l));
+  padding: 4px var(--gut-r) 4px var(--gut-l);
 }
 .lg-hscroll::-webkit-scrollbar {
   display: none;
@@ -74,14 +106,13 @@
   background: var(--line-2);
   flex: none;
 }
-
 .lg-select {
   height: 34px;
   max-width: 100%;
-  border-radius: 10px;
+  border-radius: 9px;
   border: 1px solid var(--line-2);
   background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238590a1' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a94a4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding: 0 30px 0 12px;
@@ -101,7 +132,8 @@
 /* compact chips that still give fingers a 40px target */
 .chip.lg-chip-xs {
   position: relative;
-  height: 28px;
+  height: 30px;
+  padding: 0 11px;
 }
 .chip.lg-chip-xs::after {
   content: '';
@@ -120,7 +152,7 @@
 .lg-search input {
   height: 34px;
   width: 100%;
-  border-radius: 10px;
+  border-radius: 9px;
   border: 1px solid var(--line-2);
   background: var(--surface);
   padding: 0 10px 0 32px;
@@ -128,6 +160,7 @@
 }
 .lg-search input:focus {
   border-color: var(--accent-text);
+  outline: none;
 }
 .lg-search svg {
   position: absolute;
@@ -137,26 +170,45 @@
   color: var(--text-dim);
   pointer-events: none;
 }
-
+/* a list's ground: the plain raised card */
 .lg-flat {
-  background: var(--surface);
+  background: var(--raised);
 }
+/* an overline over a block (the Section heading's look, for spots that aren't a Section) */
 .lg-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--text-dim);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 2px 2px 0;
+  min-height: 20px;
+  margin-bottom: -6px;
+}
+.lg-section-label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* a section heading's figure on the right ("12 inducted") */
+.lg-sec-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
 }
 .lg-note {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-dim);
   line-height: 1.45;
+}
+.lg-p {
+  margin: 0;
 }
 .lg-link {
   color: var(--accent-text);
@@ -168,17 +220,102 @@
 .lg-name-link:active {
   color: var(--accent-text);
 }
+/* "Show more" at the foot of a list */
+.lg-more {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+}
+.lg-more:first-child {
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+}
+.lg-more:active {
+  background: var(--surface);
+}
+/* figures in a card: a Statline with its card's padding */
+.lg-strip {
+  padding: 12px 14px;
+}
+.lg-strip .statline .v {
+  font-size: 26px;
+}
+
+/* ------------------------------------------------------------------ title slab */
+.lg-title {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+}
+.lg-title-over {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding-right: 18px;
+}
+.lg-title-over svg {
+  color: var(--tier-elite);
+  flex: none;
+}
+.lg-title-team {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lg-title-region {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.lg-title-name {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+.lg-title-sub {
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+/* a link on a slab: white, underlined */
+.lg-slab-link {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-underline-offset: 3px;
+}
 
 /* ------------------------------------------------------------------ standings table */
 .lg-st-row {
   display: grid;
   /* narrow number columns leave a phone room for "Timberwolves" and its clinch mark */
-  grid-template-columns: 20px 24px minmax(0, 1fr) 42px 34px 36px 32px;
+  grid-template-columns: 22px 24px minmax(0, 1fr) 44px 36px 32px 30px;
   align-items: center;
   gap: 0 6px;
-  padding: 0 12px;
-  min-height: 44px;
-  font-size: 13.5px;
+  padding: 0 10px;
+  min-height: 46px;
+  font-size: 13px;
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 .lg-st-row > :nth-child(n + 4) {
@@ -188,25 +325,40 @@
   border-top: 1px solid var(--line);
 }
 .lg-st-head {
-  min-height: 32px;
-  background: var(--surface-2);
+  min-height: 34px;
+  background: var(--bg-2);
   color: var(--text-dim);
   font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--line);
-  /* words: Inter's tabular hyphen would space out "W-L" */
+  border-bottom: 1px solid var(--line-2);
+  /* words: a tabular hyphen would space out "W-L" */
   font-variant-numeric: normal;
 }
-.lg-st-row .rk {
-  color: var(--text-dim);
-  font-weight: 700;
-  font-size: 12px;
+.lg-st-head + .lg-st-row {
+  border-top: none;
+}
+.lg-st-head > :first-child {
   text-align: right;
 }
+.lg-st-row .rk {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.lg-st-head .rk,
+.lg-st-head > span {
+  font-family: inherit;
+}
 .lg-st-row .nm {
-  font-weight: 700;
+  font-weight: 650;
+  font-size: 14.5px;
+  color: var(--text);
   min-width: 0;
   display: flex;
   align-items: baseline;
@@ -217,18 +369,59 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.lg-st-row .nm.two {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.lg-st-row .nm.two > span:first-child {
+  max-width: 100%;
+}
+.lg-st-rec {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
 .lg-st-row .wl {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text);
+}
+.lg-st-row .wl.good {
+  color: var(--good);
+}
+.lg-st-row .wl.bad {
+  color: var(--bad);
+}
+.lg-st-row .strk {
   font-weight: 700;
 }
+.lg-st-row .hi {
+  font-weight: 750;
+  color: var(--text);
+}
+.lg-st-row .hi.good {
+  color: var(--good);
+}
 .lg-st-row.me {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-st-row.me .nm {
+  font-weight: 800;
 }
 .lg-st-row:active:not(.lg-st-head) {
-  background: var(--surface-3);
+  background: var(--surface);
 }
 .lg-st-row .nm-ab {
   display: none;
+}
+.lg-conf {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-dim);
 }
 /* a narrow phone: a traded pick's new owner goes under the name (OddsView), which had been cut to "Timbe…" */
 @media (max-width: 389px) {
@@ -242,10 +435,10 @@
   }
 }
 .lg-clinch {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
   color: var(--text-dim);
-  letter-spacing: 0.02em;
 }
 .lg-clinch.x {
   color: var(--good);
@@ -256,24 +449,33 @@
 .lg-clinch.e {
   color: var(--bad);
 }
+/* the playoff and play-in lines: a dashed rule with its name on it */
 .lg-cut {
   position: relative;
   height: 0;
-  margin: 0 12px;
-  border-top: 1.5px dashed color-mix(in srgb, var(--text-dim) 55%, transparent);
+  border-top: 1px dashed var(--line-3);
 }
 .lg-cut span {
   position: absolute;
-  right: 0;
-  top: -7px;
-  padding: 0 0 0 6px;
-  font-size: 10px;
-  line-height: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  right: 10px;
+  top: -8px;
+  padding: 0 6px;
+  font-size: 9.5px;
+  line-height: 15px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-dim);
-  background: var(--surface);
+  background: var(--raised);
+  border-radius: 4px;
+}
+.lg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
 /* standings column modes */
@@ -284,12 +486,12 @@
   display: none;
 }
 .lg-st.mode-splits .lg-st-row {
-  grid-template-columns: 18px 22px minmax(0, 1fr) 42px 42px 42px 42px 38px;
+  grid-template-columns: 18px 22px minmax(0, 1fr) 42px 42px 42px 42px 36px;
   gap: 0 5px;
   font-size: 12.5px;
 }
 .lg-st.mode-splits .lg-st-head {
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 .lg-st-row > span {
   white-space: nowrap;
@@ -301,12 +503,19 @@
   display: inline;
 }
 .lg-st.mode-power .lg-st-row {
-  grid-template-columns: 20px 24px minmax(0, 1fr) 46px 40px 40px 30px;
+  grid-template-columns: 22px 24px minmax(0, 1fr) 44px 40px 40px 28px;
 }
-/* phones: tighter split columns leave room for an abbreviation and its clinch mark */
+/* phones: tighter columns leave room for a name (or an abbreviation) and its clinch mark */
 @media (max-width: 389px) {
+  .lg-st-row {
+    grid-template-columns: 20px 22px minmax(0, 1fr) 42px 34px 30px 28px;
+    gap: 0 5px;
+  }
+  .lg-st-row .nm {
+    font-size: 14px;
+  }
   .lg-st.mode-splits .lg-st-row {
-    grid-template-columns: 18px 22px minmax(0, 1fr) repeat(4, 39px) 35px;
+    grid-template-columns: 18px 22px minmax(0, 1fr) repeat(4, 39px) 34px;
     gap: 0 4px;
     font-size: 12px;
   }
@@ -314,9 +523,9 @@
 /* small phones: the logo goes too (the abbreviation names the team) */
 @media (max-width: 359px) {
   .lg-st.mode-splits .lg-st-row {
-    grid-template-columns: 16px minmax(0, 1fr) repeat(4, 39px) 35px;
+    grid-template-columns: 16px minmax(0, 1fr) repeat(4, 39px) 34px;
     gap: 0 3px;
-    padding: 0 10px;
+    padding: 0 8px;
   }
   .lg-st.mode-splits .lg-st-row > :nth-child(2) {
     display: none;
@@ -340,6 +549,7 @@
   .lg-st.mode-splits .lg-st-row {
     grid-template-columns: 24px 26px minmax(0, 1fr) 52px 40px 42px 42px 50px 50px 50px 52px;
     gap: 0 8px;
+    padding: 0 14px 0 12px;
   }
   .lg-st.mode-splits .nm-full {
     display: inline;
@@ -354,10 +564,10 @@
 
 /* the season forecast: projected record (its range under it) and chances; the rest of the rounds where there's room */
 .lg-st.mode-odds .lg-st-row {
-  grid-template-columns: 20px 24px minmax(0, 1fr) 46px 58px 40px;
+  grid-template-columns: 22px 24px minmax(0, 1fr) 46px 58px 40px;
 }
 .lg-st.mode-odds.odds-lottery .lg-st-row {
-  grid-template-columns: 20px 24px minmax(0, 1fr) 46px 44px 44px;
+  grid-template-columns: 22px 24px minmax(0, 1fr) 46px 44px 44px;
 }
 .lg-st.mode-odds .c-wide {
   display: none;
@@ -366,10 +576,17 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  line-height: 1.15;
+  line-height: 1.05;
 }
 .lg-st.mode-odds .odds-range {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 10.5px;
   font-weight: 600;
+  color: var(--text-dim);
+}
+.lg-st.mode-odds .lg-st-row {
+  min-height: 48px;
 }
 @media (min-width: 640px) {
   .lg-st.mode-odds .c-wide {
@@ -383,46 +600,50 @@
     grid-template-columns: 24px 26px minmax(0, 1fr) 56px 60px 52px 52px 64px;
   }
 }
+.lg-trail {
+  padding: 12px 12px 8px;
+}
 
 /* ------------------------------------------------------------------ schedule list */
 .lg-month {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 10px 12px 6px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-2);
+  gap: 10px;
+}
+.lg-month .num {
+  letter-spacing: 0.04em;
 }
 .lg-month + .lg-g-row {
   border-top: none;
 }
 .lg-g-row {
   display: grid;
-  grid-template-columns: 50px 20px 28px minmax(0, 1fr) auto;
+  grid-template-columns: 44px 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0 8px;
-  padding: 8px 12px;
-  min-height: 56px;
+  gap: 0 10px;
+  padding: 8px 12px 8px 14px;
+  min-height: 58px;
 }
-.lg-g-row + .lg-g-row {
+.lg-g-row + .lg-g-row,
+.lg-g-row + .list-divider,
+.lg-more + .list-divider {
   border-top: 1px solid var(--line);
 }
 .lg-g-row:active {
-  background: var(--surface-3);
+  background: var(--surface);
 }
+/* the next game, today: a brand edge, as the Continue bar that plays it */
 .lg-g-row.today {
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
+.lg-g-row.today .wd {
+  color: var(--accent-text);
+}
+/* games against your team on another club's page: your team's edge */
 .lg-g-row.h2h {
-  box-shadow: inset 3px 0 0 var(--accent-2);
+  box-shadow: inset 3px 0 0 var(--team-text);
 }
 .lg-g-date {
   display: flex;
@@ -430,8 +651,9 @@
   line-height: 1.15;
 }
 .lg-g-date .wd {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -441,53 +663,77 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+.lg-g-opp {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-g-name {
+  font-weight: 700;
+  font-size: 14.5px;
+}
 .lg-g-at {
+  margin-right: 5px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.lg-g-sub {
+  margin-top: 1px;
   font-size: 12px;
   color: var(--text-dim);
-  font-weight: 700;
-  text-align: center;
+}
+.lg-g-type {
+  font-weight: 750;
+  color: var(--text-2);
 }
 .lg-g-res {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 1px;
   font-variant-numeric: tabular-nums;
 }
+.lg-g-score {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+}
+.lg-g-ot {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+/* a result: W or L in a small square, in the display face */
 .lg-wl {
+  flex: none;
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
+  width: 21px;
+  height: 21px;
+  border-radius: 5px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 13.5px;
 }
 .lg-wl.w {
-  background: color-mix(in srgb, var(--good) 20%, transparent);
+  background: color-mix(in srgb, var(--good) 18%, transparent);
   color: var(--good);
 }
 .lg-wl.l {
-  background: color-mix(in srgb, var(--bad) 20%, transparent);
-  color: var(--bad);
-}
-.lg-more {
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--accent-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: color-mix(in srgb, var(--bad) 80%, white);
 }
 
 /* ------------------------------------------------------------------ scoreboard */
 .lg-day {
   display: grid;
-  grid-template-columns: 40px 1fr 40px;
+  grid-template-columns: 44px 1fr 44px;
   align-items: center;
   gap: 8px;
 }
@@ -495,39 +741,78 @@
   text-align: center;
 }
 .lg-day .iconbtn {
+  border: 1px solid var(--line-2);
   background: var(--surface);
-  border: 1px solid var(--line);
 }
+.lg-day-d {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.lg-day-s {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-jump {
+  align-self: center;
+  margin: -6px 0;
+}
+/* the day's games in one panel, two to a row with hairlines between (three on a tablet) */
 .lg-sb-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.lg-sb-grid > :nth-child(n + 3) {
+  border-top: 1px solid var(--line);
+}
+.lg-sb-grid > :nth-child(2n) {
+  border-left: 1px solid var(--line);
 }
 @media (min-width: 760px) {
   .lg-sb-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .lg-sb-grid > :nth-child(n) {
+    border-left: none;
+    border-top: none;
+  }
+  .lg-sb-grid > :nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+  .lg-sb-grid > :not(:nth-child(3n + 1)) {
+    border-left: 1px solid var(--line);
   }
 }
 .lg-sb {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px 9px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
-  border: 1px solid var(--line);
+  padding: 9px 12px 10px;
   min-width: 0;
 }
+a.lg-sb:active {
+  background: var(--surface);
+}
 .lg-sb.me {
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
-  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 18%, var(--surface-2)), var(--surface));
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
 }
 .lg-sb-st {
   display: flex;
   justify-content: space-between;
   gap: 6px;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 750;
+  font-stretch: 100%;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -555,10 +840,10 @@
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  height: 26px;
+  height: 27px;
 }
 .lg-sb-t .ab {
-  font-weight: 700;
+  font-weight: 750;
   font-size: 14px;
   display: flex;
   align-items: baseline;
@@ -582,7 +867,7 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 19px;
+  font-size: 20px;
   font-variant-numeric: tabular-nums;
 }
 .lg-sb-t.lose {
@@ -591,31 +876,101 @@
 .lg-sb-t.lose .sc {
   font-weight: 600;
 }
+.lg-sb-t.lose svg {
+  opacity: 0.6;
+}
 
 /* ------------------------------------------------------------------ leaders */
+/* the categories in one panel: hairlines between them, two or three abreast on wider screens */
 .lg-leaders {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.lg-lead + .lg-lead {
+  border-top: 1px solid var(--line-2);
 }
 @media (min-width: 600px) {
   .lg-leaders {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lg-lead + .lg-lead {
+    border-top: none;
+  }
+  .lg-lead:nth-child(n + 3) {
+    border-top: 1px solid var(--line-2);
+  }
+  .lg-lead:nth-child(2n) {
+    border-left: 1px solid var(--line);
   }
 }
 @media (min-width: 1000px) {
   .lg-leaders {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .lg-lead:nth-child(n) {
+    border-left: none;
+    border-top: none;
+  }
+  .lg-lead:nth-child(n + 4) {
+    border-top: 1px solid var(--line-2);
+  }
+  .lg-lead:not(:nth-child(3n + 1)) {
+    border-left: 1px solid var(--line);
+  }
+}
+.lg-lead {
+  padding: 12px 0 6px;
+  min-width: 0;
+}
+.lg-lead-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 14px 6px;
+}
+.lg-lead-h h3 {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-lead-h span {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.lg-lead-none {
+  padding: 4px 14px 8px;
+  font-size: 13px;
+  color: var(--text-dim);
 }
 .lg-lead-top {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 4px;
+  padding: 6px 14px 8px;
+}
+.lg-lead-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-lead-who .nm {
+  font-weight: 750;
+  font-size: 15.5px;
+}
+.lg-lead-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
 }
 .lg-lead-val {
   font-family: var(--display);
@@ -629,8 +984,9 @@
 .lg-lead-val small {
   display: block;
   font-family: var(--font);
+  font-stretch: 100%;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 750;
   letter-spacing: 0.08em;
   color: var(--text-dim);
   margin-top: 3px;
@@ -640,22 +996,38 @@
   grid-template-columns: 16px 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
+  min-height: 34px;
+  padding: 0 14px;
   font-size: 13.5px;
+  color: var(--text-2);
+  border-top: 1px solid var(--line);
 }
 .lg-lead-row .r {
   color: var(--text-dim);
-  font-size: 11.5px;
-  font-weight: 700;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 14px;
   text-align: right;
 }
 .lg-lead-row .v {
-  font-weight: 700;
+  font-weight: 750;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.lg-lead-row.me .nm,
-.lg-lead-top.me .nm {
-  color: var(--accent-text);
+.lg-lead-row:active,
+.lg-lead-top:active {
+  background: var(--surface);
+}
+/* your players: your team's edge */
+.lg-lead-row.me,
+.lg-lead-top.me {
+  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+}
+.lg-lead-row.me .nm {
+  color: var(--text);
+  font-weight: 700;
 }
 
 /* StatTable name cell */
@@ -678,21 +1050,55 @@
   gap: 6px;
   font-weight: 700;
 }
+.lg-showmore {
+  align-self: center;
+}
 
 /* ------------------------------------------------------------------ playoff bracket */
+.lg-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 22px 18px;
+  color: var(--text-dim);
+}
+.lg-blank h3 {
+  color: var(--text);
+  font-size: 20px;
+}
+.lg-blank p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.bk-conf {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bk-card {
+  padding: 12px 12px 10px;
+}
 .bk-head {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0 14px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .bk-head span {
   text-align: center;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 750;
+  font-stretch: 100%;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bk {
   display: grid;
@@ -716,7 +1122,7 @@
   top: 25%;
   bottom: 25%;
   width: 7px;
-  border: 1.5px solid var(--line-2);
+  border: 1.5px solid var(--line-3);
   border-left: none;
   border-radius: 0 6px 6px 0;
 }
@@ -734,23 +1140,28 @@
   left: -7px;
   top: 50%;
   width: 7px;
-  border-top: 1.5px solid var(--line-2);
+  border-top: 1.5px solid var(--line-3);
 }
 .bk-s {
   width: 100%;
-  border-radius: 9px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   overflow: hidden;
   text-align: left;
   display: block;
 }
-.bk-s.live {
-  border-color: color-mix(in srgb, var(--info) 45%, var(--line));
+button.bk-s:active,
+a.bk-s:active {
+  background: var(--surface-2);
 }
+.bk-s.live {
+  border-color: color-mix(in srgb, var(--info) 50%, var(--line-2));
+}
+/* your series: your team's edge */
 .bk-s.me {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  border-color: var(--team-text);
+  box-shadow: inset 3px 0 0 var(--team-text);
 }
 .bk-s.tbd {
   background: transparent;
@@ -758,38 +1169,39 @@
 }
 .bk-t {
   display: grid;
-  grid-template-columns: 11px 18px minmax(0, 1fr) 11px;
+  grid-template-columns: 11px 18px minmax(0, 1fr) 12px;
   align-items: center;
   gap: 5px;
   padding: 0 6px;
-  height: 26px;
+  height: 27px;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 750;
 }
 .bk-t + .bk-t {
   border-top: 1px solid var(--line);
 }
 .bk-s.pi .bk-t {
   grid-template-columns: 14px 18px minmax(0, 1fr) 34px;
+  height: 30px;
 }
 .bk-t .sd {
   font-size: 10px;
   color: var(--text-dim);
   text-align: right;
-  font-weight: 700;
+  font-weight: 750;
 }
 .bk-t .w {
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 15px;
+  font-size: 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .bk-t.win .w {
   color: var(--good);
 }
-/* the loser dims: grey text that keeps 4.5:1, and a faded logo */
+/* the loser dims: grey text that keeps 4.5:1, and a faded mark */
 .bk-t.lose {
   color: var(--text-dim);
 }
@@ -801,8 +1213,23 @@
   font-size: 11px;
   font-weight: 600;
 }
+/* no mark yet: "Play-in" takes the mark's room too, so it fits a phone-width bracket */
+.bk-t .bk-wide {
+  grid-column: span 2;
+}
+.bk-rec {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.bk-link {
+  display: block;
+}
 /* phones: slimmer gaps and rows, so every round's column still shows a three-letter abbreviation */
 @media (max-width: 400px) {
+  .bk-card {
+    padding: 10px 8px 8px;
+  }
   .bk-head,
   .bk {
     gap: 0 8px;
@@ -831,7 +1258,7 @@
 .bk-panel-wrap {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 @media (max-width: 759px) {
   .bk-hide-narrow {
@@ -848,9 +1275,19 @@
     display: none !important;
   }
 }
+/* the Finals (and the Cup's championship, a series' sheet): two sides and the score between */
+.bk-fcard {
+  display: block;
+  width: 100%;
+  padding: 14px;
+}
+button.bk-fcard:active,
+a.bk-fcard:active {
+  background: var(--surface);
+}
 .bk-finals {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
@@ -862,6 +1299,10 @@
   text-align: center;
   min-width: 0;
 }
+.bk-finals .side.second {
+  grid-column: 3;
+  grid-row: 1;
+}
 .bk-finals .side.lose {
   color: var(--text-dim);
 }
@@ -872,10 +1313,91 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 38px;
+  font-size: 40px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+.bk-fname {
+  font-weight: 750;
+  max-width: 100%;
+}
+.bk-fconf {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.bk-vs {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.bk-ghost {
+  display: block;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--line-3);
+}
+.bk-sscore {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.bk-sscore .num {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 36px;
+  line-height: 1;
+}
+.lg-sheet {
+  gap: 14px;
+}
+/* a series' games in its sheet */
+.lg-sr-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 12px 0 14px;
+}
+.lg-sr-row + .lg-sr-row {
+  border-top: 1px solid var(--line);
+}
+a.lg-sr-row:active,
+a.lg-sr-lead:active {
+  background: var(--surface);
+}
+.lg-sr-row .g {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+.lg-next {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.lg-sr-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.lg-sr-lead + .lg-sr-lead {
+  border-top: 1px solid var(--line);
+}
+
 /* ------------------------------------------------------------------ NBA Cup */
 .bk-head.two,
 .bk.two {
@@ -893,7 +1415,13 @@ a.bk-s:hover {
   text-decoration: none;
 }
 .lg-st.mode-cup .lg-st-row {
-  grid-template-columns: 18px 22px minmax(0, 1fr) 38px 38px 36px 32px;
+  grid-template-columns: 20px 22px minmax(0, 1fr) 38px 38px 34px 32px;
+}
+.lg-st.mode-cup .list-divider + .lg-st-row {
+  border-top: none;
+}
+.lg-st.mode-cup .lg-st-row + .list-divider {
+  border-top: 1px solid var(--line);
 }
 .lg-st-row.cup-out > span {
   color: var(--text-dim);
@@ -901,33 +1429,22 @@ a.bk-s:hover {
 .lg-st-row.cup-out .nm,
 .lg-st-row.cup-out .wl {
   font-weight: 600;
+  color: var(--text-dim);
 }
-.lg-champ {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--radius);
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--tier-elite) 45%, var(--line));
-  background:
-    radial-gradient(420px 160px at 85% 0%, color-mix(in srgb, var(--tier-elite) 22%, transparent), transparent 70%), linear-gradient(160deg, var(--surface-2), var(--surface));
-}
-.lg-champ .kicker {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--tier-elite);
-}
+/* the play-in: each game's name, then its two teams */
 .lg-pi {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
 }
 .lg-pi-game {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+  padding: 10px 12px 10px 14px;
+}
+.lg-pi-game + .lg-pi-game {
+  border-top: 1px solid var(--line);
 }
 .lg-pi-game .lbl {
   display: flex;
@@ -938,13 +1455,13 @@ a.bk-s:hover {
 .lg-pi-game .lbl b {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 .lg-pi-game .lbl span {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-dim);
 }
 
@@ -953,29 +1470,76 @@ a.bk-s:hover {
   display: grid;
   grid-template-columns: 34px 40px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  min-height: 62px;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 64px;
 }
-.lg-award + .lg-award {
-  border-top: 1px solid var(--line);
+a.lg-award:active {
+  background: var(--surface);
 }
 .lg-award .ic {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--tier-elite) 14%, var(--surface-3));
+  background: color-mix(in srgb, var(--tier-elite) 14%, transparent);
   color: var(--tier-elite);
+}
+.lg-award-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .lg-award .lb {
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 750;
+  font-stretch: 100%;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-dim);
 }
+.lg-award .nm {
+  font-weight: 750;
+  font-size: 15px;
+  margin-top: 1px;
+}
+.lg-award .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.lg-stack {
+  gap: 16px;
+}
+/* a five (an All-NBA team, the All-Stars): mark, name and position, the line */
+.lg-five {
+  display: flex;
+  flex-direction: column;
+}
+.lg-five-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 4px 14px;
+  font-size: 13.5px;
+}
+.lg-five-row + .lg-five-row {
+  border-top: 1px solid var(--line);
+}
+.lg-five-row:active {
+  background: var(--surface);
+}
+.lg-five-row.me {
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-mvp {
+  margin-left: 6px;
+}
+/* a generic five-row list (player pages' career highs use it too) */
 .lg-team5 {
   display: flex;
   flex-direction: column;
@@ -985,19 +1549,22 @@ a.bk-s:hover {
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
+  min-height: 36px;
   font-size: 13.5px;
 }
 .lg-team5 .row5 + .row5 {
   border-top: 1px solid var(--line);
 }
 /* All-Star Saturday: the place, who, the first round and the final; under each dunker his dunks */
+.lg-sat {
+  padding: 6px 14px 8px;
+}
 .lg-sat-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) 32px 38px;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 38px;
   font-size: 13.5px;
 }
 .lg-sat-row > :nth-child(n + 3) {
@@ -1008,9 +1575,10 @@ a.bk-s:hover {
   border-top: 1px solid var(--line);
 }
 .lg-sat-row.head {
-  min-height: 20px;
+  min-height: 22px;
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 750;
+  font-stretch: 100%;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1018,10 +1586,18 @@ a.bk-s:hover {
 .lg-sat-row.head + .lg-sat-dunker {
   border-top: 1px solid var(--line);
 }
-.lg-sat-win {
+.lg-sat-rk {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+.lg-sat-win,
+.lg-sat-rk.lg-sat-win {
   color: var(--tier-elite);
 }
-/* a contestant's name: the link reaches up and down the 36px row (its label keeps the ellipsis) */
+/* a contestant's name: the link reaches up and down the row (its label keeps the ellipsis) */
 .lg-sat-who {
   position: relative;
   display: flex;
@@ -1030,26 +1606,44 @@ a.bk-s:hover {
 .lg-sat-who::after {
   content: '';
   position: absolute;
-  inset: -8px -4px;
+  inset: -9px -4px;
 }
 .lg-sat-dunks {
   display: grid;
   grid-template-columns: 34px 22px minmax(0, 1fr);
   align-items: baseline;
   gap: 3px 8px;
-  padding: 0 0 8px 24px;
-  font-size: 12.5px;
+  padding: 0 0 9px 24px;
+  font-size: 12px;
+}
+.lg-sat-lb {
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 .lg-sat-miss {
   color: var(--warn);
+}
+.lg-sat-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.lg-sat-note {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 /* record book and career highs: rank (or the stat), who and when, the number */
 .lg-rec-row {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
+  gap: 10px;
+  min-height: 44px;
   padding: 3px 0;
   font-size: 13.5px;
 }
@@ -1058,6 +1652,10 @@ a.bk-s:hover {
 }
 .lg-rec-row + .lg-rec-row {
   border-top: 1px solid var(--line);
+}
+/* a record line that links (to the player, or the team) is one tap target from edge to edge */
+a.lg-rec-row:active {
+  background: var(--surface);
 }
 /* Lineups: a unit or split over too few possessions to trust, greyed by colour (opacity took its
    small text under 4.5:1) */
@@ -1068,54 +1666,86 @@ a.bk-s:hover {
 .listrow.lu-faded .bad {
   color: var(--text-2);
 }
-/* a record line that links (to the player, or the team) is one tap target from edge to edge */
-a.lg-rec-row:active {
-  background: var(--surface-3);
-}
+/* the award races: place, jersey, name and line with the voters' gap to the leader */
 .lg-race-row {
   display: grid;
-  grid-template-columns: 18px 40px minmax(0, 1fr) auto;
+  grid-template-columns: 18px 40px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
+  padding: 9px 14px 10px 12px;
 }
-.lg-race-row + .lg-race-row {
-  border-top: 1px solid var(--line);
+.lg-race-row:active {
+  background: var(--surface);
+}
+.lg-race-row.me {
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
 }
 .lg-race-row .rank {
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 18px;
+  font-size: 19px;
   color: var(--text-dim);
   text-align: center;
 }
 .lg-race-row.first .rank {
   color: var(--tier-elite);
 }
+.lg-race-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lg-race-t .nm {
+  font-weight: 750;
+}
+.lg-race-t .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lg-race-t .bar {
+  margin-top: 4px;
+}
 
-/* ------------------------------------------------------------------ news & inbox */
+/* ------------------------------------------------------------------ news & moves */
 .lg-news {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
 }
-.lg-news + .lg-news {
+.lg-news + .lg-news,
+.lg-news + .list-divider {
   border-top: 1px solid var(--line);
 }
+.lg-news-body {
+  min-width: 0;
+}
+/* a kind's icon in its colour (--k), on a faint wash of it */
 .lg-ic {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
   flex: none;
+  color: var(--k, var(--text-2));
+  background: color-mix(in srgb, var(--k, var(--text-2)) 15%, transparent);
+}
+.lg-kind {
+  color: var(--k);
 }
 .lg-news-text {
   font-size: 14px;
   line-height: 1.42;
   color: var(--text);
+}
+.lg-news-date {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-dim);
 }
 .lg-news-meta {
   display: flex;
@@ -1123,6 +1753,10 @@ a.lg-rec-row:active {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+.lg-news-more {
+  font-size: 11.5px;
+  color: var(--text-dim);
 }
 .lg-pchip {
   display: inline-flex;
@@ -1135,9 +1769,11 @@ a.lg-rec-row:active {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--text-2);
-  background: var(--surface);
   max-width: 100%;
   position: relative;
+}
+.lg-pchip.team {
+  padding-left: 3px;
 }
 /* compact chips that still give fingers a 40px target */
 .lg-pchip::after {
@@ -1145,251 +1781,457 @@ a.lg-rec-row:active {
   position: absolute;
   inset: -8px -3px;
 }
+.lg-pchip:active {
+  background: var(--surface);
+}
 .lg-pchip span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lg-date-h {
-  padding: 8px 12px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+/* a count in a chip ("Trades 4") */
+.lg-count {
   color: var(--text-dim);
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
+  font-weight: 650;
 }
-.lg-date-h + .lg-news,
-.lg-date-h + .lg-msg {
-  border-top: none;
+.chip.on .lg-count {
+  color: var(--text-2);
 }
-.lg-news + .lg-date-h,
-.lg-msg + .lg-date-h {
+.lg-count-new {
+  color: var(--accent-text);
+}
+/* chips that scroll beside a Help: the scroller gives up the bar's right side */
+.lg-bar-chips {
+  margin-bottom: 0;
+}
+.lg-bar-scroll {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0;
+  padding-right: 4px;
+}
+/* a player's moves (his page) and your last deals with a team (Trade) */
+.lg-pmoves {
+  gap: 10px;
+}
+.lg-pmove {
+  gap: 10px;
+}
+.lg-pmoves-all {
+  margin-top: 10px;
+}
+.lg-lh {
+  min-width: 0;
+  line-height: 1.4;
+}
+.lg-deals {
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
+.lg-deals-h {
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-deals-list {
+  gap: 6px;
+}
 
+/* ------------------------------------------------------------------ inbox */
+.lg-inbox-bar {
+  margin: -4px 0 -6px;
+}
 .lg-msg {
   position: relative;
 }
-.lg-msg + .lg-msg {
+.lg-msg + .lg-msg,
+.lg-msg + .list-divider {
   border-top: 1px solid var(--line);
-}
-.lg-msg::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--tone, transparent);
-}
-.lg-msg.unread {
-  background: color-mix(in srgb, var(--tone, var(--accent)) 6%, transparent);
-}
-.lg-msg.open {
-  background: var(--surface-2);
 }
 .lg-msg-top {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) 10px;
+  gap: 12px;
   align-items: start;
   width: 100%;
+  min-height: 64px;
   text-align: left;
-  padding: 12px 14px 12px 18px;
+  padding: 11px 14px;
 }
-.lg-msg.open .lg-msg-top {
-  padding-bottom: 0;
+.lg-msg-top:active {
+  background: var(--surface);
 }
-.lg-msg .ic {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+/* the sender's icon, in the message's tone when it has one (good, bad, alert) */
+.lg-msg .ic,
+.lg-msg-head .ic {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--tone, var(--text-dim)) 16%, var(--surface-3));
+  margin-top: 1px;
   color: var(--tone, var(--text-2));
+  background: color-mix(in srgb, var(--tone, var(--text-2)) 14%, transparent);
+}
+.lg-msg-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .lg-msg .from {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 650;
   color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lg-msg .subj {
-  display: block;
   font-size: 14.5px;
   font-weight: 600;
   color: var(--text-2);
   margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lg-msg.unread .subj {
-  font-weight: 700;
+  font-weight: 750;
   color: var(--text);
 }
 .lg-msg .prev {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-dim);
-  margin-top: 3px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  margin-top: 1px;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lg-msg .when {
-  font-size: 11px;
-  color: var(--text-dim);
-  white-space: nowrap;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-variant-numeric: tabular-nums;
+  justify-content: flex-end;
+  padding-top: 5px;
 }
 .lg-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   flex: none;
 }
+/* the message itself, in its sheet */
 .lg-msg-body {
-  margin: 10px 14px 0 58px;
-  padding-bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
+  gap: 10px;
+  font-size: 15px;
   line-height: 1.5;
   color: var(--text-2);
 }
 .lg-msg-body p {
   margin: 0;
 }
-
-/* ------------------------------------------------------------------ team page */
-.lg-team-hero {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  padding: 16px;
+.lg-msg-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -6px;
 }
-.lg-team-hero .big {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 30px;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.lg-team-hero .kick {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-.lg-team-hero .wm {
-  position: absolute;
-  right: -26px;
-  top: -18px;
-  opacity: 0.12;
-  pointer-events: none;
-}
-.lg-strip {
-  position: relative;
-  display: grid;
-  /* payroll gets more room: its label carries the season in the offseason ("Payroll 27-28") */
-  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.5fr);
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line-2);
-}
-.lg-strip > div {
+.lg-msg-head > span:last-child {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+  line-height: 1.25;
 }
-.lg-strip > div + div {
-  padding-left: 10px;
-  border-left: 1px solid var(--line);
-}
-.lg-strip .k {
-  font-size: 10px;
-  font-weight: 700;
+.lg-msg-head .from {
+  font-size: 12px;
+  font-weight: 750;
+  font-stretch: 100%;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
-  /* one line: a season label must not break at its hyphen */
+}
+.lg-msg-head .date {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.lg-msg-subj {
+  font-size: 24px;
+  line-height: 1.05;
+  color: var(--text);
+  margin: 2px 0 2px;
+}
+.lg-msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.lg-msg-actions > .btn {
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------------ team page */
+/* the slab: back and the conference over the mark, the name in display caps, record and figures */
+.lg-team {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 16px 16px;
+}
+.lg-team-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 42px;
+  padding-right: 14px;
+}
+.lg-team-back {
+  margin-left: -10px;
+  color: #fff;
+}
+.lg-team-back:active {
+  background: rgba(0, 0, 0, 0.2);
+}
+.lg-team-over {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.lg-strip .v {
+.lg-team-id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: -4px;
+}
+.lg-team-region {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.lg-team-name {
+  font-size: 38px;
+  line-height: 0.92;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.lg-team-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lg-team-tags:empty {
+  display: none;
+}
+.lg-team-rec {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.lg-team-wl {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 0.9;
 }
+.lg-team-rank {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.lg-team-coach {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lg-team-coach .nm {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--text);
+}
+.lg-team-coach > span {
+  max-width: 100%;
+}
+.lg-team .lg-team-figs {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+/* payroll ("$204.9M") gets the room it needs */
+.lg-team-figs .statline {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.45fr);
+}
+.lg-team-figs .statline > * {
+  padding: 2px 10px;
+}
+.lg-team-figs .statline > :first-child {
+  padding-left: 0;
+}
+.lg-team-figs .statline .v {
+  font-size: 25px;
+}
+/* tags on the team's colours: white on a dark wash, whatever their tone */
+.lg-team-tags .tag {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.32);
+}
+/* the odds line on a slab: its own link styles, white */
+.lg-team-odds {
+  margin-top: -14px;
+}
+.lg-team-odds:empty {
+  display: none;
+}
+.lg-team-odds a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  text-underline-offset: 3px;
+}
+.lg-team-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: -6px;
+}
+.lg-team-actions .btn {
+  padding: 0 10px;
+  min-width: 0;
+}
+/* the roster's rows: jersey, name and details, the line, OVR */
 .lg-prow {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  min-height: 58px;
+  padding: 8px 12px 8px 14px;
+  min-height: 60px;
 }
 .lg-prow + .lg-prow {
   border-top: 1px solid var(--line);
 }
 .lg-prow:active {
-  background: var(--surface-3);
+  background: var(--surface);
+}
+.lg-prow-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-prow .lr-meta b {
+  font-weight: 700;
 }
 .lg-pstats {
   display: grid;
-  grid-template-columns: repeat(3, 33px);
-  gap: 3px;
+  grid-template-columns: repeat(3, 32px);
+  gap: 2px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.lg-pstats > span {
+  display: flex;
+  flex-direction: column;
+}
 .lg-pstats .v {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
 }
 .lg-pstats .k {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 9.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
   color: var(--text-dim);
 }
-.lg-kv {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+@media (max-width: 374px) {
+  .lg-pstats {
+    grid-template-columns: repeat(3, 29px);
+  }
+}
+/* payroll against the cap and the tax */
+.lg-pay {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
-  min-height: 30px;
-  font-size: 13.5px;
 }
-.lg-kv .k {
+.lg-pay-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.lg-pay-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+}
+.lg-pay-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
   color: var(--text-dim);
-  font-size: 12.5px;
+}
+/* tactics, scouting: a card of named settings, meters and short lines */
+.lg-tac {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lg-tac-name {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.lg-tac-line {
+  margin-top: -4px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.lg-tac .more {
+  margin-top: -8px;
+}
+.lg-tac-sub {
+  margin-top: 4px;
+}
+.lg-meters {
+  display: flex;
+  flex-direction: column;
 }
 .lg-meter {
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr) 28px;
+  grid-template-columns: 116px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 10px;
   min-height: 26px;
   font-size: 13px;
+  color: var(--text-2);
 }
 .lg-meter > span:first-child {
   white-space: nowrap;
@@ -1398,8 +2240,59 @@ a.lg-rec-row:active {
 }
 .lg-meter .val {
   text-align: right;
-  font-weight: 700;
+  font-weight: 750;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+.lg-min {
+  min-height: 32px;
+}
+.lg-min.start > span:first-child {
+  font-weight: 700;
+  color: var(--text);
+}
+.lg-kvs {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lg-kv {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+  font-size: 13.5px;
+}
+.lg-kv + .lg-kv {
+  border-top: 1px solid var(--line);
+}
+.lg-kv dt {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.lg-kv dd {
+  margin: 0;
+  font-weight: 700;
+  min-width: 0;
+}
+.lg-coach-nm {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-weight: 750;
+  font-size: 16px;
+}
+.lg-coach-nm a {
+  text-decoration: underline;
+  text-decoration-color: var(--line-3);
+  text-underline-offset: 3px;
+}
+.lg-coach-role {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 .lg-bullets {
   margin: 0;
@@ -1426,14 +2319,90 @@ a.lg-rec-row:active {
   border-radius: 50%;
   background: var(--bul, var(--text-dim));
 }
+.lg-scout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lg-scout-sum {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.lg-scout-act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lg-threat {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+}
+.lg-threat:active {
+  background: var(--surface);
+}
+.lg-threat-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-threat .lr-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* your record against them, over their schedule (where your games carry your team's edge) */
+.lg-h2h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.lg-h2h .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lg-h2h-v {
+  font-weight: 750;
+}
+.lg-h2h-key {
+  flex: none;
+  padding-left: 8px;
+  border-left: 3px solid var(--team-text);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+/* draft picks */
+.lg-pick {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  min-height: 56px;
+}
+a.lg-pick:active {
+  background: var(--surface);
+}
+.lg-pick-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 
 /* ------------------------------------------------------------------ history */
+/* a season line: the year, the record, the seed, how it ended */
 .lg-season {
   display: grid;
-  grid-template-columns: 74px 54px minmax(0, 1fr) auto;
+  grid-template-columns: 70px 50px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 9px 14px;
   min-height: 48px;
 }
 .lg-season + .lg-season {
@@ -1442,15 +2411,15 @@ a.lg-rec-row:active {
 /* narrow phones: a slimmer year column leaves the seed room beside the outcome tag ("1st s…") */
 @media (max-width: 389px) {
   .lg-season {
-    grid-template-columns: 56px 50px minmax(0, 1fr) auto;
+    grid-template-columns: 58px 48px minmax(0, 1fr) auto;
     gap: 8px;
+    padding: 9px 12px;
   }
 }
 /* small phones: the seed gives way to the longest outcome tag ("Lost Conf. Finals") */
 @media (max-width: 359px) {
   .lg-season {
-    grid-template-columns: 52px 50px minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: 54px 48px minmax(0, 1fr);
   }
   .lg-season > :nth-child(3) {
     display: none;
@@ -1462,26 +2431,247 @@ a.lg-rec-row:active {
 .lg-season .yr {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 16px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 .lg-season .rec {
-  font-weight: 700;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
+}
+.lg-season .sd {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 /* gold beats a tag's tone (league.css loads after theme.css) */
 .tag.lg-gold {
   background: color-mix(in srgb, var(--tier-elite) 20%, transparent);
   color: var(--tier-elite);
 }
+.tag.lg-title-yr {
+  height: 26px;
+  font-size: 12px;
+}
+/* the franchise's slab: its mark and name, the team picker, its all-time figures */
+.lg-fr {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.lg-fr-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 8px;
+}
+.lg-fr-name {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.lg-fr .lg-select {
+  flex: none;
+  max-width: 96px;
+  background-color: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.lg-fr-coach {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.lg-fr-figs {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.lg-fr-figs .statline .v {
+  font-size: 25px;
+}
+/* a ranked list: place, who (with a line under), the figure */
+.lg-book-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lg-book-t {
+  font-weight: 750;
+  font-size: 15px;
+}
+.lg-book-s {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lg-book-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 14px 6px 10px;
+}
+a.lg-book-row:active {
+  background: var(--surface);
+}
+.lg-book-row .rk {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.lg-book-row:first-child .rk {
+  color: var(--tier-elite);
+}
+.lg-book-row .who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.lg-book-row .nm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 700;
+}
+.lg-book-row .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lg-book-row .v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+}
+/* League history: each season's champion, then its winners */
+.lg-champ-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+a.lg-champ-row:active {
+  background: var(--surface);
+}
+.lg-champ-row .grow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-champ-row.pending {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.lg-champ-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tier-elite);
+}
+.lg-champ-row .nm {
+  font-weight: 750;
+  font-size: 16px;
+}
+.lg-champ-row .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lg-hist-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+a.lg-hist-row:active {
+  background: var(--surface);
+}
+.lg-hist-row .k {
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-hist-row .v {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* Hall of Fame and notable retirements: jersey, name, span, career line, honours */
+.lg-legend-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.lg-legend-row:active {
+  background: var(--surface);
+}
+.lg-legend-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lg-legend-t .nm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 750;
+  font-size: 15px;
+}
+.lg-crown {
+  flex: none;
+  color: var(--tier-elite);
+}
+.lg-legend-t .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lg-legend-t .line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.lg-legend-t .line b {
+  color: var(--text);
+}
+.lg-legend-r {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
 /* retired numbers: rafter banners in the team's colours (--bn, --bn-low, --bn-trim set inline), swallowtail at the foot */
 .lg-banners {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 10px 8px;
-  margin-top: 10px;
 }
 .lg-banner {
   display: flex;
@@ -1523,7 +2713,6 @@ a.lg-rec-row:active {
 .lg-banners.sm {
   grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
   gap: 8px 6px;
-  margin-top: 0;
 }
 .lg-banners.sm .lg-banner {
   min-height: 70px;
@@ -1541,24 +2730,6 @@ a.lg-rec-row:active {
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow-wrap: normal;
-}
-.lg-hist-row {
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  min-height: 34px;
-  font-size: 13.5px;
-}
-.lg-hist-row + .lg-hist-row {
-  border-top: 1px solid var(--line);
-}
-.lg-hist-row .k {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
 }
 .lg-accolades {
   display: flex;
@@ -1581,26 +2752,77 @@ a.lg-rec-row:active {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  min-height: 52px;
-  padding: 8px 12px;
+  min-height: 56px;
+  padding: 8px 14px;
   text-align: left;
 }
-.lg-coach-row + .lg-coach-row {
-  border-top: 1px solid var(--line);
+.lg-coach-row:active {
+  background: var(--surface);
+}
+.lg-coach-row.me {
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-coach-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.lg-coach-t .nm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 750;
+}
+.lg-coach-t .sub {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 .lg-coach-row .rec {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 1px;
-  font-weight: 700;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
 }
-/* a career's four tiles inside a card (or the coach's sheet) need 375px abreast: a "Playoffs" label
-   doesn't shrink, so a 360px phone gets two rows of two */
-@media (max-width: 374px) {
-  .grid4.lg-coach-kpis {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.lg-coach-row .pct {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.lg-coach-line {
+  border-bottom: 1px solid var(--line);
+}
+.lg-jobs + .lg-more {
+  border-top: 1px solid var(--line);
+}
+.lg-job {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 14px;
+}
+.lg-job + .lg-season {
+  border-top: 1px solid var(--line);
+}
+.lg-coach-where {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.lg-coy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }

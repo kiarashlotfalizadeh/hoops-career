@@ -7,7 +7,7 @@ import { FREE_AGENT, POSITIONS, type League, type Player, type Pos } from '../..
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, StatTable, type Col } from '../components/ui';
+import { StatTable, type Col } from '../components/ui';
 import { ratingCols } from '../ratingCols';
 import { shortName, teamAbbrev, useQueryParam } from './shared';
 
@@ -57,21 +57,6 @@ export function RatingsTab({ league }: { league: League }) {
 
   return (
     <>
-      <div className="lg-hscroll" role="group" aria-label="Filter players">
-        <button
-          className={`chip ${team === String(league.userTid) ? 'on' : ''}`}
-          aria-pressed={team === String(league.userTid)}
-          onClick={() => setTeam(team === String(league.userTid) ? 'all' : String(league.userTid))}
-        >
-          <TeamLogo tid={league.userTid} size={16} /> My team
-        </button>
-        <span className="lg-vsep" />
-        {(['all', ...POSITIONS] as const).map((x) => (
-          <button key={x} className={`chip ${pos === x ? 'on' : ''}`} aria-pressed={pos === x} onClick={() => setPos(x)}>
-            {x === 'all' ? 'All' : x}
-          </button>
-        ))}
-      </div>
       <div className="lg-sub">
         <div className="lg-search">
           <Search size={15} />
@@ -87,10 +72,23 @@ export function RatingsTab({ league }: { league: League }) {
           ))}
         </select>
       </div>
+      <div className="lg-hscroll" role="group" aria-label="Filter players">
+        <button
+          className={`chip ${team === String(league.userTid) ? 'on' : ''}`}
+          aria-pressed={team === String(league.userTid)}
+          onClick={() => setTeam(team === String(league.userTid) ? 'all' : String(league.userTid))}
+        >
+          <TeamLogo tid={league.userTid} size={16} /> My team
+        </button>
+        <span className="lg-vsep" />
+        {(['all', ...POSITIONS] as const).map((x) => (
+          <button key={x} className={`chip ${pos === x ? 'on' : ''}`} aria-pressed={pos === x} onClick={() => setPos(x)}>
+            {x === 'all' ? 'All' : x}
+          </button>
+        ))}
+      </div>
       {filtered.length === 0 ? (
-        <Card>
-          <Empty>No players match these filters.</Empty>
-        </Card>
+        <div className="card empty">No players match these filters.</div>
       ) : (
         <>
           <StatTable
@@ -103,13 +101,13 @@ export function RatingsTab({ league }: { league: League }) {
             limit={limit}
           />
           {filtered.length > limit && (
-            <button className="btn sm ghost" style={{ alignSelf: 'center' }} onClick={() => setLimit(limit + PAGE)}>
+            <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + PAGE)}>
               <ChevronDown size={15} /> Show {Math.min(PAGE, filtered.length - limit)} more
             </button>
           )}
           <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · ratings as the player page
-            shows them · tap a column to sort
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · as on the player page · tap
+            a column to sort
           </div>
         </>
       )}

@@ -23,7 +23,7 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
 import { acceptProposal, openProposals, proposalError } from '../../core/league/proposals';
 import { seasonLabel } from '../../core/constants';
-import { Card, Empty, PageHeader } from '../components/ui';
+import { PageHeader, Sheet } from '../components/ui';
 import { normalizeLink, useQueryParam } from '../league/shared';
 import { inAppPath } from '../nav';
 import { continueDraft } from '../../core/league/season';
@@ -51,6 +51,12 @@ const TONE_COLOR: Record<NonNullable<InboxMessage['tone']>, string | undefined> 
   neutral: undefined,
 };
 
+/** An AI GM's trade offer comes from "<team> GM": the trade icon; anyone else unknown, a letter. */
+const iconFor = (m: InboxMessage) => SENDER_ICON[m.from] ?? (m.proposal !== undefined ? ArrowLeftRight : Mail);
+
+/** A message's lines run together for a one-line preview. */
+const previewText = (body: string) => body.replace(/([^.!?:])\n+/g, '$1 · ').replace(/\n+/g, ' ');
+
 function setRead(id: number, read: boolean) {
   useStore.getState().mutate((l) => {
     const m = l.inbox.find((x) => x.id === id);
@@ -60,133 +66,138 @@ function setRead(id: number, read: boolean) {
 
 export default function Inbox() {
   const league = useLeague();
-  const nav = useNavigate();
   const [filter, setFilter] = useQueryParam<'all' | 'unread'>('f', 'all', ['all', 'unread']);
   const [openId, setOpenId] = useState<number | null>(null);
+  // the last message opened stays in the Unread view (now read) until another one is opened
+  const [keepId, setKeepId] = useState<number | null>(null);
   const sorted = useLeagueMemo(() => [...league.inbox].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
   const unread = sorted.filter((m) => !m.read).length;
-  // Keep a just-read message visible in the Unread view until another one is opened.
-  const list = filter === 'unread' ? sorted.filter((m) => !m.read || m.id === openId) : sorted;
+  const list = filter === 'unread' ? sorted.filter((m) => !m.read || m.id === keepId) : sorted;
+  const open = openId !== null ? league.inbox.find((m) => m.id === openId) : undefined;
 
   const markAll = () =>
     useStore.getState().mutate((l) => {
       for (const m of l.inbox) m.read = true;
     });
 
-  const toggle = (m: InboxMessage) => {
-    if (openId === m.id) {
-      setOpenId(null);
-      return;
-    }
+  const show = (m: InboxMessage) => {
     setOpenId(m.id);
+    setKeepId(m.id);
     if (!m.read) setRead(m.id, true);
   };
 
   let lastKey = '';
   return (
-    <main className="page">
-      <PageHeader
-        title="Inbox"
-        sub={unread ? `${unread} unread message${unread === 1 ? '' : 's'}` : 'All caught up'}
-        back
-        right={
-          <button className="btn sm ghost" disabled={!unread} onClick={markAll}>
-            <CheckCheck size={16} /> Mark all read
+    <main className="page lg-page">
+      <PageHeader title="Inbox" sub={unread ? `${unread} unread` : 'All caught up'} back />
+      <div className="lg-bar lg-inbox-bar">
+        <div className="chips" role="group" aria-label="Messages">
+          <button className={`chip lg-chip-xs ${filter === 'all' ? 'on' : ''}`} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
+            All <span className="lg-count num">{sorted.length}</span>
           </button>
-        }
-      />
-      <div className="chips">
-        <button className={`chip ${filter === 'all' ? 'on' : ''}`} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
-          All <span className="tiny dim">{sorted.length}</span>
-        </button>
-        <button className={`chip ${filter === 'unread' ? 'on' : ''}`} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>
-          Unread{' '}
-          {unread > 0 && (
-            <span className="tiny" style={{ color: 'var(--accent-text)' }}>
-              {unread}
-            </span>
-          )}
+          <button className={`chip lg-chip-xs ${filter === 'unread' ? 'on' : ''}`} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>
+            Unread {unread > 0 && <span className="lg-count num lg-count-new">{unread}</span>}
+          </button>
+        </div>
+        <button className="btn sm ghost" disabled={!unread} onClick={markAll}>
+          <CheckCheck size={16} /> Mark all read
         </button>
       </div>
       {list.length === 0 ? (
-        <Card>
-          <Empty>
-            <MailOpen size={28} style={{ marginBottom: 6 }} />
-            <div>{filter === 'unread' ? 'No unread messages.' : 'Your inbox is empty.'}</div>
-          </Empty>
-        </Card>
+        <div className="card lg-blank">
+          <MailOpen size={26} aria-hidden="true" />
+          <p>{filter === 'unread' ? 'No unread messages.' : 'Your inbox is empty.'}</p>
+        </div>
       ) : (
-        <Card className="flush lg-flat">
+        <div className="card flush">
           {list.map((m) => {
             const key = `${m.season}:${m.day}`;
             const header = key !== lastKey;
             lastKey = key;
-            // (an AI GM's trade offer comes from "<team> GM")
-            const Icon = SENDER_ICON[m.from] ?? (m.proposal !== undefined ? ArrowLeftRight : Mail);
-            const open = openId === m.id;
+            const Icon = iconFor(m);
             const tone = m.tone ? TONE_COLOR[m.tone] : undefined;
-            const paras = m.body.split(/\n+/).filter((x) => x.trim());
-            const to = m.link ? inAppPath(normalizeLink(m.link), '') : '';
             return (
               <Fragment key={m.id}>
                 {header && (
-                  <div className="lg-date-h">
+                  <div className="list-divider">
                     {fmtDate(m.season, m.day, { weekday: 'short', month: 'short', day: 'numeric' })}
                     {m.season !== league.season ? ` · ${seasonLabel(m.season)}` : ''}
                   </div>
                 )}
-                {/* the header toggles; the open body holds its own buttons, so the card itself isn't one */}
-                <div className={`lg-msg ${m.read ? '' : 'unread'} ${open ? 'open' : ''}`} style={{ ['--tone' as string]: tone }}>
-                  <button type="button" className="lg-msg-top" aria-expanded={open} onClick={() => toggle(m)}>
-                    <span className="ic">
-                      <Icon size={16} />
+                <div className={`lg-msg ${m.read ? '' : 'unread'}`} style={tone ? { ['--tone' as string]: tone } : undefined}>
+                  <button type="button" className="lg-msg-top" aria-haspopup="dialog" onClick={() => show(m)}>
+                    <span className="ic" aria-hidden="true">
+                      <Icon size={15} />
                     </span>
-                    <span style={{ minWidth: 0 }}>
+                    <span className="lg-msg-t">
                       <span className="from">{m.from}</span>
                       <span className="subj">{m.subject}</span>
-                      {!open && <span className="prev">{m.body.replace(/([^.!?:])\n+/g, '$1 · ').replace(/\n+/g, ' ')}</span>}
+                      <span className="prev">{previewText(m.body)}</span>
                     </span>
                     <span className="when">{!m.read && <span className="lg-dot" role="img" aria-label="Unread" />}</span>
                   </button>
-                  {open && (
-                    <div className="lg-msg-body">
-                      {paras.map((p, i) => (
-                        <p key={i}>{p}</p>
-                      ))}
-                      {m.proposal !== undefined && <OfferStatus league={league} id={m.proposal} />}
-                      {m.sheet !== undefined && <SheetStatus league={league} pid={m.sheet} />}
-                      {m.tenDay !== undefined && <TenDayMessage league={league} pid={m.tenDay} />}
-                      <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
-                        {m.proposal !== undefined ? (
-                          <OfferButtons league={league} id={m.proposal} onReview={() => nav(`/trade?proposal=${m.proposal}`)} />
-                        ) : m.sheet !== undefined ? (
-                          <SheetButtons league={league} pid={m.sheet} />
-                        ) : (
-                          to && (
-                            <button className="btn sm primary" onClick={() => nav(to)}>
-                              Open <ArrowRight size={15} />
-                            </button>
-                          )
-                        )}
-                        <button
-                          className="btn sm ghost"
-                          onClick={() => {
-                            setRead(m.id, false);
-                            setOpenId(null);
-                          }}
-                        >
-                          <Mail size={15} /> Mark unread
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </Fragment>
             );
           })}
-        </Card>
+        </div>
       )}
+      <MessageSheet league={league} m={open} onClose={() => setOpenId(null)} />
     </main>
+  );
+}
+
+/** A message in full, with what can be done from it: open its screen, take or review an offer, match an offer sheet, mark it unread. */
+function MessageSheet({ league, m, onClose }: { league: League; m?: InboxMessage; onClose: () => void }) {
+  const nav = useNavigate();
+  if (!m) return null;
+  const Icon = iconFor(m);
+  const tone = m.tone ? TONE_COLOR[m.tone] : undefined;
+  const paras = m.body.split(/\n+/).filter((x) => x.trim());
+  const to = m.link ? inAppPath(normalizeLink(m.link), '') : '';
+  return (
+    <Sheet open onClose={onClose} label={m.subject}>
+      <div className="lg-msg-body" style={tone ? { ['--tone' as string]: tone } : undefined}>
+        <div className="lg-msg-head">
+          <span className="ic" aria-hidden="true">
+            <Icon size={16} />
+          </span>
+          <span>
+            <span className="from">{m.from}</span>
+            <span className="date">{fmtDate(m.season, m.day, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+          </span>
+        </div>
+        <h2 className="lg-msg-subj">{m.subject}</h2>
+        {paras.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+        {m.proposal !== undefined && <OfferStatus league={league} id={m.proposal} />}
+        {m.sheet !== undefined && <SheetStatus league={league} pid={m.sheet} />}
+        {m.tenDay !== undefined && <TenDayMessage league={league} pid={m.tenDay} />}
+        <div className="lg-msg-actions">
+          {m.proposal !== undefined ? (
+            <OfferButtons league={league} id={m.proposal} onReview={() => nav(`/trade?proposal=${m.proposal}`)} />
+          ) : m.sheet !== undefined ? (
+            <SheetButtons league={league} pid={m.sheet} />
+          ) : (
+            to && (
+              <button className="btn primary" onClick={() => nav(to)}>
+                Open <ArrowRight size={16} />
+              </button>
+            )
+          )}
+          <button
+            className="btn ghost"
+            onClick={() => {
+              setRead(m.id, false);
+              onClose();
+            }}
+          >
+            <Mail size={16} /> Mark unread
+          </button>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 
@@ -220,11 +231,11 @@ function OfferButtons({ league, id, onReview }: { league: League; id: number; on
   };
   return (
     <>
-      <button className="btn sm good" disabled={!!err} onClick={accept}>
-        <Check size={15} /> Accept
+      <button className="btn good" disabled={!!err} onClick={accept}>
+        <Check size={16} /> Accept
       </button>
-      <button className="btn sm primary" disabled={!!err} onClick={onReview}>
-        Review <ArrowRight size={15} />
+      <button className="btn primary" disabled={!!err} onClick={onReview}>
+        Review <ArrowRight size={16} />
       </button>
     </>
   );
@@ -255,10 +266,10 @@ function SheetButtons({ league, pid }: { league: League; pid: number }) {
   };
   return (
     <>
-      <button className="btn sm good" disabled={!canMatch} onClick={match}>
-        <Check size={15} /> Match
+      <button className="btn good" disabled={!canMatch} onClick={match}>
+        <Check size={16} /> Match
       </button>
-      <button className="btn sm" disabled={!open} onClick={() => setLetGo(true)}>
+      <button className="btn" disabled={!open} onClick={() => setLetGo(true)}>
         Let him go
       </button>
       {p && <LetGoSheet league={league} p={p} open={letGo} onClose={() => setLetGo(false)} />}
