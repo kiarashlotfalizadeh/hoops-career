@@ -12,6 +12,7 @@ import {
   CASH_PCT,
   PROTECTIONS,
   bookTradedCash,
+  canMakeWork,
   cashRoom,
   cashValueFor,
   counterOffers,
@@ -442,6 +443,9 @@ describe('roster spots in free agency', () => {
     r.rfa = { tid: THIRD, qo: cap.vetMin };
     signOfferSheet(l, r, U, cap.vetMin * 2, 2, 'min', 1);
     expect(roster()).toEqual([`${l.teams[U].abbrev} would have 22 players (max 21 in the offseason).`]);
+    // sending one of yours fixes it, so "what would make this work?" is worth asking
+    expect(validateTrade(l, o)).toHaveLength(1);
+    expect(canMakeWork(l, o)).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import { createLeague, defaultSettings } from '../league/create';
 import { advanceDay, continueDraft, draftNextPick, startDraft, startRegularSeason, userDraftPick } from '../league/season';
 import { CAP_FOR, contractSeason, dateToDay, prospects, standardRoster } from '../league/helpers';
 import { marketSalary, releasePlayer, tradeValue } from '../league/contracts';
+import { capPayroll } from '../league/freeAgency';
 import {
   MAX_OPEN,
   acceptProposal,
@@ -20,7 +21,19 @@ import {
   setUntouchable,
 } from '../league/proposals';
 import { deadlineDay, seasonTrades } from '../league/deadline';
-import { MAX_FIRSTS_OUT, MAX_PICKS_OUT, aiToAiTrade, aiTradeChance, evaluateTrade, executeTrade, makeItWork, neutralBalance, packageFor, validateTrade } from '../league/trades';
+import {
+  MAX_FIRSTS_OUT,
+  MAX_PICKS_OUT,
+  aiToAiTrade,
+  aiTradeChance,
+  evaluateTrade,
+  executeTrade,
+  makeItWork,
+  neutralBalance,
+  onTheBlock,
+  packageFor,
+  validateTrade,
+} from '../league/trades';
 import { nextPick, runLottery } from '../league/draft';
 import { Rng } from '../random';
 import type { League, Player, Proposal } from '../types';
@@ -279,6 +292,28 @@ describe('the trade deadline', () => {
     expect(rate(late)).toBeGreaterThan(rate(early));
   });
 
+  it('lets a contender that used the mid-level, already past the tax, buy for as much salary as it sends', () => {
+    const l = season(5);
+    const [S, B] = [1, 2];
+    for (const t of l.teams) t.strategy = t.tid === S ? 'rebuild' : t.tid === B ? 'contend' : 'retool';
+    for (const p of Object.values(l.players)) {
+      p.mood.tradeRequest = false;
+      if (p.tid === S || p.tid === B) delete p.tradeLock;
+    }
+    const vetMin = CAP_FOR(l).vetMin;
+    for (const p of standardRoster(l, S)) shape(l, p, 66, 30, vetMin);
+    const vet = shape(l, standardRoster(l, S)[0], 84, 30, 10_000);
+    // three stars (off the table), a young player paid what the veteran is, the rest on the minimum
+    const roster = standardRoster(l, B);
+    roster.forEach((p, i) => shape(l, p, i < 3 ? 88 : 70, i < 3 ? 28 : 31, vetMin));
+    shape(l, roster[3], 76, 24, 10_000);
+    // $5M past the tax: the deal may not add salary, but it needn't get under the line either
+    shape(l, roster[0], 88, 28, vetMin + CAP_FOR(l).luxuryTax + 5_000 - capPayroll(l, B, l.season));
+    l.teams[B].mleSeason = l.season;
+    const rumor = onTheBlock(l).find((r) => r.pid === vet.pid);
+    expect(rumor?.suitors).toContain(B);
+  });
+
   it('posts weekly rumors in the last three weeks, a deadline-day briefing and one recap the day after', () => {
     const l = season(5);
     const D = l.tradeDeadlineDay;
@@ -349,6 +384,13 @@ describe('draft night', () => {
         expect(evaluateTrade(l, p.offer).accept).toBe(true);
         expect(p.expires).toBe(l.day);
       }
+      // turned down, they don't call again that night (after another trade, say)
+      expect(openProposals(l).length).toBeGreaterThan(0);
+      const mail = l.inbox.length;
+      for (const p of openProposals(l)) declineProposal(l, p.id);
+      draftProposals(l);
+      expect(openProposals(l)).toEqual([]);
+      expect(l.inbox.length).toBe(mail);
     }
   });
 });

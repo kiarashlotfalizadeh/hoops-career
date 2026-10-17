@@ -3,7 +3,7 @@ import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { composites, shiftToOvr } from '../ratings';
-import { TWO_WAY_MAX, addInbox, addNews, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
+import { TWO_WAY_MAX, addInbox, addNews, andList, curTeamSeason, playerName, prospects, standardRoster, teamPlayers, twoWayRoster, winPct } from './helpers';
 import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { numberTeam } from './jerseys';
 import { logMove, logSwap } from './transactions';
@@ -191,12 +191,15 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
       tids: [top.tid],
       pids: [],
     });
-  const mine = league.draftPicks.filter((d) => d.season === season && d.tid === league.userTid && d.pick);
+  const mine = league.draftPicks
+    .filter((d) => d.season === season && d.tid === league.userTid && d.pick)
+    .map((d) => (d.round - 1) * 30 + d.pick!)
+    .sort((a, b) => a - b);
   if (mine.length) {
     addInbox(league, {
       from: 'Scouting Department',
       subject: 'Draft lottery results',
-      body: `You hold ${mine.map((d) => `#${(d.round - 1) * 30 + d.pick!}`).join(', ')}. Check the Draft board: combine results and scouting blurbs are in.`,
+      body: `You hold ${andList(mine.map((k) => `#${k}`))}. Check the Draft board for the order, the combine results and the scouting blurbs.`,
       tone: 'neutral',
       link: '/draft',
     });

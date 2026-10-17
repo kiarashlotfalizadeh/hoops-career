@@ -271,7 +271,7 @@ function tryDump(league: League, rng: Rng): Pitch | null {
       offer: offer(),
       kind: 'dump',
       note: `We need to get under the luxury tax. Take ${bad.lastName}'s contract and the pick${dps.length > 1 ? 's are' : ' is'} yours.`,
-      subject: `${t.abbrev} want to clear cap space`,
+      subject: `${t.abbrev} want to shed salary`,
     };
   }
   return null;
@@ -331,6 +331,10 @@ export function draftProposals(league: League) {
   cleanProposals(league);
   const dp = nextPick(league);
   if (!dp || dp.tid !== league.userTid || dp.round !== 1 || openProposals(league).some((p) => p.offer.a.dpids.includes(dp.dpid))) return;
+  // teams call once about a pick: offers the user turned down aren't made again that night (the
+  // same stream would make them again after his next trade)
+  const subject = `Offer for pick #${dp.pick}`;
+  if (league.inbox.some((m) => m.season === league.season && m.day === league.day && m.subject === subject)) return;
   const rng = offerRng(league, `pick:${dp.dpid}`);
   const n = rng.chance(0.5) ? 2 : 1;
   const found = withHoldsMemo(() =>
@@ -350,7 +354,7 @@ export function draftProposals(league: League) {
         offer: pkg.offer,
         kind: 'pick',
         note: `There's a player on the board we like at #${dp.pick}. Move down and pick up extra assets.`,
-        subject: `Offer for pick #${dp.pick}`,
+        subject,
       },
       rng,
       league.day,

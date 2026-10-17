@@ -2,10 +2,11 @@
 // talent, a nudge toward a roster's needs, the consensus rank, and their unpredictability on the
 // night), a few hundred times on a stream of its own. Before the lottery the order is the one by
 // record (as the projected slots read it: lottery teams first, then the playoff teams), with each
-// pick going to its owner (a protected pick that lands inside its protection stays home); after the
-// lottery it's the real order, and on draft night it starts from the picks already made. The user's
-// picks go to the highest player left on his own big board, or the way his staff would make them.
-// Pure reads of the league: the real draft's draws never change.
+// pick going to its owner (a protected pick that lands inside its protection stays home, a swap
+// right takes the other first when that one lands higher); after the lottery it's the real order,
+// and on draft night it starts from the picks already made. The user's picks go to the highest
+// player left on his own big board, or the way his staff would make them. Pure reads of the
+// league: the real draft's draws never change.
 
 import type { DraftPick, League } from '../types';
 import { Rng, hashString, mix32 } from '../random';
@@ -61,14 +62,23 @@ function mockOrder(league: League): { round: 1 | 2; pick: number; tid: number; o
   const recs = draftStandings(league);
   const order = { 1: [...recs.filter((r) => !r.playoff), ...recs.filter((r) => r.playoff)], 2: draftStandings(league, 2) };
   const out: ReturnType<typeof mockOrder> = [];
+  const firsts = new Map<number, (typeof out)[number]>();
   for (const round of [1, 2] as const)
     order[round].forEach((r, i) => {
       const dp: DraftPick | undefined = league.draftPicks.find((d) => d.season === league.season && d.round === round && d.originalTid === r.tid);
       if (!dp) return;
       // a pick that lands inside its protection stays with its team
       const tid = dp.protection && i + 1 <= dp.protection ? dp.originalTid : dp.tid;
-      out.push({ round, pick: i + 1, tid, orig: dp.originalTid, projected: true });
+      const slot = { round, pick: i + 1, tid, orig: dp.originalTid, projected: true };
+      out.push(slot);
+      if (round === 1) firsts.set(dp.dpid, slot);
     });
+  // a swap right takes the other first when that one lands higher, as the lottery settles it (see resolveSwaps)
+  for (const d of league.draftPicks) {
+    const right = firsts.get(d.dpid);
+    const subject = d.swap !== undefined ? firsts.get(d.swap) : undefined;
+    if (right && subject && subject.pick < right.pick) [right.tid, subject.tid] = [subject.tid, right.tid];
+  }
   return out;
 }
 
