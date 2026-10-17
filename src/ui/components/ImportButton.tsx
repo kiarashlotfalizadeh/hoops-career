@@ -6,7 +6,7 @@ import { useStore } from '../../state/store';
 import { UnsavedSheet } from './UnsavedSheet';
 
 /** Pick a backup file, store it as a league and open it (offering an export of an open league that can't be saved first). */
-export function ImportButton({ block = false }: { block?: boolean }) {
+export function ImportButton({ block = false, ghost = false }: { block?: boolean; ghost?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   // a backup waiting on the user: the open league couldn't be saved before it replaces it
@@ -30,7 +30,7 @@ export function ImportButton({ block = false }: { block?: boolean }) {
   };
   return (
     <>
-      <button className={`btn ${block ? 'block' : ''}`} disabled={busy} onClick={() => input.current?.click()}>
+      <button className={`btn ${block ? 'block' : ''} ${ghost ? 'ghost' : ''}`} disabled={busy} onClick={() => input.current?.click()}>
         <Upload size={17} /> {busy ? 'Importing…' : 'Import backup'}
       </button>
       <input ref={input} type="file" accept=".json,application/json" hidden onChange={(e) => void onFile(e.target.files?.[0])} />

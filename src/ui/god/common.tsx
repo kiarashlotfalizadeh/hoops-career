@@ -34,7 +34,7 @@ export const applyEdit = (fn: (l: League) => void): boolean => useStore.getState
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
   return (
     <label className="god-field">
-      <span className="tiny dim upper bold">{label}</span>
+      <span className="over">{label}</span>
       {children}
       {hint && <span className="tiny dim">{hint}</span>}
     </label>

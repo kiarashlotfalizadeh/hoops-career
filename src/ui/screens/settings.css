@@ -1,0 +1,62 @@
+/* Settings: your career's slab, then grouped settings. Scoped with the `set-` prefix. */
+
+.set-career {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.set-over {
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.set-team {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.set-fired {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+}
+.set-fields {
+  gap: 14px;
+}
+.set-fields label {
+  gap: 6px;
+}
+.set-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+/* a card of settings: each one apart from the next by a hairline */
+.set-group {
+  gap: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.set-group > * {
+  padding: 12px 0;
+}
+.set-group > * + * {
+  border-top: 1px solid var(--line);
+}
+.set-item {
+  gap: 8px;
+}
+.set-label {
+  font-weight: 650;
+}
+.set-about > svg {
+  flex: none;
+  margin-top: 1px;
+}

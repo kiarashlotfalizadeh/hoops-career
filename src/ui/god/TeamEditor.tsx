@@ -147,7 +147,7 @@ function Editor({ league, t, onClose }: { league: League; t: Team; onClose: () =
         format={(v) => `${v}%`}
         help="Fans' excitement: it fills the arena and sells merchandise."
       />
-      <div className="fo-sec">Head coach · {t.coach.name}</div>
+      <div className="over god-sec">Head coach · {t.coach.name}</div>
       <Slider
         label="Player development"
         min={1}

@@ -4,7 +4,10 @@ import { chromium } from 'playwright';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 const svg = readFileSync('public/icon.svg', 'utf8');
-const ballOnly = svg.replace(/<rect[^>]*fill="url\(#bg\)"\/>/, '');
+const ballOnly = svg.replace(/<rect id="bg"[^>]*\/>/, '');
+// the splash's wordmark in the app's own face (Archivo, condensed)
+const font = readFileSync('node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2').toString('base64');
+const face = `<style>@font-face{font-family:Archivo;src:url(data:font/woff2;base64,${font}) format('woff2');font-weight:100 900;font-stretch:62% 125%}</style>`;
 const files = [];
 const walk = (d) => {
   for (const f of readdirSync(d)) {
@@ -33,10 +36,11 @@ for (const f of files) {
     html = `<div style="width:${w}px;height:${h}px;${round ? 'border-radius:50%;overflow:hidden;' : ''}">${svg.replace('<svg ', `<svg width="${w}" height="${h}" `).replace('rx="112"', name.startsWith('AppIcon') ? 'rx="0"' : 'rx="112"')}</div>`;
   } else if (name.startsWith('splash')) {
     const s = Math.round(Math.min(w, h) * 0.28);
-    html = `<div style="width:${w}px;height:${h}px;background:#06080c;display:grid;place-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:${Math.round(s * 0.12)}px">${svg.replace('<svg ', `<svg width="${s}" height="${s}" `)}<div style="font:800 ${Math.round(s * 0.22)}px sans-serif;color:#eef2f7;letter-spacing:0.06em">HOOPS CAREER</div></div></div>`;
+    html = `${face}<div style="width:${w}px;height:${h}px;background:#07090c;display:grid;place-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:${Math.round(s * 0.14)}px">${svg.replace('<svg ', `<svg width="${s}" height="${s}" `)}<div style="font-family:Archivo;font-weight:800;font-stretch:66%;font-size:${Math.round(s * 0.3)}px;line-height:1;color:#f2f5f9;letter-spacing:0.02em">HOOPS CAREER</div></div></div>`;
   } else continue;
   const page = await browser.newPage({ viewport: { width: w, height: h } });
   await page.setContent(`<html><body style="margin:0;background:transparent">${html}</body></html>`);
+  await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: f, omitBackground: !name.startsWith('splash'), clip: { x: 0, y: 0, width: w, height: h } });
   await page.close();
 }

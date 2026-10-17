@@ -1194,8 +1194,10 @@ export interface Settings {
   onboarded?: boolean;
   /** Pause long sims for big news (default on). */
   stopOnNews?: boolean;
-  /** Home's Watch & coach opens the pre-game screen first (default on). */
+  /** Watch & coach (the Continue bar on game day) opens the pre-game screen first (default on). */
   pregame?: boolean;
+  /** Big moments (a clinch, a title, your draft pick, a big signing, an award) take the screen for a moment (default on). */
+  moments?: boolean;
   /** Draft night stops before every AI pick, so picks can be traded for on the clock (default off). */
   draftPause?: boolean;
   /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */

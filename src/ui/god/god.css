@@ -29,8 +29,8 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 10px;
+  background: var(--raised);
   border: 1px solid var(--line);
 }
 /* Save and Cancel stay in reach at the bottom of a long sheet (the sheet's own padding is 20px + the safe area) */
@@ -59,10 +59,48 @@
   background: var(--surface);
   cursor: pointer;
 }
-/* a team's name in its hub tile wraps at its spaces rather than lose its end ("Timberw…"); the tile's
-   sides are slim (GodMode.tsx) so "Timberwolves" fits a third of a narrow phone */
-.god-tile-name {
-  max-width: 100%;
-  text-align: center;
-  line-height: 1.2;
+/* the hub: the switch wears a warning edge while the editor is on */
+.god-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.god-switch.on {
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+.god-block {
+  gap: 10px;
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+}
+/* every team's mark, five abreast */
+.god-teams {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.god-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 2px 8px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+.god-team:active {
+  background: var(--surface);
+}
+.god-team-ab {
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+/* a group's heading inside an editor sheet */
+.god-sec {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }

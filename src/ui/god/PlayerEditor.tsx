@@ -223,7 +223,7 @@ function RatingsTab({ league, f, set, was, ovr, pot }: TabProps & { league: Leag
       />
       {GROUPS.map((g) => (
         <div key={g} className="col" style={{ gap: 10 }}>
-          <div className="fo-sec">{g}</div>
+          <div className="over god-sec">{g}</div>
           <div className="god-sliders">
             {RATING_META.filter((m) => m.group === g).map((m) => (
               <Slider key={m.key} label={m.label} min={ATTR_MIN} max={99} value={attrDisplay(f.ratings[m.key])} onChange={(d) => rate(m.key, d)} />

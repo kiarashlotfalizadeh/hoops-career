@@ -1,0 +1,280 @@
+/* The start screen and New League: outside a league, so the brand leads. Scoped with the `st-` prefix. */
+
+.st-page {
+  gap: 18px;
+  max-width: 560px;
+}
+/* the hero: the mark and the wordmark over a faint half court */
+.st-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 28px 8px 8px;
+}
+.st-hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -40px -60px 0;
+  background:
+    radial-gradient(260px 200px at 50% 38%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' fill='none' stroke='white' stroke-opacity='0.07' stroke-width='3'%3E%3Cpath d='M140 300V170h120v130'/%3E%3Cpath d='M140 170a60 60 0 0 1 120 0'/%3E%3Cpath d='M30 300v-60a170 170 0 0 1 340 0v60'/%3E%3C/svg%3E")
+      center bottom / 420px auto no-repeat;
+  mask-image: linear-gradient(180deg, #000 55%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
+}
+.st-word {
+  margin-top: 14px;
+  font-size: 54px;
+  line-height: 0.92;
+  letter-spacing: 0.01em;
+}
+.st-tag {
+  margin: 10px 0 0;
+  max-width: 34ch;
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+/* continue: the latest league as a slab in its team's colours */
+.st-continue {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px 16px;
+}
+.st-continue:active {
+  transform: scale(0.99);
+}
+.st-c-over {
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.st-c-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.st-c-team {
+  display: block;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.st-c-team .num {
+  color: var(--text-2);
+}
+.st-c-name {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.st-actions {
+  gap: 10px;
+}
+
+/* saved leagues */
+.st-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+}
+.st-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 6px 11px 14px;
+  text-align: left;
+}
+.st-open:active {
+  background: var(--surface);
+}
+.st-open .lr-name,
+.st-open .lr-meta {
+  display: block;
+}
+
+/* ------------------------------------------------------------ New League */
+.nl-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: -6px;
+}
+.nl-steps span {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+.nl-steps span.on {
+  background: var(--accent);
+}
+/* the league's kind: two big choices */
+.nl-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  text-align: left;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--line-2);
+  transition: border-color 0.15s ease;
+}
+.nl-choice.on {
+  border-color: var(--accent);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--accent) 10%, var(--raised)), var(--raised) 70%);
+}
+.nl-choice:disabled {
+  opacity: 0.6;
+}
+.nl-choice h3 {
+  font-size: 22px;
+}
+.nl-ic {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.nl-choice.on .nl-ic {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-text);
+}
+.nl-body {
+  display: block;
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.nl-note {
+  display: flex;
+  margin-top: 8px;
+}
+.nl-check {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line-3);
+}
+.nl-choice.on .nl-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+/* the team grid: the chosen one wears its colours */
+.nl-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.nl-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 6px 10px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.nl-team.on {
+  border-color: var(--slab-2);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--slab) 85%, #fff 6%), color-mix(in srgb, var(--slab) 60%, #000));
+  color: #fff;
+  box-shadow: 0 0 0 1px var(--slab-2);
+}
+.nl-team-name {
+  font-weight: 750;
+  font-size: 13.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nl-team-sub {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.nl-team.on .nl-team-sub {
+  color: rgba(255, 255, 255, 0.78);
+}
+/* the team you picked, as a slab */
+.nl-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nl-pick-over {
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding-right: 18px;
+}
+.nl-pick-name {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 38px;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.nl-pick-region {
+  display: block;
+  font-size: 15px;
+  font-stretch: 90%;
+  font-weight: 650;
+  text-transform: none;
+  color: var(--text-2);
+  font-family: var(--font);
+}
+.nl-pick-sub {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.nl-pick-top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-weight: 650;
+}
+.nl-chosen {
+  gap: 12px;
+}
+.nl-fields {
+  gap: 14px;
+}
+.nl-fields label {
+  gap: 6px;
+}

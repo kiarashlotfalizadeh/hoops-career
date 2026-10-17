@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Database, Shuffle } from 'lucide-react';
+import { Check, ChevronLeft, Database, Shuffle } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Chips, Ovr, Segmented, Spinner, Toggle } from '../components/ui';
+import { Chips, More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
+import { slabVars } from '../teamColors';
+import './start.css';
 import { loadSeed } from '../../data/seedLoader';
 import type { SeedData } from '../../core/league/create';
 import { createLeague, defaultSettings } from '../../core/league/create';
@@ -123,72 +125,70 @@ export default function NewLeague() {
   };
 
   const f = tid !== null ? FRANCHISES[tid] : null;
+  const stepNo = step === 'type' ? 1 : step === 'team' ? 2 : 3;
   return (
-    <main className="page standalone" style={{ paddingBottom: 40 }}>
-      <div className="row">
-        <button className="iconbtn" onClick={back} aria-label="Back">
-          <ChevronLeft size={22} />
+    <main className="page standalone st-page">
+      <div className="ph">
+        <button className="iconbtn back" onClick={back} aria-label="Back">
+          <ChevronLeft size={24} />
         </button>
-        <h1 style={{ textTransform: 'uppercase', fontSize: 26 }}>New League</h1>
-        <div className="grow" />
-        <span className="small dim">Step {step === 'type' ? 1 : step === 'team' ? 2 : 3} of 3</span>
+        <div className="grow">
+          <h1>New League</h1>
+          <div className="ph-sub">
+            Step {stepNo} of 3 · {step === 'type' ? 'The league' : step === 'team' ? 'Your team' : 'You'}
+          </div>
+        </div>
+      </div>
+      <div className="nl-steps" aria-hidden="true">
+        {[1, 2, 3].map((n) => (
+          <span key={n} className={n <= stepNo ? 'on' : ''} />
+        ))}
       </div>
 
       {step === 'type' && (
         <>
-          <button
-            type="button"
-            className={`card clickable ${kind === 'real' ? 'accent' : ''}`}
-            style={{ width: '100%', textAlign: 'left' }}
-            aria-pressed={kind === 'real'}
-            disabled={!seed}
-            onClick={() => setKind('real')}
-          >
-            <div className="row top">
-              <Database size={28} />
-              <div className="grow">
-                <h3>Real 2026-27 NBA</h3>
-                <div className="dim2 small" style={{ marginTop: 4 }}>
-                  Opening-night rosters and contracts. Ratings come from three seasons of box scores, NBA.com play-by-play and impact data, then are calibrated so every player
-                  reproduces his real numbers in the engine.
-                </div>
-                {!seedLoaded && (
-                  <div className="row small dim" style={{ marginTop: 8 }}>
-                    <Spinner /> Loading rosters…
-                  </div>
-                )}
-                {seedLoaded && !seed && (
-                  <div className="small warn" style={{ marginTop: 8 }}>
-                    {loadFailed
-                      ? "The real rosters couldn't load. Check your connection and open New League again, or use a fictional league."
-                      : 'Seed data is not bundled in this build yet. Use a fictional league for now.'}
-                  </div>
-                )}
-                {seed && (
-                  <div className="small dim" style={{ marginTop: 8 }}>
-                    {seed.players.length} players · 30 teams · stats through 2025-26
-                  </div>
-                )}
-              </div>
-            </div>
+          <button type="button" className={`nl-choice ${kind === 'real' ? 'on' : ''}`} aria-pressed={kind === 'real'} disabled={!seed} onClick={() => setKind('real')}>
+            <span className="nl-ic">
+              <Database size={22} />
+            </span>
+            <span className="grow">
+              <h3>Real 2026-27 NBA</h3>
+              <span className="nl-body">Opening-night rosters and contracts, with ratings built from three seasons of real data.</span>
+              {!seedLoaded && (
+                <span className="row small dim nl-note">
+                  <Spinner /> Loading rosters…
+                </span>
+              )}
+              {seedLoaded && !seed && (
+                <span className="small warn nl-note">
+                  {loadFailed
+                    ? "The real rosters couldn't load. Check your connection and open New League again, or use a fictional league."
+                    : 'This build has no real rosters yet. Use a fictional league.'}
+                </span>
+              )}
+              {seed && <span className="tiny dim nl-note">{seed.players.length} players · 30 teams · stats through 2025-26</span>}
+            </span>
+            <span className="nl-check" aria-hidden="true">
+              {kind === 'real' && <Check size={16} strokeWidth={3} />}
+            </span>
           </button>
-          <button
-            type="button"
-            className={`card clickable ${kind === 'fictional' ? 'accent' : ''}`}
-            style={{ width: '100%', textAlign: 'left' }}
-            aria-pressed={kind === 'fictional'}
-            onClick={() => setKind('fictional')}
-          >
-            <div className="row top">
-              <Shuffle size={28} />
-              <div className="grow">
-                <h3>Fictional League</h3>
-                <div className="dim2 small" style={{ marginTop: 4 }}>
-                  Real franchises, randomly generated players. Every save is different.
-                </div>
-              </div>
-            </div>
+          <button type="button" className={`nl-choice ${kind === 'fictional' ? 'on' : ''}`} aria-pressed={kind === 'fictional'} onClick={() => setKind('fictional')}>
+            <span className="nl-ic">
+              <Shuffle size={22} />
+            </span>
+            <span className="grow">
+              <h3>Fictional League</h3>
+              <span className="nl-body">Real franchises, generated players. Every save is different.</span>
+            </span>
+            <span className="nl-check" aria-hidden="true">
+              {kind === 'fictional' && <Check size={16} strokeWidth={3} />}
+            </span>
           </button>
+          <More label="How the real ratings are made">
+            <p className="small dim2" style={{ margin: 0 }}>
+              Ratings come from three seasons of box scores, NBA.com play-by-play and impact data, then are calibrated so every player reproduces his real numbers in the engine.
+            </p>
+          </More>
           <button className="btn primary big block" disabled={kind === 'real' && !seed} onClick={() => setStep('team')}>
             Choose your team
           </button>
@@ -210,51 +210,49 @@ export default function NewLeague() {
               { id: 'W', label: 'West' },
             ]}
           />
-          <div className="grid3">
+          <div className="nl-grid">
             {FRANCHISES.map((fr, i) => ({ fr, i }))
               .filter(({ fr }) => fr.conf === conf)
               .map(({ fr, i }) => (
                 <button
                   key={fr.abbrev}
-                  className="card tight"
+                  className={`nl-team ${tid === i ? 'on' : ''}`}
                   aria-pressed={tid === i}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 6,
-                    borderColor: tid === i ? 'var(--accent)' : undefined,
-                    background: tid === i ? `linear-gradient(160deg, ${fr.colors[0]}55, var(--surface))` : undefined,
-                  }}
+                  style={tid === i ? slabVars(fr.colors) : undefined}
                   onClick={() => setTid(i)}
                 >
-                  <TeamLogo tid={i} size={44} decorative />
-                  <div className="bold small">{fr.name}</div>
-                  <div className="tiny dim">{rank ? `Power #${rank[i]}` : `${market(fr.pop)} market`}</div>
+                  <TeamLogo tid={i} size={42} decorative />
+                  <span className="nl-team-name">{fr.name}</span>
+                  <span className="nl-team-sub">{rank ? `Power #${rank[i]}` : `${market(fr.pop)} market`}</span>
                 </button>
               ))}
           </div>
           {f && tid !== null && (
-            <Card title={`${f.region} ${f.name}`} right={<TeamLogo tid={tid} size={32} decorative />}>
-              <div className="small dim2">
-                {f.arena} · Market: {market(f.pop)} ({f.pop}M) · {f.div} Division
-              </div>
-              {kind === 'fictional' && (
-                <div className="small dim" style={{ marginTop: 8 }}>
-                  Rosters are generated when the league is created, so every player here will be new.
-                </div>
-              )}
+            <section className="slab nl-pick" style={slabVars(f.colors)} aria-label={`${f.region} ${f.name}`}>
+              <span className="slab-mark">
+                <TeamLogo tid={tid} size={170} decorative />
+              </span>
+              <span className="nl-pick-over">
+                {f.div} Division · {f.arena}
+              </span>
+              <span className="nl-pick-name">
+                <span className="nl-pick-region">{f.region}</span>
+                {f.name}
+              </span>
+              <span className="nl-pick-sub">
+                {market(f.pop)} market ({f.pop}M){kind === 'fictional' ? ' · new players, generated at the start' : ''}
+              </span>
               {teamInfo?.[tid] && (
-                <div className="col" style={{ marginTop: 10, gap: 6 }}>
+                <span className="nl-pick-top">
                   {teamInfo[tid].top.map((p) => (
-                    <div key={p.name} className="row">
+                    <span key={p.name} className="row">
                       <Ovr v={p.ovr} size="sm" />
-                      <span>{p.name}</span>
-                    </div>
+                      <span className="ellipsis">{p.name}</span>
+                    </span>
                   ))}
-                </div>
+                </span>
               )}
-            </Card>
+            </section>
           )}
           <button className="btn primary big block" disabled={!f} onClick={() => setStep('setup')}>
             {f ? `Take over the ${f.name}` : 'Pick a team'}
@@ -264,60 +262,48 @@ export default function NewLeague() {
 
       {step === 'setup' && f && tid !== null && (
         <>
-          <Card>
-            <div className="row">
-              <TeamLogo tid={tid} size={40} decorative />
-              <div className="grow">
-                <div className="bold">
-                  {f.region} {f.name}
-                </div>
-                <div className="small dim">{kind === 'real' ? 'Real 2026-27 NBA' : 'Fictional league'}</div>
+          <div className="card row nl-chosen">
+            <TeamLogo tid={tid} size={40} decorative />
+            <div className="grow">
+              <div className="lr-name">
+                {f.region} {f.name}
               </div>
-              <button className="btn sm" onClick={back}>
-                Change
-              </button>
+              <div className="lr-meta">{kind === 'real' ? 'Real 2026-27 NBA' : 'Fictional league'}</div>
             </div>
-          </Card>
-          <Card title="You">
-            <div className="col" style={{ gap: 10 }}>
-              <label className="col" style={{ gap: 4 }}>
-                <span className="small dim">Coach / GM name</span>
+            <button className="btn sm" onClick={back}>
+              Change
+            </button>
+          </div>
+          <Section title="You">
+            <div className="card col nl-fields">
+              <label className="col">
+                <span className="over">Coach / GM name</span>
                 <input className="input" value={coach} placeholder="Your name" maxLength={40} onChange={(e) => setCoach(e.target.value)} />
               </label>
-              <label className="col" style={{ gap: 4 }}>
-                <span className="small dim">League name</span>
+              <label className="col">
+                <span className="over">League name</span>
                 <input className="input" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
               </label>
             </div>
-          </Card>
-          <Card title="Difficulty">
+          </Section>
+          <Section title="Difficulty">
             <Chips label="Difficulty" value={settings.difficulty} onChange={(d) => setSettings({ ...settings, difficulty: d })} options={DIFFICULTY} />
-            <div className="small dim" style={{ marginTop: 8 }}>
-              {helpFor(DIFFICULTY, settings.difficulty)} You can change this any time.
-            </div>
-          </Card>
-          <Card title="Coaching depth">
+            <div className="small dim">{helpFor(DIFFICULTY, settings.difficulty)}</div>
+          </Section>
+          <Section title="Coaching depth">
             <Chips label="Coaching depth" value={settings.complexity} onChange={(c) => setSettings({ ...settings, complexity: c })} options={COMPLEXITY} />
-            <div className="small dim" style={{ marginTop: 8 }}>
-              {helpFor(COMPLEXITY, settings.complexity)} You can change this any time.
-            </div>
-          </Card>
-          <Card>
-            <div className="col" style={{ gap: 14 }}>
-              <Toggle
-                on={settings.injuries}
-                onChange={(v) => setSettings({ ...settings, injuries: v })}
-                label="Injuries"
-                help="Players can get hurt; fatigue, age and injury history raise the risk."
-              />
-              <Toggle
-                on={settings.jobSecurity}
-                onChange={(v) => setSettings({ ...settings, jobSecurity: v })}
-                label="Job security"
-                help="The owner can fire you after repeated bad seasons."
-              />
-            </div>
-          </Card>
+            <div className="small dim">{helpFor(COMPLEXITY, settings.complexity)}</div>
+          </Section>
+          <div className="card col" style={{ gap: 16 }}>
+            <Toggle on={settings.injuries} onChange={(v) => setSettings({ ...settings, injuries: v })} label="Injuries" help="Fatigue, age and history raise the risk." />
+            <Toggle
+              on={settings.jobSecurity}
+              onChange={(v) => setSettings({ ...settings, jobSecurity: v })}
+              label="Job security"
+              help="The owner can fire you after repeated bad seasons."
+            />
+          </div>
+          <div className="tiny dim center">All of these can be changed later in Settings.</div>
           {/* a reload on this step starts over as a real league: wait for its rosters rather than silently make a fictional one */}
           <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
             {busy ? <Spinner /> : null} Start career

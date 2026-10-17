@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { deleteLeague, listLeagues, loadLeague, type LeagueMeta } from '../../state/persistence';
 import { useStore } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
-import { Card, Empty, Sheet } from '../components/ui';
+import { Empty, Section, Sheet } from '../components/ui';
+import { BrandMark } from '../components/BrandMark';
+import { slabVars } from '../teamColors';
+import './start.css';
 import { ImportButton } from '../components/ImportButton';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 
@@ -67,53 +70,67 @@ export default function Start() {
     }
     void refresh();
   };
+  const latest = leagues?.[0];
+  const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
-    <main className="page standalone" style={{ paddingBottom: 40 }}>
-      <div className="col" style={{ alignItems: 'center', textAlign: 'center', marginTop: 28, gap: 6 }}>
-        <div className="row" style={{ gap: 6 }}>
-          {[19, 13, 20, 1, 7].map((tid) => (
-            <TeamLogo key={tid} tid={tid} size={30} decorative />
-          ))}
-        </div>
-        <h1 style={{ fontSize: 46, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 10 }}>Hoops Career</h1>
-        <div className="dim2" style={{ maxWidth: 420 }}>
-          Run an NBA franchise as GM and head coach. Real 2026-27 rosters, a possession-by-possession engine, and a tactics layer that explains every decision.
-        </div>
+    <main className="page standalone st-page">
+      <header className="st-hero">
+        <BrandMark size={112} />
+        <h1 className="st-word">Hoops Career</h1>
+        <p className="st-tag">GM and head coach of a real 2026-27 roster, with tactics that explain every result.</p>
+      </header>
+      {latest && (
+        // the league played last, one tap from where you left it
+        <button className="slab st-continue" style={slabVars(latest.colors)} onClick={() => void open(latest.id)}>
+          <span className="slab-mark">
+            <TeamLogo tid={Math.max(0, tidOf(latest))} size={150} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
+          </span>
+          <span className="st-c-over">
+            Continue · {seasonLabel(latest.season)} · {PHASE_LABEL[latest.phase]}
+          </span>
+          <span className="st-c-main">
+            <TeamLogo tid={Math.max(0, tidOf(latest))} size={44} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
+            <span className="grow">
+              <span className="st-c-team">
+                {latest.teamAbbrev} <span className="num">{latest.record}</span>
+              </span>
+              <span className="st-c-name ellipsis">{latest.name}</span>
+            </span>
+            <ChevronRight size={22} />
+          </span>
+        </button>
+      )}
+      <div className="col st-actions">
+        <button className="btn primary big block" onClick={() => nav('/new')}>
+          <Plus size={20} /> New league
+        </button>
+        <ImportButton block ghost />
       </div>
-      <button className="btn primary big block" onClick={() => nav('/new')}>
-        <Plus size={20} /> New League
-      </button>
-      <ImportButton block />
-      <Card title="Saved leagues">
+      <Section title="Saved leagues">
         {leagues === null ? (
           <Empty>Loading…</Empty>
         ) : leagues.length === 0 ? (
-          <Empty>{error ?? 'No saved leagues yet.'}</Empty>
+          <div className="card small dim center">{error ?? 'No saved leagues yet. Start one above.'}</div>
         ) : (
-          <div className="list" style={{ margin: '0 -14px' }}>
+          <div className="card flush list">
             {leagues.map((m) => {
-              const tid = m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
+              const tid = tidOf(m);
               return (
-                <div key={m.id} className="listrow clickable">
-                  {/* open and Delete are sibling buttons; this one reaches the row's edges, as the whole row used to */}
-                  <button
-                    type="button"
-                    className="row grow"
-                    style={{ minWidth: 0, textAlign: 'left', margin: '-10px 0 -10px -12px', padding: '10px 0 10px 12px' }}
-                    onClick={() => void open(m.id)}
-                  >
+                <div key={m.id} className="st-row">
+                  {/* open and Delete are sibling buttons; this one reaches the row's edges */}
+                  <button type="button" className="st-open" onClick={() => void open(m.id)}>
                     {/* as the league has it (god mode can rename and recolour a team) */}
-                    <TeamLogo tid={tid >= 0 ? tid : 0} size={38} abbrev={m.teamAbbrev} colors={m.colors} decorative />
-                    <div className="grow" style={{ minWidth: 0 }}>
-                      <div className="bold ellipsis">{m.name}</div>
+                    <TeamLogo tid={tid >= 0 ? tid : 0} size={36} abbrev={m.teamAbbrev} colors={m.colors} decorative />
+                    <span className="grow">
+                      <span className="lr-name ellipsis">{m.name}</span>
                       {/* two lines, so the record isn't the part a phone cuts off */}
-                      <div className="small dim ellipsis">
-                        {m.teamName} · {m.record}
-                      </div>
-                      <div className="small dim ellipsis">
+                      <span className="lr-meta ellipsis">
+                        {m.teamName} · <span className="num">{m.record}</span>
+                      </span>
+                      <span className="lr-meta ellipsis">
                         {seasonLabel(m.season)} · {PHASE_LABEL[m.phase]}
-                      </div>
-                    </div>
+                      </span>
+                    </span>
                   </button>
                   <button className="iconbtn" aria-label={`Delete ${m.name}`} onClick={() => setConfirm(m)}>
                     <Trash2 size={18} />
@@ -123,7 +140,7 @@ export default function Start() {
             })}
           </div>
         )}
-      </Card>
+      </Section>
       <UnsavedSheet
         open={!!unsaved}
         title="Switch without saving?"
@@ -136,8 +153,10 @@ export default function Start() {
         }}
       />
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title="Delete league?">
-        <p className="dim2">“{confirm?.name}” will be permanently removed from this device.</p>
-        <div className="row" style={{ marginTop: 12 }}>
+        <p className="dim2" style={{ marginTop: 0 }}>
+          “{confirm?.name}” will be removed from this device for good.
+        </p>
+        <div className="row" style={{ marginTop: 16 }}>
           <button className="btn grow" onClick={() => setConfirm(null)}>
             Cancel
           </button>

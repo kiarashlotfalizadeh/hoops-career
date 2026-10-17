@@ -6,14 +6,14 @@ import { Link } from 'react-router-dom';
 import { ArrowLeftRight, Pencil, TriangleAlert, UserPlus } from 'lucide-react';
 import { setOwnerConfidence } from '../../core/league/godMode';
 import { useLeague, useStore } from '../../state/store';
-import { Card, PageHeader, Slider, Toggle } from '../components/ui';
+import { PageHeader, Section, Slider, Toggle } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
-import { Callout, SecTitle } from '../office/common';
 import { PlayerEditor } from '../god/PlayerEditor';
 import { TeamEditor } from '../god/TeamEditor';
 import { CreatePlayer } from '../god/CreatePlayer';
 import { applyEdit, useEditBlock } from '../god/common';
+import '../god/god.css';
 
 export default function GodMode() {
   const league = useLeague();
@@ -36,27 +36,25 @@ export default function GodMode() {
   return (
     <main className="page">
       <PageHeader title="God mode" sub="The in-game editor" back backTo="/settings" />
-      <Card>
+      <div className={`card god-switch ${on ? 'on' : ''}`}>
         <Toggle
           on={on}
           onChange={(v) => useStore.getState().mutate((l) => (l.settings.godMode = v))}
           label="God mode"
-          help="Edit any player or team, create players and force trades. Turn it off at any time: your edits stay, and the editor is out of the way until you turn it back on."
+          help="Edit any player or team, create players and force trades. Your edits stay when it's off."
         />
-        <div className="tiny dim" style={{ marginTop: 8 }}>
-          {edits ? `${edits} edit${edits === 1 ? '' : 's'} made in this league.` : 'No edits made in this league yet.'}
-        </div>
-      </Card>
+        <div className="tiny dim">{edits ? `${edits} edit${edits === 1 ? '' : 's'} in this league` : 'No edits in this league yet'}</div>
+      </div>
 
       {on && (
         <>
           {block && (
-            <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
-              {block}
-            </Callout>
+            <div className="card row top god-block" role="status">
+              <TriangleAlert size={18} className="warn" />
+              <div className="grow small">{block}</div>
+            </div>
           )}
-          <SecTitle>Players</SecTitle>
-          <Card>
+          <Section title="Players">
             <div className="grid2">
               <button className="btn" aria-haspopup="dialog" onClick={() => setPicking(true)}>
                 <Pencil size={17} /> Edit a player
@@ -66,43 +64,34 @@ export default function GodMode() {
                 <UserPlus size={17} /> New player
               </button>
             </div>
-            <div className="small dim" style={{ marginTop: 8 }}>
-              Ratings, potential, bio, injuries, mood, contract and team. Every player's page has Edit too.
-            </div>
-          </Card>
+            <div className="small dim">Ratings, bio, health, mood, contract and team. Every player's page has Edit too.</div>
+          </Section>
 
-          <SecTitle>Teams</SecTitle>
-          <Card>
-            <div className="fo-teamgrid">
+          <Section title="Teams">
+            <div className="god-teams">
               {teams.map((t) => (
-                <button
-                  key={t.tid}
-                  className="card tight"
-                  aria-haspopup="dialog"
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingInline: 4 }}
-                  onClick={() => setTeam(t.tid)}
-                >
-                  <TeamLogo tid={t.tid} size={36} decorative />
-                  <span className="small bold god-tile-name">{t.name}</span>
-                  <span className="sr-only">: edit the {t.region} team</span>
+                <button key={t.tid} className="god-team" aria-haspopup="dialog" onClick={() => setTeam(t.tid)}>
+                  <TeamLogo tid={t.tid} size={34} decorative />
+                  <span className="god-team-ab">{t.abbrev}</span>
+                  <span className="sr-only">
+                    : edit the {t.region} {t.name}
+                  </span>
                 </button>
               ))}
             </div>
-          </Card>
+          </Section>
 
-          <SecTitle>Trades</SecTitle>
-          <Card>
-            <div className="row" style={{ gap: 12 }}>
-              <div className="grow small dim2">The Trade screen gets Force: your deal with another team goes through whatever its GM, the cap or the calendar say.</div>
+          <Section title="Trades">
+            <div className="card row" style={{ gap: 12 }}>
+              <div className="grow small dim2">Force puts your deal through whatever the other GM, the cap or the calendar say.</div>
               <Link to="/trade" className="btn sm">
                 <ArrowLeftRight size={16} /> Trade
               </Link>
             </div>
-          </Card>
+          </Section>
 
-          <SecTitle>Owner</SecTitle>
-          <Card>
-            <div className="col" style={{ gap: 10 }}>
+          <Section title="Owner">
+            <div className="card col" style={{ gap: 10 }}>
               <Slider
                 label="Owner's confidence in you"
                 min={-100}
@@ -112,13 +101,13 @@ export default function GodMode() {
                 format={(v) => `${v > 0 ? '+' : ''}${v}`}
                 left="Ready to fire you"
                 right="Delighted"
-                help="With Job security on, below -50 after your first two seasons in charge a bad season gets you fired."
+                help="With Job security on, under -50 after your first two seasons a bad season gets you fired."
               />
               <button className="btn sm" style={{ alignSelf: 'flex-start' }} disabled={!!block || owner === league.ownerMood.total} onClick={saveOwner}>
                 Save
               </button>
             </div>
-          </Card>
+          </Section>
         </>
       )}
 
