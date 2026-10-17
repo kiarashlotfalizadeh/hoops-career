@@ -9,7 +9,7 @@
 // reload, and nothing in it touches the league's random stream or knows how the games will go.
 
 import type { League, Player } from '../types';
-import { Rng, clamp, hashString } from '../random';
+import { Rng, clamp, hashString, mix32 } from '../random';
 import { HOME_EDGE, MARGIN_SD, PRIOR_GAMES, blendNet, leagueRatings, phi } from './projection';
 import { LOTTERY_ODDS } from '../league/draft';
 import { drawLot, finalsHomeCourt, standings } from '../league/standings';
@@ -195,14 +195,6 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
     scale: Float64Array.from(games, ([h, a]) => (pace[h] + pace[a]) / 200 / MARGIN_SD),
     h2h,
   };
-}
-
-/** A 32-bit hash finalizer (murmur3's): spreads the simulations' seeds over the generator's states. */
-function mix32(x: number): number {
-  let h = x >>> 0;
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  return (h ^ (h >>> 16)) >>> 0;
 }
 
 /** A home team's chance against an away team at these strengths (net per 100) and paces. */

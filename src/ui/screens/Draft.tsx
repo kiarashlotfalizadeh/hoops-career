@@ -8,6 +8,7 @@ import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../
 import { pickLabel, pickTermsNote, tradingClosedReason } from '../../core/league/trades';
 import { draftNextPick, finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
 import { draftProposals } from '../../core/league/proposals';
+import { leagueMock, mockAvailable, userNextSlot, type MockDraft, type MockSlot } from '../../core/league/mockDraft';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -19,7 +20,7 @@ import { blockOffers } from '../office/tradeBlock';
 import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
 import { boardNeighbors, compareHref } from '../compare';
 
-type View = 'live' | 'lottery' | 'board' | 'combine' | 'mine' | 'results';
+type View = 'live' | 'lottery' | 'board' | 'combine' | 'mock' | 'mine' | 'results';
 
 function fmtIn(x: number | undefined) {
   if (x === undefined || !isFinite(x)) return '—';
@@ -67,7 +68,10 @@ export default function Draft() {
   if (league.phase === 'draftLottery') views.push({ id: 'lottery', label: 'Lottery' });
   if (after) views.push({ id: 'results', label: 'Results' });
   if (!after) views.push({ id: 'board', label: 'Big board' }, { id: 'combine', label: 'Combine' });
+  if (!after && mockAvailable(league)) views.push({ id: 'mock', label: 'Mock' });
   views.push({ id: 'mine', label: 'Your picks' });
+  // the mock draft (src/core/league/mockDraft.ts): its projections show on the board too
+  const mock = useLeagueMemo(() => (after ? null : leagueMock(league)), [league, after]);
 
   const draft = (pid: number) => {
     const name = playerName(league.players[pid]);
@@ -214,10 +218,11 @@ export default function Draft() {
       {views.length > 1 && <Segmented value={view} onChange={setView} options={views} label="Draft sections" />}
 
       {view === 'live' && league.phase === 'draft' && (
-        <LiveView league={league} cls={cls} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
+        <LiveView league={league} cls={cls} mock={mock} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
       )}
       {view === 'lottery' && <LotteryView league={league} onTrade={canTrade ? setTradePick : undefined} />}
-      {view === 'board' && <BoardList league={league} list={cls} onOpen={setDetail} onDraft={onClock ? setConfirmPick : undefined} />}
+      {view === 'board' && <BoardList league={league} list={cls} mock={mock} onOpen={setDetail} onDraft={onClock ? setConfirmPick : undefined} />}
+      {view === 'mock' && <MockView league={league} mock={mock} onOpen={setDetail} />}
       {view === 'combine' && <CombineView league={league} list={cls} onOpen={setDetail} />}
       {view === 'mine' && <MyPicks league={league} />}
       {view === 'results' && <Results league={league} />}
@@ -396,6 +401,7 @@ function draftedThisYear(league: League): Player[] {
 function LiveView({
   league,
   cls,
+  mock,
   onClock,
   onOpen,
   onDraft,
@@ -403,6 +409,7 @@ function LiveView({
 }: {
   league: League;
   cls: Player[];
+  mock: MockDraft | null;
   onClock: boolean;
   onOpen: (pid: number) => void;
   onDraft: (pid: number) => void;
@@ -446,7 +453,7 @@ function LiveView({
         </>
       )}
       <SecTitle right={<span className="tiny dim">{cls.length} left</span>}>{onClock ? 'Best available · your pick' : 'Best available'}</SecTitle>
-      <BoardList league={league} list={cls.slice(0, 30)} onOpen={onOpen} onDraft={onClock ? onDraft : undefined} />
+      <BoardList league={league} list={cls.slice(0, 30)} mock={mock} onOpen={onOpen} onDraft={onClock ? onDraft : undefined} />
       {picks.length > 0 && (
         <>
           <SecTitle>Selections</SecTitle>
@@ -489,9 +496,30 @@ function SelectionRow({ league, p }: { league: League; p: Player }) {
 
 // ------------------------------------------------------------------ big board
 
-function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Player[]; onOpen: (pid: number) => void; onDraft?: (pid: number) => void }) {
+function BoardList({
+  league,
+  list,
+  mock,
+  onOpen,
+  onDraft,
+}: {
+  league: League;
+  list: Player[];
+  mock?: MockDraft | null;
+  onOpen: (pid: number) => void;
+  onDraft?: (pid: number) => void;
+}) {
   const [limit, setLimit] = useState(30);
   if (!list.length) return <Empty>No prospects left on the board.</Empty>;
+  // the mock's read of where each goes, and whether he'll still be there at the user's next pick
+  const mine = mock ? userNextSlot(league, mock) : undefined;
+  const projection = (p: Player) => {
+    const r = mock?.range.get(p.pid);
+    if (!mock || !r) return null;
+    const where = r.med > 2 * league.teams.length ? 'Undrafted in most mocks' : r.lo === r.hi ? `Proj. #${r.med}` : `Proj. #${r.lo}-${r.hi > 2 * league.teams.length ? '' : r.hi}`;
+    const gone = mine ? mock.goneBefore(p.pid, mine.overall) : null;
+    return `${where.replace(/-$/, '+')}${gone !== null && gone >= 0.05 && gone <= 0.95 ? ` · gone before your #${mine!.overall}: ${Math.round(gone * 100)}%` : ''}`;
+  };
   return (
     <Card className="flush">
       <div className="list wide2">
@@ -506,7 +534,10 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
                 <div className="fo-meta">
                   {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
                 </div>
-                <div className="fo-meta tiny">{p.archetype}</div>
+                <div className="fo-meta tiny">
+                  {p.archetype}
+                  {projection(p) ? ` · ${projection(p)}` : ''}
+                </div>
               </div>
             </button>
             {onDraft && (
@@ -523,6 +554,77 @@ function BoardList({ league, list, onOpen, onDraft }: { league: League; list: Pl
         </button>
       )}
     </Card>
+  );
+}
+
+// ------------------------------------------------------------------ mock draft
+
+/** The mock draft, slot by slot: the likeliest pick and the next ones, the user's picks lit. */
+function MockView({ league, mock, onOpen }: { league: League; mock: MockDraft | null; onOpen: (pid: number) => void }) {
+  const [round2, setRound2] = useState(false);
+  if (!mock || !mock.slots.length) return <Empty>The mock draft starts once games are played.</Empty>;
+  const projected = mock.slots[0].projected;
+  const shown = mock.slots.filter((s) => round2 || s.round === 1);
+  return (
+    <>
+      <div className="row between">
+        <span className="small dim">{projected ? 'In the order by record: the lottery still decides the top four' : 'In the draft order'}</span>
+        <Help title="Mock draft">
+          <p style={{ margin: 0 }}>
+            The draft played out {mock.runs} times the way AI teams pick: potential and talent, a nudge toward what the roster lacks, and their usual unpredictability on the night.
+            Your picks go to the top player left on your big board, or to your staff&apos;s choice.
+          </p>
+          <p style={{ margin: 0 }}>
+            Each pick shows the likeliest player not already named above it and how often he was the pick there, then the next likeliest. On the big board, each prospect&apos;s
+            range is where he went in four of five mocks.
+          </p>
+        </Help>
+      </div>
+      <Card className="flush">
+        <div className="list">
+          {shown.map((s) => (
+            <MockRow key={`${s.round}-${s.pick}`} league={league} s={s} onOpen={onOpen} />
+          ))}
+        </div>
+        {mock.slots.some((s) => s.round === 2) && (
+          <button className="btn ghost block" style={{ borderRadius: 0, borderInline: 0, borderBottom: 0 }} onClick={() => setRound2(!round2)}>
+            {round2 ? 'First round only' : 'Show the second round'}
+          </button>
+        )}
+      </Card>
+    </>
+  );
+}
+
+function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (pid: number) => void }) {
+  const [top, ...alts] = s.options;
+  const p = top && league.players[top.pid];
+  const mine = s.tid === league.userTid;
+  const name = (pid: number) => {
+    const x = league.players[pid];
+    return x ? `${x.firstName[0]}. ${x.lastName}` : '?';
+  };
+  if (!p) return null;
+  const via = s.orig !== s.tid ? ` · via ${league.teams[s.orig].abbrev}` : '';
+  return (
+    <button
+      className="listrow"
+      style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined, width: '100%', textAlign: 'left' }}
+      onClick={() => onOpen(p.pid)}
+    >
+      <span className="fo-rank">{s.overall}</span>
+      <TeamLogo tid={s.tid} size={28} decorative />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div className="fo-name small ellipsis">
+          {league.teams[s.tid].abbrev}: {playerName(p)}
+        </div>
+        <div className="fo-meta tiny ellipsis">
+          {p.pos} · {Math.round(top.p * 100)}% of mocks{via}
+          {alts.length ? ` · or ${alts.map((a) => `${name(a.pid)} ${Math.round(a.p * 100)}%`).join(', ')}` : ''}
+        </div>
+      </div>
+      <OvrPot p={p} />
+    </button>
   );
 }
 

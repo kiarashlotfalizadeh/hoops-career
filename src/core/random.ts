@@ -70,3 +70,11 @@ export function hashString(s: string): number {
 
 export const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/** A 32-bit hash finalizer (murmur3's): spreads seeds made from a counter over the generator's states, so their streams don't run into each other. */
+export function mix32(x: number): number {
+  let h = x >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}

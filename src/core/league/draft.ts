@@ -281,20 +281,39 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
   if (dp.round === 1 || dp.tid === league.userTid) logMove(league, 'draft', dp.tid, p, { note: `#${overall}` });
 }
 
+/** The spread of an AI team's read of a prospect on draft night: how unpredictable its picks are. */
+export const DRAFT_NOISE = 1.5;
+
+/** The bigs and the ball handlers on a roster, which nudge an AI team's pick toward need. */
+export interface DraftNeed {
+  bigs: number;
+  guards: number;
+}
+
+export const draftNeed = (roster: Player[]): DraftNeed => ({ bigs: roster.filter((p) => p.ratings.hgt >= 60).length, guards: roster.filter((p) => p.ratings.hnd >= 60).length });
+
+/**
+ * How an AI team rates a prospect: potential and talent, `noise` (its read on the night, see
+ * DRAFT_NOISE), a nudge toward a big or a ball handler it's short of, and the consensus rank. The
+ * mock draft scores with it too.
+ */
+export function draftScore(p: Player, need: DraftNeed, noise = 0): number {
+  let s = p.pot * 0.65 + p.ovr * 0.35 + noise;
+  if (need.bigs <= 2 && p.ratings.hgt >= 60) s += 1;
+  if (need.guards <= 2 && p.ratings.hnd >= 60) s += 1;
+  s -= (p.prospect?.rank ?? 50) * 0.04;
+  return s;
+}
+
 /** AI selection: best player available with a nudge toward need. */
 export function aiChoose(league: League, tid: number, rng: Rng): Player | undefined {
   const avail = prospects(league, league.season);
   if (!avail.length) return undefined;
-  const roster = teamPlayers(league, tid);
-  const bigs = roster.filter((p) => p.ratings.hgt >= 60).length;
-  const guards = roster.filter((p) => p.ratings.hnd >= 60).length;
+  const need = draftNeed(teamPlayers(league, tid));
   let best: Player | undefined;
   let bs = -Infinity;
   for (const p of avail) {
-    let s = p.pot * 0.65 + p.ovr * 0.35 + rng.normal(0, 1.5);
-    if (bigs <= 2 && p.ratings.hgt >= 60) s += 1;
-    if (guards <= 2 && p.ratings.hnd >= 60) s += 1;
-    s -= (p.prospect?.rank ?? 50) * 0.04;
+    const s = draftScore(p, need, rng.normal(0, DRAFT_NOISE));
     if (s > bs) {
       bs = s;
       best = p;
