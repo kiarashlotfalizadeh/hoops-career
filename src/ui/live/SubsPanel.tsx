@@ -49,6 +49,8 @@ export function SubsPanel({
         help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted), and the staff calls no timeouts to stop runs."
       />
       <div className="small dim">{outPid === null ? 'Tap a player on the floor, then a bench player.' : `${nameOf(outPid)} comes out: now pick who comes in.`}</div>
+      {/* the rows' shorthand spelled out once */}
+      <div className="tiny dim">Each player: energy, then fouls (F), points (p) and minutes (m) tonight.</div>
       <div className="col" style={{ gap: 6 }}>
         {t.on.map((p) => {
           const l = line(p);
@@ -59,8 +61,11 @@ export function SubsPanel({
                 {nameOf(p.pid)}
               </span>
               <span className="small num">{l.energy}%</span>
-              <span className="small dim num">
+              <span className="small dim num" aria-hidden="true">
                 {l.fouls}F · {l.pts}p · {l.min}m
+              </span>
+              <span className="sr-only">
+                , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.pts} point{l.pts === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
               </span>
             </button>
           );
@@ -95,8 +100,11 @@ export function SubsPanel({
                 {nameOf(p.pid)}
               </span>
               <span className="small num">{l.energy}%</span>
-              <span className="small dim num">
+              <span className="small dim num" aria-hidden="true">
                 {l.fouls}F · {l.min}m
+              </span>
+              <span className="sr-only">
+                , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
               </span>
             </button>
           );

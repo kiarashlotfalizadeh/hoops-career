@@ -200,6 +200,9 @@ export function andList(items: string[]): string {
   return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : (items[0] ?? '');
 }
 
+/** A sentence with its closing period, unless it already ends in one (a protected pick's "top-10 prot."). */
+export const sentence = (s: string) => (s.endsWith('.') ? s : `${s}.`);
+
 /**
  * A team's box-score minutes as whole numbers that still add up to the team's total (240, plus 25
  * per overtime): rounded down, then the leftover minutes go to the largest remainders.

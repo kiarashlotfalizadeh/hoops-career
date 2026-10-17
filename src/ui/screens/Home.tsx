@@ -42,6 +42,16 @@ function phaseTitle(league: League): string {
   }
 }
 
+/** A message's lines run together for a two-line preview: one that doesn't end a sentence (a goal's "… (ahead)") gets its period, or the next line reads on from it. */
+function previewText(body: string): string {
+  return body
+    .split(/\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => (/[.!?:]$/.test(x) ? x : `${x}.`))
+    .join(' ');
+}
+
 function nextUserGame(league: League) {
   const today = userGameOnDay(league, league.day);
   if (today) return today;
@@ -405,7 +415,7 @@ export default function Home() {
                   <div className="small dim">{m.from}</div>
                   <div className="bold small">{m.subject}</div>
                   <div className="small dim2" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {m.body}
+                    {previewText(m.body)}
                   </div>
                 </Link>
               ))}

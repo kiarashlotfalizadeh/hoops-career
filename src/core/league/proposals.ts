@@ -9,7 +9,7 @@
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
 import { Rng, hashString } from '../random';
-import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, standardRoster } from './helpers';
+import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, sentence, standardRoster } from './helpers';
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
@@ -153,7 +153,7 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
   addInbox(league, {
     from: `${t.region} ${t.name} GM`,
     subject: pitch.subject,
-    body: `${p.note}\nWe'd send ${assetText(league, p.offer.b)} ${ask}. ${until}`,
+    body: `${p.note}\n${sentence(`We'd send ${assetText(league, p.offer.b)} ${ask}`)} ${until}`,
     tone: 'neutral',
     link: '/trade?tab=offers',
     proposal: p.id,

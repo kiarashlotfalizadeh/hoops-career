@@ -35,7 +35,8 @@ import { TeamLogo } from './TeamLogo';
 import './gameday.css';
 
 const confWord = (c: 'E' | 'W') => (c === 'E' ? 'East' : 'West');
-const gbText = (l: StandingLine) => (l.rank === 1 ? 'in first' : `${l.gb % 1 ? l.gb.toFixed(1) : l.gb} GB`);
+// (none for the leader: "1st" already says it)
+const gbText = (l: StandingLine) => (l.rank === 1 ? '' : `${l.gb % 1 ? l.gb.toFixed(1) : l.gb} GB`);
 const CLINCH: Record<NonNullable<StandingLine['clinched']>, { text: string; tone: 'good' | 'info' | 'bad' }> = {
   x: { text: 'Clinched a playoff spot', tone: 'good' },
   p: { text: 'Clinched a play-in spot', tone: 'info' },
@@ -206,7 +207,7 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
               <span className={`num ${stakes.after.rank < stakes.before.rank ? 'good' : stakes.after.rank > stakes.before.rank ? 'bad' : 'dim'}`}>
                 {stakes.after.rank < stakes.before.rank ? '▲' : stakes.after.rank > stakes.before.rank ? '▼' : '·'}
               </span>
-              <span className="dim num">{gbText(stakes.after)}</span>
+              {gbText(stakes.after) && <span className="dim num">{gbText(stakes.after)}</span>}
             </div>
           )}
           {newly && (

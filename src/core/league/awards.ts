@@ -257,13 +257,14 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
   } else aw.allStars = out;
   for (const pid of [...out.E, ...out.W]) league.players[pid].awards.push({ season: league.season, type: 'All-Star' });
   const mine = [...out.E, ...out.W].filter((pid) => league.players[pid].tid === league.userTid);
+  // the first five of each conference by name, the rest counted
+  const named = (pids: number[]) => {
+    const names = pids.slice(0, 5).map((pid) => league.players[pid].lastName);
+    return pids.length > 5 ? `${names.join(', ')} and ${pids.length - 5} more` : andList(names);
+  };
   addNews(league, {
     kind: 'award',
-    text: `All-Stars announced. East: ${out.E.slice(0, 5)
-      .map((pid) => league.players[pid].lastName)
-      .join(', ')}... West: ${out.W.slice(0, 5)
-      .map((pid) => league.players[pid].lastName)
-      .join(', ')}...`,
+    text: `All-Stars announced. East: ${named(out.E)}. West: ${named(out.W)}.`,
     tids: [],
     pids: [...out.E, ...out.W],
   });

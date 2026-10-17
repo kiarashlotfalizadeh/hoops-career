@@ -294,7 +294,7 @@ function ResignPhase() {
                         </b>
                         <span className="dim">
                           {' '}
-                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · {playerAge(p, next)} next season
+                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · age {playerAge(p, next)} next season
                         </span>
                       </div>
                     </>
@@ -324,7 +324,7 @@ function ResignPhase() {
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="fo-name small">{playerName(p)}</div>
                     <div className="fo-meta tiny">
-                      {p.pos} · {playerAge(p, next)} next season
+                      {p.pos} · age {playerAge(p, next)} next season
                     </div>
                   </div>
                   <div className="fo-money">
