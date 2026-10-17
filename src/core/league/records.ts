@@ -620,8 +620,9 @@ export function recordsHeld(league: League, res: GameResult): HeldRecord[] {
   return out;
 }
 
-/** "52 points", "a 41-point win", "24 threes": a held record's number, said as the recap and news say it. */
+/** "52 points", "a 41-point win" ("an 18-point win"), "24 threes": a held record's number, said as the recap and news say it. */
 export function recordWhat(r: Pick<HeldRecord, 'stat' | 'team' | 'v'>): string {
-  if (r.team) return r.stat === 'margin' ? `a ${r.v}-point win` : `${r.v} ${r.stat === 'pts' ? 'points' : 'threes'}`;
+  const an = r.v === 8 || r.v === 11 || r.v === 18 || (r.v >= 80 && r.v < 90);
+  if (r.team) return r.stat === 'margin' ? `${an ? 'an' : 'a'} ${r.v}-point win` : `${r.v} ${r.stat === 'pts' ? 'points' : 'threes'}`;
   return `${r.v} ${REC_LABEL[r.stat as RecStat][1]}`;
 }

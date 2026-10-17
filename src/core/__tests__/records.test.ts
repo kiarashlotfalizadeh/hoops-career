@@ -296,6 +296,7 @@ describe('records a game holds', () => {
     // named once, as the league's, not also as the franchise's
     expect(held.filter((r) => r.stat === 'pts' && !r.team)).toHaveLength(1);
     expect(recordWhat({ stat: 'margin', team: true, v: 41 })).toBe('a 41-point win');
+    expect(recordWhat({ stat: 'margin', team: true, v: 18 })).toBe('an 18-point win');
     expect(recordWhat({ stat: 'reb', v: 25 })).toBe('25 rebounds');
   });
 });

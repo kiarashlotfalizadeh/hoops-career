@@ -210,6 +210,8 @@ describe('career milestones', () => {
       p.stats = [];
       Object.assign(statsLine(p, l.season, p.tid, false), { gp: 1, pts });
     }
+    // and a board from 7,500 rebounds, a mark between the round thousands
+    statsLine(a, l.season, a.tid, false).drb = 7499;
     simDay(l);
     const res = l.games.find((r) => r.gid === g.gid)!;
     const marks = milestonesIn(l, res);
@@ -218,6 +220,9 @@ describe('career milestones', () => {
     expect(marks.some((m) => m.pid === b.pid && m.stat === 'pts' && m.mark === 1000)).toBe(scored(b));
     const news = l.news.filter((n) => n.kind === 'milestone' && n.text.includes('career'));
     expect(news.some((n) => n.pids[0] === a.pid && n.text.endsWith('scored his 10,000th career point.'))).toBe(scored(a));
+    const rebounded = (p: Player) => (lineOf(res, p.pid)?.orb ?? 0) + (lineOf(res, p.pid)?.drb ?? 0) > 0;
+    expect(rebounded(a)).toBe(true);
+    expect(news.some((n) => n.pids[0] === a.pid && n.text.endsWith('grabbed his 7,500th career rebound.'))).toBe(true);
     // 1,000 is for the recap, not the news
     expect(news.some((n) => n.pids[0] === b.pid)).toBe(false);
     // a later game doesn't move it: the recap counts back from his total now

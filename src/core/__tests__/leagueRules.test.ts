@@ -620,6 +620,20 @@ describe('awards (L13, L18)', () => {
     return line;
   }
 
+  it("the Rookie and Sixth Man ladders pro-rate their 50 games during the season, as the 65-game rule's do", () => {
+    const l = league();
+    const line = seasonOf(l);
+    // 70 games in: 43 of them for Rookie of the Year (a flat 50 would leave him off until the vote)
+    for (const t of l.teams) [curTeamSeason(l, t.tid).won, curTeamSeason(l, t.tid).lost] = [35, 35];
+    const [rookie, short] = standardRoster(l, U);
+    rookie.draft.year = short.draft.year = l.season - 1;
+    line(rookie, 45, 45, 30);
+    line(short, 42, 42, 35);
+    const roy = awardRaces(l).roy.map((x) => x.c.p.pid);
+    expect(roy[0]).toBe(rookie.pid);
+    expect(roy).not.toContain(short.pid);
+  });
+
   it('Sixth Man needs more games off the bench than as a starter (half and half is out)', () => {
     const l = league();
     const line = seasonOf(l);

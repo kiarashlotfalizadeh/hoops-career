@@ -514,7 +514,7 @@ export function finishDraftPhase(league: League): boolean {
     from: 'Assistant GM',
     subject: 'Re-signing period',
     body: exp.length
-      ? `You have ${exp.length} expiring contract${exp.length > 1 ? 's' : ''}: ${exp.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Negotiate in Re-sign Players before free agency opens, or they hit the market.`
+      ? `You have ${exp.length} expiring contract${exp.length > 1 ? 's' : ''}: ${exp.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Negotiate in Re-sign Players before free agency opens, or ${exp.length > 1 ? 'they hit' : 'he hits'} the market.`
       : 'No expiring contracts this summer. Free agency opens next.',
     tone: 'neutral',
     link: '/resign',
@@ -542,9 +542,9 @@ export function startFreeAgency(league: League): boolean {
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Free agency is open',
-    body: `You have ${space > 0 ? `$${(space / 1000).toFixed(1)}M in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length ? " after your restricted free agents' cap holds" : ''}. You get the first look: AI teams start signing tomorrow. Top free agents weigh competing offers for a day or two; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
+    body: `You have ${space > 0 ? `$${(space / 1000).toFixed(1)}M in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}. You get the first look: AI teams start signing tomorrow. Top free agents weigh competing offers for a day or two; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
       rfas.length
-        ? `\nYour restricted free agents: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights any time before an offer sheet comes in, or match one; unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`
+        ? `\nYour restricted free agent${rfas.length > 1 ? 's' : ''}: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights any time before an offer sheet comes in, or match one; unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`
         : ''
     }`,
     tone: 'neutral',
@@ -566,8 +566,8 @@ export const faOver = (league: League) => league.faDay >= FA_DAYS - 1;
  * Advance free agency `days` days ("advance a week" near the end stops on the last day). While an
  * offer sheet on one of the user's restricted free agents waits for his call (signed on the day just
  * played, or still pending from before), it goes one day at a time: only he can match it, and a run
- * of days would go through his last day to without a stop. Leaving it unanswered, day by day, still
- * lets him go when its time runs out.
+ * of days would go through his last day to match it without a stop. Leaving it unanswered, day by
+ * day, still lets him go when its time runs out.
  */
 export function faAdvance(league: League, days = 1) {
   if (league.phase !== 'freeAgency') return;

@@ -14,7 +14,7 @@ import { confStandings } from './standings';
 import { hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
 import { projectGame } from '../analysis/projection';
-import { careerOnRecord, careerTotals, marksCrossed, newsworthy, type MilestoneStat } from '../analysis/milestones';
+import { careerOnRecord, careerTotals, marksCrossed, markText, newsworthy, type MilestoneStat } from '../analysis/milestones';
 import { gameKeys, gradeKey } from '../analysis/keys';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
@@ -420,12 +420,13 @@ function milestoneNews(league: League, sim: GameSim) {
     for (const stat of ['pts', 'reb', 'ast'] as const) {
       const tonight = stat === 'pts' ? rb.b.pts : stat === 'reb' ? rb.b.orb + rb.b.drb : rb.b.ast;
       if (tonight <= 0) continue;
-      for (const mark of marksCrossed(after[stat] - tonight, after[stat])) {
+      // (by 500s: the round thousands alone would skip 7,500 and 12,500)
+      for (const mark of marksCrossed(after[stat] - tonight, after[stat], 500)) {
         if (!newsworthy(stat, mark)) continue;
         const team = league.teams[rb.tid];
         addNews(league, {
           kind: 'milestone',
-          text: `${playerName(p)} (${team.abbrev}) ${STAT_NEWS[stat]} ${mark.toLocaleString('en-US')}th career ${stat === 'pts' ? 'point' : stat === 'reb' ? 'rebound' : 'assist'}.`,
+          text: `${playerName(p)} (${team.abbrev}) ${STAT_NEWS[stat]} ${markText(stat, mark)}.`,
           tids: [team.tid],
           pids: [p.pid],
         });

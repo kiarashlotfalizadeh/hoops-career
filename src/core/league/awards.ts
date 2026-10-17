@@ -30,22 +30,24 @@ function candidates(league: League, season = league.season): Cand[] {
   return out;
 }
 
-/** Games a player needs for the MVP, DPOY and other votes: 65 of 82, pro-rated to the busiest team's games so far. */
-export function gamesThreshold(league: League) {
+/** Games a player needs for the MVP, DPOY and other votes: 65 of 82 (or `games`), pro-rated to the busiest team's games so far. */
+export function gamesThreshold(league: League, games = 65) {
   const played = Math.max(...league.teams.map((t) => curTeamSeason(league, t.tid).won + curTeamSeason(league, t.tid).lost));
-  return Math.round(played * (65 / 82));
+  return Math.round(played * (games / 82));
 }
 
 /**
- * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games (pro
- * rata during the season) and 20 minutes a game; Rookie and Sixth Man of the Year don't, so they ask
- * for a voter's 50 games (Sixth Man for the 20 minutes too). A sixth man came off the bench in more
- * games than he started.
+ * Who can win what. Since 2023-24 the MVP, DPOY, MIP, All-NBA and All-Defense need 65 games and
+ * 20 minutes a game; Rookie and Sixth Man of the Year don't, so they ask for a voter's 50 games
+ * (Sixth Man for the 20 minutes too), both pro rata during the season. A sixth man came off the
+ * bench in more games than he started.
  */
 function awardPools(league: League, season = league.season) {
   const minG = gamesThreshold(league);
+  // (pro-rated too: a flat 50 late in the season left rookies on pace for it off the ladder)
+  const minRegular = gamesThreshold(league, 50);
   const all = candidates(league, season);
-  const regular = (c: Cand) => c.gp >= Math.min(minG, 50);
+  const regular = (c: Cand) => c.gp >= minRegular;
   return {
     eligible: all.filter((c) => c.gp >= minG && c.mpg >= 20),
     rookies: all.filter((c) => c.p.draft.year === season - 1 && regular(c)),
