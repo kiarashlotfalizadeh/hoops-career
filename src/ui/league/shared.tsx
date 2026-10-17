@@ -95,6 +95,12 @@ export { ordinal } from '../stats';
 
 export const confName = (c: 'E' | 'W' | 'F') => (c === 'E' ? 'East' : c === 'W' ? 'West' : 'Finals');
 
+/**
+ * The two conferences, the one a phone shows first: the other stays in the page, hidden there (a
+ * tablet puts them side by side, East on the left, with CSS order).
+ */
+export const confOrder = (first: 'E' | 'W'): ('E' | 'W')[] => (first === 'E' ? ['E', 'W'] : ['W', 'E']);
+
 export const shortName = (p: Pick<Player, 'firstName' | 'lastName'>) => (p.firstName ? `${p.firstName[0]}. ${p.lastName}` : p.lastName);
 
 /** Team id of a stats row, or null for multi-team/unknown rows from imported data. */

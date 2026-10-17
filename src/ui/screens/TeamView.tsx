@@ -123,11 +123,11 @@ function Hero({ league, tid, onEdit }: { league: League; tid: number; onEdit?: (
             <div className="lg-team-wl num">
               {ts.won}-{ts.lost}
             </div>
-            <div className="lg-team-rank">{gp ? `${ordinal(confRank)} in the ${confWord}` : `${confWord}ern Conference`}</div>
+            <div className="lg-team-rank">{gp ? `${ordinal(confRank)} in the ${confWord}` : 'No games yet'}</div>
           </div>
           <div className="lg-team-coach">
             <span className="nm ellipsis">{isUser ? league.coachName : team.coach.name}</span>
-            <span className="ellipsis">
+            <span className="lg-team-play">
               {off?.name ?? 'Custom offense'} · {def?.name ?? 'Custom defense'}
             </span>
           </div>
@@ -896,8 +896,8 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
       <div className="card lg-strip">
         <Statline
           items={[
-            { k: 'Picks owned', v: owned.length },
-            { k: '1st rounders', v: firsts },
+            { k: 'Owned', v: owned.length },
+            { k: '1st round', v: firsts },
             { k: 'Traded away', v: away.length, color: away.length ? 'var(--warn)' : undefined },
           ]}
         />

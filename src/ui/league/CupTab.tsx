@@ -8,7 +8,7 @@ import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Segmented } from '../components/ui';
-import { TitleSlab, Toolbar, confName, useQueryParam } from './shared';
+import { TitleSlab, Toolbar, confName, confOrder, useQueryParam } from './shared';
 
 /** "Dec 4–11", or "Nov 28 – Dec 3" across months. */
 function dateRange(league: League, a: number, b: number) {
@@ -98,8 +98,8 @@ export function CupTab({ league }: { league: League }) {
       {seeds ? (
         <>
           <div className="bk-panel-wrap">
-            {(['E', 'W'] as const).map((c) => (
-              <div key={c} className={c !== conf ? 'bk-hide-narrow' : ''}>
+            {confOrder(conf).map((c) => (
+              <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
                 <Section title={`${confName(c)} knockouts`} right={projected ? <span className="tag info">Projected</span> : undefined}>
                   <div className="card bk-card">
                     <KnockoutBracket league={league} conf={c} projected={projected} />
@@ -119,8 +119,8 @@ export function CupTab({ league }: { league: League }) {
       )}
 
       <div className="bk-panel-wrap">
-        {(['E', 'W'] as const).map((c) => (
-          <div key={c} className={c !== conf ? 'bk-hide-narrow' : ''}>
+        {confOrder(conf).map((c) => (
+          <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
             <Section title={`${confName(c)} groups`}>
               <GroupTables league={league} tables={tables.filter((t) => t.group.conf === c)} seeds={seeds} decided={!!cup.seeds} />
             </Section>

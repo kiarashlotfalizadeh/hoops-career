@@ -17,7 +17,7 @@ const short = (name: string) => {
 function Who({ league, e, win }: { league: League; e: { pid: number; name: string; tid: number }; win?: boolean }) {
   const label = <span className={`bold ellipsis ${win ? 'lg-sat-win' : ''}`}>{short(e.name)}</span>;
   return (
-    <span className="row" style={{ gap: 6, minWidth: 0 }}>
+    <span className="lg-sat-name">
       <TeamLogo tid={e.tid} size={16} />
       {league.players[e.pid] ? (
         // the link's ::after takes taps across the row's height (league.css .lg-sat-who)

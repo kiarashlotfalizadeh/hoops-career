@@ -10,7 +10,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
-import { TitleSlab, Toolbar, confName, ordinal, roundName, useQueryParam } from './shared';
+import { TitleSlab, Toolbar, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
 interface Slot {
@@ -134,8 +134,8 @@ export function PlayoffsTab({ league }: { league: League }) {
         />
       </div>
       <div className="bk-panel-wrap">
-        {(['E', 'W'] as const).map((c) => (
-          <div key={c} className={`bk-conf ${c !== conf ? 'bk-hide-narrow' : ''}`}>
+        {confOrder(conf).map((c) => (
+          <div key={c} className={`bk-conf bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
             <Section title={`${confName(c)}ern Conference`}>
               <div className="card bk-card">
                 <Bracket league={league} slots={slots[c]} onOpen={setOpen} />
