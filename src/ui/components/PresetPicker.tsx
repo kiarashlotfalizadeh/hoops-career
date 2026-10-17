@@ -1,7 +1,8 @@
-// The Tactics screen's playbook pickers: each preset with its fit for the roster, and behind the fit
-// score, "Why fit 72": the pluses and minuses it is made of, the players behind them, and what would
-// raise it.
+// The Tactics screen's playbook pickers: each preset as a row with its fit for the roster and its
+// hook, the description and what it's best for in a sheet, and behind the fit score, "Why fit 72":
+// the pluses and minuses it is made of, the players behind them, and what would raise it.
 import { useMemo, useState } from 'react';
+import { ChevronRight, Info } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
 import { presetMatches } from '../../core/sim/playbooks';
@@ -19,7 +20,8 @@ import {
 } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
-import { Sheet, Tag } from './ui';
+import { Sheet, Statline, Tag } from './ui';
+import '../screens/tactics.css';
 
 function FitTag({ v }: { v: number }) {
   const tone = v >= 88 ? 'good' : v >= 70 ? 'info' : v >= 58 ? 'warn' : 'bad';
@@ -82,6 +84,7 @@ function FitWhy({
   const plus = parts.filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
   const minus = parts.filter((t) => t.value < 0).sort((a, b) => a.value - b.value);
   const best = ranked[0][0] === id;
+  const least = ranked[ranked.length - 1];
   // what raises it: more of a quality this playbook rewards, in shown fit for five points more
   const levers = terms
     .filter((t) => t.key !== 'base' && t.weight > 0)
@@ -91,47 +94,54 @@ function FitWhy({
   const row = (t: FitTerm) => {
     const who = behind(t, pr, name);
     return (
-      <div key={t.key} className="row top small" style={{ gap: 10 }}>
-        <span className={`num bold ${t.value > 0 ? 'good' : 'bad'}`} style={{ width: 44, flex: 'none' }}>
+      <div key={t.key} className="tx-term">
+        <span className={`tx-term-v num ${t.value > 0 ? 'good' : 'bad'}`}>
           {t.value > 0 ? '+' : '−'}
           {Math.abs(t.value).toFixed(1)}
         </span>
-        <div className="grow">
-          <div>{t.key === 'base' ? 'Starting score' : QUALITY[t.key].label}</div>
-          {who && <div className="tiny dim">{who}</div>}
-        </div>
+        <span className="grow">
+          <span className="tx-term-l">{t.key === 'base' ? 'Starting score' : QUALITY[t.key].label}</span>
+          {who && <span className="tx-term-s">{who}</span>}
+        </span>
       </div>
     );
   };
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="small dim2">
-        <b>{label(id)}</b> scores {fits[id].toFixed(1)} fit points for your roster{base ? `, from a starting ${base.value}` : ''}. Fit ranks the playbooks against each other:{' '}
-        {label(ranked[0][0])} fits best ({ranked[0][1].toFixed(1)}, shown as 100) and {label(ranked[ranked.length - 1][0])} least ({ranked[ranked.length - 1][1].toFixed(1)}, shown
-        as 45).
+    <div className="col tx-why">
+      <div className="card tx-why-fig">
+        <Statline
+          items={[
+            { k: 'Fit points', v: fits[id].toFixed(1), s: base ? `from a starting ${base.value}` : label(id) },
+            { k: 'Best', v: ranked[0][1].toFixed(1), s: label(ranked[0][0]) },
+            { k: 'Least', v: least[1].toFixed(1), s: label(least[0]) },
+          ]}
+        />
       </div>
-      {!parts.length && <div className="small">It doesn't lean on any one quality, so it scores the same for every roster.</div>}
+      <div className="small dim2">
+        Fit ranks the playbooks against each other for your roster: the best shows as 100, the least as 45. <b>{label(id)}</b> shows as {shown(id)}.
+      </div>
+      {!parts.length && <div className="small">It doesn&apos;t lean on any one quality, so it scores the same for every roster.</div>}
       {plus.length > 0 && (
-        <div className="col" style={{ gap: 8 }}>
-          <div className="tiny dim upper bold">Pluses</div>
+        <div className="tx-terms">
+          <div className="over">Pluses</div>
           {plus.map(row)}
         </div>
       )}
       {minus.length > 0 && (
-        <div className="col" style={{ gap: 8 }}>
-          <div className="tiny dim upper bold">Minuses</div>
+        <div className="tx-terms">
+          <div className="over">Minuses</div>
           {minus.map(row)}
         </div>
       )}
       {levers.length > 0 && (
-        <div className="col" style={{ gap: 8 }}>
-          <div className="tiny dim upper bold">What would raise it</div>
+        <div className="tx-terms">
+          <div className="over">What would raise it</div>
           {best ? (
             <div className="small dim2">Nothing needs to: it is already the best fit for this roster.</div>
           ) : (
             levers.map(({ t, gain }) => (
-              <div key={t.key} className="row top small" style={{ gap: 10 }}>
-                <span className="grow">{QUALITY[t.key as ProfileKey].more}</span>
+              <div key={t.key} className="tx-term">
+                <span className="grow tx-term-l">{QUALITY[t.key as ProfileKey].more}</span>
                 <span className="tiny dim num nowrap">{gain > 0 ? `+${gain} fit per 5 points` : 'little change'}</span>
               </div>
             ))
@@ -155,6 +165,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const shown = useMemo(() => fitScale(fits), [fits]);
   const name = useMemo(() => rosterNames(healthy, { initial: true }), [healthy]);
   const [why, setWhy] = useState<string | null>(null);
+  const [about, setAbout] = useState<string | null>(null);
   const presets: (OffPreset | DefPreset)[] = kind === 'off' ? OFF_PRESETS : DEF_PRESETS;
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
   const pick = (id: string) =>
@@ -169,60 +180,77 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
       }
       tt.manual = true;
     });
+  // the settings have moved since this preset was picked: picking it again puts them back
+  const isCustom = (p: OffPreset | DefPreset) => cur === p.id && !presetMatches(kind === 'off' ? t.offense : t.defense, p);
   const whyPreset = presets.find((p) => p.id === why);
+  const aboutPreset = presets.find((p) => p.id === about);
+  const aboutOn = aboutPreset?.id === cur;
+  const aboutCustom = !!aboutPreset && isCustom(aboutPreset);
   return (
     <>
-      <div className="col grid-md2" style={{ gap: 8 }}>
+      <div className="card flush list wide2 tx-presets">
         {presets.map((p) => {
           const on = cur === p.id;
-          // the settings have moved since this preset was picked: tapping it again puts them back
-          const custom = on && !presetMatches(kind === 'off' ? t.offense : t.defense, p);
+          const custom = isCustom(p);
           return (
-            <div key={p.id} style={{ position: 'relative' }}>
-              <button
-                aria-pressed={on}
-                className={`card tight preset${on ? ' on' : ''}`}
-                style={{
-                  textAlign: 'left',
-                  width: '100%',
-                  height: '100%',
-                  borderColor: on ? 'var(--accent)' : undefined,
-                  background: on ? 'color-mix(in srgb, var(--accent) 16%, var(--surface))' : undefined,
-                }}
-                onClick={() => pick(p.id)}
-              >
-                {/* room on the right for the fit button, which sits over the card */}
-                <div className="row" style={{ gap: 6, paddingRight: 64, minHeight: 20 }}>
-                  <span className="bold">{p.name}</span>
-                  {custom && <Tag>Custom</Tag>}
-                </div>
-                <div className="small dim2">
-                  {p.tagline}. {p.description}
-                </div>
-                <div className="tiny dim" style={{ marginTop: 4 }}>
-                  Best for: {p.bestFor}
-                </div>
-                {custom && (
-                  <div className="tiny" style={{ marginTop: 4, color: 'var(--accent-text)' }}>
-                    Your settings have moved from it: tap to put them back.
-                  </div>
-                )}
+            <div key={p.id} className={`tx-preset ${on ? 'on' : ''}`}>
+              <button className="tx-preset-pick" aria-pressed={on} onClick={() => pick(p.id)}>
+                <span className="tx-radio" aria-hidden="true" />
+                <span className="grow">
+                  <span className="tx-preset-n">
+                    <span className="ellipsis">{p.name}</span>
+                    {custom && <Tag>Custom</Tag>}
+                  </span>
+                  <span className={`tx-preset-t ${custom ? 'accent-text' : ''}`}>{custom ? 'Settings moved: tap to put them back' : p.tagline}</span>
+                </span>
               </button>
-              <button
-                aria-label={`Fit ${shown(p.id)}: why, for ${p.name}`}
-                aria-haspopup="dialog"
-                onClick={() => setWhy(p.id)}
-                style={{ position: 'absolute', top: 2, right: 2, padding: 8, borderRadius: 10 }}
-              >
+              <button className="tx-fit" aria-label={`Fit ${shown(p.id)}: why, for ${p.name}`} aria-haspopup="dialog" onClick={() => setWhy(p.id)}>
                 <FitTag v={shown(p.id)} />
+              </button>
+              <button className="iconbtn tx-about" aria-label={`About ${p.name}`} aria-haspopup="dialog" onClick={() => setAbout(p.id)}>
+                <Info size={18} />
               </button>
             </div>
           );
         })}
       </div>
+      <Sheet open={!!aboutPreset} onClose={() => setAbout(null)} title={aboutPreset?.name}>
+        {aboutPreset && (
+          <div className="col tx-about-body">
+            <p className="tx-lead">{aboutPreset.tagline}</p>
+            <p>{aboutPreset.description}</p>
+            <div className="tx-dl">
+              <span className="over">Best for</span>
+              <span>{aboutPreset.bestFor}</span>
+            </div>
+            <button
+              className="tx-fitrow"
+              aria-haspopup="dialog"
+              onClick={() => {
+                setAbout(null);
+                setWhy(aboutPreset.id);
+              }}
+            >
+              <FitTag v={shown(aboutPreset.id)} />
+              <span className="grow">Why this fit</span>
+              <ChevronRight size={16} className="dim" aria-hidden="true" />
+            </button>
+            <button
+              className="btn primary block"
+              disabled={aboutOn && !aboutCustom}
+              onClick={() => {
+                pick(aboutPreset.id);
+                setAbout(null);
+              }}
+            >
+              {aboutOn ? (aboutCustom ? 'Put its settings back' : 'In use') : `Use ${aboutPreset.name}`}
+            </button>
+          </div>
+        )}
+      </Sheet>
       <Sheet open={!!whyPreset} onClose={() => setWhy(null)} title={whyPreset ? `Why fit ${shown(whyPreset.id)}` : ''}>
         {whyPreset && <FitWhy id={whyPreset.id} presets={presets} terms={terms[whyPreset.id]} fits={fits} pr={prof} name={name} />}
-        <button className="btn block" style={{ marginTop: 16 }} onClick={() => setWhy(null)}>
+        <button className="btn block tx-gotit" onClick={() => setWhy(null)}>
           Got it
         </button>
       </Sheet>

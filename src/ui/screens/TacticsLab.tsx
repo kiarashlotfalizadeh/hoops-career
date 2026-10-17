@@ -13,13 +13,15 @@ import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
-import { Card, Chips, Empty, Help, Kpi, PageHeader, Segmented, Spinner, Tag } from '../components/ui';
+import { Chips, Empty, Help, PageHeader, Section, Segmented, Spinner, Statline, Tag, scrollBehavior } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
+import { matchupColors } from '../teamColors';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
 import type { GameType, League, SetId, Tactics, TacticsPatch } from '../../core/types';
+import './tactics.css';
 
 type Mode = 'project' | 'compare' | 'counters';
 
@@ -197,81 +199,20 @@ export default function TacticsLab() {
     const btn = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
     if (row && btn) row.scrollLeft = Math.max(0, btn.offsetLeft - (row.clientWidth - btn.offsetWidth) / 2);
   }, []);
+  // a finished run brings its results up under the header: they start below the opponent and the Run bar
+  const results = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (run) results.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  }, [run]);
 
   const oppTeam = league.teams[opp];
   const ts = curTeamSeason(league, opp);
   const shown = run && run.opp === opp && run.mode === mode ? run : null;
   return (
     <main className="page">
-      <PageHeader title="Tactics Lab" back backTo="/tactics" sub="Simulate before you commit: every number below comes from real engine games." />
-      <Card
-        title="Opponent"
-        right={
-          <span className="small dim num">
-            {ts.won}-{ts.lost}
-          </span>
-        }
-      >
-        <div className="hscroll" ref={picker}>
-          {league.teams
-            .filter((t) => t.tid !== user)
-            .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
-            .map((t) => (
-              <button
-                key={t.tid}
-                onClick={() => setOpp(t.tid)}
-                disabled={busy}
-                aria-pressed={t.tid === opp}
-                className="col"
-                // (positioned: its screen-reader text stays inside the scroller instead of widening the page)
-                style={{ position: 'relative', alignItems: 'center', gap: 2, opacity: t.tid === opp ? 1 : busy ? 0.3 : 0.55, minWidth: 48 }}
-              >
-                {/* named by the abbreviation it shows, then the team: "MEM, Memphis Grizzlies" */}
-                <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} decorative />
-                <span className="tiny bold">{t.abbrev}</span>
-                <span className="sr-only">
-                  , {t.region} {t.name}
-                </span>
-              </button>
-            ))}
-        </div>
-        <div className="small dim2" style={{ marginTop: 8 }}>
-          <b>
-            {oppTeam.region} {oppTeam.name}:
-          </b>{' '}
-          {scout.offense[0]} {scout.defense[0]}
-        </div>
-        {scout.weaknesses.length > 0 && (
-          <div className="small" style={{ marginTop: 4 }}>
-            <span className="good">Weakness:</span> {scout.weaknesses[0]}
-          </div>
-        )}
-        {plan && (
-          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
-            <span className="small dim2">Your game plan for {oppTeam.abbrev} is included:</span>
-            {plan.items.map((it) => (
-              <Tag key={it.id} tone="info">
-                {it.label}
-              </Tag>
-            ))}
-          </div>
-        )}
-        {theirPlan && (
-          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
-            <span className="small dim2">{plan ? 'So is their plan for your next game:' : `The ${oppTeam.abbrev} plan for your next game is included:`}</span>
-            {theirPlan.items.map((it) => (
-              <Tag key={it.id} tone="warn">
-                {it.text}
-              </Tag>
-            ))}
-          </div>
-        )}
-        <Link to={`/gameplan/${opp}`} className="small row" style={{ gap: 2, marginTop: 8, color: 'var(--accent-text)', fontWeight: 650 }}>
-          Game plan vs {oppTeam.abbrev} <ChevronRight size={15} />
-        </Link>
-      </Card>
-
+      <PageHeader title="Tactics Lab" back backTo="/tactics" sub="Real engine games, before you commit." />
       <Segmented
+        tabs
         value={mode}
         onChange={setMode}
         label="Lab mode"
@@ -282,36 +223,110 @@ export default function TacticsLab() {
           { id: 'counters', label: 'Counters' },
         ]}
       />
-      <div className="small dim">
-        {mode === 'project' && 'Your current game plan against this opponent: expected result, shot profile, play types and who gets the ball.'}
-        {mode === 'compare' &&
-          (baseline
-            ? baselineName
-              ? `Your playbook "${baselineName}" (before) vs your current tactics (after), same opponent, same random draws.`
-              : 'Your tactics before vs after your latest edits, same opponent, same random draws.'
-            : 'Compare plays your tactics from before and after an edit against the same games.')}
-        {mode === 'counters' && 'The assistant drafts counters for this opponent and tests each one. Apply the ones that move the needle.'}
-      </div>
-      <div className="row">
-        <Chips
-          label="Games to simulate"
-          value={games}
-          onChange={setGames}
-          disabled={busy}
-          options={[
-            { id: 20, label: '20 games' },
-            { id: 40, label: '40' },
-            { id: 100, label: '100' },
-          ]}
-        />
-        <div className="grow" />
-        <button className="btn primary" onClick={() => void start()} disabled={busy || noBaseline}>
-          {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run
-        </button>
+
+      <Section
+        title="Opponent"
+        right={
+          <Link to={`/gameplan/${opp}`} className="card-link">
+            Game plan vs {oppTeam.abbrev} <ChevronRight size={14} />
+          </Link>
+        }
+      >
+        <div className="card flush">
+          <div className="hscroll tx-teams" ref={picker}>
+            {league.teams
+              .filter((t) => t.tid !== user)
+              .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
+              .map((t) => (
+                <button key={t.tid} onClick={() => setOpp(t.tid)} disabled={busy} aria-pressed={t.tid === opp} className="tx-team">
+                  {/* named by the abbreviation it shows, then the team: "MEM, Memphis Grizzlies" */}
+                  <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} decorative />
+                  <span className="tx-team-ab">{t.abbrev}</span>
+                  <span className="sr-only">
+                    , {t.region} {t.name}
+                  </span>
+                </button>
+              ))}
+          </div>
+          <div className="tx-scout">
+            <div className="tx-scout-h">
+              <span className="tx-scout-n">
+                {oppTeam.region} {oppTeam.name}
+              </span>
+              <span className="num tx-opp-rec">
+                {ts.won}-{ts.lost}
+              </span>
+            </div>
+            <div className="tx-note">
+              {scout.offense[0]} {scout.defense[0]}
+            </div>
+            {scout.weaknesses.length > 0 && (
+              <div className="tx-sline">
+                <Tag tone="good">Attack</Tag>
+                <span className="grow">{scout.weaknesses[0]}</span>
+              </div>
+            )}
+            {plan && (
+              <div className="tx-sline">
+                <span className="over">Your plan</span>
+                <span className="chips grow">
+                  {plan.items.map((it) => (
+                    <Tag key={it.id} tone="info">
+                      {it.label}
+                    </Tag>
+                  ))}
+                </span>
+              </div>
+            )}
+            {theirPlan && (
+              <div className="tx-sline">
+                <span className="over">Their plan</span>
+                <span className="chips grow">
+                  {theirPlan.items.map((it) => (
+                    <Tag key={it.id} tone="warn">
+                      {it.text}
+                    </Tag>
+                  ))}
+                </span>
+              </div>
+            )}
+            {(plan || theirPlan) && <div className="tiny dim">Both plans play in every Lab game.</div>}
+          </div>
+        </div>
+      </Section>
+
+      <div className="card tx-run">
+        <div className="tx-note">
+          {mode === 'project' && 'Your plan against them: the result, shot profile, play types and who gets the ball.'}
+          {mode === 'compare' &&
+            (baseline
+              ? baselineName
+                ? `Your playbook "${baselineName}" (before) vs your tactics now (after): same opponent, same random draws.`
+                : 'Your tactics before vs after your edits: same opponent, same random draws.'
+              : 'Plays your tactics from before and after an edit through the same games.')}
+          {mode === 'counters' && 'The assistant drafts counters for them and tests each one. Apply the ones that move the needle.'}
+        </div>
+        <div className="row">
+          <Chips
+            label="Games to simulate"
+            value={games}
+            onChange={setGames}
+            disabled={busy}
+            options={[
+              { id: 20, label: '20 games' },
+              { id: 40, label: '40' },
+              { id: 100, label: '100' },
+            ]}
+          />
+          <div className="grow" />
+          <button className="btn primary tx-runbtn" onClick={() => void start()} disabled={busy || noBaseline}>
+            {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run
+          </button>
+        </div>
       </div>
 
       {busy && (
-        <Card>
+        <div className="card tx-busy">
           <div className="row">
             <Spinner />
             <span className="small dim2 grow">Simulating {mode === 'counters' ? 'several game plans' : `${games} games`}…</span>
@@ -328,51 +343,45 @@ export default function TacticsLab() {
               Stop
             </button>
           </div>
-          <div
-            className="bar"
-            style={{ marginTop: 10 }}
-            role="progressbar"
-            aria-label="Games simulated"
-            aria-valuemin={0}
-            aria-valuemax={total}
-            aria-valuenow={Math.min(progress, total)}
-          >
-            <div style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%`, transition: 'width 0.2s' }} />
+          <div className="bar" role="progressbar" aria-label="Games simulated" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(progress, total)}>
+            <div className="tx-fill" style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%` }} />
           </div>
-        </Card>
+        </div>
       )}
 
       {!busy && !shown && (
         <Empty>
-          <Beaker size={28} style={{ opacity: 0.6 }} />
-          <div style={{ marginTop: 8 }}>
-            {mode === 'project' && 'Tap Run to simulate this matchup with your current plan.'}
+          <Beaker size={28} className="tx-empty-ic" />
+          <div className="tx-empty-t">
+            {mode === 'project' && 'Tap Run to simulate this matchup with your plan.'}
             {mode === 'compare' &&
-              (baseline
-                ? 'Tap Run to play both versions of your tactics against this opponent.'
-                : 'Nothing to compare yet. Change something in Tactics, then tap Compare in the bar that appears.')}
-            {mode === 'counters' && 'Tap Run and the assistant drafts counters for this opponent, then tests each one.'}
+              (baseline ? 'Tap Run to play both versions of your tactics against them.' : 'Nothing to compare yet. Change something in Tactics, then tap Compare.')}
+            {mode === 'counters' && 'Tap Run: the assistant drafts counters for them, then tests each one.'}
           </div>
           {noBaseline && (
-            <Link to="/tactics" className="btn sm" style={{ marginTop: 12 }}>
+            <Link to="/tactics" className="btn sm tx-empty-btn">
               Open Tactics
             </Link>
           )}
         </Empty>
       )}
 
+      <div ref={results} className="tx-anchor" aria-hidden="true" />
       {shown?.result && mode === 'project' && <Summary r={shown.result} league={league} oppTid={shown.opp} />}
       {shown?.result && shown.base && mode === 'compare' && <CompareView before={shown.base} after={shown.result} league={league} />}
       {shown?.cands && shown.base && (
         <>
-          <Card title="Baseline">
-            <div className="grid3">
-              <Kpi k="Win %" v={p0(shown.base.winPct)} />
-              <Kpi k="Net rtg" v={signed(shown.base.net)} color={shown.base.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
-              <Kpi k="Margin" v={signed(shown.base.ptsFor - shown.base.ptsAgainst)} />
-            </div>
-          </Card>
-          <Card
+          <section className="card tx-hero" aria-label="Baseline">
+            <div className="over tx-hero-over">Baseline · your plan now</div>
+            <Statline
+              items={[
+                { k: 'Win %', v: p0(shown.base.winPct) },
+                { k: 'Net rtg', v: signed(shown.base.net), color: shown.base.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+                { k: 'Margin', v: signed(shown.base.ptsFor - shown.base.ptsAgainst) },
+              ]}
+            />
+          </section>
+          <Section
             title="Counters, ranked"
             right={
               <Help title="Reading these numbers">
@@ -382,59 +391,65 @@ export default function TacticsLab() {
               </Help>
             }
           >
-            <div className="col" style={{ gap: 8 }}>
-              {!shown.cands.length && <div className="small dim">Nothing new to test: your plan already covers what the staff sees.</div>}
-              {shown.cands.map((c, _, all) => {
+            <div className="card flush list">
+              {!shown.cands.length && <div className="tx-empty">Nothing new to test: your plan already covers what the staff sees.</div>}
+              {shown.cands.map((c, i, all) => {
                 const sig = familySigmas(all.length);
                 const good = c.delta > sig * c.se;
                 const bad = c.delta < -sig * c.se;
+                const tone = good ? 'good' : bad ? 'bad' : '';
                 // a counter that only names their players (attacking one defender) has nothing to keep for every game
                 const mine = league.teams[league.userTid].tactics;
                 const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
                 return (
-                  <div key={c.id} className="card tight" style={{ borderColor: good ? 'color-mix(in srgb, var(--good) 45%, transparent)' : undefined }}>
-                    <div className="row between">
-                      <span className="bold">{c.label}</span>
-                      <span className={`display num ${good ? 'good' : bad ? 'bad' : 'dim2'}`} style={{ fontSize: 20 }}>
-                        {signed(c.delta)}
+                  <div key={c.id} className={`tx-cand ${tone}`}>
+                    <div className="tx-cand-top">
+                      <span className="tx-rank num" aria-hidden="true">
+                        {i + 1}
+                      </span>
+                      <span className="grow lr-name">{c.label}</span>
+                      <span className="tx-cand-d">
+                        <span className={`tx-delta num ${tone || 'dim2'}`}>{signed(c.delta)}</span>
+                        <span className="tiny dim num">± {f1(sig * c.se)}</span>
                       </span>
                     </div>
-                    <div className="small dim2">{c.why}</div>
-                    {c.evidence && (
-                      <div className="small" style={{ marginTop: 4 }}>
-                        <span className="good bold">By the numbers:</span> {c.evidence}
-                      </div>
-                    )}
-                    <div className="row between" style={{ marginTop: 6 }}>
-                      <span className="tiny dim">
-                        range ± {f1(sig * c.se)} · win {p0(c.winPct)}
-                      </span>
-                      {applied.includes(`${shown.opp}:${c.id}`) ? (
-                        <Tag tone="good">
-                          <Check size={12} /> Applied
-                        </Tag>
-                      ) : (
-                        <div className="row" style={{ gap: 6 }}>
-                          <button
-                            className={`btn xs ${good ? 'primary' : ''}`}
-                            onClick={() => applyCand(c, 'game', shown.opp)}
-                            aria-label={`Vs ${league.teams[shown.opp].abbrev}: ${c.label}, in your game plan for them`}
-                          >
-                            Vs {league.teams[shown.opp].abbrev}
-                          </button>
-                          {always && (
-                            <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)} aria-label={`Always: ${c.label}, in your tactics for every game`}>
-                              Always
-                            </button>
-                          )}
+                    <div className="tx-cand-body">
+                      <div className="tx-note">{c.why}</div>
+                      {c.evidence && (
+                        <div className="tx-ev">
+                          <b>By the numbers:</b> {c.evidence}
                         </div>
                       )}
+                      <div className="tx-cand-foot">
+                        <Tag tone={good ? 'good' : bad ? 'bad' : undefined}>{good ? 'Better' : bad ? 'Worse' : 'Too close'}</Tag>
+                        <span className="tiny dim num grow">win {p0(c.winPct)}</span>
+                        {applied.includes(`${shown.opp}:${c.id}`) ? (
+                          <Tag tone="good">
+                            <Check size={12} /> Applied
+                          </Tag>
+                        ) : (
+                          <span className="row tx-btns">
+                            <button
+                              className={`btn xs ${good ? 'primary' : ''}`}
+                              onClick={() => applyCand(c, 'game', shown.opp)}
+                              aria-label={`Vs ${league.teams[shown.opp].abbrev}: ${c.label}, in your game plan for them`}
+                            >
+                              Vs {league.teams[shown.opp].abbrev}
+                            </button>
+                            {always && (
+                              <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)} aria-label={`Always: ${c.label}, in your tactics for every game`}>
+                                Always
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </Card>
+          </Section>
         </>
       )}
     </main>
@@ -444,6 +459,7 @@ export default function TacticsLab() {
 function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid: number }) {
   const me = league.teams[league.userTid];
   const them = league.teams[oppTid];
+  const [cMe, cThem] = matchupColors(me.colors, them.colors);
   // advice only for what your tactics for this opponent still do: no "go back to man-to-man" from man-to-man
   const tactics = useLeagueMemo(() => sideFor(league, league.userTid, oppTid).team.tactics, [league, oppTid]);
   const names = rosterNames(
@@ -469,97 +485,86 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
     .slice(0, 6);
   return (
     <>
-      <Card accent>
-        <div className="grid3">
-          <Kpi k="Win %" v={p0(r.winPct)} />
-          <Kpi k="Net rtg" v={signed(r.net)} sub={`95% range ± ${f1(SIGMAS * r.netSE)}`} color={r.net >= 0 ? 'var(--good)' : 'var(--bad)'} />
-          <Kpi k="Score" v={`${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)}`} sub={`Pace ${f1(r.pace)}`} />
+      <section className="card tx-hero" aria-label="Projection">
+        <div className="over tx-hero-over">
+          {me.abbrev} vs {them.abbrev} · {r.games} games
         </div>
-      </Card>
-      <Card
+        <Statline
+          items={[
+            { k: 'Win %', v: p0(r.winPct) },
+            { k: 'Net rtg', v: signed(r.net), s: `95% ± ${f1(SIGMAS * r.netSE)}`, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+            { k: 'Score', v: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)}`, s: `Pace ${f1(r.pace)}` },
+          ]}
+        />
+      </section>
+      <Section
         title="Shot profile"
         right={
-          <span className="tiny dim">
-            {me.abbrev} vs {them.abbrev}
+          <span className="tx-legend">
+            <i style={{ background: cMe }} /> {me.abbrev} <i style={{ background: cThem }} /> {them.abbrev}
           </span>
         }
       >
-        <div className="col" style={{ gap: 10 }}>
-          <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} />
-          <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} neutral />
-          <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} neutral />
-          <CompareBar label="FTA / FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} />
-          <CompareBar label="Turnover %" a={r.shot.tov * 100} b={r.oppShot.tov * 100} higherBetter={false} />
-          <CompareBar label="Off. rebound %" a={r.shot.orb * 100} b={r.oppShot.orb * 100} />
+        <div className="card col tx-bars">
+          <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} colorA={cMe} colorB={cThem} />
+          <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} colorA={cMe} colorB={cThem} neutral />
+          <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} colorA={cMe} colorB={cThem} neutral />
+          <CompareBar label="FTA / FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} colorA={cMe} colorB={cThem} />
+          <CompareBar label="Turnover %" a={r.shot.tov * 100} b={r.oppShot.tov * 100} colorA={cMe} colorB={cThem} higherBetter={false} />
+          <CompareBar label="Off. rebound %" a={r.shot.orb * 100} b={r.oppShot.orb * 100} colorA={cMe} colorB={cThem} />
         </div>
-      </Card>
-      <Card title="Your play types">
-        <div className="col" style={{ gap: 6 }}>
+      </Section>
+      <Section title="Your play types" right={<span className="tiny dim">share · pts/poss</span>}>
+        <div className="card flush tx-table">
           {pts.map(([k, v]) => (
-            <div key={k} className="row small">
-              <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-              <span className="dim num" style={{ width: 48, textAlign: 'right' }}>
-                {p0(v.freq)}
-              </span>
-              <span className="num bold" style={{ width: 52, textAlign: 'right', color: v.ppp >= 1.1 ? 'var(--good)' : v.ppp < 0.9 ? 'var(--bad)' : undefined }}>
-                {v.ppp.toFixed(2)}
-              </span>
+            <div key={k} className="tx-tr tx-tr2">
+              <span className="ellipsis">{FINISH_LABEL[k as FinishType] ?? k}</span>
+              <span className="num dim2">{p0(v.freq)}</span>
+              <span className={`num bold ${v.ppp >= 1.1 ? 'good' : v.ppp < 0.9 ? 'bad' : ''}`}>{v.ppp.toFixed(2)}</span>
             </div>
           ))}
-          <div className="tiny dim">Share of possessions · points per possession (league average ≈ 1.13).</div>
         </div>
-      </Card>
-      <Card title="Who gets the ball">
-        <div className="col" style={{ gap: 6 }}>
-          <div className="row tiny dim upper bold">
-            <span className="grow">Player</span>
-            <span style={{ width: 44, textAlign: 'right' }}>Min</span>
-            <span style={{ width: 44, textAlign: 'right' }}>Pts</span>
-            <span style={{ width: 52, textAlign: 'right' }}>Usg</span>
-            <span style={{ width: 52, textAlign: 'right' }}>TS%</span>
+        <div className="tx-note">League average ≈ 1.13 points per possession.</div>
+      </Section>
+      <Section title="Who gets the ball" right={<span className="tiny dim">per game</span>}>
+        <div className="card flush tx-table">
+          <div className="tx-tr tx-tr5 tx-th">
+            <span>Player</span>
+            <span>Min</span>
+            <span>Pts</span>
+            <span>Usg</span>
+            <span>TS%</span>
           </div>
           {users.slice(0, 10).map((u) => (
-            <div key={u.p.pid} className="row small">
-              <span className="grow ellipsis">{names(u.p.pid)}</span>
-              <span className="dim num" style={{ width: 44, textAlign: 'right' }}>
-                {f1(u.min)}m
-              </span>
-              <span className="num" style={{ width: 44, textAlign: 'right' }}>
-                {f1(u.pts)}
-              </span>
-              <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>
-                {p1(u.usg)}
-              </span>
-              <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>
-                {p1(u.ts)}
-              </span>
+            <div key={u.p.pid} className="tx-tr tx-tr5">
+              <span className="ellipsis">{names(u.p.pid)}</span>
+              <span className="num dim2">{f1(u.min)}</span>
+              <span className="num bold">{f1(u.pts)}</span>
+              <span className="num dim2">{p1(u.usg)}</span>
+              <span className="num dim2">{p1(u.ts)}</span>
             </div>
           ))}
-          <div className="tiny dim">Minutes, points, usage rate, true shooting per game.</div>
         </div>
-      </Card>
+      </Section>
       {impacts.length > 0 && (
-        <Card title="What drives the result">
-          <div className="col" style={{ gap: 8 }}>
+        <Section title="What drives the result" right={<span className="tiny dim">pts per game</span>}>
+          <div className="card flush list">
             {impacts.map(([k, v]) => {
               const advice = v < 0 ? impactAdvice(k, tactics) : undefined;
               const X = teamRef(v >= 0 ? me : them);
               const Y = teamRef(v >= 0 ? them : me);
               return (
-                <div key={`${k}${v >= 0 ? '+' : '-'}`} className="row top small">
-                  <span className={`num bold ${v >= 0 ? 'good' : 'bad'}`} style={{ width: 44 }}>
-                    {signed(v)}
+                <div key={`${k}${v >= 0 ? '+' : '-'}`} className="tx-imp">
+                  <span className={`tx-imp-v num ${v >= 0 ? 'good' : 'bad'}`}>{signed(v)}</span>
+                  <span className="grow">
+                    <span className="tx-imp-t">{impactSentence(k, X, Y)}</span>
+                    {advice && <span className="tx-imp-a">{adviceFor(advice, league.settings.complexity)}</span>}
                   </span>
-                  <div className="grow">
-                    <div>{impactSentence(k, X, Y)}</div>
-                    {advice && <div className="tiny dim">{adviceFor(advice, league.settings.complexity)}</div>}
-                  </div>
                 </div>
               );
             })}
-            <div className="tiny dim">Expected points per game from each tactical effect.</div>
           </div>
-        </Card>
+        </Section>
       )}
     </>
   );
@@ -569,6 +574,7 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
   const { delta: d, se } = pairedDelta(before, after);
   const margin = SIGMAS * se;
   const verdict = d > margin ? 'An improvement' : d < -margin ? 'A step back' : 'Too close to call';
+  const tone = d > margin ? 'good' : d < -margin ? 'bad' : '';
   const names = rosterNames(
     Object.keys(after.players)
       .map((pid) => league.players[+pid])
@@ -583,95 +589,114 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
     .filter((x) => x.p && x.a)
     .sort((x, y) => y.a.min - x.a.min)
     .slice(0, 9);
+  const legend = (
+    <span className="tx-legend">
+      <i className="before" /> Before <i className="after" /> After
+    </span>
+  );
   return (
     <>
-      <Card accent>
-        <div className="row between">
-          <div>
-            <div className="small dim upper bold">Verdict</div>
-            <div className="bold" style={{ fontSize: 20 }}>
-              {verdict}
-            </div>
+      <section className="card tx-hero" aria-label="Verdict">
+        <div className="tx-verdict">
+          <div className="grow">
+            <div className="over">Verdict</div>
+            <div className={`tx-verdict-t ${tone}`}>{verdict}</div>
           </div>
-          <span className={`display num ${d > margin ? 'good' : d < -margin ? 'bad' : 'dim2'}`} style={{ fontSize: 34 }}>
-            {signed(d)}
-          </span>
+          <div className="tx-verdict-d">
+            <span className={`tx-delta big num ${tone || 'dim2'}`}>{signed(d)}</span>
+            <span className="tiny dim">net / 100 poss</span>
+          </div>
         </div>
-        <div className="small dim">Net rating change per 100 possessions. 95% range ± {f1(margin)}: only a change bigger than that is called.</div>
-        <div className="grid3" style={{ marginTop: 10 }}>
-          <Kpi k="Win %" v={p0(after.winPct)} sub={`was ${p0(before.winPct)}`} />
-          <Kpi k="Off rtg" v={`${f1(after.ortg)}`} sub={signed(after.ortg - before.ortg)} />
-          <Kpi k="Def rtg" v={`${f1(after.drtg)}`} sub={signed(after.drtg - before.drtg)} />
-        </div>
-      </Card>
-      <Card title="Shot profile shift">
-        <div className="col" style={{ gap: 10 }}>
-          <CompareBar label="eFG% (before / after)" a={before.shot.efg * 100} b={after.shot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
+        <div className="tx-note tx-verdict-n">95% range ± {f1(margin)}: only a change bigger than that is called.</div>
+        <Statline
+          items={[
+            { k: 'Win %', v: p0(after.winPct), s: `was ${p0(before.winPct)}` },
+            { k: 'Off rtg', v: f1(after.ortg), s: signed(after.ortg - before.ortg) },
+            { k: 'Def rtg', v: f1(after.drtg), s: signed(after.drtg - before.drtg) },
+          ]}
+        />
+      </section>
+      <Section title="Shot profile shift" right={legend}>
+        <div className="card col tx-bars">
+          <CompareBar label="eFG%" a={before.shot.efg * 100} b={after.shot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
           <CompareBar label="3PA rate" a={before.shot.threeRate * 100} b={after.shot.threeRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
           <CompareBar label="Rim rate" a={before.shot.rimRate * 100} b={after.shot.rimRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
           <CompareBar label="Opp eFG%" a={before.oppShot.efg * 100} b={after.oppShot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" higherBetter={false} />
           <CompareBar label="Opp turnover %" a={before.oppShot.tov * 100} b={after.oppShot.tov * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
         </div>
-      </Card>
-      <Card title="Play types">
-        <div className="col" style={{ gap: 6 }}>
+      </Section>
+      <Section title="Play types">
+        <div className="card flush tx-table">
+          <div className="tx-tr tx-trw tx-th">
+            <span>Type</span>
+            <span>Share</span>
+            <span>Pts/poss</span>
+          </div>
           {keys.map((k) => {
             const b = before.playTypes[k] ?? { freq: 0, ppp: 0 };
             const a = after.playTypes[k] ?? { freq: 0, ppp: 0 };
             return (
-              <div key={k} className="row small">
-                <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-                <span className="dim num" style={{ width: 92, textAlign: 'right' }}>
+              <div key={k} className="tx-tr tx-trw">
+                <span className="ellipsis">{FINISH_LABEL[k as FinishType] ?? k}</span>
+                <span className="num dim2">
                   {p0(b.freq)} → {p0(a.freq)}
                 </span>
-                <span className="num" style={{ width: 92, textAlign: 'right' }}>
-                  {b.ppp.toFixed(2)} → {a.ppp.toFixed(2)}
+                <span className="num">
+                  {b.ppp.toFixed(2)} → <b>{a.ppp.toFixed(2)}</b>
                 </span>
               </div>
             );
           })}
         </div>
-      </Card>
+      </Section>
       {setKeys.length > 0 && (
-        <Card title="Sets" right={<span className="tiny dim">runs a game · points per possession</span>}>
-          <div className="col" style={{ gap: 6 }}>
+        <Section
+          title="Sets"
+          right={
+            <Help title="Sets">
+              The possessions each set opened, a game, and the points per possession they scored. A set package&apos;s sets run now and then, for players who fit them; their
+              defense reads each one a little better every run.
+            </Help>
+          }
+        >
+          <div className="card flush tx-table">
+            <div className="tx-tr tx-trw tx-th">
+              <span>Set</span>
+              <span>Runs</span>
+              <span>Pts/poss</span>
+            </div>
             {setKeys.map((k) => {
               const b = before.sets?.[k];
               const a = after.sets?.[k];
               const ppp = (x?: { runs: number; pts: number }) => (x?.runs ? (x.pts / x.runs).toFixed(2) : '—');
               return (
-                <div key={k} className="row small">
-                  <span className="grow">{k === 'iso' ? CLEAR_OUT.name : SETS[k as SetId].name}</span>
-                  <span className="dim num" style={{ width: 92, textAlign: 'right' }}>
+                <div key={k} className="tx-tr tx-trw">
+                  <span className="ellipsis">{k === 'iso' ? CLEAR_OUT.name : SETS[k as SetId].name}</span>
+                  <span className="num dim2">
                     {f1(b?.runs ?? 0)} → {f1(a?.runs ?? 0)}
                   </span>
-                  <span className="num" style={{ width: 92, textAlign: 'right' }}>
-                    {ppp(b)} → {ppp(a)}
+                  <span className="num">
+                    {ppp(b)} → <b>{ppp(a)}</b>
                   </span>
                 </div>
               );
             })}
-            <div className="tiny dim">
-              The possessions each set opened. A set package's sets run now and then, for players who fit them; their defense reads each one a little better every run.
-            </div>
           </div>
-        </Card>
+        </Section>
       )}
-      <Card title="Touches">
-        <div className="col" style={{ gap: 6 }}>
+      <Section title="Touches" right={<span className="tiny dim">usage · pts</span>}>
+        <div className="card flush tx-table">
           {players.map(({ p, a, b }) => (
-            <div key={p.pid} className="row small">
-              <span className="grow ellipsis">{names(p.pid)}</span>
-              <span className="num dim nowrap" style={{ width: 120, textAlign: 'right' }}>
+            <div key={p.pid} className="tx-tr tx-trw">
+              <span className="ellipsis">{names(p.pid)}</span>
+              <span className="num dim2 nowrap">
                 {b ? p1(b.usg) : '—'} → {p1(a.usg)}
               </span>
-              <span className="num" style={{ width: 70, textAlign: 'right' }}>
-                {f1(a.pts)} pts
-              </span>
+              <span className="num">{f1(a.pts)} pts</span>
             </div>
           ))}
         </div>
-      </Card>
+      </Section>
     </>
   );
 }

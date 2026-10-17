@@ -6,8 +6,9 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { planFor } from '../../core/league/gamePlans';
 import { neutralSite } from '../../core/league/games';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
-import { Card, Help, Tag } from './ui';
+import { Help, Section, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
+import '../screens/tactics.css';
 
 /** The next `n` different opponents, each at his first meeting. */
 function nextOpponents(league: League, n: number): { opp: number; g: ScheduledGame }[] {
@@ -29,7 +30,7 @@ export function UpcomingOpponents() {
   const rows = useLeagueMemo(() => nextOpponents(league, 3), [league]);
   if (!rows.length) return null;
   return (
-    <Card
+    <Section
       title="Upcoming opponents"
       right={
         <Help title="Game plans">
@@ -37,7 +38,7 @@ export function UpcomingOpponents() {
         </Help>
       }
     >
-      <div className="col" style={{ gap: 8 }}>
+      <div className="card flush list">
         {rows.map(({ opp, g }) => {
           const t = league.teams[opp];
           const ts = curTeamSeason(league, opp);
@@ -55,34 +56,27 @@ export function UpcomingOpponents() {
                 .join(' · ')
             : '';
           return (
-            <Link key={opp} to={`/gameplan/${opp}`} className="card tight row" style={{ gap: 10 }}>
-              <TeamLogo tid={opp} size={32} decorative />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <div className="bold ellipsis">
+            <Link key={opp} to={`/gameplan/${opp}`} className="tx-opp">
+              <TeamLogo tid={opp} size={30} decorative />
+              <span className="grow">
+                <span className="tx-opp-t">
                   {g.home === league.userTid || neutralSite(g) ? 'vs' : '@'} {t.abbrev}{' '}
-                  <span className="dim num" style={{ fontWeight: 500 }}>
+                  <span className="tx-opp-rec num">
                     {ts.won}-{ts.lost}
                   </span>
-                </div>
-                <div className="tiny dim2">
-                  {fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-                  {g.day === league.day ? ' · Today' : ''}
-                </div>
-              </div>
-              {plan ? (
-                <div style={{ textAlign: 'right' }}>
-                  <Tag tone="info">Plan · {SCOPE[plan.scope ?? 'next']}</Tag>
-                  <div className="tiny dim2">{status}</div>
-                </div>
-              ) : (
-                <span className="tiny dim">No plan</span>
-              )}
+                </span>
+                <span className="lr-meta">
+                  {g.day === league.day ? 'Today' : fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {plan && status ? ` · ${status}` : ''}
+                </span>
+              </span>
+              {plan ? <Tag tone="info">Plan · {SCOPE[plan.scope ?? 'next']}</Tag> : <span className="tiny dim">No plan</span>}
               <span className="sr-only">. Open the game plan</span>
-              <ChevronRight size={16} className="dim" />
+              <ChevronRight size={16} className="dim tx-chev" />
             </Link>
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }

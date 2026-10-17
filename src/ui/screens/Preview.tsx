@@ -1,10 +1,9 @@
-// The pre-game screen: everything about the next game before tip-off (the storylines, the
-// projection, who's out and the game-time decisions on your questionable players, the starting
-// fives, how they play, the matchups on their best players and your game plan for them), with Tip
-// off, Quick sim and the Lab one tap away.
+// The pre-game screen, a broadcast's pre-game show: both teams on one slab, the projection, the
+// storylines and keys, who's out and the game-time decisions on your questionable players, the
+// starting fives, how they play, the matchups on their best players and your game plan for them,
+// with Tip off, Quick sim and the Lab one tap away.
 import { gameKeys } from '../../core/analysis/keys';
-import { KeysList } from '../components/GameKeys';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Beaker, ChevronRight, Crown, Eye, FastForward, Flame, History, Medal, Plus, Repeat, Star, TrendingUp, X, type LucideIcon } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -25,13 +24,15 @@ import { storylines, type StorylineKind } from '../../core/analysis/storylines';
 import { gameStakes, pct as oddsPct } from '../../core/analysis/odds';
 import { GAME_TIME_PERF, injuryText, setGameTime } from '../../core/league/injuries';
 import { K } from '../../core/sim/engine';
-import { Bar, Card, Chips, Empty, Help, PageHeader, Spinner, Tag } from '../components/ui';
+import { Avatar, Chips, Empty, Help, Ovr, PageHeader, Section, Spinner, Statline, Tag } from '../components/ui';
 import { OppPlanNote } from '../components/scouting';
 import { TeamLogo } from '../components/TeamLogo';
+import { matchupColors, slabVars } from '../teamColors';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
 import { f1, ordinal, p0, rosterNames, signed } from '../stats';
 import '../components/gameday.css';
+import './tactics.css';
 
 const confWord = (c: 'E' | 'W') => (c === 'E' ? 'East' : 'West');
 const rankText = (r: { rank: number }) => (r.rank ? ordinal(r.rank) : '—');
@@ -102,69 +103,84 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
   const resume = inProgress ? actions.find((a) => a.cmd === 'watchLive') : undefined;
   const finish = inProgress ? actions.find((a) => a.cmd === 'quickGame') : undefined;
   const them = league.teams[opp];
+  // each half of the slab in its team's colours
+  const a = slabVars(league.teams[away.tid].colors);
+  const h = slabVars(league.teams[home.tid].colors);
+  const slab = { '--pv-a': a['--slab'], '--pv-a2': a['--slab-2'], '--pv-h': h['--slab'], '--pv-h2': h['--slab-2'] } as CSSProperties;
+  const last = pv.series.games[pv.series.games.length - 1];
+  const tags = [
+    pv.playoff && <Tag key="po">{pv.playoff.tag}</Tag>,
+    (pv.playoff?.elimination || pv.playIn?.elimination) && (
+      <Tag key="el" tone="bad">
+        Elimination game
+      </Tag>
+    ),
+    pv.playoff?.clinch && (
+      <Tag key="cl" tone="good">
+        A win takes the series
+      </Tag>
+    ),
+    ...[pv.us, pv.them].map((s) => s.b2b && <Tag key={s.tid}>{`${league.teams[s.tid].abbrev} back-to-back`}</Tag>),
+  ].filter(Boolean);
 
   return (
     <main className="page">
-      <PageHeader
-        title="Preview"
-        back
-        backTo="/"
-        sub={`${typeLabel} · ${fmtDate(league.season, game.day, { weekday: 'short', month: 'short', day: 'numeric' })} · ${countdownLabel(pv.days)}`}
-      />
+      <PageHeader title="Preview" back backTo="/" />
 
-      <Card accent>
-        <div className="scorebug">
-          <TeamHead league={league} s={away} />
-          <div className="display dim" style={{ fontSize: 22 }}>
-            {pv.neutral ? 'vs' : '@'}
-          </div>
-          <TeamHead league={league} s={home} />
+      <section className="slab pv-slab" style={slab} aria-label={`${league.teams[away.tid].name} ${pv.neutral ? 'vs' : 'at'} ${league.teams[home.tid].name}`}>
+        <span className="pv-mark l">
+          <TeamLogo tid={away.tid} size={170} decorative />
+        </span>
+        <span className="pv-mark r">
+          <TeamLogo tid={home.tid} size={170} decorative />
+        </span>
+        <div className="pv-over">
+          <span>{pv.playoff ? pv.playoff.label : typeLabel}</span>
+          <span>{fmtDate(league.season, game.day, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
         </div>
-        <div className="chips" style={{ justifyContent: 'center', marginTop: 12 }}>
-          <Tag tone="info">{countdownLabel(pv.days)}</Tag>
-          {pv.playoff && <Tag tone="info">{pv.playoff.tag}</Tag>}
-          {pv.playoff?.elimination && <Tag tone="bad">Elimination game</Tag>}
-          {pv.playoff?.clinch && <Tag tone="good">A win takes the series</Tag>}
-          {pv.playIn?.elimination && <Tag tone="bad">Elimination game</Tag>}
-          {[pv.us, pv.them].map((s) => s.b2b && <Tag key={s.tid} tone="warn">{`${league.teams[s.tid].abbrev} back-to-back`}</Tag>)}
+        <div className="pv-match">
+          <TeamSide league={league} s={away} />
+          <div className="pv-mid">
+            <span className="pv-at">{pv.neutral ? 'vs' : '@'}</span>
+            <span className="pv-when">{inProgress ? 'Live' : countdownLabel(pv.days)}</span>
+          </div>
+          <TeamSide league={league} s={home} home />
         </div>
-        {pv.playoff && (
-          <div className="center small dim2" style={{ marginTop: 8 }}>
-            {pv.playoff.label}: {league.teams[pv.us.tid].abbrev} {pv.playoff.wins}-{pv.playoff.losses}
-            {pv.playoff.homeCourt ? ' · home court' : ''}
-          </div>
-        )}
-        {pv.playIn && (
-          <div className="center small dim2" style={{ marginTop: 8 }}>
-            {pv.playIn.note}
-          </div>
-        )}
-        {pv.series.total > 0 && (
-          <div className="center small dim2" style={{ marginTop: 6 }}>
-            Season series {pv.series.won}-{pv.series.lost}
-            {pv.series.meeting ? ` · meeting ${pv.series.meeting} of ${pv.series.total}` : ''}
-            {pv.series.games.length > 0 && (
-              <>
-                {' · last: '}
-                <Link to={`/game/${pv.series.games[pv.series.games.length - 1].gid}`} className="bold" style={{ color: 'var(--accent-text)' }}>
-                  {(() => {
-                    const m = pv.series.games[pv.series.games.length - 1];
-                    return `${m.won ? 'W' : 'L'} ${m.us}-${m.them}`;
-                  })()}
-                </Link>
-              </>
+        {tags.length > 0 && <div className="chips pv-tags">{tags}</div>}
+        {(pv.playoff || pv.playIn || pv.series.total > 0) && (
+          <dl className="tx-facts">
+            {pv.playoff && (
+              <Fact k="Series">
+                {league.teams[pv.us.tid].abbrev} {pv.playoff.wins}-{pv.playoff.losses}
+                {pv.playoff.homeCourt ? ' · home court' : ''}
+              </Fact>
             )}
-          </div>
+            {pv.playIn && <Fact k="Play-In">{pv.playIn.note}</Fact>}
+            {pv.series.total > 0 && (
+              <Fact k="Season">
+                {pv.series.won}-{pv.series.lost}
+                {pv.series.meeting ? ` · meeting ${pv.series.meeting} of ${pv.series.total}` : ''}
+                {last && (
+                  <>
+                    {' · last '}
+                    <Link to={`/game/${last.gid}`} className="pv-link">
+                      {`${last.won ? 'W' : 'L'} ${last.us}-${last.them}`}
+                    </Link>
+                  </>
+                )}
+              </Fact>
+            )}
+          </dl>
         )}
-      </Card>
+      </section>
+
+      {pv.userGame && <ProjectionCard league={league} game={game} pv={pv} />}
 
       <StorylinesCard league={league} game={game} pv={pv} />
 
       {pv.userGame && <KeysCard league={league} game={game} />}
 
-      {pv.userGame && <ProjectionCard league={league} game={game} pv={pv} />}
-
-      <Card
+      <Section
         title="Injury report"
         right={
           pv.us.questionable.length > 0 ? (
@@ -181,45 +197,14 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
           ) : undefined
         }
       >
-        <div className="md-grid2" style={{ display: 'grid', gap: 12 }}>
+        <div className="card flush pv-inj">
           {[pv.us, pv.them].map((s) => (
             <InjuryList key={s.tid} league={league} s={s} game={game} locked={inProgress} />
           ))}
         </div>
-      </Card>
+      </Section>
 
-      <Card
-        title="Projected starters"
-        right={
-          <Help title="Projected starters">
-            The five each coach starts tonight, as the game sets them up from the depth charts, injuries and rest. A player starting in place of a usual starter says whom he stands
-            in for.
-          </Help>
-        }
-      >
-        <div className="md-grid2" style={{ display: 'grid', gap: 12 }}>
-          {[pv.us, pv.them].map((s) => (
-            <div key={s.tid} className="col" style={{ gap: 0 }}>
-              <div className="row" style={{ gap: 6, marginBottom: 4 }}>
-                <TeamLogo tid={s.tid} size={20} decorative />
-                <span className="small bold">{league.teams[s.tid].name}</span>
-              </div>
-              {s.starters.map((p) => (
-                <Link key={p.pid} to={`/player/${p.pid}`} className="gd-row">
-                  <span className="tag" style={{ width: 30, justifyContent: 'center' }}>
-                    {p.pos}
-                  </span>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="small bold ellipsis">{p.name}</div>
-                    {p.for && <div className="tiny warn ellipsis">Starting for {p.for.name}</div>}
-                  </div>
-                  <span className="num small dim">{p.ovr}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
-        </div>
-      </Card>
+      <StartingFives league={league} away={away} home={home} />
 
       <TendenciesCard league={league} s={pv.them} pv={pv} />
 
@@ -239,7 +224,7 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
               </button>
             </>
           ) : (
-            <button className="btn primary" style={{ gridColumn: 'span 2' }} disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
+            <button className="btn primary pv-span2" disabled={simming} onClick={() => void useStore.getState().simulate({ kind: 'untilUserGame' })}>
               <FastForward size={17} /> Sim to game day
             </button>
           )}
@@ -252,20 +237,30 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
   );
 }
 
-function TeamHead({ league, s }: { league: League; s: SidePreview }) {
-  const t = league.teams[s.tid];
+function Fact({ k, children }: { k: string; children: ReactNode }) {
   return (
-    <Link to={`/team/${s.tid}`} className="col" style={{ alignItems: 'center', gap: 4, minWidth: 0 }}>
-      <TeamLogo tid={s.tid} size={54} decorative />
-      <div className="bold">{t.abbrev}</div>
-      <div className="tiny dim num">
+    <div className="tx-fact">
+      <dt>{k}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+function TeamSide({ league, s, home }: { league: League; s: SidePreview; home?: boolean }) {
+  const t = league.teams[s.tid];
+  const played = s.won + s.lost > 0;
+  return (
+    <Link to={`/team/${s.tid}`} className={`pv-side ${home ? 'home' : ''}`}>
+      <TeamLogo tid={s.tid} size={58} decorative />
+      <span className="pv-ab">{t.abbrev}</span>
+      <span className="pv-rec num">
         {s.won}-{s.lost}
-        {s.confRank && s.won + s.lost ? ` · ${ordinal(s.confRank)} ${confWord(s.conf)}` : ''}
-      </div>
-      <div className="tiny dim num">
-        {s.streak ? (s.streak > 0 ? `W${s.streak}` : `L${-s.streak}`) : ''}
-        {s.won + s.lost ? `${s.streak ? ' · ' : ''}L10 ${s.lastTen}` : ''}
-      </div>
+      </span>
+      <span className="pv-meta num">
+        {s.confRank && played ? `${ordinal(s.confRank)} ${confWord(s.conf)}` : confWord(s.conf)}
+        {s.streak ? ` · ${s.streak > 0 ? `W${s.streak}` : `L${-s.streak}`}` : ''}
+      </span>
+      {played && <span className="pv-meta num">L10 {s.lastTen}</span>}
     </Link>
   );
 }
@@ -275,6 +270,7 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
   const me = league.teams[pv.us.tid];
   const them = league.teams[pv.them.tid];
   const fav = margin >= 0 ? me : them;
+  const [cUs, cThem] = matchupColors(me.colors, them.colors);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(0);
   const [result, setResult] = useState<{ gid: number; r: LabSummary } | null>(null);
@@ -318,7 +314,7 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
   const shown = result?.gid === game.gid ? result.r : null;
   const avg = shown ? shown.margins.reduce((x, y) => x + y, 0) / shown.margins.length : 0;
   return (
-    <Card
+    <Section
       title="Projection"
       right={
         <Help title="Projection">
@@ -331,51 +327,58 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
         </Help>
       }
     >
-      <div className="row" style={{ gap: 12 }}>
-        <TeamLogo tid={fav.tid} size={36} decorative />
-        <div className="grow">
-          <div className="bold" style={{ fontSize: 17 }}>
-            {Math.abs(margin) < 0.5 ? 'A toss-up' : `${fav.abbrev} by ${Math.abs(margin).toFixed(1)}`}
+      <div className="card pv-proj">
+        <div className="pv-proj-top">
+          <div className="grow">
+            <div className="over">Estimate</div>
+            <div className="pv-big">{Math.abs(margin) < 0.5 ? 'A toss-up' : `${fav.abbrev} by ${Math.abs(margin).toFixed(1)}`}</div>
           </div>
-          <div className="small dim2">
-            {me.abbrev} {p0(win)} to win · estimate
+          <div className="pv-proj-win">
+            <div className="over">{me.abbrev} to win</div>
+            <div className="pv-big num">{p0(win)}</div>
           </div>
         </div>
+        <div className="pv-winbar" aria-hidden="true">
+          <span style={{ flexGrow: win, background: cUs }} />
+          <span style={{ flexGrow: 1 - win, background: cThem }} />
+        </div>
+        <div className="pv-winbar-l">
+          <span>{me.abbrev}</span>
+          <span>{them.abbrev}</span>
+        </div>
+        <Stakes league={league} game={game} tid={pv.us.tid} />
+        {busy ? (
+          <div className="col pv-busy">
+            <div className="row">
+              <Spinner />
+              <span className="small dim2 grow">Simulating {GAMES} games…</span>
+              <span className="small num dim">
+                {Math.min(done, GAMES)}/{GAMES}
+              </span>
+            </div>
+            <div className="bar" role="progressbar" aria-label="Simulation progress" aria-valuemin={0} aria-valuemax={GAMES} aria-valuenow={Math.min(done, GAMES)}>
+              <div className="tx-fill" style={{ width: `${Math.min(100, (done / GAMES) * 100)}%` }} />
+            </div>
+          </div>
+        ) : shown ? (
+          <div className="pv-sim">
+            <div className="over">
+              {me.abbrev} won {shown.wins} of {shown.games} engine games
+            </div>
+            <Statline
+              items={[
+                { k: 'Win %', v: p0(shown.winPct) },
+                { k: 'Avg score', v: `${Math.round(shown.ptsFor)}-${Math.round(shown.ptsAgainst)}`, s: `${f1(shown.ptsFor)}-${f1(shown.ptsAgainst)} (${signed(avg)})` },
+                { k: 'Net rtg', v: signed(shown.net), s: `± ${f1(2 * shown.netSE)} per 100` },
+              ]}
+            />
+          </div>
+        ) : null}
+        <button className="btn sm block" disabled={busy} onClick={() => void simulate()}>
+          <Beaker size={15} /> {shown ? 'Simulate again' : `Simulate ${GAMES} games`}
+        </button>
       </div>
-      <div style={{ marginTop: 8 }}>
-        <Bar value={win * 100} color={win >= 0.5 ? 'var(--good)' : 'var(--bad)'} />
-      </div>
-      <Stakes league={league} game={game} tid={pv.us.tid} />
-      {busy ? (
-        <div className="col" style={{ gap: 6, marginTop: 12 }}>
-          <div className="row">
-            <Spinner />
-            <span className="small dim2 grow">Simulating {GAMES} games…</span>
-            <span className="small num dim">
-              {Math.min(done, GAMES)}/{GAMES}
-            </span>
-          </div>
-          <div className="bar" role="progressbar" aria-label="Simulation progress" aria-valuemin={0} aria-valuemax={GAMES} aria-valuenow={Math.min(done, GAMES)}>
-            <div style={{ width: `${Math.min(100, (done / GAMES) * 100)}%`, transition: 'width 0.2s' }} />
-          </div>
-        </div>
-      ) : shown ? (
-        <div className="card tight" style={{ marginTop: 12 }}>
-          <div className="small">
-            <b>
-              {me.abbrev} won {shown.wins} of {shown.games}
-            </b>{' '}
-            ({p0(shown.winPct)}) · average {f1(shown.ptsFor)}-{f1(shown.ptsAgainst)} ({signed(avg)})
-          </div>
-          <div className="tiny dim" style={{ marginTop: 2 }}>
-            Net rating {signed(shown.net)} ± {f1(2 * shown.netSE)} per 100 possessions over {shown.games} engine games.
-          </div>
-        </div>
-      ) : null}
-      <button className="btn sm block" style={{ marginTop: 12 }} disabled={busy} onClick={() => void simulate()}>
-        <Beaker size={15} /> {shown ? 'Simulate again' : `Simulate ${GAMES} games`}
-      </button>
-    </Card>
+    </Section>
   );
 }
 
@@ -385,8 +388,11 @@ function Stakes({ league, game, tid }: { league: League; game: ScheduledGame; ti
   // a game that changes nothing either way (in or out whatever happens) isn't worth the line
   if (!s || Math.abs(s.win - s.loss) < 0.01) return null;
   return (
-    <div className="small dim2" style={{ marginTop: 8 }}>
-      Playoff odds with a win <b className="good">{oddsPct(s.win)}</b> · with a loss <b className="bad">{oddsPct(s.loss)}</b>
+    <div className="pv-stakes">
+      <span className="over">Playoff odds</span>
+      <span>
+        with a win <b className="good">{oddsPct(s.win)}</b> · with a loss <b className="bad">{oddsPct(s.loss)}</b>
+      </span>
     </div>
   );
 }
@@ -396,7 +402,7 @@ function KeysCard({ league, game }: { league: League; game: ScheduledGame }) {
   const keys = useLeagueMemo(() => gameKeys(league, game), [league, game]);
   if (!keys.length) return null;
   return (
-    <Card
+    <Section
       title="Keys to the game"
       right={
         <Help title="Keys to the game">
@@ -408,15 +414,28 @@ function KeysCard({ league, game }: { league: League; game: ScheduledGame }) {
         </Help>
       }
     >
-      <KeysList keys={keys} />
-    </Card>
+      <ol className="card flush list pv-keys">
+        {keys.map((k, i) => (
+          <li key={k.id} className="pv-key">
+            <span className="pv-key-n num" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span className="grow">
+              <span className="pv-key-t">{k.title}</span>
+              <span className="pv-key-g">{k.goal}</span>
+              <span className="lr-meta">{k.why}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Section>
   );
 }
 
 /** Icons by storyline kind. */
 const STORY_ICON: Record<StorylineKind, LucideIcon> = { revenge: History, milestone: Medal, streak: TrendingUp, hot: Flame, rematch: Repeat, mvp: Crown, picks: Star };
 
-/** What a broadcast would lead with tonight (see storylines.ts): the top four. */
+/** What a broadcast would lead with tonight (see storylines.ts): the top four, each with the jersey of the player it's about. */
 function StorylinesCard({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
   const stories = useLeagueMemo(() => {
     const out = new Set([pv.us, pv.them].flatMap((s) => [...s.out, ...s.resting, ...s.questionable.filter((q) => !q.cleared)].map((p) => p.pid)));
@@ -424,19 +443,21 @@ function StorylinesCard({ league, game, pv }: { league: League; game: ScheduledG
   }, [league, game, pv]);
   if (!stories.length) return null;
   return (
-    <Card title="Storylines">
-      <div className="col" style={{ gap: 8 }}>
+    <Section title="Storylines">
+      <div className="card flush list">
         {stories.map((st) => {
           const Icon = STORY_ICON[st.kind];
+          const p = st.pids.length ? league.players[st.pids[0]] : undefined;
           return (
-            <div key={st.id} className="row top small" style={{ gap: 8 }}>
-              <Icon size={15} className="dim" style={{ flex: 'none', marginTop: 2 }} aria-hidden="true" />
-              <span className="grow">{st.text}</span>
+            <div key={st.id} className="pv-story">
+              {p ? <Avatar p={p} /> : st.tids.length ? <TeamLogo tid={st.tids[0]} size={34} decorative /> : <span className="pv-story-ic" />}
+              <span className="grow pv-story-t">{st.text}</span>
+              <Icon size={15} className="dim pv-story-k" aria-hidden="true" />
             </div>
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -444,15 +465,15 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
   const none = !s.out.length && !s.resting.length && !s.worn.length && !s.questionable.length;
   const rot = league.teams[s.tid].rotation;
   return (
-    <div className="col" style={{ gap: 4 }}>
-      <div className="row" style={{ gap: 6 }}>
-        <TeamLogo tid={s.tid} size={20} decorative />
-        <span className="small bold">{league.teams[s.tid].name}</span>
+    <div className="list">
+      <div className="pv-inj-h">
+        <TeamLogo tid={s.tid} size={22} decorative />
+        <span className="grow">{league.teams[s.tid].name}</span>
+        {none && <span className="tiny dim">Everyone is available</span>}
       </div>
-      {none && <div className="small dim">Everyone is available.</div>}
       {s.questionable.map((p) => (
-        <div key={p.pid} className="col" style={{ gap: 2, padding: '4px 0' }}>
-          <div className="row small" style={{ gap: 8, minHeight: 32 }}>
+        <div key={p.pid} className="pv-q">
+          <div className="pv-row">
             <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Questionable'}</Tag>
             <Link to={`/player/${p.pid}`} className="grow ellipsis">
               <b>{p.name}</b> <span className="dim">{p.injury}</span>
@@ -467,18 +488,18 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
               {p.cleared ? 'Sit him' : 'Clear to play'}
             </button>
           </div>
-          <div className="tiny dim">
+          <div className="tx-note">
             {p.cleared
-              ? `Medical staff: he plays about ${Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, ${K.gameTimeRisk}× as likely to get hurt in the game${
+              ? `Plays about ${Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, ${K.gameTimeRisk}× as likely to get hurt${
                   rot.manual ? (rot.minutes[p.pid] ? ` (your rotation gives him ${rot.minutes[p.pid]} minutes)` : ' (your rotation gives him no minutes)') : ''
                 }. Tonight counts as the game he had left.`
-              : `Medical staff: one game left on his ${injuryText(p.injury)}. He sits tonight unless you clear him.`}
+              : `One game left on his ${injuryText(p.injury)}. He sits tonight unless you clear him.`}
             {locked ? ' The game is under way: this was settled at tip-off.' : ''}
           </div>
         </div>
       ))}
       {s.out.map((p) => (
-        <Link key={p.pid} to={`/player/${p.pid}`} className="gd-row small">
+        <Link key={p.pid} to={`/player/${p.pid}`} className="pv-row">
           <Tag tone="bad">Out</Tag>
           <span className="grow ellipsis">
             <b>{p.name}</b> <span className="dim">{p.injury}</span>
@@ -489,7 +510,7 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
         </Link>
       ))}
       {s.resting.map((p) => (
-        <Link key={p.pid} to={`/player/${p.pid}`} className="gd-row small">
+        <Link key={p.pid} to={`/player/${p.pid}`} className="pv-row">
           <Tag tone="warn">Rest</Tag>
           <span className="grow ellipsis">
             <b>{p.name}</b> <span className="dim">second night of a back-to-back</span>
@@ -497,7 +518,7 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
         </Link>
       ))}
       {s.worn.map((p) => (
-        <Link key={p.pid} to={`/player/${p.pid}`} className="gd-row small">
+        <Link key={p.pid} to={`/player/${p.pid}`} className="pv-row">
           <Tag>Worn</Tag>
           <span className="grow ellipsis">
             <b>{p.name}</b> <span className="dim">heavy legs</span>
@@ -509,6 +530,55 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
   );
 }
 
+/** The two starting fives side by side, away on the left as on the slab: jerseys facing each other. */
+function StartingFives({ league, away, home }: { league: League; away: SidePreview; home: SidePreview }) {
+  const rows = Array.from({ length: Math.max(away.starters.length, home.starters.length) }, (_, i) => [away.starters[i], home.starters[i]] as const);
+  const cell = (p: SidePreview['starters'][number] | undefined, right: boolean) => {
+    const pl = p ? league.players[p.pid] : undefined;
+    if (!p || !pl) return <span />;
+    return (
+      <Link to={`/player/${p.pid}`} className={`pv-five-p ${right ? 'r' : ''}`}>
+        <Avatar p={pl} />
+        <span className="pv-five-who">
+          <span className="pv-five-n ellipsis">{pl.lastName}</span>
+          <span className="pv-five-m">
+            {p.pos} <Ovr v={p.ovr} size="sm" />
+          </span>
+          {p.for && <span className="pv-five-for ellipsis">for {league.players[p.for.pid]?.lastName ?? p.for.name}</span>}
+        </span>
+      </Link>
+    );
+  };
+  return (
+    <Section
+      title="Starting fives"
+      right={
+        <Help title="Starting fives">
+          The five each coach starts tonight, as the game sets them up from the depth charts, injuries and rest. A player starting in place of a usual starter says whom he stands
+          in for.
+        </Help>
+      }
+    >
+      <div className="card flush pv-fives">
+        <div className="pv-fives-h">
+          <span>
+            <TeamLogo tid={away.tid} size={22} decorative /> {league.teams[away.tid].abbrev}
+          </span>
+          <span>
+            {league.teams[home.tid].abbrev} <TeamLogo tid={home.tid} size={22} decorative />
+          </span>
+        </div>
+        {rows.map(([a, h], i) => (
+          <div key={i} className="pv-five">
+            {cell(a, false)}
+            {cell(h, true)}
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 function TendenciesCard({ league, s, pv }: { league: League; s: SidePreview; pv: MatchupPreview }) {
   const t = league.teams[s.tid];
   const detail = league.settings.complexity !== 'simple';
@@ -517,52 +587,72 @@ function TendenciesCard({ league, s, pv }: { league: League; s: SidePreview; pv:
   // league ranks once they have played
   const played = s.pace.rank > 0;
   return (
-    <Card title={`How the ${t.name} play`}>
-      <div className="col" style={{ gap: 8 }}>
-        <div className="small dim2">
-          {s.offense.preset} at a {s.offense.pace >= 65 ? 'fast' : s.offense.pace <= 35 ? 'slow' : 'moderate'} pace
-          {played ? `: ${rankText(s.pace)} in pace (${f1(s.pace.v)}), ${rankText(s.threes)} in threes (${f1(s.threes.v)} a game)` : ''}.
-        </div>
-        <div className="small dim2">
-          Defense: {s.defense.preset} · {s.defense.scheme}
-          {s.defense.coverage ? `, ${s.defense.coverage.toLowerCase()} on ball screens` : ''}
-          {s.defense.press ? `, press ${s.defense.press.toLowerCase()}` : ''}
-          {detail ? `, help ${s.defense.help}, pressure ${s.defense.pressure}` : ''}.
-        </div>
-        {s.coach.adjusts && (
-          <div className="small dim2">
-            Coach {s.coach.name} adjusts {s.coach.adjusts} during games{detail ? ` (${p0(s.coach.chance)} chance at each break)` : ''}.
+    <Section
+      title={`How the ${t.name} play`}
+      right={
+        <Link to={`/team/${s.tid}?tab=scouting`} className="card-link">
+          Scouting <ChevronRight size={14} />
+        </Link>
+      }
+    >
+      <div className="card flush">
+        {played && (
+          <div className="pv-ranks">
+            <Statline
+              items={[
+                { k: 'Off', v: rankText(s.ortg) },
+                { k: 'Def', v: rankText(s.drtg) },
+                { k: 'Net', v: signed(s.net.v), s: rankText(s.net) },
+                { k: 'Pace', v: f1(s.pace.v), s: rankText(s.pace) },
+              ]}
+            />
           </div>
         )}
-        <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />
-        {played && (
-          <div className="small dim2">
-            Offense {rankText(s.ortg)} · defense {rankText(s.drtg)} · net {signed(s.net.v)} ({rankText(s.net)})
+        <dl className="tx-facts pv-how">
+          <Fact k="Offense">
+            {s.offense.preset} · {s.offense.pace >= 65 ? 'fast' : s.offense.pace <= 35 ? 'slow' : 'moderate'} pace
+            {played ? ` · ${rankText(s.threes)} in threes (${f1(s.threes.v)} a game)` : ''}
+          </Fact>
+          <Fact k="Defense">
+            {s.defense.preset} · {s.defense.scheme}
+            {s.defense.coverage ? `, ${s.defense.coverage.toLowerCase()} on ball screens` : ''}
+            {s.defense.press ? `, press ${s.defense.press.toLowerCase()}` : ''}
+            {detail ? ` · help ${s.defense.help}, pressure ${s.defense.pressure}` : ''}
+          </Fact>
+          {s.coach.adjusts && (
+            <Fact k="Coach">
+              {s.coach.name} adjusts {s.coach.adjusts}
+              {detail ? ` (${p0(s.coach.chance)} at each break)` : ''}
+            </Fact>
+          )}
+        </dl>
+        {pv.oppPlan && pv.oppPlan.length > 0 && (
+          <div className="pv-expect">
+            <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />
           </div>
         )}
         {detail && pts.length > 0 && (
-          <div className="col" style={{ gap: 6, marginTop: 4 }}>
-            <div className="row tiny dim upper bold">
-              <span className="grow">Their play types</span>
-              <span>pts / poss</span>
+          <div className="pv-pts">
+            <div className="pv-pts-h">
+              <span className="over">Their play types</span>
+              <span className="over">pts / poss</span>
             </div>
             {pts.map((x) => (
               <div key={x.key} className="gd-pt">
                 <span className="ellipsis">{x.label}</span>
-                <Bar value={x.share} max={maxShare} color="var(--info)" />
-                <span className="num bold right" style={{ color: x.z >= 2 ? 'var(--bad)' : x.z <= -2 ? 'var(--good)' : undefined }} title={`League ${x.base.toFixed(2)}`}>
+                <div className="bar">
+                  <div style={{ width: `${(x.share / maxShare) * 100}%`, background: 'var(--info)' }} />
+                </div>
+                <span className={`num bold right ${x.z >= 2 ? 'bad' : x.z <= -2 ? 'good' : ''}`} title={`League ${x.base.toFixed(2)}`}>
                   {x.ppp.toFixed(2)}
                 </span>
               </div>
             ))}
-            <div className="tiny dim">Bars: share of their possessions. Red: well above the league&apos;s points per possession for that play; green: well below.</div>
+            <div className="tx-note">Bars: share of their possessions. Red is well above the league for that play; green well below.</div>
           </div>
         )}
-        <Link to={`/team/${s.tid}?tab=scouting`} className="small card-link row" style={{ gap: 4, color: 'var(--accent-text)', alignSelf: 'flex-start' }}>
-          Full scouting report <ChevronRight size={14} />
-        </Link>
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -582,7 +672,7 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
   const threats = pv.threats.slice(0, 3);
   if (!threats.length) return null;
   return (
-    <Card
+    <Section
       title="Key matchups"
       right={
         <Help title="Key matchups">
@@ -591,73 +681,74 @@ function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGam
         </Help>
       }
     >
-      <div className="col" style={{ gap: 14 }}>
+      <div className="card flush list">
         {threats.map((th) => {
           const planned = plan?.matchups?.[th.pid];
           const open = editing === th.pid;
           const how = plan?.playerD?.[th.pid];
           const them = league.players[th.pid];
+          const guard = th.guard ? league.players[th.guard.pid] : undefined;
           const suggest = canPlan && them ? guardAdvice(league, them).suggest : undefined;
           return (
-            <div key={th.pid} className="col" style={{ gap: 6 }}>
-              <div className="row top" style={{ gap: 10 }}>
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <Link to={`/player/${th.pid}`} className="bold">
+            <div key={th.pid} className="pv-mu">
+              <div className="pv-mu-row">
+                {them && <Avatar p={them} />}
+                <span className="grow pv-mu-who">
+                  <Link to={`/player/${th.pid}`} className="lr-name">
                     {th.name}
                   </Link>
-                  <div className="tiny dim">{th.why}</div>
-                  {canPlan && how && (
-                    <div style={{ marginTop: 4 }}>
-                      <Tag tone="info">{PLAYER_D_META[how].label}</Tag>
-                    </div>
-                  )}
-                </div>
-                <div className="small right" style={{ flex: 'none', maxWidth: '45%' }}>
+                  <span className="lr-meta">{th.why}</span>
+                  {canPlan && how && <Tag tone="info">{PLAYER_D_META[how].label}</Tag>}
+                </span>
+                <span className="pv-mu-d">
                   {th.resting ? (
-                    <span className="warn">Resting tonight</span>
+                    <span className="warn small">Resting tonight</span>
                   ) : th.guard ? (
                     <>
-                      <span className="dim">Guarded by</span> <b>{nameOf(th.guard.pid)}</b>
+                      <span className="tiny dim">Guarded by</span>
+                      <span className="pv-mu-dn">
+                        {guard && <Avatar p={guard} />}
+                        <b>{nameOf(th.guard.pid)}</b>
+                      </span>
                     </>
                   ) : (
-                    <span className="dim">Comes off the bench</span>
+                    <span className="tiny dim">Comes off the bench</span>
                   )}
                   {planned !== undefined && planned !== th.guard?.pid && (
-                    <div className="tiny dim">
+                    <span className="tiny dim">
                       Planned: <b>{nameOf(planned)}</b>
-                    </div>
+                    </span>
                   )}
                   {canPlan && !th.resting && (
-                    <div>
-                      <button className="btn xs ghost" style={{ marginTop: 4 }} aria-expanded={open} onClick={() => setEditing(open ? null : th.pid)}>
-                        {open ? 'Done' : 'Change'}
-                      </button>
-                    </div>
+                    <button className="btn xs ghost pv-mu-btn" aria-expanded={open} onClick={() => setEditing(open ? null : th.pid)}>
+                      {open ? 'Done' : 'Change'}
+                    </button>
                   )}
-                </div>
+                </span>
               </div>
               {open && (
-                <>
+                <div className="col pv-mu-edit">
+                  <div className="over">Who guards him</div>
                   <Chips
                     label={`Who guards ${th.name}`}
                     value={planned ?? -1}
                     onChange={(pid) => useStore.getState().mutate((l) => setPlanMatchup(l, opp, th.pid, pid === -1 ? null : pid))}
                     options={[{ id: -1, label: 'Staff' }, ...mine.map((p) => ({ id: p.pid, label: nameOf(p.pid) }))]}
                   />
-                  <div className="tiny upper dim bold">How to guard him</div>
+                  <div className="over">How to guard him</div>
                   <Chips
                     label={`How to guard ${th.name}`}
                     value={how ?? ('' as PlayerDefense)}
                     onChange={(d: PlayerDefense) => useStore.getState().mutate((l) => setPlanPlayerD(l, opp, th.pid, d === how ? null : d))}
                     options={PLAYER_DEFENSES.map((d) => ({ id: d, label: `${PLAYER_D_META[d].short}${d === suggest ? ' ★' : ''}` }))}
                   />
-                </>
+                </div>
               )}
             </div>
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -670,44 +761,44 @@ function PlanCard({ league, game, opp }: { league: League; game: ScheduledGame; 
   const ideas = counters.filter((c) => !have.has(c.id) && !groups.has(c.group ?? c.id)).slice(0, 4);
   const planned = Object.keys(plan?.matchups ?? {}).length;
   return (
-    <Card
+    <Section
       title="Your game plan"
       right={
         plan?.scope && plan.scope !== 'next' ? <Tag tone="info">{plan.scope === 'series' ? 'This series' : 'All season'}</Tag> : <span className="tiny dim">vs {t.abbrev}</span>
       }
     >
-      <div className="col" style={{ gap: 10 }}>
+      <div className="card flush list">
         {!plan || (!plan.items.length && !planned) ? (
-          <div className="small dim">No changes for this opponent yet: your usual tactics play. Add a counter below or build one in the Lab.</div>
+          <div className="tx-empty">No changes for them yet: your usual tactics play.</div>
         ) : (
-          <div className="col" style={{ gap: 6 }}>
+          <>
             {plan.items.map((it) => (
-              <div key={it.id} className="row" style={{ gap: 8 }}>
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="small bold">{it.label}</div>
-                  {it.evidence && <div className="tiny dim">{it.evidence}</div>}
-                </div>
+              <div key={it.id} className="tx-item">
+                <span className="grow">
+                  <span className="lr-name">{it.label}</span>
+                  {it.evidence && <span className="lr-meta">{it.evidence}</span>}
+                </span>
                 <button className="iconbtn" aria-label={`Remove ${it.label} from the game plan`} onClick={() => useStore.getState().mutate((l) => removePlanItem(l, opp, it.id))}>
                   <X size={16} />
                 </button>
               </div>
             ))}
             {planned > 0 && (
-              <div className="small dim2">
+              <div className="tx-item tx-item-x">
                 {planned} planned matchup{planned === 1 ? '' : 's'}
               </div>
             )}
-          </div>
+          </>
         )}
         {ideas.length > 0 && (
-          <div className="col" style={{ gap: 6 }}>
-            <div className="tiny dim upper bold">The assistant suggests</div>
+          <>
+            <div className="list-divider">The assistant suggests · untested</div>
             {ideas.map((c) => (
-              <div key={c.id} className="row" style={{ gap: 8 }}>
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="small bold">{c.label}</div>
-                  <div className="tiny dim">{c.why}</div>
-                </div>
+              <div key={c.id} className="tx-item">
+                <span className="grow">
+                  <span className="lr-name">{c.label}</span>
+                  <span className="lr-meta">{c.why}</span>
+                </span>
                 <button
                   className="btn xs"
                   aria-label={`Add ${c.label} to the game plan`}
@@ -722,18 +813,17 @@ function PlanCard({ league, game, opp }: { league: League; game: ScheduledGame; 
                 </button>
               </div>
             ))}
-            <div className="tiny dim">Untested ideas: the Lab measures what each is worth against them.</div>
-          </div>
+          </>
         )}
-        <div className="row wrap" style={{ gap: 14 }}>
-          <Link to={`/lab?opp=${opp}&mode=counters`} className="small card-link row" style={{ gap: 4, color: 'var(--accent-text)' }}>
-            Test counters in the Lab <ChevronRight size={14} />
-          </Link>
-          <Link to={`/gameplan/${opp}`} className="small card-link row" style={{ gap: 4, color: 'var(--accent-text)' }}>
-            Full game plan <ChevronRight size={14} />
-          </Link>
-        </div>
+        <Link to={`/lab?opp=${opp}&mode=counters`} className="tx-linkrow">
+          <span className="grow tx-linkrow-t">Test counters in the Lab</span>
+          <ChevronRight size={16} />
+        </Link>
+        <Link to={`/gameplan/${opp}`} className="tx-linkrow">
+          <span className="grow tx-linkrow-t">Full game plan</span>
+          <ChevronRight size={16} />
+        </Link>
       </div>
-    </Card>
+    </Section>
   );
 }

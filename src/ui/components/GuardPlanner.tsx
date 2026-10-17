@@ -10,8 +10,9 @@ import { PLAYER_D_META, SCHEME_META, chasers } from '../../core/sim/tactics';
 import { attrDisplay, composites, fmtHeight } from '../../core/ratings';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
-import { Card, Chips, Help, Ovr, Tag } from './ui';
+import { Chips, Help, Ovr, Section, Tag } from './ui';
 import './scouting.css';
+import '../screens/tactics.css';
 
 const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
 
@@ -33,7 +34,7 @@ export function GuardCard({ league, opp }: { league: League; opp: number }) {
   const set = (pid: number, d: PlayerDefense | null) => mutate((l) => setPlanPlayerD(l, opp, pid, d));
   const planned = eff.defense.playerD ?? {};
   return (
-    <Card
+    <Section
       title="How to guard them"
       right={
         <Help title="How to guard them">
@@ -44,32 +45,30 @@ export function GuardCard({ league, opp }: { league: League; opp: number }) {
           ))}
           <p>
             Each instruction is for this opponent only and plays whenever he&apos;s on the floor. ★ is the staff&apos;s suggestion, from his games when there are enough, his
-            ratings otherwise.
+            ratings otherwise. Tap an instruction again to take it off.
           </p>
         </Help>
       }
     >
       {!advice.length ? (
-        <div className="small dim">Their rotation isn&apos;t set yet.</div>
+        <div className="card tx-empty">Their rotation isn&apos;t set yet.</div>
       ) : (
-        <div className="col" style={{ gap: 12 }}>
+        <div className="card flush list">
           {advice.map((a) => {
             const p = league.players[a.pid];
             const cur = planned[a.pid] ?? null;
             const line = shootingLine(a);
             return (
-              <div key={a.pid} className="col gp-guard" style={{ gap: 6 }}>
-                <div className="row between" style={{ gap: 8, minWidth: 0 }}>
-                  <div className="row" style={{ gap: 8, minWidth: 0 }}>
-                    <Ovr v={p.ovr} size="sm" />
-                    <div style={{ minWidth: 0 }}>
-                      <div className="bold ellipsis">{names(a.pid)}</div>
-                      <div className="tiny dim2 ellipsis">
-                        {p.pos} · {fmtHeight(p.heightIn)}
-                        {line ? ` · ${line}` : ''}
-                      </div>
-                    </div>
-                  </div>
+              <div key={a.pid} className="gp-guard">
+                <div className="gp-guard-h">
+                  <Ovr v={p.ovr} size="sm" />
+                  <span className="grow">
+                    <span className="lr-name ellipsis">{names(a.pid)}</span>
+                    <span className="lr-meta">
+                      {p.pos} · {fmtHeight(p.heightIn)}
+                      {line ? ` · ${line}` : ''}
+                    </span>
+                  </span>
                   {cur ? <Tag tone="info">{PLAYER_D_META[cur].short}</Tag> : <span className="tiny dim">Straight up</span>}
                 </div>
                 <Chips
@@ -79,17 +78,16 @@ export function GuardCard({ league, opp }: { league: League; opp: number }) {
                   options={PLAYER_DEFENSES.map((d) => ({ id: d, label: `${PLAYER_D_META[d].short}${d === a.suggest ? ' ★' : ''}` }))}
                 />
                 {a.suggest && a.why && (
-                  <div className="tiny dim2">
+                  <div className="tx-note">
                     ★ {PLAYER_D_META[a.suggest].label}: {a.why}
                   </div>
                 )}
               </div>
             );
           })}
-          <div className="tiny dim">Tap an instruction again to take it off.</div>
         </div>
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -109,36 +107,37 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
     });
   const sorted = [...theirs].sort((a, b) => per(a) - per(b) || a.pid - b.pid);
   return (
-    <Card
+    <Section
       title="Attack"
       right={
         <Help title="Attack a defender">
           While he&apos;s on the floor your offense runs its isolations, post-ups and ball screens at the player he guards, and that player sets most of the ball screens, so a
           switch leaves him on your ball handler and a weak screen defender can&apos;t hold up the coverage. It costs some ball movement: motion and handoffs lose a little. Against
-          a real weak link it&apos;s a small edge; against a good defender it costs points. It replaces Hunt mismatches while he plays.
+          a real weak link it&apos;s a small edge; against a good defender it costs points. It replaces Hunt mismatches while he plays. The numbers are perimeter defense on the
+          40-99 scale.
         </Help>
       }
     >
       {!theirs.length ? (
-        <div className="small dim">Their rotation isn&apos;t set yet.</div>
+        <div className="card tx-empty">Their rotation isn&apos;t set yet.</div>
       ) : (
-        <>
+        <div className="card col tx-group tight">
           <Chips
             label="Defender to attack"
             value={target ?? -1}
             onChange={(pid: number) => set(pid < 0 || pid === target ? null : pid)}
             options={[{ id: -1, label: 'Nobody' }, ...sorted.map((p) => ({ id: p.pid, label: `${names(p.pid)} ${per(p)}${p.pid === pick?.pid && pick.worth ? ' ★' : ''}` }))]}
           />
-          <div className="tiny dim" style={{ marginTop: 8 }}>
-            Perimeter defense on the 40-99 scale.{' '}
-            {pick &&
-              (pick.worth
+          <div className="tx-note">
+            {pick
+              ? pick.worth
                 ? `★ ${names(pick.pid)} is their weakest perimeter defender (${pick.perDef}, their rotation ${pick.teamPerDef}).`
-                : `Their weakest perimeter defender, ${names(pick.pid)} (${pick.perDef}), is close to their rotation (${pick.teamPerDef}): hunting him may not pay.`)}
+                : `Their weakest perimeter defender, ${names(pick.pid)} (${pick.perDef}), is close to their rotation (${pick.teamPerDef}): hunting him may not pay.`
+              : 'Perimeter defense on the 40-99 scale.'}
           </div>
-        </>
+        </div>
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -180,7 +179,7 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
     set(scheme, next);
   };
   return (
-    <Card
+    <Section
       title="Junk defense"
       right={
         <Help title="Junk defenses">
@@ -194,36 +193,36 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
         </Help>
       }
     >
-      <Chips
-        label="Junk defense"
-        value={n ? scheme : 'man'}
-        onChange={pickScheme}
-        options={[
-          { id: 'man' as DefScheme, label: 'None' },
-          { id: 'box1' as DefScheme, label: SCHEME_META.box1.label },
-          { id: 'tri2' as DefScheme, label: SCHEME_META.tri2.label },
-        ]}
-      />
-      {n > 0 && theirs.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div className="tiny upper dim bold" style={{ marginBottom: 6 }}>
-            Chase {n === 2 ? 'two' : 'one'}
+      <div className="card col tx-group tight">
+        <Chips
+          label="Junk defense"
+          value={n ? scheme : 'man'}
+          onChange={pickScheme}
+          options={[
+            { id: 'man' as DefScheme, label: 'None' },
+            { id: 'box1' as DefScheme, label: SCHEME_META.box1.label },
+            { id: 'tri2' as DefScheme, label: SCHEME_META.tri2.label },
+          ]}
+        />
+        {n > 0 && theirs.length > 0 && (
+          <div className="tx-ctl-chips col">
+            <div className="over">Chase {n === 2 ? 'two' : 'one'}</div>
+            <div className="chips" role="group" aria-label="Players to chase">
+              {creators.map((p) => (
+                <button key={p.pid} className={`chip ${chase.includes(p.pid) ? 'on' : ''}`} aria-pressed={chase.includes(p.pid)} onClick={() => toggle(p.pid)}>
+                  {names(p.pid)}
+                </button>
+              ))}
+            </div>
+            <div className="tx-note">
+              {chase.length
+                ? `The staff sends ${n === 2 ? 'two of your best perimeter defenders' : 'one of your best perimeter defenders'} (or whoever you plan in Matchups) to chase ${chase.map(names).join(' and ')}; the rest play a ${n === 2 ? 'triangle' : '2-2 box'}. While ${chase.length === 2 ? 'neither is' : "he isn't"} on the floor you play man-to-man.`
+                : `Nobody named: the chaser${n === 2 ? 's take their two main creators' : ' takes their main creator'} on the floor, all game.`}
+            </div>
           </div>
-          <div className="chips" role="group" aria-label="Players to chase">
-            {creators.map((p) => (
-              <button key={p.pid} className={`chip ${chase.includes(p.pid) ? 'on' : ''}`} aria-pressed={chase.includes(p.pid)} onClick={() => toggle(p.pid)}>
-                {names(p.pid)}
-              </button>
-            ))}
-          </div>
-          <div className="small dim" style={{ marginTop: 8 }}>
-            {chase.length
-              ? `The staff sends ${n === 2 ? 'two of your best perimeter defenders' : 'one of your best perimeter defenders'} (or whoever you plan in Matchups) to chase ${chase.map(names).join(' and ')}; the rest play a ${n === 2 ? 'triangle' : '2-2 box'}. While ${chase.length === 2 ? 'neither is' : "he isn't"} on the floor you play man-to-man.`
-              : `Nobody named: the chaser${n === 2 ? 's take their two main creators' : ' takes their main creator'} on the floor, all game.`}
-          </div>
-        </div>
-      )}
-    </Card>
+        )}
+      </div>
+    </Section>
   );
 }
 
