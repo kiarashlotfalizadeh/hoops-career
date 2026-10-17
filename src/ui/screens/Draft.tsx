@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Gavel, Play, Scale, SkipForward, Ticket } from 'lucide-react';
+import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Play, Scale, SkipForward, Ticket } from 'lucide-react';
 import type { CombineResults, DraftPick, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
@@ -13,8 +13,9 @@ import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented, Sheet, StatTable, Toggle, type Col } from '../components/ui';
-import { OvrPot, SecTitle, ordinal } from '../office/common';
+import { Avatar, Empty, Ovr, PageHeader, Section, Segmented, Sheet, StatTable, Toggle, type Col } from '../components/ui';
+import { slabVars } from '../teamColors';
+import { HelpSheet, OvrPot, ordinal } from '../office/common';
 import { PickTradeSheet } from '../office/PickTradeSheet';
 import { blockOffers } from '../office/tradeBlock';
 import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
@@ -151,26 +152,26 @@ export default function Draft() {
   const myRemaining = league.phase === 'draft' ? draftOrder(league).filter((d) => d.tid === user) : [];
 
   return (
-    <main className="page">
+    <main className="page fo-page">
       <PageHeader
         title="Draft"
-        sub={`${league.season} NBA Draft · ${after ? 'complete' : league.phase === 'draft' ? 'in progress' : league.phase === 'draftLottery' ? 'lottery complete' : `${cls.length} prospects`}`}
+        sub={`${league.season} NBA Draft · ${after ? 'complete' : league.phase === 'draft' ? 'live' : league.phase === 'draftLottery' ? 'lottery done' : `${cls.length} prospects`}`}
         back
         right={
-          <Help title="How the draft works">
-            <p style={{ margin: 0 }}>
-              <b>Lottery.</b> The 14 non-playoff teams are entered in a lottery for the top 4 picks. The worst three records have the best odds (14% each). Everyone else picks in
-              reverse order of record.
+          <HelpSheet title="How the draft works">
+            <p>
+              <b>Lottery.</b> The 14 non-playoff teams draw for the top 4 picks; the worst three records have the best odds (14% each). Everyone else picks in reverse order of
+              record.
             </p>
-            <p style={{ margin: 0 }}>
+            <p>
               <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals (team option on year 4), cheaper the later the pick. Second-rounders get 2-year minimum deals,
               not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
-            <p style={{ margin: 0 }}>
+            <p>
               <b>Big board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
             </p>
-            <p style={{ margin: 0 }}>Undrafted prospects with promise become free agents after the draft.</p>
-          </Help>
+            <p>Undrafted prospects with promise become free agents after the draft.</p>
+          </HelpSheet>
         }
       />
 
@@ -190,32 +191,28 @@ export default function Draft() {
       )}
 
       {league.phase === 'draftLottery' && (
-        <Card accent className="fo-hero">
-          <div className="row" style={{ gap: 12 }}>
-            <Gavel size={28} />
-            <div className="grow">
-              <div className="fo-mid">The lottery is done</div>
-              <div className="small dim2">Study the board, then head to the draft.</div>
-            </div>
-          </div>
-          <button className="btn primary block" style={{ marginTop: 12 }} disabled={busy} onClick={() => void begin()}>
+        <section className="card accent fo-now" aria-label="The draft">
+          <div className="fo-now-over">Lottery results are in</div>
+          <h2 className="fo-now-t">Draft night is next</h2>
+          <p className="fo-now-s">Study the board, then start the draft.</p>
+          <button className="btn primary block" disabled={busy} onClick={() => void begin()}>
             <Play size={16} fill="currentColor" /> Start the draft
           </button>
-        </Card>
+        </section>
       )}
 
       {(league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
-        <Card className="tight">
+        <div className="card tight">
           <Toggle
             on={!!league.settings.draftPause}
             onChange={setPause}
             label="Stop before every pick"
-            help="The draft waits before each team's pick, so you can trade for the pick on the clock. Off, it runs on to your next pick."
+            help="Off, it runs to your next pick. On, it waits before each team's, so you can trade for the pick on the clock."
           />
-        </Card>
+        </div>
       )}
 
-      {views.length > 1 && <Segmented value={view} onChange={setView} options={views} label="Draft sections" />}
+      {views.length > 1 && <Segmented tabs value={view} onChange={setView} options={views} label="Draft sections" />}
 
       {view === 'live' && league.phase === 'draft' && (
         <LiveView league={league} cls={cls} mock={mock} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
@@ -232,24 +229,25 @@ export default function Draft() {
 
       <Sheet open={confirmPick !== null} onClose={() => setConfirmPick(null)} title="Make the pick?">
         {confirmPick !== null && league.players[confirmPick] && np && (
-          <div className="col" style={{ gap: 12 }}>
-            <div className="row" style={{ gap: 10 }}>
-              <OvrPot p={league.players[confirmPick]} />
+          <div className="col fo-sheet">
+            <div className="fo-phead">
+              <Avatar p={league.players[confirmPick]} />
               <div className="grow">
-                <div className="bold">{playerName(league.players[confirmPick])}</div>
-                <div className="small dim">
+                <h2 className="ellipsis">{playerName(league.players[confirmPick])}</h2>
+                <div className="fo-meta">
                   {league.players[confirmPick].pos} · {league.players[confirmPick].archetype} · Big board #{league.players[confirmPick].prospect?.rank ?? '—'}
                 </div>
               </div>
+              <OvrPot p={league.players[confirmPick]} />
             </div>
-            <div className="small dim2">
-              Pick #{overallPick(league, np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie-scale deal' : 'second round, 2-year minimum deal'}).
-            </div>
+            <p className="fo-lede">
+              Pick #{overallPick(league, np.round, np.pick!)}: {np.round === 1 ? 'first round, a 4-year rookie-scale deal' : 'second round, a 2-year minimum deal'}.
+            </p>
             <div className="row">
               <button className="btn grow" onClick={() => setConfirmPick(null)}>
                 Cancel
               </button>
-              <button className="btn good grow" onClick={() => draft(confirmPick)}>
+              <button className="btn primary grow" onClick={() => draft(confirmPick)}>
                 Draft him
               </button>
             </div>
@@ -258,11 +256,11 @@ export default function Draft() {
       </Sheet>
 
       <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Sim to the end?">
-        <div className="col" style={{ gap: 12 }}>
-          <div className="dim2">
+        <div className="col fo-sheet">
+          <p className="fo-lede">
             You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}). Your
-            scouts will make {myRemaining.length > 1 ? 'those selections' : 'that selection'} for you.
-          </div>
+            scouts make {myRemaining.length > 1 ? 'those selections' : 'that selection'}.
+          </p>
           <div className="row">
             <button className="btn grow" onClick={() => setConfirmSim(false)}>
               Cancel
@@ -313,82 +311,80 @@ function OnTheClock({
   );
   if (!np) {
     return (
-      <Card accent className="fo-hero">
-        <div className="fo-eyebrow">Draft complete</div>
-        <div className="fo-mid" style={{ marginTop: 4 }}>
-          All picks are in
-        </div>
-        <div className="small dim2">Undrafted prospects become free agents. Next up: re-signing your own players.</div>
-        <button className="btn primary block" style={{ marginTop: 12 }} disabled={busy} onClick={onFinish}>
+      <section className="card accent fo-now" aria-label="Draft complete">
+        <div className="fo-now-over">Draft complete</div>
+        <h2 className="fo-now-t">All picks are in</h2>
+        <p className="fo-now-s">Undrafted prospects become free agents. Next: re-sign your own players.</p>
+        <button className="btn primary block" disabled={busy} onClick={onFinish}>
           Continue to re-signing
         </button>
-      </Card>
+      </section>
     );
   }
   const mine = np.tid === user;
   const t = league.teams[np.tid];
+  const n = overallPick(league, np.round, np.pick!);
   return (
-    <Card className={`fo-hero ${mine ? 'fo-clock' : ''}`} accent={!mine}>
-      <div className="row between">
+    // the team on the clock, in its colours
+    <section className="slab fo-clock" style={slabVars(t.colors)} aria-label={`On the clock: pick ${n}`}>
+      <span className="slab-mark">
+        <TeamLogo tid={np.tid} size={170} decorative />
+      </span>
+      <div className="fo-clock-over">
         <span className="fo-live">On the clock</span>
-        <span className="tiny dim upper bold">
+        <span>
           Round {np.round} · Pick {np.pick}
         </span>
       </div>
-      <div className="row" style={{ gap: 12, marginTop: 10 }}>
-        <TeamLogo tid={np.tid} size={54} />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="fo-big">#{overallPick(league, np.round, np.pick!)}</div>
-          <div className="bold ellipsis">
-            {mine ? "You're up" : `${t.region} ${t.name}`}
-            {np.originalTid !== np.tid && <span className="dim small"> · via {league.teams[np.originalTid].abbrev}</span>}
+      <div className="fo-clock-main">
+        <span className="fo-clock-n num">#{n}</span>
+        <div className="grow">
+          <div className="fo-clock-team">{mine ? "You're up" : t.name}</div>
+          <div className="fo-clock-sub">
+            {mine ? `${t.region} ${t.name}` : t.region}
+            {np.originalTid !== np.tid && ` · via ${league.teams[np.originalTid].abbrev}`}
           </div>
         </div>
+        <TeamLogo tid={np.tid} size={52} decorative />
       </div>
       {mine ? (
         <>
-          <div className="small dim2" style={{ marginTop: 10 }}>
-            Tap <b>Draft</b> on a prospect below, or let your scouts choose.
-          </div>
-          <div className="row" style={{ marginTop: 10, gap: 8 }}>
-            <button className="btn sm grow" onClick={onAuto}>
+          <p className="fo-clock-s">Tap Draft on a prospect, or let your scouts choose.</p>
+          <div className="fo-clock-btns">
+            <button className="btn sm" onClick={onAuto}>
               <Bot size={16} /> Auto-pick for me
             </button>
-            <button className="btn sm grow ghost" onClick={onSimToEnd}>
+            <button className="btn sm" onClick={onSimToEnd}>
               <FastForward size={16} /> Sim to end
             </button>
           </div>
           {canTrade && (
-            <button className="btn sm block" style={{ marginTop: 8 }} disabled={!offers} onClick={() => onTrade(np.dpid)}>
+            <button className="btn sm block" disabled={!offers} onClick={() => onTrade(np.dpid)}>
               <ArrowLeftRight size={15} /> Offers for this pick ({offers})
             </button>
           )}
         </>
       ) : (
-        <>
-          <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
-            <button className="btn sm grow primary" onClick={onNext}>
-              <SkipForward size={15} /> Next pick
+        <div className="fo-clock-btns">
+          <button className="btn sm primary" onClick={onNext}>
+            <SkipForward size={15} /> Next pick
+          </button>
+          {hasPicks && (
+            <button className="btn sm" onClick={onSimToMine}>
+              <Play size={15} fill="currentColor" /> Sim to my pick
             </button>
-            {hasPicks && (
-              <button className="btn sm grow" onClick={onSimToMine}>
-                <Play size={15} fill="currentColor" /> Sim to my pick
-              </button>
-            )}
-          </div>
-          <div className="row wrap" style={{ marginTop: 8, gap: 8 }}>
-            {canTrade && (
-              <button className="btn sm grow" onClick={() => onTrade(np.dpid)}>
-                <ArrowLeftRight size={15} /> Trade for #{overallPick(league, np.round, np.pick!)}
-              </button>
-            )}
-            <button className="btn sm grow ghost" onClick={onSimToEnd}>
-              <FastForward size={16} /> Sim to end of draft
+          )}
+          {canTrade && (
+            <button className="btn sm" onClick={() => onTrade(np.dpid)}>
+              <ArrowLeftRight size={15} /> Trade for #{n}
             </button>
-          </div>
-        </>
+          )}
+          <button className="btn sm" onClick={onSimToEnd}>
+            <FastForward size={16} /> Sim to end of draft
+          </button>
+        </div>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -422,16 +418,15 @@ function LiveView({
   return (
     <>
       {order.length > 1 && (
-        <>
-          <SecTitle right={onTrade ? <span className="tiny dim">Tap a pick to trade for it</span> : undefined}>Up next</SecTitle>
+        <Section title="Up next" right={onTrade ? <span className="tiny dim">Tap a pick to trade for it</span> : undefined}>
           <div className="hscroll">
             {order.slice(1, 13).map((d) => {
               const n = overallPick(league, d.round, d.pick!);
               const body = (
                 <>
-                  <span className="n">#{n}</span>
+                  <span className="n num">#{n}</span>
                   <TeamLogo tid={d.tid} size={26} decorative />
-                  <span className="tiny bold">{league.teams[d.tid].abbrev}</span>
+                  <span className="ab">{league.teams[d.tid].abbrev}</span>
                 </>
               );
               return onTrade ? (
@@ -450,26 +445,26 @@ function LiveView({
               );
             })}
           </div>
-        </>
+        </Section>
       )}
-      <SecTitle right={<span className="tiny dim">{cls.length} left</span>}>{onClock ? 'Best available · your pick' : 'Best available'}</SecTitle>
-      <BoardList league={league} list={cls.slice(0, 30)} mock={mock} onOpen={onOpen} onDraft={onClock ? onDraft : undefined} />
+      <Section title={onClock ? 'Best available · your pick' : 'Best available'} right={<span className="tiny dim">{cls.length} left</span>}>
+        <BoardList league={league} list={cls.slice(0, 30)} mock={mock} onOpen={onOpen} onDraft={onClock ? onDraft : undefined} />
+      </Section>
       {picks.length > 0 && (
-        <>
-          <SecTitle>Selections</SecTitle>
-          <Card className="flush">
+        <Section title="Selections">
+          <div className="card flush">
             <div className="list wide2">
               {(all ? picks : picks.slice(0, 8)).map((p) => (
                 <SelectionRow key={p.pid} league={league} p={p} />
               ))}
             </div>
             {picks.length > 8 && (
-              <button className="btn ghost block" style={{ borderRadius: 0, borderInline: 0, borderBottom: 0 }} onClick={() => setAll(!all)}>
+              <button className="btn ghost block fo-more-btn" onClick={() => setAll(!all)}>
                 {all ? 'Show fewer' : `Show all ${picks.length} picks`}
               </button>
             )}
-          </Card>
-        </>
+          </div>
+        </Section>
       )}
     </>
   );
@@ -478,15 +473,13 @@ function LiveView({
 function SelectionRow({ league, p }: { league: League; p: Player }) {
   const mine = p.draft.tid === league.userTid;
   return (
-    <Link to={`/player/${p.pid}`} className="listrow" style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined }}>
-      <span className="fo-rank" style={{ fontSize: 16 }}>
-        {overallPick(league, p.draft.round, p.draft.pick)}
-      </span>
-      <TeamLogo tid={p.draft.tid ?? 0} size={28} />
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="fo-name small">{playerName(p)}</div>
-        <div className="fo-meta tiny">
-          {p.pos} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+    <Link to={`/player/${p.pid}`} className={`listrow fo-sel ${mine ? 'me' : ''}`}>
+      <span className="fo-rank">{overallPick(league, p.draft.round, p.draft.pick)}</span>
+      <TeamLogo tid={p.draft.tid ?? 0} size={28} decorative />
+      <div className="grow">
+        <div className="fo-name">{playerName(p)}</div>
+        <div className="fo-meta">
+          {league.teams[p.draft.tid ?? 0]?.abbrev} · {p.pos} · {fmtHeight(p.heightIn)} · {p.college || p.country}
         </div>
       </div>
       <OvrPot p={p} />
@@ -518,43 +511,48 @@ function BoardList({
     if (!mock || !r) return null;
     const where = r.med > 2 * league.teams.length ? 'Undrafted in most mocks' : r.lo === r.hi ? `Proj. #${r.med}` : `Proj. #${r.lo}-${r.hi > 2 * league.teams.length ? '' : r.hi}`;
     const gone = mine ? mock.goneBefore(p.pid, mine.overall) : null;
-    return `${where.replace(/-$/, '+')}${gone !== null && gone >= 0.05 && gone <= 0.95 ? ` · gone before your #${mine!.overall}: ${Math.round(gone * 100)}%` : ''}`;
+    return { where: where.replace(/-$/, '+'), gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `gone before your #${mine!.overall}: ${Math.round(gone * 100)}%` : null };
   };
   return (
-    <Card className="flush">
+    <div className="card flush">
       <div className="list wide2">
-        {list.slice(0, limit).map((p) => (
-          // the scouting report and the Draft button sit side by side: a button inside a button is announced as one
-          <div key={p.pid} className="row" style={{ gap: 0, paddingRight: onDraft ? 12 : 0 }}>
-            <button className="fo-prow grow" onClick={() => onOpen(p.pid)}>
-              <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
-              <OvrPot p={p} />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <div className="fo-name">{playerName(p)}</div>
-                <div className="fo-meta">
-                  {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+        {list.slice(0, limit).map((p) => {
+          const pr = projection(p);
+          return (
+            // the scouting report and the Draft button sit side by side: a button inside a button is announced as one
+            <div key={p.pid} className={`fo-board-row ${onDraft ? 'can' : ''}`}>
+              <button className="fo-prow grow" onClick={() => onOpen(p.pid)}>
+                <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
+                <Avatar p={p} />
+                <div className="grow">
+                  <div className="fo-name">{playerName(p)}</div>
+                  <div className="fo-meta">
+                    {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+                  </div>
+                  {/* wraps on a phone rather than cut off the chance he's gone before your pick */}
+                  <div className="fo-board-proj">
+                    {p.archetype}
+                    {pr ? <span className="fo-proj"> · {pr.where}</span> : null}
+                    {pr?.gone ? <span className="warn"> · {pr.gone}</span> : null}
+                  </div>
                 </div>
-                {/* wraps on a phone rather than cut off the chance he's gone before your pick */}
-                <div className="fo-meta tiny" style={{ whiteSpace: 'normal' }}>
-                  {p.archetype}
-                  {projection(p) ? ` · ${projection(p)}` : ''}
-                </div>
-              </div>
-            </button>
-            {onDraft && (
-              <button className="btn sm good" aria-label={`Draft ${playerName(p)}`} onClick={() => onDraft(p.pid)}>
-                Draft
+                <OvrPot p={p} />
               </button>
-            )}
-          </div>
-        ))}
+              {onDraft && (
+                <button className="btn sm good" aria-label={`Draft ${playerName(p)}`} onClick={() => onDraft(p.pid)}>
+                  Draft
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
       {list.length > limit && (
-        <button className="btn ghost block" style={{ borderRadius: 0, borderInline: 0, borderBottom: 0 }} onClick={() => setLimit(limit + 30)}>
+        <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + 30)}>
           Show more ({list.length - limit} left)
         </button>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -567,33 +565,35 @@ function MockView({ league, mock, onOpen }: { league: League; mock: MockDraft | 
   const projected = mock.slots[0].projected;
   const shown = mock.slots.filter((s) => round2 || s.round === 1);
   return (
-    <>
-      <div className="row between">
-        <span className="small dim">{projected ? 'In the order by record: the lottery still decides the top four' : 'In the draft order'}</span>
-        <Help title="Mock draft">
-          <p style={{ margin: 0 }}>
+    <Section
+      title={projected ? 'Mock · order by record' : 'Mock · draft order'}
+      right={
+        <HelpSheet title="Mock draft">
+          <p>
             The draft played out {mock.runs} times the way AI teams pick: potential and talent, a nudge toward what the roster lacks, and their usual unpredictability on the night.
             Your picks go to the top player left on your big board, or to your staff&apos;s choice.
           </p>
-          <p style={{ margin: 0 }}>
+          <p>
             Each pick shows the likeliest player not already named above it and how often he was the pick there, then the next likeliest. On the big board, each prospect&apos;s
             range is where he went in four of five mocks.
           </p>
-        </Help>
-      </div>
-      <Card className="flush">
+          {projected && <p>Until the lottery the order is by record: the lottery still decides the top four.</p>}
+        </HelpSheet>
+      }
+    >
+      <div className="card flush">
         <div className="list">
           {shown.map((s) => (
             <MockRow key={`${s.round}-${s.pick}`} league={league} s={s} onOpen={onOpen} />
           ))}
         </div>
         {mock.slots.some((s) => s.round === 2) && (
-          <button className="btn ghost block" style={{ borderRadius: 0, borderInline: 0, borderBottom: 0 }} onClick={() => setRound2(!round2)}>
+          <button className="btn ghost block fo-more-btn" onClick={() => setRound2(!round2)}>
             {round2 ? 'First round only' : 'Show the second round'}
           </button>
         )}
-      </Card>
-    </>
+      </div>
+    </Section>
   );
 }
 
@@ -608,26 +608,18 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
   if (!p) return null;
   const via = s.orig !== s.tid ? ` · via ${league.teams[s.orig].abbrev}` : '';
   return (
-    <button
-      className="listrow"
-      style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined, width: '100%', textAlign: 'left' }}
-      onClick={() => onOpen(p.pid)}
-    >
+    <button className={`listrow fo-sel ${mine ? 'me' : ''}`} onClick={() => onOpen(p.pid)}>
       <span className="fo-rank">{s.overall}</span>
       <TeamLogo tid={s.tid} size={28} decorative />
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="fo-name small ellipsis">
-          {league.teams[s.tid].abbrev}: {playerName(p)}
+      <div className="grow">
+        <div className="fo-name">
+          <span className="dim2">{league.teams[s.tid].abbrev}</span> {playerName(p)}
         </div>
-        <div className="fo-meta tiny ellipsis">
+        <div className="fo-meta">
           {p.pos} · {Math.round(top.p * 100)}% of mocks{via}
         </div>
         {/* the other names on a line of their own, wrapping: at the end of the line above they were cut off */}
-        {alts.length > 0 && (
-          <div className="fo-meta tiny" style={{ whiteSpace: 'normal' }}>
-            or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}
-          </div>
-        )}
+        {alts.length > 0 && <div className="fo-board-proj">or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}</div>}
       </div>
       <OvrPot p={p} />
     </button>
@@ -657,13 +649,10 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
   ];
   if (!list.length) return <Empty>No combine results for this class.</Empty>;
   return (
-    <>
-      <div className="tiny dim">Tap a column to sort; tap a row for the full scouting report. Lane agility and sprint: lower is better.</div>
+    <Section title={`${league.season} combine · ${list.length} invitees`} right={<span className="tiny dim">Lane, sprint: lower is better</span>}>
       <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} maxHeight={560} />
-      <div className="tiny dim" style={{ marginTop: -6 }}>
-        {league.season} draft combine · {list.length} invitees
-      </div>
-    </>
+      <div className="tiny dim">Tap a column to sort, a row for his scouting report.</div>
+    </Section>
   );
 }
 
@@ -671,17 +660,13 @@ function CombineView({ league, list, onOpen }: { league: League; list: Player[];
 
 function LotteryView({ league, onTrade }: { league: League; onTrade?: (dpid: number) => void }) {
   const order = draftOrder(league).filter((d) => d.round === 1 && (d.pick ?? 99) <= 14);
-  if (!order.length) return <Empty>Lottery results will appear here after the playoffs.</Empty>;
+  if (!order.length) return <Empty>Lottery results appear here after the playoffs.</Empty>;
   // the same pre-lottery order and chances the lottery used (tied teams split theirs)
   const pre = new Map(lotteryOdds(league).map((x) => [x.tid, x]));
   return (
-    <Card className="flush">
-      <div className="row between" style={{ padding: '12px 12px 6px' }}>
-        <h3 style={{ fontSize: 14, color: 'var(--text-2)' }}>Lottery order</h3>
-        {/* (the rows' percentages need their caption while trading is open too) */}
-        <span className="tiny dim">Pre-lottery odds for #1{onTrade ? ' · tap a pick to trade' : ''}</span>
-      </div>
-      <div className="list">
+    // (the rows' percentages need their caption while trading is open too)
+    <Section title="Lottery order" right={<span className="tiny dim">Odds for #1{onTrade ? ' · tap a pick to trade' : ''}</span>}>
+      <div className="card flush list">
         {order.map((d) => {
           const p0 = pre.get(d.originalTid)?.pre ?? d.pick!;
           const move = p0 - d.pick!;
@@ -691,32 +676,28 @@ function LotteryView({ league, onTrade }: { league: League; onTrade?: (dpid: num
           // a row opens the trade sheet for its pick while trading is open
           const Row = onTrade ? 'button' : 'div';
           return (
-            <Row
-              key={d.dpid}
-              className="listrow"
-              style={{ background: mine ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : undefined, width: '100%', textAlign: 'left' }}
-              onClick={onTrade ? () => onTrade(d.dpid) : undefined}
-            >
+            <Row key={d.dpid} className={`listrow fo-sel ${mine ? 'me' : ''}`} onClick={onTrade ? () => onTrade(d.dpid) : undefined}>
               <span className="fo-rank">{d.pick}</span>
-              <TeamLogo tid={d.tid} size={32} decorative />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <div className="bold ellipsis">
+              <TeamLogo tid={d.tid} size={30} decorative />
+              <div className="grow">
+                <div className="fo-name">
                   {league.teams[d.tid].region} {league.teams[d.tid].name}
                 </div>
-                <div className="tiny dim">
+                <div className="fo-meta">
                   {ts.won}-{ts.lost}
                   {d.originalTid !== d.tid ? ` · via ${league.teams[d.originalTid].abbrev}` : ''} · {odds.toFixed(1)}%
                 </div>
               </div>
-              <span className="fo-move" style={{ color: move > 0 ? 'var(--good)' : move < 0 ? 'var(--bad)' : 'var(--text-dim)' }}>
+              <span className={`fo-move ${move > 0 ? 'good' : move < 0 ? 'bad' : 'dim'}`}>
                 {move > 0 ? <ArrowUp size={14} /> : move < 0 ? <ArrowDown size={14} /> : null}
                 {move !== 0 ? Math.abs(move) : '—'}
+                {move !== 0 && <span className="sr-only">{move > 0 ? ' places up' : ' places down'}</span>}
               </span>
             </Row>
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -734,30 +715,26 @@ function MyPicks({ league }: { league: League }) {
   return (
     <>
       {drafted.length > 0 && (
-        <>
-          <SecTitle>Drafted this year</SecTitle>
-          <Card className="flush">
-            <div className="list">
-              {drafted.map((p) => (
-                <SelectionRow key={p.pid} league={league} p={p} />
-              ))}
-            </div>
-          </Card>
-        </>
+        <Section title="Drafted this year">
+          <div className="card flush list">
+            {drafted.map((p) => (
+              <SelectionRow key={p.pid} league={league} p={p} />
+            ))}
+          </div>
+        </Section>
       )}
-      <SecTitle right={<span className="tiny dim">{owned.length} total</span>}>Picks you own</SecTitle>
-      {owned.length === 0 ? (
-        <Empty>You don't own any draft picks.</Empty>
-      ) : (
-        <Card className="flush">
-          <div className="list">
+      <Section title={`Picks you own · ${owned.length}`}>
+        {owned.length === 0 ? (
+          <Empty>You don't own any draft picks.</Empty>
+        ) : (
+          <div className="card flush list">
             {owned.map((d) => (
               <div key={d.dpid} className="listrow">
-                <TeamLogo tid={d.originalTid} size={30} />
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="bold ellipsis">{pickLabel(league, d)}</div>
-                  <div className="tiny dim">
-                    {d.originalTid === user ? 'Own pick' : `Acquired from the ${teamName(league.teams[d.originalTid])}`} · drafted after {seasonLabel(d.season)}
+                <TeamLogo tid={d.originalTid} size={30} decorative />
+                <div className="grow fo-min0">
+                  <div className="fo-name">{pickLabel(league, d)}</div>
+                  <div className="fo-meta fo-wrap">
+                    {d.originalTid === user ? 'Own pick' : `From the ${teamName(league.teams[d.originalTid])}`} · drafted after {seasonLabel(d.season)}
                     {/* its protection and any swap on it, in words */}
                     {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
                   </div>
@@ -773,31 +750,28 @@ function MyPicks({ league }: { league: League }) {
               </div>
             ))}
           </div>
-        </Card>
-      )}
+        )}
+        {owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>}
+      </Section>
       {owed.length > 0 && (
-        <>
-          <SecTitle>Owed to other teams</SecTitle>
-          <Card className="flush">
-            <div className="list">
-              {owed.map((d) => (
-                <div key={d.dpid} className="listrow">
-                  <TeamLogo tid={d.tid} size={30} decorative />
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="bold ellipsis">{pickLabel(league, d)}</div>
-                    <div className="tiny dim">
-                      Owned by the {teamName(league.teams[d.tid])}
-                      {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
-                    </div>
+        <Section title={`Owed to other teams · ${owed.length}`}>
+          <div className="card flush list">
+            {owed.map((d) => (
+              <div key={d.dpid} className="listrow">
+                <TeamLogo tid={d.tid} size={30} decorative />
+                <div className="grow fo-min0">
+                  <div className="fo-name">{pickLabel(league, d)}</div>
+                  <div className="fo-meta fo-wrap">
+                    Owned by the {teamName(league.teams[d.tid])}
+                    {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
                   </div>
-                  <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
                 </div>
-              ))}
-            </div>
-          </Card>
-        </>
+                <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
       )}
-      {owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>}
     </>
   );
 }
@@ -819,15 +793,13 @@ function Results({ league }: { league: League }) {
           { id: '2', label: 'Round 2' },
         ]}
       />
-      <Card className="flush">
-        <div className="list">
-          {list
-            .filter((p) => p.draft.round === round)
-            .map((p) => (
-              <SelectionRow key={p.pid} league={league} p={p} />
-            ))}
-        </div>
-      </Card>
+      <div className="card flush list">
+        {list
+          .filter((p) => p.draft.round === round)
+          .map((p) => (
+            <SelectionRow key={p.pid} league={league} p={p} />
+          ))}
+      </div>
     </>
   );
 }
@@ -838,34 +810,32 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
   const c = p?.prospect?.combine;
-  const stat = (k: string, val: string) => (
-    <div className="kpi" style={{ padding: 8 }}>
-      <span className="k">{k}</span>
-      <span className="v" style={{ fontSize: 18 }}>
-        {val}
-      </span>
+  const fig = (k: string, val: string) => (
+    <div>
+      <div className="k">{k}</div>
+      <div className="v num">{val}</div>
     </div>
   );
   return (
     <Sheet open={!!p} onClose={onClose} label={p ? playerName(p) : undefined}>
       {p && (
-        <div className="col" style={{ gap: 12 }}>
-          <div className="row" style={{ gap: 12 }}>
-            <span className="fo-rank" style={{ fontSize: 28, width: 40 }}>
-              {p.prospect?.rank ?? '—'}
-            </span>
-            <div className="grow" style={{ minWidth: 0 }}>
-              <h2 className="ellipsis" style={{ fontSize: 22 }}>
-                {playerName(p)}
-              </h2>
-              <div className="fo-meta">
-                {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lb
-              </div>
-              <div className="fo-meta">{p.college ? `${p.college} · ${p.country}` : p.country}</div>
+        <div className="col fo-sheet">
+          <div className="fo-prospect-h">
+            <Avatar p={p} size="lg" />
+            <div className="grow">
+              <div className="over">Big board #{p.prospect?.rank ?? '—'}</div>
+              <div className="fo-prospect-first">{p.firstName}</div>
+              <h2 className="fo-prospect-last">{p.lastName}</h2>
             </div>
-            <OvrPot p={p} />
+            <div className="fo-prospect-r">
+              <Ovr v={p.ovr} size="lg" />
+              <span className="pot">POT {p.pot}</span>
+            </div>
           </div>
-          <div className="row wrap" style={{ gap: 6 }}>
+          <div className="fo-meta fo-wrap">
+            {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lb · {p.college ? `${p.college} · ${p.country}` : p.country}
+          </div>
+          <div className="chips">
             <span className="tag info">{p.archetype}</span>
             {p.tid >= 0 && (
               <span className="tag good">
@@ -873,27 +843,22 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
               </span>
             )}
             {/* side by side with the prospect ranked next to him (either can be changed there) */}
-            <Link to={compareHref(p.pid, boardNeighbors(league, p, 1)[0]?.pid)} className="btn xs" style={{ marginLeft: 'auto' }} onClick={onClose}>
+            <Link to={compareHref(p.pid, boardNeighbors(league, p, 1)[0]?.pid)} className="btn xs fo-push" onClick={onClose}>
               <Scale size={13} /> Compare
             </Link>
           </div>
-          {p.prospect?.blurb && (
-            <div className="dim2" style={{ lineHeight: 1.45 }}>
-              {p.prospect.blurb}
-            </div>
-          )}
+          {p.prospect?.blurb && <p className="fo-lede">{p.prospect.blurb}</p>}
           {c && (
-            <>
-              <div className="fo-sec">Combine</div>
-              <div className="grid4">
-                {stat('Height', fmtIn(c.heightNoShoes))}
-                {stat('Wingspan', fmtIn(c.wingspan))}
-                {stat('Reach', fmtIn(c.standingReach))}
-                {stat('Weight', `${c.weight} lb`)}
-                {stat('Vert', `${c.maxVert.toFixed(1)}"`)}
-                {stat('Lane', `${c.laneAgility.toFixed(2)}s`)}
-                {stat('Sprint', `${c.sprint.toFixed(2)}s`)}
-                {stat('Shooting', `${c.shootingDrill}/25`)}
+            <Section title="Combine">
+              <div className="fo-combine">
+                {fig('Height', fmtIn(c.heightNoShoes))}
+                {fig('Wingspan', fmtIn(c.wingspan))}
+                {fig('Reach', fmtIn(c.standingReach))}
+                {fig('Weight', `${c.weight} lb`)}
+                {fig('Vert', `${c.maxVert.toFixed(1)}"`)}
+                {fig('Lane', `${c.laneAgility.toFixed(2)}s`)}
+                {fig('Sprint', `${c.sprint.toFixed(2)}s`)}
+                {fig('Shooting', `${c.shootingDrill}/25`)}
               </div>
               <div className="tiny dim">
                 Wingspan {c.wingspan - c.heightNoShoes >= 0 ? '+' : '−'}
@@ -902,14 +867,14 @@ function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null
                   .replace(/\.?0+$/, '')}
                 " vs height{c.wingspan - c.heightNoShoes >= 4 ? ': plus length' : c.wingspan - c.heightNoShoes < 1 ? ': short arms for his size' : ''}.
               </div>
-            </>
+            </Section>
           )}
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row">
             <Link to={`/player/${p.pid}`} className="btn grow" onClick={onClose}>
               Full profile
             </Link>
             {canDraft && p.tid < 0 && (
-              <button className="btn good grow" onClick={() => onDraft(p.pid)}>
+              <button className="btn primary grow" onClick={() => onDraft(p.pid)}>
                 Draft him
               </button>
             )}

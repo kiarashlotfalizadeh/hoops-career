@@ -18,17 +18,9 @@ const NOTE_COLOR: Record<TradeNote['tone'], string> = { good: 'var(--good)', bad
 /** "Starter value · On the block": where a player's neutral trade value ranks league-wide, and whether his team looks ready to move him (or builds around him). */
 export function TierLine({ tier, avail }: { tier: ValueTier; avail: Availability }) {
   return (
-    <div className="tiny ellipsis" style={{ marginTop: 2 }}>
-      <span style={{ color: TIER_COLOR[tier], fontWeight: 700 }}>
-        <span className="fo-dot" style={{ background: TIER_COLOR[tier] }} />
-        {tier} value
-      </span>
-      {avail === 'block' && (
-        <span className="good" style={{ fontWeight: 700 }}>
-          {' '}
-          · On the block
-        </span>
-      )}
+    <div className="fo-tier" style={{ ['--tier' as string]: TIER_COLOR[tier] }}>
+      <span className="fo-tier-v">{tier} value</span>
+      {avail === 'block' && <span className="good bold"> · On the block</span>}
       {avail === 'franchise' && <span className="dim2"> · Cornerstone</span>}
     </div>
   );
@@ -38,13 +30,12 @@ export function TierLine({ tier, avail }: { tier: ValueTier; avail: Availability
 export function TradeNotes({ notes }: { notes: TradeNote[] }) {
   if (!notes.length) return null;
   return (
-    <div className="col" style={{ gap: 3 }}>
+    <ul className="fo-notes">
       {notes.map((n) => (
-        <div key={n.text} className={`row top tiny ${n.tone === 'warn' ? 'warn' : 'dim2'}`} style={{ gap: 6, fontWeight: n.tone === 'warn' ? 700 : undefined }}>
-          <span className="fo-dot" style={{ background: NOTE_COLOR[n.tone], margin: '4px 0 0', flex: 'none' }} />
-          <span>{n.text}</span>
-        </div>
+        <li key={n.text} className={n.tone === 'warn' ? 'warn' : ''} style={{ ['--note' as string]: NOTE_COLOR[n.tone] }}>
+          {n.text}
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }

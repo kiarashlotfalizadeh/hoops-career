@@ -16,12 +16,12 @@ export function UntouchableToggle({ league, p }: { league: League; p: Player }) 
       on={on}
       onChange={(v) => useStore.getState().mutate((l) => setUntouchable(l, p.pid, v))}
       label={
-        <span className="row" style={{ gap: 6 }}>
-          <LockKeyhole size={15} style={{ color: on ? 'var(--accent-text)' : 'var(--text-dim)' }} />
+        <span className="fo-untouch">
+          <LockKeyhole size={15} className={on ? 'accent-text' : 'dim'} />
           Untouchable
         </span>
       }
-      help={on ? `AI teams won't ask for ${p.lastName} in their offers or asks.` : `Take ${p.lastName} off the table: AI teams stop asking for him.`}
+      help={on ? `AI teams won't ask for ${p.lastName}.` : `Take ${p.lastName} off the table: AI teams stop asking for him.`}
     />
   );
 }

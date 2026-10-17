@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Banknote, Check, ChevronDown, ChevronUp, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
+import { ArrowLeftRight, Ban, Banknote, Check, ChevronDown, ChevronUp, Handshake, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import {
   MAX_FIRSTS_OUT,
@@ -32,8 +32,9 @@ import {
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Help, Ovr, PageHeader, Segmented, scrollBehavior } from '../components/ui';
-import { STRATEGY_META, Callout, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
+import { Avatar, Empty, Ovr, PageHeader, Section, Segmented, scrollBehavior } from '../components/ui';
+import { slabVars } from '../teamColors';
+import { STRATEGY_META, Callout, HelpSheet, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { isUntouchable, openProposals } from '../../core/league/proposals';
 import { OffersTab } from '../office/OffersTab';
@@ -167,6 +168,7 @@ export default function Trade() {
   const god = !!league.settings.godMode;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const force = useLeagueMemo(() => (god && !empty ? checkForceTrade(league, offer) : null), [league, god, empty, offerKey]);
+  const offers = openProposals(league).length;
 
   const pickPartner = (tid: number) => {
     if (tid === partner) return;
@@ -284,79 +286,39 @@ export default function Trade() {
   };
 
   return (
-    <main className="page">
+    <main className="page fo-page">
       <PageHeader
         title="Trade"
-        sub={!closed && deadlineLabel(league) ? `${deadlineLabel(league)} · salaries for ${seasonLabel(s)}` : `Salaries for ${seasonLabel(s)}`}
+        sub={!closed && deadlineLabel(league) ? `${deadlineLabel(league)} · ${seasonLabel(s)} salaries` : `${seasonLabel(s)} salaries`}
         back
-        right={
-          <Help title="Trade rules">
-            <p style={{ margin: 0 }}>
-              <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out,
-              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level or bi-annual exception this season can't take on salary past the tax line (
-              {fmtM(CAP_FOR(league, s).luxuryTax)}).
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} during the season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season
-              no team can drop below {CAP.rosterMin}. Two-way players don't count, but each team has only {TWO_WAY_MAX} two-way slots.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Expiring contracts.</b> After the season, players whose contracts are up can only be re-signed or let go, not traded, and a player with a player option on next
-              season can't be traded until he decides after the draft. Until free agency opens, each team's own expiring players it plans to keep count against its cap at about
-              their asking price (cap holds).
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>No trade-backs.</b> A team can't reacquire a player or pick it traded away until the next season.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Draft picks.</b> No team can be left without a first-round pick in two drafts in a row, and no AI team gives up more than {MAX_FIRSTS_OUT} firsts in one deal.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Protections.</b> A team can protect its own first as it trades it (top 4, 8, 10, 14 or 20): if the pick lands in those slots it stays home and nothing more is
-              owed. It's worth less to the team getting it. A pick already protected, or one acquired from another team, keeps its terms, and a pick in a swap can't be protected.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Pick swaps.</b> A team can give another the right to swap firsts in a future draft when each holds its own, unprotected first of that draft. When the lottery sets
-              the order, the team holding the right takes the other first instead of its own if that one landed higher. The right goes with the pick that carries it if that pick is
-              traded, and each first can be in one swap. AI GMs value the right by how likely the swap is and what it would gain, on the projection they value picks with.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Cash.</b> Each team can send, and receive, up to {fmtCash(cashRoom(league, user).limit)} in cash in trades a season (about 5% of the cap). Cash isn't salary: it
-              doesn't match or count against the cap. It comes out of the sender's profit and goes onto the receiver's. AI GMs value $2-3M about like a typical second-round pick,
-              rebuilders a little more and contenders less.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Timing.</b> No trades after the deadline or during the postseason. Trading reopens after the playoffs, with the draft lottery.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>How AI GMs judge deals.</b> They value ability, age, potential and contract: a bad contract counts against a package, and taking on salary over the tax costs them.
-              Contenders want help now; rebuilders pay more for youth and picks and less for veterans. A star is worth more than several lesser players, and players they'd have to
-              waive to fit the roster count for nothing.
-              {league.settings.difficulty === 'casual' ? ' On casual they take a little less than fair value, but not for players or picks you got in a trade this season.' : ''}
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>Negotiating.</b> Under the meter they tell you their main reasons, and warn you when you'd give up far more value than you get. When they say no to a proposal,
-              they offer the versions they would take: something more from you, one of their pieces left out, or one of their bad contracts for you to absorb.
-            </p>
-          </Help>
-        }
+        right={<TradeHelp league={league} season={s} />}
       />
 
       {closed && (
         <Callout tone="warn" icon={<Ban size={18} className="warn" />}>
-          <b>Trading is closed.</b> {phaseErrs[0]} You can still browse rosters and plan.
+          <b>Trading is closed.</b> {phaseErrs[0]} Plan deals for later.
         </Callout>
       )}
 
       <Segmented
+        tabs
         label="Trade tool"
         value={tab}
         onChange={setTab}
         options={[
           { id: 'build', label: 'Build' },
           { id: 'find', label: 'Find' },
-          { id: 'block', label: 'Trading block' },
-          { id: 'offers', label: `Offers${openProposals(league).length ? ` · ${openProposals(league).length}` : ''}` },
+          {
+            id: 'block',
+            // "Block" fits the phone's row; its name stays the full one (it contains the visible word)
+            label: (
+              <>
+                <span aria-hidden="true">Block</span>
+                <span className="sr-only">Trading block</span>
+              </>
+            ),
+          },
+          { id: 'offers', label: offers ? `Offers · ${offers}` : 'Offers' },
         ]}
       />
 
@@ -378,7 +340,7 @@ export default function Trade() {
       {tab === 'offers' ? null : tab === 'build' ? (
         <>
           <TeamPicker league={league} partner={partner} onPick={pickPartner} />
-          <PartnerCard league={league} tid={partner} season={s} />
+          <PartnerSlab league={league} tid={partner} season={s} />
           {ask && ask.tid === partner && <AskCallout league={league} ask={ask} onClose={() => setAsk(null)} />}
           <DealCard league={league} partner={partner} offer={offer} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
           <div className="fo-only-sm">
@@ -394,7 +356,7 @@ export default function Trade() {
           </div>
           <div className="fo-split">
             <div className={side === 'theirs' ? '' : 'fo-hide-sm'}>
-              <AssetList league={league} tid={partner} offer={offer} season={s} sel={cleanGet} onChange={setGet} title={`${pt.region} ${pt.name} send`} />
+              <AssetList league={league} tid={partner} offer={offer} season={s} sel={cleanGet} onChange={setGet} title={`${pt.abbrev} send`} />
             </div>
             <div className={side === 'mine' ? '' : 'fo-hide-sm'}>
               <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
@@ -450,6 +412,59 @@ export default function Trade() {
   );
 }
 
+/** The trade rules in full, behind the header's "?". */
+function TradeHelp({ league, season }: { league: League; season: number }) {
+  const cap = CAP_FOR(league, season);
+  return (
+    <HelpSheet title="Trade rules">
+      <p>
+        <b>Salary matching.</b> A team over the cap ({fmtM(cap.salaryCap)}) after the trade takes back at most 125% of the salary it sends, plus $0.1M. Teams under it absorb salary
+        freely. A team that used its mid-level or bi-annual this season can't take its payroll past the tax line ({fmtM(cap.luxuryTax)}).
+      </p>
+      <p>
+        <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} in season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season no team drops
+        below {CAP.rosterMin}. Two-way players don't count, but each team has {TWO_WAY_MAX} two-way slots.
+      </p>
+      <p>
+        <b>Expiring contracts.</b> After the season, players whose deals are up can only be re-signed or let go, and a player with a player option on next season can't be traded
+        until he decides after the draft. Until free agency opens, each team's expiring players it plans to keep count against its cap at about their ask (cap holds).
+      </p>
+      <p>
+        <b>No trade-backs.</b> A team can't reacquire a player or pick it traded away until the next season.
+      </p>
+      <p>
+        <b>Draft picks.</b> No team can be left without a first in two drafts in a row, and no AI team gives up more than {MAX_FIRSTS_OUT} firsts in one deal.
+      </p>
+      <p>
+        <b>Protections.</b> A team can protect its own first as it trades it (top 4, 8, 10, 14 or 20): if it lands there, it stays home and nothing more is owed. It's worth less to
+        the team getting it. A pick already protected, or acquired from another team, keeps its terms; a pick in a swap can't be protected.
+      </p>
+      <p>
+        <b>Pick swaps.</b> A team can give another the right to swap firsts in a future draft when each holds its own unprotected first of it. When the lottery sets the order, the
+        holder takes the other first if it landed higher. The right goes with the pick that carries it, and each first can be in one swap. AI GMs value it by how likely the swap is
+        and what it would gain.
+      </p>
+      <p>
+        <b>Cash.</b> Each team can send, and receive, up to {fmtCash(cashRoom(league, league.userTid).limit)} in trades a season (about 5% of the cap). Cash isn't salary: it
+        doesn't match or count against the cap. It comes out of the sender's profit. AI GMs value $2-3M about like a typical second-round pick, rebuilders a little more and
+        contenders less.
+      </p>
+      <p>
+        <b>Timing.</b> No trades after the deadline or in the postseason. Trading reopens with the draft lottery.
+      </p>
+      <p>
+        <b>How AI GMs judge deals.</b> Ability, age, potential and contract: a bad contract counts against a package, and salary over the tax costs them. Contenders want help now;
+        rebuilders pay more for youth and picks, less for veterans. A star is worth more than several lesser players, and players they'd have to waive count for nothing.
+        {league.settings.difficulty === 'casual' ? ' On casual they take a little less than fair value, but not for players or picks you got in a trade this season.' : ''}
+      </p>
+      <p>
+        <b>Negotiating.</b> Under the meter they give their main reasons, and warn you when you'd give far more than you get. When they say no, they offer the versions they would
+        take: more from you, one of their pieces left out, or one of their bad contracts for you to absorb.
+      </p>
+    </HelpSheet>
+  );
+}
+
 // ------------------------------------------------------------------ partner picker
 
 function TeamPicker({ league, partner, onPick }: { league: League; partner: number; onPick: (tid: number) => void }) {
@@ -461,10 +476,10 @@ function TeamPicker({ league, partner, onPick }: { league: League; partner: numb
   }, [partner]);
   const teams = league.teams.filter((t) => t.tid !== league.userTid).sort((a, b) => a.abbrev.localeCompare(b.abbrev));
   return (
-    <div className="fo-teams" ref={ref} role="group" aria-label="Trade partner">
+    <div className="fo-teams hscroll" ref={ref} role="group" aria-label="Trade partner">
       {teams.map((t) => (
         <button key={t.tid} aria-pressed={t.tid === partner} className={`fo-team ${t.tid === partner ? 'on' : ''}`} onClick={() => onPick(t.tid)}>
-          <TeamLogo tid={t.tid} size={32} decorative />
+          <TeamLogo tid={t.tid} size={30} decorative />
           {t.abbrev}
         </button>
       ))}
@@ -472,7 +487,8 @@ function TeamPicker({ league, partner, onPick }: { league: League; partner: numb
   );
 }
 
-function PartnerCard({ league, tid, season }: { league: League; tid: number; season: number }) {
+/** The trade partner in its colours: who they are, how they deal, and their cap room. */
+function PartnerSlab({ league, tid, season }: { league: League; tid: number; season: number }) {
   const t = league.teams[tid];
   const ts = curTeamSeason(league, tid);
   const prev = t.seasons.find((x) => x.season === league.season - 1);
@@ -484,37 +500,38 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   // standard contracts the deal counts, as the dock does: two-way deals sit outside the 15, and after the season expiring ones are leaving
   const n = tradeRoster(league, tid).length;
   return (
-    <Card className="tight">
-      <div className="row" style={{ gap: 10 }}>
-        <TeamLogo tid={tid} size={42} decorative />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="bold ellipsis">
-            {t.region} {t.name}
-          </div>
-          <div className="row" style={{ gap: 6, marginTop: 2 }}>
-            <span className={`tag ${st.tone}`}>{st.label}</span>
-            <span className="tiny dim num">
-              {rec} · {n} players
-            </span>
-          </div>
+    <section className="slab fo-partner" style={slabVars(t.colors)} aria-label={`Trade partner: ${t.region} ${t.name}`}>
+      <span className="slab-mark">
+        <TeamLogo tid={tid} size={150} decorative />
+      </span>
+      <div className="fo-partner-top">
+        <TeamLogo tid={tid} size={46} decorative />
+        <div className="grow">
+          <div className="fo-partner-region">{t.region}</div>
+          <div className="fo-partner-name">{t.name}</div>
         </div>
-        <div className="fo-money">
-          <div className="a" style={{ color: pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-            {pay > cap.salaryCap ? `${fmtM(pay - cap.salaryCap)} over` : `${fmtM(cap.salaryCap - pay)} space`}
-          </div>
-          <div className="b">payroll {fmtM(pay)}</div>
+        <div className="fo-partner-cap">
+          <div className="v num">{pay > cap.salaryCap ? fmtM(pay - cap.salaryCap) : fmtM(cap.salaryCap - pay)}</div>
+          <div className="k">{pay > cap.luxuryTax ? 'over · taxpayer' : pay > cap.salaryCap ? 'over the cap' : 'cap space'}</div>
         </div>
       </div>
-      <div className="tiny dim" style={{ marginTop: 8 }}>
+      <div className="fo-partner-meta">
+        <span className="tag">{st.label}</span>
+        <span className="num">{rec}</span>
+        <span>·</span>
+        <span className="num">{n} players</span>
+        <span>·</span>
+        <span className="num">payroll {fmtM(pay)}</span>
+      </div>
+      <p className="fo-partner-s">
         {st.help}
-        {ts.won + ts.lost >= 10 ? ` Winning ${Math.round(winPct(ts) * 100)}% this season.` : ''}
         {/* (in free agency a team's holds are its restricted free agents' and its offer sheets', see capHolds) */}
         {holds > 0
-          ? ` Payroll includes ${fmtM(holds)} in cap holds for ${league.phase === 'freeAgency' ? 'their restricted free agents and offer sheets' : 'players they plan to re-sign'}.`
+          ? ` Payroll counts ${fmtM(holds)} in cap holds (${league.phase === 'freeAgency' ? 'restricted free agents, offer sheets' : 'players they plan to re-sign'}).`
           : ''}
-      </div>
+      </p>
       <RecentDeals league={league} tid={tid} />
-    </Card>
+    </section>
   );
 }
 
@@ -548,12 +565,12 @@ function DealCard({
     set({ ...sel, protect: next });
   };
   const col = (title: string, tid: number, sel: Sel, set: (s: Sel) => void) => (
-    <div className="col" style={{ gap: 6, minWidth: 0 }}>
-      <div className="row" style={{ gap: 6 }}>
-        <TeamLogo tid={tid} size={18} />
-        <span className="tiny upper bold dim">{title}</span>
+    <div className="fo-deal-col">
+      <div className="fo-deal-h">
+        <TeamLogo tid={tid} size={18} decorative />
+        <span className="over">{title}</span>
       </div>
-      {size(sel) === 0 && <div className="small dim">Nothing yet</div>}
+      {size(sel) === 0 && <div className="fo-deal-none">Nothing yet</div>}
       {sel.pids.map((pid) => {
         const p = league.players[pid];
         return (
@@ -572,9 +589,9 @@ function DealCard({
         const open = protectable(league, dp, tid);
         const label = pickLabel(league, dp);
         return (
-          <div key={d} className="col" style={{ gap: 4, minWidth: 0 }}>
+          <div key={d} className="fo-deal-pick">
             <span className="fo-pill">
-              <Ticket size={16} style={{ marginLeft: 4 }} className="dim" />
+              <Ticket size={15} className="fo-pill-ic" />
               <span className="ellipsis grow">{label}</span>
               <button className="x" aria-label={`Remove ${label}`} onClick={() => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) })}>
                 <X size={14} />
@@ -587,7 +604,7 @@ function DealCard({
       })}
       {(sel.swaps ?? []).map((y) => (
         <span key={`s${y}`} className="fo-pill">
-          <Repeat size={15} style={{ marginLeft: 4 }} className="dim" />
+          <Repeat size={14} className="fo-pill-ic" />
           <span className="ellipsis grow">{y} swap right</span>
           <button className="x" aria-label={`Remove the ${y} swap right`} onClick={() => set({ ...sel, swaps: sel.swaps!.filter((x) => x !== y) })}>
             <X size={14} />
@@ -596,7 +613,7 @@ function DealCard({
       ))}
       {(sel.cash ?? 0) > 0 && (
         <span className="fo-pill">
-          <Banknote size={16} style={{ marginLeft: 4 }} className="dim" />
+          <Banknote size={15} className="fo-pill-ic" />
           <span className="ellipsis grow">{fmtCash(sel.cash!)} cash</span>
           <button className="x" aria-label="Remove the cash" onClick={() => set({ ...sel, cash: 0 })}>
             <X size={14} />
@@ -606,9 +623,8 @@ function DealCard({
     </div>
   );
   return (
-    <Card
-      className="tight"
-      title={<h3>The deal</h3>}
+    <Section
+      title="The deal"
       right={
         any ? (
           <button className="btn xs ghost" onClick={onReset}>
@@ -617,12 +633,17 @@ function DealCard({
         ) : undefined
       }
     >
-      <div className="grid2" style={{ alignItems: 'start' }}>
-        {col('You send', league.userTid, give, onGive)}
-        {col('You get', partner, get, onGet)}
+      <div className="card fo-deal">
+        <div className="fo-deal-cols">
+          {col('You send', league.userTid, give, onGive)}
+          <span className="fo-deal-swap" aria-hidden="true">
+            <ArrowLeftRight size={16} />
+          </span>
+          {col('You get', partner, get, onGet)}
+        </div>
+        <TermsList league={league} offer={offer} />
       </div>
-      <TermsList league={league} offer={offer} />
-    </Card>
+    </Section>
   );
 }
 
@@ -657,14 +678,10 @@ function AssetList({
   const nameOf = rosterNames(players, { initial: true });
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   return (
-    <Card className="flush">
-      <div className="row between" style={{ padding: '12px 12px 6px' }}>
-        <div className="row" style={{ gap: 8, minWidth: 0 }}>
-          <TeamLogo tid={tid} size={22} decorative />
-          <h3 className="ellipsis" style={{ fontSize: 14, color: 'var(--text-2)' }}>
-            {title}
-          </h3>
-        </div>
+    <section className="card flush fo-assets" aria-label={title}>
+      <div className="fo-assets-h">
+        <TeamLogo tid={tid} size={22} decorative />
+        <h3 className="grow">{title}</h3>
         <span className="tiny dim">
           {players.length - tw} players{tw ? ` + ${tw} two-way` : ''}
         </span>
@@ -682,13 +699,9 @@ function AssetList({
           />
         ))}
       </div>
-      <div className="fo-sec" style={{ margin: '10px 12px 4px' }}>
-        Draft picks
-      </div>
+      <div className="list-divider">Draft picks</div>
       {picks.length === 0 ? (
-        <div className="small dim" style={{ padding: '6px 12px 12px' }}>
-          No draft picks.
-        </div>
+        <div className="fo-assets-empty">No draft picks.</div>
       ) : (
         <div className="list">
           {picks.map((dp) => (
@@ -696,15 +709,11 @@ function AssetList({
           ))}
         </div>
       )}
-      <div className="fo-sec" style={{ margin: '10px 12px 6px' }}>
-        Swap rights
-      </div>
+      <div className="list-divider">Swap rights</div>
       <SwapChips league={league} giver={tid} taker={other.tid} value={sel.swaps ?? []} taken={taken} onChange={(swaps) => onChange({ ...sel, swaps })} />
-      <div className="fo-sec" style={{ margin: '4px 12px 6px' }}>
-        Cash
-      </div>
+      <div className="list-divider">Cash</div>
       <CashControl league={league} from={tid} to={other.tid} value={sel.cash ?? 0} blocked={(other.cash ?? 0) > 0} onChange={(cash) => onChange({ ...sel, cash })} />
-    </Card>
+    </section>
   );
 }
 
@@ -712,33 +721,21 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
   const locked = untradeable(league, p);
   return (
     <button className={`fo-asset ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
-      <span className="fo-check">
+      <span className="fo-check" aria-hidden="true">
         <Check size={14} strokeWidth={3} />
       </span>
-      <Ovr v={p.ovr} size="sm" />
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="row" style={{ gap: 5 }}>
-          <span className="fo-name small">{name}</span>
-          {p.injury && (
-            <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              INJ
-            </span>
-          )}
-          {p.contract.twoWay && (
-            <span className="tag" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              Two-way
-            </span>
-          )}
-          {locked && (
-            <span className="tag bad" style={{ height: 16, fontSize: 10, padding: '0 4px' }}>
-              {{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}
-            </span>
-          )}
+      <Avatar p={p} />
+      <div className="grow">
+        <div className="fo-asset-name">
+          <span className="fo-name">{name}</span>
+          {p.injury && <span className="fo-flag bad">INJ</span>}
+          {p.contract.twoWay && <span className="fo-flag">2W</span>}
+          {locked && <span className="fo-flag bad">{{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>}
         </div>
-        <div className="fo-meta tiny">
+        <div className="fo-meta">
           {/* the name line has no room for it: it leads the details instead */}
           {p.mood.tradeRequest && (
-            <span className="warn" style={{ fontWeight: 700 }}>
+            <span className="warn bold">
               {/* you told him you'd move him */}
               {p.promise?.kind === 'trade' ? 'Promised a trade' : 'Wants a trade'} ·{' '}
             </span>
@@ -748,6 +745,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
         </div>
         <TierLine tier={valueTier(league, p)} avail={availability(league, p)} />
       </div>
+      <Ovr v={p.ovr} size="sm" />
       <div className="fo-money">
         <div className="a">{fmtM(salaryFor(p, season))}</div>
         <div className="b">{contractYearsLabel(league, p, season)}</div>
@@ -759,21 +757,21 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
 function PickAsset({ league, dp, on, onToggle }: { league: League; dp: DraftPick; on: boolean; onToggle: () => void }) {
   const own = dp.originalTid === dp.tid;
   return (
-    <button className={`fo-asset ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on} style={{ minHeight: 48 }}>
-      <span className="fo-check">
+    <button className={`fo-asset pick ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
+      <span className="fo-check" aria-hidden="true">
         <Check size={14} strokeWidth={3} />
       </span>
-      <TeamLogo tid={dp.originalTid} size={26} />
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="small bold ellipsis">{pickLabel(league, dp)}</div>
-        <div className="tiny dim">{own ? 'Own pick' : `Acquired from ${league.teams[dp.originalTid].abbrev}`}</div>
+      <TeamLogo tid={dp.originalTid} size={28} decorative />
+      <div className="grow">
+        <div className="fo-name">{pickLabel(league, dp)}</div>
+        <div className="fo-meta">{own ? 'Own pick' : `Acquired from ${league.teams[dp.originalTid].abbrev}`}</div>
       </div>
-      <span className={`tag ${dp.round === 1 ? 'info' : ''}`}>R{dp.round}</span>
+      <span className={`fo-flag ${dp.round === 1 ? 'info' : ''}`}>R{dp.round}</span>
     </button>
   );
 }
 
-// ------------------------------------------------------------------ sticky summary dock
+// ------------------------------------------------------------------ the dock: the AI GM's live reaction
 
 function reaction(ev: TradeEval): { pct: number; label: string; color: string } {
   if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)' };
@@ -842,11 +840,9 @@ function Dock({
   const maxSize = rosterMaxNow(league);
   if (empty || !ev) {
     return (
-      <div className="fo-dock">
-        <div className="row" style={{ gap: 8 }}>
-          <Info size={16} className="dim" />
-          <span className="small dim2">Tap players or picks on either side to build a deal. The AI GM reacts live.</span>
-        </div>
+      <div className="fo-dock idle">
+        <Handshake size={18} className="dim" />
+        <span className="small dim2">Tap players or picks on either side. Their GM reacts live.</span>
       </div>
     );
   }
@@ -858,82 +854,75 @@ function Dock({
   // god mode's line under Force folds with the details when it only explains (an error or a wait stays)
   const forcePlain = !!force && !force.errors.length && !force.warnings.length && !simming;
   return (
-    <div className={`fo-dock${more ? ' open' : ''}`}>
-      <div className="row between" style={{ gap: 8, marginBottom: 6 }}>
-        <span className="small bold" style={{ color: r.color }}>
-          {league.teams[offer.b.tid].abbrev}: {r.label}
+    <div className={`fo-dock${more ? ' open' : ''}`} style={{ ['--react' as string]: r.color }}>
+      <div className="fo-dock-top">
+        <TeamLogo tid={offer.b.tid} size={22} decorative />
+        <span className="fo-dock-says">
+          <span className="sr-only">{league.teams[offer.b.tid].abbrev}: </span>
+          {r.label}
         </span>
-        <span className="row" style={{ gap: 6, flex: 'none' }}>
-          <span className="tiny dim num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
-          <button className="btn xs ghost fo-only-sm" aria-expanded={more} aria-controls={forcePlain ? `${moreId} ${moreId}f` : moreId} onClick={() => setMore((m) => !m)}>
-            {more ? <ChevronDown size={14} /> : <ChevronUp size={14} />} {more ? 'Less' : 'Details'}
-          </button>
-        </span>
+        <span className="fo-dock-pct num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
+        <button className="btn xs ghost fo-only-sm" aria-expanded={more} aria-controls={forcePlain ? `${moreId} ${moreId}f` : moreId} onClick={() => setMore((m) => !m)}>
+          {more ? <ChevronDown size={14} /> : <ChevronUp size={14} />} {more ? 'Less' : 'Details'}
+        </button>
       </div>
-      <div className="fo-meter">
-        <i style={{ width: `${r.pct}%`, background: r.color }} />
+      <div className="fo-meter" aria-hidden="true">
+        <i style={{ width: `${r.pct}%` }} />
       </div>
-      <div className="fo-meter-ticks">
+      <div className="fo-meter-ticks" aria-hidden="true">
         <span>Not close</span>
         <span>Add value</span>
         <span>Close</span>
         <span>Deal!</span>
       </div>
-      {ev.notes.length > 0 && (
-        <div style={{ marginTop: 6 }}>
-          {/* their two main reasons (one when a rule problem already needs the room) */}
-          <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />
-        </div>
-      )}
+      {/* their two main reasons (one when a rule problem already needs the room) */}
+      {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}
       <div id={moreId} className="fo-dock-more">
         {/* what each protection, swap and sum of cash does, a line each */}
         <TermsList league={league} offer={offer} short />
-        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
+        <div className="statline fo-dock-figs">
           <div>
-            <div className="tiny dim upper bold">Salary</div>
-            <div className="small num">
-              Out <b>{fmtM(out)}</b>
-            </div>
-            <div className="small num">
-              In <b>{fmtM(inc)}</b>
+            <div className="k">Salary out / in</div>
+            <div className="v num">
+              {fmtM(out)} / {fmtM(inc)}
             </div>
           </div>
           <div>
-            <div className="tiny dim upper bold">Payroll after</div>
-            <div className="small num bold" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+            <div className="k">Payroll after</div>
+            <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
               {fmtM(after)}
             </div>
-            <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
-            {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
+            <div className="s num">
+              {after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}
+              {holds > 0 ? ` · incl. ${fmtM(holds)} holds` : ''}
+            </div>
           </div>
           <div>
-            <div className="tiny dim upper bold">Rosters</div>
-            <div className="small num bold" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
+            <div className="k">Rosters</div>
+            <div className="v num" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
               {rosterAfter} / {theirAfter}
             </div>
-            <div className="tiny dim">you / them</div>
+            <div className="s">you / them</div>
           </div>
         </div>
       </div>
       {/* folded on a phone, a payroll over the tax still says so */}
       {!more && after > cap.luxuryTax && (
-        <div className="fo-only-sm tiny warn bold num" style={{ marginTop: 6 }}>
-          Payroll after: {fmtM(after)}, {fmtM(after - cap.luxuryTax)} over the tax
+        <div className="fo-only-sm tiny warn bold num">
+          Payroll after {fmtM(after)}: {fmtM(after - cap.luxuryTax)} over the tax
         </div>
       )}
       {ruleErrors.length > 0 && (
-        <div className="row top small" style={{ marginTop: 8, gap: 6 }}>
-          <span className="tag bad" style={{ flex: 'none' }}>
-            Not allowed
-          </span>
-          <span className="bad">
+        <div className="fo-dock-rule">
+          <span className="tag bad">Not allowed</span>
+          <span>
             {ruleErrors[0]}
             {ruleErrors.length > 1 ? ` (+${ruleErrors.length - 1} more)` : ''}
           </span>
         </div>
       )}
-      <div className="row" style={{ marginTop: 10, gap: 8 }}>
-        <button className="btn sm grow" style={{ paddingInline: 8 }} disabled={!fixable} onClick={onWork}>
+      <div className="fo-dock-btns">
+        <button className="btn sm grow" disabled={!fixable} onClick={onWork}>
           {theyreOver ? "They can't absorb that salary" : 'What would make this work?'}
         </button>
         <button className={`btn sm ${ev.accept ? 'good' : 'primary'}`} disabled={!ev.ok} onClick={onPropose}>
@@ -941,7 +930,7 @@ function Dock({
         </button>
       </div>
       {force && (
-        <div className="col" style={{ marginTop: 8, gap: 4 }}>
+        <div className="col fo-dock-force">
           <button className="btn sm block" disabled={force.errors.length > 0 || simming} onClick={onForce}>
             <Zap size={16} /> Force this trade
           </button>
@@ -982,121 +971,113 @@ function TradingBlock({
   const offers = useLeagueMemo(() => (pid !== null && !closed && !isLocked ? blockOffers(league, pid) : []), [league, pid, closed, isLocked]);
   return (
     <>
-      <Card title={<h3>Shop a player</h3>} right={<span className="tiny dim">{mine.length} on roster</span>}>
-        <div className="small dim2" style={{ marginBottom: 10 }}>
-          Pick one of your players and see the best package every team would give you for him right now.
-        </div>
-        <div className="hscroll">
+      <Section title="Shop a player" right={<span className="tiny dim">Best package from every team</span>}>
+        <div className="hscroll fo-shop">
           {mine.map((p) => {
             const lock = untradeable(league, p);
             return (
               <button
                 key={p.pid}
-                className={`chip ${pid === p.pid ? 'on' : ''}`}
-                style={{ flex: 'none', paddingLeft: 4, opacity: lock && pid !== p.pid ? 0.55 : undefined }}
+                className={`chip ${pid === p.pid ? 'on' : ''} ${lock && pid !== p.pid ? 'fo-locked' : ''}`}
                 aria-pressed={pid === p.pid}
                 onClick={() => setShop(p.pid)}
               >
                 <Ovr v={p.ovr} size="sm" />
                 {p.lastName}
                 {lock && <Lock size={12} role="img" aria-label="can't be traded now" />}
-                {isUntouchable(league, p.pid) && <LockKeyhole size={12} role="img" aria-label="untouchable" style={{ color: 'var(--accent-text)' }} />}
+                {isUntouchable(league, p.pid) && <LockKeyhole size={12} role="img" aria-label="untouchable" className="accent-text" />}
               </button>
             );
           })}
         </div>
         {target && (
-          <div style={{ marginTop: 10 }}>
+          <div className="card tight">
             <UntouchableToggle league={league} p={target} />
           </div>
         )}
-      </Card>
+      </Section>
       {closed ? (
         <Empty>Teams aren't taking calls until trading reopens.</Empty>
       ) : !target ? (
-        <Empty>Choose a player above to see offers.</Empty>
+        <Empty>Pick a player above to hear offers.</Empty>
       ) : locked ? (
         <Empty>{locked.why}</Empty>
       ) : offers.length === 0 ? (
-        <Empty>Nobody has a package that works for {target.lastName} right now (value or salary matching).</Empty>
+        <Empty>No package works for {target.lastName} right now (value or salary matching).</Empty>
       ) : (
-        <>
-          <div className="fo-sec">
-            {offers.length} team{offers.length > 1 ? 's' : ''} would deal for {target.lastName}
+        <Section title={`${offers.length} team${offers.length > 1 ? 's' : ''} would deal for ${target.lastName}`}>
+          <div className="card flush list">
+            {(showAll ? offers : offers.slice(0, 8)).map((o) => {
+              const t = league.teams[o.tid];
+              // a player worth less than nothing to you (a bad contract): any taker is a salary dump, not a share of his value
+              const dump = o.targetValue <= 0;
+              const ratio = dump ? 0 : o.myValue / o.targetValue;
+              const tone = dump
+                ? { l: 'Salary dump', c: 'good' }
+                : ratio >= 1.1
+                  ? { l: 'Overpay', c: 'good' }
+                  : ratio >= 0.9
+                    ? { l: 'Fair value', c: 'info' }
+                    : ratio >= 0.7
+                      ? { l: 'Below value', c: 'warn' }
+                      : { l: 'Lowball', c: 'bad' };
+              const inSal = o.offer.b.pids.reduce((a, x) => a + capSalary(league, x), 0);
+              return (
+                <div key={o.tid} className="fo-pkg">
+                  <div className="fo-pkg-h">
+                    <TeamLogo tid={o.tid} size={30} decorative />
+                    <div className="grow">
+                      <div className="fo-name">
+                        {t.region} {t.name}
+                      </div>
+                      <div className="fo-meta">
+                        {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${fmtM(inSal)} back` : 'no salary back'}
+                      </div>
+                    </div>
+                    <div className="right">
+                      <span className={`tag ${tone.c}`}>{tone.l}</span>
+                      {!dump && <div className="tiny dim num">{Math.round(ratio * 100)}% of his value</div>}
+                    </div>
+                  </div>
+                  <div className="fo-pkg-items">
+                    {o.offer.b.pids.map((x) => {
+                      const p = league.players[x];
+                      return (
+                        <div key={x} className="fo-pkg-item">
+                          <Ovr v={p.ovr} size="sm" />
+                          <Link to={`/player/${p.pid}`} className="grow ellipsis bold">
+                            {playerName(p)}
+                          </Link>
+                          <span className="dim">
+                            {p.pos} · {playerAge(p, league.season)}
+                          </span>
+                          <span className="num">{fmtM(salaryFor(p, capSeason(league)))}</span>
+                        </div>
+                      );
+                    })}
+                    {o.offer.b.dpids.map((d) => {
+                      const dp = league.draftPicks.find((x) => x.dpid === d)!;
+                      return (
+                        <div key={d} className="fo-pkg-item">
+                          <Ticket size={16} className="dim fo-pkg-ic" />
+                          <span className="grow bold">{pickLabel(league, dp)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button className="btn sm block" onClick={() => onLoad(o.offer)}>
+                    Open in trade builder
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          {(showAll ? offers : offers.slice(0, 8)).map((o) => {
-            const t = league.teams[o.tid];
-            // a player worth less than nothing to you (a bad contract): any taker is a salary dump, not a share of his value
-            const dump = o.targetValue <= 0;
-            const ratio = dump ? 0 : o.myValue / o.targetValue;
-            const tone = dump
-              ? { l: 'Salary dump', c: 'var(--good)' }
-              : ratio >= 1.1
-                ? { l: 'Overpay', c: 'var(--good)' }
-                : ratio >= 0.9
-                  ? { l: 'Fair value', c: 'var(--info)' }
-                  : ratio >= 0.7
-                    ? { l: 'Below value', c: 'var(--warn)' }
-                    : { l: 'Lowball', c: 'var(--bad)' };
-            const inSal = o.offer.b.pids.reduce((a, x) => a + capSalary(league, x), 0);
-            return (
-              <Card key={o.tid} className="tight">
-                <div className="row" style={{ gap: 10 }}>
-                  <TeamLogo tid={o.tid} size={34} decorative />
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="bold ellipsis">
-                      {t.region} {t.name}
-                    </div>
-                    <div className="row" style={{ gap: 6 }}>
-                      <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
-                      <span className="tiny dim">{inSal > 0 ? `${fmtM(inSal)} back` : 'No salary back'}</span>
-                    </div>
-                  </div>
-                  <div className="right">
-                    <div className="small bold" style={{ color: tone.c }}>
-                      {tone.l}
-                    </div>
-                    {!dump && <div className="tiny dim num">{Math.round(ratio * 100)}% of his value</div>}
-                  </div>
-                </div>
-                <div className="col" style={{ gap: 6, marginTop: 10 }}>
-                  {o.offer.b.pids.map((x) => {
-                    const p = league.players[x];
-                    return (
-                      <div key={x} className="row" style={{ gap: 8 }}>
-                        <Ovr v={p.ovr} size="sm" />
-                        <Link to={`/player/${p.pid}`} className="small bold ellipsis grow">
-                          {playerName(p)}
-                        </Link>
-                        <span className="tiny dim">
-                          {p.pos} · {playerAge(p, league.season)}
-                        </span>
-                        <span className="small num">{fmtM(salaryFor(p, capSeason(league)))}</span>
-                      </div>
-                    );
-                  })}
-                  {o.offer.b.dpids.map((d) => {
-                    const dp = league.draftPicks.find((x) => x.dpid === d)!;
-                    return (
-                      <div key={d} className="row" style={{ gap: 8 }}>
-                        <Ticket size={18} className="dim" style={{ width: 28 }} />
-                        <span className="small bold grow">{pickLabel(league, dp)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button className="btn sm block" style={{ marginTop: 10 }} onClick={() => onLoad(o.offer)}>
-                  Open in trade builder
-                </button>
-              </Card>
-            );
-          })}
           {offers.length > 8 && !showAll && (
             <button className="btn ghost block" onClick={() => setShowAll(true)}>
               Show all {offers.length} offers
             </button>
           )}
-        </>
+        </Section>
       )}
     </>
   );

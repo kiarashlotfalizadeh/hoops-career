@@ -22,8 +22,8 @@ import {
   userWithdrawQualifying,
 } from '../../core/league/rfa';
 import { useLeague, useStore } from '../../state/store';
-import { Sheet } from '../components/ui';
-import { Callout, OvrPot, SecTitle, fmtM, playerMeta, shortSeason } from './common';
+import { Section, Sheet } from '../components/ui';
+import { Callout, OvrPot, fmtM, playerMeta, shortSeason } from './common';
 
 /** Run a core action on the league and toast its answer. */
 function act(fn: (l: League) => { ok: boolean; reason: string }, good: 'good' | 'neutral' = 'good') {
@@ -62,16 +62,16 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
   if (!qualified && qualifyBlockedReason(league, p)) return null;
   const qo = qualified ? p.rfa!.qo : qualifyingOffer(league, p);
   return (
-    <div className="row" style={{ gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-      <ShieldCheck size={16} className={qualified ? 'good' : 'dim'} style={{ flex: 'none' }} />
-      <div className="grow small dim2" style={{ minWidth: 0 }}>
+    <div className={`fo-qualify ${qualified ? 'on' : ''}`}>
+      <ShieldCheck size={16} className={qualified ? 'good' : 'dim'} />
+      <div className="grow small dim2">
         {qualified ? (
           <>
-            <b className="good">Qualifying offer</b> · {fmtM(qo)} for 1 yr. He'll be restricted: you can match any offer sheet.
+            <b className="good">Qualified</b> · {fmtM(qo)} for 1 yr: you can match any offer sheet.
           </>
         ) : (
           <>
-            Qualifying offer <b className="num">{fmtM(qo)}</b> (1 yr) would make him a restricted free agent.
+            Qualifying offer <b className="num">{fmtM(qo)}</b> (1 yr) makes him restricted.
           </>
         )}
       </div>
@@ -107,16 +107,11 @@ export function SheetDecision({ league, p }: { league: League; p: Player }) {
         </b>{' '}
         {sheetTerms(league, p)}.
       </div>
-      <div className="small dim2" style={{ marginTop: 4 }}>
-        Match it by the end of {deadlineLabel(s.until)} and he stays on exactly those terms. Let it go, or leave it unanswered until then, and he joins the {t.name}. Matching needs
-        a roster spot, not cap room.
+      <div className="small">
+        Match by the end of {deadlineLabel(s.until)} to keep him on those terms (a roster spot, not cap room). Let it go, or leave it, and he joins the {t.name}.
       </div>
-      {blocked && (
-        <div className="small warn" style={{ marginTop: 4 }}>
-          {blocked}
-        </div>
-      )}
-      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      {blocked && <div className="small warn">{blocked}</div>}
+      <div className="row fo-callout-btns">
         <button className="btn sm grow" onClick={() => setLetGo(true)}>
           Let him go
         </button>
@@ -136,10 +131,10 @@ export function LetGoSheet({ league, p, open, onClose }: { league: League; p: Pl
   return (
     <Sheet open={open && !!t} onClose={onClose} title={`Let ${p.lastName} go?`}>
       {t && (
-        <div className="col" style={{ gap: 12 }}>
-          <div className="dim2">
-            {playerName(p)} joins the {t.region} {t.name} on the offer sheet's terms ({sheetTerms(league, p)}), and his cap hold comes off your books. This can't be undone.
-          </div>
+        <div className="col fo-sheet">
+          <p className="fo-lede">
+            {playerName(p)} joins the {t.region} {t.name} on the sheet's terms ({sheetTerms(league, p)}) and his cap hold comes off your books. This can't be undone.
+          </p>
           <div className="row">
             <button className="btn grow" onClick={onClose}>
               Keep deciding
@@ -165,65 +160,65 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
   if (league.phase !== 'freeAgency' || !mine.length) return null;
   const full = summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX;
   return (
-    <>
-      <SecTitle>Your restricted free agents · {mine.length}</SecTitle>
-      <div className="tiny dim">
-        Re-sign them with Bird rights any time before an offer sheet comes in; when one does, you have {MATCH_DAYS} days to match it. Unsigned when free agency closes, each takes
-        his qualifying offer for {seasonLabel(league.season + 1)}
-        {full ? `, if you have a roster spot (yours is full at ${OFFSEASON_ROSTER_MAX})` : ''}.
-      </div>
-      {mine.map((p) => {
-        const r = p.rfa!;
-        const ask = askingContract(league, p, league.userTid);
-        return (
-          <div key={p.pid} className="card tight col" style={{ gap: 10 }}>
-            <div className="row" style={{ gap: 10 }}>
-              <OvrPot p={p} />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <Link to={`/player/${p.pid}`} className="fo-name" style={{ display: 'block' }}>
-                  {playerName(p)}
-                </Link>
-                <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+    <Section title={`Your restricted free agents · ${mine.length}`}>
+      <p className="fo-lede small">
+        Re-sign them with Bird rights until an offer sheet comes in; then you have {MATCH_DAYS} days to match. Unsigned at the close, each plays {seasonLabel(league.season + 1)} on
+        his qualifying offer{full ? ` if you have a roster spot (full at ${OFFSEASON_ROSTER_MAX})` : ''}.
+      </p>
+      <div className="card flush list">
+        {mine.map((p) => {
+          const r = p.rfa!;
+          const ask = askingContract(league, p, league.userTid);
+          return (
+            <div key={p.pid} className="fo-rfa">
+              <div className="fo-rfa-top">
+                <OvrPot p={p} />
+                <div className="grow">
+                  <Link to={`/player/${p.pid}`} className="fo-name">
+                    {playerName(p)}
+                  </Link>
+                  <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+                </div>
+                <div className="fo-money">
+                  <div className="a">{fmtM(r.qo)}</div>
+                  <div className="b">QO · hold {fmtM(r.hold ?? r.qo)}</div>
+                </div>
               </div>
-              <div className="fo-money">
-                <div className="a">{fmtM(r.qo)}</div>
-                <div className="b">QO · hold {fmtM(r.hold ?? r.qo)}</div>
-              </div>
+              {r.sheet ? (
+                <SheetDecision league={league} p={p} />
+              ) : (
+                <>
+                  <div className="small dim2">
+                    No offer sheet yet ·{' '}
+                    {wantsOut(p) ? (
+                      <span className="warn">wants out: won't re-sign, but you can match a sheet</span>
+                    ) : (
+                      <>
+                        asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''} to re-sign
+                      </>
+                    )}
+                  </div>
+                  <div className="row">
+                    <button className="btn sm grow" onClick={() => setWithdraw(p)}>
+                      Withdraw offer
+                    </button>
+                    <button className="btn sm primary grow" disabled={wantsOut(p)} onClick={() => onResign(p.pid)}>
+                      <PenLine size={15} /> Re-sign
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-            {r.sheet ? (
-              <SheetDecision league={league} p={p} />
-            ) : (
-              <>
-                <div className="small dim2">
-                  No offer sheet yet ·{' '}
-                  {wantsOut(p) ? (
-                    <span className="warn">wants out: won't re-sign, but you can match a sheet</span>
-                  ) : (
-                    <>
-                      asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''} to re-sign
-                    </>
-                  )}
-                </div>
-                <div className="row" style={{ gap: 8 }}>
-                  <button className="btn sm grow" onClick={() => setWithdraw(p)}>
-                    Withdraw offer
-                  </button>
-                  <button className="btn sm primary grow" disabled={wantsOut(p)} onClick={() => onResign(p.pid)}>
-                    <PenLine size={15} /> Re-sign
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       <Sheet open={!!withdraw} onClose={() => setWithdraw(null)} title={withdraw ? `Withdraw ${withdraw.lastName}'s qualifying offer?` : undefined}>
         {withdraw && (
-          <div className="col" style={{ gap: 12 }}>
-            <div className="dim2">
-              {playerName(withdraw)} becomes an unrestricted free agent at once: his {fmtM(withdraw.rfa?.hold ?? 0)} cap hold comes off your books, any team can sign him outright,
-              and to bring him back you'd have to sign him like any other free agent, with cap space. This can't be undone.
-            </div>
+          <div className="col fo-sheet">
+            <p className="fo-lede">
+              {playerName(withdraw)} becomes an unrestricted free agent now: his {fmtM(withdraw.rfa?.hold ?? 0)} cap hold comes off your books and any team can sign him outright.
+              To bring him back you'd need cap space like anyone else. This can't be undone.
+            </p>
             <div className="row">
               <button className="btn grow" onClick={() => setWithdraw(null)}>
                 Keep his rights
@@ -235,7 +230,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
           </div>
         )}
       </Sheet>
-    </>
+    </Section>
   );
 }
 
@@ -245,12 +240,12 @@ export function MySheets({ onOpen }: { onOpen: (pid: number) => void }) {
   const mine = pendingSheets(league, league.userTid);
   if (!mine.length) return null;
   return (
-    <div className="col" style={{ gap: 6, marginBottom: 10 }}>
-      <div className="row tiny dim upper bold" style={{ gap: 6 }}>
-        <FileSignature size={13} /> Your offer sheets
+    <div className="fo-pending">
+      <div className="over">
+        <FileSignature size={12} /> Your offer sheets
       </div>
       {mine.map((p) => (
-        <button key={p.pid} className="small" style={{ textAlign: 'left', minWidth: 0 }} aria-haspopup="dialog" onClick={() => onOpen(p.pid)}>
+        <button key={p.pid} className="fo-pending-row" aria-haspopup="dialog" onClick={() => onOpen(p.pid)}>
           <b>{playerName(p)}</b> · {sheetTerms(league, p)}
           <span className="dim">
             {' '}

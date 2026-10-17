@@ -10,8 +10,8 @@ import { withHoldsMemo } from '../../core/league/freeAgency';
 import { filterTargets, maxTakeBack, pickLabel, tradeTargets, type TradeOffer, type WorkResult } from '../../core/league/trades';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Chips, Empty, Help } from '../components/ui';
-import { Callout, OvrPot, capSeason, contractYearsLabel, fmtM, isOffseason } from '../office/common';
+import { Chips, Empty, Section } from '../components/ui';
+import { Callout, HelpSheet, OvrPot, capSeason, contractYearsLabel, fmtM, isOffseason } from '../office/common';
 import { TierLine } from './common';
 
 export interface FinderState {
@@ -30,16 +30,10 @@ const PAGE = 40;
 const ANY = 1e9;
 const MATCH = -1;
 
-/** A compact drop-down for one filter (the League screens' select). */
-function Pick<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+/** A compact drop-down for one filter. */
+export function FilterSelect<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
-    <select
-      className="lg-select"
-      aria-label={label}
-      value={String(value)}
-      onChange={(e) => onChange(options.find(([v]) => String(v) === e.target.value)![0])}
-      style={{ width: '100%', minWidth: 0, padding: '0 24px 0 10px', backgroundPosition: 'right 8px center', textOverflow: 'ellipsis' }}
-    >
+    <select className="fo-select" aria-label={label} value={String(value)} onChange={(e) => onChange(options.find(([v]) => String(v) === e.target.value)![0])}>
       {options.map(([v, text]) => (
         <option key={String(v)} value={String(v)}>
           {text}
@@ -71,36 +65,37 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
 
   return (
     <>
-      <Card
-        title={<h3>Find a player</h3>}
+      <Section
+        title="Find a player"
         right={
-          <Help title="Trade finder">
-            <p style={{ margin: 0 }}>Every player on another team who can be traded right now. Tap one to open the trade builder with his team and see what they'd ask for him.</p>
-            <p style={{ margin: 0 }}>
-              <b>Value tiers</b> rank each player's league-neutral trade value (ability, age, potential and contract) among everyone on a roster: Franchise (about one for every two
-              teams), All-Star, Starter, Rotation and Depth. Negative value is a contract worth less than nothing.
+          <HelpSheet title="Trade finder">
+            <p>Every player on another team who can be traded now. Tap one to open the builder with his team and hear their ask.</p>
+            <p>
+              <b>Value tiers</b> rank league-neutral trade value (ability, age, potential, contract) among everyone on a roster: Franchise (about one for every two teams),
+              All-Star, Starter, Rotation and Depth. Negative is a contract worth less than nothing.
             </p>
-            <p style={{ margin: 0 }}>
-              <b>On the block</b>: his team looks ready to move him (he asked for a trade, his contract is a burden, or he's a rebuilding team's veteran). <b>Cornerstone</b>: a
-              young star his team builds around, so expect a steep price.
+            <p>
+              <b>On the block</b>: his team looks ready to move him (he asked out, his contract is a burden, or he's a rebuilder's veteran). <b>Cornerstone</b>: a young star his
+              team builds around; expect a steep price.
             </p>
-            <p style={{ margin: 0 }}>
-              <b>Salary you can match</b> is the most you could take back sending up to two of your own tradeable contracts: 125% of them plus $0.1M, or what fits under the cap
-              after they leave.
+            <p>
+              <b>Salary you can match</b>: the most you could take back sending up to two of your tradeable contracts (125% of them plus $0.1M, or what fits under the cap after
+              they leave).
             </p>
-          </Help>
+          </HelpSheet>
         }
       >
-        <div className="col" style={{ gap: 8 }}>
-          <Chips
-            label="Position"
-            value={state.pos}
-            onChange={(pos) => set({ pos })}
-            options={[{ id: 'all' as const, label: 'All' }, ...POSITIONS.map((p) => ({ id: p, label: p }))]}
-          />
-          {/* two compact rows of drop-downs, so the list starts on the first screen of a phone */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6 }}>
-            <Pick
+        <div className="fo-filters">
+          <div className="hscroll">
+            <Chips
+              label="Position"
+              value={state.pos}
+              onChange={(pos) => set({ pos })}
+              options={[{ id: 'all' as const, label: 'All' }, ...POSITIONS.map((p) => ({ id: p, label: p }))]}
+            />
+          </div>
+          <div className="fo-selects">
+            <FilterSelect
               label="Minimum OVR"
               value={state.minOvr}
               onChange={(minOvr) => set({ minOvr })}
@@ -112,7 +107,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                 [85, '85+ OVR'],
               ]}
             />
-            <Pick
+            <FilterSelect
               label="Maximum age"
               value={state.maxAge}
               onChange={(maxAge) => set({ maxAge })}
@@ -123,23 +118,18 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                 [30, 'Age ≤ 30'],
               ]}
             />
-            <button className={`chip ${state.available ? 'on' : ''}`} aria-pressed={state.available} onClick={() => set({ available: !state.available })}>
-              On the block
-            </button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6 }}>
-            <Pick
+            <FilterSelect
               label="Maximum salary"
               value={state.salary === 'match' ? MATCH : state.salary}
               onChange={(v) => set({ salary: v === MATCH ? 'match' : v })}
               options={[
-                [MATCH, `≤ ${fmtM(data.match)}: you can match`],
+                [MATCH, `≤ ${fmtM(data.match)} (you can match)`],
                 [25_000, 'Salary ≤ $25M'],
                 [10_000, 'Salary ≤ $10M'],
                 [ANY, 'Any salary'],
               ]}
             />
-            <Pick
+            <FilterSelect
               label="Sort by"
               value={state.sort}
               onChange={(sort) => set({ sort })}
@@ -150,49 +140,53 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               ]}
             />
           </div>
+          <div className="chips">
+            <button className={`chip ${state.available ? 'on' : ''}`} aria-pressed={state.available} onClick={() => set({ available: !state.available })}>
+              On the block
+            </button>
+          </div>
         </div>
-      </Card>
+      </Section>
 
       {rows.length === 0 ? (
         <Empty>{data.rows.length === 0 ? 'Nobody can be traded right now.' : 'No players match these filters.'}</Empty>
       ) : (
-        <Card className="flush">
-          <div className="tiny dim" style={{ padding: '10px 12px 6px' }}>
-            {rows.length} player{rows.length === 1 ? '' : 's'} · tap one to hear their ask
-          </div>
-          <div className="list wide2">
-            {rows.slice(0, limit).map(({ p, age, tier, avail, salary }) => (
-              <button key={p.pid} className="fo-prow" onClick={() => onPick(p.pid)}>
-                <OvrPot p={p} />
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="row" style={{ gap: 6 }}>
-                    <TeamLogo tid={p.tid} size={16} decorative />
-                    <span className="fo-name">{playerName(p)}</span>
-                    {p.injury && <span className="tag bad">INJ</span>}
+        <Section title={`${rows.length} player${rows.length === 1 ? '' : 's'}`} right={<span className="tiny dim">Tap one to hear their ask</span>}>
+          <div className="card flush">
+            <div className="list wide2">
+              {rows.slice(0, limit).map(({ p, age, tier, avail, salary }) => (
+                <button key={p.pid} className="fo-prow" onClick={() => onPick(p.pid)}>
+                  <OvrPot p={p} />
+                  <div className="grow">
+                    <div className="fo-prow-name">
+                      <TeamLogo tid={p.tid} size={16} decorative />
+                      <span className="fo-name">{playerName(p)}</span>
+                      {p.injury && <span className="fo-flag bad">INJ</span>}
+                    </div>
+                    <div className="fo-meta">
+                      {league.teams[p.tid].abbrev} · {p.pos} · {age} · {p.archetype}
+                    </div>
+                    <TierLine tier={tier} avail={avail} />
                   </div>
-                  <div className="fo-meta">
-                    {league.teams[p.tid].abbrev} · {p.pos} · {age} · {p.archetype}
+                  <div className="fo-money">
+                    <div className="a">{p.contract.twoWay ? 'Two-way' : fmtM(salary)}</div>
+                    <div className="b">{contractYearsLabel(league, p, s)}</div>
                   </div>
-                  <TierLine tier={tier} avail={avail} />
-                </div>
-                <div className="fo-money">
-                  <div className="a">{p.contract.twoWay ? 'Two-way' : fmtM(salary)}</div>
-                  <div className="b">{contractYearsLabel(league, p, s)}</div>
-                </div>
+                </button>
+              ))}
+            </div>
+            {rows.length > limit && (
+              <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + PAGE)}>
+                Show more ({rows.length - limit} left)
               </button>
-            ))}
+            )}
           </div>
-          {rows.length > limit && (
-            <button className="btn ghost block" style={{ borderRadius: 0, borderInline: 0, borderBottom: 0 }} onClick={() => setLimit(limit + PAGE)}>
-              Show more ({rows.length - limit} left)
-            </button>
+          {data.locked > 0 && (
+            <div className="tiny dim">
+              {data.locked} more can't be traded now ({isOffseason(league) ? 'expiring contracts, undecided options and recent signings' : 'recent signings'}).
+            </div>
           )}
-        </Card>
-      )}
-      {data.locked > 0 && (
-        <div className="tiny dim" style={{ padding: '0 4px' }}>
-          {data.locked} more can't be traded right now ({isOffseason(league) ? 'expiring contracts, undecided options and recent signings' : 'recent signings'}).
-        </div>
+        </Section>
       )}
     </>
   );
@@ -218,21 +212,21 @@ export function AskCallout({ league, ask, onClose }: { league: League; ask: Ask;
   ];
   return (
     <Callout tone={r?.offer ? undefined : 'warn'} icon={<MessageSquare size={18} className={r?.offer ? 'dim' : 'warn'} />}>
-      <div className="row top" style={{ gap: 8 }}>
+      <div className="row top">
         <div className="grow">
           <b>
-            Their ask for {p ? playerName(p) : 'him'}
+            {abbr}'s ask for {p ? playerName(p) : 'him'}
             {': '}
           </b>
           {!r
             ? 'trading is closed, but you can plan the deal.'
             : r.offer
-              ? `${asked(r.offer).join(' + ') || 'nothing more'}. It's loaded below: change it, or propose it as is.`
+              ? `${asked(r.offer).join(' + ') || 'nothing more'}. Loaded below: change it or propose it.`
               : r.why === 'salary'
                 ? `no player (or pair) of yours matches his salary, so ${abbr} can't take it back.`
                 : `${abbr} can't find a package of yours they'd take for him.`}
         </div>
-        <button className="iconbtn" style={{ margin: '-6px -6px 0 0' }} aria-label="Dismiss their ask" onClick={onClose}>
+        <button className="iconbtn fo-ask-x" aria-label="Dismiss their ask" onClick={onClose}>
           <X size={16} />
         </button>
       </div>

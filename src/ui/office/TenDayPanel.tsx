@@ -3,7 +3,7 @@
 // for the player page, the Office and the inbox, and the short label lists show.
 import type { League, Player } from '../../core/types';
 import { CAP } from '../../core/constants';
-import { CAP_FOR, playerName, standardRoster } from '../../core/league/helpers';
+import { CAP_FOR, standardRoster } from '../../core/league/helpers';
 import {
   HARDSHIP_OUT,
   TEN_DAY_MAX,
@@ -24,7 +24,7 @@ import {
 import { useLeague, useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { Sheet } from '../components/ui';
-import { OvrPot, fmtM, playerMeta } from './common';
+import { Line, OvrPot, PlayerHead, fmtM } from './common';
 
 /** Run a core action on the league and toast its answer. */
 function act(fn: (l: League) => { ok: boolean; reason: string }) {
@@ -48,7 +48,7 @@ export function tenDayLabel(league: League, p: Player): string | null {
 export function tenDayLine(league: League, p: Player): string {
   const td = p.contract.tenDay!;
   const n = tenDaysWith(league, p, p.tid);
-  return `${n >= 2 ? 'Second' : 'First'} 10-day contract with the ${league.teams[p.tid].name} (${fmtM(p.contract.salaries[0], 2)} paid when he signed): ends after ${tenDayEnds(league, td.until)}${
+  return `${n >= 2 ? 'Second' : 'First'} 10-day with the ${league.teams[p.tid].name} (${fmtM(p.contract.salaries[0], 2)}, paid at signing): ends after ${tenDayEnds(league, td.until)}${
     td.hardship ? `, on a hardship spot beyond ${CAP.rosterMax}` : ''
   }. No dead money if he goes.`;
 }
@@ -64,8 +64,8 @@ export function TenDayActions({ league, p }: { league: League; p: Player }) {
   const next = tenDayUntil(league, p.contract.tenDay.until);
   const why = [...new Set([again, rest, end])].filter(Boolean);
   return (
-    <div className="col" style={{ gap: 6 }}>
-      <div className="row wrap" style={{ gap: 6 }}>
+    <div className="col">
+      <div className="chips">
         <button className="btn xs" disabled={!!again} onClick={() => act((l) => userTenDay(l, p.pid))}>
           Second 10-day{again ? '' : ` · ${fmtM(tenDayPay(league, p, next - p.contract.tenDay.until), 2)}`}
         </button>
@@ -108,39 +108,28 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
   return (
     <Sheet open={open} onClose={onClose} title="10-day contract">
       {open && p && (
-        <div className="col" style={{ gap: 12 }}>
-          <div className="row" style={{ gap: 10 }}>
-            <div className="grow" style={{ minWidth: 0 }}>
-              <div className="fo-name">{playerName(p)}</div>
-              <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-            </div>
-            <OvrPot p={p} />
+        <div className="col fo-sheet">
+          <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
+          <div className="fo-lines">
+            <Line k="Pay (paid at signing)">{fmtM(tenDayPay(league, p, until - league.day), 2)}</Line>
+            <Line k="Through">
+              {tenDayEnds(league, until)} · {until - league.day} day{until - league.day === 1 ? '' : 's'}
+            </Line>
+            <Line k="Roster">
+              {n}/{CAP.rosterMax}
+              {h.spots ? ` + ${h.spots} hardship` : ''}
+            </Line>
+            <Line k="Players out (3+ games)">{h.out}</Line>
           </div>
-          <div className="small dim2">
-            {fmtM(tenDayPay(league, p, until - league.day), 2)}, his minimum prorated for {until - league.day} day{until - league.day === 1 ? '' : 's'}, paid when he signs. He
-            holds a roster spot through {tenDayEnds(league, until)}, then becomes a free agent again with no dead money, unless you sign him to a second 10-day or for the rest of
-            the season. Two 10-days with one team a season at most{had ? ': this would be his second with you' : ''}.
-          </div>
-          <div className="card tight col" style={{ gap: 4 }}>
-            <div className="row between small">
-              <span className="dim2">Roster</span>
-              <span className="bold num">
-                {n}/{CAP.rosterMax}
-                {h.spots ? ` + ${h.spots} hardship` : ''}
-              </span>
-            </div>
-            <div className="row between small">
-              <span className="dim2">Players out (3+ games)</span>
-              <span className="bold num">{h.out}</span>
-            </div>
-            <div className="tiny dim">
-              {spot === 'hardship'
-                ? `He'd take a hardship spot beyond ${CAP.rosterMax}: with ${h.out} players out you can carry ${h.spots} more on 10-days, and they leave when their days are up.`
-                : spot === 'regular'
-                  ? `He takes one of your ${CAP.rosterMax} roster spots.`
-                  : `With ${HARDSHIP_OUT} or more players out for 3+ games, the hardship exception lets you carry 10-day players beyond ${CAP.rosterMax}.`}
-            </div>
-          </div>
+          <p className="fo-lede small">
+            His minimum, prorated. Then he's a free agent again with no dead money, unless you give him a second 10-day or the rest of the season
+            {had ? ': this would be his second with you' : ''}.{' '}
+            {spot === 'hardship'
+              ? `He takes a hardship spot beyond ${CAP.rosterMax}: with ${h.out} out you can carry ${h.spots} more on 10-days.`
+              : spot === 'regular'
+                ? `He takes one of your ${CAP.rosterMax} roster spots.`
+                : `With ${HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows 10-day players beyond ${CAP.rosterMax}.`}
+          </p>
           {blocked && <div className="small warn">{blocked}</div>}
           <div className="row">
             <button className="btn grow" onClick={onClose}>
@@ -150,7 +139,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
               Sign to a 10-day
             </button>
           </div>
-          <div className="tiny dim">Up to {TEN_DAY_MAX} per player with one team a season; after his second, sign him for the rest of the season or he leaves.</div>
+          <div className="tiny dim">Up to {TEN_DAY_MAX} per player with one team a season; after the second, the rest of the season or he leaves.</div>
         </div>
       )}
     </Sheet>

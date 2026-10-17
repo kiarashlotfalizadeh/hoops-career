@@ -24,7 +24,7 @@ import {
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { useStore } from '../../state/store';
-import { Ovr } from '../components/ui';
+import { Avatar, Help, Ovr } from '../components/ui';
 import './office.css';
 
 export const OFFSEASON_PHASES: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
@@ -86,8 +86,8 @@ export function deadlineLabel(league: League): string | null {
 export function contractUpNote(league: League, p: Player): string | null {
   if (p.tid < 0 || !isOffseason(league) || contractExp(p.contract) > league.season) return null;
   return league.phase === 'resign'
-    ? 'His contract is up. Re-sign him now or he becomes a free agent.'
-    : 'His contract is up. You hold his rights until free agency opens: re-sign him in the re-sign period after the draft.';
+    ? 'His contract is up: re-sign him now or he becomes a free agent.'
+    : 'His contract is up. You hold his rights until free agency: re-sign him after the draft.';
 }
 
 /** Why none of the user's players can be traded right now (past the deadline, the postseason) and when that ends, or null. */
@@ -120,11 +120,15 @@ export function ownerVerdict(total: number): { label: string; color: string } {
   return { label: 'Hot seat', color: 'var(--bad)' };
 }
 
+/** "+12" / "-40": a -1..1 grade as the owner's -100..100 scale. */
+export const fmtGrade = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}`;
+
 // ------------------------------------------------------------------ components
 
+/** An overline heading with an optional control on its right (the Section look, for screens outside the Front Office too). */
 export function SecTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="row between" style={{ marginTop: 4 }}>
+    <div className="fo-sec-row">
       <div className="fo-sec grow">{children}</div>
       {right}
     </div>
@@ -145,10 +149,10 @@ export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number;
           {add > 0 && <div className="fo-cap-add" style={{ left: `${pct(pay)}%`, width: `${pct(total) - pct(pay)}%` }} />}
         </div>
         <div className="fo-cap-mark" style={{ left: `${pct(cap)}%` }}>
-          <span>CAP</span>
+          <span>Cap</span>
         </div>
         <div className="fo-cap-mark tax" style={{ left: `${pct(tax)}%` }}>
-          <span>TAX</span>
+          <span>Tax</span>
         </div>
       </div>
       {legend && (
@@ -161,7 +165,7 @@ export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number;
             Cap <b>{fmtM(cap)}</b>
           </span>
           <span>
-            Tax line <b>{fmtM(tax)}</b>
+            Tax <b>{fmtM(tax)}</b>
           </span>
         </div>
       )}
@@ -202,13 +206,13 @@ export function Gauge({ value, size = 150, label }: { value: number; size?: numb
   const verdict = ownerVerdict(v);
   return (
     <svg className="fo-gauge" width={size} height={size * 0.68} viewBox="0 0 100 68" role="img" aria-label={`Owner mood ${Math.round(v * 100)}`}>
-      <path d={arc(0, 0.25)} stroke="var(--bad)" strokeWidth="8" fill="none" opacity="0.9" />
-      <path d={arc(0.25, 0.4)} stroke="var(--warn)" strokeWidth="8" fill="none" opacity="0.9" />
-      <path d={arc(0.4, 0.55)} stroke="var(--info)" strokeWidth="8" fill="none" opacity="0.9" />
-      <path d={arc(0.55, 1)} stroke="var(--good)" strokeWidth="8" fill="none" opacity="0.9" />
+      <path d={arc(0, 0.25)} stroke="var(--bad)" strokeWidth="7" fill="none" />
+      <path d={arc(0.25, 0.4)} stroke="var(--warn)" strokeWidth="7" fill="none" />
+      <path d={arc(0.4, 0.55)} stroke="var(--info)" strokeWidth="7" fill="none" />
+      <path d={arc(0.55, 1)} stroke="var(--good)" strokeWidth="7" fill="none" />
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
       <circle cx={cx} cy={cy} r="4.5" fill="var(--text)" />
-      <text x={cx} y={66} textAnchor="middle" fontSize="11" fontWeight="700" fill={verdict.color}>
+      <text x={cx} y={66} textAnchor="middle" fontSize="12" fontWeight="800" fill={verdict.color}>
         {label ?? verdict.label.toUpperCase()}
       </text>
     </svg>
@@ -229,7 +233,7 @@ export function MoodTag({ p, withNotes = false }: { p: Player; withNotes?: boole
   const lvl = moodLevel(p.mood.score);
   const m = MOOD_META[lvl];
   return (
-    <span className="row" style={{ gap: 6, minWidth: 0, display: 'inline-flex' }}>
+    <span className="fo-mood">
       <span className="tag" style={{ color: m.color, background: `color-mix(in srgb, ${m.color} 16%, transparent)` }}>
         {m.emoji} {m.label}
       </span>
@@ -244,6 +248,7 @@ export function Range({ value, min, max, step = 1, onChange, label }: { value: n
   return (
     <input
       type="range"
+      className="fo-range"
       min={min}
       max={max}
       step={step}
@@ -251,16 +256,51 @@ export function Range({ value, min, max, step = 1, onChange, label }: { value: n
       aria-label={label}
       aria-valuetext={fmtM(value, 2)}
       onChange={(e) => onChange(Number(e.target.value))}
-      style={{ ['--fill' as string]: `${fill}%`, display: 'block' }}
+      style={{ ['--fill' as string]: `${fill}%` }}
     />
   );
 }
 
+/** A note with a tone: a coloured edge and an icon, not a tinted box. */
 export function Callout({ tone, icon, children }: { tone?: 'good' | 'bad' | 'warn'; icon?: ReactNode; children: ReactNode }) {
   return (
     <div className={`fo-callout ${tone ?? ''}`}>
       {icon}
       <div className="grow">{children}</div>
+    </div>
+  );
+}
+
+/** Tap-to-explain with the Front Office's paragraph spacing: the rules in full, one short paragraph each. */
+export function HelpSheet({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Help title={title}>
+      <div className="fo-help">{children}</div>
+    </Help>
+  );
+}
+
+/** A sheet's player header: his jersey, name, line of detail and rating. */
+export function PlayerHead({ league, p, children, right }: { league: League; p: Player; children?: ReactNode; right?: ReactNode }) {
+  return (
+    <div className="fo-phead">
+      <Avatar p={p} />
+      <div className="grow">
+        <h2 className="ellipsis">{playerName(p)}</h2>
+        <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+        {children}
+      </div>
+      {right ?? <Ovr v={p.ovr} />}
+    </div>
+  );
+}
+
+/** A label and a value on one line, hairlines between rows (a contract's seasons, a sheet's terms). */
+export function Line({ k, children, className = '' }: { k: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <div className={`fo-line ${className}`}>
+      <span className="fo-line-k">{k}</span>
+      <span className="fo-line-v">{children}</span>
     </div>
   );
 }
@@ -306,7 +346,6 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
   // every season either schedule touches, in order
   const seasons = [...new Set([...remaining, ...(stretch ?? [])].map((d) => d.season))].sort((a, b) => a - b);
   const amountIn = (xs: { season: number; amount: number }[] | null, s: number) => xs?.find((d) => d.season === s)?.amount;
-  const grid = { display: 'grid', gridTemplateColumns: stretch ? '1fr auto auto' : '1fr auto', columnGap: 16, rowGap: 3 } as const;
   // why he'd give back more than a little
   const why = buyout
     ? [
@@ -317,88 +356,59 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
     : [];
   return (
     <>
-      <p className="dim2" style={{ margin: 0 }}>
-        {waive
-          ? `${playerName(p)} goes on waivers for ${WAIVER_DAYS} days, then becomes a free agent if no team claims him.`
-          : `${playerName(p)} becomes a free agent immediately and can sign with any team.`}{' '}
-        {p.contract.twoWay ? (
-          'Two-way pay sits outside the cap, so there is no dead money.'
-        ) : p.contract.tenDay ? (
-          'His 10-day pay was paid when he signed, so there is no dead money.'
-        ) : nonGuaranteed(league, p) ? (
-          "His minimum deal isn't guaranteed until opening night, so there is no dead money."
-        ) : owed > 0 ? (
-          <>
-            <b>His remaining salary stays on your books</b> as dead money and counts against the cap and your payroll until it runs out
-            {waive ? ', unless a team claims him off waivers and takes over his contract' : ''}.
-          </>
-        ) : (
-          'Nothing is left to pay on his contract, so there is no dead money.'
-        )}
+      <p className="fo-lede">
+        {waive ? `On waivers for ${WAIVER_DAYS} days, then a free agent if no one claims him.` : 'He becomes a free agent at once.'}{' '}
+        {p.contract.twoWay
+          ? 'Two-way pay is off the cap: no dead money.'
+          : p.contract.tenDay
+            ? 'His 10-day pay was paid when he signed: no dead money.'
+            : nonGuaranteed(league, p)
+              ? "His minimum deal isn't guaranteed until opening night: no dead money."
+              : owed > 0
+                ? `What he's owed stays on your cap and payroll as dead money${waive ? ' unless he is claimed' : ''}.`
+                : 'Nothing is left to pay: no dead money.'}
       </p>
       {remaining.length > 0 && (
-        <div className="card tight" style={grid}>
-          <span className="tiny dim upper bold">Dead money</span>
-          <span className="tiny dim upper bold" style={{ textAlign: 'right' }}>
-            Release
-          </span>
-          {stretch && (
-            <span className="tiny dim upper bold" style={{ textAlign: 'right' }}>
-              Stretched
-            </span>
-          )}
+        <div className={`fo-dead ${stretch ? 'three' : ''}`}>
+          <span className="over">Dead money</span>
+          <span className="over r">Release</span>
+          {stretch && <span className="over r">Stretched</span>}
           {seasons.map((s) => (
             <Fragment key={s}>
-              <span className="small dim2">{seasonLabel(s)}</span>
-              <span className="small num bold" style={{ textAlign: 'right' }}>
-                {amountIn(remaining, s) ? fmtM(amountIn(remaining, s)!) : '—'}
-              </span>
-              {stretch && (
-                <span className="small num bold" style={{ textAlign: 'right' }}>
-                  {amountIn(stretch, s) ? fmtM(amountIn(stretch, s)!) : '—'}
-                </span>
-              )}
+              <span className="dim2">{seasonLabel(s)}</span>
+              <span className="num r">{amountIn(remaining, s) ? fmtM(amountIn(remaining, s)!) : '—'}</span>
+              {stretch && <span className="num r">{amountIn(stretch, s) ? fmtM(amountIn(stretch, s)!) : '—'}</span>}
             </Fragment>
           ))}
-          <span className="small bold" style={{ borderTop: '1px solid var(--line)', paddingTop: 4 }}>
-            Total
-          </span>
-          <span className="small num bold bad" style={{ textAlign: 'right', borderTop: '1px solid var(--line)', paddingTop: 4 }}>
-            {fmtM(owed)}
-          </span>
-          {stretch && (
-            <span className="small num bold bad" style={{ textAlign: 'right', borderTop: '1px solid var(--line)', paddingTop: 4 }}>
-              {fmtM(owed)}
-            </span>
-          )}
+          <span className="fo-dead-t">Total</span>
+          <span className="fo-dead-t num r bad">{fmtM(owed)}</span>
+          {stretch && <span className="fo-dead-t num r bad">{fmtM(owed)}</span>}
         </div>
       )}
       {stretch && (
         <div className="tiny dim">
-          <b>Stretch provision:</b> the same money{contractSeason(league) === league.season ? ', past this season,' : ''} spread evenly over {spread} seasons (twice the{' '}
-          {(spread - 1) / 2} left, plus one): less dead money each season, for longer.{waive ? ' A claim off waivers still takes all of it off your books.' : ''}
+          Stretched: the same money{contractSeason(league) === league.season ? ' past this season' : ''} over {spread} seasons (twice the {(spread - 1) / 2} left, plus one).
+          {waive ? ' A waiver claim still wipes it.' : ''}
         </div>
       )}
       {buyout && (
-        <div className="card tight col" style={{ gap: 8 }}>
-          <div className="row between" style={{ gap: 8 }}>
-            <span className="small bold">Or buy him out</span>
+        <div className="fo-buyout">
+          <div className="row between">
+            <span className="bold">Or buy him out</span>
             <span className="tag good">Gives back {Math.round(buyout.giveback * 100)}%</span>
           </div>
           <div className="small dim2">
-            He'd give back {fmtM(buyout.saved)} of the {fmtM(buyout.owed)} he's owed to be let go{why.length ? ` (${why.join(', ')})` : ''}, and becomes a free agent at once (no
-            waivers).
+            He gives back {fmtM(buyout.saved)} of {fmtM(buyout.owed)}
+            {why.length ? ` (${why.join(', ')})` : ''} and skips waivers.
           </div>
-          <div className="grid2">
+          <div className="statline">
             <div>
-              <div className="tiny dim upper bold">Release</div>
-              <div className="fo-mid bad">{fmtM(buyout.owed)}</div>
-              <div className="tiny dim">dead money</div>
+              <div className="k">Release</div>
+              <div className="v bad">{fmtM(buyout.owed)}</div>
             </div>
             <div>
-              <div className="tiny dim upper bold">Buyout</div>
-              <div className="fo-mid warn">{fmtM(buyout.dead)}</div>
-              <div className="tiny dim">dead money</div>
+              <div className="k">Buyout</div>
+              <div className="v warn">{fmtM(buyout.dead)}</div>
             </div>
           </div>
           <button className="btn block" onClick={() => buyOut(false)}>
@@ -412,12 +422,9 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
         </div>
       )}
       {!p.contract.twoWay && n - 1 < CAP.rosterMin && (
-        <div className="fo-callout warn">
-          <TriangleAlert size={18} className="warn" />
-          <div>
-            You'll have {n - 1} players. Rosters need at least {CAP.rosterMin} to start the season.
-          </div>
-        </div>
+        <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
+          You'll have {n - 1} players: rosters need {CAP.rosterMin} to start the season.
+        </Callout>
       )}
       <div className="row">
         <button className="btn grow" onClick={onKeep}>
