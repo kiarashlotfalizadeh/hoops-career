@@ -40,7 +40,9 @@ holds the tokens and shared classes, `src/ui/components/ui.tsx` the shared compo
 
 Don't hard-code colours that exist as tokens. Team colours for another team come from
 `teamColors.ts`: `slabVars(colors)` for a slab, `jerseyKit` (inside `Avatar`), `teamLook`,
-`identityColor`, `matchupColors`/`jerseyColors` for two teams side by side.
+`identityColor`. Two teams side by side (a scorebug, a final, a pre-game slab) use `matchupLooks`
+(slabs that never read as one colour: on a clash the away side wears its second colour), and
+`matchupColors`/`jerseyColors` for lines and jerseys.
 
 ## Type
 
@@ -69,7 +71,9 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
 - Figures: `Statline` (`.statline`: label/value/sub, hairlines between, no boxes) for 2-4 figures in a
   row; `Kpi` (`.kpi`) when figures must be tiles (a grid of many).
 - `Segmented`: a boxed switch for filters and options; `tabs` prop for a screen's own sections
-  (underlined page tabs, `.seg.tabs`). Keep `role=radiogroup`.
+  (underlined page tabs, `.seg.tabs`). Keep `role=radiogroup`. Hubs with many sections (League,
+  a team, History) use `TabBar` (`league/shared.tsx`): the same tabs, sticky under the top bar,
+  edge to edge, fading where they scroll.
 - `Chips` / `.chip`: toggles and quick filters. `.tag` (+ `good` `bad` `warn` `info` `brand`):
   small caps labels; never a whole sentence.
 - `Ovr` (tier badge), `Avatar` (the jersey badge: team colours and number; neutral kit for free
@@ -80,7 +84,9 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
 - `Help` (a "?" that opens a sheet) and `More` (a "More ⌄" expander) for explanations.
 - `Sheet`: bottom sheet (dialog on tablets). Title in `h2`.
 - `.dockbar`: a screen's own fixed action bar over the tab bar; the Continue bar steps aside for it
-  (and for `.fo-dock` and `.gd-dock`).
+  (and for `.fo-dock` and `.gd-dock`), except a running sim's progress, which the docks ride above.
+- The Continue bar (App.tsx) names the next step and runs it; on the screen that step names (the
+  draft board, free agents, re-signing) it shrinks to its round options button.
 - `.empty` for empty states: one line, what to do next.
 
 ## Screen anatomy (phone)
@@ -104,7 +110,10 @@ Spacing: the page stacks sections 16px apart; inside a section 10px; inside a ca
 
 - Screens fade in (opacity only: a transform would trap fixed docks). Sheets and the Continue bar
   slide up; toasts drop in. Press states scale to 0.97.
-- Big moments (a clinch, a title, your draft pick, a signing, an award) get a full-screen moment.
+- Figures in a `Statline` count up when a screen opens (`CountUp`), once; later changes just show.
+- Big moments (a clinch, a series, a title, the Cup, your draft pick, a big signing, an award) get a
+  full-screen card in your colours (`moments.ts`, `components/Moments.tsx`), once, after a sim and
+  outside the live game; Settings → Big moments turns them off.
 - Everything respects `prefers-reduced-motion` (theme.css zeroes animations).
 
 ## Accessibility (unchanged bar)
