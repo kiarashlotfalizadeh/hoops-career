@@ -8,6 +8,10 @@
   color: var(--text-dim);
   line-height: 1.4;
 }
+.tm-foot .card-link {
+  flex: none;
+  white-space: nowrap;
+}
 /* shortcuts to the screens beside this one: compact, under the title */
 .tm-links {
   display: flex;
