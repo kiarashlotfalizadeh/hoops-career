@@ -7,7 +7,7 @@ import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Card, Empty, Segmented, StatTable, type Col } from '../components/ui';
-import { f1, perGame, seasonLine, signed, teamRatings, type PerGame } from '../stats';
+import { advancedView, f1, perGame, seasonLine, signed, teamRatings, type AdvView, type PerGame } from '../stats';
 import { shortName, statSeasons, statTid, teamAbbrev, useQueryParam } from './shared';
 
 type View = 'leaders' | 'players' | 'teams';
@@ -17,6 +17,8 @@ export interface StatRow {
   s: PlayerStats;
   pg: PerGame;
   tid: number | null;
+  /** PER and win shares: an imported season's own, or worked out for a regular season played here (see advancedView). */
+  adv: AdvView | null;
 }
 
 /** Per-game rows for every player with stats in a season (regular season or playoffs). */
@@ -29,7 +31,7 @@ export function useSeasonRows(league: League, season: number, playoffs: boolean)
       if (!s || s.gp === 0) continue;
       const pg = perGame(s);
       if (!pg) continue;
-      out.push({ p, s, pg, tid: statTid(league, s) });
+      out.push({ p, s, pg, tid: statTid(league, s), adv: advancedView(league, p, s) });
     }
     return out;
   }, [league, season, playoffs]);
@@ -127,6 +129,12 @@ interface Cat {
   minNote?: string;
 }
 
+/** Leaders in the all-in-one numbers: regular seasons only (a season played here has none in the playoffs). */
+const ADV_CATS: Cat[] = [
+  { key: 'ws', label: 'Win shares', unit: 'WS', get: (r) => r.adv?.ws ?? -Infinity, fmt: f1 },
+  { key: 'per', label: 'Player efficiency', unit: 'PER', get: (r) => r.adv?.per ?? -Infinity, fmt: f1 },
+];
+
 const CATS: Cat[] = [
   { key: 'pts', label: 'Points', unit: 'PPG', get: (r) => r.pg.pts, fmt: f1 },
   { key: 'reb', label: 'Rebounds', unit: 'RPG', get: (r) => r.pg.reb, fmt: f1 },
@@ -153,9 +161,9 @@ function Leaders({ league, rows, season, playoffs }: { league: League; rows: Sta
   return (
     <>
       <div className="lg-leaders">
-        {CATS.map((c) => {
+        {[...CATS, ...(rows.some((r) => r.adv) ? ADV_CATS : [])].map((c) => {
           const top = qualified
-            .filter((r) => !c.min || c.min(r))
+            .filter((r) => (!c.min || c.min(r)) && Number.isFinite(c.get(r)))
             .sort((a, b) => c.get(b) - c.get(a))
             .slice(0, 5);
           return <LeaderCard key={c.key} league={league} cat={c} top={top} />;
@@ -224,7 +232,9 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
   const [limit, setLimit] = useState(PAGE);
   const games = teamGames(league, season, rows, playoffs);
   const minGp = Math.max(1, Math.ceil(games * 0.3));
-  const hasAdv = real && rows.some((r) => r.s.adv);
+  // PER and win shares wherever a season has them (imported, or a regular season played here); BPM and EPM only come imported
+  const hasAdv = rows.some((r) => r.adv);
+  const hasBpm = real && rows.some((r) => r.s.adv);
   const tot = mode === 'tot';
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -338,9 +348,16 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
         fmt: (v) => (v === -Infinity ? '—' : <span className={(v as number) > 0 ? 'good' : (v as number) < 0 ? 'bad' : ''}>{signed(v as number, tot ? 0 : 1)}</span>),
       },
     ];
-    if (hasAdv) {
+    if (hasAdv)
+      c.push({
+        key: 'per',
+        label: 'PER',
+        get: (r) => r.adv?.per ?? -99,
+        fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)),
+        help: "Player efficiency rating (Hollinger's): his per-minute production, adjusted for pace; the league's average is 15.",
+      });
+    if (hasBpm)
       c.push(
-        { key: 'per', label: 'PER', get: (r) => r.s.adv?.per ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)) },
         { key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)) },
         {
           key: 'epm',
@@ -349,11 +366,26 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
           fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)),
           help: 'Estimated plus-minus (Dunks & Threes): points per 100 possessions he adds over an average player, offense and defense.',
         },
-        { key: 'ws', label: 'WS', get: (r) => r.s.adv?.ws ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)) },
       );
-    }
+    if (hasAdv)
+      c.push(
+        {
+          key: 'ws',
+          label: 'WS',
+          get: (r) => r.adv?.ws ?? -99,
+          fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)),
+          help: "Win shares: the team's wins his offense and defense account for, from the box score (Basketball Reference's method).",
+        },
+        {
+          key: 'ws48',
+          label: 'WS/48',
+          get: (r) => r.adv?.ws48 ?? -99,
+          fmt: (v) => ((v as number) === -99 ? '—' : (v as number).toFixed(3)),
+          help: 'Win shares per 48 minutes: about .100 is an average player.',
+        },
+      );
     return c;
-  }, [league, hasAdv, tot]);
+  }, [league, hasAdv, hasBpm, tot]);
   // the same element between renders lets React skip the table while the search box updates
   const table = useMemo(
     () => (

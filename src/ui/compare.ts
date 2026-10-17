@@ -9,7 +9,7 @@ import { REC_LABEL, REC_STATS } from '../core/league/records';
 import { playerAge } from '../core/playerGen';
 import { seasonLabel } from '../core/constants';
 import { SKILLS, type SkillPercentile } from './playerSkills';
-import { f1, ordinal, perGame, seasonLine, signed } from './stats';
+import { advancedView, f1, ordinal, perGame, seasonLine, signed } from './stats';
 import { accolades, careerTotals } from './league/shared';
 
 /** Which way a row is better: the higher value, the lower (turnovers, fouls, age), or neither (height, games played). */
@@ -178,10 +178,11 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     // imported seasons carry no plus-minus or on-court numbers, only their own advanced stats
     stat('pm', '+/-', (t) => (t.real && !t.pm ? null : pg(t).pm), 'high', 'signed'),
     stat('net', 'Net on court', (t) => (t.onPoss ? pg(t).onOff : null), 'high', 'signed'),
-    stat('per', 'PER', (t) => t.adv?.per ?? null, 'high', 'f1'),
+    // PER and win shares for a season played here too (worked out from its box score); BPM and EPM only for imported ones
+    row('per', 'PER', (p) => (lines.get(p) ? (advancedView(league, p, lines.get(p)!.tot)?.per ?? null) : null), 'high', 'f1'),
     stat('bpm', 'BPM', (t) => t.adv?.bpm ?? null, 'high', 'signed'),
     stat('epm', 'EPM', (t) => t.adv?.epm ?? null, 'high', 'signed'),
-    stat('ws', 'Win shares', (t) => t.adv?.ws ?? null, 'high', 'f1'),
+    row('ws', 'Win shares', (p) => (lines.get(p) ? (advancedView(league, p, lines.get(p)!.tot)?.ws ?? null) : null), 'high', 'f1'),
   ];
 
   // career totals: a player who hasn't played reads "—", not a row of zeros

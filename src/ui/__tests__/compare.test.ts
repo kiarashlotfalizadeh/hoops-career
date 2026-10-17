@@ -118,7 +118,7 @@ describe('compareSections', () => {
     expect(rowView(row('season', 'gp')).win).toBeNull();
     expect(rowView(row('season', 'usg')).win).toBeNull();
     expect(row('career', 'cgp').dir).toBe('none');
-    // both from this season: no season row; PER and win shares exist for neither (simulated seasons), so they're left out
+    // both from this season: no season row; PER and win shares exist for neither (no team's season to measure them against), so they're left out
     expect(sec('season').rows.some((r) => r.key === 'season' || r.key === 'per' || r.key === 'ws')).toBe(false);
     expect(row('overview', 'age').dir).toBe('low');
   });

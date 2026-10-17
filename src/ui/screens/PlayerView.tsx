@@ -10,7 +10,7 @@ import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented,
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
-import { f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
+import { advancedView, f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
@@ -541,6 +541,7 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
   const rows = seasonsOf(p).filter((r) => r.playoffs === po);
   type R = (typeof rows)[number];
   const pg = (r: R) => perGame(r.tot)!;
+  const adv = (r: R) => advancedView(league, p, r.tot);
   const cols: Col<R>[] = [
     {
       key: 'season',
@@ -572,10 +573,11 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'ft', label: 'FT%', get: (r) => (r.tot.fta ? pg(r).ftPct : NaN), fmt: (v) => pct(v as number) },
     { key: 'ts', label: 'TS%', get: (r) => (r.tot.fga || r.tot.fta ? pg(r).tsPct : NaN), fmt: (v) => pct(v as number) },
     { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
-    { key: 'per', label: 'PER', get: (r) => r.tot.adv?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
+    { key: 'per', label: 'PER', get: (r) => adv(r)?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
     { key: 'epm', label: 'EPM', get: (r) => r.tot.adv?.epm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
-    { key: 'ws', label: 'WS', get: (r) => r.tot.adv?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
+    { key: 'ws', label: 'WS', get: (r) => adv(r)?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
+    { key: 'ws48', label: 'WS/48', get: (r) => adv(r)?.ws48 ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : (v as number).toFixed(3)) },
     // imported seasons carry no plus-minus: "—", not 0.0 (as in the league stats)
     { key: 'pm', label: '+/-', get: (r) => (r.tot.real && !r.tot.pm ? NaN : pg(r).pm), fmt: (v) => signed(v as number) },
   ];
@@ -592,7 +594,8 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
       />
       {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
       <div className="tiny dim">
-        “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes; PER, BPM, EPM and WS exist only for those, +/- only for simulated seasons.
+        “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes, and only they have BPM and EPM; PER and win shares for seasons played in this league
+        are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.
       </div>
       {!po && <CareerHighs p={p} league={league} />}
     </>
