@@ -225,23 +225,23 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
   const since = league.records?.since ?? league.startSeason;
   const sections: CmpSection[] = [
     { id: 'overview', title: 'Overview', rows: overview, empty: 'Pick two players to compare.' },
-    { id: 'skills', title: 'Scouting profile', note: 'Percentiles among every rostered player.', rows: skills, empty: '' },
+    { id: 'skills', title: 'Scouting profile', note: 'Percentile among rostered players.', rows: skills, empty: '' },
     { id: 'ratings', title: 'Ratings', rows: ratings, empty: '' },
     {
       id: 'season',
       title: 'This season',
-      note: 'Regular season, per game; a player without a game yet shows his latest season.',
+      note: 'Per game, regular season (his latest one if he has yet to play this one).',
       rows: season,
       empty: 'No NBA games yet.',
     },
     {
       id: 'career',
       title: 'Career',
-      note: 'Regular-season totals on record: for a real veteran, his last three seasons before this league and his seasons in it.',
+      note: 'Regular-season totals on record (for a real veteran, his last three seasons before this league count too).',
       rows: careerRows,
       empty: 'No NBA games yet.',
     },
-    { id: 'highs', title: 'Career highs', note: `Single games in the regular season since ${seasonLabel(since)}.`, rows: highs, empty: 'No games in this league yet.' },
+    { id: 'highs', title: 'Career highs', note: `Regular-season games since ${seasonLabel(since)}.`, rows: highs, empty: 'No games in this league yet.' },
     { id: 'honors', title: 'Honors', rows: honors, empty: 'No honors yet.' },
   ];
   // rows neither has a value for say nothing (PER and win shares between two simulated seasons)

@@ -1,16 +1,16 @@
-import { AccoladeChips, TabBar, accolades, useQueryParam } from '../league/shared';
-import { useState } from 'react';
+import { accolades, useQueryParam } from '../league/shared';
+import { Fragment, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, MessageCircle, PenLine, Pencil, Scale } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, MessageCircle, PenLine, Pencil, Scale } from 'lucide-react';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel } from '../../core/ratings';
-import { Avatar, Bar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, StatTable, Tag, pct, type Col } from '../components/ui';
+import { Avatar, Bar, Chips, Empty, Help, More, Ovr, PageHeader, Section, Segmented, Sheet, StatTable, Statline, Tag, pct, type Col } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
-import { advancedView, f1, ordinalSuffix, p1, perGame, playerSeason, seasonLine, signed } from '../stats';
+import { advancedView, f1, ordinal, ordinalSuffix, perGame, playerSeason, seasonLine, signed } from '../stats';
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
@@ -21,7 +21,7 @@ import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, re
 import { untradeableReason } from '../../core/league/trades';
 import { liveInProgress } from '../../state/live';
 import { seasonLabel } from '../../core/constants';
-import { BBREF_TO_TID } from '../../core/teams';
+import { BBREF_TO_TID, FRANCHISES } from '../../core/teams';
 import { PlayerMoves } from '../league/MovesTab';
 import { deadlineLabel } from '../../core/league/rfa';
 import { sheetTerms } from '../office/RfaPanel';
@@ -30,15 +30,29 @@ import { REC_LABEL, REC_STATS, careerHighOf } from '../../core/league/records';
 import { careerOnRecord } from '../../core/analysis/milestones';
 import { neutralSite } from '../../core/league/games';
 import { fmtDate } from '../../core/league/helpers';
+import { awardRaces } from '../../core/league/awards';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { compareHref } from '../compare';
 import { LazyPlayerEditor } from '../god/lazy';
+import { useBack } from '../nav';
+import { slabVars } from '../teamColors';
+import './team.css';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
 const AVERAGE_OVR = 74;
+
+/** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
+const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
+
+const RACES = [
+  ['mvp', 'MVP'],
+  ['dpoy', 'DPOY'],
+  ['roy', 'ROY'],
+  ['smoy', '6MOY'],
+] as const;
 
 /**
  * Where a player's OVR comes from: each attribute's weighted gap to the league average,
@@ -82,6 +96,12 @@ function seasonsOf(p: Player) {
   return rows.sort((a, b) => b.season - a.season || Number(a.playoffs) - Number(b.playoffs));
 }
 
+/** A long last name steps down a size or two, so it fits beside the jersey and the badge. */
+function nameSize(last: string): string {
+  const longest = Math.max(...last.split(/[\s-]/).map((w) => w.length));
+  return longest > 11 ? 'xl' : longest > 9 || last.length > 16 ? 'l' : '';
+}
+
 export default function PlayerView() {
   const league = useLeague();
   const nav = useNavigate();
@@ -91,20 +111,25 @@ export default function PlayerView() {
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
   const [extending, setExtending] = useState(false);
-  const [openRating, setOpenRating] = useState<string | null>(null);
   // the trade-request mail links here with ?meet=1
   const [params] = useSearchParams();
   const [meeting, setMeeting] = useState(() => params.get('meet') === '1');
   const [comparing, setComparing] = useState(false);
   const [editing, setEditing] = useState(false);
   const pctile = useSkillPercentiles(league);
+  // this season's award ladders, as the Awards tab draws them (once games are played)
+  const races = useLeagueMemo(() => {
+    if (league.phase !== 'regular' || !league.teams.some((t) => t.seasons.some((s) => s.season === league.season && s.won + s.lost > 0))) return null;
+    return awardRaces(league, 5);
+  }, [league]);
+  const goBack = useBack(p && p.tid === league.userTid ? '/roster' : p && p.tid >= 0 ? `/team/${p.tid}` : '/');
   if (!p) {
     return (
       <main className="page">
         <PageHeader title="Player" back backTo="/roster" />
-        <Card>
+        <div className="card">
           <Empty>That player is no longer in the league.</Empty>
-        </Card>
+        </div>
       </main>
     );
   }
@@ -145,396 +170,368 @@ export default function PlayerView() {
           : team
             ? `${team.region} ${team.name}`
             : '';
+  const colors = team ? (team.colors ?? FRANCHISES[team.tid]?.colors ?? NO_TEAM) : NO_TEAM;
   const contribs = ovrContributions(league, p);
   const pluses = contribs.parts.filter((x) => x.delta > 0).slice(0, 4);
   const minuses = contribs.parts
     .filter((x) => x.delta < 0)
     .slice(-3)
     .reverse();
+  const inRaces = races
+    ? RACES.flatMap(([k, label]) => {
+        const i = races[k].findIndex((x) => x.c.p.pid === p.pid);
+        return i >= 0 ? [`${label} race · ${ordinal(i + 1)}`] : [];
+      })
+    : [];
+  const freedom = team ? ['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1] : null;
+  const usage = [
+    ...(team ? [{ k: 'Minutes', v: p.injury ? 'Out' : String(team.rotation.minutes[p.pid] ?? 0), s: p.injury ? 'injured' : 'planned' }] : []),
+    ...(cur
+      ? [
+          { k: 'USG%', v: pct(cur.usg), s: 'usage' },
+          { k: 'On net', v: signed(cur.onOff), s: 'per 100', color: cur.onOff >= 0 ? 'var(--good)' : 'var(--bad)' },
+          { k: '+/-', v: signed(cur.pm), s: 'a game' },
+        ]
+      : []),
+  ];
+  const whys = [...new Set([tradeWhy, releaseWhy, extendWhy])].filter(Boolean).join(' ');
+  const honors = accolades(p);
 
   return (
     <main className="page">
-      <PageHeader
-        title={p.lastName}
-        sub={status}
-        back
-        backTo={mine ? '/roster' : team ? `/team/${team.tid}` : '/'}
-        right={
-          <div className="row" style={{ gap: 4 }}>
-            {league.settings.godMode && (
-              <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setEditing(true)}>
-                <Pencil size={16} /> Edit
-              </button>
-            )}
-            <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setComparing(true)}>
-              <Scale size={16} /> Compare
-            </button>
-          </div>
-        }
-      />
-      <Card accent>
-        <div className="row top" style={{ gap: 14 }}>
+      <div className="tm-bar">
+        <button className="iconbtn back" onClick={goBack} aria-label="Back">
+          <ChevronLeft size={24} />
+        </button>
+        <span className="grow" />
+        {league.settings.godMode && (
+          <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setEditing(true)}>
+            <Pencil size={15} /> Edit
+          </button>
+        )}
+        <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setComparing(true)}>
+          <Scale size={15} /> Compare
+        </button>
+      </div>
+
+      <section className="slab tm-hero" style={slabVars(colors)} aria-label={`${p.firstName} ${p.lastName}`}>
+        {team && (
+          <span className="slab-mark">
+            <TeamLogo tid={team.tid} size={190} decorative />
+          </span>
+        )}
+        <div className="tm-over">{[p.jersey ? `#${p.jersey}` : '', p.pos, status].filter(Boolean).join(' · ')}</div>
+        <div className="tm-id">
           <Avatar p={p} size="lg" />
-          <div className="grow">
-            <div className="bold" style={{ fontSize: 19 }}>
-              {p.firstName} {p.lastName}
-            </div>
-            <div className="small dim2">
-              {p.pos}
-              {p.jersey ? ` · #${p.jersey}` : ''} · {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb
-            </div>
-            <div className="small dim">
-              {p.country}
-              {p.college ? ` · ${p.college}` : ''}
-              {/* (the draft slot held together: "2018 R1" then "#11" alone on the next line read oddly) */}
-              {p.draft.round > 0 ? ` · ${p.draft.year}\u00a0R${p.draft.round}\u00a0#${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ` · Undrafted` : ''}
-            </div>
-            <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
-              <Tag tone="info">{p.archetype}</Tag>
-              <Tag>{tierLabel(p.ovr)}</Tag>
-              {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
-              {p.injury && (
-                <Tag tone="bad">
-                  {p.injury.type} · {p.injury.gamesRemaining}g
-                </Tag>
-              )}
-              {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
-            </div>
+          <div className="tm-names">
+            <span className="tm-first">{p.firstName}</span>
+            <h1 className={`tm-last ${nameSize(p.lastName)}`}>{p.lastName}</h1>
           </div>
-          <div className="col" style={{ alignItems: 'center', gap: 4 }}>
+          <div className="tm-ovr">
             <Ovr v={p.ovr} size="lg" />
             <span className="pot">POT {p.pot}</span>
-            {team && <TeamLogo tid={team.tid} size={28} />}
           </div>
         </div>
-        <div className="grid4" style={{ marginTop: 12 }}>
-          <Kpi k="PTS" v={line ? f1(line.pts) : '—'} />
-          <Kpi k="REB" v={line ? f1(line.reb) : '—'} />
-          <Kpi k="AST" v={line ? f1(line.ast) : '—'} />
-          {/* no shots, no percentage: "—", not 0.0 */}
-          <Kpi k="TS%" v={line && (line.fga || line.fta) ? pct(line.tsPct) : '—'} />
+        <div className="tm-meta">
+          {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb · {p.country}
+          {p.college ? ` · ${p.college}` : ''}
+          {/* (the draft slot held together: "2018 R1" then "#11" alone on the next line read oddly) */}
+          {p.draft.round > 0 ? ` · ${p.draft.year}\u00a0R${p.draft.round}\u00a0#${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ' · Undrafted' : ''}
         </div>
+        <div className="tm-tags">
+          <Tag>{p.archetype}</Tag>
+          <Tag>{tierLabel(p.ovr)}</Tag>
+          {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
+          {p.injury && (
+            <Tag tone="bad">
+              {p.injury.type} · {p.injury.gamesRemaining}g
+            </Tag>
+          )}
+          {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
+          {inRaces.map((r) => (
+            <Link key={r} to="/league?tab=awards" className="tag warn">
+              {r}
+            </Link>
+          ))}
+        </div>
+        <Statline
+          items={[
+            { k: 'PTS', v: line ? f1(line.pts) : '—' },
+            { k: 'REB', v: line ? f1(line.reb) : '—' },
+            { k: 'AST', v: line ? f1(line.ast) : '—' },
+            // no shots, no percentage: "—", not 0.0
+            { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
+          ]}
+        />
         {!cur && line && lastSeason ? (
-          <div className="tiny dim" style={{ marginTop: 6 }}>
+          <div className="tm-hero-note">
             {seasonLabel(lastSeason)} per game{p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
           </div>
         ) : null}
-      </Card>
+      </section>
 
-      <TabBar
-        value={tab}
-        onChange={setTab}
-        label="Player sections"
-        options={[
-          { id: 'overview', label: 'Overview' },
-          { id: 'ratings', label: 'Ratings' },
-          { id: 'stats', label: 'Stats' },
-          { id: 'log', label: 'Games' },
-          { id: 'dev', label: 'Growth' },
-        ]}
-      />
+      <div className="tm-tabs five">
+        <Segmented
+          tabs
+          value={tab}
+          onChange={setTab}
+          label="Player sections"
+          options={[
+            { id: 'overview', label: 'Overview' },
+            { id: 'ratings', label: 'Ratings' },
+            { id: 'stats', label: 'Stats' },
+            { id: 'log', label: 'Games' },
+            { id: 'dev', label: 'Growth' },
+          ]}
+        />
+      </div>
 
       {tab === 'overview' && (
         <>
-          <Card
+          <Section
             title="Scouting profile"
             right={
-              <Help title="How skills are measured">
-                Each skill is a blend of underlying ratings, the same blend the game engine uses. Percentiles compare him with every rostered NBA player.
+              <Help title="Scouting profile">
+                Each skill blends the ratings the game engine uses for it. The number is his percentile among every rostered NBA player: 90th means better than 90% of them.
               </Help>
             }
           >
-            <div className="col" style={{ gap: 9 }}>
+            <div className="card tm-skills">
               {SKILLS.map((s) => {
-                const val = s.get(c, p);
-                const pc = pctile(s.key, val);
+                const pc = pctile(s.key, s.get(c, p));
                 return (
-                  <div key={s.key} className="ratingrow" style={{ gridTemplateColumns: '128px 1fr 44px' }}>
-                    <span className="dim2">{s.label}</span>
+                  <div key={s.key} className="tm-skill">
+                    <span className="tm-skill-l">{s.label}</span>
                     <Bar value={pc} color={skillColor(pc)} />
-                    <span className="num right small">
+                    <span className="num tm-skill-v">
                       {pc}
-                      <span className="dim tiny">{ordinalSuffix(pc)}</span>
+                      <span className="tm-sfx">{ordinalSuffix(pc)}</span>
                     </span>
                   </div>
                 );
               })}
             </div>
-          </Card>
+          </Section>
+
           <div className="md-grid2">
-            <Card title="Why he's a" right={<Ovr v={p.ovr} size="sm" />}>
-              <div className="small dim" style={{ marginBottom: 8 }}>
-                {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} point${Math.abs(contribs.gap) === 1 ? '' : 's'} ${contribs.gap > 0 ? 'above' : 'below'}`} an average
-                NBA player ({AVERAGE_OVR}). Biggest reasons, in OVR points:
-              </div>
-              <div className="col" style={{ gap: 6 }}>
-                {pluses.map((x) => (
-                  <div key={x.key} className="row between small">
-                    <span>{x.label}</span>
-                    <span className="good num">+{x.delta}</span>
-                  </div>
-                ))}
-                {pluses.length > 0 && minuses.length > 0 && <div className="divider" />}
-                {minuses.map((x) => (
-                  <div key={x.key} className="row between small">
-                    <span>{x.label}</span>
-                    <span className="bad num">{x.delta}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            <Card title="Role & usage">
-              <div className="col" style={{ gap: 8 }}>
-                <div>
-                  <div className="bold">{ROLE_META[role].label}</div>
-                  <div className="small dim">{ROLE_META[role].help}</div>
+            <Section title={`Why he's a ${p.ovr}`}>
+              <div className="card tm-why">
+                <div className="tm-why-sum">
+                  {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} OVR ${contribs.gap > 0 ? 'above' : 'below'}`} an average player ({AVERAGE_OVR}). The biggest
+                  reasons:
                 </div>
-                {arch.role !== role && <div className="small warn">His natural role is {ROLE_META[arch.role].label}.</div>}
-                {team && (
-                  <div className="small dim2">
-                    Shot freedom: {['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1]} · Planned minutes:{' '}
-                    {p.injury ? 'out (injured)' : (team.rotation.minutes[p.pid] ?? 0)}
-                  </div>
-                )}
-                {cur && (
-                  <div className="small dim2">
-                    Usage {p1(cur.usg)} · On-court net {signed(cur.onOff)} · +/- {signed(cur.pm)}
-                  </div>
-                )}
-                {mine && (
-                  <div className="row" style={{ gap: 6 }}>
-                    <button className="btn xs" onClick={() => setRoleOpen(true)}>
+                <div className="tm-why-cols">
+                  {[
+                    { title: 'Lifts him', list: pluses },
+                    { title: 'Holds him back', list: minuses },
+                  ].map((g) => (
+                    <div key={g.title} className="tm-why-col">
+                      <div className="over">{g.title}</div>
+                      {!g.list.length && <div className="tm-why-row dim">Nothing</div>}
+                      {g.list.map((x) => (
+                        <div key={x.key} className="tm-why-row">
+                          <span className="ellipsis">{x.label}</span>
+                          <span className={`num ${x.delta > 0 ? 'good' : 'bad'}`}>
+                            {x.delta > 0 ? '+' : ''}
+                            {x.delta}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Section>
+
+            <Section
+              title="Role & usage"
+              right={
+                mine && (
+                  <span className="tm-links-r">
+                    <button className="card-link" aria-haspopup="dialog" onClick={() => setRoleOpen(true)}>
                       Set role
                     </button>
-                    <Link to="/rotation" className="btn xs">
-                      Minutes
+                    <Link to="/rotation" className="card-link">
+                      Minutes <ChevronRight size={14} />
                     </Link>
+                  </span>
+                )
+              }
+            >
+              <div className="card tm-role">
+                <div className="row between top">
+                  <div className="grow">
+                    <div className="tm-role-name">{ROLE_META[role].label}</div>
+                    <div className="tm-role-help">{ROLE_META[role].help}</div>
                   </div>
-                )}
+                  {freedom && <Tag tone={freedom === 'Green light' ? 'good' : freedom === 'Limited' ? 'warn' : undefined}>{freedom}</Tag>}
+                </div>
+                {arch.role !== role && <div className="small warn">Natural role: {ROLE_META[arch.role].label}.</div>}
+                {usage.length > 0 && <Statline items={usage} />}
               </div>
-            </Card>
+            </Section>
           </div>
+
           <div className="md-grid2">
             {/* retired players and prospects have no mood to show */}
             {p.tid !== RETIRED && p.tid !== DRAFT_PROSPECT && (
-              <Card title="Mood">
-                <div className="row" style={{ gap: 8 }}>
-                  <span style={{ color: mood.color, fontSize: 18 }}>{mood.emoji}</span>
-                  <span className="bold">{mood.label}</span>
-                  {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
-                </div>
-                <div className="col small dim2" style={{ marginTop: 8, gap: 4 }}>
-                  {p.mood.notes.length ? p.mood.notes.map((n) => <div key={n}>• {n}</div>) : <div>No complaints.</div>}
-                  {p.mood.expectedMin > 0 && <div className="dim">Expects about {p.mood.expectedMin} minutes a night.</div>}
-                </div>
-                {/* one who asked out or is unhappy can be met, and promised something */}
-                {mine && p.promise && (
-                  <div className="small bold" style={{ marginTop: 8 }}>
-                    {promiseStatus(league, p)}
+              <Section title="Mood">
+                <div className="card tm-mood-card">
+                  <div className="row">
+                    <span className="tm-mood-ic" style={{ color: mood.color }} aria-hidden="true">
+                      {mood.emoji}
+                    </span>
+                    <span className="tm-mood-l grow">{mood.label}</span>
+                    {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
                   </div>
-                )}
-                {mine && !p.promise && wantsMeeting(p) && (
+                  <ul className="tm-notes">
+                    {p.mood.notes.length ? p.mood.notes.map((n) => <li key={n}>{n}</li>) : <li>No complaints</li>}
+                    {p.mood.expectedMin > 0 && <li className="dim">Expects about {p.mood.expectedMin} minutes a night</li>}
+                  </ul>
+                  {/* one who asked out or is unhappy can be met, and promised something */}
+                  {mine && p.promise && <div className="small bold">{promiseStatus(league, p)}</div>}
+                  {mine && !p.promise && wantsMeeting(p) && (
+                    <div className="row wrap tm-acts">
+                      <button className="btn sm" disabled={!!(busyWhy ?? meetBlockedReason(league, p))} onClick={() => setMeeting(true)}>
+                        <MessageCircle size={15} /> Meet with him
+                      </button>
+                      {(busyWhy ?? meetBlockedReason(league, p)) && <span className="tm-why-line">{busyWhy ?? meetBlockedReason(league, p)}</span>}
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            <Section title="Contract">
+              <div className="card tm-deal">
+                {p.tid >= 0 ? (
                   <>
-                    <button className="btn xs" style={{ marginTop: 10 }} disabled={!!(busyWhy ?? meetBlockedReason(league, p))} onClick={() => setMeeting(true)}>
-                      <MessageCircle size={14} /> Meet with him
-                    </button>
-                    {(busyWhy ?? meetBlockedReason(league, p)) && (
-                      <div className="tiny dim" style={{ marginTop: 6 }}>
-                        {busyWhy ?? meetBlockedReason(league, p)}
+                    <Statline
+                      items={[
+                        { k: 'Salary', v: fmtM(sal), s: seasonLabel(salSeason) },
+                        {
+                          k: extStart !== null ? 'Deal ends' : 'Expires',
+                          v: shortSeason(extStart !== null ? extStart - 1 : contractExp(p.contract)),
+                          s: openOption(league, p) ? `${openOption(league, p)} option` : rookieScaleDeal(p) ? 'rookie scale' : undefined,
+                        },
+                        { k: 'Market', v: fmtM(marketSalary(league, p)), s: 'value' },
+                      ]}
+                    />
+                    {openOption(league, p) && rookieScaleDeal(p) && <div className="tm-deal-note">Rookie scale deal.</div>}
+                    {extStart !== null && (
+                      <div className="tm-deal-note">
+                        <span className="good bold">Extended through {seasonLabel(contractExp(p.contract))}</span> · {fmtM(salaryFor(p, extStart))} from {shortSeason(extStart)}
+                      </div>
+                    )}
+                    {p.contract.twoWay && <div className="tm-deal-note">Two-way: off the 15-man roster and the cap. Plays only when the team is short-handed.</div>}
+                    {p.contract.tenDay && <div className="tm-deal-note">{tenDayLine(league, p)}</div>}
+                    {p.rfa && (
+                      <div className="tm-deal-note">
+                        Qualifying offer out ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): a restricted free agent when free agency opens.
                       </div>
                     )}
                   </>
-                )}
-              </Card>
-            )}
-            <Card title="Contract">
-              {p.tid >= 0 ? (
-                <div className="col" style={{ gap: 6 }}>
-                  <div className="row between">
-                    <span className="dim2 small">{seasonLabel(salSeason)} salary</span>
-                    <span className="bold num">{fmtM(sal)}</span>
-                  </div>
-                  <div className="row between">
-                    <span className="dim2 small">{extStart !== null ? 'Current deal ends' : 'Expires'}</span>
-                    <span>
-                      {seasonLabel(extStart !== null ? extStart - 1 : contractExp(p.contract))}
-                      {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
-                      {rookieScaleDeal(p) ? ' · rookie scale' : ''}
-                    </span>
-                  </div>
-                  {extStart !== null && (
-                    <>
-                      <div className="row between">
-                        <span className="small good bold">Extended through</span>
-                        <span>{seasonLabel(contractExp(p.contract))}</span>
-                      </div>
-                      <div className="row between">
-                        <span className="dim2 small">Extension starts</span>
-                        <span className="num">
-                          {fmtM(salaryFor(p, extStart))} in {shortSeason(extStart)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  {p.contract.twoWay && <div className="small dim2">Two-way deal: outside the 15-man roster and the cap. He only plays when the team is short-handed.</div>}
-                  {p.contract.tenDay && <div className="small dim2">{tenDayLine(league, p)}</div>}
-                  {p.rfa && (
-                    <div className="small dim2">
-                      Qualifying offer extended ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): he becomes a restricted free agent when free agency opens.
+                ) : faAsk ? (
+                  <>
+                    <div className="tm-deal-note">
+                      {p.waivers
+                        ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
+                        : p.rfa?.sheet
+                          ? `Signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
+                          : p.rfa?.tid === league.userTid
+                            ? `Your restricted free agent: re-sign him with Bird rights (asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}), or match any offer sheet. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
+                            : p.rfa
+                              ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
+                              : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                     </div>
-                  )}
-                  <div className="row between">
-                    <span className="dim2 small">Market value</span>
-                    <span className="num">{fmtM(marketSalary(league, p))}</span>
-                  </div>
-                </div>
-              ) : faAsk ? (
-                <div className="col" style={{ gap: 8 }}>
-                  <div className="small dim2">
-                    {p.waivers
-                      ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
-                      : p.rfa?.sheet
-                        ? `Restricted: he signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match it until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
-                        : p.rfa?.tid === league.userTid
-                          ? `Your restricted free agent: re-sign him with Bird rights (asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}), or match any offer sheet. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
-                          : p.rfa
-                            ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
-                            : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
-                  </div>
-                  {/* straight to his offer (or claim) sheet on the Free Agents screen */}
-                  {!p.rfa?.sheet && (
-                    <Link className="btn sm primary" to={`/free-agents?offer=${p.pid}`}>
-                      {p.waivers ? 'Claim off waivers' : p.rfa?.tid === league.userTid ? 'Re-sign' : p.rfa ? 'Offer sheet' : 'Make an offer'}
-                    </Link>
-                  )}
-                </div>
-              ) : p.tid === DRAFT_PROSPECT ? (
-                <div className="small dim2">Eligible for the {p.draft.year} draft.</div>
-              ) : (
-                <div className="small dim">—</div>
-              )}
-              {mine ? (
-                <>
-                  <div className="row" style={{ marginTop: 10, gap: 6 }}>
-                    {tradeWhy ? (
-                      <button className="btn xs" disabled>
-                        <ArrowLeftRight size={14} /> Trade
-                      </button>
-                    ) : (
-                      <Link className="btn xs" to={`/trade?give=${p.pid}`}>
-                        <ArrowLeftRight size={14} /> Trade
+                    {/* straight to his offer (or claim) sheet on the Free Agents screen */}
+                    {!p.rfa?.sheet && (
+                      <Link className="btn sm primary tm-deal-go" to={`/free-agents?offer=${p.pid}`}>
+                        {p.waivers ? 'Claim off waivers' : p.rfa?.tid === league.userTid ? 'Re-sign' : p.rfa ? 'Offer sheet' : 'Make an offer'}
                       </Link>
                     )}
-                    {finalSeason && (
-                      <button className="btn xs" disabled={!!extendWhy} onClick={() => setExtending(true)}>
-                        <PenLine size={14} /> Extend
+                  </>
+                ) : p.tid === DRAFT_PROSPECT ? (
+                  <div className="tm-deal-note">Eligible for the {p.draft.year} draft.</div>
+                ) : (
+                  <div className="small dim">—</div>
+                )}
+                {mine ? (
+                  <>
+                    <div className="row wrap tm-acts">
+                      {tradeWhy ? (
+                        <button className="btn sm" disabled>
+                          <ArrowLeftRight size={15} /> Trade
+                        </button>
+                      ) : (
+                        <Link className="btn sm" to={`/trade?give=${p.pid}`}>
+                          <ArrowLeftRight size={15} /> Trade
+                        </Link>
+                      )}
+                      {finalSeason && (
+                        <button className="btn sm" disabled={!!extendWhy} onClick={() => setExtending(true)}>
+                          <PenLine size={15} /> Extend
+                        </button>
+                      )}
+                      {p.contract.twoWay && (
+                        <button
+                          className="btn sm"
+                          disabled={!!busyWhy}
+                          onClick={() => {
+                            let res = { ok: false, reason: '' };
+                            useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
+                            useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
+                          }}
+                        >
+                          Convert to standard
+                        </button>
+                      )}
+                      <button className="btn sm danger" disabled={!!releaseWhy} onClick={() => setConfirmRelease(true)}>
+                        Release
                       </button>
-                    )}
-                    {p.contract.twoWay && (
-                      <button
-                        className="btn xs"
-                        disabled={!!busyWhy}
-                        onClick={() => {
-                          let res = { ok: false, reason: '' };
-                          useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
-                          useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-                        }}
-                      >
-                        Convert to standard
-                      </button>
-                    )}
-                    <button className="btn xs danger" disabled={!!releaseWhy} onClick={() => setConfirmRelease(true)}>
-                      Release
-                    </button>
-                  </div>
-                  {(tradeWhy || releaseWhy || extendWhy) && (
-                    <div className="tiny dim" style={{ marginTop: 6 }}>
-                      {[...new Set([tradeWhy, releaseWhy, extendWhy])].filter(Boolean).join(' ')}
                     </div>
-                  )}
-                  {p.contract.tenDay && (
-                    <div style={{ marginTop: 10 }}>
-                      <TenDayActions league={league} p={p} />
+                    {whys && <div className="tm-why-line">{whys}</div>}
+                    {p.contract.tenDay && <TenDayActions league={league} p={p} />}
+                  </>
+                ) : (
+                  p.tid >= 0 &&
+                  p.tid !== league.userTid && (
+                    <div className="row tm-acts">
+                      <Link className="btn sm" to={`/trade?with=${p.tid}&get=${p.pid}`}>
+                        <ArrowLeftRight size={15} /> Trade for him
+                      </Link>
                     </div>
-                  )}
-                </>
-              ) : (
-                p.tid >= 0 &&
-                p.tid !== league.userTid && (
-                  <div className="row" style={{ marginTop: 10, gap: 6 }}>
-                    <Link className="btn xs" to={`/trade?with=${p.tid}&get=${p.pid}`}>
-                      <ArrowLeftRight size={14} /> Trade for him
-                    </Link>
-                  </div>
-                )
-              )}
-            </Card>
+                  )
+                )}
+              </div>
+            </Section>
           </div>
+
           {/* the same honors, names and order as the league history (the Hall of Fame has its own tag above) */}
-          {accolades(p).length > 0 && (
-            <Card title="Honors">
-              <AccoladeChips p={p} max={Infinity} />
-            </Card>
+          {honors.length > 0 && (
+            <Section title="Honors">
+              <div className="tm-honors">
+                {honors.map((a) => (
+                  <span key={a.label} className={`tag ${a.gold ? 'tm-gold' : ''}`}>
+                    {a.n > 1 ? `${a.n}× ` : ''}
+                    {a.label}
+                  </span>
+                ))}
+              </div>
+            </Section>
           )}
           <PlayerMoves league={league} pid={p.pid} />
         </>
       )}
 
-      {tab === 'ratings' && (
-        <>
-          <div className="tiny dim" style={{ margin: '0 2px 8px' }}>
-            Tap a rating to see what it does in the engine.
-          </div>
-          {(['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const).map((g) => (
-            <Card key={g} title={g}>
-              <div className="col" style={{ gap: 6 }}>
-                {RATING_META.filter((m) => m.group === g).map((m) => {
-                  const val = attrDisplay(p.ratings[m.key as RatingKey]);
-                  const was = p.ratingsHistory.length > 1 ? p.ratingsHistory[p.ratingsHistory.length - 2].r?.[m.key as RatingKey] : undefined;
-                  const prev = was === undefined ? null : attrDisplay(was);
-                  const open = openRating === m.key;
-                  return (
-                    <div key={m.key}>
-                      <button
-                        className="ratingrow block"
-                        style={{ gridTemplateColumns: '108px 1fr 54px', width: '100%', textAlign: 'left' }}
-                        onClick={() => setOpenRating(open ? null : m.key)}
-                        aria-expanded={open}
-                      >
-                        <span className="dim2">{m.label}</span>
-                        <Bar value={((val - 40) / 59) * 100} color={val >= 85 ? 'var(--tier-elite)' : val >= 75 ? 'var(--good)' : val >= 64 ? 'var(--info)' : 'var(--text-dim)'} />
-                        <span className="num right bold">
-                          {val}
-                          {prev !== null && val !== prev && (
-                            <span className={`tiny ${val > prev ? 'good' : 'bad'}`}>
-                              {' '}
-                              {val > prev ? '+' : ''}
-                              {val - prev}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                      {open && (
-                        <div className="tiny dim fade-in" style={{ padding: '2px 0 6px' }}>
-                          {m.help}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          ))}
-        </>
-      )}
-
+      {tab === 'ratings' && <RatingsTab p={p} />}
       {tab === 'stats' && <StatsTab p={p} league={league} />}
       {tab === 'log' && <GameLog p={p} league={league} onOpen={(gid) => nav(`/game/${gid}`)} />}
       {tab === 'dev' && <DevTab p={p} league={league} mine={mine} />}
 
       {/* (loaded the first time it opens) */}
       {editing && league.settings.godMode && <LazyPlayerEditor pid={p.pid} onClose={() => setEditing(false)} />}
-      <Sheet open={roleOpen} onClose={() => setRoleOpen(false)} title={`${p.firstName} ${p.lastName}: role`}>
+      <Sheet open={roleOpen} onClose={() => setRoleOpen(false)} title={`${p.lastName}: role`}>
         <RoleEditor p={p} onDone={() => setRoleOpen(false)} />
       </Sheet>
       <Sheet open={confirmRelease && mine && !releaseWhy} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
@@ -548,6 +545,49 @@ export default function PlayerView() {
       </Sheet>
       <PlayerPicker open={comparing} onClose={() => setComparing(false)} anchor={p} title={`Compare ${p.lastName} with…`} onPick={(other) => nav(compareHref(p.pid, other))} />
     </main>
+  );
+}
+
+const RATING_GROUPS = ['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const;
+
+/** Every rating on the 40-99 scale, by group, with last season's change; a tap opens what it does. */
+function RatingsTab({ p }: { p: Player }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const was = p.ratingsHistory.length > 1 ? p.ratingsHistory[p.ratingsHistory.length - 2].r : undefined;
+  return (
+    <>
+      <div className="card flush">
+        <div className="list">
+          {RATING_GROUPS.map((g) => (
+            <Fragment key={g}>
+              <div className="list-divider">{g}</div>
+              <div className="list wide2 tm-group">
+                {RATING_META.filter((m) => m.group === g).map((m) => {
+                  const val = attrDisplay(p.ratings[m.key as RatingKey]);
+                  const before = was?.[m.key as RatingKey];
+                  const prev = before === undefined ? null : attrDisplay(before);
+                  const on = open === m.key;
+                  return (
+                    <div key={m.key} className="tm-rt">
+                      <button className="tm-rt-row" onClick={() => setOpen(on ? null : m.key)} aria-expanded={on}>
+                        <span className="tm-rt-l">{m.label}</span>
+                        <Bar value={((val - 40) / 59) * 100} color={val >= 85 ? 'var(--tier-elite)' : val >= 75 ? 'var(--good)' : val >= 64 ? 'var(--info)' : 'var(--text-dim)'} />
+                        <span className="tm-rt-v num">{val}</span>
+                        <span className={`tm-rt-d num ${prev !== null && val !== prev ? (val > prev ? 'good' : 'bad') : ''}`}>
+                          {prev !== null && val !== prev ? `${val > prev ? '+' : ''}${val - prev}` : ''}
+                        </span>
+                      </button>
+                      {on && <div className="tm-rt-help fade-in">{m.help}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+      <div className="tm-foot">Tap a rating for what it does in the engine. Changes are since last season.</div>
+    </>
   );
 }
 
@@ -604,26 +644,35 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
   const real = p.stats.some((s) => s.real);
   return (
     <>
-      <Segmented
-        value={po ? 'po' : 'rs'}
-        onChange={(v) => setPo(v === 'po')}
-        label="Season type"
-        options={[
-          { id: 'rs', label: 'Regular season' },
-          { id: 'po', label: 'Playoffs' },
-        ]}
-      />
+      <div className="tm-seg-l">
+        <Segmented
+          value={po ? 'po' : 'rs'}
+          onChange={(v) => setPo(v === 'po')}
+          label="Season type"
+          options={[
+            { id: 'rs', label: 'Regular season' },
+            { id: 'po', label: 'Playoffs' },
+          ]}
+        />
+      </div>
       {rows.length ? (
         <StatTable rows={rows} cols={shown} rowKey={(r) => r.key} />
       ) : (
-        <Card>
+        <div className="card">
           <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>
-        </Card>
+        </div>
       )}
-      <div className="tiny dim">
-        {real
-          ? '“real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes, and only they have BPM and EPM; PER and win shares for seasons played in this league are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.'
-          : 'PER and win shares are worked out from each season’s box score the way Basketball Reference does (not in the playoffs).'}
+      <div className="tm-foot">
+        {real ? (
+          <More label="“real” seasons and advanced stats">
+            <p className="tm-more-p">
+              “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes; only they have BPM and EPM. PER and win shares for seasons played in this league
+              are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.
+            </p>
+          </More>
+        ) : (
+          'PER and win shares come from each box score, as Basketball Reference works them (not in the playoffs).'
+        )}
       </div>
       {!po && <CareerHighs p={p} league={league} />}
     </>
@@ -639,27 +688,31 @@ function CareerHighs({ p, league }: { p: Player; league: League }) {
   const whole = !p.stats.some((s) => s.real) && careerOnRecord(p, league.season) && first >= since;
   const stored = new Set(league.games.map((g) => g.gid));
   return (
-    <Card title={whole ? 'Career highs' : `Highs since ${seasonLabel(since)}`}>
-      <div className="lg-team5">
+    <Section title={whole ? 'Career highs' : `Highs since ${seasonLabel(since)}`}>
+      <div className="card flush list">
         {REC_STATS.filter((k) => highs[k]).map((k) => {
           const h = careerHighOf(p, k)!;
           const text = `vs ${league.teams[h.opp]?.abbrev ?? '?'} · ${fmtDate(h.season, h.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-          return (
-            <div key={k} className="lg-rec-row lbl">
-              <span className="small dim2">{REC_LABEL[k][0]}</span>
-              {stored.has(h.gid) ? (
-                <Link to={`/game/${h.gid}`} className="tiny dim ellipsis">
-                  {text}
-                </Link>
-              ) : (
-                <span className="tiny dim ellipsis">{text}</span>
-              )}
-              <span className="num bold">{h.v}</span>
+          const body = (
+            <>
+              <span className="tm-hi-v num">{h.v}</span>
+              <span className="tm-hi-k">{REC_LABEL[k][0]}</span>
+              <span className="tm-hi-when ellipsis">{text}</span>
+            </>
+          );
+          return stored.has(h.gid) ? (
+            <Link key={k} to={`/game/${h.gid}`} className="tm-hi">
+              {body}
+              <ChevronRight size={15} className="dim" />
+            </Link>
+          ) : (
+            <div key={k} className="tm-hi">
+              {body}
             </div>
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -679,9 +732,9 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
     .reverse();
   if (!rows.length)
     return (
-      <Card>
+      <div className="card">
         <Empty>No games this season.</Empty>
-      </Card>
+      </div>
     );
   type R = (typeof rows)[number];
   const cols: Col<R>[] = [
@@ -692,9 +745,9 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
       sticky: true,
       get: (r) => r.g.gid,
       fmt: (_, r) => (
-        <span className="row" style={{ gap: 4 }}>
+        <span className="tm-log-opp">
           {/* the Cup final is on a neutral floor: nobody's home */}
-          <span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home || neutralSite(r.g) ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
+          <span className={`tm-wl ${r.won ? 'w' : 'l'}`}>{r.won ? 'W' : 'L'}</span> {r.home || neutralSite(r.g) ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
         </span>
       ),
     },
@@ -710,7 +763,11 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
     { key: 'tov', label: 'TOV', get: (r) => r.box.tov },
     { key: 'pm', label: '+/-', get: (r) => r.box.pm, fmt: (v) => signed(v as number, 0) },
   ];
-  return <StatTable rows={rows} cols={cols} rowKey={(r) => r.g.gid} onRow={(r) => onOpen(r.g.gid)} />;
+  return (
+    <Section title={`${seasonLabel(league.season)} · ${rows.length} game${rows.length === 1 ? '' : 's'}`}>
+      <StatTable rows={rows} cols={cols} rowKey={(r) => r.g.gid} onRow={(r) => onOpen(r.g.gid)} />
+    </Section>
+  );
 }
 
 function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean }) {
@@ -718,56 +775,64 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
   const age = playerAge(p, league.season);
   return (
     <>
-      <Card title="Overall by season">
-        {hist.length > 1 ? (
-          <LineChart points={hist.map((h) => h.ovr)} labels={hist.map((h) => `'${String(h.season).slice(2)}`)} />
-        ) : (
-          <div className="small dim">
-            History builds as seasons pass. Current: {p.ovr} OVR, potential {p.pot}.
-          </div>
-        )}
-      </Card>
-      <Card
+      <Section title="Overall by season">
+        <div className="card">
+          {hist.length > 1 ? (
+            <LineChart points={hist.map((h) => h.ovr)} labels={hist.map((h) => `'${String(h.season).slice(2)}`)} />
+          ) : (
+            <div className="small dim">
+              History builds as seasons pass. Now {p.ovr} OVR, potential {p.pot}.
+            </div>
+          )}
+        </div>
+      </Section>
+      <Section
         title="Outlook"
         right={
-          <Help title="How development works">
+          <Help title="How players develop">
             Players follow age curves: skills and IQ improve into the late 20s, while speed and explosiveness peak around 24-27 and then decline. On top of that come a hidden
             personal growth tendency, coaching quality (coach + coaching budget), practice intensity, playing time for young players (25+ minutes helps), and each player's training
             focus.
           </Help>
         }
       >
-        <div className="small dim2">
-          {p.tid === RETIRED
-            ? `Retired${p.retiredSeason ? ` after the ${seasonLabel(p.retiredSeason)} season` : ''}.`
-            : age <= 22
-              ? 'Young and raw. Expect big jumps with minutes and good coaching.'
-              : age <= 26
-                ? 'Still improving, especially skills and decision-making.'
-                : age <= 30
-                  ? 'In his prime. Skill gains offset early athletic decline.'
-                  : age <= 33
-                    ? 'Veteran. Athleticism is fading; IQ and shooting hold up.'
-                    : 'Late career. Expect steady decline; conditioning work slows it.'}
-        </div>
-        <div className="grid3" style={{ marginTop: 10 }}>
-          <Kpi k="Age" v={age} />
-          <Kpi k="Potential" v={p.pot} />
-          {p.tid >= 0 && <Kpi k="Season wear" v={`${Math.round(p.wear)}/100`} sub={p.wear > 50 ? 'Needs rest' : 'Fresh'} color={p.wear > 50 ? 'var(--warn)' : undefined} />}
-        </div>
-      </Card>
-      {mine && (
-        <Card title="Training focus">
-          <Chips
-            label="Training focus"
-            value={p.training}
-            onChange={(f: TrainingFocus) => useStore.getState().mutate((l) => void (l.players[p.pid].training = f))}
-            options={(Object.keys(FOCUS_META) as TrainingFocus[]).map((k) => ({ id: k, label: FOCUS_META[k].label }))}
-          />
-          <div className="small dim" style={{ marginTop: 8 }}>
-            {FOCUS_META[p.training].help} Focused areas grow faster; others grow a little slower.
+        <div className="card tm-outlook">
+          <div className="tm-outlook-l">
+            {p.tid === RETIRED
+              ? `Retired${p.retiredSeason ? ` after the ${seasonLabel(p.retiredSeason)} season` : ''}.`
+              : age <= 22
+                ? 'Young and raw: big jumps come with minutes and good coaching.'
+                : age <= 26
+                  ? 'Still improving, especially skills and decisions.'
+                  : age <= 30
+                    ? 'In his prime: skill gains offset early athletic decline.'
+                    : age <= 33
+                      ? 'Veteran: athleticism fades; IQ and shooting hold up.'
+                      : 'Late career: steady decline; conditioning work slows it.'}
           </div>
-        </Card>
+          <Statline
+            items={[
+              { k: 'Age', v: age },
+              { k: 'Potential', v: p.pot, s: p.pot > p.ovr ? `+${p.pot - p.ovr} to go` : 'reached' },
+              ...(p.tid >= 0
+                ? [{ k: 'Season wear', v: `${Math.round(p.wear)}/100`, s: p.wear > 50 ? 'needs rest' : 'fresh', color: p.wear > 50 ? 'var(--warn)' : undefined }]
+                : []),
+            ]}
+          />
+        </div>
+      </Section>
+      {mine && (
+        <Section title="Training focus">
+          <div className="card tm-train">
+            <Chips
+              label="Training focus"
+              value={p.training}
+              onChange={(f: TrainingFocus) => useStore.getState().mutate((l) => void (l.players[p.pid].training = f))}
+              options={(Object.keys(FOCUS_META) as TrainingFocus[]).map((k) => ({ id: k, label: FOCUS_META[k].label }))}
+            />
+            <div className="small dim">{FOCUS_META[p.training].help} Focused areas grow faster; the rest a little slower.</div>
+          </div>
+        </Section>
       )}
     </>
   );

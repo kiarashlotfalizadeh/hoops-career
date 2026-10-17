@@ -1,4 +1,4 @@
-/* Player comparison (/compare): two heads side by side, a strip naming the sides that stays in view,
+/* Player comparison (/compare): two heads face to face, a strip naming the sides that stays in view,
    then tables with each row's label in the middle (the scouting profile's above its bars). The
    middle column's width is shared by the strip and the tables, so each value sits under its name. */
 .cmp-page {
@@ -17,33 +17,98 @@
 
 /* ------------------------------------------------------------ heads */
 .cmp-heads {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
+/* a side's team colour: a thin edge along the top of its head (none for a player without a team) */
 .cmp-head {
+  --cmp-edge: var(--line-2);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   padding: 12px;
+  border-top: 3px solid var(--cmp-edge);
+}
+.cmp-head.b {
+  grid-column: 2;
+  grid-row: 1;
+}
+.cmp-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* face to face: the jerseys meet in the middle, the badges on the outer edges */
+.cmp-head.a .cmp-top {
+  flex-direction: row-reverse;
+}
+.cmp-ovr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.cmp-ovr .pot {
+  font-size: 10.5px;
+  line-height: 1;
+}
+.cmp-vs-badge {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text-dim);
 }
 .cmp-name {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  margin-top: 4px;
-  line-height: 1.15;
+  margin-top: 2px;
+  line-height: 1.1;
 }
-.cmp-name > span:last-child {
+.cmp-first {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.cmp-last {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 21px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   /* a long one wraps (at its hyphen if it has one) rather than lose its end */
   overflow-wrap: anywhere;
+}
+.cmp-team {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+.cmp-meta {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 /* a long archetype or injury wraps inside its column instead of widening it ("Heliocentric creat…" lost
    what he is); one line keeps the tag's 20px */
@@ -59,11 +124,22 @@
 .cmp-deal {
   min-width: 0;
   margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.cmp-deal-m {
+  font-weight: 750;
+  font-size: 14px;
+}
+.cmp-deal-s {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 1px;
 }
 /* both Change buttons on one line, whatever each head holds */
 .cmp-foot {
   margin-top: auto;
-  padding-top: 6px;
+  padding-top: 4px;
 }
 .cmp-empty {
   align-items: center;
@@ -83,9 +159,9 @@
   grid-template-columns: minmax(0, 1fr) var(--cmp-l) minmax(0, 1fr);
   align-items: center;
   /* the cards' border and padding, so its columns line up with the tables' */
-  padding: 7px 14px;
+  padding: 6px 14px;
   border: 1px solid var(--line-2);
-  border-radius: 12px;
+  border-radius: 10px;
   /* solid fallback first, as the top bar does */
   background: rgba(22, 29, 40, 0.96);
   background: color-mix(in srgb, var(--surface-2) 96%, transparent);
@@ -94,16 +170,19 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   text-align: center;
 }
-/* a long name wraps (at its hyphen if it has one) rather than lose its end */
+/* a long name wraps (at its hyphen if it has one) rather than lose its end; its team colour under it */
 .cmp-strip > :not(.cmp-vs) {
+  --cmp-edge: var(--line-3);
   min-width: 0;
   overflow-wrap: anywhere;
   line-height: 1.15;
+  padding-bottom: 3px;
+  background: linear-gradient(var(--cmp-edge), var(--cmp-edge)) center bottom / 28px 2px no-repeat;
 }
 .cmp-vs {
   font-size: 11px;
@@ -112,8 +191,13 @@
 }
 
 /* ------------------------------------------------------------ tables */
+.cmp-card {
+  padding: 10px 14px 12px;
+}
 .cmp-note {
-  margin: -4px 0 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
   line-height: 1.4;
 }
 .cmp-t {
@@ -121,7 +205,7 @@
   table-layout: fixed;
   border-collapse: collapse;
 }
-/* the values only: Inter's tabular hyphen is a figure wide, which spaces out the labels' ("Three - point") */
+/* the values only: a tabular hyphen is a figure wide, which spaces out the labels' ("Three - point") */
 .cmp-t td {
   font-variant-numeric: tabular-nums;
 }
@@ -150,8 +234,8 @@
 }
 .cmp-v {
   text-align: center;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 650;
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -159,7 +243,7 @@
 }
 .cmp-n {
   display: inline-block;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 7px;
 }
 /* the better side: the good colour in a pill (ties and rows with no better way stay plain) */
@@ -174,8 +258,9 @@
 .cmp-group th {
   padding: 12px 0 5px;
   font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-2);
   text-align: center;
@@ -219,7 +304,7 @@
   flex: none;
   min-width: 46px;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 650;
   text-align: center;
 }
 .cmp-track {
@@ -241,10 +326,9 @@
   .cmp-head .avatar {
     width: 56px;
     height: 56px;
-    font-size: 22px;
   }
-  .cmp-name > span:last-child {
-    font-size: 25px;
+  .cmp-last {
+    font-size: 26px;
   }
   .cmp-v {
     font-size: 15px;

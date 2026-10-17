@@ -1,17 +1,21 @@
 import { attrDisplay } from '../../core/ratings';
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BedDouble, ChevronRight, Undo2, Wand2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
 import { evaluateLineup } from '../../core/ai/coachAI';
 import { ensureRotation } from '../../core/league/games';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
-import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
+import { Avatar, Help, Ovr, PageHeader, Section, Sheet, Slider, Statline, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { League, Player, Rotation as RotationT } from '../../core/types';
 import { f1, gamesMemo, ordinal, playerSeason, rosterNames, signed, startingFive } from '../stats';
 import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
 import { swapSpots } from '../../core/analysis/lineups';
+import './team.css';
+
+/** The minute bar's full width: the most a target can be. */
+const MAX_MIN = 44;
 
 export default function Rotation() {
   const league = useLeague();
@@ -43,6 +47,7 @@ export default function Rotation() {
   const injuredMin = order.reduce((a, pid) => a + (byId.get(pid)?.injury ? (rot.minutes[pid] ?? 0) : 0), 0);
   const starters = healthyOrder.slice(0, 5).map((pid) => byId.get(pid)!);
   const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
+  const startMin = starters.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
   const closers = rot.closers.filter((pid) => byId.has(pid));
   // the engine starts the first five healthy players: the Bench heading goes after the fifth
   const startSet = startingFive(order.map((pid) => byId.get(pid)!));
@@ -65,6 +70,7 @@ export default function Rotation() {
     // the rotation's content stands for order, byId and rot, which are new objects every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(rot), playoffs]);
+  const planned = healthyOrder.filter((pid) => (plan.norm[pid] ?? 0) > 0);
 
   const move = (pid: number, dir: -1 | 1) =>
     update((r) => {
@@ -84,7 +90,7 @@ export default function Rotation() {
         title="Rotation"
         back
         backTo="/roster"
-        sub={rot.manual ? 'Custom rotation' : 'Assistant-managed (updates for injuries automatically)'}
+        sub={rot.manual ? 'Custom rotation' : 'Assistant-managed · adjusts for injuries'}
         right={
           <button
             className="btn sm"
@@ -101,25 +107,31 @@ export default function Rotation() {
           </button>
         }
       />
-      <Card>
-        <div className="row between">
-          <div>
-            <div className="bold">Minute targets: {total}</div>
-            <div className="small dim">The stint plan below scales them to exactly 240. Fouls, fatigue, injuries and blowouts adjust them in-game.</div>
-            {injuredMin > 0 && <div className="small warn">Injured players' {injuredMin} minutes go to the healthy ones: the stint plan shows who gets them.</div>}
+
+      <div className="card tm-rsum">
+        <div className="row top">
+          <div className="grow">
+            <Statline
+              items={[
+                { k: 'Targets', v: total, s: total === 240 ? 'of 240 minutes' : 'scaled to 240' },
+                { k: 'Starters', v: startMin, s: 'first five' },
+                { k: 'Bench', v: total - startMin, s: 'the rest' },
+              ]}
+            />
           </div>
           <Help title="How rotations work">
             <p>
-              The first five players start. The coaching staff turns your minute targets into a stint plan (shown below) and follows it at dead balls, pulling players early for
-              foul trouble or fatigue.
+              The first five healthy players start. The coaching staff turns your minute targets into a stint plan (below), scaled to exactly 240 minutes, and follows it at dead
+              balls. Fouls, fatigue, injuries and blowouts change it in the game.
             </p>
             <p>
               Closers finish the 4th quarter and overtime when healthy. Players on "rest on back-to-backs" sit the second night of back-to-backs, which lowers wear and injury risk.
             </p>
           </Help>
         </div>
+        {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} minutes of injured players go to the healthy ones: the stint plan shows who.</div>}
         {startEval && startEval.notes.length > 0 && (
-          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+          <div className="tm-tags">
             {startEval.notes.map((n) => (
               <Tag key={n} tone="warn">
                 {n}
@@ -127,9 +139,9 @@ export default function Rotation() {
             ))}
           </div>
         )}
-      </Card>
+      </div>
 
-      <Card className="flush">
+      <div className="card flush">
         <div className="list">
           {order.map((pid, i) => {
             const p = byId.get(pid)!;
@@ -139,7 +151,7 @@ export default function Rotation() {
               <Fragment key={pid}>
                 {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
                 {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
-                <div className="listrow" style={{ background: startSet.has(pid) ? 'color-mix(in srgb, var(--accent) 7%, transparent)' : undefined }}>
+                <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
                   <div className="move-arrows">
                     <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0}>
                       <ArrowUp size={16} />
@@ -150,87 +162,84 @@ export default function Rotation() {
                   </div>
                   <Avatar p={p} />
                   <div
-                    className="grow row"
+                    className="tm-rrow-main"
                     role="button"
                     tabIndex={0}
                     aria-haspopup="dialog"
                     // named by what it shows, his name first: "A. Mitchell Closer SG · … 28 minutes 82"
                     onClick={() => setEdit(pid)}
                     onKeyDown={activateOnKey(() => setEdit(pid))}
-                    style={{ cursor: 'pointer', minWidth: 0 }}
                   >
-                    <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="grow">
                       {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
-                      <div className="row wrap" style={{ gap: '2px 6px', minWidth: 0 }}>
-                        <span className="bold ellipsis" style={{ minWidth: 0, color: p.injury ? 'var(--text-2)' : undefined }}>
-                          {fullNameOf(pid)}
-                        </span>
+                      <div className="tm-rname">
+                        <span className="ellipsis">{fullNameOf(pid)}</span>
                         {p.injury && <Tag tone="bad">Out</Tag>}
                         {closers.includes(pid) && <Tag>Closer</Tag>}
-                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
+                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
                       </div>
-                      <div className="tiny dim">
-                        {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg actual` : p.archetype} · stamina{' '}
-                        {attrDisplay(p.ratings.end)}
+                      <div className="lr-meta ellipsis">
+                        {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg` : p.archetype} · sta {attrDisplay(p.ratings.end)}
                         {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
                       </div>
-                      <div className="bar" style={{ marginTop: 5, height: 5 }}>
-                        <div style={{ width: `${(m / 44) * 100}%` }} />
+                      <div className="bar tm-mbar">
+                        <div style={{ width: `${(m / MAX_MIN) * 100}%` }} />
                       </div>
                     </div>
-                    <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
-                      <span className="display num" style={{ fontSize: 22, color: p.injury ? 'var(--text-dim)' : undefined }}>
-                        {m}
-                        <span className="sr-only"> minutes</span>
-                      </span>
-                      <Ovr v={p.ovr} size="sm" />
-                    </div>
+                    <span className="tm-rmin">
+                      <span className="tm-rmin-v num">{m}</span>
+                      <span className="tm-rmin-k">min</span>
+                    </span>
+                    <Ovr v={p.ovr} size="sm" />
                   </div>
                 </div>
               </Fragment>
             );
           })}
         </div>
-      </Card>
+      </div>
 
-      <Card title="Stint plan" right={<span className="tiny dim">48 minutes →</span>}>
-        <div className="col" style={{ gap: 3 }}>
-          {healthyOrder
-            .filter((pid) => (plan.norm[pid] ?? 0) > 0)
-            .map((pid) => {
-              return (
-                <div
-                  key={pid}
-                  className="row"
-                  style={{ gap: 6 }}
-                  role="img"
-                  aria-label={`${nameOf(pid)}: ${plan.norm[pid]} minutes, on the floor in minutes ${stints(plan.slots, pid)}`}
-                >
-                  <span className="tiny ellipsis" style={{ width: 110, flex: 'none' }}>
-                    {nameOf(pid)}
-                  </span>
-                  <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(48, 1fr)', gap: 1 }}>
-                    {plan.slots.map((slot, s) => (
-                      <div
-                        key={s}
-                        style={{ height: 12, borderRadius: 2, background: slot.includes(pid) ? 'var(--accent)' : 'var(--surface-3)', marginLeft: s % 12 === 0 && s ? 3 : 0 }}
-                      />
+      <Section
+        title="Stint plan"
+        right={
+          <Help title="Stint plan">
+            When each player is planned on the floor, minute by minute through the four quarters, from your targets scaled to 240. The staff follows it at dead balls and adjusts
+            for fouls, fatigue, injuries and blowouts.
+          </Help>
+        }
+      >
+        <div className="card tm-plan">
+          <div className="tm-plan-row tm-plan-head" aria-hidden="true">
+            <span />
+            <span className="tm-plan-qs">
+              {['Q1', 'Q2', 'Q3', 'Q4'].map((q) => (
+                <span key={q}>{q}</span>
+              ))}
+            </span>
+            <span>MIN</span>
+          </div>
+          {planned.map((pid, i) => (
+            <div
+              key={pid}
+              className={`tm-plan-row ${i === 5 ? 'gap' : ''}`}
+              role="img"
+              aria-label={`${nameOf(pid)}: ${plan.norm[pid]} minutes, on the floor in minutes ${stints(plan.slots, pid)}`}
+            >
+              <span className="tm-plan-n ellipsis">{nameOf(pid)}</span>
+              <span className="tm-plan-qs">
+                {[0, 1, 2, 3].map((q) => (
+                  <span key={q} className="tm-plan-q">
+                    {plan.slots.slice(q * 12, q * 12 + 12).map((slot, s) => (
+                      <i key={s} className={slot.includes(pid) ? 'on' : ''} />
                     ))}
-                  </div>
-                  <span className="tiny num dim" style={{ width: 20, textAlign: 'right' }}>
-                    {plan.norm[pid]}
                   </span>
-                </div>
-              );
-            })}
+                ))}
+              </span>
+              <span className="tm-plan-m num">{plan.norm[pid]}</span>
+            </div>
+          ))}
         </div>
-        <div className="tiny dim" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', marginTop: 6, paddingLeft: 116, paddingRight: 26 }}>
-          <span>Q1</span>
-          <span>Q2</span>
-          <span>Q3</span>
-          <span>Q4</span>
-        </div>
-      </Card>
+      </Section>
 
       <LineupsCard />
 
@@ -242,7 +251,7 @@ export default function Rotation() {
         <div className="dockbar">
           <div className="grow small">
             <div className="bold">Assistant's rotation applied</div>
-            <div className="dim">{undo.manual ? 'Your custom rotation was replaced.' : 'Refreshed for the current roster.'}</div>
+            <div className="dim">{undo.manual ? 'It replaced your custom one.' : 'Refreshed for the current roster.'}</div>
           </div>
           <button
             className="btn sm"
@@ -291,33 +300,33 @@ function LineupsCard() {
   const lastSeason = league.teams[league.userTid].seasons.some((s) => s.season === league.season - 1 && s.poss > 0);
   if (!lineups.length && !lastSeason) return null;
   return (
-    <Card
-      title="Lineups this season"
-      right={
-        <div className="row" style={{ gap: 10 }}>
-          <Link className="card-link" to="/lineups" aria-label="See all lineups, pairs, trios and on-off splits">
-            See all
-          </Link>
+    <Section
+      title={
+        <h3>
+          Lineups this season
           <Help title="Lineup net rating">
-            Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes. See all has every five,
-            the pairs and trios inside them and each player's on-off split, and can make a five your starters or closers.
+            Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes. All lineups has every
+            five, the pairs and trios inside them and each player's on-off split, and can make a five your starters or closers.
           </Help>
-        </div>
+        </h3>
+      }
+      right={
+        <Link className="card-link" to="/lineups" aria-label="See all lineups, pairs, trios and on-off splits">
+          All <ChevronRight size={14} />
+        </Link>
       }
     >
-      <div className="col" style={{ gap: 8 }}>
-        {!lineups.length && <div className="small dim">No five has played 8 minutes together yet this season.</div>}
+      <div className="card flush list">
+        {!lineups.length && <div className="tm-lu-empty small dim">No five has played 8 minutes together yet this season.</div>}
         {lineups.map((l) => (
-          <div key={l.key} className="row small top">
-            <span className={`num bold ${l.net >= 0 ? 'good' : 'bad'}`} style={{ width: 46 }}>
-              {signed(l.net)}
-            </span>
-            <span className="grow dim2">{l.pids.map((pid) => names(pid) || '?').join(', ')}</span>
-            <span className="tiny dim num">{Math.round(l.min)}m</span>
+          <div key={l.key} className="tm-lu">
+            <span className={`tm-lu-net num ${l.net >= 0 ? 'good' : 'bad'}`}>{signed(l.net)}</span>
+            <span className="tm-lu-names">{l.pids.map((pid) => names(pid) || '?').join(', ')}</span>
+            <span className="tm-lu-min num">{Math.round(l.min)}m</span>
           </div>
         ))}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -346,25 +355,26 @@ function EditPlayer({
   // one tap instead of a run of arrow taps: trade depth-chart spots (and minutes: the role moves with the spot) with anyone
   const swap = (other: number) => update((r) => swapSpots(r, order, p.pid, other));
   return (
-    <div className="col" style={{ gap: 16 }}>
-      <div className="col" style={{ gap: 6 }}>
-        <div className="small bold">
-          {starting ? 'Starter' : at < 5 ? 'Starter when healthy' : 'Bench'}, {ordinal(at + 1)} on the depth chart · swap spot and minutes with
+    <div className="tm-ed">
+      <div className="tm-ed-who">
+        <Avatar p={p} />
+        <div className="grow">
+          <div className="bold">{starting ? 'Starter' : at < 5 ? 'Starter when healthy' : 'Bench'}</div>
+          <div className="lr-meta">
+            {ordinal(at + 1)} on the depth chart · {p.pos}
+          </div>
         </div>
+        <Ovr v={p.ovr} size="sm" />
+      </div>
+      <Section title="Swap spot and minutes with">
         <div className="chips">
           {order
             .filter((pid) => pid !== p.pid)
             .map((pid) => {
               const j = order.indexOf(pid);
               return (
-                <button key={pid} className="chip" onClick={() => swap(pid)}>
-                  {starters.has(pid) ? (
-                    <span className="tag info" style={{ height: 16, padding: '0 4px' }}>
-                      S
-                    </span>
-                  ) : (
-                    <span className="dim tiny">{j + 1}</span>
-                  )}{' '}
+                <button key={pid} className="chip tm-swap" onClick={() => swap(pid)}>
+                  <span className={`tm-swap-n ${starters.has(pid) ? 's' : ''}`}>{starters.has(pid) ? 'S' : j + 1}</span>
                   {names(pid)}
                   {/* the S badge and spot number spelled out: "S Dixon, starter", "9 Warren, 9th on the depth chart" */}
                   <span className="sr-only">{starters.has(pid) ? ', starter' : `, ${ordinal(j + 1)} on the depth chart`}</span>
@@ -372,54 +382,58 @@ function EditPlayer({
               );
             })}
         </div>
-      </div>
-      <Slider
-        label="Target minutes"
-        value={m}
-        min={0}
-        max={44}
-        onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
-        format={(x) => `${x} min`}
-        help={p.mood.expectedMin ? `He expects about ${p.mood.expectedMin} minutes. Big gaps hurt his mood.` : undefined}
-      />
-      <Slider
-        label="Hard minute cap"
-        value={cap}
-        min={0}
-        max={44}
-        onChange={(x) =>
-          update((r) => {
-            if (x === 0) delete r.caps[p.pid];
-            else r.caps[p.pid] = x;
-          })
-        }
-        format={(x) => (x ? `${x} min` : 'None')}
-        help={
-          cap && cap < m
-            ? `Load management: never exceed this, even in close games. It's under his ${m}-minute target: he plays ${cap} at most.`
-            : 'Load management: never exceed this, even in close games.'
-        }
-      />
-      <Toggle
-        on={rot.closers.includes(p.pid)}
-        onChange={(on) =>
-          update((r) => {
-            r.closers = on ? [...r.closers.filter((x) => x !== p.pid), p.pid].slice(-5) : r.closers.filter((x) => x !== p.pid);
-          })
-        }
-        label="Closing lineup"
-        help={
-          !rot.closers.includes(p.pid) && rot.closers.length >= 5 && names(rot.closers[0])
-            ? `Closers play the end of the 4th quarter and overtime. You have five: adding him replaces ${names(rot.closers[0])}.`
-            : 'Closers play the end of the 4th quarter and overtime (up to five).'
-        }
-      />
-      <Toggle
-        on={rot.restB2B.includes(p.pid)}
-        onChange={(on) => update((r) => void (r.restB2B = on ? [...r.restB2B, p.pid] : r.restB2B.filter((x) => x !== p.pid)))}
-        label="Rest on back-to-backs"
-        help={`Season wear: ${Math.round(p.wear)}. Resting lowers wear and injury risk at the cost of a weaker lineup that night.`}
-      />
+      </Section>
+      <Section title="Minutes">
+        <div className="tm-ed-group">
+          <Slider
+            label="Target minutes"
+            value={m}
+            min={0}
+            max={MAX_MIN}
+            onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
+            format={(x) => `${x} min`}
+            help={p.mood.expectedMin ? `He expects about ${p.mood.expectedMin}. Big gaps hurt his mood.` : undefined}
+          />
+          <Slider
+            label="Hard minute cap"
+            value={cap}
+            min={0}
+            max={MAX_MIN}
+            onChange={(x) =>
+              update((r) => {
+                if (x === 0) delete r.caps[p.pid];
+                else r.caps[p.pid] = x;
+              })
+            }
+            format={(x) => (x ? `${x} min` : 'None')}
+            help={cap && cap < m ? `Never more, even in close games: under his ${m}-minute target, so ${cap} at most.` : 'Load management: never more, even in close games.'}
+          />
+        </div>
+      </Section>
+      <Section title="Late game and rest">
+        <div className="tm-ed-group">
+          <Toggle
+            on={rot.closers.includes(p.pid)}
+            onChange={(on) =>
+              update((r) => {
+                r.closers = on ? [...r.closers.filter((x) => x !== p.pid), p.pid].slice(-5) : r.closers.filter((x) => x !== p.pid);
+              })
+            }
+            label="Closing lineup"
+            help={
+              !rot.closers.includes(p.pid) && rot.closers.length >= 5 && names(rot.closers[0])
+                ? `Ends the 4th and overtime. You have five: he replaces ${names(rot.closers[0])}.`
+                : 'Ends the 4th quarter and overtime (up to five).'
+            }
+          />
+          <Toggle
+            on={rot.restB2B.includes(p.pid)}
+            onChange={(on) => update((r) => void (r.restB2B = on ? [...r.restB2B, p.pid] : r.restB2B.filter((x) => x !== p.pid)))}
+            label="Rest on back-to-backs"
+            help={`Wear ${Math.round(p.wear)}. Sits the second night: less wear and injury risk, a weaker lineup.`}
+          />
+        </div>
+      </Section>
       <button className="btn block" onClick={close}>
         Done
       </button>

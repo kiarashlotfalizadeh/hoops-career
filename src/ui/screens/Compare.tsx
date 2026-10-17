@@ -11,13 +11,15 @@ import { fmtHeight } from '../../core/ratings';
 import { playerName } from '../../core/league/helpers';
 import { askingContract, waiverSalary } from '../../core/league/contracts';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { FRANCHISES } from '../../core/teams';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Avatar, Bar, Card, Empty, Ovr, PageHeader } from '../components/ui';
+import { Avatar, Bar, Empty, Ovr, PageHeader, Section } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { capSeason, fmtM, openOption, shortSeason } from '../office/common';
 import { shortName } from '../league/shared';
 import { skillColor, useSkillPercentiles } from '../playerSkills';
+import { identityColor } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
 
@@ -44,10 +46,17 @@ function contractOf(league: League, p: Player): { main: string; sub?: string } {
   return { main: '—' };
 }
 
-function Head({ league, p, pid, onPick }: { league: League; p: Player | undefined; pid: number | null; onPick: () => void }) {
+/** The colour a side is known by: his team's, or a neutral one for a player without a team. */
+function sideColor(league: League, p: Player | undefined): string | undefined {
+  if (!p || p.tid < 0) return undefined;
+  const colors = league.teams[p.tid]?.colors ?? FRANCHISES[p.tid]?.colors;
+  return colors ? identityColor(colors) : undefined;
+}
+
+function Head({ league, p, pid, onPick, side }: { league: League; p: Player | undefined; pid: number | null; onPick: () => void; side: Side }) {
   if (!p) {
     return (
-      <div className="card cmp-head cmp-empty">
+      <div className={`card cmp-head cmp-empty ${side}`}>
         <UserPlus size={22} className="dim" aria-hidden />
         {/* a player pruned from the save leaves his pid behind */}
         <div className="small dim2">{pid === null ? 'No player yet' : 'This player is no longer in the league'}</div>
@@ -60,46 +69,47 @@ function Head({ league, p, pid, onPick }: { league: League; p: Player | undefine
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const deal = contractOf(league, p);
   const status = p.tid === FREE_AGENT ? (p.rfa ? 'Restricted FA' : 'Free agent') : p.tid === DRAFT_PROSPECT ? 'Prospect' : 'Retired';
+  const edge = sideColor(league, p);
   return (
-    <div className="card cmp-head">
-      <div className="row between top">
+    <div className={`card cmp-head ${side}`} style={edge ? { ['--cmp-edge' as string]: edge } : undefined}>
+      <div className="cmp-top">
         <Avatar p={p} />
-        <div className="col" style={{ alignItems: 'center', gap: 2 }}>
-          <Ovr v={p.ovr} size="sm" />
+        <div className="cmp-ovr">
+          <Ovr v={p.ovr} />
           <span className="pot">POT {p.pot}</span>
         </div>
       </div>
       <Link to={`/player/${p.pid}`} className="cmp-name">
-        <span className="small dim2 ellipsis">{p.firstName || ' '}</span>
-        <span>{p.lastName}</span>
+        <span className="cmp-first ellipsis">{p.firstName || ' '}</span>
+        <span className="cmp-last">{p.lastName}</span>
       </Link>
-      <div className="row small" style={{ gap: 6, minWidth: 0 }}>
+      <div className="cmp-team">
         {team ? (
           <>
             <TeamLogo tid={team.tid} size={18} decorative />
-            <span className="bold ellipsis">{team.abbrev}</span>
+            <span className="bold">{team.abbrev}</span>
           </>
         ) : (
-          <span className="dim2 ellipsis">{status}</span>
+          <span className="dim2">{status}</span>
         )}
+        <span className="cmp-meta">
+          {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)}
+        </span>
       </div>
-      <div className="tiny dim2 ellipsis">
-        {p.pos} · {playerAge(p, league.season)} yrs · {fmtHeight(p.heightIn)}
-      </div>
-      <span className="tag info cmp-tag" title={p.archetype}>
+      <span className="tag cmp-tag" title={p.archetype}>
         {p.archetype}
       </span>
-      <div className="cmp-deal">
-        <div className="small bold num ellipsis">{deal.main}</div>
-        {deal.sub && <div className="tiny dim">{deal.sub}</div>}
-      </div>
       {p.injury && (
         <span className="tag bad cmp-tag">
           {p.injury.type} · {p.injury.gamesRemaining}g
         </span>
       )}
+      <div className="cmp-deal">
+        <div className="cmp-deal-m num">{deal.main}</div>
+        {deal.sub && <div className="cmp-deal-s">{deal.sub}</div>}
+      </div>
       <div className="cmp-foot">
-        <button className="btn xs" aria-haspopup="dialog" aria-label={`Change ${playerName(p)} for another player`} onClick={onPick}>
+        <button className="btn xs ghost" aria-haspopup="dialog" aria-label={`Change ${playerName(p)} for another player`} onClick={onPick}>
           Change
         </button>
       </div>
@@ -138,75 +148,77 @@ function Heads({ names, mid }: { names: [string, string]; mid?: string }) {
   );
 }
 
-function Section({ s, names }: { s: CmpSection; names: [string, string] }) {
+function Block({ s, names }: { s: CmpSection; names: [string, string] }) {
   return (
-    <Card title={s.title}>
-      {s.note && <div className="tiny dim cmp-note">{s.note}</div>}
-      {!s.rows.length ? (
-        <div className="small dim">{s.empty}</div>
-      ) : s.id === 'skills' ? (
-        // percentiles as bars that grow out from the middle, the skill above them
-        <table className="cmp-t cmp-skills">
-          <Heads names={names} />
-          <tbody>
-            {s.rows.map((r) => {
-              const v = rowView(r);
-              return (
-                <Fragment key={r.key}>
-                  <tr className="cmp-sl">
-                    <th colSpan={2} scope="colgroup">
-                      {r.label}
-                    </th>
-                  </tr>
-                  <tr>
-                    {(['a', 'b'] as Side[]).map((side) => {
-                      const val = r[side];
-                      const text = v[side];
-                      return (
-                        <td key={side} className={`cmp-bar ${side} ${v.win === side ? 'win' : ''} ${val === null ? 'none' : ''}`}>
-                          <div className="cmp-bw">
-                            <span className="cmp-n">{text}</span>
-                            {v.win === side && <span className="sr-only"> (better)</span>}
-                            <span className="cmp-track">{val !== null && <Bar value={val} color={skillColor(val)} height={8} />}</span>
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <table className="cmp-t">
-          <Heads names={names} mid={s.title} />
-          <tbody>
-            {s.rows.map((r) => {
-              const v = rowView(r);
-              return (
-                <Fragment key={r.key}>
-                  {r.group && (
-                    <tr className="cmp-group">
-                      <th colSpan={3} scope="colgroup">
-                        {r.group}
+    <Section title={s.title}>
+      <div className="card cmp-card">
+        {s.note && <div className="cmp-note">{s.note}</div>}
+        {!s.rows.length ? (
+          <div className="small dim">{s.empty}</div>
+        ) : s.id === 'skills' ? (
+          // percentiles as bars that grow out from the middle, the skill above them
+          <table className="cmp-t cmp-skills">
+            <Heads names={names} />
+            <tbody>
+              {s.rows.map((r) => {
+                const v = rowView(r);
+                return (
+                  <Fragment key={r.key}>
+                    <tr className="cmp-sl">
+                      <th colSpan={2} scope="colgroup">
+                        {r.label}
                       </th>
                     </tr>
-                  )}
-                  <tr>
-                    <Val text={v.a} win={v.win === 'a'} />
-                    <th scope="row" className="cmp-l">
-                      {r.label}
-                    </th>
-                    <Val text={v.b} win={v.win === 'b'} />
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </Card>
+                    <tr>
+                      {(['a', 'b'] as Side[]).map((side) => {
+                        const val = r[side];
+                        const text = v[side];
+                        return (
+                          <td key={side} className={`cmp-bar ${side} ${v.win === side ? 'win' : ''} ${val === null ? 'none' : ''}`}>
+                            <div className="cmp-bw">
+                              <span className="cmp-n">{text}</span>
+                              {v.win === side && <span className="sr-only"> (better)</span>}
+                              <span className="cmp-track">{val !== null && <Bar value={val} color={skillColor(val)} height={8} />}</span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <table className="cmp-t">
+            <Heads names={names} mid={s.title} />
+            <tbody>
+              {s.rows.map((r) => {
+                const v = rowView(r);
+                return (
+                  <Fragment key={r.key}>
+                    {r.group && (
+                      <tr className="cmp-group">
+                        <th colSpan={3} scope="colgroup">
+                          {r.group}
+                        </th>
+                      </tr>
+                    )}
+                    <tr>
+                      <Val text={v.a} win={v.win === 'a'} />
+                      <th scope="row" className="cmp-l">
+                        {r.label}
+                      </th>
+                      <Val text={v.b} win={v.win === 'b'} />
+                    </tr>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </Section>
   );
 }
 
@@ -228,6 +240,7 @@ export default function Compare() {
   const set = (a: number | null, b: number | null) => setParams(compareQuery(a, b), { replace: true });
   const names: [string, string] = [pa ? playerName(pa) : 'No player', pb ? playerName(pb) : 'No player'];
   const other = picking === 'a' ? pb : picking === 'b' ? pa : undefined;
+  const edges = [sideColor(league, pa), sideColor(league, pb)];
 
   return (
     <main className="page cmp-page">
@@ -243,19 +256,22 @@ export default function Compare() {
         }
       />
       <div className="cmp-heads">
-        <Head league={league} p={pa} pid={ids.a} onPick={() => setPicking('a')} />
-        <Head league={league} p={pb} pid={ids.b} onPick={() => setPicking('b')} />
+        <Head league={league} p={pa} pid={ids.a} side="a" onPick={() => setPicking('a')} />
+        <span className="cmp-vs-badge" aria-hidden="true">
+          VS
+        </span>
+        <Head league={league} p={pb} pid={ids.b} side="b" onPick={() => setPicking('b')} />
       </div>
       {pa || pb ? (
         <>
           {/* which side is which, kept in view while the rows scroll by */}
           <div className="cmp-strip" aria-hidden>
-            <span>{pa ? shortName(pa) : '—'}</span>
+            <span style={edges[0] ? { ['--cmp-edge' as string]: edges[0] } : undefined}>{pa ? shortName(pa) : '—'}</span>
             <span className="cmp-vs">vs</span>
-            <span>{pb ? shortName(pb) : '—'}</span>
+            <span style={edges[1] ? { ['--cmp-edge' as string]: edges[1] } : undefined}>{pb ? shortName(pb) : '—'}</span>
           </div>
           {sections.map((s) => (
-            <Section key={s.id} s={s} names={names} />
+            <Block key={s.id} s={s} names={names} />
           ))}
         </>
       ) : (

@@ -9,11 +9,11 @@ import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Sheet } from './ui';
-import { TeamLogo } from './TeamLogo';
-import { OvrPot, playerMeta } from '../office/common';
+import { Avatar, Ovr, Sheet } from './ui';
+import { playerMeta } from '../office/common';
 import { boardNeighbors, draftPhase, loadRecent, pickerPool, playersAt, recentPids, searchPlayers } from '../compare';
 import '../league/league.css';
+import '../screens/team.css';
 
 const QUICK = 6;
 
@@ -80,19 +80,22 @@ export function PlayerPicker({
   const found = open && q.trim() ? searchPlayers(league, pool, q) : null;
 
   const row = (p: Player) => (
-    <button key={p.pid} className="fo-prow" onClick={() => pick(p.pid)}>
-      <OvrPot p={p} />
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="fo-name">{playerName(p)}</div>
-        <div className="fo-meta">{playerMeta(league, p, where(league, p))}</div>
-      </div>
-      {p.tid >= 0 && <TeamLogo tid={p.tid} size={24} decorative />}
+    <button key={p.pid} className="tm-pick" onClick={() => pick(p.pid)}>
+      <Avatar p={p} />
+      <span className="grow">
+        <span className="tm-pick-n">{playerName(p)}</span>
+        <span className="tm-pick-m">{playerMeta(league, p, where(league, p))}</span>
+      </span>
+      <span className="tm-ovr">
+        <Ovr v={p.ovr} size="sm" />
+        <span className="pot">POT {p.pot}</span>
+      </span>
     </button>
   );
 
   return (
     <Sheet open={open} onClose={close} title={title}>
-      <div className="col" style={{ gap: 10 }}>
+      <div className="col tm-picker">
         <div className="lg-search">
           <Search size={15} />
           <input
@@ -112,8 +115,8 @@ export function PlayerPicker({
                 <div className="list">{found.list.map(row)}</div>
               </div>
               {found.total > found.list.length && (
-                <div className="tiny dim">
-                  The best {found.list.length} of {found.total}: type more of the name to narrow it.
+                <div className="tm-foot">
+                  The best {found.list.length} of {found.total}: type more to narrow it.
                 </div>
               )}
             </>
