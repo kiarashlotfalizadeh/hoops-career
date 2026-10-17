@@ -11,18 +11,26 @@ import { inkOn } from '../teamColors';
 /** How long the lineups stay up before the tip at 1× (faster speeds shorten it). */
 export const INTRO_MS = 9000;
 
-/** A starter's line for the intro: this season's per game, or last season's (`last`) before his first game. */
-export function introLine(league: League, pid: number): { text: string; last: boolean } {
+/**
+ * A starter's line for the intro: this season's per game, or last season's (`last`) before his first game.
+ * `short` rounds to whole numbers, the units between them, for a phone's half court (to the tenth, the
+ * assists were cut off).
+ */
+export function introLine(league: League, pid: number): { text: string; short: string; last: boolean } {
   const p = league.players[pid];
-  if (!p) return { text: '', last: false };
+  if (!p) return { text: '', short: '', last: false };
   for (const season of [league.season, league.season - 1]) {
     const s = seasonTotals(p, season);
     if (s && s.gp > 0) {
-      const pg = (v: number) => (v / s.gp).toFixed(1);
-      return { text: `${pg(s.pts)} pts · ${pg(s.orb + s.drb)} reb · ${pg(s.ast)} ast`, last: season !== league.season };
+      const line = (digits: number, sep: string) => {
+        const pg = (v: number) => (v / s.gp).toFixed(digits);
+        return `${pg(s.pts)} pts${sep}${pg(s.orb + s.drb)} reb${sep}${pg(s.ast)} ast`;
+      };
+      return { text: line(1, ' · '), short: line(0, ' '), last: season !== league.season };
     }
   }
-  return { text: p.experience === 0 ? 'Rookie' : '', last: false };
+  const text = p.experience === 0 ? 'Rookie' : '';
+  return { text, short: text, last: false };
 }
 
 export function Intro({
@@ -86,11 +94,13 @@ export function Intro({
                 {p?.jersey || '0'}
               </span>
               <span className="col" style={{ gap: 0, minWidth: 0 }}>
-                <span className="ellipsis bold">
+                {/* (a long name wraps, at its hyphen if it has one, rather than lose its end and the position) */}
+                <span className="bold live-intro-name">
                   {names(pid)} <span className="live-intro-pos">{p?.pos}</span>
                 </span>
                 <span className="live-intro-line ellipsis">
-                  {lines.get(pid)?.text}
+                  <span className="live-intro-dec">{lines.get(pid)?.text}</span>
+                  <span className="live-intro-whole">{lines.get(pid)?.short}</span>
                   {!lastSeason && lines.get(pid)?.last ? ' · last season' : ''}
                 </span>
               </span>
@@ -106,7 +116,7 @@ export function Intro({
       <div className="live-intro-head">
         <div className="live-intro-kicker">Starting lineups</div>
         <div className="live-intro-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>
-        {context && <div className="live-intro-where ellipsis">{context}</div>}
+        {context && <div className="live-intro-where ellipsis live-intro-ctx">{context}</div>}
         {lastSeason && <div className="live-intro-where ellipsis">Per game, last season</div>}
       </div>
       <div className="live-intro-grid">

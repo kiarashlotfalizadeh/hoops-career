@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Banknote, Check, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
+import { Ban, Banknote, Check, ChevronDown, ChevronUp, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
@@ -400,7 +400,19 @@ export default function Trade() {
               <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
             </div>
           </div>
-          <Dock league={league} offer={offer} ev={ev} empty={empty} season={s} onPropose={propose} onWork={whatWorks} force={force} onForce={forceIt} />
+          {/* (keyed: a new deal or partner starts with the dock folded) */}
+          <Dock
+            key={empty ? 'none' : offer.b.tid}
+            league={league}
+            offer={offer}
+            ev={ev}
+            empty={empty}
+            season={s}
+            onPropose={propose}
+            onWork={whatWorks}
+            force={force}
+            onForce={forceIt}
+          />
         </>
       ) : tab === 'find' ? (
         <TradeFinder league={league} state={finder} onChange={setFinder} onPick={pickTarget} />
@@ -798,6 +810,10 @@ function Dock({
   const user = league.userTid;
   // god-mode edits wait while a sim runs, a forced trade too
   const simming = useStore((s) => !!s.sim);
+  // on a phone the dock folds the deal's terms and its salary, payroll and roster numbers away until it's
+  // opened (office.css .fo-dock-more): all of it covered half the asset list
+  const [more, setMore] = useState(false);
+  const moreId = useId();
   const cap = CAP_FOR(league, season);
   const key = JSON.stringify(offer);
   // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
@@ -839,13 +855,20 @@ function Dock({
   // the helper can fix our side's salary matching, a full roster and the value, nothing else
   const theyreOver = money.theyreOver;
   const fixable = !ev.accept && money.workable;
+  // god mode's line under Force folds with the details when it only explains (an error or a wait stays)
+  const forcePlain = !!force && !force.errors.length && !force.warnings.length && !simming;
   return (
-    <div className="fo-dock">
+    <div className={`fo-dock${more ? ' open' : ''}`}>
       <div className="row between" style={{ gap: 8, marginBottom: 6 }}>
         <span className="small bold" style={{ color: r.color }}>
           {league.teams[offer.b.tid].abbrev}: {r.label}
         </span>
-        <span className="tiny dim num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
+        <span className="row" style={{ gap: 6, flex: 'none' }}>
+          <span className="tiny dim num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
+          <button className="btn xs ghost fo-only-sm" aria-expanded={more} aria-controls={forcePlain ? `${moreId} ${moreId}f` : moreId} onClick={() => setMore((m) => !m)}>
+            {more ? <ChevronDown size={14} /> : <ChevronUp size={14} />} {more ? 'Less' : 'Details'}
+          </button>
+        </span>
       </div>
       <div className="fo-meter">
         <i style={{ width: `${r.pct}%`, background: r.color }} />
@@ -862,34 +885,42 @@ function Dock({
           <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />
         </div>
       )}
-      {/* what each protection, swap and sum of cash does, a line each */}
-      <TermsList league={league} offer={offer} short />
-      <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
-        <div>
-          <div className="tiny dim upper bold">Salary</div>
-          <div className="small num">
-            Out <b>{fmtM(out)}</b>
+      <div id={moreId} className="fo-dock-more">
+        {/* what each protection, swap and sum of cash does, a line each */}
+        <TermsList league={league} offer={offer} short />
+        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
+          <div>
+            <div className="tiny dim upper bold">Salary</div>
+            <div className="small num">
+              Out <b>{fmtM(out)}</b>
+            </div>
+            <div className="small num">
+              In <b>{fmtM(inc)}</b>
+            </div>
           </div>
-          <div className="small num">
-            In <b>{fmtM(inc)}</b>
+          <div>
+            <div className="tiny dim upper bold">Payroll after</div>
+            <div className="small num bold" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+              {fmtM(after)}
+            </div>
+            <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
+            {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
           </div>
-        </div>
-        <div>
-          <div className="tiny dim upper bold">Payroll after</div>
-          <div className="small num bold" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-            {fmtM(after)}
+          <div>
+            <div className="tiny dim upper bold">Rosters</div>
+            <div className="small num bold" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
+              {rosterAfter} / {theirAfter}
+            </div>
+            <div className="tiny dim">you / them</div>
           </div>
-          <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
-          {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
-        </div>
-        <div>
-          <div className="tiny dim upper bold">Rosters</div>
-          <div className="small num bold" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
-            {rosterAfter} / {theirAfter}
-          </div>
-          <div className="tiny dim">you / them</div>
         </div>
       </div>
+      {/* folded on a phone, a payroll over the tax still says so */}
+      {!more && after > cap.luxuryTax && (
+        <div className="fo-only-sm tiny warn bold num" style={{ marginTop: 6 }}>
+          Payroll after: {fmtM(after)}, {fmtM(after - cap.luxuryTax)} over the tax
+        </div>
+      )}
       {ruleErrors.length > 0 && (
         <div className="row top small" style={{ marginTop: 8, gap: 6 }}>
           <span className="tag bad" style={{ flex: 'none' }}>
@@ -914,7 +945,7 @@ function Dock({
           <button className="btn sm block" disabled={force.errors.length > 0 || simming} onClick={onForce}>
             <Zap size={16} /> Force this trade
           </button>
-          <span className={`tiny ${force.errors.length ? 'bad' : force.warnings.length || simming ? 'warn' : 'dim'}`}>
+          <span id={`${moreId}f`} className={`tiny ${force.errors.length ? 'bad' : force.warnings.length || simming ? 'warn' : 'dim fo-dock-more'}`}>
             {force.errors[0] ??
               (simming
                 ? 'The simulation is running: a forced trade waits for it to stop.'

@@ -153,7 +153,13 @@ export default function Live() {
   scriptRef.current = script;
   /** The possession the court last finished drawing: what Replay shows. */
   const lastDone = useRef<Script | null>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  // (and as state, for the effect that measures what's around the court once it's there)
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
+  const stageCb = useCallback((el: HTMLDivElement | null) => {
+    stageRef.current = el;
+    setStageEl(el);
+  }, []);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
@@ -821,6 +827,21 @@ export default function Live() {
   };
 
   const over = status !== 'live';
+  // a tablet held upright gives the court the height the scorebug, the strip and the coaching dock leave
+  // it (live.css --live-under): those vary with the game (a series line), the settings (the ticker, win
+  // probability) and the coaching depth (the dock), so they're measured rather than budgeted
+  useEffect(() => {
+    const page = stageEl?.closest<HTMLElement>('.live-page');
+    if (!page) return;
+    const parts = ['.live-bugcard', '.live-strip-under', '.live-dock'].flatMap((s) => page.querySelector<HTMLElement>(s) ?? []);
+    const ro = new ResizeObserver(() => page.style.setProperty('--live-under', `${parts.reduce((h, el) => h + el.offsetHeight, 0)}px`));
+    parts.forEach((el) => ro.observe(el));
+    return () => {
+      ro.disconnect();
+      page.style.removeProperty('--live-under');
+    };
+    // the strip and the dock come and go with the game's status
+  }, [stageEl, status]);
   const persist = !!game?.keep;
   const tactics = useMemo(
     () => (game ? game.sim.baseTactics(game.userSide) : null),
@@ -980,7 +1001,7 @@ export default function Live() {
       <div className="live-grid">
         <div className="col live-left" style={{ gap: 10 }}>
           {/* the scorebug and the court: on a phone they stay at the top while the rest scrolls under them */}
-          <div className="live-stage" ref={stageRef}>
+          <div className="live-stage" ref={stageCb}>
             <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} atBreak={atBreak} ot={result?.ot ?? 0} context={context} wpHome={wpHome}>
               {others.length > 0 && status !== 'simmed' && <ScoreTicker league={league} games={others} elapsed={view.elapsed} done={over} onOpen={() => setPanel('scores')} />}
             </ScoreBug>
@@ -1164,7 +1185,7 @@ export default function Live() {
           {status === 'final' && result && <GameRecap res={result} league={league} />}
         </div>
         <div className="col live-right" style={{ gap: 10 }}>
-          {/* the coaching buttons: a dock in place of the tab bar on a phone, the top of this column elsewhere */}
+          {/* the coaching buttons: upright, a dock pinned to the bottom (in the tab bar's place on a phone, just over it on a tablet); sideways, the top of this column */}
           {!over && (
             <div className={`grid4 live-ctl live-dock${playsOn ? ' five' : ''}`} role="group" aria-label="Coaching">
               <button
