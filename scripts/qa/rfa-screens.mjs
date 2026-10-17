@@ -200,10 +200,10 @@ await page.waitForTimeout(500);
 await shot('d15-offer-sheet');
 await scrollSheet();
 await shot('d15b-offer-sheet-bottom');
-const sign = page.locator('.sheet').getByRole('button', { name: /Sign offer sheet/ });
+const sign = page.locator('.sheet').getByRole('button', { name: /^Offer sheet ·/ });
 await page
   .locator('.sheet')
-  .getByRole('button', { name: /His price/ })
+  .getByRole('button', { name: /^His ask/ })
   .click()
   .catch(() => {});
 await page.waitForTimeout(300);
