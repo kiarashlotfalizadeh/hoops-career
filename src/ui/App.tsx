@@ -286,11 +286,11 @@ function ContinueBar() {
   const steps = !!sim && sim.total > 1;
   // game day: the bar's Watch & coach opens the pre-game screen first (Settings), as Home's does; the
   // menu's "Watch & coach live" goes straight to the court
-  const go = (a: FlowAction) => {
+  const go = (a: FlowAction, fromBar = false) => {
     haptic();
     const live = liveInProgress(league);
     const today = userGameOnDay(league, league.day);
-    if (a === primary && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/preview')) {
+    if (fromBar && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/preview')) {
       nav(`/preview/${today.gid}`);
       return;
     }
@@ -329,7 +329,7 @@ function ContinueBar() {
           <div className="continue">
             <div className={`continue-inner ${here ? 'compact' : ''}`}>
               {!here && (
-                <button className="continue-go" disabled={!!primary.disabled} onClick={() => go(primary)}>
+                <button className="continue-go" disabled={!!primary.disabled} onClick={() => go(primary, true)}>
                   <Play size={18} fill="currentColor" aria-hidden="true" />
                   <span className="grow">
                     <span className="cg-label ellipsis">{label}</span>
