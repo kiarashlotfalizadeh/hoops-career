@@ -195,7 +195,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
   const car = (key: string, label: string, f: (c: Career) => number, dir: Dir = 'high', fmt: Fmt = 'int') => row(key, label, onCareer(f), dir, fmt);
   const careerRows: CmpRow[] = [
     car('seasons', 'Seasons', (c) => c.seasons.size, 'none'),
-    car('cgp', 'Games', (c) => c.gp),
+    car('cgp', 'Games', (c) => c.gp, 'none'),
     car('cpts', 'Points', (c) => c.pts),
     car('creb', 'Rebounds', (c) => c.reb),
     car('cast', 'Assists', (c) => c.ast),

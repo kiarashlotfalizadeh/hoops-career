@@ -323,5 +323,15 @@ describe('saves', () => {
     expect(fixed.players[q.pid].jerseys).toBeUndefined();
     // a save from before retired numbers has none, and that's fine
     expect(fixed.teams[(A + 3) % 30].retired).toBeUndefined();
+    // the players a team numbered, out of shape, go: it numbers its roster again (it threw at the next game)
+    const odd = structuredClone(l) as unknown as { teams: { numbered?: unknown }[] };
+    odd.teams[A].numbered = 5;
+    odd.teams[B].numbered = { x: 1 };
+    const kept = l.teams[(A + 3) % 30].numbered;
+    const back2 = migrate(odd);
+    expect(back2.teams[A].numbered).toBeUndefined();
+    expect(back2.teams[B].numbered).toBeUndefined();
+    expect(back2.teams[(A + 3) % 30].numbered).toEqual(kept);
+    expect(() => numberTeam(back2, A)).not.toThrow();
   });
 });

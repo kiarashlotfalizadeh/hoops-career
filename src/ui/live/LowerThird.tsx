@@ -32,7 +32,8 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
   // scoring records count once the book has a season behind it, as in the news
   const book = league.records;
   const kind = bookOf(type);
-  const lists = book && kind && league.season > book.since ? { league: book.league[kind].players.pts?.[0]?.[0] ?? 0, kind } : null;
+  // (a list with nothing on it yet has no record to break)
+  const lists = book && kind && league.season > book.since ? { league: book.league[kind].players.pts?.[0]?.[0], kind } : null;
   const out = new Map<number, PlayerBefore>();
   for (const t of sim.T) {
     const tid = t.team.tid;
@@ -44,11 +45,11 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
       const whole = careerOnRecord(p, league.season);
       const h = high.get(pid);
       const c = whole ? careerTotals(p) : null;
-      const franchise = lists && team ? (book!.teams[tid]?.[lists.kind].players.pts?.[0]?.[0] ?? 0) : null;
+      const franchise = lists && team ? book!.teams[tid]?.[lists.kind].players.pts?.[0]?.[0] : undefined;
       out.set(pid, {
         ...(h ? { high: { ...h, career: whole && p.experience === 0 } } : {}),
         ...(c ? { career: { pts: c.pts, reb: c.reb, ast: c.ast } } : {}),
-        ...(lists && franchise !== null ? { records: { team: franchise, teamName: team.name, league: lists.league, playoffs: lists.kind === 'post' } } : {}),
+        ...(lists && team ? { records: { team: franchise, teamName: team.name, league: lists.league, playoffs: lists.kind === 'post' } } : {}),
       });
     }
   }

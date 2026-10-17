@@ -72,7 +72,7 @@ export interface RecordShelf {
 }
 
 export interface RecordBook {
-  /** The first season the book covers: the league's first, or, for a save from before the book, its oldest stored game's. */
+  /** The first season the book covers: the league's first, or, for a save from before the book, the season it was read back in (see backfillRecords). */
   since: number;
   league: { reg: RecordShelf; post: RecordShelf };
   /** Each franchise's, by tid. */
@@ -183,12 +183,37 @@ function franchise(book: RecordBook, tid: number) {
 /**
  * Write one game into the book (League.records, started on the first) and its players' career
  * highs, and return the records it set or tied. A game the book doesn't count returns nothing.
+ *
+ * Each list is judged once, against its best from before the game: the night's best mark on it is
+ * the record (two players can't both set one by passing the old best in turn), and a list the book
+ * had nothing on yet (a franchise's first postseason) only starts.
  */
 export function recordGame(league: League, res: GameResult): RecordNote[] {
   const kind = bookOf(res.type);
   if (!kind) return [];
   const book = (league.records ??= emptyBook(res.season));
   const notes: RecordNote[] = [];
+  const tonight = (k: RowKey) => k.gid === res.gid && k.season === res.season;
+  // every list the game touches, with how to judge it once all its rows are in (the order lists were first touched: the league's before the franchise's)
+  const judged = new Map<unknown[], () => void>();
+  const put = <R>(list: R[], row: R, keep: number, key: (r: R) => RowKey, note: (r: R, kind: 'record' | 'tie') => void) => {
+    if (!judged.has(list)) {
+      const before = list.length ? key(list[0]).v : undefined;
+      judged.set(list, () => {
+        if (before === undefined || !list.length) return;
+        const top = key(list[0]);
+        // a new best: whoever reached it tonight; else whoever equalled the old one (a tie stays first with whoever set it)
+        const at = tonight(top) && top.v > before ? top.v : top.v === before ? before : undefined;
+        if (at === undefined) return;
+        for (const r of list) {
+          const k = key(r);
+          if (k.v !== at) break;
+          if (tonight(k)) note(r, at > before ? 'record' : 'tie');
+        }
+      });
+    }
+    insertMark(list, row, keep, key);
+  };
   const sides = [
     [res.home, res.away],
     [res.away, res.home],
@@ -204,10 +229,9 @@ export function recordGame(league: League, res: GameResult): RecordNote[] {
         if (v <= 0) continue;
         // a player no longer in the save (a backfill from older results) carries his name from the box score
         const row = (): MarkRow => (p ? [v, b.pid, us.tid, them.tid, res.season, res.day, res.gid] : [v, b.pid, us.tid, them.tid, res.season, res.day, res.gid, b.name]);
-        const atL = insertMark((lg.players[stat] ??= []), row(), KEEP.league[kind], markKey);
-        const atT = insertMark((fr.players[stat] ??= []), row(), KEEP.team[kind], markKey);
-        if (atL === 'record' || atL === 'tie') notes.push({ scope: 'league', book: kind, kind: atL, stat, tid: us.tid, pid: b.pid, v });
-        if (atT === 'record' || atT === 'tie') notes.push({ scope: 'team', book: kind, kind: atT, stat, tid: us.tid, pid: b.pid, v });
+        const note = (scope: RecordNote['scope']) => (r: MarkRow, k: RecordNote['kind']) => notes.push({ scope, book: kind, kind: k, stat, tid: r[2], pid: r[1], v: r[0] });
+        put((lg.players[stat] ??= []), row(), KEEP.league[kind], markKey, note('league'));
+        put((fr.players[stat] ??= []), row(), KEEP.team[kind], markKey, note('team'));
         if (kind === 'reg' && p) careerHigh(p, stat, [v, res.season, res.day, them.tid, res.gid]);
       }
     }
@@ -215,12 +239,12 @@ export function recordGame(league: League, res: GameResult): RecordNote[] {
       const v = stat === 'pts' ? us.pts : stat === 'margin' ? us.pts - them.pts : us.t.tpm;
       if (v <= 0) continue;
       const row = (): TeamRow => [v, us.tid, them.tid, res.season, res.day, res.gid, us.pts, them.pts];
-      const atL = insertMark((book.league[kind].teams[stat] ??= []), row(), KEEP.league[kind], teamKey);
-      const atT = insertMark((fr.teams[stat] ??= []), row(), KEEP.team[kind], teamKey);
-      if (atL === 'record' || atL === 'tie') notes.push({ scope: 'league', book: kind, kind: atL, stat, team: true, tid: us.tid, v });
-      if (atT === 'record' || atT === 'tie') notes.push({ scope: 'team', book: kind, kind: atT, stat, team: true, tid: us.tid, v });
+      const note = (scope: RecordNote['scope']) => (r: TeamRow, k: RecordNote['kind']) => notes.push({ scope, book: kind, kind: k, stat, team: true, tid: r[1], v: r[0] });
+      put((book.league[kind].teams[stat] ??= []), row(), KEEP.league[kind], teamKey, note('league'));
+      put((fr.teams[stat] ??= []), row(), KEEP.team[kind], teamKey, note('team'));
     }
   }
+  for (const judge of judged.values()) judge();
   return notes;
 }
 
@@ -268,12 +292,12 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
   for (const list of byWho.values()) {
     const first = list[0];
     const opp = first.tid === res.home.tid ? res.away.tid : res.home.tid;
-    // a stat that set the league's record doesn't also claim the franchise's
-    const shown = list.filter((n) => n.scope === 'league' || !list.some((m) => m.scope === 'league' && m.stat === n.stat && m.kind === 'record'));
+    // a stat that set or tied the league's record names the number once: a franchise record set with a share of the league's goes with it
+    const shown = list.filter((n) => n.scope === 'league' || !list.some((m) => m.scope === 'league' && m.stat === n.stat));
+    const whose = (n: RecordNote) => `${n.scope === 'league' ? 'league' : (league.teams[n.tid]?.name ?? 'franchise')} ${post(n)}record`;
     const parts = shown.map((n) => {
-      const what = recordWhat(n);
-      const whose = n.scope === 'league' ? 'league' : `${league.teams[n.tid]?.name ?? 'franchise'}`;
-      return `${what} (${n.kind === 'tie' ? 'tying the' : 'a'} ${whose} ${post(n)}record)`;
+      const also = n.kind === 'tie' && list.find((m) => m.scope === 'team' && m.stat === n.stat && m.kind === 'record');
+      return `${recordWhat(n)} (${n.kind === 'tie' ? `tying the ${whose(n)}${also ? `, a ${whose(also)}` : ''}` : `a ${whose(n)}`})`;
     });
     const who = first.team
       ? (league.teams[first.tid]?.region ?? ab(first.tid))
@@ -296,12 +320,13 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
 const partsList = (parts: string[]) => (parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
 
 /**
- * A book for a save from before the record book: read back from the results it still has (this
- * season's and last season's), so it covers those seasons; career highs come with it.
+ * A book for a save from before the record book: read back from this season's results, the only
+ * ones the save still has whole (of last season's it keeps only the user's games, which would make
+ * a book of their best nights), so it covers this season on; career highs come with it.
  */
 export function backfillRecords(league: League) {
   if (league.records) return;
-  const games = [...league.games].filter((g) => bookOf(g.type)).sort((a, b) => a.season - b.season || a.day - b.day || a.gid - b.gid);
+  const games = [...league.games].filter((g) => g.season === league.season && bookOf(g.type)).sort((a, b) => a.day - b.day || a.gid - b.gid);
   // (with nothing to read the book starts with the first game, as a new league's does: a save comes back as it went)
   for (const g of games) recordGame(league, g);
 }
@@ -392,6 +417,30 @@ function teamGamesBy(league: League, playoffs: boolean): (tid: number, season: n
     const ts = league.teams[tid]?.seasons.find((x) => x.season === season);
     return ts ? ts.won + ts.lost : 82;
   };
+}
+
+/**
+ * Could one of his seasons in this league stand in a single-season record list (see seasonRecords)?
+ * A regular season of 70% of his teams' games (split between teams, as the league's list counts it)
+ * qualifies for the per-game and percentage lists, and a playoff run of four games may on a
+ * franchise's short postseason lists. Compaction keeps such a player, since the lists are read from
+ * the players the save keeps (a fringe career's big total season, without the games, can still go).
+ */
+export function mayHoldSeasonRecord(league: League, p: Player): boolean {
+  const reg = new Map<number, { gp: number; games: number }>();
+  for (const s of p.stats) {
+    if (s.real || s.gp <= 0) continue;
+    if (s.playoffs) {
+      if (s.gp >= 4) return true;
+      continue;
+    }
+    const ts = league.teams[s.tid]?.seasons.find((x) => x.season === s.season);
+    const r = reg.get(s.season) ?? { gp: 0, games: 0 };
+    r.gp += s.gp;
+    r.games = Math.max(r.games, ts ? ts.won + ts.lost : 82);
+    reg.set(s.season, r);
+  }
+  return [...reg.values()].some((r) => r.gp >= Math.ceil(r.games * 0.7));
 }
 
 /**

@@ -300,7 +300,8 @@ export function Levels({
             tabIndex={i === cur ? 0 : -1}
             disabled={disabled}
             className={i === cur ? 'on' : i < cur ? 'below' : undefined}
-            onClick={() => onChange(LEVEL_VALUES[i])}
+            // the setting already marked stays as it is: a preset's or the staff's value between levels isn't snapped to the level's
+            onClick={() => i !== cur && onChange(LEVEL_VALUES[i])}
             onKeyDown={(e) => onKey(e, i)}
           >
             {n}

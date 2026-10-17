@@ -32,9 +32,9 @@ export interface PlayerBefore {
   /**
    * The points records he's playing for tonight (see records.ts), once the book has a season behind
    * it: his franchise's (named by its team name) and the league's, in tonight's book (regular season
-   * or playoffs).
+   * or playoffs). A list with nothing on it yet (a franchise's first postseason) has no record to break.
    */
-  records?: { team: number; teamName: string; league: number; playoffs: boolean };
+  records?: { team?: number; teamName: string; league?: number; playoffs: boolean };
 }
 
 export interface GraphicInput {
@@ -125,7 +125,11 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
       const rec = before?.records;
       if (rec) {
         const post = rec.playoffs ? 'playoff ' : '';
-        if (b.pts > rec.league)
+        // the record is tonight's best: a man past the old one isn't the record while someone else has more
+        const most = (players: BoxLine[]) => Math.max(0, ...players.filter((x) => x.pid !== b.pid).map((x) => x.pts));
+        const team = rec.team === undefined ? undefined : Math.max(rec.team, most(lines[side]));
+        const lg = rec.league === undefined ? undefined : Math.max(rec.league, most(lines[0]), most(lines[1]));
+        if (lg !== undefined && b.pts > lg)
           add({
             id: `rec-l-${b.pid}`,
             kind: 'record',
@@ -134,9 +138,9 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
             side,
             priority: 98,
           });
-        else if (b.pts > rec.team)
+        else if (team !== undefined && b.pts > team)
           add({ id: `rec-t-${b.pid}`, kind: 'record', tag: 'Franchise record', text: `${name}: ${b.pts} points, a ${rec.teamName} ${post}record`, side, priority: 96 });
-        else if (q >= 4 && b.pts >= rec.team - 4 && rec.team >= 40)
+        else if (rec.team !== undefined && q >= 4 && b.pts >= rec.team - 4 && rec.team >= 40)
           add({
             id: `rec-w-${b.pid}`,
             kind: 'watch',

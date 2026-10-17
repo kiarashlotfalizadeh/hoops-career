@@ -285,6 +285,19 @@ describe('two seasons of the carousel', () => {
     expect(userCoach(x)!.name).toBe('New Name');
     expect(x.teams[userTid].coach.name).toBe('New Name');
     expect(coachCareer(x, userCoach(x)!).coy).toContain(aw.season);
+    // his old name stays with him: no new coach is given it, so an award that named him can't go to one
+    expect(userCoach(x)!.aka).toEqual(['The User']);
+    const ai = x.coaches!.find((r) => !r.user)!;
+    const before = ai.name;
+    ai.name = 'The User';
+    expect(coyWinners(x).get(aw.season)).toBe(userCoach(x)!.id);
+    ai.name = before;
+    // and he can take it back: the name he leaves is the one kept
+    expect(renameUserCoach(x, 'The User')).toBe(true);
+    expect(userCoach(x)!.aka).toEqual(['New Name']);
+    expect(coachCareer(x, userCoach(x)!).coy).toContain(aw.season);
+    // former names survive a save
+    expect(migrate(structuredClone(x)).coaches).toEqual(x.coaches);
   });
 
   it('survives a save; a save from before the registry, or a damaged one, starts it again from the coaches in charge', async () => {
@@ -312,10 +325,16 @@ describe('two seasons of the carousel', () => {
     const dup = structuredClone(l);
     delete dup.coaches;
     dup.teams[8].coach.name = dup.teams[7].coach.name;
+    // ...and a Coach of the Year the renamed one won under the shared name stays his, as does the other's
+    const [early, late] = dup.awards;
+    Object.assign(early, { coy: 8, coyCoach: dup.teams[7].coach.name });
+    Object.assign(late, { coy: 7, coyCoach: dup.teams[7].coach.name });
     const fixed = migrate(dup);
     expect(registryProblems(fixed)).toEqual([]);
     expect(fixed.teams[7].coach.name).toBe(l.teams[7].coach.name);
     expect(fixed.teams[8].coach.name).not.toBe(fixed.teams[7].coach.name);
+    expect(coyWinners(fixed).get(early.season)).toBe(activeCoach(fixed, 8)!.id);
+    expect(coyWinners(fixed).get(late.season)).toBe(activeCoach(fixed, 7)!.id);
   });
 });
 

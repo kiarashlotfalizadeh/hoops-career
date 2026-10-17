@@ -27,7 +27,7 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { freezeRecordNames } from './records';
+import { freezeRecordNames, mayHoldSeasonRecord } from './records';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -705,14 +705,16 @@ function extensionCandidatesMail(league: League) {
  * Retirees stay for history and the Hall of Fame, but after two seasons only as career records:
  * those who never played a game go, the rest lose sim-only detail (ratings snapshots beyond peak
  * and final, tendencies, scouting, mood, on-court and shot-zone context in their stat lines).
- * Five seasons on, fringe careers without an award (under 100 games) leave too. Without this the
+ * Five seasons on, fringe careers without an award (under 100 games) leave too, unless a season of
+ * theirs can stand in the single-season record lists (see mayHoldSeasonRecord). Without this the
  * save grows by every retiree's full record.
  */
 function compactRetired(league: League) {
   for (const p of Object.values(league.players)) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
     const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
-    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5))) {
+    // (a season that can stand in the single-season record lists keeps him: they're read from the players kept)
+    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5 && !mayHoldSeasonRecord(league, p)))) {
       // a night of his in the record book keeps his name
       freezeRecordNames(league, p);
       delete league.players[p.pid];

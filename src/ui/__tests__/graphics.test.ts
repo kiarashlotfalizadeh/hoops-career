@@ -187,4 +187,18 @@ describe('record book graphics', () => {
     else expect(watch).toEqual([]);
     expect(sim.over).toBe(true);
   });
+
+  it("a list with nothing on it has no record to break, and the record is tonight's best", () => {
+    const { views, logs } = playThrough(23);
+    const end = views[views.length - 1];
+    const [top, second] = [...end.box.home.players].sort((a, b) => b.pts - a.pts);
+    expect(second.pts).toBeGreaterThan(0);
+    expect(top.pts).toBeGreaterThan(second.pts);
+    const recs = (records: PlayerBefore['records']) =>
+      graphicCandidates(input(end, logs, { before: new Map([top, second].map((b) => [b.pid, { records }])) })).filter((g) => g.kind === 'record');
+    // a franchise's first postseason: no franchise or league list yet, so nobody's 12 points is "a record"
+    expect(recs({ teamName: 'Hawks', playoffs: true })).toEqual([]);
+    // both past the old franchise best: only the one with more tonight holds it
+    expect(recs({ team: second.pts - 1, teamName: 'Hawks', league: 200, playoffs: false }).map((g) => g.id)).toEqual([`rec-t-${top.pid}`]);
+  });
 });

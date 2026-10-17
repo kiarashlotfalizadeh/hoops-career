@@ -47,6 +47,11 @@ export interface CoachRecord {
   tac: number;
   /** The user's coach. */
   user?: true;
+  /**
+   * Names he went by before (the user's, renamed in Settings): no new coach is given one, and an
+   * award that named him then (Coach of the Year goes by name) still finds him.
+   */
+  aka?: string[];
   stints: CoachStint[];
 }
 
@@ -98,7 +103,12 @@ export function seedCoaches(league: League) {
   league.teams[league.userTid].coach.name = league.coachName;
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
-    if (taken.has(t.coach.name)) t.coach.name = uniqueName(rng, taken);
+    if (taken.has(t.coach.name)) {
+      const was = t.coach.name;
+      t.coach.name = uniqueName(rng, taken);
+      // a Coach of the Year he won with this team under the shared name stays his (before the registry, AI coaches never moved)
+      for (const a of league.awards) if (a.coy === t.tid && a.coyCoach === was) a.coyCoach = t.coach.name;
+    }
     taken.add(t.coach.name);
   }
   league.coaches = league.teams.map((t, id) => {
@@ -184,17 +194,26 @@ export function swapJobs(league: League, from: number, to: number) {
 
 /** Another coach in the league's history has had this name (the user can't take it). Reads the league only. */
 export function coachNameTaken(league: League, name: string): boolean {
-  return league.coaches ? league.coaches.some((r) => !r.user && r.name === name) : league.teams.some((t) => t.tid !== league.userTid && t.coach.name === name);
+  return league.coaches
+    ? league.coaches.some((r) => !r.user && (r.name === name || !!r.aka?.includes(name)))
+    : league.teams.some((t) => t.tid !== league.userTid && t.coach.name === name);
 }
 
-/** The user's new name (Settings): his team's coach and his registry entry take it. A name another coach has had is refused (false). */
+/**
+ * The user's new name (Settings): his team's coach and his registry entry take it, and the old one
+ * is kept with his entry (see CoachRecord.aka). A name another coach has had is refused (false).
+ */
 export function renameUserCoach(league: League, name: string): boolean {
   ensureCoaches(league);
   if (coachNameTaken(league, name)) return false;
+  const me = userCoach(league);
+  if (me && me.name !== name) {
+    const aka = [...(me.aka ?? []).filter((n) => n !== name), me.name];
+    me.aka = aka;
+    me.name = name;
+  }
   league.coachName = name;
   league.teams[league.userTid].coach.name = name;
-  const me = userCoach(league);
-  if (me) me.name = name;
   return true;
 }
 
@@ -298,7 +317,7 @@ export function coyWinners(league: League): Map<number, number> {
     const tid = a.coy;
     if (tid === undefined) continue;
     const had = (r: CoachRecord) => r.stints.some((s) => s.tid === tid && atSeasonEnd(league, s, a.season));
-    const named = reg.filter((r) => r.name === a.coyCoach);
+    const named = reg.filter((r) => r.name === a.coyCoach || (a.coyCoach !== undefined && !!r.aka?.includes(a.coyCoach)));
     const w = named.find(had) ?? named[0] ?? reg.find(had);
     if (w) out.set(a.season, w.id);
   }
@@ -485,7 +504,8 @@ export function coachingCarousel(league: League): CarouselMoves {
   }
   if (!moves.fired.length) return moves;
   const coy = coyWinners(league);
-  const taken = new Set(reg.map((r) => r.name));
+  // (the user's former names too: an award that named him then must still find him)
+  const taken = new Set(reg.flatMap((r) => [r.name, ...(r.aka ?? [])]));
   const fresh: CoachProfile[] = [];
   for (let i = 0; i < moves.fired.length * CANDIDATES; i++) {
     const p = randomCoach(rng);

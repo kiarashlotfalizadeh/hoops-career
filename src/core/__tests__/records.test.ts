@@ -26,6 +26,7 @@ import {
   freezeRecordNames,
   gameMark,
   markKey,
+  mayHoldSeasonRecord,
   teamMark,
   type MarkRow,
 } from '../league/records';
@@ -174,6 +175,77 @@ describe('record news', () => {
     expect(news).toHaveLength(1);
     expect(news[0].text).toContain('100 points (a league record)');
     expect(news[0].text).not.toContain('Knicks record');
+  });
+});
+
+describe('what one game did to the book', () => {
+  const l = played('record-notes', 6);
+  const base = l.games.find((g) => g.type === 'regular')!;
+  /** The same night, a season later (the book's news counts by then), with these points for the home side's first players in box order. */
+  const night = (gid: number, pts: number[], type: GameResult['type'] = 'regular'): GameResult => {
+    const g: GameResult = { ...structuredClone(base), gid, season: l.season + 1, type };
+    g.home.players.filter((b) => b.min > 0).forEach((b, i) => (b.pts = pts[i] ?? 0));
+    return g;
+  };
+
+  it("the night's best mark on a list is its record, not every man who passed the old best in turn", () => {
+    const x = structuredClone(l);
+    const g = night(999_201, [100, 120, 110]);
+    const notes = recordGame(x, g).filter((n) => n.stat === 'pts' && !n.team);
+    const [, second] = g.home.players.filter((b) => b.min > 0);
+    expect(notes.map((n) => [n.scope, n.kind, n.pid, n.v])).toEqual([
+      ['league', 'record', second.pid, 120],
+      ['team', 'record', second.pid, 120],
+    ]);
+  });
+
+  it('a list the book had nothing on yet only starts: no franchise playoff "record" on its first postseason night', () => {
+    const x = structuredClone(l);
+    expect(x.records!.league.post.players.pts).toBeUndefined();
+    expect(recordGame(x, night(999_202, [12, 25, 8], 'playoffs'))).toEqual([]);
+    // the next night that beats it is one
+    const notes = recordGame(x, night(999_203, [40], 'playoffs')).filter((n) => n.stat === 'pts' && !n.team);
+    expect(notes.map((n) => [n.scope, n.kind, n.v])).toEqual([
+      ['league', 'record', 40],
+      ['team', 'record', 40],
+    ]);
+  });
+
+  it("a share of the league's record that's also a franchise record names the number once", () => {
+    const x = structuredClone(l);
+    const g = night(999_204, [150]);
+    recordGame(x, g);
+    // the other side's man matches it a season later still: the league's tied, his franchise's set
+    const t: GameResult = { ...structuredClone(base), gid: 999_205, season: l.season + 2 };
+    const him = t.away.players.find((b) => b.min > 0)!;
+    him.pts = 150;
+    const before = x.news.length;
+    recordNews(x, t, recordGame(x, t));
+    const text = x.news.slice(before).find((n) => n.pids.includes(him.pid))!.text;
+    expect(text).toContain(`150 points (tying the league record, a ${x.teams[t.away.tid].name} record)`);
+    expect(text.match(/150 points/g)).toHaveLength(1);
+  });
+
+  it("a save from before the book reads back this season's results only: last season's are just the user's games", () => {
+    const x = structuredClone(l);
+    delete x.records;
+    const old: GameResult = { ...structuredClone(base), gid: 999_206, season: l.season - 1 };
+    old.home.players.find((b) => b.min > 0)!.pts = 140;
+    x.games.unshift(old);
+    backfillRecords(x);
+    expect(x.records!.since).toBe(l.season);
+    expect(x.records!.league.reg.players.pts![0][0]).toBe(l.records!.league.reg.players.pts![0][0]);
+  });
+
+  it('a retiree whose season can stand in the single-season lists is one compaction keeps', () => {
+    const p = { stats: [{ ...blankStats(2020, 0, false), gp: 40 }] } as unknown as Parameters<typeof mayHoldSeasonRecord>[1];
+    expect(mayHoldSeasonRecord(l, p)).toBe(false);
+    // (a season without a stored team record counts 82 games; split between teams it counts whole)
+    p.stats.push({ ...blankStats(2020, 1, false), gp: 20 });
+    expect(mayHoldSeasonRecord(l, p)).toBe(true);
+    expect(mayHoldSeasonRecord(l, { stats: [{ ...blankStats(2027, 0, true), gp: 4 }] } as unknown as Parameters<typeof mayHoldSeasonRecord>[1])).toBe(true);
+    // real seasons are history from before the league
+    expect(mayHoldSeasonRecord(l, { stats: [{ ...blankStats(2026, 0, false), gp: 80, real: true }] } as unknown as Parameters<typeof mayHoldSeasonRecord>[1])).toBe(false);
   });
 });
 

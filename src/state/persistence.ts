@@ -507,10 +507,12 @@ const isJersey = (v: unknown) => typeof v === 'string' && /^\d{1,3}$/.test(v);
 /**
  * Retired numbers and the numbers players wore by team (both optional): a damaged entry goes. A
  * retired number needs its number, a player id, a name and the season; a number by team needs a
- * team in the league.
+ * team in the league. The players a team has numbered go unless they're a list of ids (the team
+ * then numbers its roster again at its next game or arrival, see numberTeam).
  */
 function migrateNumbers(x: League) {
   for (const t of x.teams) {
+    if (t.numbered !== undefined && !(Array.isArray(t.numbered) && t.numbered.every(int))) delete t.numbered;
     if (t.retired === undefined) continue;
     t.retired = Array.isArray(t.retired) ? t.retired.filter((r) => obj(r) && isJersey(r.jersey) && int(r.pid) && str(r.name) && int(r.season)) : [];
   }
@@ -573,6 +575,7 @@ function coachesIntact(x: League, reg: unknown): boolean {
     num(r.dev) &&
     num(r.tac) &&
     (r.user === undefined || r.user === true) &&
+    (r.aka === undefined || (Array.isArray(r.aka) && r.aka.length <= 50 && r.aka.every(str))) &&
     Array.isArray(r.stints) &&
     r.stints.every(stint);
   return Array.isArray(reg) && reg.every(coach) && registryProblems(x).length === 0;
