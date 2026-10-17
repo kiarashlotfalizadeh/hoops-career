@@ -94,6 +94,9 @@ export function CAP_FOR(league: League, season = league.season) {
   return {
     salaryCap: Math.round(CAP.salaryCap * g),
     luxuryTax: Math.round(CAP.luxuryTax * g),
+    apron1: Math.round(CAP.apron1 * g),
+    apron2: Math.round(CAP.apron2 * g),
+    taxBracket: Math.round(CAP.taxBracket * g),
     minPayroll: Math.round(CAP.minPayroll * g),
     minContract: Math.round(CAP.minContract * g),
     vetMin: Math.round(CAP.vetMinContract * g),

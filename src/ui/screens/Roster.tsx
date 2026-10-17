@@ -1,4 +1,5 @@
-import { capSeason, fmtM, isOffseason, openOption, shortSeason } from '../office/common';
+import { capSeason, fmtM, isOffseason, openOption, shortSeason, twoWayLabel } from '../office/common';
+import { TWO_WAY_GAMES, twoWayLimitReached } from '../../core/league/contracts';
 import { useQueryParam } from '../league/shared';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -176,7 +177,7 @@ export default function Roster() {
                       {p.pos} · {age(p)} · {fmtHeight(p.heightIn)} · {ROLE_META[role].label}
                     </div>
                     <div className="row" style={{ gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
-                      {p.contract.twoWay && <Tag>Two-way</Tag>}
+                      {p.contract.twoWay && <Tag tone={twoWayLimitReached(league, p) ? 'bad' : undefined}>{twoWayLabel(league, p)}</Tag>}
                       {p.contract.tenDay && <Tag tone="warn">{tenDayLabel(league, p)}</Tag>}
                       {p.injury && (
                         <Tag tone="bad">
@@ -216,7 +217,8 @@ export default function Roster() {
         <>
           <StatTable rows={roster} cols={contractCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
           <div className="small dim">
-            Cap {fmtM(cap.salaryCap)} · Tax line {fmtM(cap.luxuryTax)}. PO = player option, TO = team option on the final year. Full cap sheet in{' '}
+            Cap {fmtM(cap.salaryCap)} · Tax line {fmtM(cap.luxuryTax)} · Aprons {fmtM(cap.apron1)} / {fmtM(cap.apron2)}. PO = player option, TO = team option on the final year.
+            Two-way players play {TWO_WAY_GAMES} regular-season games at most. Full cap sheet in{' '}
             <Link to="/office" style={{ color: 'var(--accent-text)' }}>
               Front Office
             </Link>

@@ -541,6 +541,8 @@ export interface SimTeamInput {
   perf?: Record<number, number>;
   /** Players held out (rest / coach decision). */
   rest?: number[];
+  /** Why some of the players in `rest` sit when it isn't rest: the DNP note their box line shows instead ("Two-way limit"). */
+  dnp?: Record<number, string>;
   /**
    * Injured players who play anyway (game-time decisions on questionable players): dressed instead
    * of sitting out, at K.gameTimeRisk times the usual in-game injury risk. Their form is in `perf`.
@@ -756,7 +758,7 @@ export class GameSim {
         sp.dnp = `Injured (${p.injury!.type})`;
       } else if (rest.has(p.pid)) {
         sp.out = 2;
-        sp.dnp = 'Rest';
+        sp.dnp = input.dnp?.[p.pid] ?? 'Rest';
       } else if (hurt) {
         // a game-time decision: he plays through it, at a higher risk of getting hurt
         sp.risk = K.gameTimeRisk;

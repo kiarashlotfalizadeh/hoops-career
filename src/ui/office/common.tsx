@@ -8,19 +8,25 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
-import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
+import { type CAP_FOR, contractSeason, playerName, standardRoster } from '../../core/league/helpers';
 import {
+  CAP_STATUS_LABEL,
+  TWO_WAY_GAMES,
   WAIVER_DAYS,
   buyoutTerms,
+  capStatus,
+  hardCap,
   nonGuaranteed,
   releaseDeadMoney,
   releasePlayer,
   releaseSchedule,
+  seasonGames,
   stretchDeadMoney,
   stretchPhrase,
   stretchedSeasons,
   userBuyout,
 } from '../../core/league/contracts';
+import { REPEATER_SEASONS, taxSeasons } from '../../core/league/finances';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { useStore } from '../../state/store';
@@ -131,37 +137,85 @@ export function SecTitle({ children, right }: { children: ReactNode; right?: Rea
   );
 }
 
-/** Payroll vs cap vs tax, with an optional pending amount (striped). */
-export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number; cap: number; tax: number; add?: number; legend?: boolean }) {
+/** The lines a payroll is read against: the cap, the tax line and the two aprons (a season's CAP_FOR). */
+export type CapLines = Pick<ReturnType<typeof CAP_FOR>, 'salaryCap' | 'luxuryTax' | 'apron1' | 'apron2'>;
+
+/** A payroll's colour: green under the cap, amber over it, red past the tax line. */
+export const payTone = (lines: CapLines, x: number) => (x > lines.luxuryTax ? 'var(--bad)' : x > lines.salaryCap ? 'var(--warn)' : 'var(--good)');
+
+/** A payroll's status ("Over the 1st apron") and its tag tone; `holds` (cap holds) count against the cap, not toward the tax or the aprons. */
+export function capTag(lines: CapLines, pay: number, holds = 0): { label: string; tone: 'good' | 'warn' | 'bad' } {
+  const st = capStatus(lines, pay) === 'under' && pay + holds > lines.salaryCap ? 'over' : capStatus(lines, pay);
+  return { label: CAP_STATUS_LABEL[st], tone: st === 'under' ? 'good' : st === 'over' ? 'warn' : 'bad' };
+}
+
+/** "Hard-capped at the 1st apron ($209.0M): used the mid-level", or null without a hard cap. */
+export function hardCapLabel(league: League, tid: number, season: number): string | null {
+  const h = hardCap(league, tid, season);
+  if (!h) return null;
+  return `Hard-capped at the ${h.apron === 1 ? '1st' : '2nd'} apron (${fmtM(h.amount)}): used the ${h.route === 'mle' ? 'mid-level' : h.route === 'bae' ? 'bi-annual' : 'taxpayer mid-level'}`;
+}
+
+/** "34 of 50 games": a two-way deal's regular-season games against its limit, from the preseason through the season (null in the summer, and off a two-way deal). */
+export function twoWayGames(league: League, p: Player): string | null {
+  return p.contract.twoWay && contractSeason(league) === league.season ? `${seasonGames(p, league.season)} of ${TWO_WAY_GAMES} games` : null;
+}
+
+/** "Two-way · 34 of 50 games" (just "Two-way" in the summer). */
+export function twoWayLabel(league: League, p: Player): string {
+  const g = twoWayGames(league, p);
+  return g ? `Two-way · ${g}` : 'Two-way';
+}
+
+/** "Repeater: paid tax 3 of the last 4 seasons" for a team that pays the repeater rates in `season`, or null. */
+export function repeaterLabel(league: League, tid: number, season: number): string | null {
+  const n = taxSeasons(league, tid, season);
+  return n >= REPEATER_SEASONS ? `Repeater: paid tax ${n} of the last 4 seasons` : null;
+}
+
+/**
+ * Payroll against the cap, the tax line and the aprons, with an optional pending amount (striped).
+ * The aprons are labelled under the bar, the first to the left of its mark and the second to the
+ * right, so the three lines nine and thirteen million apart stay readable on a phone.
+ */
+export function CapBar({ pay, lines, add = 0, legend = true }: { pay: number; lines: CapLines; add?: number; legend?: boolean }) {
   const total = pay + Math.max(0, add);
-  const max = Math.max(tax * 1.14, total * 1.03);
+  const max = Math.max(lines.apron2 * 1.08, total * 1.03);
   const pct = (x: number) => clamp((x / max) * 100, 0, 100);
-  const tone = (x: number) => (x > tax ? 'var(--bad)' : x > cap ? 'var(--warn)' : 'var(--good)');
   return (
     <div>
       <div className="fo-cap">
         <div className="fo-cap-track">
-          <div className="fo-cap-fill" style={{ width: `${pct(pay)}%`, background: tone(pay) }} />
+          <div className="fo-cap-fill" style={{ width: `${pct(pay)}%`, background: payTone(lines, pay) }} />
           {add > 0 && <div className="fo-cap-add" style={{ left: `${pct(pay)}%`, width: `${pct(total) - pct(pay)}%` }} />}
         </div>
-        <div className="fo-cap-mark" style={{ left: `${pct(cap)}%` }}>
+        <div className="fo-cap-mark" style={{ left: `${pct(lines.salaryCap)}%` }}>
           <span>CAP</span>
         </div>
-        <div className="fo-cap-mark tax" style={{ left: `${pct(tax)}%` }}>
+        <div className="fo-cap-mark tax" style={{ left: `${pct(lines.luxuryTax)}%` }}>
           <span>TAX</span>
+        </div>
+        <div className="fo-cap-mark apron first" style={{ left: `${pct(lines.apron1)}%` }}>
+          <span>1ST</span>
+        </div>
+        <div className="fo-cap-mark apron" style={{ left: `${pct(lines.apron2)}%` }}>
+          <span>2ND</span>
         </div>
       </div>
       {legend && (
         <div className="fo-legend">
           <span>
-            <i style={{ background: tone(total) }} />
+            <i style={{ background: payTone(lines, total) }} />
             Payroll <b>{fmtM(total)}</b>
           </span>
           <span>
-            Cap <b>{fmtM(cap)}</b>
+            Cap <b>{fmtM(lines.salaryCap)}</b>
           </span>
           <span>
-            Tax line <b>{fmtM(tax)}</b>
+            Tax <b>{fmtM(lines.luxuryTax)}</b>
+          </span>
+          <span>
+            Aprons <b>{fmtM(lines.apron1)}</b> / <b>{fmtM(lines.apron2)}</b>
           </span>
         </div>
       )}

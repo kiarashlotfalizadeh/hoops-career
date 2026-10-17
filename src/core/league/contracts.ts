@@ -1,7 +1,9 @@
 // Player valuation, contract demands and roster transactions under a simplified CBA:
-// soft cap (sign FAs only with space, an exception (the mid-level, the room exception or the
-// bi-annual) or for the minimum), unlimited re-signing of own players, luxury tax, 15-man rosters,
-// rookie scale, 125% trade salary matching, and the stretch provision for releases.
+// soft cap (sign FAs only with space, an exception (the mid-level, the taxpayer mid-level, the room
+// exception or the bi-annual) or for the minimum), the aprons and the hard caps the exceptions bring,
+// unlimited re-signing of own players, 15-man rosters, rookie scale, the buyout market's rule,
+// two-way deals and their games limit, and the stretch provision for releases. The luxury tax's
+// brackets are in finances.ts, trade matching by apron in trades.ts.
 // Restricted free agency's rules live in rfa.ts; its holds on summer cap space are here
 // (marketHolds), since every signing route counts them. The user's talks with a player (his
 // walk-away price, counters, patience) are in negotiation.ts, 10-day contracts in tenDay.ts.
@@ -291,24 +293,37 @@ export const rookieScaleDeal = (p: Player) => !!p.contract.rookie && p.draft.rou
 export const MLE_PCT = 0.085;
 /** Longest deal the mid-level exception allows. */
 export const MLE_YEARS = 4;
+/** Taxpayer mid-level exception, as a share of the cap: for a signing the mid-level can't take without going past the first apron. */
+export const TMLE_PCT = 0.037;
 /** Room exception, as a share of the cap: for a team that has used its cap space, in place of the mid-level. */
 export const ROOM_PCT = 0.057;
 /** Bi-annual exception, as a share of the cap. */
 export const BAE_PCT = 0.033;
 
-export type Exception = 'mle' | 'room' | 'bae';
+export type Exception = 'mle' | 'tmle' | 'room' | 'bae';
 
 /** The exceptions a team can sign free agents with over the cap: share of the cap, longest deal, names. */
 export const EXCEPTIONS: Record<Exception, { pct: number; years: number; name: string; short: string }> = {
   bae: { pct: BAE_PCT, years: 2, name: 'bi-annual exception', short: 'Bi-annual' },
+  tmle: { pct: TMLE_PCT, years: 2, name: 'taxpayer mid-level exception', short: 'Taxpayer mid-level' },
   room: { pct: ROOM_PCT, years: 2, name: 'room exception', short: 'Room exception' },
   mle: { pct: MLE_PCT, years: MLE_YEARS, name: 'mid-level exception', short: 'Mid-level' },
 };
 
-/** The order a signing looks for an exception that covers it: the smallest first, so a cheap signing doesn't use up the mid-level. */
-export const EXCEPTION_ORDER: Exception[] = ['bae', 'room', 'mle'];
+/**
+ * The order a signing looks for an exception that covers it: the smallest first, so a cheap signing
+ * doesn't use up the mid-level, and the taxpayer mid-level last: it only pays what the mid-level
+ * can't without taking the team past the first apron (see exceptionCovers).
+ */
+export const EXCEPTION_ORDER: Exception[] = ['bae', 'room', 'mle', 'tmle'];
 
-export const isException = (r: SigningRoute | null | undefined): r is Exception => r === 'mle' || r === 'room' || r === 'bae';
+/** The exceptions as lists show them: the mid-levels first. */
+export const EXCEPTION_LIST: Exception[] = ['mle', 'tmle', 'room', 'bae'];
+
+export const isException = (r: SigningRoute | null | undefined): r is Exception => r === 'mle' || r === 'tmle' || r === 'room' || r === 'bae';
+
+/** The two mid-levels: a team gets one of them a season. */
+export const isMidLevel = (r: SigningRoute | null | undefined): r is 'mle' | 'tmle' => r === 'mle' || r === 'tmle';
 
 /** Longest deal a signing route allows. */
 export const routeYears = (r: SigningRoute) => (isException(r) ? EXCEPTIONS[r].years : 5);
@@ -318,26 +333,29 @@ export const exceptionAmount = (league: League, kind: Exception, season = contra
   Math.round((CAP_FOR(league, season).salaryCap * EXCEPTIONS[kind].pct) / 10) * 10;
 
 /**
- * Why a team can't use this exception at all this contract season, or null (the tax line is
- * exceptionRoom's call). The mid-level once a season, and not once the team has signed a free agent
- * with cap space: it gets the room exception instead, once. An offer sheet it signed on cap space
- * counts as using its space while it waits for a decision (the user's pending offers on cap space
- * do the same, see userExceptionRoom), as a pending mid-level offer keeps the space shut: otherwise
- * a team could hold its space, sign over the cap with the mid-level, and then land the space
- * signing too. The bi-annual not two seasons running, and it and the room exception don't mix in
- * a season.
+ * Why a team can't use this exception at all this contract season, or null (the aprons and its hard
+ * cap are exceptionRoom's call). One mid-level a season, the mid-level or the taxpayer mid-level,
+ * and neither once the team has signed a free agent with cap space: it gets the room exception
+ * instead, once. An offer sheet it signed on cap space counts as using its space while it waits for
+ * a decision (the user's pending offers on cap space do the same, see userExceptionRoom), as a
+ * pending mid-level offer keeps the space shut: otherwise a team could hold its space, sign over the
+ * cap with the mid-level, and then land the space signing too. The bi-annual not two seasons
+ * running, and it and the room exception don't mix in a season.
  */
 export function exceptionUsedReason(league: League, tid: number, kind: Exception, season = contractSeason(league)): string | null {
   const t = league.teams[tid];
   switch (kind) {
     case 'mle':
-      if (t.mleSeason === season) return 'Used this season.';
+    case 'tmle':
+      if ((kind === 'mle' ? t.mleSeason : t.tmleSeason) === season) return 'Used this season.';
+      if ((kind === 'mle' ? t.tmleSeason : t.mleSeason) === season)
+        return `Not after the ${kind === 'mle' ? 'taxpayer mid-level' : 'mid-level'}: a team gets one mid-level a season.`;
       if (t.spaceSeason === season || t.roomSeason === season) return 'Gone this season: a free agent was signed with cap space, so the room exception replaces it.';
       if (spaceSheetPending(league, tid, season)) return 'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.';
       return null;
     case 'room':
       if (t.roomSeason === season) return 'Used this season.';
-      if (t.mleSeason === season) return 'Not after the mid-level: a team gets one or the other.';
+      if (t.mleSeason === season || t.tmleSeason === season) return 'Not after a mid-level: a team gets one or the other.';
       if (t.baeSeason === season) return 'Not after the bi-annual this season.';
       if (t.spaceSeason !== season) return 'Only after signing a free agent with cap space this season (it replaces the mid-level).';
       return null;
@@ -351,29 +369,116 @@ export function exceptionUsedReason(league: League, tid: number, kind: Exception
 
 /**
  * Most a team can pay one free agent with an exception this contract season: its amount (the
- * mid-level 8.5% of the cap, the room exception 5.7%, the bi-annual 3.3%), and for the mid-level and
- * the bi-annual only while the signing keeps the team under the luxury tax (counting the offer
- * sheets it has signed, which land on its payroll unless matched, and `extra`: other commitments the
- * caller counts, such as the user's pending offers). 0 when it can't be used.
+ * mid-level 8.5% of the cap, the room exception 5.7%, the taxpayer mid-level 3.7%, the bi-annual
+ * 3.3%), and for the mid-level and the bi-annual only while the signing keeps the team at or under
+ * the first apron, for the taxpayer mid-level the second, and never past a hard cap it already has
+ * (see hardCap). The payroll counts the offer sheets it has signed, which land on it unless matched,
+ * and `extra`: other commitments the caller counts, such as the user's pending offers. The taxpayer
+ * mid-level is for a team the mid-level can't take where it would go: 0 while the mid-level pays
+ * as much under the first apron. 0 when it can't be used.
  */
 export function exceptionRoom(league: League, tid: number, kind: Exception, season = contractSeason(league), extra = 0): number {
   if (exceptionUsedReason(league, tid, kind, season)) return 0;
   const full = exceptionAmount(league, kind, season);
-  // (a team that has just used its cap space is nowhere near the tax)
+  // (a team that has just used its cap space is nowhere near the aprons)
   if (kind === 'room') return full;
+  const cap = CAP_FOR(league, season);
   const sheets = marketHolds(league, tid, season).reduce((a, h) => a + (h.kind === 'sheet' ? h.amount : 0), 0);
-  return Math.max(0, Math.min(full, CAP_FOR(league, season).luxuryTax - payroll(league, tid, season) - sheets - extra));
+  const committed = payroll(league, tid, season) + sheets + extra;
+  const limit = Math.min(kind === 'tmle' ? cap.apron2 : cap.apron1, hardCap(league, tid, season)?.amount ?? Infinity);
+  const room = Math.min(full, limit - committed);
+  if (kind === 'tmle' && room <= cap.apron1 - committed) return 0;
+  return Math.max(0, room);
 }
 
-/** Most a team can pay one free agent with its mid-level exception (see exceptionRoom): 0 once used, replaced by the room exception, or past the tax. */
+/**
+ * Does this exception pay one free agent `amount` this contract season (see exceptionRoom; `extra`
+ * as there)? The taxpayer mid-level only pays what the mid-level can't under the first apron: a
+ * signing the mid-level takes there is the mid-level's, so a team can't pick the smaller exception
+ * to put its hard cap at the second apron instead.
+ */
+export function exceptionCovers(league: League, tid: number, kind: Exception, amount: number, season = contractSeason(league), extra = 0): boolean {
+  return amount <= exceptionRoom(league, tid, kind, season, extra) && (kind !== 'tmle' || amount > exceptionRoom(league, tid, 'mle', season, extra));
+}
+
+/** Most a team can pay one free agent with its mid-level exception (see exceptionRoom): 0 once used, replaced by the room exception, or past the first apron. */
 export const mleRoom = (league: League, tid: number, season = contractSeason(league)) => exceptionRoom(league, tid, 'mle', season);
 
-/** The most any of a team's exceptions would pay one free agent now. */
-export const bestExceptionRoom = (league: League, tid: number, season = contractSeason(league)) =>
-  Math.max(0, ...EXCEPTION_ORDER.map((k) => exceptionRoom(league, tid, k, season)));
+/** The most any of a team's exceptions (`kinds`) would pay one free agent now. */
+export const bestExceptionRoom = (league: League, tid: number, season = contractSeason(league), kinds: readonly Exception[] = EXCEPTION_ORDER) =>
+  Math.max(0, ...kinds.map((k) => exceptionRoom(league, tid, k, season)));
 
-/** A team that used the mid-level or the bi-annual this season stays under the tax line for the rest of it: trades can't take its payroll past it. */
-export const taxCapped = (t: Team, season: number) => t.mleSeason === season || t.baeSeason === season;
+/** A hard cap: the payroll a team can't pass by a trade or a signing this contract season, which apron it is and the exception that set it. */
+export interface HardCap {
+  amount: number;
+  apron: 1 | 2;
+  route: 'mle' | 'bae' | 'tmle';
+}
+
+/**
+ * A team's hard cap for a contract season, or null: the first apron once it used the mid-level or
+ * the bi-annual, the second once it used the taxpayer mid-level (the lower one when both apply; the
+ * room exception sets none). No trade or signing can take its payroll past it (see
+ * hardCapBlockedReason), but a minimum deal that gets it back to 13 healthy players, so a roster can
+ * always be filled.
+ */
+export function hardCap(league: League, tid: number, season = contractSeason(league)): HardCap | null {
+  const t = league.teams[tid];
+  const cap = CAP_FOR(league, season);
+  if (t.mleSeason === season) return { amount: cap.apron1, apron: 1, route: 'mle' };
+  if (t.baeSeason === season) return { amount: cap.apron1, apron: 1, route: 'bae' };
+  if (t.tmleSeason === season) return { amount: cap.apron2, apron: 2, route: 'tmle' };
+  return null;
+}
+
+/** "the first apron", "the second apron". */
+export const apronName = (n: 1 | 2) => `the ${n === 1 ? 'first' : 'second'} apron`;
+
+/** The hard cap a signing on this route brings, for the inbox: " (it hard-caps us at the first apron, $209.0M, for the season)", or nothing. */
+export function hardCapNote(league: League, route: SigningRoute, season = contractSeason(league)): string {
+  if (route !== 'mle' && route !== 'bae' && route !== 'tmle') return '';
+  const cap = CAP_FOR(league, season);
+  const apron = route === 'tmle' ? 2 : 1;
+  return ` (it hard-caps us at ${apronName(apron)}, $${((apron === 1 ? cap.apron1 : cap.apron2) / 1000).toFixed(1)}M, for the season)`;
+}
+
+/** Healthy players under a standard contract for a contract season: a hard-capped team short of 13 can still sign minimum deals past its hard cap. */
+const healthyFor = (league: League, tid: number, season: number) => standardRoster(league, tid).filter((p) => !p.injury && contractExp(p.contract) >= season).length;
+
+/**
+ * Why a signing that adds `amount` to team `tid`'s payroll for a contract season would break its
+ * hard cap (see hardCap), or null. Past it nothing goes through, Bird rights included: a minimum
+ * deal, a 10-day, a waiver claim, a two-way conversion, a restricted free agent's new deal, a
+ * matched offer sheet or a qualifying offer (exception signings stop at it in exceptionRoom, trades
+ * in validateTrade). The payroll counts the offer sheets the team has signed, which land on it
+ * unless matched. The one way past is a minimum-sized deal for a team with fewer than 13 healthy
+ * players under contract that season, so a roster can always be filled.
+ */
+export function hardCapBlockedReason(league: League, tid: number, amount: number, season = contractSeason(league)): string | null {
+  const hard = hardCap(league, tid, season);
+  if (!hard || amount <= 0) return null;
+  const sheets = marketHolds(league, tid, season).reduce((a, h) => a + (h.kind === 'sheet' ? h.amount : 0), 0);
+  const after = payroll(league, tid, season) + sheets + amount;
+  if (after <= hard.amount) return null;
+  if (amount <= CAP_FOR(league, season).vetMin + 10 && healthyFor(league, tid, season) < CAP.rosterMin) return null;
+  const [who, whose, them] = tid === league.userTid ? ['You are', 'your', 'you'] : [`The ${league.teams[tid].name} are`, 'their', 'them'];
+  return `${who} hard-capped at ${apronName(hard.apron)} ($${(hard.amount / 1000).toFixed(1)}M) after the ${EXCEPTIONS[hard.route].name}: this would take ${whose} payroll to $${(after / 1000).toFixed(1)}M. Only a minimum deal that gets ${them} back to ${CAP.rosterMin} healthy players can go past it.`;
+}
+
+/** Where a payroll stands against the cap's lines. */
+export type CapStatus = 'under' | 'over' | 'tax' | 'apron1' | 'apron2';
+
+export function capStatus(cap: Pick<ReturnType<typeof CAP_FOR>, 'salaryCap' | 'luxuryTax' | 'apron1' | 'apron2'>, pay: number): CapStatus {
+  return pay > cap.apron2 ? 'apron2' : pay > cap.apron1 ? 'apron1' : pay > cap.luxuryTax ? 'tax' : pay > cap.salaryCap ? 'over' : 'under';
+}
+
+export const CAP_STATUS_LABEL: Record<CapStatus, string> = {
+  under: 'Under the cap',
+  over: 'Over the cap',
+  tax: 'Taxpayer',
+  apron1: 'Over the 1st apron',
+  apron2: 'Over the 2nd apron',
+};
 
 export type { SigningRoute };
 
@@ -393,32 +498,39 @@ export function signingRoute(
   via?: Exception,
 ): SigningRoute | null {
   const cap = CAP_FOR(league, season);
-  if (amount <= (p && p.experience < 3 ? cap.minContract : cap.vetMin) + 1) return 'min';
+  // (a minimum deal fits over the cap, but not past a hard cap: see hardCapBlockedReason)
+  if (amount <= (p && p.experience < 3 ? cap.minContract : cap.vetMin) + 1) return hardCapBlockedReason(league, tid, amount, season) ? null : 'min';
   const pay = payroll(league, tid, season);
   // (the holds are only worth adding up when the payroll alone leaves the room)
   if (pay + amount <= cap.salaryCap && pay + heldSalary(league, tid, season) + amount <= cap.salaryCap) return 'space';
   for (const k of via ? [via, ...EXCEPTION_ORDER.filter((x) => x !== via)] : EXCEPTION_ORDER)
-    if ((years === undefined || years <= EXCEPTIONS[k].years) && amount <= exceptionRoom(league, tid, k, season)) return k;
+    if ((years === undefined || years <= EXCEPTIONS[k].years) && exceptionCovers(league, tid, k, amount, season)) return k;
   return null;
 }
 
 /**
  * How an AI team pays a free agent who wants `years`: a route that allows his length if one does,
- * else the one with the longest deal it can (his length then cut to it, see routeYears).
+ * else the one with the longest deal it can (his length then cut to it, see routeYears). Only a
+ * contender takes the taxpayer mid-level: anyone else stops at the first apron (see aiExceptions).
  */
 export function aiRoute(league: League, tid: number, amount: number, season: number, p: Pick<Player, 'experience'>, years: number): SigningRoute | null {
-  return (
+  const r =
     signingRoute(league, tid, amount, season, p, years) ??
     (years > MLE_YEARS ? signingRoute(league, tid, amount, season, p, MLE_YEARS) : null) ??
-    signingRoute(league, tid, amount, season, p)
-  );
+    signingRoute(league, tid, amount, season, p);
+  // (the taxpayer mid-level comes last, so nothing else would have paid him)
+  return r === 'tmle' && league.teams[tid].strategy !== 'contend' ? null : r;
 }
+
+/** The exceptions an AI team signs with: a contender all of them, anyone else all but the taxpayer mid-level, whose bill only a contender pays. */
+export const aiExceptions = (t: Team): Exception[] => (t.strategy === 'contend' ? EXCEPTION_ORDER : EXCEPTION_ORDER.filter((k) => k !== 'tmle'));
 
 /** A signing used this route: cap space (then no mid-level for the rest of the season, the room exception instead) or an exception. */
 export function spendRoute(league: League, tid: number, route: SigningRoute | null, season = contractSeason(league)) {
   const t = league.teams[tid];
   if (route === 'space') t.spaceSeason = season;
   else if (route === 'mle') t.mleSeason = season;
+  else if (route === 'tmle') t.tmleSeason = season;
   else if (route === 'room') t.roomSeason = season;
   else if (route === 'bae') t.baeSeason = season;
 }
@@ -487,15 +599,16 @@ export const wantsOutReason = (p: Player) =>
     : `${playerName(p)} asked for a trade: your promise has him holding off, but he won't re-sign while it stands.`;
 
 /**
- * The payroll an AI team will go to for keeping a player worth `v`. It follows the strategy:
- * contenders go a little past the tax, retooling teams stop halfway between cap and tax,
- * rebuilders near the cap. A player worth 82+ stretches it to the tax (8% past it for a contender,
- * or for anyone's franchise player at 86+). Re-signing, extensions, qualifying offers and matching
+ * The payroll an AI team will go to for keeping a player worth `v`. It follows the strategy and
+ * the aprons: contenders go into the tax up to the first apron, to the second for a player worth
+ * 82+ and a little past it only for a franchise player (86+); retooling teams stop halfway between
+ * cap and tax, rebuilders near the cap, either stretching to the tax line for an 82+ player and to
+ * the first apron for a franchise player. Re-signing, extensions, qualifying offers and matching
  * offer sheets all budget with it.
  */
 export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number): number {
-  if (v >= 86 || (v >= 82 && t.strategy === 'contend')) return cap.luxuryTax * 1.08;
-  if (t.strategy === 'contend') return cap.luxuryTax * 1.02;
+  if (t.strategy === 'contend') return v >= 86 ? cap.apron2 * 1.03 : v >= 82 ? cap.apron2 : cap.apron1;
+  if (v >= 86) return cap.apron1;
   if (v >= 82) return cap.luxuryTax;
   return t.strategy === 'retool' ? (cap.salaryCap + cap.luxuryTax) / 2 : cap.salaryCap * 1.05;
 }
@@ -532,8 +645,10 @@ export function signPlayer(
     // a new team: the trade-back rule was about his old one (a re-signing keeps it)
     delete p.tradedFrom;
   }
-  // whatever he signs, restricted free agency is over (a matched offer sheet included)
+  // whatever he signs, restricted free agency is over (a matched offer sheet included), and so is
+  // the buyout market's hold on him: waived again, it's the salary of this deal that counts
   delete p.rfa;
+  delete p.waivedSalary;
   // like the NBA's: no trading him until December 15 of his first season, or three months after
   // an in-season signing if that is later (otherwise a free agent could be signed and flipped for
   // more value); a summer or training-camp signing waits for December 15
@@ -700,6 +815,11 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   delete p.meeting;
   if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead, ...(lock ? { lock } : {}) };
   else delete p.waivers;
+  // waived or bought out in the regular season off a deal paying more than the mid-level: the
+  // buyout market's rule follows him for the rest of it (see buyoutBlockedReason)
+  const before = contract.twoWay ? 0 : salaryFor({ contract }, league.season);
+  if (league.phase === 'regular' && before > exceptionAmount(league, 'mle', league.season)) p.waivedSalary = { season: league.season, salary: before };
+  else delete p.waivedSalary;
   // a free agent again: whatever he was talking about with the user is over
   delete p.talks;
   p.asking = undefined;
@@ -730,9 +850,10 @@ export function waiverOrder(league: League): Team[] {
 
 /**
  * Why team `tid` can't claim him, or null. A claim takes over his contract, so it needs a roster
- * spot and either cap room for this season's salary or a minimum salary, as a signing would, and
- * like a signing it is made in the regular season: once the postseason starts, a player still on
- * waivers clears to free agency (see resolveWaivers).
+ * spot and either cap room for this season's salary or a minimum salary, as a signing would (and
+ * like one it can't take a hard-capped team past its hard cap, or break the buyout market's rule),
+ * and like a signing it is made in the regular season: once the postseason starts, a player still
+ * on waivers clears to free agency (see resolveWaivers).
  */
 export function claimBlockedReason(league: League, tid: number, p: Player): string | null {
   const w = p.waivers;
@@ -747,7 +868,22 @@ export function claimBlockedReason(league: League, tid: number, p: Player): stri
   const room = cap.salaryCap - payroll(league, tid, league.season);
   if (salary > min + 10 && salary > room)
     return `His ${seasonLabel(league.season)} salary is $${(salary / 1000).toFixed(1)}M: claiming him needs that much cap space (${room > 0 ? `$${(room / 1000).toFixed(1)}M` : 'none'} now).`;
-  return null;
+  return hardCapBlockedReason(league, tid, salary, league.season) ?? buyoutBlockedReason(league, tid, p, salary);
+}
+
+/**
+ * The buyout market's rule, as in the NBA: a player waived (or bought out) during this regular
+ * season off a deal that paid him more than the mid-level can't join a team whose payroll would be
+ * over the first apron with `amount` (his new salary, or the contract a claim takes over) added,
+ * by any signing or a waiver claim. Why team `tid` can't add him, or null. Summer signings are for
+ * next season, which the rule doesn't reach.
+ */
+export function buyoutBlockedReason(league: League, tid: number, p: Player, amount: number): string | null {
+  const w = p.waivedSalary;
+  if (!w || w.season !== contractSeason(league) || w.salary <= exceptionAmount(league, 'mle', w.season)) return null;
+  const apron = CAP_FOR(league, w.season).apron1;
+  if (payroll(league, tid, w.season) + amount <= apron) return null;
+  return `${playerName(p)} was waived this season off a $${(w.salary / 1000).toFixed(1)}M deal, more than the mid-level: a team over the first apron ($${(apron / 1000).toFixed(1)}M) with him on its payroll can't add him.`;
 }
 
 /** An AI team claims a player whose contract is worth having (positive trade value to it) and who'd make its roster: 64+ in value, or anyone when it's short of 13. */
@@ -775,6 +911,7 @@ function claimPlayer(league: League, p: Player, tid: number) {
   p.mood.tradeRequest = false;
   p.mood.score = Math.max(p.mood.score, 0);
   delete p.waivers;
+  delete p.waivedSalary;
   delete p.talks;
   p.asking = undefined;
   p.faDays = undefined;
@@ -963,10 +1100,66 @@ export function wantsTwoWay(league: League, p: Player, tid?: number): boolean {
 /** Two-way deals run two seasons, one for a player in his last season of eligibility. */
 export const twoWayYears = (p: Player) => (p.experience >= 3 ? 1 : 2);
 
-/** Promote a two-way player to a standard deal at the minimum for his remaining seasons. */
+/** Regular-season games a two-way player can play in a season (the NBA's active-list limit): then he sits until he's converted to a standard contract. */
+export const TWO_WAY_GAMES = 50;
+/** When the user hears that one of his two-way players is near the limit (and again when he reaches it). */
+export const TWO_WAY_WARN = 40;
+
+/** Regular-season games he has played this season, for every team (Cup group games and knockouts included, the championship not, as in the stats). */
+export function seasonGames(p: Pick<Player, 'stats'>, season: number): number {
+  let n = 0;
+  for (const s of p.stats) if (s.season === season && !s.playoffs && !s.real) n += s.gp;
+  return n;
+}
+
+/** A two-way player who has played his TWO_WAY_GAMES this season: he can't play another regular-season game on that deal. */
+export const twoWayLimitReached = (league: League, p: Player) => !!p.contract.twoWay && seasonGames(p, league.season) >= TWO_WAY_GAMES;
+
+/** After a regular-season game he played in: the user hears when one of his two-way players has used 40 of his 50 games, and when he has used them all. */
+export function twoWayGamesNote(league: League, p: Player) {
+  if (p.tid !== league.userTid || !p.contract.twoWay) return;
+  const n = seasonGames(p, league.season);
+  if (n !== TWO_WAY_WARN && n !== TWO_WAY_GAMES) return;
+  const name = playerName(p);
+  const convert = 'Convert him to a standard contract (a roster spot, at the minimum) to keep playing him.';
+  addInbox(league, {
+    from: 'Assistant GM',
+    subject: n === TWO_WAY_GAMES ? `${name} reached the two-way limit` : `${name}: ${TWO_WAY_GAMES - n} two-way games left`,
+    body:
+      n === TWO_WAY_GAMES
+        ? `${name} has played his ${TWO_WAY_GAMES} games on a two-way deal, so he sits out the rest of the regular season. ${convert}`
+        : `${name} has played ${n} of the ${TWO_WAY_GAMES} regular-season games a two-way deal allows. After the ${TWO_WAY_GAMES}th he can't play. ${convert}`,
+    tone: n === TWO_WAY_GAMES ? 'alert' : 'neutral',
+    link: `/player/${p.pid}`,
+  });
+}
+
+/** Minutes a game, over his regular-season games this season, from which an AI team counts on a two-way player (see aiTwoWayLimits). */
+const TWO_WAY_RELIED_MPG = 10;
+
+/**
+ * Every day of the regular season: an AI team converts a two-way player who has reached his games
+ * limit to a standard contract when it relies on him (10+ minutes a game) and has a roster spot for
+ * him (and room for his minimum under a hard cap); otherwise he sits out the rest of the regular
+ * season (see buildSimInput). The user's two-way players are his call: the inbox says when one
+ * nears the limit (see twoWayGamesNote).
+ */
+export function aiTwoWayLimits(league: League) {
+  if (league.phase !== 'regular') return;
+  for (const p of Object.values(league.players)) {
+    if (p.tid < 0 || p.tid === league.userTid || !twoWayLimitReached(league, p)) continue;
+    const rows = p.stats.filter((s) => s.season === league.season && !s.playoffs && !s.real);
+    const min = rows.reduce((a, s) => a + s.min, 0);
+    if (min < TWO_WAY_RELIED_MPG * seasonGames(p, league.season) || standardRoster(league, p.tid).length >= CAP.rosterMax) continue;
+    // (convertTwoWay turns it down when the minimum would take a hard-capped team past its hard cap)
+    convertTwoWay(league, p.pid);
+  }
+}
+
+/** Promote a two-way player to a standard deal at the minimum for his remaining seasons (a roster spot, and room under a hard cap as a minimum signing needs). */
 export function convertTwoWay(league: League, pid: number): { ok: boolean; reason: string } {
   const p = league.players[pid];
-  if (league.fired) return { ok: false, reason: FIRED_REASON };
+  if (league.fired && p?.tid === league.userTid) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid < 0 || !p.contract.twoWay) return { ok: false, reason: 'He is not on a two-way contract.' };
   const max = rosterMaxNow(league);
   const s = contractSeason(league);
@@ -977,9 +1170,12 @@ export function convertTwoWay(league: League, pid: number): { ok: boolean; reaso
   const exp = contractExp(p.contract);
   if (exp < s) return { ok: false, reason: 'His contract is up. Re-sign him to a standard deal instead.' };
   const min = (season: number) => (p.experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
+  // his minimum joins the payroll, as a minimum signing's would: not past a hard cap
+  const hard = hardCapBlockedReason(league, p.tid, min(s), s);
+  if (hard) return { ok: false, reason: hard };
   p.contract = { start: s, salaries: Array.from({ length: exp - s + 1 }, (_, i) => min(s + i)), converted: true };
-  // like a minimum signing, it doesn't count against the user's pending free-agent offers (see slackForBids)
-  if (p.tid === league.userTid) for (const b of league.faBids ?? []) if (b.route === 'space' || isException(b.route)) b.slack = (b.slack ?? 0) + p.contract.salaries[0];
+  // like a minimum signing, it doesn't count against the user's pending free-agent offers on cap space (see slackForBids)
+  if (p.tid === league.userTid) for (const b of league.faBids ?? []) if (b.route === 'space') b.slack = (b.slack ?? 0) + p.contract.salaries[0];
   addNews(league, { kind: 'signing', text: `The ${league.teams[p.tid].name} converted ${playerName(p)} to a standard contract.`, tids: [p.tid], pids: [p.pid] });
   logMove(league, 'convert', p.tid, p, { amount: p.contract.salaries[0], years: p.contract.salaries.length });
   return { ok: true, reason: `${playerName(p)} now holds a standard roster spot.` };

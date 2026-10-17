@@ -18,7 +18,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { OddsLine } from '../components/OddsLine';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
 import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, startingFive, teamRatings, type PerGame } from '../stats';
-import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
+import { PRACTICE, capTag, fmtM, hardCapLabel, openOption, payTone, shortSeason } from '../office/common';
 import { OutcomeTag, PROJECTION_NOTE, SectionLabel, StrategyTag, TabBar, pickProjection, seasonOutcome, shortName, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
@@ -166,11 +166,10 @@ function Hero({ league, tid }: { league: League; tid: number }) {
 }
 
 function payColor(league: League, pay: number, season: number) {
-  const cap = CAP_FOR(league, season);
-  return pay > cap.luxuryTax ? 'var(--bad)' : pay > cap.salaryCap ? 'var(--warn)' : 'var(--good)';
+  return payTone(CAP_FOR(league, season), pay);
 }
 
-/** Payroll vs cap and tax lines, for the season contracts count against (next season in the offseason). */
+/** Payroll vs the cap, the tax line and the aprons, for the season contracts count against (next season in the offseason), with its status and any hard cap. */
 function PayrollBar({ league, tid }: { league: League; tid: number }) {
   const cs = contractSeason(league);
   const pay = payroll(league, tid, cs);
@@ -179,19 +178,28 @@ function PayrollBar({ league, tid }: { league: League; tid: number }) {
   const holds = room > pay ? ' after holds' : '';
   const cap = CAP_FOR(league, cs);
   const color = payColor(league, pay, cs);
+  const status = capTag(cap, pay, room - pay);
+  const hard = hardCapLabel(league, tid, cs);
   return (
     <Card>
-      <div className="row between" style={{ marginBottom: 8 }}>
+      <div className="row between" style={{ marginBottom: 8, gap: 8 }}>
         <span className="small dim">Payroll {seasonLabel(cs)}</span>
-        <span className="bold num" style={{ color }}>
-          {fmtM(pay)}
+        <span className="row" style={{ gap: 6 }}>
+          <span className={`tag ${status.tone}`}>{status.label}</span>
+          <span className="bold num" style={{ color }}>
+            {fmtM(pay)}
+          </span>
         </span>
       </div>
-      <Bar value={(pay / (cap.luxuryTax * 1.1)) * 100} color={color} />
+      <Bar value={(pay / (cap.apron2 * 1.08)) * 100} color={color} />
       <div className="row between tiny dim" style={{ marginTop: 6 }}>
         <span>Cap {fmtM(cap.salaryCap)}</span>
         <span>{room > cap.salaryCap ? `${fmtM(room - cap.salaryCap)} over cap${holds}` : `${fmtM(cap.salaryCap - room)} cap space${holds}`}</span>
         <span>Tax {fmtM(cap.luxuryTax)}</span>
+      </div>
+      <div className="tiny dim" style={{ marginTop: 2 }}>
+        Aprons {fmtM(cap.apron1)} / {fmtM(cap.apron2)}
+        {hard ? <span className="warn"> · {hard}</span> : null}
       </div>
     </Card>
   );

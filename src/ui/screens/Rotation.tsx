@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
+import { twoWayLimitReached } from '../../core/league/contracts';
 import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
@@ -163,6 +164,8 @@ export default function Rotation() {
                           {fullNameOf(pid)}
                         </span>
                         {p.injury && <Tag tone="bad">Out</Tag>}
+                        {/* a two-way player past his games limit sits whatever his minutes say */}
+                        {twoWayLimitReached(league, p) && <Tag tone="bad">Two-way limit</Tag>}
                         {closers.includes(pid) && <Tag>Closer</Tag>}
                         {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" />}
                       </div>
