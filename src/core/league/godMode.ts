@@ -9,20 +9,19 @@
 // has been edited. Created players draw on a random stream of their own, never the league's.
 import type { Injury, League, Player, Pos, RatingKey, Ratings, Team } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT, POSITIONS, RETIRED } from '../types';
+import { CAP } from '../constants';
 import { RATING_KEYS, shiftToOvr } from '../ratings';
 import { Rng, clamp, hashString } from '../random';
-import { contractExp, followTendencies, genTendencies, generatePlayer, playerAge, salaryFor } from '../playerGen';
+import { contractExp, followTendencies, genTendencies, generatePlayer, salaryFor } from '../playerGen';
 import { contractSeason, inSeason, playerName, rosterMaxNow, standardRoster, teamPlayers, TWO_WAY_MAX, twoWayRoster } from './helpers';
-import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract } from './contracts';
+import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract, preferredYears, valueScore } from './contracts';
 import { refreshDerived } from './progression';
 import { INJURY_TYPES } from './injuries';
 import { numberTeam, retiredNumbers } from './jerseys';
 import { ensureRotation } from './games';
 import { activeCoach } from './coaches';
 import { cleanProposals } from './proposals';
-import { executeTrade, type TradeOffer } from './trades';
-
-export const godModeOn = (league: League) => !!league.settings.godMode;
+import { executeTrade, swapSeasons, type TradeOffer } from './trades';
 
 /** A team in season needs this many players to dress for a game (the engine plays five). */
 export const DRESS_MIN = 5;
@@ -114,7 +113,7 @@ function rosterChecks(league: League, moves: RosterMove[], out: EditCheck) {
     const ab = teamLabel(league, tid);
     if (inSeason(league) && std + tw < 0 && all < DRESS_MIN)
       out.errors.push(`${ab} would have ${all} player${all === 1 ? '' : 's'}: a team needs ${DRESS_MIN} to dress for its games.`);
-    else if (inSeason(league) && std < 0 && n < 13) out.warnings.push(`${ab} drops to ${n} players (13 is the minimum in season).`);
+    else if (inSeason(league) && std < 0 && n < CAP.rosterMin) out.warnings.push(`${ab} drops to ${n} players (${CAP.rosterMin} is the minimum in season).`);
     if (std > 0 && n > rosterMaxNow(league)) out.warnings.push(`${ab} will carry ${n} players (the limit is ${rosterMaxNow(league)} now).`);
     if (tw > 0 && nTw > TWO_WAY_MAX) out.warnings.push(`${ab} will have ${nTw} two-way players (the limit is ${TWO_WAY_MAX}).`);
   }
@@ -134,18 +133,24 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
   if (e.weightLb !== undefined && !wholeIn(e.weightLb, GOD_LIMITS.weightLb)) err(`Weight is ${GOD_LIMITS.weightLb[0]} to ${GOD_LIMITS.weightLb[1]} lb.`);
   for (const [k, v] of Object.entries(e.ratings ?? {})) if (!RATING_KEYS.includes(k as RatingKey) || !Number.isFinite(v)) err(`${k} isn't a rating.`);
   if (e.growth !== undefined && !between(e.growth, [-1, 1])) err('Development is -1 to 1.');
-  if (e.injuryProne !== undefined && !between(e.injuryProne, [0, 1])) err('Injury proneness is 0 to 1.');
+  if (e.injuryProne !== undefined && !between(e.injuryProne, [0, 1])) err('Injury proneness is 0 to 100%.');
   if (e.wear !== undefined && !between(e.wear, [0, 100])) err('Wear is 0 to 100.');
   if (e.mood?.score !== undefined && !between(e.mood.score, [-10, 10])) err('Mood is -10 to 10.');
-  if (e.injury && (!movable(p) || !e.injury.type.trim() || !wholeIn(e.injury.games, GOD_LIMITS.injuryGames)))
-    err(movable(p) ? `An injury keeps him out ${GOD_LIMITS.injuryGames[0]} to ${GOD_LIMITS.injuryGames[1]} games.` : 'Only active players can be hurt.');
+  if (e.injury) {
+    if (!movable(p)) err('Only active players can be hurt.');
+    else if (!e.injury.type.trim()) err('Pick an injury.');
+    else if (!wholeIn(e.injury.games, GOD_LIMITS.injuryGames)) err(`An injury keeps him out ${GOD_LIMITS.injuryGames[0]} to ${GOD_LIMITS.injuryGames[1]} games.`);
+  }
 
   // where he ends up: the contract and the jersey are checked against that team
   const to = e.tid ?? p.tid;
   const moving = e.tid !== undefined && e.tid !== p.tid;
+  const cs = contractSeason(league);
+  // a free agent, or a player whose deal is up, joins a team on his asking deal: a standard one,
+  // unless the edit makes it a two-way one
+  const signs = moving && to >= 0 && salaryFor(p, cs) <= 0;
   const wasTw = p.tid >= 0 && !!p.contract.twoWay;
-  // (a free agent joins on a standard deal unless the edit makes it a two-way one)
-  const isTw = to >= 0 && (e.contract?.twoWay ?? (moving && p.tid < 0 ? false : wasTw));
+  const isTw = to >= 0 && (e.contract?.twoWay ?? (signs ? false : wasTw));
   if (moving) {
     if (!movable(p)) err(p.tid === DRAFT_PROSPECT ? 'A draft prospect joins a team through the draft.' : 'A retired player stays retired.');
     else if (to !== FREE_AGENT && !league.teams[to]) err("That team doesn't exist.");
@@ -160,11 +165,12 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
       out,
     );
   if (e.jersey !== undefined && (e.jersey !== p.jersey || moving)) {
-    if (!/^\d{1,2}$/.test(e.jersey)) err('A jersey number is 0 to 99 (00 too).');
-    else if (to >= 0) {
+    // (no leading zero but 00's: "07" would be a second 7)
+    if (!/^(00|\d|[1-9]\d)$/.test(e.jersey)) err('A jersey number is 0 to 99 (00 too).');
+    else if (league.teams[to]) {
       const mate = teamPlayers(league, to).find((x) => x.pid !== p.pid && x.jersey === e.jersey);
       if (mate) err(`${playerName(mate)} wears No. ${e.jersey} for ${teamLabel(league, to)}.`);
-      else if (retiredNumbers(league.teams[to]).has(e.jersey)) err(`${teamLabel(league, to)} have retired No. ${e.jersey}.`);
+      else if (retiredNumbers(league.teams[to]).has(e.jersey)) err(`${teamLabel(league, to)} has retired No. ${e.jersey}.`);
     }
   }
   const c = e.contract;
@@ -173,7 +179,11 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
     if (c.amount !== undefined && !between(c.amount, GOD_LIMITS.salary)) err('A salary is $0.1M to $100M a season.');
     if (c.years !== undefined && !wholeIn(c.years, GOD_LIMITS.years)) err(`A contract runs ${GOD_LIMITS.years[0]} to ${GOD_LIMITS.years[1]} seasons.`);
     if (c.option) {
-      const years = c.years ?? Math.max(1, contractExp(p.contract) - contractSeason(league) + 1);
+      // the deal it goes on: the length set here, or his asking deal's when he signs one (joining a
+      // team, or a new salary on a deal that's up; at his age after the edit, see preferredYears), or
+      // what's left of his deal
+      const asks = signs || (c.amount !== undefined && salaryFor(p, cs) <= 0);
+      const years = c.years ?? (asks ? preferredYears(league, { ...p, bornYear: e.age !== undefined ? league.season - e.age : p.bornYear }) : yearsLeft(league, p));
       if (years < 2) err('An option goes on the last season of a deal of two seasons or more.');
     }
   }
@@ -194,8 +204,10 @@ export function yearsLeft(league: League, p: Player): number {
 function applyContract(league: League, p: Player, c: ContractEdit) {
   const cs = contractSeason(league);
   if (c.amount !== undefined || c.years !== undefined) {
-    const amount = c.amount ?? (salaryFor(p, cs) || askingContract(league, p).amount);
-    const years = c.years ?? Math.max(1, yearsLeft(league, p));
+    // (what the edit leaves out stays as it is, or for a deal that's up is his asking deal's)
+    const ask = salaryFor(p, cs) > 0 ? null : askingContract(league, p);
+    const amount = c.amount ?? ask?.amount ?? salaryFor(p, cs);
+    const years = c.years ?? ask?.years ?? yearsLeft(league, p);
     const old = p.contract;
     const past: number[] = [];
     for (let s = old.start; s < cs; s++) past.push(salaryFor(p, s));
@@ -269,8 +281,9 @@ export function editPlayer(league: League, pid: number, e: PlayerEdit) {
   const { errors } = checkPlayerEdit(league, p, e);
   if (errors.length) throw new Error(errors[0]);
   const touched = [p.tid];
+  const moving = e.tid !== undefined && e.tid !== p.tid;
   const prevOvr = p.ovr;
-  const wasAge = playerAge(p, league.season);
+  const worth = valueScore(league, p);
   if (e.firstName !== undefined) p.firstName = e.firstName.trim();
   if (e.lastName !== undefined) p.lastName = e.lastName.trim();
   if (e.country !== undefined) p.country = e.country.trim();
@@ -286,15 +299,25 @@ export function editPlayer(league: League, pid: number, e: PlayerEdit) {
   if (e.growth !== undefined) p.growth = e.growth;
   if (e.injuryProne !== undefined) p.injuryProne = e.injuryProne;
   refreshDerived(league, p);
-  // his tendencies follow his new level, as after a summer's development (his style stays)
-  if (p.ovr !== prevOvr) followTendencies(p, prevOvr, new Rng(hashString(`${league.id}:god:${pid}`)));
+  // his tendencies follow his new level (his style stays, and his role settles over the summer): from
+  // the level of this season's snapshot, which they were set for, and the snapshot then holds him as
+  // edited, or next summer's development (see annualProgression) would move them for the edit again
+  if (p.ovr !== prevOvr) {
+    const last = p.ratingsHistory[p.ratingsHistory.length - 1];
+    const snap = last?.season === league.season ? last : undefined;
+    followTendencies(p, snap?.ovr ?? prevOvr, new Rng(hashString(`${league.id}:god:${pid}`)), false);
+    if (snap) Object.assign(snap, { ovr: p.ovr, pot: p.pot }, snap.r ? { r: { ...p.ratings } } : {});
+  }
   if (e.injury === null) p.injury = null;
-  else if (e.injury) p.injury = { type: e.injury.type.trim(), gamesRemaining: e.injury.games, gamesTotal: e.injury.games, severity: injurySeverity(e.injury.type, e.injury.games) };
+  else if (e.injury) {
+    const type = e.injury.type.trim();
+    p.injury = { type, gamesRemaining: e.injury.games, gamesTotal: e.injury.games, severity: injurySeverity(type, e.injury.games) };
+  }
   if (e.wear !== undefined) p.wear = e.wear;
   if (e.mood?.score !== undefined) p.mood.score = e.mood.score;
   if (e.mood?.tradeRequest !== undefined) p.mood.tradeRequest = e.mood.tradeRequest;
-  if (e.tid !== undefined && e.tid !== p.tid) {
-    movePlayer(league, p, e.tid);
+  if (moving) {
+    movePlayer(league, p, e.tid!);
     touched.push(p.tid);
   }
   if (e.contract) applyContract(league, p, e.contract);
@@ -302,8 +325,8 @@ export function editPlayer(league: League, pid: number, e: PlayerEdit) {
     p.jersey = e.jersey;
     if (p.tid >= 0) (p.jerseys ??= {})[p.tid] = e.jersey;
   }
-  // a free agent asks for what he's worth now
-  if (p.tid === FREE_AGENT && e.tid === undefined && (p.ovr !== prevOvr || playerAge(p, league.season) !== wasAge)) {
+  // a free agent asks for what he's worth now (one sent to free agency already does)
+  if (p.tid === FREE_AGENT && !moving && valueScore(league, p) !== worth) {
     p.asking = undefined;
     p.asking = askingContract(league, p);
   }
@@ -340,7 +363,7 @@ export function checkTeamEdit(league: League, tid: number, e: TeamEdit): string[
     if (!/^[A-Z0-9]{2,4}$/.test(ab)) out.push('An abbreviation is 2 to 4 letters or digits.');
     else if (league.teams.some((x) => x.tid !== tid && x.abbrev.toUpperCase() === ab)) out.push(`${ab} is another team's abbreviation.`);
   }
-  if (e.colors !== undefined && !(e.colors.length === 3 && e.colors.every((c) => COLOR.test(c)))) out.push('Colours are three #rrggbb values.');
+  if (e.colors !== undefined && !(e.colors.length === 3 && e.colors.every((c) => COLOR.test(c)))) out.push('Colors are three #rrggbb values.');
   if (e.strategy !== undefined && !['contend', 'retool', 'rebuild'].includes(e.strategy)) out.push('A strategy is contend, retool or rebuild.');
   if (e.cash !== undefined && !between(e.cash, [-GOD_LIMITS.cash, GOD_LIMITS.cash])) out.push('Cash is within ±$10B.');
   if (e.hype !== undefined && !between(e.hype, [0, 1])) out.push('Hype is 0 to 100%.');
@@ -391,6 +414,7 @@ export function healTeam(league: League, tid: number): number {
 
 /** The owner's standing with the user (-1 to 1; below -0.5 after the grace period he fires him, see ownerEvaluation). */
 export function setOwnerConfidence(league: League, total: number) {
+  if (!Number.isFinite(total)) throw new Error("The owner's confidence is -100 to 100.");
   league.ownerMood = { ...league.ownerMood, total: Math.round(clamp(total, -1, 1) * 100) / 100 };
   league.godEdits = (league.godEdits ?? 0) + 1;
 }
@@ -449,7 +473,9 @@ export function createPlayer(league: League, o: NewPlayer): Player {
   if (o.lastName?.trim()) p.lastName = o.lastName.trim();
   if (o.pos) p.pos = o.pos;
   p.experience = clamp(o.age - 21, 0, 20);
-  p.draft = { year: league.season - Math.max(0, o.age - 20), round: 0, pick: 0, tid: null };
+  // (in the league since the summer before his first season, as a fictional league's undrafted free
+  // agents are: one with no experience is this season's rookie)
+  p.draft = { year: league.season - 1 - p.experience, round: 0, pick: 0, tid: null };
   p.contract = { start: league.season, salaries: [0] };
   refreshDerived(league, p);
   p.tend = genTendencies(p, rng);
@@ -467,9 +493,9 @@ export function createPlayer(league: League, o: NewPlayer): Player {
 
 /**
  * What stops a forced trade: only the deal's shape (each player and pick still with the team
- * sending it, nothing in it twice, something moving, cash one way) and five players left to dress
- * in season. Value, salary matching, roster limits, the deadline and the trade-back rule don't
- * apply; the roster limits come back as warnings.
+ * sending it, each swap on both teams' own open firsts, nothing in it twice, something moving, cash
+ * one way) and five players left to dress in season. Value, salary matching, roster limits, the
+ * deadline and the trade-back rule don't apply; the roster limits come back as warnings.
  */
 export function checkForceTrade(league: League, offer: TradeOffer): EditCheck {
   const out: EditCheck = { errors: [], warnings: [] };
@@ -485,6 +511,21 @@ export function checkForceTrade(league: League, offer: TradeOffer): EditCheck {
   const dpids = [...a.dpids, ...b.dpids];
   if (new Set(pids).size < pids.length || new Set(dpids).size < dpids.length) out.errors.push('A player or pick is in the deal twice.');
   if ((a.cash ?? 0) > 0 && (b.cash ?? 0) > 0) out.errors.push('Cash can only go one way in a deal.');
+  // a swap right rides on both teams' own firsts of that draft (see termErrors in trades.ts): each
+  // still with its team, unprotected, in no other swap and staying put in this deal, or the right
+  // would land on a pick a third team holds
+  const moving = new Set(dpids);
+  for (const [side, other] of [
+    [a, b],
+    [b, a],
+  ])
+    for (const y of side.swaps ?? [])
+      if (
+        !swapSeasons(league, side.tid, other.tid).includes(y) ||
+        other.swaps?.includes(y) ||
+        league.draftPicks.some((d) => d.season === y && d.round === 1 && moving.has(d.dpid) && (d.originalTid === a.tid || d.originalTid === b.tid))
+      )
+        out.errors.push(`A ${y} pick swap needs both teams' own ${y} firsts, unprotected, in no other swap and not moving in the deal.`);
   const something = (s: TradeOffer['a']) => s.pids.length || s.dpids.length || s.swaps?.length || (s.cash ?? 0) > 0;
   if (!something(a) && !something(b)) out.errors.push('The trade is empty.');
   if (!out.errors.length) {
@@ -505,5 +546,9 @@ export function forceTrade(league: League, offer: TradeOffer) {
   const { errors } = checkForceTrade(league, offer);
   if (errors.length) throw new Error(errors[0]);
   executeTrade(league, offer);
+  // as after any edit: offers that no longer stand go now, and both rosters' rotations, roles and
+  // numbers follow at once
+  cleanProposals(league);
+  refreshTeams(league, [offer.a.tid, offer.b.tid]);
   league.godEdits = (league.godEdits ?? 0) + 1;
 }

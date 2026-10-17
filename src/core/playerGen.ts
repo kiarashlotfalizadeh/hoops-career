@@ -186,10 +186,11 @@ export function genTendencies(p: Player, rng: Rng): Tendencies {
  * Tendencies follow his level (call after a year's development, with the OVR they were last set
  * for): his own style stays and the part that comes with quality moves, so a prospect who becomes
  * a star takes more of the shots and an aging star hands them on (his ratings do most of that),
- * while his usage and self-creation settle toward his level's (OWN_ROLE_KEEP). A player without
- * tendencies (from a save made before they were generated) gets a set.
+ * while his usage and self-creation settle toward his level's (OWN_ROLE_KEEP). `settle` false (a
+ * god-mode edit, not a summer): only his level moves them. A player without tendencies (from a save
+ * made before they were generated) gets a set.
  */
-export function followTendencies(p: Player, prevOvr: number, rng: Rng) {
+export function followTendencies(p: Player, prevOvr: number, rng: Rng, settle = true) {
   if (!p.tend) {
     p.tend = genTendencies(p, rng);
     return;
@@ -198,7 +199,7 @@ export function followTendencies(p: Player, prevOvr: number, rng: Rng) {
   for (const k of TEND_KEYS) {
     const before = tendBase(k, prevOvr, p.ratings.hgt);
     const own = (t[k] ?? Math.exp(before)) / Math.exp(before);
-    setTend(t, k, Math.exp(tendBase(k, p.ovr, p.ratings.hgt)) * Math.pow(own, GEN_LEVEL[k] ? OWN_ROLE_KEEP : 1));
+    setTend(t, k, Math.exp(tendBase(k, p.ovr, p.ratings.hgt)) * Math.pow(own, settle && GEN_LEVEL[k] ? OWN_ROLE_KEEP : 1));
   }
 }
 

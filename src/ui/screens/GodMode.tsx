@@ -23,11 +23,15 @@ export default function GodMode() {
   const [player, setPlayer] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [team, setTeam] = useState<number | null>(null);
-  const [owner, setOwner] = useState(league.ownerMood.total);
+  // the slider shows the owner's mood as it is (a sim moves it) until it's dragged
+  const [draft, setDraft] = useState<number | null>(null);
+  const owner = draft ?? league.ownerMood.total;
   const edits = league.godEdits ?? 0;
   const teams = [...league.teams].sort((a, b) => a.region.localeCompare(b.region) || a.name.localeCompare(b.name));
   const saveOwner = () => {
-    if (applyEdit((l) => setOwnerConfidence(l, owner))) useStore.getState().toast("The owner's confidence is set.", 'good');
+    if (!applyEdit((l) => setOwnerConfidence(l, owner))) return;
+    setDraft(null);
+    useStore.getState().toast("The owner's confidence is set.", 'good');
   };
   return (
     <main className="page">
@@ -105,7 +109,7 @@ export default function GodMode() {
                 min={-100}
                 max={100}
                 value={Math.round(owner * 100)}
-                onChange={(v) => setOwner(v / 100)}
+                onChange={(v) => setDraft(v / 100)}
                 format={(v) => `${v > 0 ? '+' : ''}${v}`}
                 left="Ready to fire you"
                 right="Delighted"
