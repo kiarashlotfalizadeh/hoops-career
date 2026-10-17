@@ -631,31 +631,6 @@
 }
 
 /* ------------------------------------------------------------ the pre-game screen (Preview.tsx) */
-/* player of the game: a tile, in the team colour when he's yours */
-.gd-pog {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  min-width: 0;
-}
-.gd-pog.mine {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-}
-
-/* a fact line: icon or tag, text, value */
-.gd-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  flex-wrap: wrap;
-}
-
 /* results and players in compact rows that link */
 .gd-row {
   display: flex;

@@ -42,8 +42,8 @@ const H_FT = 47;
 const SIDE = 1.6;
 const TOP = 2.4;
 /** The canvas in feet, apron included: the Live screen's layouts size the court by this ratio (live.css). */
-export const FLOOR_W = W_FT + 2 * SIDE;
-export const FLOOR_H = H_FT + TOP;
+const FLOOR_W = W_FT + 2 * SIDE;
+const FLOOR_H = H_FT + TOP;
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -265,7 +265,7 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.strokeStyle = pal.trim;
   ctx.lineWidth = Math.max(1, k * 0.12);
   ctx.beginPath();
-  const pin = 0.55 * k;
+  const pin = 0.35 * k;
   ctx.moveTo(X(-25) - pin, h);
   ctx.lineTo(X(-25) - pin, Y(0) - pin);
   ctx.lineTo(X(25) + pin, Y(0) - pin);
@@ -454,23 +454,22 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
 
 /** The team with the ball, in its colours, on the boards behind the baseline it attacks (both sides of the basket). */
 function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, colors: [string, string]) {
-  const h = (TOP - 0.7) * k;
+  // dark boards, lit in the team's jersey colour along the bottom: they read on any apron
+  const h = (TOP - 0.6) * k;
   const w = 7 * k;
-  setFont(ctx, 800, Math.max(9, h * 0.72));
+  const bar = Math.max(2, 0.28 * k);
+  setFont(ctx, 800, Math.max(9, h * 0.66));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const cx of [-14.5, 14.5]) {
     const x = (cx + W_FT / 2) * k - w / 2;
-    const y = -TOP * k + 0.25 * k;
+    const y = -TOP * k + 0.2 * k;
+    ctx.fillStyle = 'rgba(8,10,14,0.88)';
+    ctx.fillRect(x, y, w, h);
     ctx.fillStyle = colors[0];
-    ctx.strokeStyle = colors[1];
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = inkOn(colors[0]);
-    ctx.fillText(abbrev, x + w / 2, y + h / 2 + 0.5);
+    ctx.fillRect(x, y + h - bar, w, bar);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(abbrev, x + w / 2, y + (h - bar) / 2 + 0.5);
   }
 }
 
