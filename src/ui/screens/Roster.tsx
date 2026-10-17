@@ -6,7 +6,8 @@ import { Activity, ListOrdered, Workflow } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
 import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col, activateOnKey } from '../components/ui';
-import { attrDisplay, fmtHeight, ROLE_META, archetype } from '../../core/ratings';
+import { fmtHeight, ROLE_META, archetype } from '../../core/ratings';
+import { ratingCols } from '../ratingCols';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type PerGame } from '../stats';
@@ -44,31 +45,9 @@ export default function Roster() {
   const expiring = isOffseason(league) ? roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) < s0).length : 0;
   const age = (p: Player) => playerAge(p, league.season);
 
-  const ratingCols: Col<Player>[] = [
+  const ratingTable: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
-    { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (v) => <Ovr v={v as number} size="sm" /> },
-    { key: 'pot', label: 'POT', get: (p) => p.pot },
-    ...(['hgt', 'spd', 'ath', 'ins', 'mid', 'tp', 'hnd', 'pas', 'oiq', 'perD', 'intD', 'blk', 'diq', 'dreb'] as const).map((k) => ({
-      key: k,
-      label: {
-        hgt: 'SIZ',
-        spd: 'SPD',
-        ath: 'EXP',
-        ins: 'FIN',
-        mid: 'MID',
-        tp: '3PT',
-        hnd: 'HND',
-        pas: 'PAS',
-        oiq: 'OIQ',
-        perD: 'PER',
-        intD: 'INT',
-        blk: 'BLK',
-        diq: 'DIQ',
-        dreb: 'REB',
-      }[k],
-      get: (p: Player) => attrDisplay(p.ratings[k]),
-      fmt: (v: number | string) => <span style={{ color: (v as number) >= 80 ? 'var(--good)' : (v as number) <= 60 ? 'var(--text-dim)' : undefined }}>{v}</span>,
-    })),
+    ...ratingCols((p: Player) => p),
   ];
 
   // before anyone plays, each player's latest season (as the team page does) instead of a table of zeros;
@@ -203,7 +182,7 @@ export default function Roster() {
           </div>
         </Card>
       )}
-      {view === 'ratings' && <StatTable rows={roster} cols={ratingCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />}
+      {view === 'ratings' && <StatTable rows={roster} cols={ratingTable} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />}
       {view === 'stats' && (
         <>
           <StatTable rows={roster} cols={statCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
