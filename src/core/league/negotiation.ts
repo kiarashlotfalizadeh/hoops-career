@@ -289,7 +289,7 @@ export function userExtend(league: League, pid: number, amount: number, years: n
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signs a ${years}-year, $${(salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M extension`,
-    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at $${(salaries[0] / 1000).toFixed(1)}M with 5% annual raises, and counts against that season's cap; his current salary doesn't change.`,
+    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at $${(salaries[0] / 1000).toFixed(1)}M${years > 1 ? ' with 5% annual raises' : ''}, and counts against that season's cap; his current salary doesn't change.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });

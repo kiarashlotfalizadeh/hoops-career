@@ -318,8 +318,8 @@ function aiSheetTerms(league: League, t: Team, p: Player, season: number): { amo
 }
 
 /**
- * One AI team's shot at the market: the best fit it can pay (cap space, the mid-level exception
- * or the minimum). A full roster only adds a clearly better player than the one he'd displace. A
+ * One AI team's shot at the market: the best fit it can pay (cap space, an exception or the
+ * minimum). A full roster only adds a clearly better player than the one he'd displace. A
  * restricted free agent gets an offer sheet instead of a contract (see rfa.ts): a team is a bit
  * pickier about one his team may match (worth 68+, and 1.5 points off its interest), signs one at
  * a time, and only while the market leaves his team its full two days to decide.

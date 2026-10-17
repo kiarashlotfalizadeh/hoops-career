@@ -96,7 +96,7 @@ export const REVENUE_SHARING = 0.4;
  * Revenue sharing, at the end of the regular season: each team pays REVENUE_SHARING of whatever its
  * local revenue (gate, merchandise and local TV) beat the league average by, and the teams below the
  * average get the same share of their gap. Without it the biggest markets out-earned the smallest by
- * about 80M a season on the same payroll, and over a long career small markets ran a billion into the red.
+ * about $80M a season on the same payroll, and over a long career small markets ran a billion into the red.
  * Returns what each team received (negative: paid).
  */
 export function shareRevenue(league: League): Map<number, number> {

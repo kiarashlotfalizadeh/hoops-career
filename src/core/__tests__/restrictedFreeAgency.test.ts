@@ -18,7 +18,7 @@ import {
   statsLine,
   teamPlayers,
 } from '../league/helpers';
-import { askingContract, capSpace, leaveTeam, makeContract, marketHolds, releasePlayer, signPlayer, signingRoute, summerRoster, wantsTwoWay } from '../league/contracts';
+import { FA_DAYS, askingContract, capSpace, leaveTeam, makeContract, marketHolds, releasePlayer, signPlayer, signingRoute, summerRoster, wantsTwoWay } from '../league/contracts';
 import { contractExp } from '../playerGen';
 import { capHolds, capPayroll, fillRosters, marqueeFA, offerRoute, renouncePlayer, userBid, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
 import {
@@ -389,6 +389,11 @@ describe('offer sheets', () => {
     expect(userDecideSheet(l, q.pid, false).ok).toBe(true);
     expect(q.tid).toBe(R);
     expect(q.contract).toEqual(makeContract(l, 9_000, 3, s, q.experience));
+    // one signed on the next-to-last day runs to the close, and the mail and the news say so
+    const z = rfa(l, U);
+    signOfferSheet(l, z, R, 9_000, 3, 'space', FA_DAYS - 2);
+    expect(l.inbox[0].body).toMatch(new RegExp(`Match it by the end of day ${FA_DAYS} \\(when free agency closes\\) and he stays with us`));
+    expect(l.news.at(-1)!.text).toMatch(new RegExp(`can match it by the end of day ${FA_DAYS} \\(when free agency closes\\)\\.$`));
   });
 
   it('left unanswered past its last match day, the sheet lets him go, and the inbox says so', () => {

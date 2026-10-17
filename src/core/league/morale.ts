@@ -69,8 +69,9 @@ export function updateMorale(league: League, tid: number, notify = false) {
     } else if (role && role === natural) roleC = 0.5;
     const fair = marketSalary(league, p);
     const sal = salaryFor(p, league.season);
-    // a rookie-scale deal is set by the draft slot, so it's never held against the team
-    const contract = sal > 0 && !p.contract.rookie ? clamp(((sal - fair) / Math.max(fair, 2000)) * 2, -2, 1.5) : 0;
+    // a rookie-scale deal is set by the draft slot, so it's never held against the team, nor a
+    // 10-day contract, whose salary is his minimum prorated for its days, not a season's pay
+    const contract = sal > 0 && !p.contract.rookie && !p.contract.tenDay ? clamp(((sal - fair) / Math.max(fair, 2000)) * 2, -2, 1.5) : 0;
     if (contract < -1) gripes.push('Feels underpaid');
     if (pt < -1.5) gripes.push(`Wants more minutes (expects ~${Math.round(exp)} mpg)`);
     if (win < -1.5) gripes.push('Frustrated by losing');

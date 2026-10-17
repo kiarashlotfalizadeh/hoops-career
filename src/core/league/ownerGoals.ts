@@ -698,7 +698,7 @@ export function ownerCheckIn(league: League) {
     addInbox(league, {
       from: 'Owner',
       subject: 'All-Star break check-in',
-      body: [`At the break, ${good} of my ${prog.length} goals are on track.`, ...lines, mood].join('\n'),
+      body: [`At the break, ${good} of my ${prog.length} goals ${good === 1 ? 'is' : 'are'} on track.`, ...lines, mood].join('\n'),
       tone: good === prog.length ? 'good' : good * 2 >= prog.length ? 'neutral' : 'bad',
       link: '/owner',
     });

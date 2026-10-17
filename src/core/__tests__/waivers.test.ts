@@ -212,7 +212,7 @@ describe('waivers', () => {
     expect(p.tid).toBe(FREE_AGENT);
     expect(p.waivers).toBeUndefined();
     expect(deadFor(l, from, p.pid)).toBe(2 * vetMin);
-    expect(l.inbox[0].body).toMatch(/fell through \(Waiver claims close with the regular season/);
+    expect(l.inbox[0].body).toMatch(/fell through\. Waiver claims close with the regular season, as signings do\. He is a free agent now\.$/);
   });
 
   it('everyone left on waivers clears when the season is over', () => {
