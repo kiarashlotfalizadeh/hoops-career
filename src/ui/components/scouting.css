@@ -9,15 +9,16 @@
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-  padding: 8px;
+  padding: 8px 9px;
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--raised);
   border: 1px solid var(--line);
 }
 .scout-ranks .k {
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-dim);
   white-space: nowrap;
@@ -27,8 +28,9 @@
 .scout-ranks .v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 18px;
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1.1;
   white-space: nowrap;
 }
 .scout-ranks .r {
@@ -36,28 +38,54 @@
   font-weight: 700;
 }
 
-/* game plan: one of their players and who guards him */
+/* game plan: one of their players (his jersey, name, size) and who guards him */
 .gp-match {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px 10px;
   width: 100%;
+  min-height: 60px;
+  padding: 10px 10px 10px 14px;
   text-align: left;
 }
-.gp-match + .gp-match {
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
+.gp-match:active {
+  background: var(--surface);
+}
+.gp-match-p {
+  min-width: 0;
+}
+.gp-match-n {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.gp-match-d {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  max-width: 120px;
+  text-align: right;
+}
+.gp-match-dn {
+  max-width: 100%;
+  font-weight: 700;
+  font-size: 14px;
+}
+.gp-match .gp-notes {
+  padding-left: 50px;
 }
 .gp-notes {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 2px 10px;
 }
 .gp-note {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 650;
 }
 .gp-note.good {
   color: var(--good);
@@ -74,14 +102,31 @@
   resize: vertical;
   border-radius: 12px;
   border: 1px solid var(--line-2);
-  background: var(--surface);
+  background: var(--raised);
   padding: 10px 12px;
   font-size: 16px;
 }
 .gp-note-input:focus {
   border-color: var(--accent-text);
+  outline: none;
 }
-/* how to guard them: the four instructions in one row on a phone */
+/* how to guard them: the player, then the four instructions in one row on a phone */
+.gp-guard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.gp-guard-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.gp-guard-h .lr-name,
+.gp-guard-h .lr-meta {
+  display: block;
+}
 .gp-guard .chips {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
