@@ -241,6 +241,15 @@
 .lg-more:active {
   background: var(--surface);
 }
+/* your rows on their team tint: dim text a step lighter, as theme.css does for its tinted surfaces */
+.lg-lead-row.me,
+.lg-lead-top.me,
+.lg-five-row.me,
+.lg-race-row.me,
+.lg-coach-row.me,
+.lg-sb.me {
+  --text-dim: var(--text-2);
+}
 /* figures in a card: a Statline with its card's padding */
 .lg-strip {
   padding: 12px 14px;
