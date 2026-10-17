@@ -137,6 +137,16 @@ describe('import', () => {
     useStore.getState().mutate((x) => (x.name = 'renamed'));
     await expect(importLeague(backup(played('other')))).rejects.toThrow('Export a backup');
     expect(useStore.getState().league).toBe(open);
+    // a file that isn't a backup says so first
+    await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Hoops Career backup');
+  });
+
+  it('says so when the device has no room for the import', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    });
+    await expect(importLeague(backup(played('full')))).rejects.toThrow('Device storage is full. Free up some space, then import again.');
   });
 });
 

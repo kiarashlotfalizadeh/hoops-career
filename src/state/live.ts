@@ -260,7 +260,7 @@ export class LiveGame {
   checkpoint(): boolean {
     const j = this.journal;
     let changed = false;
-    // the league's copy was put back from an earlier one (an undone phase change): this game's goes on
+    // the league's copy was put back from an earlier one (a change that threw, undone by the store's attempt or task): this game's goes on
     if (this.league.live !== j && !this.committed && this.pendingIn(this.league)) {
       this.league.live = j;
       changed = true;

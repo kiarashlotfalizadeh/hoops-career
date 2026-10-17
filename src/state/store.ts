@@ -164,8 +164,13 @@ function rollbackPoint(l: League): () => void {
 
 const failed = (label: string) => `${label} hit an error, so nothing changed. If it keeps happening, export a backup and report it.`;
 
+/** Leagues a sim threw on halfway through a day: their last save is read back in their place, so they are never written. */
+const halfPlayed = new WeakSet<League>();
+
 /** One write of `l`, recorded in the store while it's still the open league. */
 async function write(l: League): Promise<boolean> {
+  // (nothing of a half-played day is worth keeping: its last save stands)
+  if (halfPlayed.has(l)) return true;
   if (useStore.getState().saveProblem?.kind === 'conflict') return false;
   const at = changes;
   try {
@@ -181,6 +186,8 @@ async function write(l: League): Promise<boolean> {
 
 /** After a sim threw halfway: go back to the last save rather than keep a half-played day. */
 async function reloadLastSave(l: League) {
+  // an autosave, the app being hidden or another league opened over it mustn't write the half-played day meanwhile
+  halfPlayed.add(l);
   let last: League | undefined;
   try {
     last = await loadLeague(l.id);
@@ -188,12 +195,15 @@ async function reloadLastSave(l: League) {
     console.error(e);
   }
   const st = useStore.getState();
+  // another league was opened meanwhile: it stays open, and this one's last save is where it picks up
+  if (st.league !== l) return;
   if (last) {
     st.setLeague(last);
     st.toast('The simulation hit an error, so your league went back to its last save.', 'bad');
     return;
   }
   // never saved (or the device can't be read): this copy is the only one, so keep it
+  halfPlayed.delete(l);
   useStore.setState({ sim: null, stopRequested: false, v: st.v + 1 });
   st.toast("The simulation hit an error, and this league has no save to go back to. Export a backup of it (Settings) so it isn't lost.", 'bad');
 }
@@ -211,7 +221,7 @@ export const useStore = create<AppState>((set, get) => ({
     // another league opened over this one (Back to the main menu, then another save): keep its
     // unsaved changes. A reload of the same league is a way back from them, so it skips this.
     // (callers that can wait use saveBeforeLeaving first, and offer an export when it fails)
-    if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict')
+    if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict' && !halfPlayed.has(old))
       void (saving ?? Promise.resolve())
         .then(() => saveLeague(old))
         .catch((e) => {
@@ -286,6 +296,9 @@ export const useStore = create<AppState>((set, get) => ({
     let left = startDay;
     try {
       for (;;) {
+        // a write in flight (an autosave, the app being hidden) stores the league as it is when its turn
+        // comes, which mustn't be halfway through a day that throws
+        while (saving) await saving;
         if (get().stopRequested || get().league !== l) break;
         if (l.day !== left && targetDone(l, target, startDay, startPhase)) break;
         if (live && !live.committed) live.commit(l);

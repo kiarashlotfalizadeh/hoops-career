@@ -19,6 +19,7 @@ afterEach(() => {
   resetLab();
   FakeWorker.all = [];
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('lab client', () => {
@@ -43,5 +44,18 @@ describe('lab client', () => {
     await Promise.resolve();
     expect(cur.terminated).toBe(true);
     expect((failed as Error | null)?.message).toBe('crashed');
+  });
+
+  it("a call that throws before it's sent fails, and its stall timer goes with it", async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    vi.useFakeTimers();
+    await expect(
+      withLab(() => {
+        throw new Error('bad request');
+      }),
+    ).rejects.toThrow('bad request');
+    void withLab(() => new Promise<never>(() => {}), 60 * 60_000).catch(() => {});
+    vi.advanceTimersByTime(10 * 60_000);
+    expect(FakeWorker.all.at(-1)!.terminated).toBe(false);
   });
 });
