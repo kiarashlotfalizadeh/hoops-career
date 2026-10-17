@@ -2,6 +2,7 @@
 // season and offseason, driven only through the in-app Play menu, as a player would.
 // Usage: node scripts/qa/full-career.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';
 const browser = await chromium.launch();
@@ -22,9 +23,11 @@ const waitSim = async () => {
   await page.waitForTimeout(400);
   await page.waitForSelector('.simbar', { state: 'detached', timeout: 600000 }).catch(() => {});
   await page.waitForTimeout(400);
+  await clearMoments(page);
 };
 const phase = async () => `${await page.locator('.topbar').first().getAttribute('data-phase')} · ${(await page.locator('.topbar .sub').first().textContent())?.trim()}`;
 const play = async (label) => {
+  await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page.waitForTimeout(300);
   const b = page
@@ -62,6 +65,7 @@ log(`created → ${await phase()}`);
 await play('Start regular season');
 // one live game, coached to the end
 await play('Sim to next game');
+await clearMoments(page);
 await page.getByRole('button', { name: 'Play options', exact: true }).click();
 await page.waitForTimeout(300);
 const live = page
@@ -160,6 +164,7 @@ await shot('14-roster-y2');
 // the draft can leave more than 15 standard contracts: cut the cheapest one, as a player would, until the season can start
 for (let i = 0; i < 5; i++) {
   await page.goto(`${base}/#/`);
+  await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page.waitForTimeout(300);
   const start = page

@@ -9,6 +9,7 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 
 if (!existsSync(join('dist', 'index.html'))) {
   console.error('No production build in dist/: run npm run build first.');
@@ -53,7 +54,10 @@ try {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => fail.push(`pageerror: ${e.message}`));
   page.on('console', (m) => m.type() === 'error' && fail.push(`console: ${m.text()}`));
-  const waitSim = () => page.waitForSelector('.simbar', { state: 'detached', timeout: 120_000 }).catch(() => {});
+  const waitSim = async () => {
+    await page.waitForSelector('.simbar', { state: 'detached', timeout: 120_000 }).catch(() => {});
+    await clearMoments(page);
+  };
 
   await page.goto(`${base}/#/start`);
   await page.getByText('New League').click();
@@ -66,6 +70,8 @@ try {
   await page.waitForSelector('.topbar', { timeout: 30_000 });
   step('created the real league');
 
+  await clearMoments(page);
+
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page
     .locator('.sheet')
@@ -74,6 +80,7 @@ try {
   await page.waitForTimeout(800);
 
   // the opening-night game, live: the court plays, then sims to the final
+  await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   const watch = page.locator('.sheet').getByRole('button', { name: /^Watch & coach live/ });
   if (!(await watch.count())) {
@@ -82,6 +89,7 @@ try {
       .getByRole('button', { name: /^Sim to next game/ })
       .click();
     await waitSim();
+    await clearMoments(page);
     await page.getByRole('button', { name: 'Play options', exact: true }).click();
   }
   await watch.click();
@@ -107,6 +115,7 @@ try {
   step(`coached a live game to the final (${await bug.getAttribute('aria-label')})`);
 
   await page.goto(`${base}/#/`);
+  await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page
     .locator('.sheet')
@@ -207,6 +216,7 @@ try {
   // the app closed mid-game (a reload, last: a file input doesn't take a file after one): a pause
   // saves where the game is, and the game picks up there instead of at tip-off
   await page.goto(`${base}/#/`);
+  await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   if (!(await watch.count())) {
     await page
@@ -214,6 +224,7 @@ try {
       .getByRole('button', { name: /^Sim to next game/ })
       .click();
     await waitSim();
+    await clearMoments(page);
     await page.getByRole('button', { name: 'Play options', exact: true }).click();
   }
   await watch.click();

@@ -2,6 +2,7 @@
 // roster, the Lab (projection and counters), the pre-game screen, a live game and its report. Works on any build.
 // Usage: node scripts/qa/core-screens.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';
 const browser = await chromium.launch();
@@ -20,6 +21,7 @@ const shot = async (name, full = false) => {
 const waitSim = async () => {
   await page.waitForTimeout(300);
   await page.waitForSelector('.simbar', { state: 'detached', timeout: 180000 }).catch(() => {});
+  await clearMoments(page);
 };
 await page.goto(`${base}/#/start`);
 await page.waitForTimeout(600);

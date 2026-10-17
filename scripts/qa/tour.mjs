@@ -5,6 +5,7 @@
 // (npm run dev) and builds made with VITE_QA=1 expose: for a production-like run,
 // `VITE_QA=1 npm run build && npm run preview`.
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 import { mkdirSync } from 'node:fs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'tour';
@@ -31,9 +32,11 @@ const waitSim = async (pg) => {
   await pg.waitForTimeout(300);
   await pg.waitForSelector('.simbar', { state: 'detached', timeout: 600000 }).catch(() => {});
   await pg.waitForTimeout(300);
+  await clearMoments(pg);
 };
 const phase = async () => `${await phone.locator('.topbar').first().getAttribute('data-phase')} · ${(await phone.locator('.topbar .sub').first().textContent())?.trim()}`;
 const play = async (label) => {
+  await clearMoments(phone);
   await phone.getByRole('button', { name: 'Play options', exact: true }).click();
   await phone.waitForTimeout(300);
   const b = phone
@@ -165,6 +168,7 @@ if (want('mid')) await play('Start regular season');
 if (stages.includes('mid')) {
   await play('Sim to next game');
   // a live game for the game view and live screens
+  await clearMoments(phone);
   await phone.getByRole('button', { name: 'Play options', exact: true }).click();
   await phone.waitForTimeout(300);
   const live = phone

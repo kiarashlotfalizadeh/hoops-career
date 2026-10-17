@@ -7,6 +7,7 @@
 // between runs; CHROMIUM=/path/to/chrome or PLAYWRIGHT_BROWSERS_PATH if browsers are elsewhere.
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots/league';
@@ -60,10 +61,12 @@ const waitSim = async () => {
   await page.waitForTimeout(400);
   await page.waitForSelector('.simbar', { state: 'detached', timeout: 300_000 });
   await page.waitForTimeout(300);
+  await clearMoments(page);
 };
 
 /** Open the top-bar Play sheet and run the action with this label. Returns false if unavailable. */
 const play = async (label) => {
+  await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page.waitForTimeout(250);
   const btn = page.locator('.sheet button', { hasText: label }).first();

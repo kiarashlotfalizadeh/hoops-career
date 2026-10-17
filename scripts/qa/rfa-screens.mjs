@@ -6,6 +6,7 @@
 // screenshots. Fails on page errors, console errors or a page wider than the phone.
 // Usage: npx vite --port 5183 & node scripts/qa/rfa-screens.mjs http://localhost:5183 <outDir>
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5183';
@@ -45,6 +46,7 @@ const scrollSheet = async () => {
 const waitSim = async () => {
   await page.waitForTimeout(400);
   await page.waitForSelector('.simbar', { state: 'detached', timeout: 240000 }).catch(() => {});
+  await clearMoments(page);
 };
 /** Run `fn` on the league in the page (fn's source is sent over; it gets the league and `arg`). */
 const mutate = (fn, arg) =>
@@ -162,6 +164,7 @@ await shot('d09-fa-sheet-decision');
 await go('/office');
 await shot('d10-office-fa-sheet');
 // the season can't start until he decides
+await clearMoments(page);
 await page.getByRole('button', { name: 'Play options', exact: true }).click();
 await page.waitForTimeout(400);
 await shot('d11-play-menu-blocked');

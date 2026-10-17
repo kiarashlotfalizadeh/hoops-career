@@ -3,6 +3,7 @@
 // (lottery, live draft, re-sign window, free agency).
 // Usage: node scripts/qa/office-screens.mjs <baseUrl> <outDir> [pre|all]
 import { chromium } from 'playwright';
+import { clearMoments } from './moments.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
@@ -39,6 +40,7 @@ const scrollSheet = async () => {
 const waitSim = async () => {
   await page.waitForTimeout(400);
   await page.waitForSelector('.simbar', { state: 'detached', timeout: 240000 }).catch(() => {});
+  await clearMoments(page);
 };
 const tryClick = async (locator, label) => {
   try {
@@ -133,6 +135,7 @@ await shot('o23-resign-off', true);
 // ------------------------------------------------------------------ season → offseason
 if (stage === 'all') {
   const play = async (re) => {
+    await clearMoments(page);
     await page.getByRole('button', { name: 'Play options', exact: true }).click();
     await page.waitForTimeout(350);
     const btn = page.locator('.sheet button').filter({ hasText: re }).first();
