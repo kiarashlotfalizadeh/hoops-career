@@ -50,8 +50,9 @@ export function currentMoments(league: League): Moment[] {
   const nick = team.name;
   const season = league.season;
 
-  // a postseason spot, while the regular season is still being played
-  if (league.phase === 'regular') {
+  // a postseason spot (read into the postseason too: a long sim can clinch it in its last week and
+  // end in the play-in, before the screen has looked)
+  if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') {
     const row = confStandings(league, team.conf).find((r) => r.tid === me);
     const conf = team.conf === 'E' ? 'Eastern Conference' : 'Western Conference';
     // a play-in spot is only news until a playoff spot is
