@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftRight, BarChart3, ChevronRight, ClipboardList, ShieldAlert, Swords, Target } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, ChevronRight, ClipboardList, Pencil, ShieldAlert, Swords, Target } from 'lucide-react';
 import { ACTIONS, type DraftPick, type League, type Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted, teamName } from '../../core/league/helpers';
@@ -25,6 +25,7 @@ import { capPayroll } from '../../core/league/freeAgency';
 import { MovesTab } from '../league/MovesTab';
 import { RetiredBanners } from '../league/RetiredBanners';
 import { activeCoach, coachCareer, coyWinners, stintTotals } from '../../core/league/coaches';
+import { LazyTeamEditor } from '../god/lazy';
 
 const TABS = ['roster', 'tactics', 'scouting', 'schedule', 'picks', 'moves', 'history'] as const;
 type Tab = (typeof TABS)[number];
@@ -36,6 +37,7 @@ export default function TeamView() {
   const tid = Number(params.tid);
   const team = Number.isInteger(tid) ? league.teams[tid] : undefined;
   const [tab, setTab] = useQueryParam<Tab>('tab', 'roster', TABS, true);
+  const [editing, setEditing] = useState(false);
   if (!team) {
     return (
       <main className="page">
@@ -48,7 +50,19 @@ export default function TeamView() {
   }
   return (
     <main className="page lg-page" key={tid}>
-      <PageHeader title={team.name} sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`} back />
+      <PageHeader
+        title={team.name}
+        sub={`${team.div} Division · ${FRANCHISES[tid]?.arena ?? ''}`}
+        back
+        right={
+          league.settings.godMode && (
+            <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setEditing(true)}>
+              <Pencil size={16} /> Edit
+            </button>
+          )
+        }
+      />
+      {editing && league.settings.godMode && <LazyTeamEditor tid={tid} onClose={() => setEditing(false)} />}
       <Hero league={league} tid={tid} />
       <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} label="Team sections" />
       {tab === 'roster' && <RosterTab league={league} tid={tid} />}

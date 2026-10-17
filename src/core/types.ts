@@ -1206,6 +1206,8 @@ export interface Settings {
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */
   liveScores?: boolean;
+  /** God mode: the in-game editor for players and teams, created players and forced trades (default off; see godMode.ts). */
+  godMode?: boolean;
 }
 
 export interface League {
@@ -1308,6 +1310,8 @@ export interface League {
   oddsTrail?: { season: number; tid: number; pts: [number, number, number][] };
   /** Teams that want the user as head coach this summer (see jobs.ts): from the carousel's openings after the playoffs until the draft. */
   jobOffers?: { season: number; offers: JobOffer[] };
+  /** Changes made in god mode (see godMode.ts), counted so the league says it has been edited. */
+  godEdits?: number;
 }
 
 /**

@@ -1,12 +1,26 @@
+import { createContext, useContext } from 'react';
 import { FRANCHISES } from '../../core/teams';
+import { useStore } from '../../state/store';
 import { inkOn } from '../teamColors';
+
+/** True inside a league's screens: marks and avatars there wear its teams' abbreviations and colours (god mode can change them). */
+export const LeagueLook = createContext(false);
+
+/** A team's abbreviation and colours as the open league has them, inside its screens (undefined elsewhere: the franchise's are used). */
+export function useTeamLook(tid: number): { abbrev?: string; colors?: [string, string, string] } {
+  const inLeague = useContext(LeagueLook);
+  const abbrev = useStore((s) => (inLeague ? s.league?.teams[tid]?.abbrev : undefined));
+  const colors = useStore((s) => (inLeague ? s.league?.teams[tid]?.colors : undefined));
+  return { abbrev, colors };
+}
 
 // Original monogram marks generated from franchise colors (no trademarked artwork). `decorative`: the
 // team's name is shown next to it, so screen readers skip the mark instead of reading the name twice.
 export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: number; size?: number; abbrev?: string; colors?: [string, string, string]; decorative?: boolean }) {
   const f = FRANCHISES[tid];
-  const ab = abbrev ?? f?.abbrev ?? '???';
-  const [c1, c2, c3] = colors ?? f?.colors ?? ['#334155', '#94a3b8', '#ffffff'];
+  const look = useTeamLook(tid);
+  const ab = abbrev ?? look.abbrev ?? f?.abbrev ?? '???';
+  const [c1, c2, c3] = colors ?? look.colors ?? f?.colors ?? ['#334155', '#94a3b8', '#ffffff'];
   const shape = f?.mark ?? 'circle';
   const text = ab.length > 3 ? ab.slice(0, 3) : ab;
   const ink = inkOn(c1);

@@ -7,6 +7,7 @@ import { LEVEL_VALUES, levelIndex, type LevelNames } from '../../core/sim/tactic
 import { FRANCHISES } from '../../core/teams';
 import { useBack } from '../nav';
 import { inkOn } from '../teamColors';
+import { useTeamLook } from './TeamLogo';
 
 export function Card({
   title,
@@ -62,7 +63,8 @@ export function Ovr({ v, size = '' }: { v: number; size?: '' | 'sm' | 'lg' }) {
 }
 
 export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastName' | 'tid' | 'jersey'>; size?: '' | 'lg' }) {
-  const colors = p.tid >= 0 ? FRANCHISES[p.tid]?.colors : undefined;
+  const look = useTeamLook(p.tid);
+  const colors = p.tid >= 0 ? (look.colors ?? FRANCHISES[p.tid]?.colors) : undefined;
   const c1 = colors?.[0] ?? '#334155';
   const c2 = colors?.[1] ?? '#64748b';
   const initials = `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`;

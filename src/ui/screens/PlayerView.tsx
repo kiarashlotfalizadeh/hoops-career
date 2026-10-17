@@ -1,7 +1,7 @@
 import { AccoladeChips, TabBar, accolades, useQueryParam } from '../league/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, MessageCircle, PenLine, Scale } from 'lucide-react';
+import { ArrowLeftRight, MessageCircle, PenLine, Pencil, Scale } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -32,6 +32,7 @@ import { fmtDate } from '../../core/league/helpers';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { compareHref } from '../compare';
+import { LazyPlayerEditor } from '../god/lazy';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -94,6 +95,7 @@ export default function PlayerView() {
   const [params] = useSearchParams();
   const [meeting, setMeeting] = useState(() => params.get('meet') === '1');
   const [comparing, setComparing] = useState(false);
+  const [editing, setEditing] = useState(false);
   const pctile = useSkillPercentiles(league);
   if (!p) {
     return (
@@ -155,9 +157,16 @@ export default function PlayerView() {
         back
         backTo={mine ? '/roster' : team ? `/team/${team.tid}` : '/'}
         right={
-          <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setComparing(true)}>
-            <Scale size={16} /> Compare
-          </button>
+          <div className="row" style={{ gap: 4 }}>
+            {league.settings.godMode && (
+              <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setEditing(true)}>
+                <Pencil size={16} /> Edit
+              </button>
+            )}
+            <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setComparing(true)}>
+              <Scale size={16} /> Compare
+            </button>
+          </div>
         }
       />
       <Card accent>
@@ -519,6 +528,8 @@ export default function PlayerView() {
       {tab === 'log' && <GameLog p={p} league={league} onOpen={(gid) => nav(`/game/${gid}`)} />}
       {tab === 'dev' && <DevTab p={p} league={league} mine={mine} />}
 
+      {/* (loaded the first time it opens) */}
+      {editing && league.settings.godMode && <LazyPlayerEditor pid={p.pid} onClose={() => setEditing(false)} />}
       <Sheet open={roleOpen} onClose={() => setRoleOpen(false)} title={`${p.firstName} ${p.lastName}: role`}>
         <RoleEditor p={p} onDone={() => setRoleOpen(false)} />
       </Sheet>

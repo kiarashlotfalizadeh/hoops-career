@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Banknote, Check, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X } from 'lucide-react';
+import { Ban, Banknote, Check, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
@@ -45,6 +45,7 @@ import { CashControl, ProtectSelect, SwapChips, TermsList, protectable } from '.
 import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
 import { RecentDeals } from '../league/MovesTab';
 import { continueDraft } from '../../core/league/season';
+import { checkForceTrade, forceTrade, type EditCheck } from '../../core/league/godMode';
 
 interface Sel {
   pids: number[];
@@ -162,6 +163,10 @@ export default function Trade() {
     [league, partner, user],
   );
   const closed = phaseErrs.length > 0;
+  // god mode: what would stop this deal being forced through (only its shape and five players to dress)
+  const god = !!league.settings.godMode;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const force = useLeagueMemo(() => (god && !empty ? checkForceTrade(league, offer) : null), [league, god, empty, offerKey]);
 
   const pickPartner = (tid: number) => {
     if (tid === partner) return;
@@ -198,6 +203,19 @@ export default function Trade() {
     reset();
     setAsk(null);
     return true;
+  };
+
+  /** God mode: the deal goes through whatever their GM and the rules say. */
+  const forceIt = () => {
+    const abbrev = league.teams[offer.b.tid].abbrev;
+    if (checkForceTrade(league, offer).errors.length) return;
+    useStore.getState().mutate((l) => {
+      forceTrade(l, offer);
+      if (l.phase === 'draft') continueDraft(l);
+    });
+    useStore.getState().toast(`Trade forced through with ${abbrev}.`, 'good');
+    reset();
+    setAsk(null);
   };
 
   const propose = () => {
@@ -380,7 +398,7 @@ export default function Trade() {
               <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
             </div>
           </div>
-          <Dock league={league} offer={offer} ev={ev} empty={empty} season={s} onPropose={propose} onWork={whatWorks} />
+          <Dock league={league} offer={offer} ev={ev} empty={empty} season={s} onPropose={propose} onWork={whatWorks} force={force} onForce={forceIt} />
         </>
       ) : tab === 'find' ? (
         <TradeFinder league={league} state={finder} onChange={setFinder} onPick={pickTarget} />
@@ -758,6 +776,8 @@ function Dock({
   season,
   onPropose,
   onWork,
+  force,
+  onForce,
 }: {
   league: League;
   offer: TradeOffer;
@@ -766,6 +786,9 @@ function Dock({
   season: number;
   onPropose: () => void;
   onWork: () => void;
+  /** God mode is on: what stops the deal being forced (null when it's off). */
+  force: EditCheck | null;
+  onForce: () => void;
 }) {
   const user = league.userTid;
   const cap = CAP_FOR(league, season);
@@ -879,6 +902,16 @@ function Dock({
           <Handshake size={16} /> Propose
         </button>
       </div>
+      {force && (
+        <div className="col" style={{ marginTop: 8, gap: 4 }}>
+          <button className="btn sm block" disabled={force.errors.length > 0} onClick={onForce}>
+            <Zap size={16} /> Force this trade
+          </button>
+          <span className={`tiny ${force.errors.length ? 'bad' : force.warnings.length ? 'warn' : 'dim'}`}>
+            {force.errors[0] ?? force.warnings[0] ?? 'God mode: it goes through whatever their GM and the trade rules say.'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

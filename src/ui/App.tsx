@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
-import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Workflow, X } from 'lucide-react';
+import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Wand2, Workflow, X } from 'lucide-react';
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
@@ -12,7 +12,7 @@ import { faDayNumber } from '../core/league/season';
 import type { League } from '../core/types';
 import { ordinal } from './league/shared';
 import { gamesMemo } from './stats';
-import { TeamLogo } from './components/TeamLogo';
+import { LeagueLook, TeamLogo } from './components/TeamLogo';
 import { Sheet, Spinner } from './components/ui';
 import { flowActions } from './flow';
 import { useFlowRunner } from './useFlow';
@@ -46,6 +46,7 @@ const Finances = lazyRetry(() => import('./screens/Finances'));
 const Inbox = lazyRetry(() => import('./screens/Inbox'));
 const Settings = lazyRetry(() => import('./screens/Settings'));
 const History = lazyRetry(() => import('./screens/History'));
+const GodMode = lazyRetry(() => import('./screens/GodMode'));
 
 const BLOCKED = 'Close other Hoops Career tabs or windows to finish updating your saves.';
 
@@ -223,6 +224,12 @@ function TopBar() {
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
           <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
         </button>
+        {/* god mode on: the editor is a tap away, and the wand says it's on */}
+        {league.settings.godMode && (
+          <button className="iconbtn" style={{ color: 'var(--warn)' }} onClick={() => nav('/god')} aria-label="God mode editor">
+            <Wand2 size={20} />
+          </button>
+        )}
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
           <SettingsIcon size={20} />
         </button>
@@ -259,7 +266,7 @@ function TopBar() {
 }
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/live', '/game', '/preview'] },
+  { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/god', '/live', '/game', '/preview'] },
   { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player', '/compare'] },
   { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab', '/gameplan'] },
   { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
@@ -520,6 +527,7 @@ function GameShell() {
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/history" element={<History />} />
+            <Route path="/god" element={<GodMode />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -540,7 +548,15 @@ export function App() {
             <Routes>
               <Route path="/start" element={<Start />} />
               <Route path="/new" element={<NewLeague />} />
-              <Route path="/*" element={<GameShell />} />
+              {/* inside a league, team marks and avatars wear its teams' abbreviations and colours */}
+              <Route
+                path="/*"
+                element={
+                  <LeagueLook.Provider value={true}>
+                    <GameShell />
+                  </LeagueLook.Provider>
+                }
+              />
             </Routes>
           </Suspense>
           <Toasts />
