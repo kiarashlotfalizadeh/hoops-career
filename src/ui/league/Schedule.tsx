@@ -6,7 +6,6 @@ import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { teamRatings } from '../stats';
-import { Card, Empty } from '../components/ui';
 import { ordinal, roundName, useGamesByGid, useQueryParam } from './shared';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { nextUserGame } from '../../core/analysis/preview';
@@ -51,7 +50,7 @@ interface Row {
 
 /**
  * One team's schedule & results, grouped by month. Long lists start collapsed around the next game.
- * `h2hTid` highlights games against that team (e.g. the user's team on another club's page);
+ * `h2hTid` marks games against that team (the user's, on another club's page) with its edge;
  * `cupOnly` keeps just its NBA Cup games.
  */
 export function TeamScheduleList({
@@ -93,12 +92,7 @@ export function TeamScheduleList({
   }, [league, tid, byGid]);
 
   const list = cupOnly ? rows.filter((r) => r.g.cup) : rows;
-  if (!list.length)
-    return (
-      <Card>
-        <Empty>{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</Empty>
-      </Card>
-    );
+  if (!list.length) return <div className="card empty">{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</div>;
 
   const nextIdx = list.findIndex((r) => !r.g.played);
   const anchor = nextIdx === -1 ? list.length : nextIdx;
@@ -107,7 +101,7 @@ export function TeamScheduleList({
 
   let lastMonth = '';
   return (
-    <Card className="flush lg-flat">
+    <div className="card flush">
       {hiddenCount > 0 && (
         <button className="lg-more" onClick={() => setExpanded(true)}>
           <ChevronDown size={15} /> Show {hiddenCount} earlier game{hiddenCount === 1 ? '' : 's'}
@@ -126,58 +120,51 @@ export function TeamScheduleList({
         return (
           <Fragment key={r.g.gid}>
             {showMonth && (
-              <div className="lg-month">
+              <div className="list-divider lg-month">
                 <span>{month}</span>
-                {monthRec && (
-                  <span className="num small dim" style={{ fontFamily: 'var(--font)', letterSpacing: 0, textTransform: 'none' }}>
-                    {monthRec}
-                  </span>
-                )}
+                {monthRec && <span className="num">{monthRec}</span>}
               </div>
             )}
             <Link to={to} className={`lg-g-row ${today ? 'today' : ''} ${h2hTid !== undefined && r.opp === h2hTid ? 'h2h' : ''}`}>
-              <div className="lg-g-date">
+              <span className="lg-g-date">
                 <span className="wd">{today ? 'Today' : fmtDate(league.season, r.g.day, { weekday: 'short' })}</span>
                 <span className="d">{fmtDate(league.season, r.g.day)}</span>
-              </div>
-              {/* the Cup final is on a neutral floor: nobody's home */}
-              <span className="lg-g-at">{r.home || neutralSite(r.g) ? 'vs' : '@'}</span>
+              </span>
               <TeamLogo tid={r.opp} size={28} decorative />
-              <div style={{ minWidth: 0 }}>
-                <div className="bold ellipsis">{opp.name}</div>
+              <span className="lg-g-opp">
+                <span className="lg-g-name ellipsis">
+                  {/* the Cup final is on a neutral floor: nobody's home */}
+                  <span className="lg-g-at">{r.home || neutralSite(r.g) ? 'vs' : '@'}</span>
+                  {opp.name}
+                </span>
                 {/* (wraps: a long top scorer's name would cut off his points) */}
-                <div className="tiny dim">
-                  {typeLabel ? (
-                    <span style={{ color: 'var(--accent-text)', fontWeight: 700 }}>
-                      {typeLabel}
-                      {' · '}
-                    </span>
-                  ) : null}
+                <span className="lg-g-sub">
+                  {typeLabel ? <b className="lg-g-type">{typeLabel} · </b> : null}
                   {rowSub(league, r, tid, ranks)}
-                </div>
-              </div>
-              <div className="lg-g-res">
+                </span>
+              </span>
+              <span className="lg-g-res">
                 {r.res ? (
                   <>
-                    <span className="row" style={{ gap: 6 }}>
+                    <span className="lg-g-score">
                       <span className={`lg-wl ${r.won ? 'w' : 'l'}`}>{r.won ? 'W' : 'L'}</span>
-                      <span className="num bold">
+                      <span className="num">
                         {r.us}-{r.them}
                       </span>
                     </span>
-                    {r.res.ot > 0 && <span className="tiny dim">{r.res.ot > 1 ? `${r.res.ot}OT` : 'OT'}</span>}
+                    {r.res.ot > 0 && <span className="lg-g-ot">{r.res.ot > 1 ? `${r.res.ot}OT` : 'OT'}</span>}
                   </>
                 ) : r.g.played ? (
-                  <span className="tiny dim">Final</span>
+                  <span className="lg-g-ot">Final</span>
                 ) : (
                   <ChevronRight size={16} className="dim" />
                 )}
-              </div>
+              </span>
             </Link>
           </Fragment>
         );
       })}
-    </Card>
+    </div>
   );
 }
 
@@ -217,12 +204,7 @@ export function DayScoreboard({ league }: { league: League }) {
   const byGid = useGamesByGid(league);
   const days = useLeagueMemo(() => [...new Set(league.schedule.map((g) => g.day))].sort((a, b) => a - b), [league]);
   const [dayStr, setDayStr] = useQueryParam<string>('day', '');
-  if (!days.length)
-    return (
-      <Card>
-        <Empty>No games scheduled.</Empty>
-      </Card>
-    );
+  if (!days.length) return <div className="card empty">No games scheduled.</div>;
   const fallback = days.includes(league.day) ? league.day : (days.find((d) => d >= league.day) ?? days[days.length - 1]);
   const day = dayStr !== '' && days.includes(Number(dayStr)) ? Number(dayStr) : fallback;
   const idx = days.indexOf(day);
@@ -246,8 +228,8 @@ export function DayScoreboard({ league }: { league: League }) {
           <ChevronLeft size={20} />
         </button>
         <div className="mid">
-          <div className="bold">{fmtDate(league.season, day, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
-          <div className="tiny dim upper">
+          <div className="lg-day-d">{fmtDate(league.season, day, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+          <div className="lg-day-s">
             {isToday ? 'Today · ' : ''}
             {games.length} game{games.length === 1 ? '' : 's'}
             {played && played < games.length ? ` · ${played} final` : played ? ' · final' : ''}
@@ -258,11 +240,11 @@ export function DayScoreboard({ league }: { league: League }) {
         </button>
       </div>
       {day !== fallback && (
-        <button className="btn xs ghost" style={{ alignSelf: 'center' }} onClick={() => setDayStr('')}>
+        <button className="btn xs ghost lg-jump" onClick={() => setDayStr('')}>
           Jump to {fallback === league.day ? 'today' : fallback > league.day ? 'next game day' : 'latest games'}
         </button>
       )}
-      <div className="lg-sb-grid">
+      <div className="card flush lg-sb-grid">
         {games.map((g) => (
           <ScoreCard key={g.gid} league={league} g={g} res={byGid.get(g.gid)} />
         ))}

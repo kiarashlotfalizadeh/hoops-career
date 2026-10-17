@@ -5,9 +5,9 @@ import { standings, type StandingRow } from '../../core/league/standings';
 import { curTeamSeason, teamPlayers } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Help, Segmented } from '../components/ui';
+import { Help, Segmented } from '../components/ui';
 import { f0, f1, signed, teamRatings } from '../stats';
-import { confName, ordinal, streakLabel, useQueryParam } from './shared';
+import { Toolbar, confName, ordinal, streakLabel, useQueryParam } from './shared';
 import { OddsView } from './OddsView';
 
 type View = 'E' | 'W' | 'league' | 'power' | 'odds';
@@ -40,32 +40,61 @@ export function StandingsTab({ league }: { league: League }) {
         <PowerRankings league={league} />
       ) : (
         <>
-          <div className="row between">
-            <span className="small dim">
-              {!started ? 'Season has not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}
-            </span>
-            <div className="chips lg-only-narrow" role="group" aria-label="Columns">
-              <button className={`chip lg-chip-xs ${cols === 'basic' ? 'on' : ''}`} aria-pressed={cols === 'basic'} onClick={() => setCols('basic')}>
-                Standings
-              </button>
-              <button className={`chip lg-chip-xs ${cols === 'splits' ? 'on' : ''}`} aria-pressed={cols === 'splits'} onClick={() => setCols('splits')}>
-                Splits
-              </button>
-            </div>
-          </div>
+          <Toolbar
+            right={
+              <>
+                <div className="chips lg-only-narrow" role="group" aria-label="Columns">
+                  <button className={`chip lg-chip-xs ${cols === 'basic' ? 'on' : ''}`} aria-pressed={cols === 'basic'} onClick={() => setCols('basic')}>
+                    Standings
+                  </button>
+                  <button className={`chip lg-chip-xs ${cols === 'splits' ? 'on' : ''}`} aria-pressed={cols === 'splits'} onClick={() => setCols('splits')}>
+                    Splits
+                  </button>
+                </div>
+                <StandingsHelp />
+              </>
+            }
+          >
+            {!started ? 'Season not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}
+          </Toolbar>
           <StandingsTable league={league} rows={view === 'league' ? leagueRows(rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} cols={cols} />
           {view === 'league' ? (
-            <div className="lg-note">Teams are ranked by win %, then point differential. Playoff seeding uses the conference standings and their tiebreakers.</div>
+            <div className="lg-note">Ties break on point differential. Seeds come from the conference standings.</div>
           ) : (
-            <div className="lg-note">
-              Seeds 1-6 make the playoffs; 7-10 go to the play-in. <span className="lg-clinch x">x</span> clinched playoffs · <span className="lg-clinch p">p</span> clinched
-              play-in · <span className="lg-clinch e">e</span> eliminated. Two-team ties break on head-to-head, division leader, division record (same division only), conference
-              record, record against playoff teams in the conference, then in the other conference, then point differential. In ties of three or more, division leaders go first.
+            <div className="lg-legend">
+              <span>1-6 playoffs</span>
+              <span>7-10 play-in</span>
+              <span>
+                <b className="lg-clinch x">x</b> clinched
+              </span>
+              <span>
+                <b className="lg-clinch p">p</b> play-in
+              </span>
+              <span>
+                <b className="lg-clinch e">e</b> out
+              </span>
             </div>
           )}
         </>
       )}
     </>
+  );
+}
+
+/** How the table reads and how ties break, a tap away. */
+function StandingsHelp() {
+  return (
+    <Help title="Seeds and tiebreakers">
+      <p className="lg-p">
+        Seeds 1-6 in each conference make the playoffs; 7-10 go to the play-in. <b className="lg-clinch x">x</b> clinched a playoff spot, <b className="lg-clinch p">p</b> clinched
+        at least the play-in, <b className="lg-clinch e">e</b> eliminated.
+      </p>
+      <p className="lg-p">
+        Two-team ties break on head-to-head, division leader, division record (same division only), conference record, record against playoff teams in the conference, then in the
+        other conference, then point differential. In ties of three or more, division leaders go first.
+      </p>
+      <p className="lg-p">The League view ranks all 30 teams by win %, then point differential; seeding uses the conference standings and their tiebreakers.</p>
+    </Help>
   );
 }
 
@@ -103,9 +132,9 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
-    <Card className={`flush lg-flat lg-st mode-${cols}`}>
+    <div className={`card flush lg-st mode-${cols}`}>
       <div className="lg-st-row lg-st-head" aria-hidden="true">
-        <span style={{ textAlign: 'right' }}>#</span>
+        <span>#</span>
         <span />
         <span>Team</span>
         <span>W-L</span>
@@ -137,7 +166,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
                   </span>
                 )}
                 {!conf && (
-                  <span className="tiny dim" style={{ fontWeight: 600 }} aria-hidden="true">
+                  <span className="lg-conf" aria-hidden="true">
                     {r.conf}
                   </span>
                 )}
@@ -146,25 +175,25 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
               <span className="wl" aria-hidden="true">
                 {r.won}-{r.lost}
               </span>
-              <span className="c-basic dim2" aria-hidden="true">
+              <span className="c-basic" aria-hidden="true">
                 {r.gb === 0 ? '—' : r.gb.toFixed(1)}
               </span>
-              <span className="c-basic dim2" aria-hidden="true">
+              <span className="c-basic" aria-hidden="true">
                 {r.lastTen}
               </span>
-              <span className={`c-basic ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : 'dim'}`} style={{ fontWeight: 650 }} aria-hidden="true">
+              <span className={`c-basic strk ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : ''}`} aria-hidden="true">
                 {streakLabel(r.streak)}
               </span>
-              <span className="c-split dim2" aria-hidden="true">
+              <span className="c-split" aria-hidden="true">
                 {r.home}
               </span>
-              <span className="c-split dim2" aria-hidden="true">
+              <span className="c-split" aria-hidden="true">
                 {r.away}
               </span>
-              <span className="c-split dim2" aria-hidden="true">
+              <span className="c-split" aria-hidden="true">
                 {r.confRec}
               </span>
-              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : 'dim'}`} aria-hidden="true">
+              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : ''}`} aria-hidden="true">
                 {r.won + r.lost ? signed(r.diff) : '—'}
               </span>
             </Link>
@@ -181,7 +210,7 @@ function StandingsTable({ league, rows, conf, cols }: { league: League; rows: St
           </Fragment>
         );
       })}
-    </Card>
+    </div>
   );
 }
 
@@ -210,25 +239,26 @@ function PowerRankings({ league }: { league: League }) {
 
   return (
     <>
-      <div className="row between">
-        <span className="small dim">
-          {list.every((x) => x.gp === 0)
-            ? 'Ranked by roster strength (TAL) until games are played'
-            : list.some((x) => x.gp < 10)
-              ? 'Net rating, blended with roster strength early on'
-              : 'Ranked by net rating (points per 100 possessions)'}
-        </span>
-        <Help title="Power rankings">
-          <p style={{ margin: 0 }}>Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
-          <p style={{ margin: 0 }}>
-            Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until
-            about ten games are played.
-          </p>
-        </Help>
-      </div>
-      <Card className="flush lg-flat lg-st mode-power">
+      <Toolbar
+        right={
+          <Help title="Power rankings">
+            <p className="lg-p">Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
+            <p className="lg-p">
+              Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until
+              about ten games are played.
+            </p>
+          </Help>
+        }
+      >
+        {list.every((x) => x.gp === 0)
+          ? 'By roster strength (TAL) until games are played'
+          : list.some((x) => x.gp < 10)
+            ? 'Net rating, with roster strength early on'
+            : 'By net rating per 100 possessions'}
+      </Toolbar>
+      <div className="card flush lg-st mode-power">
         <div className="lg-st-row lg-st-head">
-          <span style={{ textAlign: 'right' }}>#</span>
+          <span>#</span>
           <span />
           <span>Team</span>
           <span className="c-power">Net</span>
@@ -242,20 +272,20 @@ function PowerRankings({ league }: { league: League }) {
             <Link key={x.tid} to={`/team/${x.tid}`} className={`lg-st-row ${x.tid === league.userTid ? 'me' : ''}`}>
               <span className="rk">{i + 1}</span>
               <TeamLogo tid={x.tid} size={24} decorative />
-              <span className="nm" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
-                <span style={{ maxWidth: '100%' }}>{t.name}</span>
-                <span className="tiny dim num" style={{ fontWeight: 600 }}>
+              <span className="nm two">
+                <span>{t.name}</span>
+                <span className="lg-st-rec">
                   {x.ts.won}-{x.ts.lost}
                 </span>
               </span>
-              <span className={`c-power bold ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`}>{x.gp ? signed(x.tr.net) : '—'}</span>
-              <span className="c-power dim2">{x.gp ? f1(x.tr.ortg) : '—'}</span>
-              <span className="c-power dim2">{x.gp ? f1(x.tr.drtg) : '—'}</span>
-              <span className="c-power dim2">{f0(x.talent)}</span>
+              <span className={`c-power wl ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`}>{x.gp ? signed(x.tr.net) : '—'}</span>
+              <span className="c-power">{x.gp ? f1(x.tr.ortg) : '—'}</span>
+              <span className="c-power">{x.gp ? f1(x.tr.drtg) : '—'}</span>
+              <span className="c-power">{f0(x.talent)}</span>
             </Link>
           );
         })}
-      </Card>
+      </div>
     </>
   );
 }

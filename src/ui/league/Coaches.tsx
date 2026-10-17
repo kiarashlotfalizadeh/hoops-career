@@ -3,15 +3,15 @@
 // opens his jobs season by season.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ClipboardList } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardList } from 'lucide-react';
 import type { League } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecord, type CoachSeason, type CoachTotals, type CoachStint } from '../../core/league/coaches';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Kpi, Sheet } from '../components/ui';
-import { OutcomeTag, SectionLabel, ordinal, seasonOutcome, useQueryParam } from './shared';
+import { Section, Sheet, Statline } from '../components/ui';
+import { OutcomeTag, ordinal, seasonOutcome, useQueryParam } from './shared';
 
 interface Row {
   r: CoachRecord;
@@ -37,10 +37,18 @@ function jobSpan(league: League, j: CoachTotals & { stint: CoachStint }) {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** A career record in a tile: it stays on one line at phone width (as the Franchise view's does). */
-function RecordKpi({ k }: { k: CoachTotals }) {
-  const rec = `${k.won}-${k.lost}`;
-  return <Kpi k="Record" v={<span style={{ fontSize: rec.length > 7 ? 15 : rec.length > 5 ? 17 : 20, whiteSpace: 'nowrap' }}>{rec}</span>} sub={winPctLabel(k.won, k.lost)} />;
+/** A career's figures in a row: seasons, record (with its win %), playoff runs and titles. */
+function CareerLine({ k }: { k: CoachCareer }) {
+  return (
+    <Statline
+      items={[
+        { k: 'Seasons', v: k.seasons },
+        { k: 'Record', v: `${k.won}-${k.lost}`, s: winPctLabel(k.won, k.lost) },
+        { k: 'Playoffs', v: k.playoffs },
+        { k: 'Titles', v: k.titles, color: k.titles ? 'var(--tier-elite)' : undefined },
+      ]}
+    />
+  );
 }
 
 export function CoachesView({ league }: { league: League }) {
@@ -56,60 +64,51 @@ export function CoachesView({ league }: { league: League }) {
   const lastSeason = (x: Row) => x.k.lines[x.k.lines.length - 1]?.season ?? 0;
   const former = rows.filter((x) => x.status !== 'active').sort((a, b) => lastSeason(b) - lastSeason(a) || b.k.won - a.k.won || a.r.id - b.r.id);
   const shown = rows.find((x) => String(x.r.id) === open);
-  if (!rows.length)
-    return (
-      <Card>
-        <Empty>No coaching history in this league yet.</Empty>
-      </Card>
-    );
+  if (!rows.length) return <div className="card empty">No coaching history in this league yet.</div>;
   return (
     <>
       {me && (
-        <>
-          <SectionLabel right={<span className="tiny dim">{plural(me.k.stints.length, 'job')}</span>}>Your career</SectionLabel>
-          <Card>
-            <div className="grid4 lg-coach-kpis">
-              <Kpi k="Seasons" v={me.k.seasons} />
-              <RecordKpi k={me.k} />
-              <Kpi k="Playoffs" v={me.k.playoffs} />
-              <Kpi k="Titles" v={me.k.titles} color={me.k.titles ? 'var(--tier-elite)' : undefined} />
+        <Section title="Your career" right={<span className="lg-sec-meta">{plural(me.k.stints.length, 'job')}</span>}>
+          <div className="card flush">
+            <div className="lg-strip lg-coach-line">
+              <CareerLine k={me.k} />
             </div>
-            <div className="lg-team5" style={{ marginTop: 8 }}>
+            <div className="list lg-jobs">
               {[...me.k.stints].reverse().map((j, i) => (
                 <JobRow key={i} league={league} j={j} />
               ))}
             </div>
-            <button className="btn sm ghost block" style={{ marginTop: 6 }} onClick={() => setOpen(String(me.r.id))}>
-              Season by season
+            <button className="lg-more" onClick={() => setOpen(String(me.r.id))}>
+              Season by season <ChevronRight size={15} />
             </button>
-          </Card>
-        </>
+          </div>
+        </Section>
       )}
-      <SectionLabel right={<span className="tiny dim">{active.length}</span>}>Head coaches</SectionLabel>
-      <Card className="flush lg-flat">
-        {active.map((x) => (
-          <CoachRow key={x.r.id} league={league} x={x} onOpen={() => setOpen(String(x.r.id))} />
-        ))}
-      </Card>
-      <SectionLabel right={<span className="tiny dim">{former.length}</span>}>Former coaches</SectionLabel>
-      {former.length === 0 ? (
-        <Card>
-          <Empty>Coaches let go after the playoffs land here, out of work until someone hires them (retired after five seasons without a job), with their records.</Empty>
-        </Card>
-      ) : (
-        <>
-          <Card className="flush lg-flat">
-            {former.slice(0, limit).map((x) => (
-              <CoachRow key={x.r.id} league={league} x={x} onOpen={() => setOpen(String(x.r.id))} />
-            ))}
-          </Card>
-          {former.length > limit && (
-            <button className="btn sm ghost" style={{ alignSelf: 'center' }} onClick={() => setLimit(limit + 25)}>
-              <ChevronDown size={15} /> Show more ({former.length - limit})
-            </button>
-          )}
-        </>
-      )}
+      <Section title="Head coaches" right={<span className="lg-sec-meta">{active.length}</span>}>
+        <div className="card flush list">
+          {active.map((x) => (
+            <CoachRow key={x.r.id} league={league} x={x} onOpen={() => setOpen(String(x.r.id))} />
+          ))}
+        </div>
+      </Section>
+      <Section title="Former coaches" right={<span className="lg-sec-meta">{former.length}</span>}>
+        {former.length === 0 ? (
+          <div className="card empty">Coaches let go after the playoffs land here, out of work until someone hires them (retired after five seasons without a job).</div>
+        ) : (
+          <>
+            <div className="card flush list">
+              {former.slice(0, limit).map((x) => (
+                <CoachRow key={x.r.id} league={league} x={x} onOpen={() => setOpen(String(x.r.id))} />
+              ))}
+            </div>
+            {former.length > limit && (
+              <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + 25)}>
+                <ChevronDown size={15} /> Show more ({former.length - limit})
+              </button>
+            )}
+          </>
+        )}
+      </Section>
       <CoachSheet league={league} x={shown} onClose={() => setOpen('')} />
     </>
   );
@@ -128,14 +127,14 @@ function CoachRow({ league, x, onOpen }: { league: League; x: Row; onOpen: () =>
         : `${team.abbrev} · from ${seasonLabel(cur?.stint.from ?? league.season)}`
       : `${k.lines.length ? seasonRange(k.lines[0].season, k.lines[k.lines.length - 1].season, false) : '—'} · ${status === 'available' ? 'available' : 'retired'}`;
   return (
-    <button className="lg-coach-row" onClick={onOpen}>
+    <button className={`lg-coach-row ${r.user ? 'me' : ''}`} onClick={onOpen}>
       <TeamLogo tid={tid} size={26} />
-      <span className="col" style={{ minWidth: 0, gap: 2 }}>
-        <span className="row" style={{ gap: 6, minWidth: 0 }}>
-          <span className="bold ellipsis">{r.name}</span>
-          {r.user && <span className="tag info">You</span>}
+      <span className="lg-coach-t">
+        <span className="nm">
+          <span className="ellipsis">{r.name}</span>
+          {r.user && <span className="tag">You</span>}
         </span>
-        <span className="tiny dim ellipsis">
+        <span className="sub ellipsis">
           {sub}
           {k.titles ? ` · ${plural(k.titles, 'title')}` : ''}
           {k.coy.length ? ` · COY${k.coy.length > 1 ? ` ×${k.coy.length}` : ''}` : ''}
@@ -145,7 +144,7 @@ function CoachRow({ league, x, onOpen }: { league: League; x: Row; onOpen: () =>
         <span className="num">
           {k.won}-{k.lost}
         </span>
-        <span className="tiny dim num">{winPctLabel(k.won, k.lost)}</span>
+        <span className="pct num">{winPctLabel(k.won, k.lost)}</span>
       </span>
     </button>
   );
@@ -156,13 +155,13 @@ function JobRow({ league, j }: { league: League; j: CoachTotals & { stint: Coach
   const team = league.teams[j.stint.tid];
   const best = j.titles ? plural(j.titles, 'title') : j.playoffs ? plural(j.playoffs, 'playoff run') : '';
   return (
-    <div className="row5" style={{ gridTemplateColumns: '24px minmax(0, 1fr) auto', minHeight: 44 }}>
-      <TeamLogo tid={team.tid} size={22} decorative />
-      <span className="col" style={{ minWidth: 0, gap: 1 }}>
-        <Link to={`/team/${team.tid}`} className="bold ellipsis">
+    <div className="lg-job">
+      <TeamLogo tid={team.tid} size={24} decorative />
+      <span className="lg-coach-t">
+        <Link to={`/team/${team.tid}`} className="nm ellipsis">
           {team.region} {team.name}
         </Link>
-        <span className="tiny dim ellipsis">
+        <span className="sub ellipsis">
           {jobSpan(league, j)}
           {j.lines.length ? ` · ${plural(j.lines.length, 'season')}` : ''}
           {best ? ` · ${best}` : ''}
@@ -186,22 +185,19 @@ function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: 
     : `${status === 'available' ? 'Out of work, available to hire' : 'Retired'}${last ? `: last coached ${league.teams[last.tid].abbrev} in ${seasonLabel(last.season)}` : ''}`;
   return (
     <Sheet open onClose={onClose} title={r.name}>
-      <div className="col" style={{ gap: 12 }}>
-        <div className="col" style={{ gap: 2 }}>
-          <div className="small dim2">{where}</div>
-          <div className="tiny dim">
+      <div className="col lg-sheet">
+        <div>
+          <div className="lg-coach-where">{where}</div>
+          <div className="lg-note">
             {off} · {def} · Development {r.dev} · Adjustments {r.tac}
           </div>
         </div>
-        <div className="grid4 lg-coach-kpis">
-          <Kpi k="Seasons" v={k.seasons} />
-          <RecordKpi k={k} />
-          <Kpi k="Playoffs" v={k.playoffs} />
-          <Kpi k="Titles" v={k.titles} color={k.titles ? 'var(--tier-elite)' : undefined} />
+        <div className="card lg-strip">
+          <CareerLine k={k} />
         </div>
         {k.coy.length > 0 && (
-          <div className="row wrap" style={{ gap: 6 }}>
-            <span className="tiny dim upper bold">Coach of the Year</span>
+          <div className="lg-coy">
+            <span className="over">Coach of the Year</span>
             {k.coy.map((s) => (
               <span key={s} className="tag lg-gold">
                 {seasonLabel(s)}
@@ -210,18 +206,16 @@ function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: 
           </div>
         )}
         {[...k.stints].reverse().map((j, i) => (
-          <Card key={i} className="flush lg-flat">
-            <div className="lg-team5" style={{ padding: '2px 12px', borderBottom: j.lines.length ? '1px solid var(--line)' : undefined }}>
-              <JobRow league={league} j={j} />
-            </div>
+          <div key={i} className="card flush">
+            <JobRow league={league} j={j} />
             {[...j.lines].reverse().map((l) => (
               <SeasonLine key={l.season} league={league} l={l} />
             ))}
-          </Card>
+          </div>
         ))}
         {k.stints.every((j) => !j.lines.length) && (
-          <div className="small dim">
-            <ClipboardList size={14} style={{ verticalAlign: -2 }} /> No games coached yet.
+          <div className="lg-note">
+            <ClipboardList size={14} aria-hidden="true" /> No games coached yet.
           </div>
         )}
       </div>
@@ -239,7 +233,7 @@ function SeasonLine({ league, l }: { league: League; l: CoachSeason }) {
       <span className="rec">
         {l.won}-{l.lost}
       </span>
-      <span className="tiny dim ellipsis">{note}</span>
+      <span className="sd ellipsis">{note}</span>
       {ts && l.round !== undefined ? <OutcomeTag o={seasonOutcome(league, l.tid, ts)} /> : <span className="tag">Left</span>}
     </div>
   );

@@ -1,17 +1,16 @@
-import { type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Award, Crown, Medal, Shield, Sparkles, Star, TrendingUp, Trophy, Users } from 'lucide-react';
 import type { League, Player, SeasonAwards } from '../../core/types';
-import { curTeamSeason } from '../../core/league/helpers';
+import { curTeamSeason, playerName } from '../../core/league/helpers';
 import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Bar, Card, Empty } from '../components/ui';
+import { Avatar, Bar, Help, Section } from '../components/ui';
 import { f1, playerSeason } from '../stats';
-import { CupBanner } from './CupTab';
 import { AllStarSaturday } from './AllStarSaturday';
-import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
+import { seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
   const pg = playerSeason(p, season, playoffs);
@@ -45,47 +44,13 @@ export function AwardsTab({ league }: { league: League }) {
             </option>
           ))}
         </select>
-        <span className="small dim">{status}</span>
+        <span className="lg-bar-l">{status}</span>
       </div>
 
-      {aw?.champion !== undefined && (
-        <div className="lg-champ">
-          <div className="row" style={{ gap: 14 }}>
-            <TeamLogo tid={aw.champion} size={54} decorative />
-            <div className="grow">
-              <div className="kicker">
-                <Trophy size={12} style={{ verticalAlign: -1 }} /> Champions
-              </div>
-              <div className="display bold" style={{ fontSize: 24, textTransform: 'uppercase', lineHeight: 1.05 }}>
-                {league.teams[aw.champion].region} {league.teams[aw.champion].name}
-              </div>
-              {aw.runnerUp !== undefined && (
-                <div className="small dim2">
-                  def. {league.teams[aw.runnerUp].region} {league.teams[aw.runnerUp].name}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {aw?.cupWinner !== undefined && (
-        <CupBanner
-          league={league}
-          season={season}
-          tid={aw.cupWinner}
-          runnerUp={aw.cupRunnerUp}
-          mvp={aw.cupMvp}
-          final={league.cup?.season === season ? league.cup.bracket.find((t) => t.round === 'final') : undefined}
-        />
-      )}
+      {aw && (aw.champion !== undefined || aw.cupWinner !== undefined) && <Champions league={league} aw={aw} />}
 
       {!decided && isCurrent && <AwardRace league={league} />}
-      {!decided && !isCurrent && !aw?.allStars.E.length && (
-        <Card>
-          <Empty>No awards recorded for {seasonLabel(season)}.</Empty>
-        </Card>
-      )}
+      {!decided && !isCurrent && !aw?.allStars.E.length && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
 
       {decided && aw && <MajorAwards league={league} aw={aw} />}
       {decided && aw && <Teams league={league} aw={aw} />}
@@ -96,6 +61,70 @@ export function AwardsTab({ league }: { league: League }) {
 }
 
 // ---------------------------------------------------------------- winners
+
+/** The season's two titles: the champions and the NBA Cup's winners, with whom they beat and the Cup's MVP. */
+function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
+  const final = league.cup?.season === aw.season ? league.cup.bracket.find((t) => t.round === 'final') : undefined;
+  const score = final?.highPts !== undefined && final.lowPts !== undefined ? ` ${Math.max(final.highPts, final.lowPts)}-${Math.min(final.highPts, final.lowPts)}` : '';
+  const mvp = aw.cupMvp !== undefined ? league.players[aw.cupMvp] : undefined;
+  return (
+    <Section title="Titles">
+      <div className="card flush list">
+        {aw.champion !== undefined && (
+          <Link to={`/team/${aw.champion}`} className="lg-award">
+            <span className="ic">
+              <Trophy size={18} />
+            </span>
+            <TeamLogo tid={aw.champion} size={40} decorative />
+            <span className="lg-award-t">
+              <span className="lb">Champions</span>
+              <span className="nm ellipsis">
+                {league.teams[aw.champion].region} {league.teams[aw.champion].name}
+              </span>
+              {aw.runnerUp !== undefined && (
+                <span className="sub ellipsis">
+                  def. {league.teams[aw.runnerUp].region} {league.teams[aw.runnerUp].name}
+                </span>
+              )}
+            </span>
+            <span />
+          </Link>
+        )}
+        {aw.cupWinner !== undefined && (
+          <div className="lg-award">
+            <span className="ic">
+              <Trophy size={18} />
+            </span>
+            <TeamLogo tid={aw.cupWinner} size={40} decorative />
+            <span className="lg-award-t">
+              <span className="lb">NBA Cup</span>
+              <Link to={`/team/${aw.cupWinner}`} className="nm ellipsis">
+                {league.teams[aw.cupWinner].region} {league.teams[aw.cupWinner].name}
+              </Link>
+              <span className="sub">
+                {aw.cupRunnerUp !== undefined && (
+                  <>
+                    def. {league.teams[aw.cupRunnerUp].name}
+                    {score}
+                  </>
+                )}
+                {mvp && (
+                  <>
+                    {aw.cupRunnerUp !== undefined ? ' · ' : ''}MVP{' '}
+                    <Link to={`/player/${mvp.pid}`} className="lg-name-link">
+                      {playerName(mvp)}
+                    </Link>
+                  </>
+                )}
+              </span>
+            </span>
+            <span />
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
 
 function AwardRow({ icon, children, to }: { icon: ReactNode; children: ReactNode; to?: string }) {
   const inner = (
@@ -136,14 +165,17 @@ function PlayerAward({
   return (
     <AwardRow icon={icon} to={`/player/${p.pid}`}>
       <Avatar p={{ ...p, tid: tid ?? -1 }} />
-      <div style={{ minWidth: 0 }}>
-        <div className="lb">{label}</div>
-        <div className="bold ellipsis">
+      <span className="lg-award-t">
+        <span className="lb">{label}</span>
+        <span className="nm ellipsis">
           {p.firstName} {p.lastName}
-        </div>
-        <div className="tiny dim ellipsis">{statLine(p, season, kind, playoffs)}</div>
-      </div>
-      {tid !== null ? <TeamLogo tid={tid} size={28} /> : <span />}
+        </span>
+        <span className="sub ellipsis">
+          {tid !== null ? `${teamAbbrev(league, tid)} · ` : ''}
+          {statLine(p, season, kind, playoffs)}
+        </span>
+      </span>
+      <span />
     </AwardRow>
   );
 }
@@ -153,110 +185,117 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
   const coyTeam = aw.coy !== undefined ? league.teams[aw.coy] : undefined;
   const coyTs = coyTeam?.seasons.find((x) => x.season === s);
   return (
-    <Card className="flush">
-      <div style={{ padding: '12px 12px 0' }}>
-        <SectionLabel>Season awards</SectionLabel>
+    <Section title="Season awards">
+      <div className="card flush list">
+        <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
+        <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP · playoff stats" playoffs />
+        <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player of the Year" kind="def" />
+        <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
+        <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
+        <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
+        {coyTeam && (
+          <AwardRow icon={<Award size={18} />} to={`/team/${coyTeam.tid}`}>
+            <TeamLogo tid={coyTeam.tid} size={40} decorative />
+            <span className="lg-award-t">
+              <span className="lb">Coach of the Year</span>
+              <span className="nm ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</span>
+              <span className="sub ellipsis">
+                {coyTeam.region} {coyTeam.name}
+                {coyTs ? ` · ${coyTs.won}-${coyTs.lost}` : ''}
+              </span>
+            </span>
+            <span />
+          </AwardRow>
+        )}
+        <PlayerAward league={league} pid={aw.allStarMvp} season={s} icon={<Star size={18} />} label="All-Star Game MVP" />
       </div>
-      <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
-      <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP · playoff stats" playoffs />
-      <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player of the Year" kind="def" />
-      <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
-      <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
-      <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
-      {coyTeam && (
-        <AwardRow icon={<Award size={18} />} to={`/team/${coyTeam.tid}`}>
-          <TeamLogo tid={coyTeam.tid} size={40} decorative />
-          <div style={{ minWidth: 0 }}>
-            <div className="lb">Coach of the Year</div>
-            <div className="bold ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</div>
-            <div className="tiny dim ellipsis">
-              {coyTeam.region} {coyTeam.name}
-              {coyTs ? ` · ${coyTs.won}-${coyTs.lost}` : ''}
-            </div>
-          </div>
-          <span />
-        </AwardRow>
-      )}
-      <PlayerAward league={league} pid={aw.allStarMvp} season={s} icon={<Star size={18} />} label="All-Star Game MVP" />
-    </Card>
+    </Section>
   );
 }
 
-function TeamList({ league, title, pids, season, kind = 'off' }: { league: League; title: string; pids: number[]; season: number; kind?: 'off' | 'def' }) {
-  if (!pids.length) return null;
+/** One or more fives in a panel, each under its name: the All-NBA teams, the All-Defensive teams, the All-Rookie teams. */
+function Fives({ league, title, teams, season, kind = 'off' }: { league: League; title: string; teams: { name: string; pids: number[] }[]; season: number; kind?: 'off' | 'def' }) {
+  const shown = teams.filter((t) => t.pids.length);
+  if (!shown.length) return null;
   return (
-    <Card title={title}>
-      <div className="lg-team5">
-        {pids.map((pid) => {
-          const p = league.players[pid];
-          if (!p) return null;
-          const tid = seasonTeam(league, p, season);
-          return (
-            <Link key={pid} to={`/player/${pid}`} className="row5">
-              {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-              {/* (a long name wraps rather than lose its end and the position) */}
-              <span>
-                <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
-              </span>
-              <span className="tiny dim num">{statLine(p, season, kind)}</span>
-            </Link>
-          );
-        })}
+    <Section title={title}>
+      <div className="card flush">
+        {shown.map((t) => (
+          <Fragment key={t.name}>
+            {shown.length > 1 && <div className="list-divider">{t.name}</div>}
+            <div className="lg-five">
+              {t.pids.map((pid) => {
+                const p = league.players[pid];
+                if (!p) return null;
+                const tid = seasonTeam(league, p, season);
+                return <FiveRow key={pid} league={league} p={p} tid={tid} line={statLine(p, season, kind)} />;
+              })}
+            </div>
+          </Fragment>
+        ))}
       </div>
-    </Card>
+    </Section>
+  );
+}
+
+function FiveRow({ league, p, tid, line, mvp }: { league: League; p: Player; tid: number | null; line: string; mvp?: boolean }) {
+  return (
+    <Link to={`/player/${p.pid}`} className={`lg-five-row ${tid === league.userTid ? 'me' : ''}`}>
+      {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
+      {/* (a long name wraps rather than lose its end and the position) */}
+      <span>
+        <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
+        {mvp && <span className="tag lg-gold lg-mvp">MVP</span>}
+      </span>
+      <span className="tiny dim num">{line}</span>
+    </Link>
   );
 }
 
 function Teams({ league, aw }: { league: League; aw: SeasonAwards }) {
+  const nth = ['1st', '2nd', '3rd'];
+  const rookies =
+    aw.allRookie.length > 5
+      ? [
+          { name: 'All-Rookie 1st Team', pids: aw.allRookie.slice(0, 5) },
+          { name: 'All-Rookie 2nd Team', pids: aw.allRookie.slice(5) },
+        ]
+      : [{ name: 'All-Rookie Team', pids: aw.allRookie }];
   return (
-    <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
-      {aw.allNba.map((t, i) => (
-        <TeamList key={`n${i}`} league={league} title={`All-NBA ${['1st', '2nd', '3rd'][i]} Team`} pids={t} season={aw.season} />
-      ))}
-      {aw.allDefense.map((t, i) => (
-        <TeamList key={`d${i}`} league={league} title={`All-Defensive ${['1st', '2nd'][i]} Team`} pids={t} season={aw.season} kind="def" />
-      ))}
-      {aw.allRookie.length > 5 ? (
-        <>
-          <TeamList league={league} title="All-Rookie 1st Team" pids={aw.allRookie.slice(0, 5)} season={aw.season} />
-          <TeamList league={league} title="All-Rookie 2nd Team" pids={aw.allRookie.slice(5)} season={aw.season} />
-        </>
-      ) : (
-        <TeamList league={league} title="All-Rookie Team" pids={aw.allRookie} season={aw.season} />
-      )}
+    <div className="md-grid2">
+      <Fives league={league} title="All-NBA" teams={aw.allNba.map((pids, i) => ({ name: `All-NBA ${nth[i]} Team`, pids }))} season={aw.season} />
+      <div className="col lg-stack">
+        <Fives league={league} title="All-Defensive" teams={aw.allDefense.map((pids, i) => ({ name: `All-Defensive ${nth[i]} Team`, pids }))} season={aw.season} kind="def" />
+        <Fives league={league} title={rookies.length > 1 ? 'All-Rookie' : 'All-Rookie Team'} teams={rookies} season={aw.season} />
+      </div>
     </div>
   );
 }
 
 function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
   return (
-    <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
-      {(['E', 'W'] as const).map((c) => (
-        <Card key={c} title={`${c === 'E' ? 'East' : 'West'} All-Stars`} right={<Medal size={16} className="dim" />}>
-          <div className="lg-team5">
-            {aw.allStars[c].map((pid) => {
-              const p = league.players[pid];
-              if (!p) return null;
-              const tid = seasonTeam(league, p, aw.season);
-              return (
-                <Link key={pid} to={`/player/${pid}`} className="row5">
-                  {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-                  <span>
-                    <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
-                    {pid === aw.allStarMvp && (
-                      <span className="tag lg-gold" style={{ marginLeft: 6 }}>
-                        MVP
-                      </span>
-                    )}
-                  </span>
-                  <span className="tiny dim num">{statLine(p, aw.season)}</span>
-                </Link>
-              );
-            })}
+    <Section
+      title={
+        <h3>
+          <Medal size={13} aria-hidden="true" /> All-Stars
+        </h3>
+      }
+    >
+      <div className="card flush lg-allstars">
+        {(['E', 'W'] as const).map((c) => (
+          <div key={c}>
+            <div className="list-divider">{c === 'E' ? 'East' : 'West'}</div>
+            <div className="lg-five">
+              {aw.allStars[c].map((pid) => {
+                const p = league.players[pid];
+                if (!p) return null;
+                return <FiveRow key={pid} league={league} p={p} tid={seasonTeam(league, p, aw.season)} line={statLine(p, aw.season)} mvp={pid === aw.allStarMvp} />;
+              })}
+            </div>
           </div>
-        </Card>
-      ))}
-    </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 
@@ -273,23 +312,25 @@ function AwardRace({ league }: { league: League }) {
     return { played, mvp: withTeam(r.mvp), dpoy: withTeam(r.dpoy), roy: withTeam(r.roy), smoy: withTeam(r.smoy) };
   }, [league]);
 
-  if (race.played === 0) {
-    return (
-      <Card>
-        <Empty>The award races start once games are played.</Empty>
-      </Card>
-    );
-  }
+  if (race.played === 0) return <div className="card empty">The award races start once games are played.</div>;
   return (
     <>
-      <div className="lg-note">
-        Ladders update daily and use the same formulas as the voters: production, availability and team success. Winners are announced at the end of the regular season.
+      <div className="lg-bar">
+        <span className="lg-bar-l">Updated daily · winners at season&apos;s end</span>
+        <span className="lg-bar-r">
+          <Help title="Award races">
+            <p className="lg-p">
+              The ladders update daily and use the same formulas as the voters: production, availability and team success, with the same eligibility rules. Winners are announced at
+              the end of the regular season.
+            </p>
+          </Help>
+        </span>
       </div>
-      <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
-        <RaceCard league={league} title="MVP ladder" icon={<Crown size={15} />} list={race.mvp} />
-        <RaceCard league={league} title="Defensive Player of the Year" icon={<Shield size={15} />} list={race.dpoy} kind="def" />
-        <RaceCard league={league} title="Rookie of the Year" icon={<Sparkles size={15} />} list={race.roy} />
-        <RaceCard league={league} title="Sixth Man of the Year" icon={<Users size={15} />} list={race.smoy} />
+      <div className="md-grid2">
+        <RaceCard league={league} title="MVP ladder" icon={<Crown size={13} />} list={race.mvp} />
+        <RaceCard league={league} title="Defensive Player of the Year" icon={<Shield size={13} />} list={race.dpoy} kind="def" />
+        <RaceCard league={league} title="Rookie of the Year" icon={<Sparkles size={13} />} list={race.roy} />
+        <RaceCard league={league} title="Sixth Man of the Year" icon={<Users size={13} />} list={race.smoy} />
       </div>
     </>
   );
@@ -299,40 +340,39 @@ function RaceCard({ league, title, icon, list, kind = 'off' }: { league: League;
   const top = list[0]?.score ?? 1;
   const low = Math.min(0, ...list.map((x) => x.score));
   return (
-    <Card
+    <Section
       title={
         <h3>
           {icon} {title}
         </h3>
       }
     >
-      {list.length === 0 ? (
-        <div className="small dim">Nobody qualifies yet.</div>
-      ) : (
-        list.map(({ c, score }, i) => {
-          const ts = c.tid !== null ? curTeamSeason(league, c.tid) : undefined;
-          return (
-            <Link key={c.p.pid} to={`/player/${c.p.pid}`} className={`lg-race-row ${i === 0 ? 'first' : ''}`}>
-              <span className="rank">{i + 1}</span>
-              <Avatar p={{ ...c.p, tid: c.tid ?? -1 }} />
-              <div style={{ minWidth: 0 }}>
-                <div className="bold ellipsis" style={{ color: c.tid === league.userTid ? 'var(--accent)' : undefined }}>
-                  {c.p.firstName} {c.p.lastName}
-                </div>
-                {/* (wraps: on a narrow phone the last number was cut off) */}
-                <div className="tiny dim">
-                  {teamAbbrev(league, c.tid)}
-                  {ts ? `\u00a0(${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
-                </div>
-                <div style={{ marginTop: 5 }}>
-                  <Bar value={score - low} max={Math.max(0.01, top - low)} height={4} color={i === 0 ? 'var(--tier-elite)' : undefined} />
-                </div>
-              </div>
-              {c.tid !== null ? <TeamLogo tid={c.tid} size={24} /> : <span />}
-            </Link>
-          );
-        })
-      )}
-    </Card>
+      <div className="card flush list">
+        {list.length === 0 ? (
+          <div className="lg-lead-none">Nobody qualifies yet.</div>
+        ) : (
+          list.map(({ c, score }, i) => {
+            const ts = c.tid !== null ? curTeamSeason(league, c.tid) : undefined;
+            return (
+              <Link key={c.p.pid} to={`/player/${c.p.pid}`} className={`lg-race-row ${i === 0 ? 'first' : ''} ${c.tid === league.userTid ? 'me' : ''}`}>
+                <span className="rank">{i + 1}</span>
+                <Avatar p={{ ...c.p, tid: c.tid ?? -1 }} />
+                <span className="lg-race-t">
+                  <span className="nm ellipsis">
+                    {c.p.firstName} {c.p.lastName}
+                  </span>
+                  {/* (wraps: on a narrow phone the last number was cut off) */}
+                  <span className="sub">
+                    {teamAbbrev(league, c.tid)}
+                    {ts ? `\u00a0(${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
+                  </span>
+                  <Bar value={score - low} max={Math.max(0.01, top - low)} height={3} color={i === 0 ? 'var(--tier-elite)' : 'var(--text-dim)'} />
+                </span>
+              </Link>
+            );
+          })
+        )}
+      </div>
+    </Section>
   );
 }

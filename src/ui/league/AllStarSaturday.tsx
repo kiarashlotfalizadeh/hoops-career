@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { Target, Zap } from 'lucide-react';
 import type { Dunk, Dunker, League, SeasonAwards, ThreeShooter } from '../../core/types';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card } from '../components/ui';
+import { Help, Section } from '../components/ui';
 
 /** "Kon Knueppel" → "K. Knueppel", from the name as it was. */
 const short = (name: string) => {
@@ -17,7 +17,7 @@ const short = (name: string) => {
 function Who({ league, e, win }: { league: League; e: { pid: number; name: string; tid: number }; win?: boolean }) {
   const label = <span className={`bold ellipsis ${win ? 'lg-sat-win' : ''}`}>{short(e.name)}</span>;
   return (
-    <span className="row" style={{ gap: 6, minWidth: 0 }}>
+    <span className="lg-sat-name">
       <TeamLogo tid={e.tid} size={16} />
       {league.players[e.pid] ? (
         // the link's ::after takes taps across the row's height (league.css .lg-sat-who)
@@ -51,35 +51,43 @@ function tiebreak(rows: ThreeShooter[], offs: (r: ThreeShooter) => number[] | un
 }
 
 function Note({ children }: { children: ReactNode }) {
-  return <div className="tiny dim">{children}</div>;
+  return <div className="lg-sat-note">{children}</div>;
 }
 
 function ThreeCard({ league, three }: { league: League; three: ThreeShooter[] }) {
   const r1Off = tiebreak(three, (e) => e.r1Off);
   const finalOff = tiebreak(three, (e) => e.finalOff);
   return (
-    <Card
+    <Section
       title={
         <h3>
-          <Target size={15} /> Three-Point Contest
+          <Target size={13} aria-hidden="true" /> Three-Point Contest
         </h3>
       }
+      right={
+        <Help title="Three-Point Contest">
+          <p className="lg-p">27 balls a round, 40 points at most: four racks of four plus a money ball, a rack of money balls, two deep threes. The top three go to the final.</p>
+        </Help>
+      }
     >
-      <Head />
-      {three.map((e, i) => (
-        <div key={e.pid} className="lg-sat-row">
-          <span className={`tiny bold ${i === 0 ? 'lg-sat-win' : 'dim'}`}>{i + 1}</span>
-          <Who league={league} e={e} win={i === 0} />
-          <span className={`num ${e.final === undefined ? 'bold' : 'dim'}`}>{e.r1}</span>
-          <span className="num bold">{e.final ?? ''}</span>
-        </div>
-      ))}
-      <div className="col" style={{ gap: 2, marginTop: 6 }}>
-        {r1Off && <Note>Shoot-off for the final: {r1Off}</Note>}
-        {finalOff && <Note>Shoot-off for the title: {finalOff}</Note>}
-        <Note>27 balls a round, 40 points at most: four racks of four plus a money ball, a rack of money balls, two deep threes.</Note>
+      <div className="card lg-sat">
+        <Head />
+        {three.map((e, i) => (
+          <div key={e.pid} className="lg-sat-row">
+            <span className={`lg-sat-rk ${i === 0 ? 'lg-sat-win' : ''}`}>{i + 1}</span>
+            <Who league={league} e={e} win={i === 0} />
+            <span className={`num ${e.final === undefined ? 'bold' : 'dim'}`}>{e.r1}</span>
+            <span className="num bold">{e.final ?? ''}</span>
+          </div>
+        ))}
+        {(r1Off || finalOff) && (
+          <div className="lg-sat-notes">
+            {r1Off && <Note>Shoot-off for the final: {r1Off}</Note>}
+            {finalOff && <Note>Shoot-off for the title: {finalOff}</Note>}
+          </div>
+        )}
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -91,11 +99,11 @@ function DunkList({ label, dunks }: { label: string; dunks?: Dunk[] }) {
     <>
       {dunks.map((d, i) => (
         <Fragment key={i}>
-          <span className="tiny dim upper">{i === 0 ? label : ''}</span>
+          <span className="lg-sat-lb">{i === 0 ? label : ''}</span>
           <span className={`num bold ${d.score === 50 ? 'lg-sat-win' : ''}`}>{d.score}</span>
-          <span className="tiny dim2">
+          <span className="dim2">
             {d.text}
-            {d.miss && <span className="lg-sat-miss"> · couldn't finish it</span>}
+            {d.miss && <span className="lg-sat-miss"> · couldn&apos;t finish it</span>}
           </span>
         </Fragment>
       ))}
@@ -105,32 +113,38 @@ function DunkList({ label, dunks }: { label: string; dunks?: Dunk[] }) {
 
 function DunkCard({ league, dunk }: { league: League; dunk: Dunker[] }) {
   return (
-    <Card
+    <Section
       title={
         <h3>
-          <Zap size={15} /> Slam Dunk Contest
+          <Zap size={13} aria-hidden="true" /> Slam Dunk Contest
         </h3>
       }
+      right={
+        <Help title="Slam Dunk Contest">
+          <p className="lg-p">Five judges give each dunk 6-10. Two dunks a round, the top two to the final; ties go to a dunk-off.</p>
+        </Help>
+      }
     >
-      <Head />
-      {dunk.map((e, i) => (
-        <div key={e.pid} className="lg-sat-dunker">
-          <div className="lg-sat-row">
-            <span className={`tiny bold ${i === 0 ? 'lg-sat-win' : 'dim'}`}>{i + 1}</span>
-            <Who league={league} e={e} win={i === 0} />
-            <span className={`num ${e.final ? 'dim' : 'bold'}`}>{total(e.r1)}</span>
-            <span className="num bold">{e.final ? total(e.final) : ''}</span>
+      <div className="card lg-sat">
+        <Head />
+        {dunk.map((e, i) => (
+          <div key={e.pid} className="lg-sat-dunker">
+            <div className="lg-sat-row">
+              <span className={`lg-sat-rk ${i === 0 ? 'lg-sat-win' : ''}`}>{i + 1}</span>
+              <Who league={league} e={e} win={i === 0} />
+              <span className={`num ${e.final ? 'dim' : 'bold'}`}>{total(e.r1)}</span>
+              <span className="num bold">{e.final ? total(e.final) : ''}</span>
+            </div>
+            <div className="lg-sat-dunks">
+              <DunkList label="R1" dunks={e.r1} />
+              <DunkList label="Off" dunks={e.r1Off} />
+              <DunkList label="Final" dunks={e.final} />
+              <DunkList label="Off" dunks={e.finalOff} />
+            </div>
           </div>
-          <div className="lg-sat-dunks">
-            <DunkList label="R1" dunks={e.r1} />
-            <DunkList label="Off" dunks={e.r1Off} />
-            <DunkList label="Final" dunks={e.final} />
-            <DunkList label="Off" dunks={e.finalOff} />
-          </div>
-        </div>
-      ))}
-      <Note>Five judges give each dunk 6-10. Two dunks a round; ties go to a dunk-off.</Note>
-    </Card>
+        ))}
+      </div>
+    </Section>
   );
 }
 
@@ -139,7 +153,7 @@ export function AllStarSaturday({ league, aw }: { league: League; aw: SeasonAwar
   const sat = aw.saturday;
   if (!sat || (!sat.three.length && !sat.dunk.length)) return null;
   return (
-    <div className="md-grid2" style={{ display: 'grid', gap: 14 }}>
+    <div className="md-grid2">
       {sat.three.length > 0 && <ThreeCard league={league} three={sat.three} />}
       {sat.dunk.length > 0 && <DunkCard league={league} dunk={sat.dunk} />}
     </div>

@@ -1,11 +1,14 @@
 // Shared helpers for the league hub, team pages, history and inbox screens.
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Trophy } from 'lucide-react';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
 import { draftStandings } from '../../core/league/draft';
 import { Segmented } from '../components/ui';
+import { TeamLogo } from '../components/TeamLogo';
+import { slabVars } from '../teamColors';
 import './league.css';
 
 /** A string state value persisted in the URL query (replace, so tabs don't pile up history). */
@@ -30,10 +33,33 @@ export function useQueryParam<T extends string>(key: string, def: T, allowed?: r
   return [value, set];
 }
 
-/** Sticky, horizontally scrollable tab bar that keeps the active tab in view. */
+/** Several query values in one step (two setters in a row would each start from the same URL); null removes one. */
+export function useSetParams() {
+  const [, setSp] = useSearchParams();
+  return useCallback(
+    (vals: Record<string, string | null>) =>
+      setSp(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(vals)) {
+            if (v === null) n.delete(k);
+            else n.set(k, v);
+          }
+          return n;
+        },
+        { replace: true },
+      ),
+    [setSp],
+  );
+}
+
+/**
+ * A screen's own sections: underlined page tabs that stick under the top bar and scroll sideways,
+ * keeping the active one in view.
+ */
 export function TabBar<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  // Fade hints on whichever edge has more tabs to scroll to.
+  // fade hints on whichever edge has more tabs to scroll to
   useEffect(() => {
     const wrap = ref.current;
     const seg = wrap?.querySelector<HTMLElement>('.seg');
@@ -52,7 +78,7 @@ export function TabBar<T extends string>({ value, options, onChange, label }: { 
   }, []);
   return (
     <div className="lg-tabs" ref={ref}>
-      <Segmented value={value} options={options} onChange={onChange} label={label} />
+      <Segmented value={value} options={options} onChange={onChange} label={label} tabs />
     </div>
   );
 }
@@ -68,6 +94,12 @@ export function useGamesByGid(league: League): Map<number, GameResult> {
 export { ordinal } from '../stats';
 
 export const confName = (c: 'E' | 'W' | 'F') => (c === 'E' ? 'East' : c === 'W' ? 'West' : 'Finals');
+
+/**
+ * The two conferences, the one a phone shows first: the other stays in the page, hidden there (a
+ * tablet puts them side by side, East on the left, with CSS order).
+ */
+export const confOrder = (first: 'E' | 'W'): ('E' | 'W')[] => (first === 'E' ? ['E', 'W'] : ['W', 'E']);
 
 export const shortName = (p: Pick<Player, 'firstName' | 'lastName'>) => (p.firstName ? `${p.firstName[0]}. ${p.lastName}` : p.lastName);
 
@@ -281,6 +313,42 @@ export function SectionLabel({ children, right }: { children: ReactNode; right?:
     <div className="lg-section-label">
       <span>{children}</span>
       {right}
+    </div>
+  );
+}
+
+/**
+ * A title won, in the winner's colours: the season's champions (Playoffs), the NBA Cup's winners
+ * (NBA Cup) or a franchise's banners. The screen's one slab, at its top.
+ */
+export function TitleSlab({ league, tid, over, children }: { league: League; tid: number; over: ReactNode; children?: ReactNode }) {
+  const t = league.teams[tid];
+  return (
+    <section className="slab lg-title" style={slabVars(t.colors) as CSSProperties}>
+      <span className="slab-mark">
+        <TeamLogo tid={tid} size={170} decorative />
+      </span>
+      <div className="lg-title-over">
+        <Trophy size={13} aria-hidden="true" /> {over}
+      </div>
+      <div className="lg-title-team">
+        <TeamLogo tid={tid} size={52} decorative />
+        <div className="grow">
+          <div className="lg-title-region">{t.region}</div>
+          <div className="lg-title-name">{t.name}</div>
+        </div>
+      </div>
+      {children && <div className="lg-title-sub">{children}</div>}
+    </section>
+  );
+}
+
+/** A toolbar line over a list or a table: what it shows on the left, its switches (and Help) on the right. */
+export function Toolbar({ children, right }: { children?: ReactNode; right?: ReactNode }) {
+  return (
+    <div className="lg-bar">
+      <span className="lg-bar-l">{children}</span>
+      {right && <span className="lg-bar-r">{right}</span>}
     </div>
   );
 }

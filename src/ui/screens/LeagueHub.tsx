@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { useLeague } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { fmtDate } from '../../core/league/helpers';
-import { Chips, PageHeader, Segmented } from '../components/ui';
-import { TabBar, useQueryParam } from '../league/shared';
+import { PageHeader, Segmented } from '../components/ui';
+import { TabBar, useQueryParam, useSetParams } from '../league/shared';
 import { StandingsTab } from '../league/StandingsTab';
 import { StatsTab } from '../league/StatsTab';
 import { RatingsTab } from '../league/RatingsTab';
@@ -66,35 +66,30 @@ export default function LeagueHub() {
   );
 }
 
+/** Your schedule (all of it, or its NBA Cup games) or every game of a day: one switch over the list. */
 function ScheduleTab() {
   const league = useLeague();
-  const [mode, setMode] = useQueryParam<'mine' | 'day'>('sched', 'mine', ['mine', 'day']);
-  const [games, setGames] = useQueryParam<'all' | 'cup'>('games', 'all', ['all', 'cup']);
+  const [mode] = useQueryParam<'mine' | 'day'>('sched', 'mine', ['mine', 'day']);
+  const [games] = useQueryParam<'all' | 'cup'>('games', 'all', ['all', 'cup']);
+  const setParams = useSetParams();
   const t = league.teams[league.userTid];
   const cup = league.schedule.some((g) => g.cup && (g.home === t.tid || g.away === t.tid));
+  const value = mode === 'day' ? 'day' : cup && games === 'cup' ? 'cup' : 'mine';
+  // both query values change in one step
+  const pick = (v: 'mine' | 'cup' | 'day') => setParams(v === 'day' ? { sched: 'day' } : { sched: null, games: v === 'cup' ? 'cup' : null });
   return (
     <>
       <Segmented
         label="Schedule view"
-        value={mode}
-        onChange={setMode}
+        value={value}
+        onChange={pick}
         options={[
-          { id: 'mine', label: `${t.abbrev} schedule` },
-          { id: 'day', label: 'All games by day' },
+          { id: 'mine' as const, label: `${t.abbrev} schedule` },
+          ...(cup ? [{ id: 'cup' as const, label: 'Cup games' }] : []),
+          { id: 'day' as const, label: 'Scores by day' },
         ]}
       />
-      {mode === 'mine' && cup && (
-        <Chips
-          label="Games"
-          value={games}
-          onChange={setGames}
-          options={[
-            { id: 'all', label: 'All games' },
-            { id: 'cup', label: 'NBA Cup' },
-          ]}
-        />
-      )}
-      {mode === 'mine' ? <TeamScheduleList league={league} tid={league.userTid} cupOnly={cup && games === 'cup'} /> : <DayScoreboard league={league} />}
+      {mode === 'mine' ? <TeamScheduleList league={league} tid={league.userTid} cupOnly={value === 'cup'} /> : <DayScoreboard league={league} />}
     </>
   );
 }

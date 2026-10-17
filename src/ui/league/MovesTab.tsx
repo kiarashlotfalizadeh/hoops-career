@@ -10,7 +10,7 @@ import { playerTxns, teamTxns, tradesBetween, txnLine, type TxnPart } from '../.
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty } from '../components/ui';
+import { Card, Help } from '../components/ui';
 import { NEWS_KIND } from './NewsTab';
 import { useQueryParam } from './shared';
 
@@ -90,20 +90,28 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
   let lastKey = '';
   return (
     <>
-      <div className="lg-hscroll" role="group" aria-label="Kind of move">
-        {/* kinds with no moves stay out, as on the News tab */}
-        {FILTERS.filter((f) => f === 'all' || f === filter || counts.get(f)).map((f) => (
-          <button key={f} className={`chip ${filter === f ? 'on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
-            {FILTER_LABEL[f]} <span className="dim num">{counts.get(f) ?? 0}</span>
-          </button>
-        ))}
+      <div className="lg-bar lg-bar-chips">
+        <div className="lg-hscroll lg-bar-scroll" role="group" aria-label="Kind of move">
+          {/* kinds with no moves stay out, as on the News tab */}
+          {FILTERS.filter((f) => f === 'all' || f === filter || counts.get(f)).map((f) => (
+            <button key={f} className={`chip ${filter === f ? 'on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+              {FILTER_LABEL[f]} <span className="lg-count num">{counts.get(f) ?? 0}</span>
+            </button>
+          ))}
+        </div>
+        <span className="lg-bar-r">
+          <Help title="The moves log">
+            <p className="lg-p">
+              Trades and your own moves stay in the log for good; other teams&apos; signings, releases, options and draft picks for two seasons. Their minimum deals aren&apos;t
+              listed.
+            </p>
+          </Help>
+        </span>
       </div>
       {shown.length === 0 ? (
-        <Card>
-          <Empty>{all.length ? 'No moves of this kind in the log.' : 'No moves yet. Trades, signings, extensions and releases show up here as they happen.'}</Empty>
-        </Card>
+        <div className="card empty">{all.length ? 'No moves of this kind in the log.' : 'No moves yet: trades, signings, extensions and releases land here.'}</div>
       ) : (
-        <Card className="flush lg-flat">
+        <div className="card flush">
           {shown.slice(0, limit).map((t) => {
             const summer = OFFSEASON.includes(t.phase);
             const key = `${t.season}:${summer}`;
@@ -112,33 +120,28 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
             const M = kindMeta(t);
             return (
               <Fragment key={t.id}>
-                {header && <div className="lg-date-h">{summer ? `${t.season} offseason` : `${seasonLabel(t.season)} season`}</div>}
+                {header && <div className="list-divider">{summer ? `${t.season} offseason` : `${seasonLabel(t.season)} season`}</div>}
                 <div className="lg-news">
-                  <span className="lg-ic" style={{ background: `color-mix(in srgb, ${M.color} 16%, var(--surface-3))`, color: M.color }}>
-                    <M.icon size={16} />
+                  <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
+                    <M.icon size={15} />
                   </span>
-                  <div style={{ minWidth: 0 }}>
+                  <div className="lg-news-body">
                     <div className="lg-news-text">
                       <TxnText league={league} parts={txnLine(t, { tid })} />
                     </div>
-                    <div className="tiny dim" style={{ marginTop: 2 }}>
-                      {fmtDate(t.season, t.day)}
-                    </div>
+                    <div className="lg-news-date">{fmtDate(t.season, t.day)}</div>
                   </div>
                 </div>
               </Fragment>
             );
           })}
           {shown.length > limit && (
-            <button className="lg-more" style={{ borderBottom: 'none', borderTop: '1px solid var(--line)' }} onClick={() => setLimit(limit + PAGE)}>
+            <button className="lg-more" onClick={() => setLimit(limit + PAGE)}>
               <ChevronDown size={15} /> Show more ({shown.length - limit})
             </button>
           )}
-        </Card>
+        </div>
       )}
-      <div className="lg-note">
-        Trades and your own moves stay in the log for good, other teams' signings, releases, options and draft picks for two seasons. Their minimum deals aren't listed.
-      </div>
     </>
   );
 }
@@ -160,21 +163,19 @@ export function PlayerMoves({ league, pid }: { league: League; pid: number }) {
   const shown = all ? moves : moves.slice(0, 6);
   return (
     <Card title="Transactions">
-      <div className="col" style={{ gap: 10 }}>
+      <div className="col lg-pmoves">
         {shown.map((t) => (
-          <div key={t.id} className="row top" style={{ gap: 10 }}>
+          <div key={t.id} className="row top lg-pmove">
             <TeamLogo tid={moveTeam(t, pid)} size={22} />
-            <div className="grow small" style={{ minWidth: 0, lineHeight: 1.4 }}>
+            <div className="grow small lg-lh">
               <TxnText league={league} parts={txnLine(t, { pid })} />
             </div>
-            <span className="tiny dim num" style={{ whiteSpace: 'nowrap' }}>
-              {monthYear(t)}
-            </span>
+            <span className="tiny dim num nowrap">{monthYear(t)}</span>
           </div>
         ))}
       </div>
       {moves.length > shown.length && (
-        <button className="btn xs" style={{ marginTop: 10 }} onClick={() => setAll(true)}>
+        <button className="btn xs lg-pmoves-all" onClick={() => setAll(true)}>
           Show all {moves.length}
         </button>
       )}
@@ -187,13 +188,11 @@ export function RecentDeals({ league, tid }: { league: League; tid: number }) {
   const deals = useLeagueMemo(() => tradesBetween(league, league.userTid, tid).slice(0, 3), [league, tid]);
   if (!deals.length) return null;
   return (
-    <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-      <div className="tiny dim upper bold" style={{ letterSpacing: '0.06em', marginBottom: 4 }}>
-        Your last {deals.length === 1 ? 'deal' : `${deals.length} deals`} with them
-      </div>
-      <div className="col" style={{ gap: 6 }}>
+    <div className="lg-deals">
+      <div className="lg-deals-h">Your last {deals.length === 1 ? 'deal' : `${deals.length} deals`} with them</div>
+      <div className="col lg-deals-list">
         {deals.map((t) => (
-          <div key={t.id} className="small" style={{ lineHeight: 1.4 }}>
+          <div key={t.id} className="small lg-lh">
             <span className="tiny dim num">{fmtDate(t.season, t.day, { month: 'short', day: 'numeric', year: 'numeric' })} · </span>
             <TxnText league={league} parts={txnLine(t, { tid: league.userTid })} />
           </div>

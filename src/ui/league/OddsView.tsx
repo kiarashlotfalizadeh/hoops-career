@@ -5,8 +5,8 @@ import { fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { LineChart } from '../components/charts';
-import { Card, Help } from '../components/ui';
-import { confName, useQueryParam } from './shared';
+import { Help, Section } from '../components/ui';
+import { Toolbar, confName, useQueryParam } from './shared';
 
 type Mode = 'playoffs' | 'lottery';
 
@@ -20,7 +20,7 @@ export function OddsView({ league }: { league: League }) {
   const [conf, setConf] = useQueryParam<'E' | 'W'>('oconf', userConf, ['E', 'W']);
   const [mode, setMode] = useQueryParam<Mode>('omode', 'playoffs', ['playoffs', 'lottery']);
   const f = useLeagueMemo(() => leagueForecast(league), [league]);
-  if (!f) return <div className="lg-note">The season is over: the forecast starts again with next season's preseason.</div>;
+  if (!f) return <div className="card empty">The season is over: the forecast starts again in next season&apos;s preseason.</div>;
   // the playoff race best first; the lottery worst first
   const rows = f.teams
     .filter((t) => league.teams[t.tid].conf === conf)
@@ -28,37 +28,31 @@ export function OddsView({ league }: { league: League }) {
   return (
     <>
       <Trail league={league} />
-      <div className="row between">
-        <div className="chips" role="group" aria-label="Conference">
+      <Toolbar
+        right={
+          <>
+            <div className="chips" role="group" aria-label="Forecast">
+              {(['playoffs', 'lottery'] as const).map((m) => (
+                <button key={m} className={`chip lg-chip-xs ${mode === m ? 'on' : ''}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
+                  {m === 'playoffs' ? 'Playoffs' : 'Lottery'}
+                </button>
+              ))}
+            </div>
+            <OddsHelp />
+          </>
+        }
+      >
+        <span className="chips" role="group" aria-label="Conference">
           {(['E', 'W'] as const).map((c) => (
             <button key={c} className={`chip lg-chip-xs ${conf === c ? 'on' : ''}`} aria-pressed={conf === c} onClick={() => setConf(c)}>
               {c === 'E' ? 'East' : 'West'}
             </button>
           ))}
-        </div>
-        <div className="row" style={{ gap: 6 }}>
-          <div className="chips" role="group" aria-label="Forecast">
-            {(['playoffs', 'lottery'] as const).map((m) => (
-              <button key={m} className={`chip lg-chip-xs ${mode === m ? 'on' : ''}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
-                {m === 'playoffs' ? 'Playoffs' : 'Lottery'}
-              </button>
-            ))}
-          </div>
-          <Help title="Season forecast">
-            <p style={{ margin: 0 }}>
-              The rest of the season is played out {FORECAST_SIMS.toLocaleString('en-US')} times, game by game on the real schedule, then the play-in, the playoffs and the lottery
-              draw. Each team's strength is its net rating this season, weighed against what its roster is worth (injured players count from when they're back) until enough games
-              are in, and it's uncertain, more so early on.
-            </p>
-            <p style={{ margin: 0 }}>
-              It knows nothing about how the games will actually go. 100% and — mean a place clinched or a team that's out; anything else rounds to &gt;99% or &lt;1%.
-            </p>
-          </Help>
-        </div>
-      </div>
-      <Card className={`flush lg-flat lg-st mode-odds odds-${mode}`}>
+        </span>
+      </Toolbar>
+      <div className={`card flush lg-st mode-odds odds-${mode}`}>
         <div className="lg-st-row lg-st-head" aria-hidden="true">
-          <span style={{ textAlign: 'right' }}>#</span>
+          <span>#</span>
           <span />
           <span>Team</span>
           <span>Proj</span>
@@ -83,14 +77,33 @@ export function OddsView({ league }: { league: League }) {
         {rows.map((t, i) => (
           <OddsRow key={t.tid} league={league} t={t} rank={i + 1} mode={mode} />
         ))}
-      </Card>
+      </div>
       <div className="lg-note">
-        {f.preseason ? 'Preseason forecast: rosters only, before a game is played. ' : ''}
+        {f.preseason ? 'Preseason forecast, from rosters only. ' : ''}
         {mode === 'playoffs'
-          ? `The ${confName(conf)} by projected record, with the 10th-90th percentile of wins under it. Playoffs counts the play-in's winners.`
-          : 'The lottery is everyone not in the playoffs. The chances are for each team’s own first-round pick, wherever it went in a trade (→ its owner now): first, in the top four, and where it lands on average when it’s in the lottery.'}
+          ? `The ${confName(conf)} by projected record, its 10th-90th percentile of wins under it.`
+          : 'Each team’s own first-round pick, wherever it went (→ its owner now).'}
       </div>
     </>
+  );
+}
+
+function OddsHelp() {
+  return (
+    <Help title="Season forecast">
+      <p className="lg-p">
+        The rest of the season is played out {FORECAST_SIMS.toLocaleString('en-US')} times, game by game on the real schedule, then the play-in, the playoffs and the lottery draw.
+        Each team&apos;s strength is its net rating this season, weighed against what its roster is worth (injured players count from when they&apos;re back) until enough games are
+        in, and it&apos;s uncertain, more so early on.
+      </p>
+      <p className="lg-p">
+        Playoffs counts the play-in&apos;s winners. The lottery is everyone not in the playoffs: the chances are for each team&apos;s own first-round pick, wherever it went in a
+        trade: first, in the top four, and where it lands on average when it&apos;s in the lottery.
+      </p>
+      <p className="lg-p">
+        It knows nothing about how the games will actually go. 100% and — mean a place clinched or a team that&apos;s out; anything else rounds to &gt;99% or &lt;1%.
+      </p>
+    </Help>
   );
 }
 
@@ -116,7 +129,7 @@ function OddsRow({ league, t, rank, mode }: { league: League; t: TeamOdds; rank:
           <span className="nm-ab">{team.abbrev}</span>
         </span>
         {mode === 'lottery' && owner && (
-          <span className="tiny dim" style={{ fontWeight: 600 }} aria-hidden="true">
+          <span className="lg-conf" aria-hidden="true">
             → {owner}
           </span>
         )}
@@ -125,38 +138,44 @@ function OddsRow({ league, t, rank, mode }: { league: League; t: TeamOdds; rank:
       <span className="wl" aria-hidden="true">
         {proj}
         {mode === 'playoffs' && t.lo !== t.hi && (
-          <span className="tiny dim odds-range">
+          <span className="odds-range">
             {t.lo}-{t.hi}
           </span>
         )}
       </span>
       {mode === 'playoffs' ? (
         <>
-          <span className="c-wide dim2" aria-hidden="true">
+          <span className="c-wide" aria-hidden="true">
             {pct(t.top6)}
           </span>
-          <span className="c-wide dim2" aria-hidden="true">
+          <span className="c-wide" aria-hidden="true">
             {pct(t.playIn)}
           </span>
-          <span className={t.reach[0] >= 0.5 ? 'good' : undefined} style={{ fontWeight: 700 }} aria-hidden="true">
+          <span className={`hi ${t.reach[0] >= 0.5 ? 'good' : ''}`} aria-hidden="true">
             {pct(t.reach[0], t.clinched || t.out)}
           </span>
-          <span className="c-wide dim2" aria-hidden="true">
+          <span className="c-wide" aria-hidden="true">
             {pct(t.reach[2], t.out)}
           </span>
-          <span className="c-wide dim2" aria-hidden="true">
+          <span className="c-wide" aria-hidden="true">
             {pct(t.reach[3], t.out)}
           </span>
-          <span aria-hidden="true">{pct(t.reach[4], t.out)}</span>
+          <span className="hi" aria-hidden="true">
+            {pct(t.reach[4], t.out)}
+          </span>
         </>
       ) : (
         <>
-          <span className="c-wide dim2" aria-hidden="true">
+          <span className="c-wide" aria-hidden="true">
             {pct(t.lottery, t.clinched || t.out)}
           </span>
-          <span aria-hidden="true">{pct(t.pick1, t.clinched)}</span>
-          <span aria-hidden="true">{pct(t.top4, t.clinched)}</span>
-          <span className="c-wide dim2" aria-hidden="true">
+          <span className="hi" aria-hidden="true">
+            {pct(t.pick1, t.clinched)}
+          </span>
+          <span className="hi" aria-hidden="true">
+            {pct(t.top4, t.clinched)}
+          </span>
+          <span className="c-wide" aria-hidden="true">
             {t.pick !== null && t.lottery >= 0.05 ? t.pick.toFixed(1) : '—'}
           </span>
         </>
@@ -171,11 +190,13 @@ function Trail({ league }: { league: League }) {
   if (!tr || tr.season !== league.season || tr.tid !== league.userTid || tr.pts.length < 2) return null;
   const last = tr.pts[tr.pts.length - 1];
   return (
-    <Card
-      title={`Your playoff odds · ${league.teams[league.userTid].name}`}
-      right={<span className="tiny dim">{`${pct(last[1] / 1000)} on ${fmtDate(league.season, last[0])}`}</span>}
+    <Section
+      title={`${league.teams[league.userTid].abbrev} playoff odds`}
+      right={<span className="lg-sec-meta">{`${pct(last[1] / 1000)} on ${fmtDate(league.season, last[0])}`}</span>}
     >
-      <LineChart points={tr.pts.map((p) => p[1] / 10)} labels={tr.pts.map((p) => fmtDate(league.season, p[0]))} yMin={0} yMax={100} refLine={50} height={110} values={false} />
-    </Card>
+      <div className="card lg-trail">
+        <LineChart points={tr.pts.map((p) => p[1] / 10)} labels={tr.pts.map((p) => fmtDate(league.season, p[0]))} yMin={0} yMax={100} refLine={50} height={110} values={false} />
+      </div>
+    </Section>
   );
 }

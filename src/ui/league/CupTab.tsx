@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy } from 'lucide-react';
 import type { CupTie, League } from '../../core/types';
@@ -6,8 +7,8 @@ import { dayToDate, fmtDate, playerName } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Segmented } from '../components/ui';
-import { confName, useQueryParam } from './shared';
+import { Help, Section, Segmented } from '../components/ui';
+import { TitleSlab, Toolbar, confName, confOrder, useQueryParam } from './shared';
 
 /** "Dec 4–11", or "Nov 28 – Dec 3" across months. */
 function dateRange(league: League, a: number, b: number) {
@@ -38,18 +39,14 @@ export function CupTab({ league }: { league: League }) {
   if (!cup) {
     return (
       <>
-        <Card>
-          <div className="col" style={{ alignItems: 'center', textAlign: 'center', gap: 8, padding: '12px 0' }}>
-            <Trophy size={30} className="dim" />
-            <h3>No NBA Cup this season</h3>
-            <div className="small dim" style={{ maxWidth: 340 }}>
-              The in-season tournament is drawn with each new schedule: six groups of five play on Cup nights in November, and the best eight meet in December knockouts.
-            </div>
-          </div>
-        </Card>
         {lastWinner?.cupWinner !== undefined && (
           <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
         )}
+        <div className="card lg-blank">
+          <Trophy size={26} aria-hidden="true" />
+          <h3>No NBA Cup this season</h3>
+          <p>It&apos;s drawn with each new schedule: six groups of five play on Cup nights in November, the best eight meet in December knockouts.</p>
+        </div>
       </>
     );
   }
@@ -65,8 +62,8 @@ export function CupTab({ league }: { league: League }) {
       : cup.seeds
         ? `Knockouts · ${koRound}`
         : projected
-          ? `Group stage · ${groupGamesLeft} group game${groupGamesLeft === 1 ? '' : 's'} left`
-          : `Group stage starts ${fmtDate(league.season, cup.nights[0])}`;
+          ? `Group stage · ${groupGamesLeft} game${groupGamesLeft === 1 ? '' : 's'} left`
+          : `Groups start ${fmtDate(league.season, cup.nights[0])}`;
 
   return (
     <>
@@ -84,83 +81,79 @@ export function CupTab({ league }: { league: League }) {
       {!projected && !cup.seeds && lastWinner?.cupWinner !== undefined && lastWinner.season < cup.season && (
         <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
       )}
-      <div className="row between" style={{ gap: 8 }}>
-        <span className="small dim">{status}</span>
-        <span className="tiny dim">Knockouts {dateRange(league, cup.qfDays[0], cup.finalDay)}</span>
-      </div>
+      {/* the knockouts' dates: on the bracket's heads once it's drawn, on the line under the switch until then */}
+      <Toolbar right={<CupHelp league={league} />}>{status}</Toolbar>
       <div className="bk-only-narrow">
-        <ConfToggle value={conf} onChange={setConf} />
+        <Segmented
+          label="Conference"
+          value={conf}
+          onChange={setConf}
+          options={[
+            { id: 'E', label: 'East' },
+            { id: 'W', label: 'West' },
+          ]}
+        />
       </div>
 
       {seeds ? (
         <>
           <div className="bk-panel-wrap">
-            {(['E', 'W'] as const).map((c) => (
-              <div key={c} className={c !== conf ? 'bk-hide-narrow' : ''}>
-                <Card title={`${confName(c)} knockouts`} right={projected ? <span className="tag info">Projected</span> : undefined}>
-                  <KnockoutBracket league={league} conf={c} projected={projected} />
-                </Card>
+            {confOrder(conf).map((c) => (
+              <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
+                <Section title={`${confName(c)} knockouts`} right={projected ? <span className="tag info">Projected</span> : undefined}>
+                  <div className="card bk-card">
+                    <KnockoutBracket league={league} conf={c} projected={projected} />
+                  </div>
+                </Section>
               </div>
             ))}
           </div>
           <CupFinal league={league} final={final} />
         </>
       ) : (
-        <Card title="How the knockouts work">
-          <div className="small dim2" style={{ lineHeight: 1.5 }}>
-            The three group winners and the best runner-up in each conference advance. Quarterfinals ({dateRange(league, cup.qfDays[0], cup.qfDays[1])}) and semifinals (
-            {fmtDate(league.season, cup.sfDay)}) are hosted by the better seed and count in the standings. The championship ({fmtDate(league.season, cup.finalDay)}) is on a neutral
-            floor and doesn&apos;t. Teams that don&apos;t advance play their last two regular-season games in the knockout window.
-          </div>
-        </Card>
+        <div className="lg-legend">
+          <span>QF {dateRange(league, cup.qfDays[0], cup.qfDays[1])}</span>
+          <span>SF {fmtDate(league.season, cup.sfDay)}</span>
+          <span>Final {fmtDate(league.season, cup.finalDay)}, neutral floor</span>
+        </div>
       )}
 
       <div className="bk-panel-wrap">
-        {(['E', 'W'] as const).map((c) => (
-          <div key={c} className={`col ${c !== conf ? 'bk-hide-narrow' : ''}`} style={{ gap: 14 }}>
-            {tables
-              .filter((t) => t.group.conf === c)
-              .map((t) => (
-                <GroupCard key={t.group.id} league={league} table={t} seeds={seeds} decided={!!cup.seeds} />
-              ))}
+        {confOrder(conf).map((c) => (
+          <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
+            <Section title={`${confName(c)} groups`}>
+              <GroupTables league={league} tables={tables.filter((t) => t.group.conf === c)} seeds={seeds} decided={!!cup.seeds} />
+            </Section>
           </div>
         ))}
       </div>
-      <div className="lg-note">
-        {seeds &&
-          (cup.seeds
-            ? 'Group winners (seeds 1-3) and the best runner-up in each conference (WC) went through. '
-            : 'Tags mark who would go through if the group stage ended today: the group winners (seeds 1-3) and the best runner-up in each conference (WC). ')}
-        Cup nights: {cup.nights.map((d) => fmtDate(league.season, d)).join(', ')}. Group ties break on head-to-head, then point differential and points scored in group games, then
-        last season&apos;s record.
-      </div>
+      {seeds && <div className="lg-note">{cup.seeds ? 'Went through' : 'Would go through today'}: group winners (#1-3) and the best runner-up (WC).</div>}
     </>
   );
 }
 
-function ConfToggle({ value, onChange }: { value: 'E' | 'W'; onChange: (v: 'E' | 'W') => void }) {
+/** How the Cup works: who goes through, what counts, the Cup nights and the group tiebreakers. */
+function CupHelp({ league }: { league: League }) {
+  const cup = league.cup!;
   return (
-    <Segmented
-      label="Conference"
-      value={value}
-      onChange={onChange}
-      options={[
-        { id: 'E', label: 'East' },
-        { id: 'W', label: 'West' },
-      ]}
-    />
+    <Help title="NBA Cup">
+      <p className="lg-p">
+        The three group winners and the best runner-up in each conference advance. Quarterfinals ({dateRange(league, cup.qfDays[0], cup.qfDays[1])}) and semifinals (
+        {fmtDate(league.season, cup.sfDay)}) are hosted by the better seed and count in the standings. The championship ({fmtDate(league.season, cup.finalDay)}) is on a neutral
+        floor and doesn&apos;t count in the standings or season stats. Teams that don&apos;t advance play their last two regular-season games in the knockout window.
+      </p>
+      <p className="lg-p">Cup nights: {cup.nights.map((d) => fmtDate(league.season, d)).join(', ')}.</p>
+      <p className="lg-p">Group ties break on head-to-head, then point differential and points scored in group games, then last season&apos;s record.</p>
+    </Help>
   );
 }
 
-function GroupCard({ league, table, seeds, decided }: { league: League; table: CupGroupTable; seeds?: Seeds; decided: boolean }) {
-  const seedOf = (tid: number) => {
-    const i = seeds?.[table.group.conf].indexOf(tid) ?? -1;
-    return i < 0 ? undefined : i + 1;
-  };
+/** A conference's three groups in one table: a head, then each group under its name. */
+function GroupTables({ league, tables, seeds, decided }: { league: League; tables: CupGroupTable[]; seeds?: Seeds; decided: boolean }) {
   return (
-    <Card title={table.group.id} className="flush lg-flat lg-st mode-cup">
+    <div className="card flush lg-st mode-cup">
       <div className="lg-st-row lg-st-head">
-        <span style={{ textAlign: 'right' }}>#</span>
+        <span>#</span>
         <span />
         <span>Team</span>
         <span>W-L</span>
@@ -168,29 +161,40 @@ function GroupCard({ league, table, seeds, decided }: { league: League; table: C
         <span title="Points scored in group games">PF</span>
         <span />
       </div>
-      {table.rows.map((r) => {
-        const seed = seedOf(r.tid);
-        const out = decided && seed === undefined;
+      {tables.map((table) => {
+        const seedOf = (tid: number) => {
+          const i = seeds?.[table.group.conf].indexOf(tid) ?? -1;
+          return i < 0 ? undefined : i + 1;
+        };
         return (
-          <Link key={r.tid} to={`/team/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
-            <span className="rk">{r.won + r.lost ? r.rank : '—'}</span>
-            <TeamLogo tid={r.tid} size={22} decorative />
-            <span className="nm">
-              <span>
-                <span className="nm-full">{league.teams[r.tid].name}</span>
-                <span className="nm-ab">{league.teams[r.tid].abbrev}</span>
-              </span>
-            </span>
-            <span className="wl">
-              {r.won}-{r.lost}
-            </span>
-            <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : 'dim'}>{r.won + r.lost ? (r.pd > 0 ? `+${r.pd}` : r.pd) : '—'}</span>
-            <span className="dim2">{r.won + r.lost ? r.pf : '—'}</span>
-            <span>{seed !== undefined && <span className={`tag ${!decided ? '' : seed === 4 ? 'info' : 'good'}`}>{seed === 4 ? 'WC' : `#${seed}`}</span>}</span>
-          </Link>
+          <Fragment key={table.group.id}>
+            <div className="list-divider">{table.group.id}</div>
+            {table.rows.map((r) => {
+              const seed = seedOf(r.tid);
+              const out = decided && seed === undefined;
+              return (
+                <Link key={r.tid} to={`/team/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
+                  <span className="rk">{r.won + r.lost ? r.rank : '—'}</span>
+                  <TeamLogo tid={r.tid} size={22} decorative />
+                  <span className="nm">
+                    <span>
+                      <span className="nm-full">{league.teams[r.tid].name}</span>
+                      <span className="nm-ab">{league.teams[r.tid].abbrev}</span>
+                    </span>
+                  </span>
+                  <span className="wl">
+                    {r.won}-{r.lost}
+                  </span>
+                  <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : ''}>{r.won + r.lost ? (r.pd > 0 ? `+${r.pd}` : r.pd) : '—'}</span>
+                  <span>{r.won + r.lost ? r.pf : '—'}</span>
+                  <span>{seed !== undefined && <span className={`tag ${!decided ? '' : seed === 4 ? 'info' : 'good'}`}>{seed === 4 ? 'WC' : `#${seed}`}</span>}</span>
+                </Link>
+              );
+            })}
+          </Fragment>
         );
       })}
-    </Card>
+    </div>
   );
 }
 
@@ -252,8 +256,8 @@ function KnockoutBracket({ league, conf, projected }: { league: League; conf: 'E
   return (
     <>
       <div className="bk-head two">
-        <span>Quarterfinals · {qfDate}</span>
-        <span>Semifinal · {fmtDate(league.season, cup.sfDay)}</span>
+        <span>QF · {qfDate}</span>
+        <span>SF · {fmtDate(league.season, cup.sfDay)}</span>
       </div>
       <div className="bk two">
         <div className="bk-col r1">
@@ -285,80 +289,60 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
   const ptsOf = (tid: number | undefined) => (final && tid !== undefined && final.winner !== undefined ? (tid === final.high ? final.highPts : final.lowPts) : undefined);
   const side = (tid: number | undefined, label: string) => (
     <div className={`side ${final?.winner !== undefined && final.winner !== tid ? 'lose' : ''}`}>
-      {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <div style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px dashed var(--line-2)' }} />}
-      <div className="bold ellipsis" style={{ maxWidth: '100%' }}>
-        {tid !== undefined ? league.teams[tid].name : `${label} winner`}
-      </div>
-      {tid !== undefined && <div className="tiny dim">{label}</div>}
+      {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
+      <div className="bk-fname ellipsis">{tid !== undefined ? league.teams[tid].name : `${label} winner`}</div>
+      {tid !== undefined && <div className="bk-fconf">{label}</div>}
       {ptsOf(tid) !== undefined && <div className="score">{ptsOf(tid)}</div>}
     </div>
   );
   const body = (
     <div className="bk-finals">
       {side(eTid, 'East')}
-      <div className="display dim" style={{ fontSize: 18 }}>
-        vs
-      </div>
+      <div className="bk-vs">vs</div>
       {side(wTid, 'West')}
     </div>
   );
   return (
-    <Card
+    <Section
       title={
         <h3>
-          <Trophy size={14} style={{ verticalAlign: -2 }} /> Championship
+          <Trophy size={13} aria-hidden="true" /> Championship
         </h3>
       }
-      right={<span className="small dim">{final?.winner !== undefined ? 'Final' : `${fmtDate(league.season, cup.finalDay)} · neutral floor`}</span>}
+      right={<span className="lg-sec-meta">{final?.winner !== undefined ? 'Final' : `${fmtDate(league.season, cup.finalDay)} · neutral floor`}</span>}
     >
       {final?.winner !== undefined ? (
-        <Link to={`/game/${final.gid}`} style={{ display: 'block', color: 'inherit', position: 'relative' }}>
+        <Link to={`/game/${final.gid}`} className="card bk-fcard">
           {body}
           <span className="sr-only">. Championship box score</span>
         </Link>
       ) : (
-        body
+        <div className="card bk-fcard">{body}</div>
       )}
-      <div className="tiny dim" style={{ marginTop: 8, textAlign: 'center' }}>
-        The championship doesn&apos;t count in the standings or season stats.
-      </div>
-    </Card>
+      <div className="lg-note">Doesn&apos;t count in the standings or season stats.</div>
+    </Section>
   );
 }
 
 export function CupBanner({ league, season, tid, runnerUp, mvp, final }: { league: League; season: number; tid: number; runnerUp?: number; mvp?: number; final?: CupTie }) {
-  const t = league.teams[tid];
   const p = mvp !== undefined ? league.players[mvp] : undefined;
   const score = final?.highPts !== undefined && final.lowPts !== undefined ? ` ${Math.max(final.highPts, final.lowPts)}-${Math.min(final.highPts, final.lowPts)}` : '';
   return (
-    <div className="lg-champ">
-      <div className="row" style={{ gap: 14 }}>
-        <TeamLogo tid={tid} size={60} decorative />
-        <div className="grow">
-          <div className="kicker">
-            <Trophy size={12} style={{ verticalAlign: -1 }} /> {seasonLabel(season)} NBA Cup
-          </div>
-          <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase', lineHeight: 1.05 }}>
-            {t.region} {t.name}
-          </div>
-          <div className="small dim2" style={{ marginTop: 3 }}>
-            {runnerUp !== undefined && (
-              <>
-                def. {league.teams[runnerUp].name}
-                {score}
-              </>
-            )}
-            {p && (
-              <>
-                {runnerUp !== undefined ? ' · ' : ''}Cup MVP{' '}
-                <Link to={`/player/${p.pid}`} className="lg-name-link">
-                  {playerName(p)}
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} NBA Cup`}>
+      {runnerUp !== undefined && (
+        <>
+          def. {league.teams[runnerUp].name}
+          {score}
+        </>
+      )}
+      {p && (
+        <>
+          {runnerUp !== undefined ? ' · ' : ''}Cup MVP{' '}
+          <Link to={`/player/${p.pid}`} className="lg-slab-link">
+            {playerName(p)}
+          </Link>
+        </>
+      )}
+    </TitleSlab>
   );
 }

@@ -6,7 +6,7 @@ import { POSITIONS } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Card, Empty, Segmented, StatTable, type Col } from '../components/ui';
+import { Avatar, Segmented, StatTable, type Col } from '../components/ui';
 import { advancedView, f1, perGame, seasonLine, signed, teamRatings, type AdvView, type PerGame } from '../stats';
 import { shortName, statSeasons, statTid, teamAbbrev, useQueryParam } from './shared';
 
@@ -87,26 +87,18 @@ export function StatsTab({ league }: { league: League }) {
           ))}
         </select>
         <div className="chips" role="group" aria-label="Season type">
-          <button className={`chip ${!playoffs ? 'on' : ''}`} style={{ height: 34 }} aria-pressed={!playoffs} onClick={() => setPo('reg')}>
+          <button className={`chip lg-chip-xs ${!playoffs ? 'on' : ''}`} aria-pressed={!playoffs} onClick={() => setPo('reg')}>
             Regular season
           </button>
-          <button
-            className={`chip ${playoffs ? 'on' : ''}`}
-            style={{ height: 34 }}
-            aria-pressed={playoffs}
-            disabled={(real || view === 'teams') && !playoffs}
-            onClick={() => setPo('po')}
-          >
+          <button className={`chip lg-chip-xs ${playoffs ? 'on' : ''}`} aria-pressed={playoffs} disabled={(real || view === 'teams') && !playoffs} onClick={() => setPo('po')}>
             Playoffs
           </button>
         </div>
       </div>
       {/* why Playoffs is greyed out (the team table says so itself) */}
-      {real && !playoffs && view !== 'teams' && <div className="tiny dim">Playoff stats aren&apos;t included for imported real-life seasons.</div>}
+      {real && !playoffs && view !== 'teams' && <div className="lg-note">No playoff stats for imported real-life seasons.</div>}
       {real && playoffs ? (
-        <Card>
-          <Empty>Playoff stats aren&apos;t included for imported real-life seasons. Switch to the regular season, or pick a season played in this league.</Empty>
-        </Card>
+        <div className="card empty">No playoff stats for imported real-life seasons. Switch to the regular season, or pick a season played in this league.</div>
       ) : (
         <>
           {view === 'leaders' && <Leaders league={league} rows={rows} season={season} playoffs={playoffs} />}
@@ -158,55 +150,53 @@ function Leaders({ league, rows, season, playoffs }: { league: League; rows: Sta
   const games = teamGames(league, season, rows, playoffs);
   const minGp = Math.max(1, Math.ceil(games * (playoffs ? 0.3 : 0.5)));
   const qualified = rows.filter((r) => r.s.gp >= minGp && r.pg.min >= (playoffs ? 10 : 15));
-  if (!rows.length)
-    return (
-      <Card>
-        <Empty>No games played {playoffs ? 'in the playoffs ' : ''}yet this season.</Empty>
-      </Card>
-    );
+  if (!rows.length) return <div className="card empty">No games played {playoffs ? 'in the playoffs ' : ''}yet this season.</div>;
   return (
     <>
-      <div className="lg-leaders">
+      {/* every category in one panel: the leader, then the next four */}
+      <div className="card flush lg-leaders">
         {[...CATS, ...(rows.some((r) => r.adv) ? ADV_CATS : [])].map((c) => {
           const top = qualified
             .filter((r) => (!c.min || c.min(r)) && Number.isFinite(c.get(r)))
             .sort((a, b) => c.get(b) - c.get(a))
             .slice(0, 5);
-          return <LeaderCard key={c.key} league={league} cat={c} top={top} />;
+          return <LeaderBlock key={c.key} league={league} cat={c} top={top} />;
         })}
       </div>
       <div className="lg-note">
-        Leaders need {minGp}+ games ({playoffs ? '30' : '50'}% of team games) and {playoffs ? 10 : 15}+ minutes per game.
+        Qualified: {minGp}+ games ({playoffs ? '30' : '50'}% of team games), {playoffs ? 10 : 15}+ minutes a game.
       </div>
     </>
   );
 }
 
-function LeaderCard({ league, cat, top }: { league: League; cat: Cat; top: StatRow[] }) {
+function LeaderBlock({ league, cat, top }: { league: League; cat: Cat; top: StatRow[] }) {
   const [first, ...rest] = top;
   return (
-    <Card title={cat.label} right={cat.minNote ? <span className="tiny dim">{cat.minNote}</span> : undefined}>
+    <section className="lg-lead">
+      <div className="lg-lead-h">
+        <h3>{cat.label}</h3>
+        {cat.minNote && <span>{cat.minNote}</span>}
+      </div>
       {!first ? (
-        <div className="small dim">Nobody qualifies yet.</div>
+        <div className="lg-lead-none">Nobody qualifies yet.</div>
       ) : (
         <>
           <Link to={`/player/${first.p.pid}`} className={`lg-lead-top ${first.tid === league.userTid ? 'me' : ''}`}>
             <Avatar p={first.p} />
-            <div style={{ minWidth: 0 }}>
-              <div className="bold ellipsis nm" style={{ fontSize: 15.5 }}>
+            <span className="lg-lead-who">
+              <span className="nm ellipsis">
                 {first.p.firstName} {first.p.lastName}
-              </div>
-              <div className="row small dim" style={{ gap: 6, marginTop: 2 }}>
+              </span>
+              <span className="lg-lead-meta">
                 {first.tid !== null && <TeamLogo tid={first.tid} size={16} decorative />}
-                <span>
-                  {teamAbbrev(league, first.tid)} · {first.p.pos}
-                </span>
-              </div>
-            </div>
-            <div className="lg-lead-val">
+                {teamAbbrev(league, first.tid)} · {first.p.pos}
+              </span>
+            </span>
+            <span className="lg-lead-val">
               {cat.fmt(cat.get(first))}
               <small>{cat.unit}</small>
-            </div>
+            </span>
           </Link>
           {rest.map((r, i) => (
             <Link key={r.p.pid} to={`/player/${r.p.pid}`} className={`lg-lead-row ${r.tid === league.userTid ? 'me' : ''}`}>
@@ -218,7 +208,7 @@ function LeaderCard({ league, cat, top }: { league: League; cat: Cat; top: StatR
           ))}
         </>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -411,6 +401,16 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
 
   return (
     <>
+      <div className="lg-sub">
+        <div className="lg-search">
+          <Search size={15} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" aria-label="Search players" />
+        </div>
+        <select className="lg-select" value={mode} onChange={(e) => setMode(e.target.value as 'pg' | 'tot')} aria-label="Per game or season totals">
+          <option value="pg">Per game</option>
+          <option value="tot">Totals</option>
+        </select>
+      </div>
       <div className="lg-hscroll" role="group" aria-label="Filter players">
         <button className={`chip ${qual === 'q' ? 'on' : ''}`} aria-pressed={qual === 'q'} onClick={() => setQual(qual === 'q' ? 'all' : 'q')}>
           Qualified ({minGp}+ GP)
@@ -425,31 +425,19 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
           </button>
         ))}
       </div>
-      <div className="lg-sub">
-        <div className="lg-search">
-          <Search size={15} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" aria-label="Search players" />
-        </div>
-        <select className="lg-select" value={mode} onChange={(e) => setMode(e.target.value as 'pg' | 'tot')} aria-label="Per game or season totals">
-          <option value="pg">Per game</option>
-          <option value="tot">Totals</option>
-        </select>
-      </div>
       {filtered.length === 0 ? (
-        <Card>
-          <Empty>{rows.length ? 'No players match these filters.' : playoffs ? 'No playoff games played yet.' : 'No games played yet.'}</Empty>
-        </Card>
+        <div className="card empty">{rows.length ? 'No players match these filters.' : playoffs ? 'No playoff games played yet.' : 'No games played yet.'}</div>
       ) : (
         <>
           {table}
           {filtered.length > limit && (
-            <button className="btn sm ghost" style={{ alignSelf: 'center' }} onClick={() => setLimit(limit + PAGE)}>
+            <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + PAGE)}>
               <ChevronDown size={15} /> Show {Math.min(PAGE, filtered.length - limit)} more
             </button>
           )}
           <div className="lg-note">
             {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} ·{' '}
-            {tot ? 'season totals' : 'per-game averages'} · tap a column to sort
+            {tot ? 'season totals' : 'per game'} · tap a column to sort
             {real ? ' · imported real-life season' : ''}
           </div>
         </>
@@ -509,17 +497,11 @@ function TeamStatsTable({ league, season }: { league: League; season: number }) 
     ],
     [league],
   );
-  if (!rows.length) {
-    return (
-      <Card>
-        <Empty>{season === league.season ? 'No games played yet this season.' : 'Team stats are only tracked for simulated seasons.'}</Empty>
-      </Card>
-    );
-  }
+  if (!rows.length) return <div className="card empty">{season === league.season ? 'No games played yet this season.' : 'Team stats are only tracked for simulated seasons.'}</div>;
   return (
     <>
       <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(`/team/${r.tid}`)} highlight={(r) => r.tid === league.userTid} />
-      <div className="lg-note">Team stats cover the regular season. ORtg, DRtg and Net are per 100 possessions. Sorting DRtg, TOV% and Opp eFG% puts the best (lowest) first.</div>
+      <div className="lg-note">Regular season · ratings per 100 possessions · DRtg, TOV% and Opp eFG% sort lowest (best) first.</div>
     </>
   );
 }
