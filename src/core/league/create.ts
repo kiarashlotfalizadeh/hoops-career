@@ -214,7 +214,9 @@ export function createLeague(opts: CreateOpts): League {
   const season = START_SEASON;
   const teams = FRANCHISES.map((_, tid) => makeTeam(tid, season, rng));
   const league: League = {
-    id: `lg_${Date.now().toString(36)}_${Math.floor(rng.next() * 1e6).toString(36)}`,
+    // a league made from a given seed (tests and scripts) gets an id from it, so the streams drawn from
+    // the id (opponents' game plans, AI extensions, the carousel...) play out the same on every run
+    id: `lg_${opts.rngSeed !== undefined ? `s${rngSeed.toString(36)}${(hashString(opts.name) >>> 0).toString(36)}` : Date.now().toString(36)}_${Math.floor(rng.next() * 1e6).toString(36)}`,
     name: opts.name,
     version: SAVE_VERSION,
     created: Date.now(),
