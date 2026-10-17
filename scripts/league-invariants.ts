@@ -376,7 +376,7 @@ function checkSeasonEnd() {
   const mpg = (pid: number) => (gp(pid) ? line(pid)!.min / gp(pid) : 0);
   // Most Improved needs last season's numbers: none in a fictional league's first season
   const lastSeason = Object.values(L.players).some((p) => (H.seasonTotals(p, L.season - 1)?.gp ?? 0) >= 20);
-  // 65 games for the MVP, DPOY and MIP; Rookie and Sixth Man of the Year aren't covered by the rule
+  // 65 games for the MVP, DPOY and MIP; Rookie and Sixth Man of the Year aren't covered by the rule, so Sixth Man asks for a voter's 50
   for (const k of ['mvp', 'dpoy', 'smoy', 'mip'] as const)
     if ((aw[k] === undefined && (k !== 'mip' || lastSeason)) || (aw[k] !== undefined && gp(aw[k]!) < (k === 'smoy' ? 50 : 65)))
       bad('award eligibility', `${k} ${aw[k]} gp ${aw[k] !== undefined ? gp(aw[k]!) : '-'}`);

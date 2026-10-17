@@ -127,6 +127,7 @@ try {
     '/lab',
     '/league',
     '/league?tab=stats',
+    '/league?tab=ratings',
     '/team/5',
     '/team/5?tab=scouting',
     '/gameplan/5',

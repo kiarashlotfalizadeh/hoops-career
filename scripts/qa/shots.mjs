@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';
 const flow = process.argv[4] ?? 'new';
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? undefined });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 const page = await ctx.newPage();
 const errors = [];
