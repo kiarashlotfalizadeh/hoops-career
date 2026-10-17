@@ -327,7 +327,8 @@ export function Bar({ value, max = 100, color, height = 6 }: { value: number; ma
   );
 }
 
-let openSheets = 0;
+/** The open sheets, the top one last: Escape and Tab are its alone (a Help sheet over a contract sheet). */
+const openSheets: object[] = [];
 
 /**
  * Bottom sheet on phones, centred dialog on tablets. Focus moves in and is restored on close,
@@ -357,13 +358,18 @@ export function Sheet({
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    openSheets++;
+    const me = {};
+    openSheets.push(me);
     document.body.classList.add('sheet-open');
     ref.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
+      if (openSheets[openSheets.length - 1] !== me) return;
       if (e.key === 'Escape') closeRef.current();
       if (e.key !== 'Tab' || !ref.current) return;
-      const f = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')];
+      // what Tab can reach: not disabled controls, nor a radio group's unselected options (tabindex -1)
+      const f = [...ref.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]')].filter(
+        (el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled && !el.hidden,
+      );
       if (!f.length) return;
       const first = f[0];
       const last = f[f.length - 1];
@@ -378,10 +384,8 @@ export function Sheet({
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      if (--openSheets <= 0) {
-        openSheets = 0;
-        document.body.classList.remove('sheet-open');
-      }
+      openSheets.splice(openSheets.indexOf(me), 1);
+      if (!openSheets.length) document.body.classList.remove('sheet-open');
       prev?.focus?.({ preventScroll: true });
     };
   }, [open]);
@@ -389,10 +393,12 @@ export function Sheet({
     if (!open) setDrag(0);
   }, [open]);
   if (!open) return null;
-  // swipe down from the top of the sheet to dismiss; sliders, tables and scrollers keep their own drags
+  // swipe down from the top of the sheet to dismiss; sliders, tables and scrollers keep their own drags,
+  // and a sheet opened from this one (its touches bubble up the React tree) drags itself, not this one
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    start.current = (ref.current?.scrollTop ?? 0) <= 0 && !ownsDrag(e.target as Element, ref.current) ? { x: t.clientX, y: t.clientY, locked: false } : null;
+    const mine = !!ref.current?.contains(e.target as Node);
+    start.current = mine && (ref.current?.scrollTop ?? 0) <= 0 && !ownsDrag(e.target as Element, ref.current) ? { x: t.clientX, y: t.clientY, locked: false } : null;
   };
   const onTouchMove = (e: React.TouchEvent) => {
     const s = start.current;
@@ -546,7 +552,9 @@ export function StatTable<T>({
   maxHeight?: number;
   limit?: number;
 }) {
-  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(initialSort ? { key: initialSort, dir: -1 } : null);
+  // the column's own first direction, as a tap on its header gives it (names A-Z, ranks lowest first, the rest highest first)
+  const firstDir = (c: Col<T> | undefined): 1 | -1 => (c?.left || c?.asc ? 1 : -1);
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(() => (initialSort ? { key: initialSort, dir: firstDir(cols.find((c) => c.key === initialSort)) } : null));
   const sorted = useMemo(() => {
     if (!sort) return rows;
     const col = cols.find((c) => c.key === sort.key);
@@ -566,7 +574,7 @@ export function StatTable<T>({
                 style={{ minWidth: c.width }}
                 title={c.help}
                 aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
-                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: c.left || c.asc ? 1 : -1 }))}
+                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: firstDir(c) }))}
               >
                 {/* named by its visible label first ("PTS, sort by points per game"); the arrow is aria-sort's */}
                 <button type="button" className="th-sort" aria-label={`${c.label}, sort by ${lowerFirst(c.help ?? c.label)}`} onClick={(e) => e.preventDefault()}>
@@ -618,7 +626,10 @@ export function compareCells(va: number | string, vb: number | string, dir: 1 | 
 
 export function fmtNum(v: number, d = 1) {
   if (!isFinite(v)) return '—';
-  return Number.isInteger(v) ? String(v) : v.toFixed(d);
+  if (Number.isInteger(v)) return String(v);
+  // a value that rounds to zero reads "0.0", not "-0.0" (as the stats helpers' f1)
+  const s = v.toFixed(d);
+  return Number(s) === 0 ? (0).toFixed(d) : s;
 }
 
 export const pct = (v: number, d = 1) => (isFinite(v) ? `${(v * 100).toFixed(d)}` : '—');

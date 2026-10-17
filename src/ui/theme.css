@@ -326,13 +326,25 @@ h3 {
   color: var(--text-dim);
   font-weight: 600;
 }
-/* a 360px phone: the status line under the team name ("Free Agency · day 12") gets the room it needs */
+/* a 360px phone: the status line under the team name ("Free Agency · day 30", "Preseason · 2026-27") gets the room it needs */
 @media (max-width: 380px) {
   .topbar-inner {
-    gap: 6px;
+    gap: 4px;
   }
   .topbar .iconbtn {
     width: 38px;
+  }
+}
+/* god mode's wand makes a fourth control: on a phone they close up so the status line keeps its room */
+@media (max-width: 430px) {
+  .topbar-inner:has(.god-wand) {
+    gap: 4px;
+  }
+  .topbar-inner:has(.god-wand) .iconbtn {
+    width: 36px;
+  }
+  .topbar-inner:has(.god-wand) .btn.sm {
+    padding: 0 10px;
   }
 }
 .iconbtn {

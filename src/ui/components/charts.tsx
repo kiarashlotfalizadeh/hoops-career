@@ -1,22 +1,25 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useState } from 'react';
 import type { ShotRecord } from '../../core/types';
 import { periodLabel } from '../stats';
 import { wpText } from '../../core/analysis/winProb';
 
-/** Track an element's width so charts draw at their real size instead of a letterboxed 320px. */
+/**
+ * Track an element's width so charts draw at their real size instead of a letterboxed 320px. A
+ * callback ref: a chart that first had too little data to draw (and rendered nothing) is measured
+ * once its element appears.
+ */
 function useWidth(fallback = 320) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
   const [w, setW] = useState(fallback);
   useLayoutEffect(() => {
-    const el = ref.current;
     if (!el) return;
     const update = () => setW(Math.max(200, Math.round(el.clientWidth)));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-  return [ref, w] as const;
+  }, [el]);
+  return [setEl, w] as const;
 }
 
 export function LineChart({
@@ -41,28 +44,33 @@ export function LineChart({
 }) {
   const [ref, w] = useWidth();
   const h = height;
-  if (points.length === 0) return null;
-  const lo = yMin ?? Math.min(...points) - 2;
-  const hi = yMax ?? Math.max(...points) + 2;
+  // a value that isn't a number (NaN, ±Infinity) leaves a gap in the line instead of breaking the chart
+  const known = points.filter((v) => isFinite(v));
+  if (known.length === 0) return null;
+  const lo = yMin ?? Math.min(...known) - 2;
+  const hi = yMax ?? Math.max(...known) + 2;
   const x = (i: number) => (points.length === 1 ? w / 2 : 14 + (i / (points.length - 1)) * (w - 28));
   const y = (v: number) => h - 18 - ((v - lo) / Math.max(1e-6, hi - lo)) * (h - 32);
-  const d = points.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const d = points.flatMap((v, i) => (isFinite(v) ? [`${i && isFinite(points[i - 1]) ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`] : [])).join(' ');
   return (
     <div ref={ref}>
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => Math.round(v)).join(', ')}`}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => (isFinite(v) ? Math.round(v) : 'none')).join(', ')}`}>
         {refLine !== undefined && <line x1={0} x2={w} y1={y(refLine)} y2={y(refLine)} stroke="var(--line-2)" strokeDasharray="4 4" />}
-        <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.12} />
+        {known.length === points.length && <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.12} />}
         <path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
-        {points.map((v, i) => (
-          <g key={i}>
-            <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
-            {values && points.length <= 12 && (
-              <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Barlow Condensed">
-                {Math.round(v)}
-              </text>
-            )}
-          </g>
-        ))}
+        {points.map(
+          (v, i) =>
+            isFinite(v) && (
+              <g key={i}>
+                <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
+                {values && points.length <= 12 && (
+                  <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Barlow Condensed">
+                    {Math.round(v)}
+                  </text>
+                )}
+              </g>
+            ),
+        )}
         {labels &&
           labels.map((l, i) =>
             labels.length <= 12 || i % Math.ceil(labels.length / 8) === 0 ? (
@@ -365,21 +373,24 @@ export function CompareBar({
   higherBetter?: boolean;
   neutral?: boolean;
 }) {
-  const total = Math.abs(a) + Math.abs(b) || 1;
+  // a figure that isn't a number (a rate with no attempts) reads "—", draws no bar and decides nothing
+  const [wa, wb] = [a, b].map((v) => (isFinite(v) ? Math.abs(v) : 0));
+  const total = wa + wb || 1;
+  const show = (v: number) => (isFinite(v) ? fmt(v) : '—');
   // a tie (as shown) favours neither side
-  const tie = neutral || fmt(a) === fmt(b);
+  const tie = neutral || !isFinite(a) || !isFinite(b) || show(a) === show(b);
   const aWins = !tie && (higherBetter ? a > b : a < b);
   const bWins = !tie && !aWins;
   return (
     <div className="col" style={{ gap: 4 }}>
       <div className="row between small">
-        <span className={`num ${aWins ? 'bold' : tie ? '' : 'dim2'}`}>{fmt(a)}</span>
+        <span className={`num ${aWins ? 'bold' : tie ? '' : 'dim2'}`}>{show(a)}</span>
         <span className="tiny dim upper">{label}</span>
-        <span className={`num ${bWins ? 'bold' : tie ? '' : 'dim2'}`}>{fmt(b)}</span>
+        <span className={`num ${bWins ? 'bold' : tie ? '' : 'dim2'}`}>{show(b)}</span>
       </div>
       <div className="row" style={{ gap: 3 }}>
-        <div style={{ flex: Math.abs(a) / total, height: 6, borderRadius: 3, background: colorA, opacity: aWins || tie ? 1 : 0.45 }} />
-        <div style={{ flex: Math.abs(b) / total, height: 6, borderRadius: 3, background: colorB, opacity: bWins || tie ? 1 : 0.45 }} />
+        <div style={{ flex: wa / total, height: 6, borderRadius: 3, background: colorA, opacity: aWins || tie ? 1 : 0.45 }} />
+        <div style={{ flex: wb / total, height: 6, borderRadius: 3, background: colorB, opacity: bWins || tie ? 1 : 0.45 }} />
       </div>
     </div>
   );

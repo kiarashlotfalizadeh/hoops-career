@@ -45,9 +45,11 @@ export default function NewLeague() {
   const asked = sp.get('step');
   const step: Step = asked === 'team' || (asked === 'setup' && tid !== null) ? asked : asked === 'setup' ? 'team' : 'type';
   const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
+  // back through the history (the main menu is behind the first step), and without any (a deep link or
+  // a reload) to the step before, or the main menu in place of this screen
   const back = () => {
-    if (step === 'type') nav('/start');
-    else if (canGoBack()) nav(-1);
+    if (canGoBack()) nav(-1);
+    else if (step === 'type') nav('/start', { replace: true });
     else setStep(step === 'setup' ? 'team' : 'type');
   };
   const [conf, setConf] = useState<'E' | 'W'>(() => (tid !== null ? FRANCHISES[tid].conf : 'E'));
