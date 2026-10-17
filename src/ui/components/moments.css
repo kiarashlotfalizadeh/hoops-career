@@ -1,0 +1,158 @@
+/* Big moments: a full-screen card in the team's colours (see Moments.tsx). Reduced motion keeps the
+   card and drops the movement (theme.css zeroes every animation). */
+
+.moment {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--safe-t) + 24px) var(--gut-r) calc(var(--safe-b) + 24px) var(--gut-l);
+  overflow: hidden;
+  color: #fff;
+  text-align: center;
+  animation: fade 0.25s ease;
+  --text-dim: rgba(255, 255, 255, 0.78);
+}
+/* the team's colour, from a floodlight above to near-black */
+.moment-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(70% 50% at 50% 30%, color-mix(in srgb, var(--slab) 85%, #fff 15%), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--slab) 80%, #000), #050608 85%);
+}
+/* three slabs sweep across behind the headline, in the trim and the brand */
+.moment-stripes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.moment-stripes span {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  height: 54px;
+  transform: rotate(-12deg) translateX(-110%);
+  animation: moment-sweep 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.moment-stripes span:nth-child(1) {
+  top: 34%;
+  background: var(--slab-2);
+  opacity: 0.85;
+}
+.moment-stripes span:nth-child(2) {
+  top: calc(34% + 62px);
+  height: 18px;
+  background: var(--accent);
+  animation-delay: 0.08s;
+}
+.moment-stripes span:nth-child(3) {
+  top: calc(34% - 28px);
+  height: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  animation-delay: 0.14s;
+}
+@keyframes moment-sweep {
+  to {
+    transform: rotate(-12deg) translateX(0);
+  }
+}
+.moment-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  width: 100%;
+}
+.moment-mark {
+  margin-bottom: 8px;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.5));
+  animation: moment-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) 0.15s both;
+}
+.moment-mark .avatar.lg {
+  width: 132px;
+  height: 132px;
+}
+@keyframes moment-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+.moment-over {
+  font-size: 12px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  animation: fade 0.4s ease 0.3s both;
+}
+.moment-title {
+  font-family: var(--display);
+  font-stretch: 64%;
+  font-weight: 900;
+  font-size: clamp(56px, 19vw, 96px);
+  line-height: 0.88;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.45);
+  animation: moment-title 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s both;
+}
+@keyframes moment-title {
+  from {
+    transform: scale(1.25);
+    letter-spacing: 0.12em;
+    opacity: 0;
+  }
+}
+.moment-sub {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 32ch;
+  animation: fade 0.4s ease 0.45s both;
+}
+.moment-go {
+  margin-top: 22px;
+  min-width: 220px;
+  background: #fff;
+  color: #0b0f15;
+  border-color: transparent;
+  animation: fade 0.4s ease 0.6s both;
+}
+/* confetti for a title or the Cup */
+.moment-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.moment-confetti span {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.95;
+  animation: moment-fall linear infinite;
+}
+.moment-confetti span:nth-child(3n) {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+@keyframes moment-fall {
+  to {
+    transform: translate(var(--drift, 0), 110vh) rotate(var(--spin, 360deg));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moment-confetti,
+  .moment-stripes {
+    display: none;
+  }
+}

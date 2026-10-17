@@ -19,6 +19,7 @@ import { userGameOnDay } from '../core/league/games';
 import { useFlowRunner } from './useFlow';
 import { lazyRetry } from './lazyRetry';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Moments } from './components/Moments';
 import { applyAccent } from './teamColors';
 import { haptic } from '../native';
 
@@ -564,6 +565,7 @@ function GameShell() {
       </ErrorBoundary>
       <ContinueBar />
       <BottomNav />
+      <Moments />
     </div>
   );
 }

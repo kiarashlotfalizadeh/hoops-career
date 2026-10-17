@@ -553,7 +553,7 @@ export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: R
         <div key={i}>
           <div className="k">{it.k}</div>
           <div className="v" style={it.color ? { color: it.color } : undefined}>
-            {it.v}
+            {typeof it.v === 'string' || typeof it.v === 'number' ? <CountUp value={String(it.v)} /> : it.v}
           </div>
           {it.s && <div className="s">{it.s}</div>}
         </div>
@@ -561,6 +561,51 @@ export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: R
     </div>
   );
 }
+
+/** "+11.3", "114.7", "$216.2M", "97": one number with a prefix and a suffix that hold no digits. */
+const COUNTABLE = /^([^\d+-]*)([+-]?)(\d+(?:\.(\d+))?)(\D*)$/;
+
+/**
+ * A figure that counts up from zero when it first shows (a screen opening), then just shows its
+ * value: later changes don't replay it. Text that isn't one number, and reduced motion, show as is.
+ */
+export function CountUp({ value, ms = 650 }: { value: string; ms?: number }) {
+  const m = COUNTABLE.exec(value);
+  const [t, setT] = useState(() => (m && !reducedMotion() ? 0 : 1));
+  useEffect(() => {
+    if (t >= 1) return;
+    let raf = 0;
+    const start = performance.now();
+    const step = (now: number) => {
+      const x = Math.min(1, (now - start) / ms);
+      setT(x);
+      if (x < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+    // once, on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!m || t >= 1) return <>{value}</>;
+  const [, pre, sign, num, dec, post] = m;
+  // ease out: quick at first, settling on the value
+  const eased = 1 - (1 - t) ** 3;
+  const shown = (Number(num) * eased).toFixed(dec?.length ?? 0);
+  // screen readers get the value itself, not the count
+  return (
+    <>
+      <span className="sr-only">{value}</span>
+      <span aria-hidden="true">
+        {pre}
+        {sign}
+        {shown}
+        {post}
+      </span>
+    </>
+  );
+}
+
+const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export function Kpi({ k, v, sub, color }: { k: ReactNode; v: ReactNode; sub?: ReactNode; color?: string }) {
   return (
