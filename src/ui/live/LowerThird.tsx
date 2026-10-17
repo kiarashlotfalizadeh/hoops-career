@@ -1,6 +1,7 @@
 // The live game's broadcast graphic (see graphics.ts): a lower-third over the bottom of the court
 // (the backcourt, away from the basket where the play happens), in the team's colour, read out
 // to screen readers. Reduced motion: it appears without sliding in.
+import type { CSSProperties } from 'react';
 import type { GameType, League } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 import { careerOnRecord, careerTotals } from '../../core/analysis/milestones';
@@ -56,9 +57,10 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
   return out;
 }
 
+/** `kit`: the team's slab colour (its tag's block). */
 export function LowerThird({ g, kit }: { g: Graphic; kit: string }) {
   return (
-    <div className="live-l3 fade-in" role="status" style={{ borderLeftColor: kit }}>
+    <div className="live-l3" role="status" style={{ '--l3-c': kit } as CSSProperties}>
       <span className="live-l3-tag">{g.tag}</span>
       <span className="live-l3-text">{g.text}</span>
     </div>

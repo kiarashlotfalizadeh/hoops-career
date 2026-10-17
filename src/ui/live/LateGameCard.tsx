@@ -55,16 +55,18 @@ export function LateGameCard({
   };
   const sit = drawn?.sit?.[side];
   return (
-    <div className="card tight fade-in" role="group" aria-label="Late-game play calls">
-      <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <div className="row" style={{ gap: 6 }}>
-          <Flag size={16} style={{ color: 'var(--accent-text)' }} aria-hidden="true" />
-          <span className="bold small">Late game</span>
-        </div>
+    <section className="card lgc fade-in" role="group" aria-label="Late-game play calls">
+      <div className="lgc-h">
+        <Flag size={15} className="accent-text" aria-hidden="true" />
+        <span className="lgc-t">Late game</span>
+        <span className="grow" />
         {sit && <span className="tag info">Plan: {sit}</span>}
+        <button className={`chip ${withTimeout ? 'on' : ''}`} aria-pressed={withTimeout} onClick={() => setWithTimeout((x) => !x)}>
+          Timeout + play
+        </button>
       </div>
       {pending && (
-        <div className="row" style={{ gap: 6, marginTop: 8 }}>
+        <div className="lgc-called">
           <span className="pill" role="status">
             Called: {callLabel(pending, nameOf)}
           </span>
@@ -73,50 +75,43 @@ export function LateGameCard({
           </button>
         </div>
       )}
-      <div className="tiny dim upper bold" style={{ marginTop: 10, marginBottom: 6 }}>
-        On offense
-      </div>
-      <div className="chips">
-        <button className="chip" onClick={() => call({ kind: 'three' })}>
-          Go for 3
-        </button>
-        <button className="chip" onClick={() => call({ kind: 'two' })}>
-          Quick 2
-        </button>
-        <button className="chip" onClick={() => call({ kind: 'hold' })}>
-          Run clock / last shot
-        </button>
-      </div>
-      {five.length > 0 && (
-        <div className="chips" role="group" aria-label="Isolation for" style={{ marginTop: 6 }}>
-          {five.map((pid) => (
-            <button key={pid} className="chip" aria-label={`Isolation for ${nameOf(pid)}`} onClick={() => call({ kind: 'iso', pid })}>
-              Iso: {nameOf(pid)}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="row between" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div className="col" style={{ gap: 6 }}>
-          <span className="tiny dim upper bold">On defense</span>
-          <button className="chip" onClick={() => call({ kind: 'foul' })}>
-            Foul now
+      <div className="lgc-blk">
+        <span className="over">On offense · your next trip</span>
+        <div className="chips">
+          <button className="chip" onClick={() => call({ kind: 'three' })}>
+            Go for 3
           </button>
-        </div>
-        <div className="row" style={{ gap: 6 }}>
+          <button className="chip" onClick={() => call({ kind: 'two' })}>
+            Quick 2
+          </button>
+          <button className="chip" onClick={() => call({ kind: 'hold' })}>
+            Run clock / last shot
+          </button>
           {onSets && (
             <button className="chip" onClick={onSets}>
               <ClipboardList size={14} aria-hidden="true" /> Sets
             </button>
           )}
-          <button className={`chip ${withTimeout ? 'on' : ''}`} aria-pressed={withTimeout} onClick={() => setWithTimeout((x) => !x)}>
-            Timeout + play
+        </div>
+        {five.length > 0 && (
+          <div className="chips" role="group" aria-label="Isolation for">
+            {five.map((pid) => (
+              <button key={pid} className="chip" aria-label={`Isolation for ${nameOf(pid)}`} onClick={() => call({ kind: 'iso', pid })}>
+                Iso: {nameOf(pid)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="lgc-blk">
+        <span className="over">On defense · their next trip</span>
+        <div className="chips">
+          <button className="chip" onClick={() => call({ kind: 'foul' })}>
+            Foul now
           </button>
         </div>
       </div>
-      <div className="tiny dim" style={{ marginTop: 8 }}>
-        Offensive calls run on your next trip, Foul now on theirs. A call lasts until it is run or the period ends.
-      </div>
-    </div>
+      <div className="tiny dim">A call lasts until it&apos;s run or the period ends.</div>
+    </section>
   );
 }

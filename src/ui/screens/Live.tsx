@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { haptic } from '../../native';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  ChevronRight,
   ChevronsRight,
   ClipboardList,
   Clapperboard,
@@ -22,8 +23,8 @@ import { useLeague, useStore, useVersion } from '../../state/store';
 import { prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, type LiveGame } from '../../state/live';
 import { skipChoices, type SkipTo } from '../live/skip';
 import { buildScript, captionAt, type Script } from '../live/choreo';
-import { Court } from '../live/Court';
-import { Card, Empty, PageHeader, Sheet, Toggle, scrollBehavior } from '../components/ui';
+import { Court, courtFloor } from '../live/Court';
+import { Empty, PageHeader, Section, Sheet, Toggle, scrollBehavior } from '../components/ui';
 import { LateGameCard } from '../live/LateGameCard';
 import { composites } from '../../core/ratings';
 import type { League, PbpEntry, Settings, Tactics } from '../../core/types';
@@ -33,7 +34,7 @@ import { planFor } from '../../core/league/gamePlans';
 import { hashString } from '../../core/random';
 import { keptTactics } from '../live/keep';
 import { fmtClock, pbpOpacity, periodLabel, rosterNames } from '../stats';
-import { jerseyColors, matchupColors } from '../teamColors';
+import { jerseyColors, matchupColors, teamLook } from '../teamColors';
 import { flowActions, stillAlive } from '../flow';
 import { LIVE_SPEEDS } from '../settingsOptions';
 import { playTypeBaselines } from '../../core/analysis/playTypes';
@@ -55,7 +56,7 @@ import { Huddle } from '../live/Huddle';
 import { PlayPicker } from '../live/PlayPicker';
 import { useCalls } from '../live/plays';
 import '../live/live.css';
-import { GameRecap } from '../components/GameRecap';
+import { FinalSlab, GameRecap } from '../components/GameRecap';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from '../live/graphics';
 import { GRAPHIC_MS, LowerThird, playersBefore } from '../live/LowerThird';
 import { winProb } from '../../core/analysis/winProb';
@@ -160,6 +161,8 @@ export default function Live() {
     stageRef.current = el;
     setStageEl(el);
   }, []);
+  /** The period report at a break: the button over the court scrolls to it. */
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
@@ -945,7 +948,6 @@ export default function Live() {
   const me = sim.T[userSide];
   const quarter = script?.q ?? view.q;
   const result = resultGid !== null ? league.games.find((g) => g.gid === resultGid) : undefined;
-  const won = !!result && (userSide === 0 ? result.home.pts > result.away.pts : result.away.pts > result.home.pts);
   // the fives the court is drawing (between possessions, the ones on the floor now)
   const fives: [number[], number[]] = script ? (script.off === 0 ? [script.oPids, script.dPids] : [script.dPids, script.oPids]) : [view.sides[0].on, view.sides[1].on];
   const flowKits = matchupColors(home.colors, away.colors);
@@ -971,8 +973,8 @@ export default function Live() {
       fives={fives}
       side={userSide}
       info={[
-        { abbrev: home.abbrev, kit: colors[0], manage: sim.T[0].t.manage },
-        { abbrev: away.abbrev, kit: colors[1], manage: sim.T[1].t.manage },
+        { abbrev: home.abbrev, kit: colors[0], edge: teamLook(home.colors).text, manage: sim.T[0].t.manage },
+        { abbrev: away.abbrev, kit: colors[1], edge: teamLook(away.colors).text, manage: sim.T[1].t.manage },
       ]}
       names={nameOf}
       jersey={(pid) => league.players[pid]?.jersey || '0'}
@@ -987,9 +989,13 @@ export default function Live() {
   const pickedMine = panel === 'mine' && picked !== undefined ? drawnPlayer(view, picked) : undefined;
   // the Plays sheet and its sets from Advanced depth (Simple keeps the Late game card)
   const playsOn = league.settings.complexity !== 'simple';
+  // whose floor: the home team's, or a neutral one for the Cup final
+  const floor = courtFloor(home, neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
+  const nextPeriod = periodLabel(view.q + 1);
+  const toReport = () => reportRef.current?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
 
   return (
-    <main className={`page full live-page${over ? ' done' : ''}`} style={{ gap: 10 }}>
+    <main className={`page full live-page${over ? ' done' : ''}${atBreak && !over ? ' at-break' : ''}`}>
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
         Live game: {away.region} {away.name} {neutral ? 'vs' : 'at'} {home.region} {home.name}
@@ -999,7 +1005,7 @@ export default function Live() {
       </div>
 
       <div className="live-grid">
-        <div className="col live-left" style={{ gap: 10 }}>
+        <div className="live-left">
           {/* the scorebug and the court: on a phone they stay at the top while the rest scrolls under them */}
           <div className="live-stage" ref={stageCb}>
             <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} atBreak={atBreak} ot={result?.ot ?? 0} context={context} wpHome={wpHome}>
@@ -1018,6 +1024,7 @@ export default function Live() {
                 onBeat={beat.set}
                 names={nameOf}
                 abbrevs={[home.abbrev, away.abbrev]}
+                floor={floor}
                 label={
                   show
                     ? `Court: ${show.kind === 'reel' ? `highlight ${show.i + 1} of ${show.scripts.length}` : 'replay'}, ${drawing?.label ?? ''}.`
@@ -1031,8 +1038,11 @@ export default function Live() {
                 }
               />
               {banner && !over && !show && (
-                <div key={banner.id} className={`live-banner fade-in ${banner.kind}`} role="status">
-                  {banner.text}
+                <div key={banner.id} className={`live-banner ${banner.kind}`} role="status">
+                  <span className="live-banner-k" aria-hidden="true">
+                    {banner.kind === 'injury' ? 'Injury' : banner.kind === 'foulout' ? 'Fouled out' : 'Adjustment'}
+                  </span>
+                  <span className="live-banner-t">{banner.text}</span>
                 </div>
               )}
               {intro && status === 'live' && (
@@ -1050,24 +1060,22 @@ export default function Live() {
                 />
               )}
               {atBreak && !over && !show && (
-                <div
-                  className="col center fade-in live-break"
-                  style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, background: 'rgba(6,8,12,0.62)' }}
-                >
-                  <div className="display bold" style={{ fontSize: 26, textTransform: 'uppercase', color: '#fff' }}>
+                <div className="live-break fade-in">
+                  <div className="live-break-t">
                     {view.q >= 4 ? (view.q === 4 ? 'Overtime' : `Overtime ${view.q - 3}`) : view.q === 2 ? 'Halftime' : `End of ${periodLabel(view.q)}`}
                   </div>
-                  {view.q >= 4 && (
-                    <div className="bold" style={{ color: '#fff' }}>
-                      Tied at {view.sides[0].score} after {view.q === 4 ? 'regulation' : periodLabel(view.q)}
-                    </div>
-                  )}
-                  <div className="small" style={{ maxWidth: 280, color: '#d6dbe3' }}>
-                    The period report is with the coaching panels. Subs and adjustments you make now apply from the first possession of {periodLabel(view.q + 1)}.
+                  <div className="live-break-s">
+                    {view.q >= 4 ? `Tied at ${view.sides[0].score} after ${view.q === 4 ? 'regulation' : periodLabel(view.q)}. ` : ''}
+                    Subs and changes now count from {nextPeriod}&apos;s first possession.
                   </div>
-                  <button className="btn primary sm" onClick={togglePause}>
-                    <Play size={16} fill="currentColor" /> Start {periodLabel(view.q + 1)}
-                  </button>
+                  <div className="live-break-go">
+                    <button className="btn primary sm" onClick={togglePause}>
+                      <Play size={16} fill="currentColor" /> Start {nextPeriod}
+                    </button>
+                    <button className="btn sm live-break-rep" onClick={toReport}>
+                      Report <ChevronRight size={15} />
+                    </button>
+                  </div>
                 </div>
               )}
               {(show || (!over && !atBreak && (script || ffing || graphic))) && (
@@ -1091,16 +1099,18 @@ export default function Live() {
                     </div>
                   )}
                   {(drawing || ffing) && (
-                    <div className="pill" aria-hidden="true" style={{ background: 'rgba(6,8,12,0.78)', color: '#fff', maxWidth: '100%' }}>
+                    // the offense's colour along its edge, as the court's boards show who has the ball
+                    <div className="live-cap-plate" aria-hidden="true" style={drawing ? ({ '--cap-c': colors[drawing.off][0] } as CSSProperties) : undefined}>
                       {drawing ? (
-                        <span style={{ width: 8, height: 8, borderRadius: 4, flex: 'none', background: colors[drawing.off][0], border: `1px solid ${colors[drawing.off][1]}` }} />
+                        <Caption script={drawing} beat={beat} />
                       ) : (
-                        <FastForward size={12} />
+                        <span className="live-cap ff">
+                          <FastForward size={12} /> Fast-forward to the next key play
+                        </span>
                       )}
-                      {drawing ? <Caption script={drawing} beat={beat} /> : <span className="ellipsis small">Fast-forward to the next key play</span>}
                     </div>
                   )}
-                  {graphic && !show && <LowerThird key={graphic.id} g={graphic} kit={flowKits[graphic.side]} />}
+                  {graphic && !show && <LowerThird key={graphic.id} g={graphic} kit={teamLook((graphic.side === 0 ? home : away).colors).slab} />}
                 </div>
               )}
               {/* playback, over the court like a video's: pause, speed, key plays and skip */}
@@ -1138,64 +1148,70 @@ export default function Live() {
             </div>
           </div>
 
+          {status !== 'live' &&
+            (() => {
+              const actions = (
+                <>
+                  <button
+                    className="btn primary block"
+                    disabled={resultGid === null}
+                    // the report opens on the Why: the recap is already here
+                    onClick={() => resultGid !== null && nav(`/game/${resultGid}${status === 'final' ? '?tab=report' : ''}`, { replace: true })}
+                  >
+                    <Activity size={16} /> {status === 'final' ? 'Game report' : 'Box score'}
+                  </button>
+                  {status === 'final' && reelSize > 0 && (
+                    <button className="btn block" disabled={!!show} onClick={playReel}>
+                      <Clapperboard size={16} /> {show?.kind === 'reel' ? 'Playing the highlights…' : `Watch the highlights (${reelSize})`}
+                    </button>
+                  )}
+                  <div className="live-final-go">
+                    <button className="btn" onClick={() => nav('/', { replace: true })}>
+                      <HomeIcon size={16} /> Home
+                    </button>
+                    {nextAction && (
+                      <button className="btn" disabled={simBusy} onClick={() => void nextGame()}>
+                        Next game <ChevronsRight size={16} />
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+              return status === 'final' && result ? (
+                <FinalSlab res={result} league={league}>
+                  {actions}
+                </FinalSlab>
+              ) : (
+                <section className="card live-simmed">
+                  <h2>{status === 'final' ? `Final: ${away.abbrev} ${ticker.get().score[1]}, ${home.abbrev} ${ticker.get().score[0]}` : 'Simulated'}</h2>
+                  {status === 'simmed' && <p className="small dim">Played out from the Play menu, so the result stands.</p>}
+                  {actions}
+                </section>
+              );
+            })()}
+          {status === 'final' && result && <GameRecap res={result} league={league} />}
+
           {/* a game simulated elsewhere: the coached version never happened, so don't show its floor */}
           {status !== 'simmed' && <div className="live-strip-under">{strip}</div>}
-
-          {status !== 'live' && (
-            <Card accent>
-              {status === 'final' ? (
-                <>
-                  <div className="bold" style={{ fontSize: 18 }}>
-                    Final: {away.abbrev} {ticker.get().score[1]}, {home.abbrev} {ticker.get().score[0]}
-                  </div>
-                  <div className="small dim" style={{ marginBottom: 10 }}>
-                    {won ? 'Win! ' : 'Loss. '}The full breakdown shows exactly why.
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="bold" style={{ fontSize: 18 }}>
-                    This game was simulated
-                  </div>
-                  <div className="small dim" style={{ marginBottom: 10 }}>
-                    It was played out from the Play menu, so the result stands.
-                  </div>
-                </>
-              )}
-              <button className="btn primary block" disabled={resultGid === null} onClick={() => resultGid !== null && nav(`/game/${resultGid}`, { replace: true })}>
-                <Activity size={16} /> {status === 'final' ? 'Game report' : 'Box score'}
-              </button>
-              {status === 'final' && reelSize > 0 && (
-                <button className="btn block" style={{ marginTop: 8 }} disabled={!!show} onClick={playReel}>
-                  <Clapperboard size={16} /> {show?.kind === 'reel' ? 'Playing the highlights…' : `Watch the highlights (${reelSize})`}
-                </button>
-              )}
-              <div className="row" style={{ marginTop: 8 }}>
-                <button className="btn grow" onClick={() => nav('/', { replace: true })}>
-                  <HomeIcon size={16} /> Home
-                </button>
-                {nextAction && (
-                  <button className="btn grow" disabled={simBusy} onClick={() => void nextGame()}>
-                    Next game <ChevronsRight size={16} />
-                  </button>
-                )}
-              </div>
-            </Card>
-          )}
-          {status === 'final' && result && <GameRecap res={result} league={league} />}
         </div>
-        <div className="col live-right" style={{ gap: 10 }}>
+        <div className="live-right">
           {/* the coaching buttons: upright, a dock pinned to the bottom (in the tab bar's place on a phone, just over it on a tablet); sideways, the top of this column */}
           {!over && (
-            <div className={`grid4 live-ctl live-dock${playsOn ? ' five' : ''}`} role="group" aria-label="Coaching">
+            <div className={`live-ctl live-dock${playsOn ? ' five' : ''}`} role="group" aria-label="Coaching">
               <button
-                className="btn sm"
+                className="ld-btn"
                 // (nothing to stop before the opening tip)
                 disabled={me.timeouts <= 0 || atBreak || toPending || intro || buzzer}
                 onClick={() => callTimeout()}
               >
                 {/* named by what it shows, "TO 7", then the state: "TO 7 left: call a timeout" */}
-                <Timer size={16} /> TO <span className="live-dock-n num">{view.sides[userSide].timeouts}</span>
+                <span className="ld-ic" aria-hidden="true">
+                  <Timer size={19} />
+                  <span className="ld-n num">{view.sides[userSide].timeouts}</span>
+                </span>
+                <span className="ld-l">
+                  TO <span className="sr-only">{view.sides[userSide].timeouts}</span>
+                </span>
                 <span className="sr-only">
                   {toPending
                     ? game.timeoutWaiting
@@ -1207,52 +1223,70 @@ export default function Live() {
                 </span>
               </button>
               <button
-                className="btn sm"
+                className="ld-btn"
                 onClick={() => {
                   setPicked(undefined);
                   setPanel('subs');
                 }}
               >
-                <Users size={16} /> Subs
+                <span className="ld-ic" aria-hidden="true">
+                  <Users size={19} />
+                </span>
+                <span className="ld-l">Subs</span>
               </button>
               {playsOn && (
                 <button
-                  className={`btn sm ${calls.pending ? 'primary' : ''}`}
+                  className={`ld-btn${calls.pending ? ' on' : ''}`}
                   onClick={() => setPanel('plays')}
                   aria-label={calls.pending ? 'Plays: a call is waiting' : 'Plays: call a play'}
                 >
-                  <ClipboardList size={16} /> Plays
+                  <span className="ld-ic" aria-hidden="true">
+                    <ClipboardList size={19} />
+                    {calls.pending && <span className="ld-dot" />}
+                  </span>
+                  <span className="ld-l">Plays</span>
                 </button>
               )}
-              <button className="btn sm" onClick={() => setPanel('tactics')}>
-                <SlidersHorizontal size={16} /> Adjust
+              <button className="ld-btn" onClick={() => setPanel('tactics')}>
+                <span className="ld-ic" aria-hidden="true">
+                  <SlidersHorizontal size={19} />
+                </span>
+                <span className="ld-l">Adjust</span>
               </button>
-              <button className="btn sm" onClick={() => setPanel('stats')}>
-                <ListOrdered size={16} /> Box
+              <button className="ld-btn" onClick={() => setPanel('stats')}>
+                <span className="ld-ic" aria-hidden="true">
+                  <ListOrdered size={19} />
+                </span>
+                <span className="ld-l">Box</span>
               </button>
             </div>
           )}
 
           {status !== 'simmed' && <div className="live-strip-side">{strip}</div>}
 
-          {alerts.slice(0, 2).map((s) => (
-            <div key={s.id} className="card tight fade-in" style={{ borderColor: `color-mix(in srgb, var(--${s.tone === 'info' ? 'info' : s.tone}) 40%, transparent)` }}>
-              <div className="row top">
-                <Zap size={16} style={{ color: `var(--${s.tone === 'info' ? 'info' : s.tone})`, flex: 'none', marginTop: 2 }} />
-                <div className="grow small">{s.text}</div>
+          {alerts.length > 0 && (
+            <section className="live-asst" aria-label="Assistant">
+              <div className="over live-asst-h" aria-hidden="true">
+                Assistant
               </div>
-              <div className="row" style={{ justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
-                <button className="btn xs ghost" onClick={() => setDismissed((d) => [...d, s.id])}>
-                  Dismiss
-                </button>
-                {s.action && (
-                  <button className="btn xs primary" onClick={() => runAlert(s)}>
-                    {s.action.label}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+              {alerts.slice(0, 2).map((s) => (
+                <div key={s.id} className={`live-alert fade-in ${s.tone}`}>
+                  <Zap size={15} className="live-alert-ic" aria-hidden="true" />
+                  <div className="live-alert-t">{s.text}</div>
+                  <div className="live-alert-go">
+                    <button className="btn xs ghost" onClick={() => setDismissed((d) => [...d, s.id])}>
+                      Dismiss
+                    </button>
+                    {s.action && (
+                      <button className="btn xs primary" onClick={() => runAlert(s)}>
+                        {s.action.label}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
 
           {!over && (
             <LateGameCard
@@ -1269,21 +1303,23 @@ export default function Live() {
           )}
 
           {atBreak && !over && (
-            <PeriodReport
-              league={league}
-              view={view}
-              side={userSide}
-              teams={[home, away]}
-              tactics={tactics}
-              names={nameOf}
-              baselines={baselines}
-              colors={barColors}
-              apply={applyTactics}
-              onStart={togglePause}
-              oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
-              win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
-              keys={keys}
-            />
+            <div className="live-report" ref={reportRef}>
+              <PeriodReport
+                league={league}
+                view={view}
+                side={userSide}
+                teams={[home, away]}
+                tactics={tactics}
+                names={nameOf}
+                baselines={baselines}
+                colors={barColors}
+                apply={applyTactics}
+                onStart={togglePause}
+                oppPlan={game ? oppPlanIn(game.sim, (1 - userSide) as 0 | 1)?.items : undefined}
+                win={wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome}
+                keys={keys}
+              />
+            </div>
           )}
 
           {!over && pills.length > 0 && (
@@ -1395,39 +1431,41 @@ export default function Live() {
         <ScoresSheet league={league} games={others} elapsed={view.elapsed} done={over} />
       </Sheet>
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">
-        <div className="col" style={{ gap: 8 }}>
-          <div className="row between" style={{ gap: 10 }}>
-            <span className="small dim2">Speed</span>
-            <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
-              {LIVE_SPEEDS.map((s) => (
-                <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => pickSpeed(s.id)}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
+        <div className="live-skipsheet">
+          <div className="live-skip-opts">
+            {skipTo.map((o) => (
+              <button
+                key={o.id}
+                className="flow-opt live-skip"
+                onClick={() => {
+                  setPanel('none');
+                  skip(o.id);
+                }}
+              >
+                <span className="fo-l">{o.label}</span>
+                <span className="fo-s">{o.sub}</span>
+                <FastForward size={18} className="fo-c" aria-hidden="true" />
+              </button>
+            ))}
           </div>
-          <Toggle
-            on={keyPlays}
-            onChange={toggleKeyPlays}
-            label="Key plays only"
-            help="Draws crunch time, the ends of periods, runs, timeouts and anything your assistant flags, and fast-forwards the rest."
-          />
-          {skipTo.map((o) => (
-            <button
-              key={o.id}
-              className={`btn block ${o.id === 'end' ? '' : 'ghost'} live-skip`}
-              onClick={() => {
-                setPanel('none');
-                skip(o.id);
-              }}
-            >
-              <FastForward size={16} />
-              <span className="col" style={{ alignItems: 'flex-start', gap: 0 }}>
-                <span>{o.label}</span>
-                <span className="tiny dim">{o.sub}</span>
-              </span>
-            </button>
-          ))}
+          <div className="live-skip-set">
+            <div className="row between" style={{ gap: 10 }}>
+              <span className="slider-label">Speed</span>
+              <div className="seg" role="group" aria-label="Speed" style={{ flex: 'none' }}>
+                {LIVE_SPEEDS.map((s) => (
+                  <button key={s.id} className={speed === s.id ? 'on' : ''} aria-pressed={speed === s.id} onClick={() => pickSpeed(s.id)}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Toggle
+              on={keyPlays}
+              onChange={toggleKeyPlays}
+              label="Key plays only"
+              help="Draws crunch time, period ends, runs, timeouts and what your assistant flags; skips the rest."
+            />
+          </div>
           <button className="btn block ghost" onClick={() => setPanel('none')}>
             Keep coaching
           </button>
@@ -1440,7 +1478,7 @@ export default function Live() {
 /** The court's running call of the possession it's drawing ('Holmgren screens for Mitchell'), from the frame it has reached. */
 function Caption({ script, beat }: { script: Script; beat: Beat }) {
   const i = useSyncExternalStore(beat.subscribe, beat.get);
-  return <span className="small live-cap">{captionAt(script, i)}</span>;
+  return <span className="live-cap">{captionAt(script, i)}</span>;
 }
 
 /** The play-by-play only re-renders when new lines arrive, not on every animation frame. */
@@ -1467,10 +1505,11 @@ const Feed = memo(function Feed({
     { id: 0, label: homeAbbrev },
   ];
   return (
-    <Card
+    <Section
       title="Play-by-play"
+      className="live-feed"
       right={
-        <div className="seg" role="group" aria-label="Show" style={{ flex: 'none' }}>
+        <div className="seg live-feed-seg" role="group" aria-label="Show">
           {opts.map((o) => (
             <button key={String(o.id)} className={only === o.id ? 'on' : ''} aria-pressed={only === o.id} onClick={() => setOnly(o.id)}>
               {o.label}
@@ -1479,20 +1518,18 @@ const Feed = memo(function Feed({
         </div>
       }
     >
-      <div className="col" style={{ gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-        {shown.length === 0 && <div className="small dim">Nothing yet.</div>}
+      <div className="card flush live-feed-list">
+        {shown.length === 0 && <div className="small dim live-feed-row">Nothing yet.</div>}
         {shown.map(({ i, e }) => (
-          <div key={i} className="row top small" style={{ gap: 8, opacity: pbpOpacity(e.kind) }}>
-            <span className="tiny dim num" style={{ width: 58, flex: 'none' }}>
+          <div key={i} className={`live-feed-row${e.kind === 'period' || e.kind === 'timeout' ? ' strong' : ''}`} style={{ opacity: pbpOpacity(e.kind) }}>
+            <span className="live-feed-when num">
               {periodLabel(e.q)} {fmtClock(e.clock)}
             </span>
-            <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, background: e.t === -1 ? 'transparent' : colors[e.t][0], flex: 'none' }} />
-            <span className="grow dim2" style={{ fontWeight: e.kind === 'period' || e.kind === 'timeout' ? 700 : undefined }}>
-              {e.text}
-            </span>
+            <span className="live-feed-team" style={{ background: e.t === -1 ? 'transparent' : colors[e.t][0] }} />
+            <span className="grow">{e.text}</span>
           </div>
         ))}
       </div>
-    </Card>
+    </Section>
   );
 });

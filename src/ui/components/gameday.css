@@ -1,49 +1,636 @@
-/* ------------------------------------------------------------ gameday: the pre-game screen and the post-game recap */
+/* ------------------------------------------------------------ gameday: the pre-game screen, the final and the post-game recap */
 
-/* player of the game: a tile, in the team colour when he's yours */
-.gd-pog {
+/* ------------------------------------------------------------ the final: a broadcast's final graphic
+   Both teams' colours meet in the middle, where FINAL sits; the winner's score bright, the loser's back */
+.gd-final {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--surface);
+  padding: 14px 14px 16px;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 9px),
+    linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--fa) 90%, #fff 10%),
+      color-mix(in srgb, var(--fa) 72%, #000) 49.7%,
+      color-mix(in srgb, var(--fh) 72%, #000) 50.3%,
+      color-mix(in srgb, var(--fh) 90%, #fff 10%)
+    );
+  box-shadow: none;
+}
+/* the trim along the bottom, each team's under its half */
+.gd-final::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--ta) 50%, var(--th) 50%);
+}
+.gd-fs-over {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 16px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.gd-fs-over > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gd-fs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.gd-fs-team {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'logo pts'
+    'ab pts';
+  align-items: center;
+  column-gap: 10px;
   min-width: 0;
 }
-.gd-pog.mine {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+.gd-fs-team.home {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'pts logo'
+    'pts ab';
+}
+.gd-fs-team > svg {
+  grid-area: logo;
+  justify-self: center;
+}
+.gd-fs-ab {
+  grid-area: ab;
+  justify-self: center;
+  margin-top: 2px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+.gd-fs-pts {
+  grid-area: pts;
+  justify-self: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: clamp(44px, 14vw, 60px);
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+}
+.gd-fs-team.lost .gd-fs-pts {
+  color: rgba(255, 255, 255, 0.55);
+}
+.gd-fs-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.gd-fs-final {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.gd-fs-wl {
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.gd-fs-wl.w {
+  background: var(--good);
+  color: var(--accent-ink);
+}
+.gd-fs-wl.l {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--accent-ink);
+}
+.gd-final .gd-ls {
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 8px;
+}
+.gd-fs-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* a fact line: icon or tag, text, value */
-.gd-line {
+/* ------------------------------------------------------------ the linescore */
+.gd-ls {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.gd-ls th,
+.gd-ls td {
+  padding: 6px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+.gd-ls thead th {
+  padding-top: 7px;
+  padding-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.gd-ls tbody tr + tr > * {
+  border-top: 1px solid var(--line);
+}
+.gd-ls .l {
+  text-align: left;
+  font-weight: 750;
+}
+.gd-ls tbody th {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+}
+.gd-ls td {
+  color: var(--text-2);
+}
+.gd-ls .gd-ls-t {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------ the recap */
+.gd-recap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+/* the three stars: a jersey, the line, whose */
+.gd-star {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 8px 12px 8px 10px;
+}
+.gd-star:active {
+  background: var(--surface);
+}
+.gd-star.mine {
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.gd-star-n {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--text-dim);
+}
+.gd-star.pog .gd-star-n {
+  color: var(--tier-elite);
+}
+.gd-star-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gd-star-k {
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tier-elite);
+}
+.gd-star-name {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.gd-star-line {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.gd-star-team {
+  flex: none;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+/* the night: a label column and its line, hairlines between */
+.gd-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+.gd-fact {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.gd-fact dt {
+  padding-top: 2px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.gd-fact dd {
+  margin: 0;
+  color: var(--text);
+}
+/* keys to the game, graded */
+.gd-key {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+.gd-key-mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+.gd-key-mark.met {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  color: var(--good);
+}
+.gd-key-mark.missed {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: color-mix(in srgb, var(--bad) 80%, white);
+}
+.gd-key-t {
+  font-weight: 700;
+  font-size: 14px;
+}
+.gd-key-g {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.gd-key-v {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+}
+/* keys as the game stands (the break, the huddle) */
+.gd-keys-live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gd-keys-live.compact {
+  gap: 6px;
+}
+.gd-kl {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
-  flex-wrap: wrap;
 }
-
+.gd-kl-t {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.gd-kl-n {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+/* quotes */
+.gd-quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .gd-quote {
   margin: 0;
   padding: 2px 0 2px 12px;
-  border-left: 3px solid var(--line-2);
+  border-left: 3px solid var(--line-3);
 }
 .gd-quote.mine {
-  border-left-color: var(--accent-text);
+  border-left-color: var(--team-text);
 }
 .gd-quote p {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.45;
+  font-weight: 600;
 }
 .gd-quote footer {
   margin-top: 4px;
   font-size: 11.5px;
   color: var(--text-dim);
 }
+.gd-press {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gd-press-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* the night's other results */
+.gd-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+.gd-other:active {
+  background: var(--surface);
+}
+.gd-other-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.gd-other-t.won {
+  color: var(--text);
+  font-weight: 750;
+}
+.gd-next {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 14px;
+}
 
+/* ------------------------------------------------------------ the game report (GameView.tsx) */
+.gv-headline {
+  margin: 2px 0 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--team-text);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.gv-factor {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 12px 12px;
+}
+.gv-pts {
+  flex: none;
+  width: 50px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+}
+.gv-factor-t {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.gv-factor-d {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.gv-advice {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--warn);
+}
+.gv-advice svg {
+  vertical-align: -2px;
+}
+.gv-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gv-pt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+.gv-pt > .num {
+  width: 82px;
+  text-align: right;
+}
+.gv-pt-h {
+  min-height: 30px;
+  background: var(--bg-2);
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.gv-pt-h > span:not(.grow) {
+  width: 82px;
+  text-align: right;
+}
+.gv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+}
+.gv-row.top {
+  align-items: flex-start;
+}
+.gv-pm {
+  flex: none;
+  width: 34px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.1;
+}
+.gv-run {
+  flex: none;
+  width: 3px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: currentColor;
+}
+.gv-grade {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 7px 14px;
+}
+.gv-grade:active {
+  background: var(--surface);
+}
+.gv-g {
+  flex: none;
+  width: 30px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--bad);
+}
+.gv-g.A {
+  color: var(--good);
+}
+.gv-g.B {
+  color: var(--info);
+}
+.gv-g.C {
+  color: var(--warn);
+}
+.gv-grade-n {
+  display: block;
+  font-weight: 700;
+  font-size: 14px;
+}
+.gv-grade-l {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.gv-shots {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gv-swings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.gv-swing {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+}
+.gv-swing-n {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  font-size: 11px;
+  font-weight: 800;
+}
+.gv-pbp {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 14px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.gv-pbp.strong {
+  font-weight: 700;
+  background: var(--bg-2);
+}
+.gv-pbp-when {
+  flex: none;
+  width: 62px;
+  padding-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.gv-pbp-sc {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.gv-box-pts {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+}
+.gv-dnp {
+  padding: 9px 14px 11px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+/* the adjustments both benches made */
+.gv-adj {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.gv-adj-when {
+  flex: none;
+  width: 64px;
+  padding-top: 1px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.gv-mine {
+  color: var(--team-text);
+}
+
+/* ------------------------------------------------------------ the pre-game screen (Preview.tsx) */
 /* results and players in compact rows that link */
 .gd-row {
   display: flex;
@@ -105,4 +692,33 @@ body:has(.simbar) .gd-dock {
   font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 13px;
+}
+
+/* the highlights reel in a game report: the court and its controls */
+.gd-hl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gd-hl-court {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.gd-hl-court .court-cv {
+  border-radius: 12px;
+}
+.gd-hl-start {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(6, 8, 12, 0.55);
+}
+.gd-hl-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }

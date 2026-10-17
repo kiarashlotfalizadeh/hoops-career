@@ -4,6 +4,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { League } from '../../core/types';
 import { fmtClock, periodLabel } from '../stats';
+import { More, Section } from '../components/ui';
+import { TeamLogo } from '../components/TeamLogo';
 import { scoreAt, tipLabel, tipMinute, type OtherGame, type TickerScore } from './scoreboard';
 
 /** How long each game stays on the bottom line. */
@@ -84,43 +86,47 @@ export function ScoresSheet({ league, games, elapsed, done }: { league: League; 
     { title: 'Around the league', rows: rows.filter((r) => !r.o.why) },
   ].filter((g) => g.rows.length);
   return (
-    <div className="col" style={{ gap: 14 }}>
+    <div className="col" style={{ gap: 16 }}>
       {groups.map((g) => (
-        <div key={g.title} className="col" style={{ gap: 6 }}>
-          <div className="tiny dim upper bold">{g.title}</div>
-          {g.rows.map(({ o, s }) => {
-            const [h, a] = [league.teams[o.res.home.tid], league.teams[o.res.away.tid]];
-            const lead = s.state === 'pre' ? -1 : s.score[0] > s.score[1] ? 0 : s.score[1] > s.score[0] ? 1 : -1;
-            return (
-              <div key={o.res.gid} className="card tight live-score-row">
-                <div className="col" style={{ gap: 2, minWidth: 0 }}>
-                  {(
-                    [
-                      [a, s.score[1], lead === 1],
-                      [h, s.score[0], lead === 0],
-                    ] as const
-                  ).map(([t, pts, ahead]) => (
-                    <div key={t.tid} className="row small" style={{ gap: 8 }}>
-                      <span className={`grow ${ahead ? 'bold' : 'dim2'}`}>
-                        {t.region} {t.name}
-                      </span>
-                      <span className={`num ${ahead ? 'bold' : 'dim2'}`}>{s.state === 'pre' ? '' : pts}</span>
-                    </div>
-                  ))}
+        <Section key={g.title} title={g.title}>
+          <div className="card flush list">
+            {g.rows.map(({ o, s }) => {
+              const [h, a] = [league.teams[o.res.home.tid], league.teams[o.res.away.tid]];
+              const lead = s.state === 'pre' ? -1 : s.score[0] > s.score[1] ? 0 : s.score[1] > s.score[0] ? 1 : -1;
+              return (
+                <div key={o.res.gid} className="live-score-row">
+                  <div className="live-score-teams">
+                    {(
+                      [
+                        [a, s.score[1], lead === 1],
+                        [h, s.score[0], lead === 0],
+                      ] as const
+                    ).map(([t, pts, ahead]) => (
+                      <div key={t.tid} className={`live-score-team${ahead ? ' ahead' : ''}`}>
+                        <TeamLogo tid={t.tid} size={20} decorative />
+                        <span className="grow ellipsis">
+                          {t.region} {t.name}
+                        </span>
+                        <span className="num live-score-pts">{s.state === 'pre' ? '' : pts}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="live-score-st">
+                    <span className={`live-ticker-st${s.state === 'final' ? ' final' : s.state === 'pre' ? ' pre' : ''}`}>{statusText(league, o, s)}</span>
+                    {o.why && <span className="tag info">{o.why}</span>}
+                  </div>
                 </div>
-                <div className="col" style={{ alignItems: 'flex-end', gap: 2, flex: 'none', minWidth: 74 }}>
-                  <span className={`small bold ${s.state === 'final' ? '' : s.state === 'pre' ? 'dim' : 'warn'}`}>{statusText(league, o, s)}</span>
-                  {o.why && <span className="tag info">{o.why}</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </Section>
       ))}
-      <div className="tiny dim">
-        Games tip at the home team&apos;s local 7:00 or 7:30 and run on your game&apos;s clock, so the late ones out West are still to come when an early one ends. Final scores are
-        in once your game is.
-      </div>
+      <More label="How the clock runs">
+        <div className="small dim">
+          Games tip at the home team&apos;s local 7:00 or 7:30 and run on your game&apos;s clock, so the late ones out West are still to come when an early one ends. Final scores
+          are in once your game is.
+        </div>
+      </More>
     </div>
   );
 }

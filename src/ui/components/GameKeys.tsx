@@ -44,8 +44,8 @@ export function KeysList({ keys }: { keys: GameKey[] }) {
  */
 export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[]; box: Pick<GameResult, 'home' | 'away'>; side: 0 | 1; share: number; compact?: boolean }) {
   return (
-    <div className="col" style={{ gap: compact ? 6 : 8 }}>
-      <div className="tiny dim upper bold">Keys to the game</div>
+    <div className={`gd-keys-live${compact ? ' compact' : ''}`}>
+      <div className="over">Keys to the game</div>
       {keys.map((k) => {
         const v = keyValue(k, box, side);
         const st = keyState(k, v, share, false);
@@ -55,14 +55,14 @@ export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[];
         const pace = !rate && v !== null && share > 0.05 && share < 1 && st !== 'met' && st !== 'missed' ? Math.round(v / share) : null;
         const u = rate ? '%' : '';
         return (
-          <div key={k.id} className="row top small" style={{ gap: 8 }}>
+          <div key={k.id} className="gd-kl">
             <div className="grow" style={{ minWidth: 0 }}>
-              <b>{k.title}</b>{' '}
-              <span className="dim2">
+              <div className="gd-kl-t">{k.title}</div>
+              <div className="gd-kl-n num">
                 {v ?? 0}
-                {u} so far{pace !== null ? `, on pace for ${pace}` : ''} · {k.dir === 'max' ? '≤' : '≥'} {k.target}
+                {u} so far{pace !== null ? ` · on pace for ${pace}` : ''} · goal {k.dir === 'max' ? '≤' : '≥'} {k.target}
                 {u}
-              </span>
+              </div>
             </div>
             <span className={`tag ${tag.tone}`} style={{ flex: 'none' }}>
               {tag.text}
@@ -79,33 +79,33 @@ export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
   const counted = keys.filter((k) => k.met !== null);
   const met = counted.filter((k) => k.met).length;
   return (
-    <div className="col" style={{ gap: 8 }}>
-      <div className="row between" style={{ gap: 8 }}>
-        <span className="row tiny dim upper bold" style={{ gap: 6 }}>
+    <section className="sec">
+      <div className="sec-h">
+        <h3>
           <KeyRound size={13} aria-hidden="true" /> Keys to the game
-        </span>
+        </h3>
         <span className={`tag ${met === counted.length && met > 0 ? 'good' : met === 0 ? 'bad' : ''}`}>
           {met} of {counted.length}
         </span>
       </div>
-      {keys.map((k) => (
-        <div key={k.id} className="row top small" style={{ gap: 8 }}>
-          <span
-            className={k.met === null ? 'dim' : k.met ? 'good' : 'bad'}
-            style={{ flex: 'none', marginTop: 1 }}
-            role="img"
-            aria-label={k.met === null ? 'Did not apply' : k.met ? 'Met' : 'Missed'}
-          >
-            {k.met === null ? '—' : k.met ? <Check size={15} /> : <X size={15} />}
-          </span>
-          <div className="grow" style={{ minWidth: 0 }}>
-            <div>
-              <b>{k.title}</b> <span className="dim2">· {k.goal.replace(/^./, (c) => c.toLowerCase())}</span>
+      <div className="card flush list">
+        {keys.map((k) => (
+          <div key={k.id} className="gd-key">
+            <span
+              className={`gd-key-mark ${k.met === null ? 'void' : k.met ? 'met' : 'missed'}`}
+              role="img"
+              aria-label={k.met === null ? 'Did not apply' : k.met ? 'Met' : 'Missed'}
+            >
+              {k.met === null ? '—' : k.met ? <Check size={15} /> : <X size={15} />}
+            </span>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="gd-key-t">{k.title}</div>
+              <div className="gd-key-g">{k.goal}</div>
             </div>
-            <div className="tiny dim">{k.value === null ? 'He sat out.' : `${k.value}${k.pct ? '%' : ''} on the night.`}</div>
+            <span className="gd-key-v num">{k.value === null ? 'Sat out' : `${k.value}${k.pct ? '%' : ''}`}</span>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </section>
   );
 }

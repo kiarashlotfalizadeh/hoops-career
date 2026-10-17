@@ -1,34 +1,797 @@
-/* ------------------------------------------------------------------ live game: the on-court strip */
+/* The live game: a broadcast on a phone. The scorebug sits on the court like a TV frame, the strip
+   of both fives under it, the coaching dock in the tab bar's place. Team colours only where a team is
+   the subject (the bug's blocks, the floor, the lineups, the graphics); the brand runs the controls. */
+
+.live-page {
+  gap: 10px;
+}
+.live-left,
+.live-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ the scorebug */
+.lb {
+  position: relative;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+/* what's at stake: a series, a Cup round */
+.lb-ctx {
+  padding: 5px 12px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.lb-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 56px;
+}
+.lb-side {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.lb-side.home {
+  flex-direction: row-reverse;
+}
+/* a team's block: its colour, its name, its timeouts (bars) and team fouls */
+.lb-id {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  flex: 0 1 80px;
+  min-width: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 8px 9px 10px;
+  color: #fff;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--lb-c) 88%, #fff 12%), var(--lb-c) 70%);
+  box-shadow: inset 0 -3px 0 var(--lb-t);
+}
+.lb-side.home .lb-id {
+  align-items: flex-end;
+  padding: 7px 10px 9px 8px;
+}
+.lb-ab {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+}
+.lb-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.lb-side.home .lb-meta {
+  flex-direction: row-reverse;
+}
+.lb-to {
+  display: flex;
+  gap: 2px;
+}
+.lb-to i {
+  width: 3px;
+  height: 7px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.26);
+}
+.lb-to i.on {
+  background: #fff;
+}
+.lb-tf {
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+/* in the penalty: the other team shoots on every foul */
+.lb-tf.on {
+  background: var(--warn);
+  color: var(--accent-ink);
+}
+.lb-score {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: clamp(32px, 10.4vw, 44px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.lb-score.dim {
+  color: var(--text-dim);
+}
+.lb-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 60px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.lb-q {
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.lb-clock {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+}
+.lb-run {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--warn);
+  white-space: nowrap;
+}
+/* the win-probability line: away on the left, home on the right, as the scores sit */
+.lb-wp {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.lb-wp b {
+  color: var(--text);
+  font-weight: 800;
+}
+.lb-wp-bar {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+}
+.lb-wp-bar > span {
+  display: block;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* ------------------------------------------------------------------ the bottom line (around the league) */
+.live-ticker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 10px 4px 6px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.live-ticker:active {
+  background: var(--surface);
+}
+.live-ticker-tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.live-ticker-game {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.live-ticker-st {
+  margin-left: 4px;
+  color: var(--warn);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.live-ticker-st.final {
+  color: var(--text-2);
+}
+.live-ticker-st.pre {
+  color: var(--text-dim);
+}
+.live-ticker-why {
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.live-ticker-n {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+/* every score, in the sheet */
+.live-score-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+}
+.live-score-teams {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.live-score-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.live-score-team.ahead {
+  color: var(--text);
+  font-weight: 700;
+}
+.live-score-pts {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+}
+.live-score-st {
+  flex: none;
+  min-width: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 12.5px;
+}
+
+/* ------------------------------------------------------------------ the court and what goes over it */
+.live-stage {
+  display: flex;
+  flex-direction: column;
+  /* scrolled back to (the highlights), it clears the top bar */
+  scroll-margin-top: calc(var(--top-h) + var(--safe-t) + 10px);
+}
+.live-court {
+  position: relative;
+}
+.live-court .court-cv {
+  border-radius: 0 0 12px 12px;
+}
+.live-court > :not(canvas) {
+  /* the overlays' text is drawn on the court's colours: white whatever the theme says */
+  color: #fff;
+}
+
+/* the event banner: what happened, under a coloured label */
+.live-banner {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: calc(100% - 16px);
+  display: flex;
+  align-items: stretch;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(6, 8, 12, 0.92);
+  box-shadow: var(--shadow);
+  animation: l3-in 0.3s ease;
+}
+.live-banner-k {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 4px 8px;
+  background: var(--bad);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.live-banner.adjust .live-banner-k {
+  background: var(--info);
+}
+.live-banner-t {
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* a break: the period's name big over the court, the next period one tap away */
+.live-break {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 58px 16px 16px;
+  text-align: center;
+  background: rgba(6, 8, 12, 0.72);
+  border-radius: 0 0 12px 12px;
+}
+.live-break-t {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.live-break-s {
+  max-width: 260px;
+  font-size: 13px;
+  color: #d6dbe3;
+}
+.live-break-go {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.live-break-rep {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.live-report {
+  scroll-margin-top: calc(var(--top-h) + var(--safe-t) + 10px);
+}
+
+/* the play's call, the graphics and the replays: over the backcourt, clear of the basket the play goes to */
+.live-lower {
+  position: absolute;
+  left: 8px;
+  right: 58px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.live-cap-plate {
+  max-width: 100%;
+  padding: 6px 10px 6px 11px;
+  border-radius: 4px;
+  background: rgba(6, 8, 12, 0.86);
+  box-shadow: inset 3px 0 0 var(--cap-c, rgba(255, 255, 255, 0.4));
+}
+/* the running call of the play: two lines at most, so a long make-and-assist still reads whole */
+.live-cap {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.live-cap.ff {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d6dbe3;
+}
+/* a broadcast lower third: the team's colour holds the label, the line on a dark plate */
+.live-l3 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  animation: l3-in 0.3s ease;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+.live-l3-tag {
+  padding: 3px 14px 3px 9px;
+  background: var(--l3-c, var(--surface-3));
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.live-l3-text {
+  max-width: 100%;
+  padding: 6px 11px 7px;
+  background: rgba(6, 8, 12, 0.92);
+  box-shadow: inset 3px 0 0 var(--l3-c, var(--surface-3));
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+@keyframes l3-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+/* replays and the highlights reel: a tag over the play's call */
+.live-show {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 3px 3px 9px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.live-show > span:first-of-type {
+  flex: none;
+  white-space: nowrap;
+}
+.live-show-tag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.live-show-x {
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+  background: rgba(0, 0, 0, 0.14);
+}
+.live-show-x::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+/* playback, over the court like a video's: one capsule down the right sideline */
+.live-mini {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 23px;
+  background: rgba(6, 8, 12, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.live-mini-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+}
+.live-mini-btn::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+.live-mini-btn.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.live-mini-btn:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ------------------------------------------------------------------ the starting lineups, before the tip */
+.live-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 58px 16px 12px;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(180deg, rgba(6, 8, 12, 0.9), rgba(6, 8, 12, 0.78));
+  overflow: hidden;
+}
+.li-head {
+  text-align: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.li-kicker {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.li-where {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: #c9d1dc;
+}
+.li-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+}
+.li-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+/* each five under its team's colour */
+.li-team {
+  margin-bottom: 2px;
+  padding: 3px 12px 4px 8px;
+  background: var(--lb-c);
+  box-shadow: inset 0 -2px 0 var(--lb-t);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.li-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  animation: intro-in 0.35s ease both;
+}
+.li-row:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.li-row:nth-child(4) {
+  animation-delay: 0.16s;
+}
+.li-row:nth-child(5) {
+  animation-delay: 0.24s;
+}
+.li-row:nth-child(6) {
+  animation-delay: 0.32s;
+}
+.li-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 11px;
+}
+.li-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.li-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.li-pos {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9aa5b5;
+}
+.li-line {
+  font-size: 10.5px;
+  color: #b4bdca;
+}
+.live-intro-whole {
+  display: none;
+}
+/* a phone's half court: whole numbers on the lines (to the tenth, the assists were cut off), and no
+   series or Cup line, which the scorebug just above already shows, to leave height for a long name's wrap */
+@media (max-width: 759px), (max-height: 520px) {
+  .live-intro-dec,
+  .live-intro-ctx {
+    display: none;
+  }
+  .live-intro-whole {
+    display: inline;
+  }
+}
+/* a narrow phone's court is shorter (and a phone's held sideways): the lineups pack tighter to keep Tip
+   off clear of the last line */
+@media (max-width: 399px), (max-height: 520px) {
+  .live-intro {
+    gap: 6px;
+    padding: 8px 56px 12px 10px;
+  }
+  .li-kicker {
+    font-size: 20px;
+  }
+  .li-col {
+    gap: 3px;
+  }
+  .li-team {
+    font-size: 13.5px;
+  }
+  .li-name {
+    font-size: 12px;
+  }
+  .li-line {
+    font-size: 10px;
+  }
+}
+.li-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.li-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+@keyframes intro-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .li-row,
+  .live-l3,
+  .live-banner {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ the on-court strip */
 .oc-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.oc-col {
+  min-width: 0;
+}
+.oc-col + .oc-col {
+  border-left: 1px solid var(--line);
+}
+/* each five under a thin edge in its team's colour */
+.oc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 10px 0;
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 2px 0 var(--oc-edge, var(--line-3));
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.oc-you {
+  color: var(--text-dim);
+  font-weight: 750;
+}
+.oc-head-pts {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
 }
 .oc-row {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   grid-template-areas:
     'num name pts'
     'num meter pips';
-  column-gap: 6px;
-  row-gap: 3px;
+  column-gap: 8px;
+  row-gap: 4px;
   align-items: center;
   width: 100%;
-  min-height: 36px;
-  padding: 4px 6px;
-  border-radius: 8px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  min-height: 42px;
+  padding: 5px 10px;
   text-align: left;
   color: var(--text);
 }
-.oc-row:hover {
-  border-color: var(--line-2);
+.oc-row + .oc-row {
+  border-top: 1px solid var(--line);
+}
+.oc-row:active {
+  background: var(--surface);
 }
 .oc-num {
   grid-area: num;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2px solid;
   display: grid;
@@ -45,8 +808,9 @@
   align-items: center;
   gap: 3px;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
+  line-height: 1.1;
 }
 .oc-mark {
   display: inline-flex;
@@ -54,22 +818,43 @@
   gap: 1px;
   flex: none;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 750;
+}
+.oc-mark.hot {
+  color: var(--warn);
+}
+.oc-mark.cold {
+  color: var(--info);
 }
 .oc-pts {
   grid-area: pts;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
   text-align: right;
 }
 .oc-meter {
   grid-area: meter;
-  height: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
 }
 .oc-meter > span {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 2px;
+}
+.oc-meter > .good {
+  background: var(--good);
+}
+.oc-meter > .warn {
+  background: var(--warn);
+}
+.oc-meter > .bad {
+  background: var(--bad);
 }
 .oc-pips {
   grid-area: pips;
@@ -77,8 +862,8 @@
   gap: 2px;
 }
 .oc-pips > span {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: var(--surface-3);
 }
@@ -92,6 +877,538 @@
   background: var(--bad);
 }
 
+/* ------------------------------------------------------------------ the coaching dock */
+.live-dock {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+.live-dock.five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.ld-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 50px;
+  border-radius: 10px;
+  color: var(--text-2);
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ld-btn:active {
+  background: var(--surface-2);
+}
+.ld-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ld-ic {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+/* the timeouts left, on the TO button's whistle */
+.ld-n {
+  position: absolute;
+  top: -6px;
+  right: -13px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+  font-stretch: 80%;
+  letter-spacing: 0;
+}
+/* a play call waiting */
+.ld-btn.on {
+  color: var(--accent-text);
+}
+.ld-dot {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-2);
+}
+
+/* ------------------------------------------------------------------ the assistant */
+.live-asst {
+  display: flex;
+  flex-direction: column;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.live-asst-h {
+  padding: 9px 12px 0;
+}
+.live-alert {
+  --tone: var(--info);
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 10px 12px;
+}
+.live-alert + .live-alert {
+  border-top: 1px solid var(--line);
+}
+.live-alert.warn {
+  --tone: var(--warn);
+}
+.live-alert.bad {
+  --tone: var(--bad);
+}
+.live-alert-ic {
+  margin-top: 2px;
+  color: var(--tone);
+}
+.live-alert-t {
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.live-alert-go {
+  grid-column: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* quick adjustments: one swipeable row of chips */
+.live-pills .chip {
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ the play-by-play */
+.live-feed .sec-h {
+  min-height: 34px;
+}
+.live-feed-seg {
+  flex: none;
+  overflow: visible;
+}
+.live-feed-seg button {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.live-feed-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.live-feed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.live-feed-row + .live-feed-row {
+  border-top: 1px solid var(--line);
+}
+.live-feed-row.strong {
+  color: var(--text);
+  font-weight: 700;
+  background: var(--bg-2);
+}
+.live-feed-when {
+  flex: none;
+  width: 56px;
+  padding-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.live-feed-team {
+  flex: none;
+  align-self: stretch;
+  width: 3px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------ the final */
+.live-final-go {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.live-simmed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.live-simmed p {
+  margin: 0 0 4px;
+}
+
+/* ------------------------------------------------------------------ sheets: skip, and the coaching sheets */
+.live-skipsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.live-skip-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.live-skip-set {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* the huddle */
+.hd {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.hd-fig,
+.ps-fig,
+.pr-fig {
+  padding: 10px 14px;
+}
+.hd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px 8px 14px;
+}
+.hd-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.hd-tip > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* the period report: one panel, its parts between hairlines */
+.pr {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+.pr-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pr-headline {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.pr-fig {
+  padding: 0;
+}
+.pr-blk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.pr-scorers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.pr-factor {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.pr-pts {
+  flex: none;
+  width: 42px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1.1;
+}
+.pr-advice {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--warn);
+}
+.pr-advice svg {
+  vertical-align: -2px;
+}
+.pr-go {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+/* the late game card */
+.lgc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+}
+.lgc-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lgc-t {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.lgc-called {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lgc-blk {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* the substitutions sheet: rows with energy, fouls, points and minutes in columns */
+.sp {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sp-step {
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.sp-step.on {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  color: var(--text);
+  font-weight: 650;
+}
+.sp-head,
+.sp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 22px 26px 26px;
+  align-items: center;
+  column-gap: 8px;
+}
+.sp-head {
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: right;
+  padding-right: 14px;
+}
+.sp-head > :first-child {
+  grid-column: 2;
+}
+.sec-h > .sp-head {
+  flex: 1;
+}
+.sp-row {
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 14px;
+  text-align: left;
+  font-size: 14px;
+}
+.sp-row:active {
+  background: var(--surface);
+}
+.sp-row.picked {
+  background: color-mix(in srgb, var(--accent) 14%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--accent);
+  --text-dim: var(--text-2);
+}
+.sp-row:disabled {
+  cursor: default;
+}
+.sp-row:disabled:not(.out) .sp-name {
+  color: var(--text-2);
+}
+.sp-row.out {
+  opacity: 0.5;
+}
+.sp-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-e {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.sp-bar {
+  width: 30px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.sp-bar > span {
+  display: block;
+  height: 100%;
+}
+.sp-bar > .good {
+  background: var(--good);
+}
+.sp-bar > .warn {
+  background: var(--warn);
+}
+.sp-bar > .bad {
+  background: var(--bad);
+}
+.sp-n {
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* the adjustments sheet */
+.tp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tp-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.tp-plan,
+.tp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tp-matchups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tp-mu {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* the plays sheet: a set per row, its look under its name */
+.pp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pp-called {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pp-set {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 14px 12px;
+}
+.pp-set-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pp-set-name {
+  font-weight: 750;
+  font-size: 15px;
+}
+.pp-look {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.pp-set .more {
+  margin-top: -4px;
+}
+
+/* a player's sheet */
+.ps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ps-blk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the live box score's play types */
+.bx-pt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+.bx-ppp {
+  width: 42px;
+  text-align: right;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+}
+
 /* ------------------------------------------------------------------ live game: layout
    Every form factor keeps the score, the court and the coaching buttons on screen at once:
    - upright (phones, and tablets held upright): the scorebug and the court stay at the top while the
@@ -101,29 +1418,8 @@
      the coaching buttons and the strip head the right one;
    - phones held sideways: the court fills the left side, the scorebug stays at the top of the right.
    A finished game goes back to a plain page (its report and recap scroll). */
-.live-stage {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  /* scrolled back to (the highlights), it clears the top bar */
-  scroll-margin-top: calc(var(--top-h) + var(--safe-t) + 10px);
-}
-.live-court {
-  position: relative;
-}
 .live-strip-side {
   display: none;
-}
-.live-dock .btn.sm {
-  position: relative;
-}
-.live-dock-n {
-  position: absolute;
-  top: 4px;
-  right: 7px;
-  font-size: 11px;
-  font-weight: 800;
-  opacity: 0.7;
 }
 
 /* upright: the coaching dock pinned to the bottom (in the page's flow on a tablet, a taller scorebug
@@ -135,12 +1431,14 @@
     right: 0;
     bottom: 0;
     z-index: 40;
-    padding: 7px max(10px, var(--safe-r)) calc(7px + var(--safe-b)) max(10px, var(--safe-l));
-    background: rgba(11, 15, 21, 0.94);
-    background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+    padding: 5px max(8px, var(--safe-r)) calc(5px + var(--safe-b)) max(8px, var(--safe-l));
+    border: none;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: rgba(11, 15, 21, 0.95);
+    background: color-mix(in srgb, var(--bg-2) 95%, transparent);
     backdrop-filter: blur(16px) saturate(150%);
     -webkit-backdrop-filter: blur(16px) saturate(150%);
-    border-top: 1px solid var(--line);
   }
 }
 /* phones: the dock takes the tab bar's place */
@@ -151,25 +1449,9 @@
   .live-dock {
     min-height: calc(var(--nav-h) + var(--safe-b));
   }
-  .live-dock.grid4 {
-    gap: 6px;
-  }
-  .live-dock .btn.sm {
-    flex-direction: column;
-    height: auto;
-    min-height: 48px;
-    padding: 4px 2px;
-    gap: 1px;
-    font-size: 12px;
-  }
-  /* the strip's rows a little slimmer, so more of the assistant fits under the court */
-  .live-strip-under .oc-row {
-    min-height: 32px;
-    padding: 3px 6px;
-    row-gap: 2px;
-  }
 }
-/* upright, tall enough: the scorebug and the court stay pinned (on a short phone they would leave too little to scroll) */
+/* upright, tall enough: the scorebug and the court stay pinned (on a short phone they would leave too
+   little to scroll); at a break they let go, for the period report */
 @media (max-width: 759px) and (min-height: 700px), (orientation: portrait) and (min-width: 760px) {
   .live-page:not(.done) .live-grid,
   .live-page:not(.done) .live-left {
@@ -179,24 +1461,32 @@
     position: sticky;
     top: calc(var(--top-h) + var(--safe-t));
     z-index: 20;
-    gap: 8px;
-    margin: -12px calc(-1 * max(14px, var(--safe-r))) 0 calc(-1 * max(14px, var(--safe-l)));
-    padding: 12px max(14px, var(--safe-r)) 8px max(14px, var(--safe-l));
+    margin: -14px calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+    padding: 8px var(--gut-r) 8px var(--gut-l);
     background: var(--bg);
+  }
+  .live-page.at-break .live-stage {
+    position: static;
   }
 }
 /* tablets held upright: the court takes the height the scorebug, the strip and the dock leave it. Live.tsx
    measures those three into --live-under (they vary with the game, the settings and the coaching depth);
-   the 48px are the stage's padding and gaps, the gap to the strip and a little air over the dock */
+   the 40px are the stage's padding, the gap to the strip and a little air over the dock. The floor is
+   53.2 x 49.4 ft, apron included (Court.tsx) */
 @media (orientation: portrait) and (min-width: 760px) {
   .live-court {
-    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - var(--live-under, 400px) - 48px) * 50 / 47));
+    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - var(--live-under, 400px) - 40px) * 532 / 494));
+    margin: 0 auto;
+  }
+  /* the scorebug as wide as the court it sits on */
+  .live-page:not(.done) .lb {
+    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - var(--live-under, 400px) - 40px) * 532 / 494));
     margin: 0 auto;
   }
   /* the dock sits over the tab bar (and its 1px top border), its buttons in the bar's 640px column */
   .live-dock {
     bottom: calc(var(--nav-h) + var(--safe-b) + 1px);
-    padding: 7px max(14px, var(--safe-r), 50vw - 320px) 7px max(14px, var(--safe-l), 50vw - 320px);
+    padding: 5px max(14px, var(--safe-r), 50vw - 320px) 5px max(14px, var(--safe-l), 50vw - 320px);
   }
   /* the page's end scrolls clear of the dock */
   .live-page:not(.done) {
@@ -212,8 +1502,9 @@
   .live-strip-side {
     display: block;
   }
-  .live-court {
-    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - 160px) * 50 / 47));
+  .live-court,
+  .live-page:not(.done) .lb {
+    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - 150px) * 532 / 494));
     margin: 0 auto;
   }
   .live-page.done .live-left {
@@ -221,7 +1512,7 @@
   }
 }
 
-/* phones held sideways */
+/* phones held sideways: the court on the left as tall as the screen, the scorebug over the right column */
 @media (orientation: landscape) and (max-height: 520px) {
   :root[data-gameday] .bottomnav {
     display: none;
@@ -246,6 +1537,8 @@
     position: sticky;
     top: calc(var(--top-h) + var(--safe-t) + 8px);
     z-index: 5;
+    border-bottom: 1px solid var(--line-2);
+    border-radius: 12px;
     box-shadow: 0 -8px 0 var(--bg);
   }
   .live-page:not(.done) .live-court {
@@ -253,8 +1546,13 @@
     grid-row: 1 / span 2;
     position: sticky;
     top: calc(var(--top-h) + var(--safe-t) + 8px);
-    /* the half court is 50 x 47 ft: as tall as the screen allows */
-    width: min(calc(100vw - 340px - var(--safe-l) - var(--safe-r)), calc((100dvh - var(--top-h) - var(--safe-t) - var(--safe-b) - 20px) * 50 / 47));
+    /* as tall as the screen allows */
+    width: min(calc(100vw - 340px - var(--safe-l) - var(--safe-r)), calc((100dvh - var(--top-h) - var(--safe-t) - var(--safe-b) - 20px) * 532 / 494));
+  }
+  .live-page:not(.done) .live-court .court-cv,
+  .live-page:not(.done) .live-court > .live-intro,
+  .live-page:not(.done) .live-court > .live-break {
+    border-radius: 12px;
   }
   .live-page:not(.done) .live-right {
     grid-column: 2;
@@ -265,437 +1563,5 @@
   }
   .live-page.done .live-left {
     position: static;
-  }
-}
-
-/* ------------------------------------------------------------------ live game: playback over the court */
-.live-mini {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.live-mini-btn {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(6, 8, 12, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #fff;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 15px;
-}
-.live-mini-btn::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-}
-.live-mini-btn.on {
-  background: var(--accent);
-  border-color: transparent;
-  color: var(--accent-ink);
-}
-.live-mini-btn:active {
-  transform: scale(0.94);
-}
-/* the play label and the graphics keep clear of it */
-.live-court .live-lower {
-  right: 52px;
-}
-/* the running call of the play: two lines at most, so a long make-and-assist still reads whole */
-.live-lower > .pill {
-  border-radius: 14px;
-}
-.live-cap {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.3;
-}
-
-/* ------------------------------------------------------------------ live game: banners, pills, skip */
-.live-banner {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
-  margin: 0 auto;
-  width: fit-content;
-  max-width: calc(100% - 16px);
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(6, 8, 12, 0.86);
-  border: 1px solid var(--line-2);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 700;
-  text-align: center;
-  box-shadow: var(--shadow);
-}
-.live-banner.injury,
-.live-banner.foulout {
-  border-color: color-mix(in srgb, var(--bad) 65%, transparent);
-}
-.live-banner.adjust {
-  border-color: color-mix(in srgb, var(--info) 65%, transparent);
-}
-.live-pills .chip {
-  flex: none;
-}
-.live-context {
-  margin: -2px 0 4px;
-}
-.btn.live-skip {
-  height: auto;
-  min-height: 52px;
-  padding: 8px 14px;
-  justify-content: flex-start;
-  white-space: normal;
-  text-align: left;
-}
-/* five coaching buttons (Plays from Advanced depth): still one row on a 360px phone, the icon over the word */
-.live-ctl.five {
-  grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
-}
-.live-ctl.five .btn.sm {
-  flex-direction: column;
-  height: auto;
-  min-height: 42px;
-  padding: 4px 2px;
-  gap: 1px;
-  font-size: 12px;
-}
-
-/* ------------------------------------------------------------------ live game: the play label and broadcast graphics, over the backcourt */
-.live-lower {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  pointer-events: none;
-}
-.live-l3 {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  max-width: 100%;
-  padding: 5px 12px 6px 10px;
-  border-radius: 10px;
-  border-left: 4px solid var(--accent);
-  background: rgba(6, 8, 12, 0.88);
-  color: #fff;
-  box-shadow: var(--shadow);
-  animation: l3-in 0.3s ease;
-}
-.live-l3-tag {
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #c9d1dc;
-}
-.live-l3-text {
-  font-size: 13.5px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-@keyframes l3-in {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-}
-
-/* the scorebug's win-probability bar: away on the left, home on the right, as the scores sit */
-.live-wp {
-  display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 62px;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-}
-.live-wp > span:last-child {
-  text-align: right;
-}
-.live-wp-bar {
-  display: flex;
-  gap: 2px;
-  height: 4px;
-}
-.live-wp-bar > span {
-  display: block;
-  border-radius: 2px;
-  transition: width 0.4s ease;
-}
-
-/* ------------------------------------------------------------------ live game: replays and the highlights reel */
-/* (in the backcourt over the play's call, clear of the basket the play goes to) */
-.live-show {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 16px);
-  padding: 4px 4px 4px 10px;
-  border-radius: 999px;
-  background: rgba(6, 8, 12, 0.86);
-  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
-  color: #fff;
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.live-show > span:first-of-type {
-  flex: none;
-  white-space: nowrap;
-}
-.live-show-tag {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-  color: #c9d1dc;
-}
-.live-show-x {
-  position: relative;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-.live-show-x::after {
-  content: '';
-  position: absolute;
-  inset: -10px;
-}
-
-/* ------------------------------------------------------------------ live game: the bottom line (around the league) */
-.live-ticker {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 6px;
-  padding: 3px 8px 3px 3px;
-  min-height: 24px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid var(--line);
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-}
-.live-ticker::after {
-  content: '';
-  position: absolute;
-  inset: -6px 0;
-}
-.live-ticker-tag {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-.live-ticker-game {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.live-ticker-st {
-  margin-left: 4px;
-  color: var(--warn);
-  font-weight: 700;
-}
-.live-ticker-st.final {
-  color: var(--text-2);
-}
-.live-ticker-why {
-  min-width: 0;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-.live-ticker-n {
-  flex: none;
-  color: var(--text-dim);
-  font-size: 10.5px;
-}
-.live-score-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.live-score-row > .col:first-child {
-  flex: 1;
-}
-
-/* ------------------------------------------------------------------ live game: the starting lineups before the tip */
-.live-intro {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 52px 14px 10px;
-  border-radius: 12px;
-  background: rgba(6, 8, 12, 0.8);
-  color: #fff;
-  overflow: hidden;
-}
-.live-intro-head {
-  text-align: center;
-  min-width: 0;
-  max-width: 100%;
-}
-.live-intro-kicker {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.live-intro-where {
-  font-size: 11.5px;
-  color: #c9d1dc;
-}
-.live-intro-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  width: 100%;
-  max-width: 520px;
-}
-.live-intro-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.live-intro-team {
-  padding-bottom: 3px;
-  border-bottom: 2px solid;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.live-intro-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.2;
-  animation: intro-in 0.35s ease both;
-}
-.live-intro-row:nth-child(3) {
-  animation-delay: 0.08s;
-}
-.live-intro-row:nth-child(4) {
-  animation-delay: 0.16s;
-}
-.live-intro-row:nth-child(5) {
-  animation-delay: 0.24s;
-}
-.live-intro-row:nth-child(6) {
-  animation-delay: 0.32s;
-}
-.live-intro-num {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid;
-  display: grid;
-  place-items: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 11px;
-}
-.live-intro-pos {
-  font-size: 10px;
-  font-weight: 700;
-  color: #9aa5b5;
-}
-.live-intro-name {
-  overflow-wrap: anywhere;
-}
-.live-intro-line {
-  font-size: 10.5px;
-  color: #b4bdca;
-}
-.live-intro-whole {
-  display: none;
-}
-/* a phone's half court: whole numbers on the lines (to the tenth, the assists were cut off), and no
-   series or Cup line, which the scorebug just above already shows, to leave height for a long name's wrap */
-@media (max-width: 759px), (max-height: 520px) {
-  .live-intro-dec,
-  .live-intro-ctx {
-    display: none;
-  }
-  .live-intro-whole {
-    display: inline;
-  }
-}
-.live-intro-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.live-intro-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.25s linear;
-}
-@keyframes intro-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-intro-row {
-    animation: none;
   }
 }

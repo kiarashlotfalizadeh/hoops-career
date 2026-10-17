@@ -5,17 +5,21 @@ import { Clapperboard, SkipBack, SkipForward, Square } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
-import { Court } from '../live/Court';
+import { Court, courtFloor } from '../live/Court';
 import { jerseyColors } from '../teamColors';
 import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { teamPlayers } from '../../core/league/helpers';
-import { Card } from './ui';
+import { neutralSite } from '../../core/league/games';
+import { Section } from './ui';
+import './gameday.css';
 
 export function HighlightsCard({ league, res }: { league: League; res: GameResult }) {
   const reel = league.reel?.gid === res.gid ? league.reel : undefined;
   const home = league.teams[res.home.tid];
   const away = league.teams[res.away.tid];
   const colors = useMemo(() => jerseyColors(home.colors, away.colors), [home, away]);
+  // the floor it was played on: the home team's, or the Cup final's neutral one
+  const floor = useMemo(() => courtFloor(home, neutralSite(res), res.cup === 'final' ? 'NBA Cup' : ''), [home, res]);
   // names as the box score had them (players since traded or retired keep theirs)
   const nameOf = useMemo(() => {
     const per = [res.home, res.away].map((b) => {
@@ -51,10 +55,10 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
     setCur(k === null ? null : { i: k, sc: { ...scripts[k] } });
   };
   return (
-    <Card
+    <Section
       title={
         <h3>
-          <Clapperboard size={14} style={{ verticalAlign: -2 }} /> Highlights
+          <Clapperboard size={13} aria-hidden="true" /> Highlights
         </h3>
       }
       right={
@@ -63,8 +67,8 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
         </span>
       }
     >
-      <div className="col" style={{ gap: 8 }}>
-        <div style={{ position: 'relative', maxWidth: 520, width: '100%', margin: '0 auto' }}>
+      <div className="gd-hl">
+        <div className="gd-hl-court">
           <Court
             script={sc}
             speed={league.settings.liveSpeed || 1}
@@ -75,10 +79,11 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
             onBeat={setBeat}
             names={nameOf}
             abbrevs={[home.abbrev, away.abbrev]}
+            floor={floor}
             label={sc ? `Highlight ${i! + 1} of ${scripts.length}: ${sc.label}.` : 'Highlights: press play.'}
           />
           {sc === null && (
-            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', borderRadius: 12, background: 'rgba(6,8,12,0.55)' }}>
+            <div className="gd-hl-start">
               <button className="btn primary sm" onClick={() => go(0)}>
                 <Clapperboard size={15} /> Play the highlights
               </button>
@@ -87,29 +92,27 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
         </div>
         {sc && i !== null && (
           <>
-            <div className="row small" style={{ gap: 8 }}>
-              <span className="tag info" style={{ flex: 'none' }}>
+            <div className="gd-hl-bar small">
+              <span className="tag brand" style={{ flex: 'none' }}>
                 {i + 1}/{scripts.length}
               </span>
               <span className="grow">{captionAt(sc, beat)}</span>
             </div>
-            <div className="row between" style={{ gap: 8 }}>
-              <span className="tiny dim num">{at(i)}</span>
-              <div className="row" style={{ gap: 6 }}>
-                <button className="btn xs" aria-label="Previous play" disabled={i === 0} onClick={() => go(i - 1)}>
-                  <SkipBack size={14} />
-                </button>
-                <button className="btn xs" aria-label="Stop the highlights" onClick={() => go(null)}>
-                  <Square size={14} />
-                </button>
-                <button className="btn xs" aria-label="Next play" disabled={i + 1 >= scripts.length} onClick={() => go(i + 1)}>
-                  <SkipForward size={14} />
-                </button>
-              </div>
+            <div className="gd-hl-bar">
+              <span className="tiny dim num grow">{at(i)}</span>
+              <button className="btn xs" aria-label="Previous play" disabled={i === 0} onClick={() => go(i - 1)}>
+                <SkipBack size={14} />
+              </button>
+              <button className="btn xs" aria-label="Stop the highlights" onClick={() => go(null)}>
+                <Square size={14} />
+              </button>
+              <button className="btn xs" aria-label="Next play" disabled={i + 1 >= scripts.length} onClick={() => go(i + 1)}>
+                <SkipForward size={14} />
+              </button>
             </div>
           </>
         )}
       </div>
-    </Card>
+    </Section>
   );
 }

@@ -3,7 +3,7 @@ import type { GameType, League } from '../../core/types';
 import { GAME } from '../../core/constants';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
-import { Card, Chips, Segmented } from '../components/ui';
+import { Card, Chips, Section, Segmented } from '../components/ui';
 import { FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { fmtClock, periodLabel, wholeMinutes } from '../stats';
@@ -57,6 +57,7 @@ export function BoxPanel({
   return (
     <div className="col" style={{ gap: 12 }}>
       <Segmented
+        tabs
         value={tab}
         onChange={setTab}
         label="Box score sections"
@@ -140,24 +141,25 @@ export function BoxPanel({
               </tbody>
             </table>
           </div>
-          <Card title="Play types so far">
-            <div className="col" style={{ gap: 4 }}>
+          <Section title="Play types so far" right={<span className="tiny dim">poss · per poss</span>}>
+            <div className="card flush list">
+              {pt.length === 0 && <div className="bx-pt small dim">None yet.</div>}
               {pt.map(([k, v]) => (
-                <div key={k} className="row small">
+                <div key={k} className="bx-pt">
                   <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-                  <span className="dim num">{v.poss} poss</span>
-                  <span className="num bold" style={{ width: 48, textAlign: 'right' }}>
-                    {(v.pts / Math.max(1, v.poss)).toFixed(2)}
-                  </span>
+                  <span className="dim num">{v.poss}</span>
+                  <span className="num bx-ppp">{(v.pts / Math.max(1, v.poss)).toFixed(2)}</span>
                 </div>
               ))}
             </div>
-          </Card>
+          </Section>
         </>
       )}
       {tab === 'team' && (
         <>
-          <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+          <div className="card flush">
+            <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+          </div>
           <Card
             title="Team comparison"
             right={
@@ -352,8 +354,7 @@ function WinProbCard({
             height={130}
           />
           <div className="small dim" style={{ marginTop: 8 }}>
-            {me} {wpText(mine(series[series.length - 1].wp))} to win now, from {wpText(mine(series[0].wp))} at tip-off: the score, the time left, who has the ball and the pre-game
-            projection.
+            {me} {wpText(mine(series[series.length - 1].wp))} to win now, {wpText(mine(series[0].wp))} at tip-off. From the score, the clock, the ball and the pre-game projection.
           </div>
         </>
       )}

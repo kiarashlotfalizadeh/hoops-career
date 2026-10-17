@@ -1,6 +1,6 @@
 import { PLAYER_DEFENSES, type PlayerDefense, type Settings, type Tactics } from '../../core/types';
-import { Kpi } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
+import { PlayerLine } from './MyPlayer';
 import { HACK_BELOW, hackThreshold } from './pills';
 import { PLAYER_D_META, hacks, startHacking, stopHacking } from '../../core/sim/tactics';
 
@@ -41,13 +41,8 @@ export function OppPlayer({
       else delete t.defense.playerD;
     });
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="grid4">
-        <Kpi k="PTS" v={p.pts} />
-        <Kpi k="FG" v={`${p.fgm}/${p.fga}`} />
-        <Kpi k="Fouls" v={p.fouls} />
-        <Kpi k="Energy" v={`${Math.round(p.energy * 100)}%`} />
-      </div>
+    <div className="ps">
+      <PlayerLine p={p} />
       <div className="small">
         Free throws: <b>{ft}%</b> shooter
         {p.fta > 0 ? (
@@ -97,8 +92,8 @@ export function OppPlayer({
       )}
       {complexity !== 'simple' && (
         <>
-          <div className="col" style={{ gap: 6 }}>
-            <div className="tiny upper dim bold">Guard him</div>
+          <div className="ps-blk">
+            <div className="over">Guard him</div>
             <div className="chips" role="group" aria-label={`How to guard ${name}`}>
               {PLAYER_DEFENSES.map((d) => (
                 <button key={d} className={`chip ${how === d ? 'on' : ''}`} aria-pressed={how === d} title={PLAYER_D_META[d].help} onClick={() => setHow(d)}>

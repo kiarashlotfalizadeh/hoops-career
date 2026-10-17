@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { Flame, Snowflake } from 'lucide-react';
 import type { GameManagement } from '../../core/types';
 import { inkOn } from '../teamColors';
@@ -15,6 +15,8 @@ interface SideInfo {
   abbrev: string;
   /** Jersey [fill, trim]. */
   kit: [string, string];
+  /** The team's colour as text on the dark theme (its edge over the column). */
+  edge: string;
   manage: GameManagement;
 }
 
@@ -47,8 +49,14 @@ export const OnCourt = memo(function OnCourt({
     const ds = view.sides[s];
     const limit = foulLimit(view.q, info[s].manage.foulTrouble);
     return (
-      <div className="col oc-col" style={{ gap: 4, minWidth: 0 }}>
-        <div className="tiny dim upper bold">{mine ? `${info[s].abbrev} · You` : info[s].abbrev}</div>
+      <div className={`oc-col${mine ? ' mine' : ''}`} style={{ '--oc-edge': info[s].edge } as CSSProperties}>
+        <div className="oc-head">
+          <span>{info[s].abbrev}</span>
+          {mine && <span className="oc-you">You</span>}
+          <span className="oc-head-pts" aria-hidden="true">
+            Pts
+          </span>
+        </div>
         {fives[s].map((pid) => {
           const p = ds.players.find((x) => x.pid === pid);
           if (!p) return null;
@@ -59,6 +67,7 @@ export const OnCourt = memo(function OnCourt({
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
           // named by what it shows, number and name first ("7 Holmgren"), then the rest for a screen reader
           const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
+          const tone = p.energy < fat ? 'bad' : p.energy < fat + 0.15 ? 'warn' : 'good';
           return (
             <button
               key={pid}
@@ -74,13 +83,13 @@ export const OnCourt = memo(function OnCourt({
                 <span className="ellipsis">{names(pid)}</span>
                 <span className="sr-only">{more}</span>
                 {hot && (
-                  <span className="warn oc-mark" aria-hidden="true">
+                  <span className="oc-mark hot" aria-hidden="true">
                     <Flame size={12} />
                     {p.streak}
                   </span>
                 )}
                 {cold && (
-                  <span className="oc-mark" style={{ color: 'var(--info)' }} aria-hidden="true">
+                  <span className="oc-mark cold" aria-hidden="true">
                     <Snowflake size={12} />
                   </span>
                 )}
@@ -88,8 +97,8 @@ export const OnCourt = memo(function OnCourt({
               <span className="oc-pts num" aria-hidden="true">
                 {p.pts}
               </span>
-              <span className="bar oc-meter" aria-hidden="true">
-                <span style={{ width: `${e}%`, background: p.energy < fat ? 'var(--bad)' : p.energy < fat + 0.15 ? 'var(--warn)' : 'var(--good)' }} />
+              <span className="oc-meter" aria-hidden="true">
+                <span className={tone} style={{ width: `${e}%` }} />
               </span>
               <span className="oc-pips" aria-hidden="true">
                 {Array.from({ length: 6 }, (_, i) => (
