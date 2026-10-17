@@ -11,6 +11,7 @@ import { Avatar, Bar, Card, Empty } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { CupBanner } from './CupTab';
 import { AllStarSaturday } from './AllStarSaturday';
+import { RisingStars } from './RisingStars';
 import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
@@ -88,6 +89,7 @@ export function AwardsTab({ league }: { league: League }) {
       {decided && aw && <MajorAwards league={league} aw={aw} />}
       {decided && aw && <Teams league={league} aw={aw} />}
       {aw && aw.allStars.E.length > 0 && <AllStars league={league} aw={aw} />}
+      {aw?.risingStars && <RisingStars league={league} aw={aw} />}
       {aw?.saturday && <AllStarSaturday league={league} aw={aw} />}
     </>
   );
@@ -176,6 +178,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
         </AwardRow>
       )}
       <PlayerAward league={league} pid={aw.allStarMvp} season={s} icon={<Star size={18} />} label="All-Star Game MVP" />
+      <PlayerAward league={league} pid={aw.risingStars?.mvp} season={s} icon={<Sparkles size={18} />} label="Rising Stars MVP" />
     </Card>
   );
 }

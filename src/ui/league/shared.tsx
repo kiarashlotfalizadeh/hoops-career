@@ -221,6 +221,7 @@ export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number
     { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
     { label: '3-Point Contest', n: count((t) => t === 'Three-Point Contest') },
     { label: 'Dunk Contest', n: count((t) => t === 'Slam Dunk Contest') },
+    { label: 'Rising Stars MVP', n: count((t) => t === 'Rising Stars MVP') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },
     { label: '6MOY', n: count((t) => t === 'Sixth Man of the Year') },
@@ -230,8 +231,8 @@ export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number
   return out.filter((x) => x.n > 0);
 }
 
-/** All-Star Saturday's contests: a token in a career's honours, never a reason on its own to remember one (see careerValue in History). */
-const CONTEST_AWARDS = new Set(['Three-Point Contest', 'Slam Dunk Contest']);
+/** All-Star weekend's sideshows (Saturday's contests, the Rising Stars MVP): a token in a career's honours, never a reason on its own to remember one (see careerValue in History). */
+const CONTEST_AWARDS = new Set(['Three-Point Contest', 'Slam Dunk Contest', 'Rising Stars MVP']);
 
 export function accoladeScore(p: Player) {
   return p.awards.reduce(

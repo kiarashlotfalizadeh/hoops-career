@@ -1140,6 +1140,8 @@ export interface SeasonAwards {
   allStarMvp?: number;
   /** All-Star Saturday's contests (see allStarSaturday.ts), each field in its final order: the winner first. */
   saturday?: { three: ThreeShooter[]; dunk: Dunker[] };
+  /** The Rising Stars game (see risingStars.ts): the rookies' and the sophomores' rosters with their lines, the final score (rookies first) and its MVP. */
+  risingStars?: { rookies: RisingStar[]; sophomores: RisingStar[]; score: [number, number]; mvp?: number };
   cupWinner?: number;
   cupRunnerUp?: number;
   cupMvp?: number;
@@ -1156,6 +1158,16 @@ export interface ThreeShooter {
   /** Shoot-off racks (0-6 each) that broke a tie for a place in the final, or for the title. */
   r1Off?: number[];
   finalOff?: number[];
+}
+
+/** A Rising Stars player's night: his name and team as they were, and his line in the game. */
+export interface RisingStar {
+  pid: number;
+  name: string;
+  tid: number;
+  pts: number;
+  reb: number;
+  ast: number;
 }
 
 /** One dunk: five judges' 6-10s added up (30-50), what it was, and whether he finished it in his tries. */
