@@ -1,26 +1,27 @@
 import { capSeason, fmtM, isOffseason, openOption, shortSeason } from '../office/common';
 import { useQueryParam } from '../league/shared';
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, ListOrdered, Workflow } from 'lucide-react';
+import { Activity, ChevronRight, ListOrdered, Workflow } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP_FOR, payroll, rosterSorted } from '../../core/league/helpers';
-import { Avatar, Card, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col, activateOnKey } from '../components/ui';
+import { Avatar, Ovr, PageHeader, Segmented, StatTable, Tag, pct, type Col, activateOnKey } from '../components/ui';
 import { fmtHeight, ROLE_META, archetype } from '../../core/ratings';
 import { ratingCols } from '../ratingCols';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type PerGame } from '../stats';
-import type { Player } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
+import type { League, Player } from '../../core/types';
+import { CAP } from '../../core/constants';
 import { tenDayLabel } from '../office/TenDayPanel';
+import './team.css';
 
 type View = 'players' | 'ratings' | 'stats' | 'contracts';
 
 export function MoodIcon({ p }: { p: Player }) {
   const m = MOOD_META[moodLevel(p.mood.score)];
   return (
-    <span role="img" aria-label={`Mood: ${m.label}`} title={m.label} style={{ color: m.color, fontSize: 12 }}>
+    <span className="tm-mood" role="img" aria-label={`Mood: ${m.label}`} title={m.label} style={{ color: m.color }}>
       {m.emoji}
     </span>
   );
@@ -31,11 +32,8 @@ export default function Roster() {
   const nav = useNavigate();
   const [view, setView] = useQueryParam<View>('view', 'players', ['players', 'ratings', 'stats', 'contracts']);
   const tid = league.userTid;
-  const team = league.teams[tid];
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   const nameOf = useMemo(() => rosterNames(roster, { initial: true }), [roster]);
-  // an injured starter sits: the next healthy player up starts, as on the Rotation screen
-  const starters = startingFive(roster);
   // between seasons, count and pay next season's contracts (the same view as Office and Re-sign)
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
@@ -43,7 +41,7 @@ export default function Roster() {
   const standard = roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) >= s0).length;
   const twoWays = roster.filter((p) => p.contract.twoWay).length;
   const expiring = isOffseason(league) ? roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) < s0).length : 0;
-  const age = (p: Player) => playerAge(p, league.season);
+  const over = pay > cap.salaryCap;
 
   const ratingTable: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },
@@ -86,7 +84,7 @@ export default function Roster() {
         if (!v) return <span className="dim">—</span>;
         const opt = contractExp(p.contract) === s ? openOption(league, p) : undefined;
         return (
-          <span style={{ color: opt ? 'var(--warn)' : undefined }}>
+          <span className={opt ? 'warn' : undefined}>
             {fmtM(v as number)}
             {opt && <span className="tiny"> {opt === 'team' ? 'TO' : 'PO'}</span>}
           </span>
@@ -96,113 +94,141 @@ export default function Roster() {
     { key: 'exp', label: 'EXP', get: (p) => contractExp(p.contract) },
   ];
 
+  const spots = `${standard}/${CAP.rosterMax}${twoWays ? ` + ${twoWays} two-way` : ''}${expiring ? ` + ${expiring} expiring` : ''}`;
+  const money = `${fmtM(pay)}${isOffseason(league) ? ` in ${shortSeason(s0)}` : ''} · ${over ? `${fmtM(pay - cap.salaryCap)} over cap` : `${fmtM(cap.salaryCap - pay)} space`}`;
+
   return (
     <main className="page">
-      <PageHeader
-        title="Roster"
-        sub={`${standard}/${CAP.rosterMax} players${twoWays ? ` + ${twoWays} two-way` : ''}${expiring ? ` + ${expiring} expiring` : ''} · ${isOffseason(league) ? `${seasonLabel(s0)} payroll` : 'Payroll'} ${fmtM(pay)} · ${pay > cap.salaryCap ? `${fmtM(pay - cap.salaryCap)} over cap` : `${fmtM(cap.salaryCap - pay)} cap space`}`}
-      />
-      <div className="grid3">
-        <Link to="/rotation" className="btn sm">
-          <ListOrdered size={16} /> Rotation
+      <PageHeader title="Roster" sub={`${spots} · ${money}`} />
+      <nav className="tm-links" aria-label="Team tools">
+        <Link to="/rotation" className="btn sm ghost">
+          <ListOrdered size={15} /> Rotation
         </Link>
-        <Link to="/tactics" className="btn sm">
-          <Workflow size={16} /> Tactics
+        <Link to="/tactics" className="btn sm ghost">
+          <Workflow size={15} /> Tactics
         </Link>
-        <Link to="/lab" className="btn sm">
-          <Activity size={16} /> Lab
+        <Link to="/lab" className="btn sm ghost">
+          <Activity size={15} /> Lab
         </Link>
+      </nav>
+      <div className="tm-tabs">
+        <Segmented
+          tabs
+          value={view}
+          onChange={setView}
+          label="Roster view"
+          options={[
+            { id: 'players', label: 'Players' },
+            { id: 'ratings', label: 'Ratings' },
+            { id: 'stats', label: 'Stats' },
+            { id: 'contracts', label: 'Contracts' },
+          ]}
+        />
       </div>
-      <Segmented
-        value={view}
-        onChange={setView}
-        label="Roster view"
-        options={[
-          { id: 'players', label: 'Players' },
-          { id: 'ratings', label: 'Ratings' },
-          { id: 'stats', label: 'Stats' },
-          { id: 'contracts', label: 'Contracts' },
-        ]}
-      />
-      {view === 'players' && (
-        <Card className="flush">
-          <div className="list wide2">
-            {roster.map((p, i) => {
-              const pg = playerSeason(p, league.season);
-              const role = team.tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
-              const mins = team.rotation.minutes[p.pid] ?? 0;
-              return (
-                <div
-                  key={p.pid}
-                  className="listrow clickable"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => nav(`/player/${p.pid}`)}
-                  onKeyDown={activateOnKey(() => nav(`/player/${p.pid}`))}
-                >
-                  <span className="tiny dim num" style={{ width: 14 }}>
-                    {starters.has(p.pid) ? 'S' : i + 1}
-                  </span>
-                  <Avatar p={p} />
-                  <div className="grow">
-                    <div className="row" style={{ gap: 6 }}>
-                      <span className="bold ellipsis">
-                        {p.firstName} {p.lastName}
-                      </span>
-                      <MoodIcon p={p} />
-                    </div>
-                    <div className="small dim ellipsis">
-                      {p.pos} · {age(p)} · {fmtHeight(p.heightIn)} · {ROLE_META[role].label}
-                    </div>
-                    <div className="row" style={{ gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
-                      {p.contract.twoWay && <Tag>Two-way</Tag>}
-                      {p.contract.tenDay && <Tag tone="warn">{tenDayLabel(league, p)}</Tag>}
-                      {p.injury && (
-                        <Tag tone="bad">
-                          {p.injury.type} · {p.injury.gamesRemaining}g
-                        </Tag>
-                      )}
-                      {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
-                      {pg ? (
-                        <span className="tiny dim2 num">
-                          {f1(pg.pts)} pts · {f1(pg.reb)} reb · {f1(pg.ast)} ast · {f1(pg.min)} min
-                        </span>
-                      ) : (
-                        <span className="tiny dim">{mins ? `${mins} min planned` : 'Out of rotation'}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
-                    <Ovr v={p.ovr} />
-                    <span className="pot">POT {p.pot}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+      {view === 'players' && <PlayerList league={league} roster={roster} onOpen={(pid) => nav(`/player/${pid}`)} />}
       {view === 'ratings' && <StatTable rows={roster} cols={ratingTable} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />}
       {view === 'stats' && (
         <>
           <StatTable rows={roster} cols={statCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
-          {!anyCur && (
-            <div className="small dim">{[...lines.values()].some(Boolean) ? "No games yet this season: each player's latest season, per game." : 'No games played yet.'}</div>
-          )}
+          {!anyCur && <div className="tm-foot">{[...lines.values()].some(Boolean) ? 'No games yet: each player’s latest season, per game.' : 'No games played yet.'}</div>}
         </>
       )}
       {view === 'contracts' && (
         <>
           <StatTable rows={roster} cols={contractCols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} />
-          <div className="small dim">
-            Cap {fmtM(cap.salaryCap)} · Tax line {fmtM(cap.luxuryTax)}. PO = player option, TO = team option on the final year. Full cap sheet in{' '}
-            <Link to="/office" style={{ color: 'var(--accent-text)' }}>
-              Front Office
+          <div className="tm-foot row between top">
+            <span>
+              Cap {fmtM(cap.salaryCap)} · Tax {fmtM(cap.luxuryTax)} · PO / TO: player / team option
+            </span>
+            <Link to="/office" className="card-link">
+              Cap sheet <ChevronRight size={14} />
             </Link>
-            .
           </div>
         </>
       )}
     </main>
   );
 }
+
+/** The roster as rows: tonight's five, the bench, then the two-way deals. */
+function PlayerList({ league, roster, onOpen }: { league: League; roster: Player[]; onOpen: (pid: number) => void }) {
+  const team = league.teams[league.userTid];
+  // an injured starter sits: the next healthy player up starts, as on the Rotation screen
+  const starters = startingFive(roster);
+  const groups: [string, Player[]][] = [
+    ['Starters', roster.filter((p) => starters.has(p.pid))],
+    ['Bench', roster.filter((p) => !starters.has(p.pid) && !p.contract.twoWay)],
+    ['Two-way', roster.filter((p) => !starters.has(p.pid) && p.contract.twoWay)],
+  ];
+  const age = (p: Player) => playerAge(p, league.season);
+  return (
+    <div className="card flush">
+      <div className="list">
+        {groups.map(([label, list]) =>
+          list.length ? (
+            <Fragment key={label}>
+              <div className="list-divider">{label}</div>
+              {/* each group its own two-column grid on a tablet, so its rows pair up from its first */}
+              <div className="list wide2 tm-group">
+                {list.map((p) => {
+                  const pg = playerSeason(p, league.season);
+                  const role = team.tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
+                  const mins = team.rotation.minutes[p.pid] ?? 0;
+                  const ten = tenDayLabel(league, p);
+                  return (
+                    <div key={p.pid} className="listrow clickable tm-prow" role="button" tabIndex={0} onClick={() => onOpen(p.pid)} onKeyDown={activateOnKey(() => onOpen(p.pid))}>
+                      <Avatar p={p} />
+                      <div className="grow">
+                        <div className="tm-pname">
+                          <span className="ellipsis">
+                            {p.firstName} {p.lastName}
+                          </span>
+                          <MoodIcon p={p} />
+                        </div>
+                        <div className="lr-meta ellipsis">
+                          {p.pos} · {age(p)} · {fmtHeight(p.heightIn)} · {ROLE_META[role].label}
+                        </div>
+                        <div className="tm-pline">
+                          {p.injury && (
+                            <Tag tone="bad">
+                              {p.injury.type} · {p.injury.gamesRemaining}g
+                            </Tag>
+                          )}
+                          {/* (the two-way group's heading says it for the rest) */}
+                          {p.contract.twoWay && starters.has(p.pid) && <Tag>Two-way</Tag>}
+                          {ten && <Tag tone="warn">{ten}</Tag>}
+                          {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
+                          {pg ? (
+                            <span className="tm-figs">
+                              <Fig v={pg.pts} k="pts" />
+                              <Fig v={pg.reb} k="reb" />
+                              <Fig v={pg.ast} k="ast" />
+                              <Fig v={pg.min} k="min" />
+                            </span>
+                          ) : (
+                            <span className="tm-figs dim">{mins ? `${mins} min planned` : 'Out of rotation'}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="tm-ovr">
+                        <Ovr v={p.ovr} />
+                        <span className="pot">POT {p.pot}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Fragment>
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A per-game figure in a row's stat line: the number, then its unit in small capitals. */
+const Fig = ({ v, k }: { v: number; k: string }) => (
+  <span>
+    <b className="num">{f1(v)}</b> {k}
+  </span>
+);

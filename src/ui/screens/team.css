@@ -1,0 +1,929 @@
+/* The Team section: roster, a player's page, rotation, lineups and the shared pickers. Scoped with
+   the `tm-` prefix. */
+
+/* ------------------------------------------------------------ shared */
+/* a line under a table or a list: what its marks mean */
+.tm-foot {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.tm-foot .card-link {
+  flex: none;
+  white-space: nowrap;
+}
+/* shortcuts to the screens beside this one: compact, under the title */
+.tm-links {
+  display: flex;
+  gap: 8px;
+  margin-top: -6px;
+}
+.tm-links .btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  gap: 6px;
+  color: var(--text-2);
+}
+.tm-links .btn svg {
+  flex: none;
+  color: var(--text-dim);
+}
+.tm-mood {
+  flex: none;
+  font-size: 12px;
+  line-height: 1;
+}
+/* an OVR badge with its POT under it */
+.tm-ovr {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.tm-ovr .pot {
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+/* a group's rows two to a line on a tablet: hairlines between the lines, none doubled under the last */
+@media (min-width: 760px) {
+  .list.wide2.tm-group > * {
+    border-bottom: none;
+  }
+  .list.wide2.tm-group > :nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* ------------------------------------------------------------ roster rows */
+.tm-prow {
+  align-items: center;
+  padding-block: 9px;
+}
+.tm-pname {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.tm-pline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 4px;
+}
+/* a row's season line: figures first, units in small capitals */
+.tm-figs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tm-figs b {
+  font-size: 13px;
+  font-weight: 700;
+  font-stretch: var(--text-w);
+  letter-spacing: 0;
+  color: var(--text-2);
+  margin-right: 1px;
+}
+/* a narrow phone: the four figures condense to stay on one line */
+@media (max-width: 380px) {
+  .tm-figs {
+    gap: 0 7px;
+    font-size: 10px;
+    font-stretch: 82%;
+    letter-spacing: 0.04em;
+  }
+  .tm-figs b {
+    font-stretch: 82%;
+  }
+}
+.tm-figs.dim {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* page tabs that share the width, so the last one isn't cut off on a narrow phone */
+.tm-tabs .seg.tabs {
+  gap: 0;
+}
+.tm-tabs .seg.tabs button {
+  flex: 1 1 auto;
+  padding: 0 6px;
+}
+.tm-tabs .seg.tabs button.on::before {
+  left: 4px;
+  right: 4px;
+}
+/* the player page's five tabs: a little tighter on a narrow phone */
+@media (max-width: 400px) {
+  .tm-tabs.five .seg.tabs button {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 0 4px;
+  }
+}
+/* a boxed switch that sizes to its options instead of filling the row */
+.tm-seg-l .seg {
+  display: inline-flex;
+  max-width: 100%;
+}
+
+/* ------------------------------------------------------------ the player's page */
+/* back on the left, Edit and Compare on the right; the name is the slab's */
+.tm-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: -6px 0 -8px;
+}
+.tm-bar .back {
+  margin-left: -10px;
+}
+.tm-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+/* the faded mark sits behind the badge, clear of the figures */
+.tm-hero .slab-mark {
+  top: 18px;
+  bottom: auto;
+  right: -44px;
+  opacity: 0.13;
+}
+.tm-over {
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding-right: 18px;
+}
+.tm-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tm-id .avatar.lg {
+  width: 68px;
+  height: 68px;
+  margin: -4px 0 -4px -6px;
+}
+.tm-names {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  container-type: inline-size;
+}
+.tm-first {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-2);
+  line-height: 1.15;
+}
+/* 34px, or smaller until the name's longest run (--run letters, at most about 0.62em each) fits the column */
+.tm-last {
+  font-size: 28px;
+  font-size: clamp(18px, 100cqi / (var(--run, 8) * 0.62), 34px);
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+.tm-hero .tm-ovr {
+  gap: 4px;
+}
+.tm-hero .tm-ovr .pot {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.tm-meta {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.35;
+  margin-top: -2px;
+}
+.tm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* signal tags on a team's colours: a dark ground, so the colour reads whatever the slab */
+.tm-hero .tag.bad,
+.tm-hero .tag.warn {
+  background: rgba(0, 0, 0, 0.42);
+}
+.tm-hero .tag.bad {
+  color: #ffa3ad;
+}
+.tm-hero .tag.warn {
+  color: var(--tier-elite);
+}
+a.tag {
+  position: relative;
+}
+a.tag::after {
+  content: '';
+  position: absolute;
+  inset: -12px -2px;
+}
+.tm-hero .statline {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.tm-hero-note {
+  margin-top: -6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* scouting profile: skill, percentile bar, the percentile */
+.tm-skills {
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px;
+}
+.tm-skill {
+  display: grid;
+  grid-template-columns: minmax(0, 8.6em) minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  font-size: 13px;
+}
+.tm-skill-l {
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-skill-v {
+  text-align: right;
+  font-weight: 700;
+  font-size: 14px;
+}
+.tm-sfx {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--text-dim);
+  margin-left: 1px;
+}
+@media (min-width: 760px) {
+  .tm-skills {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 28px;
+  }
+}
+
+/* why he's a 97: what lifts his OVR and what holds it back, in two columns */
+.tm-why {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tm-why-sum {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-why-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.tm-why-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tm-why-col .over {
+  margin-bottom: 2px;
+}
+.tm-why-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.tm-why-row .num {
+  font-weight: 750;
+}
+
+/* role & usage */
+.tm-links-r {
+  display: inline-flex;
+  gap: 16px;
+}
+.tm-role {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tm-role-name {
+  font-weight: 750;
+  font-size: 16px;
+}
+.tm-role-help {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-role .statline,
+.tm-outlook .statline {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.tm-role .statline .v,
+.tm-deal .statline .v,
+.tm-outlook .statline .v {
+  font-size: 24px;
+}
+
+/* mood */
+.tm-mood-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tm-mood-ic {
+  font-size: 18px;
+  line-height: 1;
+  width: 20px;
+  text-align: center;
+}
+.tm-mood-l {
+  font-weight: 750;
+  font-size: 16px;
+}
+.tm-notes {
+  margin: 0;
+  padding: 0 0 0 30px;
+  font-size: 13px;
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tm-notes li::marker {
+  color: var(--text-dim);
+}
+
+/* contract */
+.tm-deal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tm-deal-note {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+.tm-deal-go {
+  align-self: flex-start;
+}
+.tm-acts {
+  gap: 8px;
+  padding-top: 2px;
+}
+.tm-why-line {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.tm-honors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tm-honors .tag {
+  height: 24px;
+  padding: 0 9px;
+}
+.tag.tm-gold {
+  background: color-mix(in srgb, var(--tier-elite) 16%, transparent);
+  color: var(--tier-elite);
+}
+
+/* ratings: a spec sheet, one row a rating, its group as the divider */
+.tm-rt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 8em) minmax(0, 1fr) 30px 26px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  text-align: left;
+  font-size: 13.5px;
+}
+.tm-rt-row:active,
+.tm-rt-row[aria-expanded='true'] {
+  background: var(--surface);
+}
+.tm-rt-l {
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-rt-v {
+  text-align: right;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 19px;
+}
+.tm-rt-d {
+  font-size: 11.5px;
+  font-weight: 750;
+  text-align: left;
+}
+.tm-rt-help {
+  padding: 0 14px 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  background: var(--surface);
+}
+.tm-more-p {
+  margin: 0;
+}
+
+/* career highs */
+.tm-hi {
+  display: grid;
+  grid-template-columns: 44px 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 12px 0 14px;
+}
+div.tm-hi {
+  grid-template-columns: 44px 76px minmax(0, 1fr);
+}
+a.tm-hi:active {
+  background: var(--surface);
+}
+.tm-hi-v {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+}
+.tm-hi-k {
+  font-size: 13px;
+  font-weight: 650;
+}
+.tm-hi-when {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* the game log: W / L as small marks */
+.tm-log-opp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tm-wl {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: inline-grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 12.5px;
+}
+.tm-wl.w {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  color: var(--good);
+}
+.tm-wl.l {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: color-mix(in srgb, var(--bad) 80%, white);
+}
+
+/* growth */
+.tm-outlook {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tm-outlook-l {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.tm-train {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ------------------------------------------------------------ rotation */
+.tm-rsum {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.tm-rsum .statline .v {
+  font-size: 26px;
+}
+.tm-rsum-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.tm-rrow {
+  gap: 10px;
+  padding-block: 8px;
+}
+/* the name, the line under it and the minute bar open his sheet; the arrows stay their own */
+.tm-rrow-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  align-self: stretch;
+}
+.tm-rname {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+/* a long name wraps (at its hyphen) on a narrow phone rather than lose its end */
+.tm-rname > .ellipsis {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tm-rrow.out .tm-rname > .ellipsis {
+  color: var(--text-2);
+}
+.tm-mbar.bar {
+  height: 4px;
+  margin-top: 6px;
+}
+.tm-rrow.out .tm-mbar > div {
+  background: var(--text-dim);
+}
+.tm-rmin {
+  flex: none;
+  width: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.tm-rmin-v {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 24px;
+}
+.tm-rmin-k {
+  margin-top: 2px;
+  font-size: 9.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tm-rrow.out .tm-rmin-v {
+  color: var(--text-dim);
+}
+
+/* stint plan: a row a player, four quarter blocks of twelve minutes, on the floor lit */
+.tm-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px 12px 14px;
+}
+.tm-plan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 92px) minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 8px;
+}
+.tm-plan-row.gap {
+  margin-top: 6px;
+}
+.tm-plan-head {
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-align: center;
+}
+.tm-plan-head > :last-child {
+  text-align: right;
+}
+.tm-plan-qs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.tm-plan-q {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.tm-plan-q i {
+  display: block;
+  height: 100%;
+}
+.tm-plan-q i.on {
+  background: var(--accent);
+}
+/* a minute on after a minute on: one bar, with a hairline marking the minute */
+.tm-plan-q i.on + i.on {
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.16);
+}
+.tm-plan-n {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.tm-plan-m {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+/* lineups this season */
+.tm-lu {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 14px;
+}
+.tm-lu-net {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1.05;
+}
+.tm-lu-names {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.35;
+}
+.tm-lu-min {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding-top: 1px;
+}
+.tm-lu-empty {
+  padding: 14px;
+}
+
+/* the edit sheet */
+.tm-ed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tm-ed-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: -6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tm-ed-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tm-swap {
+  padding-left: 6px;
+}
+.tm-swap-n {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+.tm-swap-n.s {
+  color: var(--accent-ink);
+  background: var(--text-2);
+}
+
+/* ------------------------------------------------------------ lineups */
+/* filters: an overline label, then its chips, flat on the page */
+.tm-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -4px;
+}
+.tm-frow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tm-frow > .over {
+  flex: none;
+  width: 38px;
+}
+.tm-frow-r {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.tm-filters .chips {
+  gap: 5px;
+}
+.tm-filters .chip {
+  padding: 0 11px;
+}
+.tm-select {
+  height: 32px;
+  max-width: 220px;
+}
+.tm-hint {
+  margin-top: -4px;
+}
+.tm-sec-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.tm-lurow {
+  align-items: center;
+  gap: 12px;
+}
+.tm-lu-who {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.tm-lu-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+.tm-net {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+  min-width: 48px;
+  text-align: right;
+}
+.tm-lu-chev {
+  flex: none;
+  margin: 0 -4px 0 -6px;
+}
+.tm-lu-more {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+}
+.tm-unit-p {
+  min-height: 52px;
+  padding-block: 6px;
+}
+.tm-sheet-foot .card-link {
+  min-height: 28px;
+}
+
+/* ------------------------------------------------------------ the player picker */
+.tm-picker {
+  gap: 10px;
+}
+/* a 44px field, and 16px type so a phone doesn't zoom in on it */
+.tm-picker .lg-search input {
+  height: 44px;
+  font-size: 16px;
+  padding-left: 36px;
+}
+.tm-picker .lg-search svg {
+  left: 12px;
+}
+.tm-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 14px;
+  text-align: left;
+}
+.tm-pick:active {
+  background: var(--surface);
+}
+.tm-pick-n {
+  display: block;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tm-pick-m {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------ role editor */
+.tm-role-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px 10px 14px;
+  text-align: left;
+}
+.tm-role-opt:active {
+  background: var(--surface);
+}
+.tm-role-opt.on {
+  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--accent);
+  --text-dim: var(--text-2);
+}
+.tm-role-opt-l {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.tm-role-opt-h {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+.tm-role-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--line-3);
+}
+.tm-role-opt.on .tm-role-check {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
