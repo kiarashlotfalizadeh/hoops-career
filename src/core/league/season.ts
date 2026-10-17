@@ -59,6 +59,7 @@ import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
 import { coachingCarousel } from './coaches';
+import { makeJobOffers } from './jobs';
 import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
 import { retireNumbers } from './jerseys';
@@ -411,8 +412,8 @@ function endPlayoffs(league: League) {
     });
   }
   ownerEvaluation(league);
-  // AI owners review their coaches too (on a random stream of their own)
-  coachingCarousel(league);
+  // AI owners review their coaches too (on a random stream of their own), and the teams that changed look at the user
+  makeJobOffers(league, coachingCarousel(league));
   withRng(league, (rng) => {
     retirements(league, rng);
     league.phase = 'draftLottery';
@@ -441,6 +442,8 @@ export function continueDraft(league: League) {
 export function startDraft(league: League): boolean {
   if (league.phase !== 'draftLottery' || league.fired) return false;
   league.phase = 'draft';
+  // the summer's job offers go with the draft
+  delete league.jobOffers;
   // draft night: late June, or the day after a late Finals
   league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 25));
   cleanProposals(league);

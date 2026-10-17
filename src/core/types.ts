@@ -2,6 +2,7 @@
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
 import type { CoachRecord } from './league/coaches';
+import type { JobOffer } from './league/jobs';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PlayCall, PossLog } from './sim/log';
 
@@ -1308,6 +1309,8 @@ export interface League {
    * team starts it again.
    */
   oddsTrail?: { season: number; tid: number; pts: [number, number, number][] };
+  /** Teams that want the user as head coach this summer (see jobs.ts): from the carousel's openings after the playoffs until the draft. */
+  jobOffers?: { season: number; offers: JobOffer[] };
 }
 
 /**

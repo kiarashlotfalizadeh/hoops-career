@@ -8,7 +8,8 @@ import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, teamPlayers } from '../../core/league/helpers';
 import { contractExp } from '../../core/playerGen';
 import { deleteLeague } from '../../state/persistence';
-import { seasonsInCharge, takeOverTeam } from '../../core/league/owner';
+import { seasonsInCharge } from '../../core/league/owner';
+import { declineJob, takeJob, type JobOffer } from '../../core/league/jobs';
 import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
 import { useLeague, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -108,7 +109,10 @@ export default function Settings() {
         <div className="fo-callout bad">
           <TriangleAlert size={18} className="bad" />
           <div className="grow">
-            <b>You were fired.</b> Take over another team to keep your career going.
+            <b>You were fired.</b>{' '}
+            {league.jobOffers?.offers.length
+              ? `${league.jobOffers.offers.length === 1 ? 'A team wants' : `${league.jobOffers.offers.length} teams want`} you: take a job to keep your career going.`
+              : 'Take over another team to keep your career going.'}
           </div>
           <button className="btn xs" onClick={() => setSheet('switch')}>
             Find a new job
@@ -355,19 +359,33 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
   const t = pick !== null ? league.teams[pick] : null;
   const books = capSeason(league);
 
-  const take = () => {
-    if (pick === null) return;
-    const target = league.teams[pick];
-    useStore.getState().mutate((l) => takeOverTeam(l, pick));
+  const take = (tid = pick) => {
+    if (tid === null) return;
+    const target = league.teams[tid];
+    let err: string | null = null;
+    useStore.getState().mutate((l) => void (err = takeJob(l, tid)));
+    if (err) return useStore.getState().toast(err, 'bad');
     useStore.getState().toast(`Welcome to the ${target.region} ${target.name}, Coach.`, 'good');
     onClose();
     setPick(null);
     nav('/');
   };
+  const offers = league.jobOffers?.offers ?? [];
 
   return (
-    <Sheet open={open} onClose={onClose} title="Take over another team">
+    <Sheet open={open} onClose={onClose} title={offers.length ? 'Job market' : 'Take over another team'}>
       <div className="col" style={{ gap: 12 }}>
+        {offers.length > 0 && (
+          <>
+            <div className="small dim2">
+              {league.fired ? 'Teams that want you after the carousel: ' : 'Teams calling about their openings: '}their offers stand until the draft.
+            </div>
+            {offers.map((o) => (
+              <OfferCard key={o.tid} league={league} o={o} onTake={() => take(o.tid)} onDecline={() => useStore.getState().mutate((l) => declineJob(l, o.tid))} />
+            ))}
+            <div className="tiny dim upper bold">Or take over any team</div>
+          </>
+        )}
         <div className="small dim2">The {cur.name} go back to the AI staff. Your owner mood resets to neutral; the season, finances and league history carry on.</div>
         <Segmented
           value={conf}
@@ -446,12 +464,47 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
             <button className="btn grow" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn primary grow" disabled={pick === null} onClick={take}>
+            <button className="btn primary grow" disabled={pick === null} onClick={() => take()}>
               {t ? `Take over ${t.abbrev}` : 'Pick a team'}
             </button>
           </div>
         </div>
       </div>
     </Sheet>
+  );
+}
+
+/** One team's offer: who they are, where they stand and what the job is, with the user's two choices. */
+function OfferCard({ league, o, onTake, onDecline }: { league: League; o: JobOffer; onTake: () => void; onDecline: () => void }) {
+  const t = league.teams[o.tid];
+  const books = capSeason(league);
+  return (
+    <div className="card tight">
+      <div className="row" style={{ gap: 10 }}>
+        <TeamLogo tid={t.tid} size={36} decorative />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="bold ellipsis">
+            {t.region} {t.name}
+          </div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
+            <span className="tiny dim">
+              {fmtM(payroll(league, t.tid, books))} payroll{books > league.season ? ` for ${shortSeason(books)}` : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="small dim2" style={{ marginTop: 8 }}>
+        {o.note}
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="btn grow" onClick={onDecline}>
+          Decline
+        </button>
+        <button className="btn primary grow" onClick={onTake}>
+          Take the job
+        </button>
+      </div>
+    </div>
   );
 }

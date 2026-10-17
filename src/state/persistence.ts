@@ -478,10 +478,24 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   for (const a of x.awards) if (obj(a) && a.risingStars !== undefined && !risingIntact(x, a.risingStars)) delete a.risingStars;
   migrateNumbers(x);
   migrateCoaches(x);
+  // the summer's job offers: a damaged list goes (the job market still lists every team)
+  if (x.jobOffers !== undefined && !jobOffersIntact(x, x.jobOffers)) delete x.jobOffers;
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** The summer's job offers in shape: a season, and offers from teams in the league (not the user's), each with its kind and note. */
+function jobOffersIntact(x: League, j: unknown): boolean {
+  const kinds = new Set(['opening', 'approach', 'change']);
+  return (
+    obj(j) &&
+    int(j.season) &&
+    Array.isArray(j.offers) &&
+    j.offers.length <= 30 &&
+    j.offers.every((o) => obj(o) && int(o.tid) && !!x.teams[o.tid as number] && o.tid !== x.userTid && kinds.has(o.kind as string) && str(o.note))
+  );
 }
 
 /** The user's odds trail in shape: a season, a team in the league, and at most a season's weekly points of [day, playoffs, title] in tenths of a percent. */

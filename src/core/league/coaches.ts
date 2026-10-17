@@ -433,7 +433,7 @@ function resume(league: League, k: CoachCareer): string {
 }
 
 /** A candidate for an opening: a former head coach (his record) or a new one. */
-interface Candidate {
+export interface Candidate {
   profile: CoachProfile;
   rec?: CoachRecord;
   career?: CoachCareer;
@@ -447,6 +447,11 @@ interface Candidate {
  * rebuilding team gives a first-timer a little more of a look.
  */
 function hireScore(league: League, tid: number, c: Candidate, firedNow: boolean, rng: Rng): number {
+  return candidateScore(league, tid, c, firedNow) + rng.normal(0, 0.45);
+}
+
+/** How much an owner likes a candidate before the interviews' noise (see hireScore): the job market's read of the user against a team's hire. */
+export function candidateScore(league: League, tid: number, c: Candidate, firedNow: boolean): number {
   const strategy = league.teams[tid].strategy;
   const k = c.career;
   let s = (((c.profile.development + c.profile.tactics) / 2 - 60) / 12.5) * (k ? 0.25 : 0.5);
@@ -459,7 +464,7 @@ function hireScore(league: League, tid: number, c: Candidate, firedNow: boolean,
     if (strategy === 'contend') s += 0.3;
     if (firedNow) s -= 0.3;
   } else if (strategy === 'rebuild') s += 0.2;
-  return s + rng.normal(0, 0.45);
+  return s;
 }
 
 export interface CarouselMoves {
