@@ -82,12 +82,15 @@ describe('retired players (L4)', () => {
     const pool = Object.values(l.players).filter((p) => p.tid === -1);
     // newSeason moves the calendar a year on, so "3 years ago" becomes 4 and "4" becomes 5
     const vet = retiree(l, pool[0], 2, 500);
-    const fringe = retiree(l, pool[1], 4, 60);
+    const fringe = retiree(l, pool[1], 4, 40);
     const decorated = retiree(l, pool[2], 4, 60, true);
     const recent = retiree(l, pool[3], 2, 60);
+    // a full season of his stands in his franchise's single-season lists (they're read from the players kept)
+    const listed = retiree(l, pool[4], 4, 60);
     l.phase = 'freeAgency';
     expect(newSeason(l)).toBe(true);
     expect(l.players[fringe.pid]).toBeUndefined();
+    expect(l.players[listed.pid]).toBeDefined();
     expect(l.players[decorated.pid]).toBeDefined();
     expect(l.players[recent.pid]).toBeDefined();
     const s = vet.stats[0];

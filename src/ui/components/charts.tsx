@@ -27,6 +27,7 @@ export function LineChart({
   yMax,
   labels,
   refLine,
+  values = true,
 }: {
   points: number[];
   height?: number;
@@ -35,6 +36,8 @@ export function LineChart({
   yMax?: number;
   labels?: string[];
   refLine?: number;
+  /** Each point's value over it (twelve points or fewer). */
+  values?: boolean;
 }) {
   const [ref, w] = useWidth();
   const h = height;
@@ -53,7 +56,7 @@ export function LineChart({
         {points.map((v, i) => (
           <g key={i}>
             <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
-            {points.length <= 12 && (
+            {values && points.length <= 12 && (
               <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Barlow Condensed">
                 {Math.round(v)}
               </text>
@@ -63,7 +66,15 @@ export function LineChart({
         {labels &&
           labels.map((l, i) =>
             labels.length <= 12 || i % Math.ceil(labels.length / 8) === 0 ? (
-              <text key={i} x={x(i)} y={h - 4} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+              // the first and last labels end at the edges rather than running off them
+              <text
+                key={i}
+                x={x(i)}
+                y={h - 4}
+                textAnchor={labels.length > 1 && i === 0 ? 'start' : labels.length > 1 && i === labels.length - 1 ? 'end' : 'middle'}
+                fontSize="10"
+                fill="var(--text-dim)"
+              >
                 {l}
               </text>
             ) : null,

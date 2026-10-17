@@ -423,8 +423,7 @@ function teamGamesBy(league: League, playoffs: boolean): (tid: number, season: n
  * Could one of his seasons in this league stand in a single-season record list (see seasonRecords)?
  * A regular season of 70% of his teams' games (split between teams, as the league's list counts it)
  * qualifies for the per-game and percentage lists, and a playoff run of four games may on a
- * franchise's short postseason lists. Compaction keeps such a player, since the lists are read from
- * the players the save keeps (a fringe career's big total season, without the games, can still go).
+ * franchise's short postseason lists. A cheap test before holdsSeasonRecord reads the lists.
  */
 export function mayHoldSeasonRecord(league: League, p: Player): boolean {
   const reg = new Map<number, { gp: number; games: number }>();
@@ -441,6 +440,21 @@ export function mayHoldSeasonRecord(league: League, p: Player): boolean {
     reg.set(s.season, r);
   }
   return [...reg.values()].some((r) => r.gp >= Math.ceil(r.games * 0.7));
+}
+
+/**
+ * Does one of his seasons stand in a single-season record list, the league's or a franchise's he
+ * played for, in the regular season or the playoffs? Compaction keeps such a fringe retiree, since
+ * the lists are read from the players the save keeps (a big total season without the games to
+ * qualify for the per-game lists is let go: see mayHoldSeasonRecord).
+ */
+export function holdsSeasonRecord(league: League, p: Player): boolean {
+  if (!mayHoldSeasonRecord(league, p)) return false;
+  const tids = [...new Set(p.stats.filter((s) => !s.real).map((s) => s.tid))];
+  for (const playoffs of [false, true])
+    for (const stat of Object.keys(SEASON_STAT_LABEL) as SeasonStat[])
+      for (const tid of [undefined, ...tids]) if (seasonRecords(league, stat, { tid, playoffs }).some((m) => m.pid === p.pid)) return true;
+  return false;
 }
 
 /**

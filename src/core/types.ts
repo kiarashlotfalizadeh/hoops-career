@@ -1290,6 +1290,12 @@ export interface League {
   records?: RecordBook;
   /** Every head coach the league has had, the user among them, with his jobs (see coaches.ts): the coaching carousel and coach histories. */
   coaches?: CoachRecord[];
+  /**
+   * The user's team's playoff and title odds this regular season, a point a week (see recordTrail in
+   * analysis/odds.ts): [day, playoffs, title], the chances in tenths of a percent. A new season or
+   * team starts it again.
+   */
+  oddsTrail?: { season: number; tid: number; pts: [number, number, number][] };
 }
 
 /**

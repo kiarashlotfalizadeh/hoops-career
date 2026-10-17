@@ -27,7 +27,7 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
-import { freezeRecordNames, mayHoldSeasonRecord } from './records';
+import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -61,6 +61,7 @@ import { coachingCarousel } from './coaches';
 import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
 import { retireNumbers } from './jerseys';
+import { recordTrail } from '../analysis/odds';
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -147,6 +148,8 @@ function periodic(league: League, rng: Rng) {
   aiToAiTrade(league, rng);
   // (offers to the user draw on their own random stream)
   aiProposals(league);
+  // the user's playoff and title odds, once a week (the forecast draws on a stream of its own)
+  if (d % 7 === 6) recordTrail(league);
 }
 
 function playAllStarGame(league: League, rng: Rng) {
@@ -706,7 +709,7 @@ function extensionCandidatesMail(league: League) {
  * those who never played a game go, the rest lose sim-only detail (ratings snapshots beyond peak
  * and final, tendencies, scouting, mood, on-court and shot-zone context in their stat lines).
  * Five seasons on, fringe careers without an award (under 100 games) leave too, unless a season of
- * theirs can stand in the single-season record lists (see mayHoldSeasonRecord). Without this the
+ * theirs stands in the single-season record lists (see holdsSeasonRecord). Without this the
  * save grows by every retiree's full record.
  */
 function compactRetired(league: League) {
@@ -714,7 +717,7 @@ function compactRetired(league: League) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
     const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
     // (a season that can stand in the single-season record lists keeps him: they're read from the players kept)
-    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5 && !mayHoldSeasonRecord(league, p)))) {
+    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5 && !holdsSeasonRecord(league, p)))) {
       // a night of his in the record book keeps his name
       freezeRecordNames(league, p);
       delete league.players[p.pid];

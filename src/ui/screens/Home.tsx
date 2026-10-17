@@ -12,6 +12,7 @@ import { confStandings } from '../../core/league/standings';
 import { openProposals } from '../../core/league/proposals';
 import { scoutTeam, teamAlerts } from '../../core/ai/advisor';
 import { TeamLogo } from '../components/TeamLogo';
+import { OddsLine } from '../components/OddsLine';
 import { Card, Kpi, Ovr } from '../components/ui';
 import { flowActions } from '../flow';
 import { useFlowRunner } from '../useFlow';
@@ -443,6 +444,7 @@ export default function Home() {
               Top 6 qualify for the playoffs; 7-10 go to the play-in.
             </div>
           )}
+          <OddsLine league={league} tid={league.userTid} />
         </Card>
       </div>
 
@@ -575,6 +577,7 @@ function SeasonOutlook({ league }: { league: League }) {
       <div className="small dim2" style={{ marginTop: 10 }}>
         {outlook}
       </div>
+      <OddsLine league={league} tid={team.tid} />
     </Card>
   );
 }

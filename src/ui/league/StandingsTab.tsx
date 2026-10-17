@@ -8,13 +8,14 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Card, Help, Segmented } from '../components/ui';
 import { f0, f1, signed, teamRatings } from '../stats';
 import { confName, ordinal, streakLabel, useQueryParam } from './shared';
+import { OddsView } from './OddsView';
 
-type View = 'E' | 'W' | 'league' | 'power';
+type View = 'E' | 'W' | 'league' | 'power' | 'odds';
 type Cols = 'basic' | 'splits';
 
 export function StandingsTab({ league }: { league: League }) {
   const userConf = league.teams[league.userTid].conf;
-  const [view, setView] = useQueryParam<View>('view', userConf, ['E', 'W', 'league', 'power']);
+  const [view, setView] = useQueryParam<View>('view', userConf, ['E', 'W', 'league', 'power', 'odds']);
   const [cols, setCols] = useQueryParam<Cols>('cols', 'basic', ['basic', 'splits']);
   const rows = useLeagueMemo(() => standings(league), [league]);
   const started = rows.some((r) => r.won + r.lost > 0);
@@ -30,9 +31,12 @@ export function StandingsTab({ league }: { league: League }) {
           { id: 'W', label: 'West' },
           { id: 'league', label: 'League' },
           { id: 'power', label: 'Power' },
+          { id: 'odds', label: 'Odds' },
         ]}
       />
-      {view === 'power' ? (
+      {view === 'odds' ? (
+        <OddsView league={league} />
+      ) : view === 'power' ? (
         <PowerRankings league={league} />
       ) : (
         <>

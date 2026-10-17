@@ -22,6 +22,7 @@ import { hashString } from '../../core/random';
 import { countdownLabel, matchupPreview, nextUserGame, type MatchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { PLAYER_DEFENSES, type GameType, type League, type PlayerDefense, type ScheduledGame } from '../../core/types';
 import { storylines, type StorylineKind } from '../../core/analysis/storylines';
+import { gameStakes, pct as oddsPct } from '../../core/analysis/odds';
 import { GAME_TIME_PERF, injuryText, setGameTime } from '../../core/league/injuries';
 import { K } from '../../core/sim/engine';
 import { Bar, Card, Chips, Empty, Help, PageHeader, Spinner, Tag } from '../components/ui';
@@ -344,6 +345,7 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
       <div style={{ marginTop: 8 }}>
         <Bar value={win * 100} color={win >= 0.5 ? 'var(--good)' : 'var(--bad)'} />
       </div>
+      <Stakes league={league} game={game} tid={pv.us.tid} />
       {busy ? (
         <div className="col" style={{ gap: 6, marginTop: 12 }}>
           <div className="row">
@@ -374,6 +376,18 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
         <Beaker size={15} /> {shown ? 'Simulate again' : `Simulate ${GAMES} games`}
       </button>
     </Card>
+  );
+}
+
+/** What tonight is worth in the playoff race (see gameStakes): the season forecast with the game won, and lost. */
+function Stakes({ league, game, tid }: { league: League; game: ScheduledGame; tid: number }) {
+  const s = useLeagueMemo(() => gameStakes(league, game.gid, tid), [league, game.gid, tid]);
+  // a game that changes nothing either way (in or out whatever happens) isn't worth the line
+  if (!s || Math.abs(s.win - s.loss) < 0.01) return null;
+  return (
+    <div className="small dim2" style={{ marginTop: 8 }}>
+      Playoff odds with a win <b className="good">{oddsPct(s.win)}</b> · with a loss <b className="bad">{oddsPct(s.loss)}</b>
+    </div>
   );
 }
 

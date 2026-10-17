@@ -463,8 +463,24 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   for (const a of x.awards) if (obj(a) && a.saturday !== undefined && !saturdayIntact(x, a.saturday)) delete a.saturday;
   migrateNumbers(x);
   migrateCoaches(x);
+  // the user's weekly odds: a damaged trail goes (the next week starts it again)
+  if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** The user's odds trail in shape: a season, a team in the league, and at most a season's weekly points of [day, playoffs, title] in tenths of a percent. */
+function trailIntact(x: League, t: unknown): boolean {
+  const permille = (v: unknown) => int(v) && v >= 0 && v <= 1000;
+  return (
+    obj(t) &&
+    int(t.season) &&
+    int(t.tid) &&
+    !!x.teams[t.tid] &&
+    Array.isArray(t.pts) &&
+    t.pts.length <= 60 &&
+    t.pts.every((p) => Array.isArray(p) && p.length === 3 && int(p[0]) && permille(p[1]) && permille(p[2]))
+  );
 }
 
 /** All-Star Saturday's results in shape: at most eight shooters and four dunkers, scores in range, each dunk with its name. */

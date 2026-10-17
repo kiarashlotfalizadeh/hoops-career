@@ -15,6 +15,7 @@ import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/pl
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
+import { OddsLine } from '../components/OddsLine';
 import { Avatar, Bar, Card, Empty, Kpi, Ovr, PageHeader, Segmented, StatTable, shade, type Col } from '../components/ui';
 import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, startingFive, teamRatings, type PerGame } from '../stats';
 import { PRACTICE, fmtM, openOption, shortSeason } from '../office/common';
@@ -114,6 +115,9 @@ function Hero({ league, tid }: { league: League; tid: number }) {
               {off?.name ?? 'Custom offense'} · {def?.name ?? 'Custom defense'}
             </div>
           </div>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <OddsLine league={league} tid={tid} />
         </div>
         <div className="lg-strip">
           <div>
