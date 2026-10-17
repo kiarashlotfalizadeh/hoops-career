@@ -71,7 +71,7 @@ function Head({ league, p, pid, onPick }: { league: League; p: Player | undefine
       </div>
       <Link to={`/player/${p.pid}`} className="cmp-name">
         <span className="small dim2 ellipsis">{p.firstName || ' '}</span>
-        <span className="ellipsis">{p.lastName}</span>
+        <span>{p.lastName}</span>
       </Link>
       <div className="row small" style={{ gap: 6, minWidth: 0 }}>
         {team ? (
@@ -91,7 +91,7 @@ function Head({ league, p, pid, onPick }: { league: League; p: Player | undefine
       </span>
       <div className="cmp-deal">
         <div className="small bold num ellipsis">{deal.main}</div>
-        {deal.sub && <div className="tiny dim ellipsis">{deal.sub}</div>}
+        {deal.sub && <div className="tiny dim">{deal.sub}</div>}
       </div>
       {p.injury && (
         <span className="tag bad cmp-tag">
@@ -250,9 +250,9 @@ export default function Compare() {
         <>
           {/* which side is which, kept in view while the rows scroll by */}
           <div className="cmp-strip" aria-hidden>
-            <span className="ellipsis">{pa ? shortName(pa) : '—'}</span>
+            <span>{pa ? shortName(pa) : '—'}</span>
             <span className="cmp-vs">vs</span>
-            <span className="ellipsis">{pb ? shortName(pb) : '—'}</span>
+            <span>{pb ? shortName(pb) : '—'}</span>
           </div>
           {sections.map((s) => (
             <Section key={s.id} s={s} names={names} />

@@ -16,7 +16,8 @@ import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
   const pg = playerSeason(p, season, playoffs);
   if (!pg) return '';
-  return kind === 'def' ? `${f1(pg.stl)} stl · ${f1(pg.blk)} blk · ${f1(pg.reb)} reb` : `${f1(pg.pts)} pts · ${f1(pg.reb)} reb · ${f1(pg.ast)} ast`;
+  // (each number kept with its unit where a line wraps)
+  return kind === 'def' ? `${f1(pg.stl)}\u00a0stl · ${f1(pg.blk)}\u00a0blk · ${f1(pg.reb)}\u00a0reb` : `${f1(pg.pts)}\u00a0pts · ${f1(pg.reb)}\u00a0reb · ${f1(pg.ast)}\u00a0ast`;
 }
 
 export function AwardsTab({ league }: { league: League }) {
@@ -193,7 +194,8 @@ function TeamList({ league, title, pids, season, kind = 'off' }: { league: Leagu
           return (
             <Link key={pid} to={`/player/${pid}`} className="row5">
               {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-              <span className="ellipsis">
+              {/* (a long name wraps rather than lose its end and the position) */}
+              <span>
                 <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
               </span>
               <span className="tiny dim num">{statLine(p, season, kind)}</span>
@@ -239,7 +241,7 @@ function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
               return (
                 <Link key={pid} to={`/player/${pid}`} className="row5">
                   {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-                  <span className="ellipsis">
+                  <span>
                     <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
                     {pid === aw.allStarMvp && (
                       <span className="tag lg-gold" style={{ marginLeft: 6 }}>
@@ -317,9 +319,10 @@ function RaceCard({ league, title, icon, list, kind = 'off' }: { league: League;
                 <div className="bold ellipsis" style={{ color: c.tid === league.userTid ? 'var(--accent)' : undefined }}>
                   {c.p.firstName} {c.p.lastName}
                 </div>
-                <div className="tiny dim ellipsis">
+                {/* (wraps: on a narrow phone the last number was cut off) */}
+                <div className="tiny dim">
                   {teamAbbrev(league, c.tid)}
-                  {ts ? ` (${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
+                  {ts ? `\u00a0(${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
                 </div>
                 <div style={{ marginTop: 5 }}>
                   <Bar value={score - low} max={Math.max(0.01, top - low)} height={4} color={i === 0 ? 'var(--tier-elite)' : undefined} />

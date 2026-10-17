@@ -62,7 +62,8 @@ export default function GodMode() {
                 <Pencil size={17} /> Edit a player
               </button>
               <button className="btn" aria-haspopup="dialog" onClick={() => setCreating(true)}>
-                <UserPlus size={17} /> Create a player
+                {/* (as short as Edit's: on a narrow phone "Create a player" took two lines beside its one) */}
+                <UserPlus size={17} /> New player
               </button>
             </div>
             <div className="small dim" style={{ marginTop: 8 }}>
@@ -78,13 +79,11 @@ export default function GodMode() {
                   key={t.tid}
                   className="card tight"
                   aria-haspopup="dialog"
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingInline: 4 }}
                   onClick={() => setTeam(t.tid)}
                 >
                   <TeamLogo tid={t.tid} size={36} decorative />
-                  <span className="small bold ellipsis" style={{ maxWidth: '100%' }}>
-                    {t.name}
-                  </span>
+                  <span className="small bold god-tile-name">{t.name}</span>
                   <span className="sr-only">: edit the {t.region} team</span>
                 </button>
               ))}

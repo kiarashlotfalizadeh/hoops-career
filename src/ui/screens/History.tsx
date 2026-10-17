@@ -85,7 +85,8 @@ function Franchise({ league }: { league: League }) {
           <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase', lineHeight: 1.05 }}>
             {team.region} {team.name}
           </div>
-          <div className="small dim ellipsis">{tid === league.userTid ? `Your franchise · Coach ${league.coachName}` : `Coach ${team.coach.name}`}</div>
+          {/* (wraps: on a narrow phone the coach's name was cut) */}
+          <div className="small dim">{tid === league.userTid ? `Your franchise · Coach ${league.coachName}` : `Coach ${team.coach.name}`}</div>
         </div>
         <select className="lg-select" value={tid} onChange={(e) => setTidStr(e.target.value)} aria-label="Team" style={{ maxWidth: 96 }}>
           {[...league.teams]
@@ -172,9 +173,10 @@ function Franchise({ league }: { league: League }) {
                     <span className="tiny dim bold" style={{ textAlign: 'right' }}>
                       {i + 1}
                     </span>
-                    <span className="ellipsis">
+                    {/* a long name pushes his seasons onto a line of their own rather than cutting them off */}
+                    <span>
                       <span className="bold">{name(r.p.pid)}</span>{' '}
-                      <span className="tiny dim">
+                      <span className="tiny dim nowrap">
                         {r.seasons} season{r.seasons === 1 ? '' : 's'}
                         {r.p.tid === tid ? ' · active' : r.p.tid === RETIRED ? ' · retired' : ''}
                       </span>

@@ -145,7 +145,8 @@ export function TeamScheduleList({
               <TeamLogo tid={r.opp} size={28} decorative />
               <div style={{ minWidth: 0 }}>
                 <div className="bold ellipsis">{opp.name}</div>
-                <div className="tiny dim ellipsis">
+                {/* (wraps: a long top scorer's name would cut off his points) */}
+                <div className="tiny dim">
                   {typeLabel ? (
                     <span style={{ color: 'var(--accent-text)', fontWeight: 700 }}>
                       {typeLabel}
@@ -185,7 +186,8 @@ function rowSub(league: League, r: Row, tid: number, ranks: Map<number, Standing
     const side = r.res.home.tid === tid ? r.res.home : r.res.away;
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
     // the last word of a box-score name can be a suffix ("Jr."): the player's own last name when he's still in the league
-    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name} ${top.pts} pts` : '';
+    // (his points kept with his name when the line wraps)
+    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name}\u00a0${top.pts}\u00a0pts` : '';
     return [r.g.type === 'regular' ? r.rec : '', lead].filter(Boolean).join(' · ');
   }
   const st = ranks.get(r.opp);

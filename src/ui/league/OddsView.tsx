@@ -110,7 +110,7 @@ function OddsRow({ league, t, rank, mode }: { league: League; t: TeamOdds; rank:
     <Link to={`/team/${t.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
       <span className="rk">{rank}</span>
       <TeamLogo tid={t.tid} size={24} decorative />
-      <span className="nm">
+      <span className={`nm${mode === 'lottery' && owner ? ' owed' : ''}`}>
         <span>
           <span className="nm-full">{team.name}</span>
           <span className="nm-ab">{team.abbrev}</span>

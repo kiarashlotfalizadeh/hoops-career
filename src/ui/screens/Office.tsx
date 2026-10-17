@@ -401,7 +401,16 @@ function ExceptionsBlock({ league, season }: { league: League; season: number })
           </span>
           {r.why ? (
             <span className="tiny dim" style={{ textAlign: 'right', minWidth: 0 }}>
-              {r.why}
+              {/* a hyphenated word kept on one line: "mid-" then "level)." read as two words */}
+              {r.why.split(/(\S*\w-\w\S*)/).map((part, i) =>
+                i % 2 ? (
+                  <span key={i} className="nowrap">
+                    {part}
+                  </span>
+                ) : (
+                  part
+                ),
+              )}
             </span>
           ) : (
             <span className="num bold good" style={{ textAlign: 'right' }}>

@@ -294,8 +294,10 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
         <div className="row" style={{ gap: 6 }}>
           <span className="bold ellipsis">{name}</span>
         </div>
-        {/* what's wrong leads the details: the name line has no room for it on a phone */}
-        <div className="tiny dim ellipsis">
+        {/* what's wrong leads the details: the name line has no room for it on a phone. They wrap rather
+            than lose the archetype or the injury off the end, the archetype next to the position and each
+            dot kept with what's before it */}
+        <div className="tiny dim">
           {p.injury && (
             <span className="bad" style={{ fontWeight: 700 }}>
               Out {p.injury.gamesRemaining}g ({p.injury.type}) ·{' '}
@@ -306,7 +308,7 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
               Wants a trade ·{' '}
             </span>
           )}
-          {p.pos} · {age} yrs{min ? ` · ${Math.round(min)} min` : ''} · {p.archetype}
+          {p.pos}&nbsp;· {p.archetype}&nbsp;· {age}&nbsp;yrs{min ? `\u00a0· ${Math.round(min)}\u00a0min` : ''}
         </div>
       </div>
       <div className="lg-pstats">

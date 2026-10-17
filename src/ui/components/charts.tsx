@@ -52,6 +52,10 @@ export function LineChart({
   const x = (i: number) => (points.length === 1 ? w / 2 : 14 + (i / (points.length - 1)) * (w - 28));
   const y = (v: number) => h - 18 - ((v - lo) / Math.max(1e-6, hi - lo)) * (h - 32);
   const d = points.flatMap((v, i) => (isFinite(v) ? [`${i && isFinite(points[i - 1]) ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`] : [])).join(' ');
+  // every nth label, as many as the width fits ("Oct 26Nov 16" ran together on a phone): about 6px a
+  // character at 10px and a gap, half as much again as the first and last end at the edges
+  const labelW = labels?.length ? Math.max(...labels.map((l) => l.length)) * 6 : 0;
+  const every = labels && labels.length > 1 ? Math.max(1, Math.ceil((labelW * 1.5 + 8) / ((w - 28) / (labels.length - 1)))) : 1;
   return (
     <div ref={ref}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => (isFinite(v) ? Math.round(v) : 'none')).join(', ')}`}>
@@ -73,7 +77,7 @@ export function LineChart({
         )}
         {labels &&
           labels.map((l, i) =>
-            labels.length <= 12 || i % Math.ceil(labels.length / 8) === 0 ? (
+            i % every === 0 ? (
               // the first and last labels end at the edges rather than running off them
               <text
                 key={i}

@@ -59,3 +59,10 @@
   background: var(--surface);
   cursor: pointer;
 }
+/* a team's name in its hub tile wraps at its spaces rather than lose its end ("Timberw…"); the tile's
+   sides are slim (GodMode.tsx) so "Timberwolves" fits a third of a narrow phone */
+.god-tile-name {
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.2;
+}

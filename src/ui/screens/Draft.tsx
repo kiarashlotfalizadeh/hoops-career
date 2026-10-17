@@ -603,7 +603,7 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
   const mine = s.tid === league.userTid;
   const name = (pid: number) => {
     const x = league.players[pid];
-    return x ? `${x.firstName[0]}. ${x.lastName}` : '?';
+    return x ? `${x.firstName[0]}.\u00a0${x.lastName}` : '?';
   };
   if (!p) return null;
   const via = s.orig !== s.tid ? ` · via ${league.teams[s.orig].abbrev}` : '';
@@ -621,8 +621,13 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
         </div>
         <div className="fo-meta tiny ellipsis">
           {p.pos} · {Math.round(top.p * 100)}% of mocks{via}
-          {alts.length ? ` · or ${alts.map((a) => `${name(a.pid)} ${Math.round(a.p * 100)}%`).join(', ')}` : ''}
         </div>
+        {/* the other names on a line of their own, wrapping: at the end of the line above they were cut off */}
+        {alts.length > 0 && (
+          <div className="fo-meta tiny" style={{ whiteSpace: 'normal' }}>
+            or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}
+          </div>
+        )}
       </div>
       <OvrPot p={p} />
     </button>

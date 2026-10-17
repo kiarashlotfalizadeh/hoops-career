@@ -28,6 +28,7 @@ import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
 import { REC_LABEL, REC_STATS, careerHighOf } from '../../core/league/records';
 import { careerOnRecord } from '../../core/analysis/milestones';
+import { neutralSite } from '../../core/league/games';
 import { fmtDate } from '../../core/league/helpers';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerPicker } from '../components/PlayerPicker';
@@ -185,7 +186,8 @@ export default function PlayerView() {
             <div className="small dim">
               {p.country}
               {p.college ? ` · ${p.college}` : ''}
-              {p.draft.round > 0 ? ` · ${p.draft.year} R${p.draft.round} #${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ` · Undrafted` : ''}
+              {/* (the draft slot held together: "2018 R1" then "#11" alone on the next line read oddly) */}
+              {p.draft.round > 0 ? ` · ${p.draft.year}\u00a0R${p.draft.round}\u00a0#${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ` · Undrafted` : ''}
             </div>
             <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
               <Tag tone="info">{p.archetype}</Tag>
@@ -354,7 +356,7 @@ export default function PlayerView() {
                   </div>
                   <div className="row between">
                     <span className="dim2 small">{extStart !== null ? 'Current deal ends' : 'Expires'}</span>
-                    <span className="num">
+                    <span>
                       {seasonLabel(extStart !== null ? extStart - 1 : contractExp(p.contract))}
                       {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
                       {rookieScaleDeal(p) ? ' · rookie scale' : ''}
@@ -364,7 +366,7 @@ export default function PlayerView() {
                     <>
                       <div className="row between">
                         <span className="small good bold">Extended through</span>
-                        <span className="num">{seasonLabel(contractExp(p.contract))}</span>
+                        <span>{seasonLabel(contractExp(p.contract))}</span>
                       </div>
                       <div className="row between">
                         <span className="dim2 small">Extension starts</span>
@@ -692,7 +694,7 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
       fmt: (_, r) => (
         <span className="row" style={{ gap: 4 }}>
           {/* the Cup final is on a neutral floor: nobody's home */}
-          <span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home || r.g.cup === 'final' ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
+          <span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home || neutralSite(r.g) ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
         </span>
       ),
     },
