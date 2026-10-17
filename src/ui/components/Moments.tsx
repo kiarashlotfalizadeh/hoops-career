@@ -43,7 +43,10 @@ export function Moments() {
     const fresh = newMoments(now, seen.current.keys);
     if (!fresh.length) return;
     for (const m of fresh) seen.current.keys.add(m.key);
-    if (league.settings.moments !== false) setQueue((q) => [...q, ...fresh]);
+    if (league.settings.moments === false) return;
+    // a sim through the playoffs ends on the title: that's the moment, not every series on the way
+    const title = fresh.some((m) => m.kind === 'title');
+    setQueue((q) => [...q, ...fresh].filter((m) => !title || m.kind !== 'series'));
   }, [league, v]);
   const showing = !simming && pathname !== '/live' && league ? queue[0] : undefined;
   if (!showing || !league) return null;
