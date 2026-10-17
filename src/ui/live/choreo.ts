@@ -78,7 +78,10 @@ function baseSpots(players: PInfo[], handler: number): Map<number, Pt> {
 
 function guardSpot(o: Pt, onBall: boolean, help: number): Pt {
   const k = onBall ? 0.12 : 0.22 + (help / 100) * 0.18;
-  return { x: o.x + (BASKET.x - o.x) * k, y: o.y + (BASKET.y - o.y) * k };
+  const dist = Math.hypot(BASKET.x - o.x, BASKET.y - o.y);
+  // a step off him at least, so a man near the basket isn't drawn under his defender (on a drive, on his hip)
+  const gap = dist > 0.5 ? Math.max(k * dist, 2) / dist : 0;
+  return gap ? { x: o.x + (BASKET.x - o.x) * gap, y: o.y + (BASKET.y - o.y) * gap } : { x: o.x, y: o.y - 2 };
 }
 
 const ZONE23: Pt[] = [
@@ -206,6 +209,16 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
     else if (d.has(pid)) d.set(pid, { x: clamp(p.x, -24, 24), y: clamp(p.y, 0.5, 46) });
     if (pid === holder) ball = { ...o.get(pid)! };
   };
+  // the log leaves out the pass that starts an action for a man off the ball (an isolation, a post
+  // entry, a ball screen for someone else): it finds him first
+  const catchBall = (pid: number) => {
+    if (pid === holder || !o.has(pid)) return;
+    const from = holder;
+    holder = pid;
+    ball = { ...o.get(pid)! };
+    follow();
+    snap(360, cap(`${N(from)} finds ${N(pid)}`));
+  };
 
   snap(0, name ? { cap: log.label } : {});
   // a set's off-ball screens, in order: where each sends its man depends on the set
@@ -255,9 +268,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
       case 'transition': {
         holder = st.pid ?? holder;
         moveTo(holder, { x: 0, y: 30 });
-        oPids.forEach((pid, i) => {
-          if (pid !== holder) moveTo(pid, { x: [-20, 20, -10, 10][i % 4], y: 14 + (i % 2) * 6 });
-        });
+        // (a lane each for the other four: counted among them, two never share one)
+        oPids.filter((pid) => pid !== holder).forEach((pid, i) => moveTo(pid, { x: [-20, 20, -10, 10][i], y: 14 + (i % 2) * 6 }));
         dPids.forEach((pid, i) => d.set(pid, { x: (i - 2) * 6, y: 18 + i * 3 }));
         ball = { ...o.get(holder)! };
         snap(650, cap(`${N(holder)} pushes it in transition`));
@@ -268,6 +280,15 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
       case 'screen': {
         const scr = st.pid!;
         const h = st.pid2 ?? holder;
+        // a ball screen is for the man with the ball, out on the floor: one in the corner or under the
+        // basket comes up for it (or the screen would send him over the baseline)
+        const up = o.get(h)!;
+        if (up.y < 22) {
+          moveTo(h, { x: clamp(up.x, -15, 15), y: 26 });
+          follow();
+          snap(420);
+        }
+        catchBall(h);
         const hp = o.get(h)!;
         moveTo(scr, { x: hp.x + 3, y: hp.y - 1.5 });
         follow();
@@ -364,6 +385,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
       }
       case 'drive': {
         const pid = st.pid!;
+        catchBall(pid);
         const p = o.get(pid)!;
         moveTo(pid, { x: p.x * 0.35, y: 10 });
         follow();
@@ -376,6 +398,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         moveTo(pid, { x: side, y: 8 });
         follow();
         snap(560, cap(`${N(pid)} posts up`));
+        // the entry pass once he has his spot
+        catchBall(pid);
         break;
       }
       case 'cut': {

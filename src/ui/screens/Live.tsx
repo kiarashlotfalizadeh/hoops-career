@@ -28,7 +28,7 @@ import { LateGameCard } from '../live/LateGameCard';
 import { composites } from '../../core/ratings';
 import type { League, PbpEntry, Settings, Tactics } from '../../core/types';
 import type { PossLog } from '../../core/sim/log';
-import { buildSimInput, userGameOnDay } from '../../core/league/games';
+import { buildSimInput, neutralSite, userGameOnDay } from '../../core/league/games';
 import { planFor } from '../../core/league/gamePlans';
 import { hashString } from '../../core/random';
 import { keptTactics } from '../live/keep';
@@ -684,6 +684,8 @@ export default function Live() {
     if (!lg || status !== 'live') return;
     clearFF();
     setIntro(false);
+    // a replay up now is of a moment the skip leaves behind (and an automatic one, once done, would play on past the break)
+    setShow(null);
     // a timeout called just before the skip is taken along the way: no huddle at the other end
     huddleNext.current = false;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
@@ -929,6 +931,8 @@ export default function Live() {
   // the user's team carries the accent in two-team comparisons (away first)
   const barColors: [string, string] = userSide === 1 ? ['var(--accent)', 'var(--text-dim)'] : ['var(--text-dim)', 'var(--accent)'];
   const plan = planFor(league, userSide === 0 ? game.game.away : game.game.home, game.game);
+  // the Cup final: nobody's home floor
+  const neutral = neutralSite(game.game);
   const banner = banners[0];
   const ffing = keyPlays && !script && !atBreak && !over;
   // what the court draws: a replay or the reel in place of the game for a moment
@@ -967,7 +971,7 @@ export default function Live() {
     <main className={`page full live-page${over ? ' done' : ''}`} style={{ gap: 10 }}>
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
-        Live game: {away.region} {away.name} at {home.region} {home.name}
+        Live game: {away.region} {away.name} {neutral ? 'vs' : 'at'} {home.region} {home.name}
       </h1>
       <div className="sr-only" aria-live="polite">
         {announce}
@@ -977,7 +981,7 @@ export default function Live() {
         <div className="col live-left" style={{ gap: 10 }}>
           {/* the scorebug and the court: on a phone they stay at the top while the rest scrolls under them */}
           <div className="live-stage" ref={stageRef}>
-            <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} ot={result?.ot ?? 0} context={context} wpHome={wpHome}>
+            <ScoreBug ticker={ticker} view={view} home={home} away={away} quarter={quarter} over={over} atBreak={atBreak} ot={result?.ot ?? 0} context={context} wpHome={wpHome}>
               {others.length > 0 && status !== 'simmed' && <ScoreTicker league={league} games={others} elapsed={view.elapsed} done={over} onOpen={() => setPanel('scores')} />}
             </ScoreBug>
             <div className="live-court">
@@ -1018,6 +1022,7 @@ export default function Live() {
                   kits={colors}
                   names={nameOf}
                   context={context}
+                  neutral={neutral}
                   speed={speed}
                   paused={paused}
                   onTip={tipOff}
@@ -1432,7 +1437,7 @@ const Feed = memo(function Feed({
   // everything, the scoring plays (with the period and timeout lines that frame them), or one team's
   const [only, setOnly] = useState<'all' | 'score' | 0 | 1>('all');
   const shown = feed.filter(({ e }) =>
-    only === 'all' ? true : only === 'score' ? e.kind === 'make' || e.kind === 'ft' || e.kind === 'period' : e.t === only || e.kind === 'period',
+    only === 'all' ? true : only === 'score' ? e.kind === 'make' || e.kind === 'ft' || e.kind === 'period' || e.kind === 'timeout' : e.t === only || e.kind === 'period',
   );
   const opts: { id: typeof only; label: string }[] = [
     { id: 'all', label: 'All' },

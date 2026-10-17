@@ -32,6 +32,7 @@ export function Intro({
   kits,
   names,
   context,
+  neutral,
   speed,
   paused,
   onTip,
@@ -45,6 +46,8 @@ export function Intro({
   kits: [[string, string], [string, string]];
   names: (pid: number) => string;
   context?: string;
+  /** On a neutral floor (the Cup final): not the home team's arena. */
+  neutral?: boolean;
   speed: number;
   paused: boolean;
   onTip: () => void;
@@ -61,7 +64,7 @@ export function Intro({
   useEffect(() => {
     if (left <= 0) onTip();
   }, [left, onTip]);
-  const arena = FRANCHISES[home.tid]?.arena;
+  const arena = neutral ? undefined : FRANCHISES[home.tid]?.arena;
   const lines = new Map([...fives[0], ...fives[1]].map((pid) => [pid, introLine(league, pid)]));
   // opening nights read last season's lines (said once, at the top); a starter yet to play this season says so on his line
   const withLines = [...lines.values()].filter((l) => l.text && l.text !== 'Rookie');
@@ -71,8 +74,9 @@ export function Intro({
     const kit = kits[side];
     return (
       <div className="live-intro-col">
+        {/* the name alone, as a broadcast has it: "Oklahoma City Thunder" doesn't fit half a phone's court */}
         <div className="live-intro-team" style={{ borderColor: kit[0] }}>
-          {t.region} {t.name}
+          {t.name}
         </div>
         {fives[side].map((pid) => {
           const p = league.players[pid];
@@ -97,13 +101,11 @@ export function Intro({
     );
   };
   return (
-    <div className="live-intro fade-in" role="dialog" aria-label="Starting lineups">
+    // (a region, not a dialog: it doesn't take the focus, and the playback buttons beside it stay in reach)
+    <div className="live-intro fade-in" role="region" aria-label="Starting lineups">
       <div className="live-intro-head">
         <div className="live-intro-kicker">Starting lineups</div>
-        <div className="live-intro-where ellipsis">
-          {arena ? `${arena} · ` : ''}
-          {home.region}
-        </div>
+        <div className="live-intro-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>
         {context && <div className="live-intro-where ellipsis">{context}</div>}
         {lastSeason && <div className="live-intro-where ellipsis">Per game, last season</div>}
       </div>

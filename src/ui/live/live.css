@@ -355,14 +355,6 @@
   gap: 1px;
   font-size: 12px;
 }
-/* the transport row (pause, speed, key plays, skip) stays one line on a 360px phone */
-.live-transport .btn.sm {
-  padding: 0 10px;
-  gap: 5px;
-}
-.live-transport .seg button {
-  padding: 0 9px;
-}
 
 /* ------------------------------------------------------------------ live game: the play label and broadcast graphics, over the backcourt */
 .live-lower {

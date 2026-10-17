@@ -58,7 +58,7 @@ export default function GameView() {
       : ['var(--accent)', 'var(--text-dim)'];
   const flowColors = matchupColors(home.colors, away.colors);
   const typeLabel =
-    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular Season');
+    cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular season');
   return (
     <main className="page">
       <PageHeader
@@ -470,7 +470,8 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
   const min = wholeMinutes(box.players);
   return (
     <Card title={title} className="flush">
-      <div className="tablewrap" style={{ border: 'none', borderRadius: 0 }}>
+      {/* it scrolls sideways: focusable so a keyboard can scroll it */}
+      <div className="tablewrap" tabIndex={0} role="region" aria-label={`${title} box score`} style={{ border: 'none', borderRadius: 0 }}>
         <table className="stats">
           <thead>
             <tr>

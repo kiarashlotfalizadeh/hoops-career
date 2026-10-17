@@ -100,7 +100,8 @@ export function BoxPanel({
                   .filter((p) => p.min > 0 || onFloor.has(p.pid))
                   .map((p) => (
                     <tr key={p.pid}>
-                      <td className="l sticky">{nameOf(p.pid)}</td>
+                      {/* starters in bold, as in the game report */}
+                      <td className={`l sticky${p.gs ? ' bold' : ''}`}>{nameOf(p.pid)}</td>
                       <td>{min(p.pid)}</td>
                       <td className="bold">{p.pts}</td>
                       <td>{p.orb + p.drb}</td>
@@ -115,7 +116,7 @@ export function BoxPanel({
                         {p.ftm}-{p.fta}
                       </td>
                       <td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
-                      <td>{p.pm > 0 ? `+${p.pm}` : p.pm}</td>
+                      <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{p.pm > 0 ? `+${p.pm}` : p.pm}</td>
                     </tr>
                   ))}
                 <tr>
