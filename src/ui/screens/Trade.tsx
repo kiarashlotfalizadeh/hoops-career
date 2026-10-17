@@ -208,11 +208,13 @@ export default function Trade() {
   /** God mode: the deal goes through whatever their GM and the rules say. */
   const forceIt = () => {
     const abbrev = league.teams[offer.b.tid].abbrev;
-    if (checkForceTrade(league, offer).errors.length) return;
-    useStore.getState().mutate((l) => {
+    if (useStore.getState().sim || checkForceTrade(league, offer).errors.length) return;
+    // all of it or none of it, as every god-mode edit
+    const ok = useStore.getState().attempt('The forced trade', (l) => {
       forceTrade(l, offer);
       if (l.phase === 'draft') continueDraft(l);
     });
+    if (!ok) return;
     useStore.getState().toast(`Trade forced through with ${abbrev}.`, 'good');
     reset();
     setAsk(null);
@@ -794,6 +796,8 @@ function Dock({
   onForce: () => void;
 }) {
   const user = league.userTid;
+  // god-mode edits wait while a sim runs, a forced trade too
+  const simming = useStore((s) => !!s.sim);
   const cap = CAP_FOR(league, season);
   const key = JSON.stringify(offer);
   // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
@@ -907,11 +911,14 @@ function Dock({
       </div>
       {force && (
         <div className="col" style={{ marginTop: 8, gap: 4 }}>
-          <button className="btn sm block" disabled={force.errors.length > 0} onClick={onForce}>
+          <button className="btn sm block" disabled={force.errors.length > 0 || simming} onClick={onForce}>
             <Zap size={16} /> Force this trade
           </button>
-          <span className={`tiny ${force.errors.length ? 'bad' : force.warnings.length ? 'warn' : 'dim'}`}>
-            {force.errors[0] ?? force.warnings[0] ?? 'God mode: it goes through whatever their GM and the trade rules say.'}
+          <span className={`tiny ${force.errors.length ? 'bad' : force.warnings.length || simming ? 'warn' : 'dim'}`}>
+            {force.errors[0] ??
+              (simming
+                ? 'The simulation is running: a forced trade waits for it to stop.'
+                : (force.warnings[0] ?? 'God mode: it goes through whatever their GM and the trade rules say.'))}
           </span>
         </div>
       )}

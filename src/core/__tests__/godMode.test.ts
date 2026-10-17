@@ -22,7 +22,7 @@ import {
 } from '../league/godMode';
 import { contractSeason, freeAgents, payroll, playerName, standardRoster, teamPlayers } from '../league/helpers';
 import { evaluateTrade } from '../league/trades';
-import { preferredYears } from '../league/contracts';
+import { askingContract, preferredYears } from '../league/contracts';
 import { registryProblems } from '../league/coaches';
 import { simDay } from '../league/season';
 import { contractExp, followTendencies, salaryFor } from '../playerGen';
@@ -129,11 +129,16 @@ describe('moving players', () => {
 
   it('a free agent joins on his asking deal; a player sent to free agency leaves no dead money', () => {
     const l = fresh();
-    const fa = freeAgents(l).sort((x, y) => y.ovr - x.ovr)[0];
+    const [fa, cut] = freeAgents(l).sort((x, y) => y.ovr - x.ovr);
     editPlayer(l, fa.pid, { tid: B });
     expect(fa.tid).toBe(B);
     expect(salaryFor(fa, contractSeason(l))).toBeGreaterThan(0);
     expect(fa.asking).toBeUndefined();
+    // one whose price came down as the market dried up signs at it, as the editor shows it
+    cut.asking = { amount: Math.round(askingContract(l, cut).amount * 0.7), years: 2 };
+    const shown = askingContract(l, cut, B);
+    editPlayer(l, cut.pid, { tid: B });
+    expect([salaryFor(cut, contractSeason(l)), contractExp(cut.contract) - contractSeason(l) + 1]).toEqual([shown.amount, shown.years]);
     const p = best(l, A)[0];
     const dead = l.teams[A].deadMoney.length;
     const pay = payroll(l, A);

@@ -14,7 +14,7 @@ import { RATING_KEYS, shiftToOvr } from '../ratings';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, followTendencies, genTendencies, generatePlayer, salaryFor } from '../playerGen';
 import { contractSeason, inSeason, playerName, rosterMaxNow, standardRoster, teamPlayers, TWO_WAY_MAX, twoWayRoster } from './helpers';
-import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract, preferredYears, valueScore } from './contracts';
+import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract, valueScore } from './contracts';
 import { refreshDerived } from './progression';
 import { INJURY_TYPES } from './injuries';
 import { numberTeam, retiredNumbers } from './jerseys';
@@ -180,10 +180,10 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
     if (c.years !== undefined && !wholeIn(c.years, GOD_LIMITS.years)) err(`A contract runs ${GOD_LIMITS.years[0]} to ${GOD_LIMITS.years[1]} seasons.`);
     if (c.option) {
       // the deal it goes on: the length set here, or his asking deal's when he signs one (joining a
-      // team, or a new salary on a deal that's up; at his age after the edit, see preferredYears), or
-      // what's left of his deal
+      // team, or a new salary on a deal that's up; at his age after the edit, or a free agent's
+      // marked-down terms), or what's left of his deal
       const asks = signs || (c.amount !== undefined && salaryFor(p, cs) <= 0);
-      const years = c.years ?? (asks ? preferredYears(league, { ...p, bornYear: e.age !== undefined ? league.season - e.age : p.bornYear }) : yearsLeft(league, p));
+      const years = c.years ?? (asks ? askingContract(league, { ...p, bornYear: e.age !== undefined ? league.season - e.age : p.bornYear }).years : yearsLeft(league, p));
       if (years < 2) err('An option goes on the last season of a deal of two seasons or more.');
     }
   }
@@ -245,6 +245,10 @@ function movePlayer(league: League, p: Player, to: number) {
   delete p.waivers;
   p.mood.tradeRequest = false;
   if (league.faBids?.some((b) => b.pid === p.pid)) league.faBids = league.faBids.filter((b) => b.pid !== p.pid);
+  // a free agent joining a team signs at his price as it stands (marked down as the market dried
+  // up, as the editor shows it), so it's read before his asking deal goes
+  const cs = contractSeason(league);
+  const ask = to >= 0 && salaryFor(p, cs) <= 0 ? askingContract(league, p, to) : null;
   p.asking = undefined;
   p.faDays = undefined;
   if (to === FREE_AGENT) {
@@ -253,11 +257,7 @@ function movePlayer(league: League, p: Player, to: number) {
     p.asking = askingContract(league, p);
     p.faDays = FA_PRICE_CUT_DAYS;
   } else {
-    const cs = contractSeason(league);
-    if (salaryFor(p, cs) <= 0) {
-      const ask = askingContract(league, p, to);
-      p.contract = makeContract(league, ask.amount, ask.years, cs, p.experience);
-    }
+    if (ask) p.contract = makeContract(league, ask.amount, ask.years, cs, p.experience);
     p.tid = to;
     p.joinedSeason = league.season;
     league.teams[to].rotation.order.push(p.pid);
