@@ -107,7 +107,7 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
     subject: league.fired ? (offers.length > 1 ? `${offers.length} job offers` : 'A job offer') : 'Other teams are calling',
     body: league.fired
       ? `${names[0].toUpperCase()}${names.slice(1)} want you as head coach. ${offers.map((o) => o.note).join(' ')} Take one, or any job you like, from the job market.`
-      : `${offers.map((o) => o.note).join(' ')} Stay put, or take the job: the offer stands until the draft.`,
+      : `${offers.map((o) => o.note).join(' ')} Stay put, or ${offers.length > 1 ? 'take one of the jobs: the offers stand' : 'take the job: the offer stands'} until the draft.`,
     tone: 'good',
     link: '/settings?sheet=switch',
   });

@@ -1,6 +1,9 @@
 // Derived stat helpers shared by screens.
 import type { League, Player, PlayerStats, TeamSeason } from '../core/types';
-import { seasonTotals } from '../core/league/helpers';
+import { seasonLine } from '../core/league/helpers';
+
+// (the season line across a traded player's teams lives with the other stats helpers in core)
+export { seasonLine };
 import { gameScore } from '../core/league/awards';
 import { seasonAdvanced } from '../core/analysis/advanced';
 
@@ -95,35 +98,6 @@ export function advancedView(league: League, p: Player, s: PlayerStats): AdvView
   if (s.real || s.playoffs) return null;
   const a = seasonAdvanced(league, p, s.season);
   return a ? { per: a.per, ws: a.ws, ws48: a.ws48, computed: true } : null;
-}
-
-type Adv = NonNullable<PlayerStats['adv']>;
-/** The figures every imported row has (EPM only comes with seeds built with it). */
-type AdvKey = Exclude<keyof Adv, 'oepm' | 'depm' | 'epm'>;
-
-/**
- * A season's totals across all his teams, imported advanced numbers included: a player traded
- * during a real season has a row per team, and adding the rows up dropped them (his usage read
- * 0.0, and his page showed his first team's PER, BPM and win shares as the season's).
- */
-export function seasonLine(p: Player, season: number, playoffs = false): PlayerStats | null {
-  const t = seasonTotals(p, season, playoffs);
-  if (!t || t.adv) return t;
-  const rows = p.stats.filter((s) => s.season === season && s.playoffs === playoffs && s.adv);
-  if (!rows.length) return t;
-  // rates by minutes played, counts added up
-  const min = rows.reduce((a, r) => a + r.min, 0);
-  const rate = (k: AdvKey) => rows.reduce((a, r) => a + r.adv![k] * r.min, 0) / Math.max(1e-9, min);
-  const sum = (k: AdvKey) => rows.reduce((a, r) => a + r.adv![k], 0);
-  const keys: AdvKey[] = ['per', 'ts', 'usg', 'astPct', 'trbPct', 'stlPct', 'blkPct', 'tovPct', 'obpm', 'dbpm', 'bpm'];
-  const adv = Object.fromEntries(keys.map((k) => [k, rate(k)])) as Adv;
-  adv.ws = sum('ws');
-  adv.vorp = sum('vorp');
-  adv.ws48 = min ? (adv.ws * 48) / min : 0;
-  // EPM is already the whole season's: every team row carries the same figure
-  const e = rows.find((r) => r.adv!.epm !== undefined)?.adv;
-  if (e) Object.assign(adv, { oepm: e.oepm, depm: e.depm, epm: e.epm });
-  return { ...t, adv };
 }
 
 export function playerSeason(p: Player, season: number, playoffs = false): PerGame | null {

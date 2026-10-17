@@ -90,9 +90,11 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
 
 /**
  * An offer sheet another team signed with one of the user's restricted free agents: its terms, the
- * deadline, and Match / Let him go. Leaving it unanswered past the deadline lets him go.
+ * deadline, and Match / Let him go (confirmed first: it can't be undone). Leaving it unanswered past
+ * the deadline lets him go.
  */
 export function SheetDecision({ league, p }: { league: League; p: Player }) {
+  const [letGo, setLetGo] = useState(false);
   const s = p.rfa?.sheet;
   if (!s) return null;
   const t = league.teams[s.tid];
@@ -115,14 +117,40 @@ export function SheetDecision({ league, p }: { league: League; p: Player }) {
         </div>
       )}
       <div className="row" style={{ gap: 8, marginTop: 8 }}>
-        <button className="btn sm grow" onClick={() => act((l) => userDecideSheet(l, p.pid, false), 'neutral')}>
+        <button className="btn sm grow" onClick={() => setLetGo(true)}>
           Let him go
         </button>
         <button className="btn sm primary grow" disabled={!!blocked} onClick={() => act((l) => userDecideSheet(l, p.pid, true))}>
           Match
         </button>
       </div>
+      <LetGoSheet league={league} p={p} open={letGo} onClose={() => setLetGo(false)} />
     </Callout>
+  );
+}
+
+/** Confirms letting an offer sheet on the user's restricted free agent go unmatched (the Office, Free Agents and the inbox). */
+export function LetGoSheet({ league, p, open, onClose }: { league: League; p: Player; open: boolean; onClose: () => void }) {
+  const s = p.rfa?.sheet;
+  const t = s ? league.teams[s.tid] : undefined;
+  return (
+    <Sheet open={open && !!t} onClose={onClose} title={`Let ${p.lastName} go?`}>
+      {t && (
+        <div className="col" style={{ gap: 12 }}>
+          <div className="dim2">
+            {playerName(p)} joins the {t.region} {t.name} on the offer sheet's terms ({sheetTerms(league, p)}), and his cap hold comes off your books. This can't be undone.
+          </div>
+          <div className="row">
+            <button className="btn grow" onClick={onClose}>
+              Keep deciding
+            </button>
+            <button className="btn danger grow" onClick={() => (act((l) => userDecideSheet(l, p.pid, false), 'neutral'), onClose())}>
+              Let him go
+            </button>
+          </div>
+        </div>
+      )}
+    </Sheet>
   );
 }
 

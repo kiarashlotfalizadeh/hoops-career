@@ -23,7 +23,11 @@ const GROUPS = ['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as
 
 /** The stored 0-100 value an attribute shown on the 40-99 scale stands for (see attrDisplay). */
 const fromDisplay = (d: number) => Math.round(((d - 40) / 0.59) * 10) / 10;
+/** The lowest an attribute shows: ratings are stored 1-100, and 1 reads 41. */
+const ATTR_MIN = attrDisplay(1);
 const signed = (v: number, d = 0) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`;
+/** Whether he has a deal for the contract season: it goes with him if he moves, as in a trade (without one, a team he joins signs him to his asking deal). */
+const underContract = (league: League, p: Player) => p.tid >= 0 && salaryFor(p, contractSeason(league)) > 0;
 
 interface Form {
   firstName: string;
@@ -52,7 +56,7 @@ interface Form {
   touched: Partial<Record<keyof ContractEdit, true>>;
 }
 
-function formOf(league: League, p: Player): Form {
+export function formOf(league: League, p: Player): Form {
   const cs = contractSeason(league);
   const ask = salaryFor(p, cs) > 0 ? null : askingContract(league, p);
   return {
@@ -83,33 +87,38 @@ function formOf(league: League, p: Player): Form {
 
 const moved = (a: number, b: number) => Math.abs(a - b) > 1e-6;
 
-/** The edit: only what differs from him as he is (a field that doesn't parse goes in, for the checks to name). */
-function editOf(league: League, p: Player, f: Form): PlayerEdit {
+/**
+ * The edit: only what differs from the form as it opened, `base` (a field that doesn't parse goes
+ * in, for the checks to name). Not from him as he is now: a sim running while the sheet is open
+ * moves his wear, mood, health or team, and saving mustn't put those back.
+ */
+export function editOf(base: Form, f: Form): PlayerEdit {
   const e: PlayerEdit = {};
-  if (f.firstName.trim() !== p.firstName) e.firstName = f.firstName;
-  if (f.lastName.trim() !== p.lastName) e.lastName = f.lastName;
-  if (f.country.trim() !== p.country) e.country = f.country;
-  if (f.college.trim() !== p.college) e.college = f.college;
-  if (f.pos !== p.pos) e.pos = f.pos;
-  if (f.jersey.trim() !== p.jersey) e.jersey = f.jersey.trim();
-  if (whole(f.age) !== playerAge(p, league.season)) e.age = whole(f.age);
-  if (f.heightIn !== p.heightIn) e.heightIn = f.heightIn;
-  if (whole(f.weightLb) !== p.weightLb) e.weightLb = whole(f.weightLb);
-  const r = Object.fromEntries(RATING_META.filter((m) => moved(f.ratings[m.key], p.ratings[m.key])).map((m) => [m.key, f.ratings[m.key]]));
+  if (f.firstName.trim() !== base.firstName) e.firstName = f.firstName;
+  if (f.lastName.trim() !== base.lastName) e.lastName = f.lastName;
+  if (f.country.trim() !== base.country) e.country = f.country;
+  if (f.college.trim() !== base.college) e.college = f.college;
+  if (f.pos !== base.pos) e.pos = f.pos;
+  if (f.jersey.trim() !== base.jersey) e.jersey = f.jersey.trim();
+  if (f.age.trim() !== base.age) e.age = whole(f.age);
+  if (f.heightIn !== base.heightIn) e.heightIn = f.heightIn;
+  if (f.weightLb.trim() !== base.weightLb) e.weightLb = whole(f.weightLb);
+  const r = Object.fromEntries(RATING_META.filter((m) => moved(f.ratings[m.key], base.ratings[m.key])).map((m) => [m.key, f.ratings[m.key]]));
   if (Object.keys(r).length) e.ratings = r;
-  if (moved(f.growth, p.growth)) e.growth = f.growth;
-  if (moved(f.injuryProne, p.injuryProne)) e.injuryProne = f.injuryProne;
-  if (moved(f.wear, p.wear)) e.wear = f.wear;
-  if (moved(f.mood, p.mood.score) || f.tradeRequest !== p.mood.tradeRequest) e.mood = { score: f.mood, tradeRequest: f.tradeRequest };
-  if (!f.injury) {
-    if (p.injury) e.injury = null;
-  } else if (!p.injury || f.injury.type !== p.injury.type || whole(f.injury.games) !== p.injury.gamesRemaining) e.injury = { type: f.injury.type, games: whole(f.injury.games) };
-  if (f.tid !== p.tid) e.tid = f.tid;
+  if (moved(f.growth, base.growth)) e.growth = f.growth;
+  if (moved(f.injuryProne, base.injuryProne)) e.injuryProne = f.injuryProne;
+  if (moved(f.wear, base.wear)) e.wear = f.wear;
+  const mood = { ...(moved(f.mood, base.mood) ? { score: f.mood } : {}), ...(f.tradeRequest !== base.tradeRequest ? { tradeRequest: f.tradeRequest } : {}) };
+  if (Object.keys(mood).length) e.mood = mood;
+  const hurt = (x: Form['injury']) => (x ? `${x.type}|${x.games.trim()}` : '');
+  if (hurt(f.injury) !== hurt(base.injury)) e.injury = f.injury && { type: f.injury.type, games: whole(f.injury.games) };
+  if (f.tid !== base.tid) e.tid = f.tid;
   if (f.tid >= 0) {
     const c: ContractEdit = {};
     // $M as typed to $K in $10K steps (an empty or unreadable amount is NaN: the checks say so)
     if (f.touched.amount) c.amount = f.amount.trim() ? Math.round(Number(f.amount) * 100) * 10 : NaN;
-    if (f.touched.years) c.years = f.years;
+    // a new salary runs for the seasons shown (left to itself, a deal that's up would get one)
+    if (f.touched.years || f.touched.amount) c.years = f.years;
     if (f.touched.option) c.option = f.option === 'none' ? null : f.option;
     if (f.touched.twoWay) c.twoWay = f.twoWay;
     if (Object.keys(c).length) e.contract = c;
@@ -129,12 +138,13 @@ export function PlayerEditor({ pid, onClose }: { pid: number | null; onClose: ()
 }
 
 function Editor({ league, p, onClose }: { league: League; p: Player; onClose: () => void }) {
-  const [f, setF] = useState(() => formOf(league, p));
+  const [base] = useState(() => formOf(league, p));
+  const [f, setF] = useState(base);
   const set = (patch: Partial<Form>) => setF((x) => ({ ...x, ...patch }));
   const tabs: Tab[] = movable(p) ? ['ratings', 'bio', 'status', 'contract'] : p.tid === RETIRED ? ['bio'] : ['ratings', 'bio'];
   const [tab, setTab] = useState<Tab>(tabs[0]);
   const block = useEditBlock(league);
-  const edit = editOf(league, p, f);
+  const edit = editOf(base, f);
   const check = checkPlayerEdit(league, p, edit);
   // what the new ratings make him
   const ovr = toDisplay(ovrRaw(f.ratings), league.ovrScale);
@@ -171,7 +181,7 @@ function Editor({ league, p, onClose }: { league: League; p: Player; onClose: ()
           options={tabs.map((id) => ({ id, label: { ratings: 'Ratings', bio: 'Bio', status: 'Status', contract: 'Contract' }[id] }))}
         />
       )}
-      {tab === 'ratings' && <RatingsTab league={league} f={f} set={set} ovr={ovr} pot={pot} />}
+      {tab === 'ratings' && <RatingsTab league={league} f={f} set={set} was={base.ratings} ovr={ovr} pot={pot} />}
       {tab === 'bio' && <BioTab f={f} set={set} />}
       {tab === 'status' && <StatusTab league={league} p={p} f={f} set={set} />}
       {tab === 'contract' && <ContractTab league={league} p={p} f={f} set={set} />}
@@ -182,9 +192,10 @@ function Editor({ league, p, onClose }: { league: League; p: Player; onClose: ()
 
 type TabProps = { f: Form; set: (patch: Partial<Form>) => void };
 
-function RatingsTab({ league, f, set, ovr, pot }: TabProps & { league: League; ovr: number; pot: number }) {
+function RatingsTab({ league, f, set, was, ovr, pot }: TabProps & { league: League; was: Ratings; ovr: number; pot: number }) {
   const [target, setTarget] = useState(ovr);
-  const rate = (k: RatingKey, d: number) => set({ ratings: { ...f.ratings, [k]: clamp(fromDisplay(d), 1, 100) } });
+  // dragged back to the value it showed, a rating is his exact one again (not the scale's step), so nothing changes
+  const rate = (k: RatingKey, d: number) => set({ ratings: { ...f.ratings, [k]: d === attrDisplay(was[k]) ? was[k] : clamp(fromDisplay(d), 1, 100) } });
   return (
     <div className="col" style={{ gap: 14 }}>
       <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
@@ -215,7 +226,7 @@ function RatingsTab({ league, f, set, ovr, pot }: TabProps & { league: League; o
           <div className="fo-sec">{g}</div>
           <div className="god-sliders">
             {RATING_META.filter((m) => m.group === g).map((m) => (
-              <Slider key={m.key} label={m.label} min={40} max={99} value={attrDisplay(f.ratings[m.key])} onChange={(d) => rate(m.key, d)} />
+              <Slider key={m.key} label={m.label} min={ATTR_MIN} max={99} value={attrDisplay(f.ratings[m.key])} onChange={(d) => rate(m.key, d)} />
             ))}
           </div>
         </div>
@@ -270,11 +281,12 @@ function StatusTab({ league, p, f, set }: TabProps & { league: League; p: Player
   const types = INJURY_TYPES.map((t) => ({ id: t.name, label: t.name }));
   if (f.injury && !types.some((t) => t.id === f.injury!.type)) types.unshift({ id: f.injury.type, label: f.injury.type });
   const joining = f.tid >= 0 && f.tid !== p.tid;
+  const hasDeal = underContract(league, p);
   return (
     <div className="col" style={{ gap: 14 }}>
       <Select label="Team" value={f.tid} options={teamOptions(league)} onChange={(tid) => set({ tid })} />
-      {joining && p.tid < 0 && !f.touched.amount && !f.touched.years && <div className="tiny dim">He signs his asking deal with them (see Contract to set another).</div>}
-      {joining && p.tid >= 0 && <div className="tiny dim">His contract goes with him, as in a trade; nothing stays on the books of the team he leaves.</div>}
+      {joining && !hasDeal && !f.touched.amount && !f.touched.years && <div className="tiny dim">He signs his asking deal with them (see Contract to set another).</div>}
+      {joining && hasDeal && <div className="tiny dim">His contract goes with him, as in a trade; nothing stays on the books of the team he leaves.</div>}
       {f.tid < 0 && p.tid >= 0 && <div className="tiny dim">Released to free agency with no dead money left behind.</div>}
       <div className="divider" />
       {f.injury ? (
@@ -326,21 +338,32 @@ function StatusTab({ league, p, f, set }: TabProps & { league: League; p: Player
 function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Player }) {
   if (f.tid < 0) return <div className="empty">A free agent has no contract: he signs one when he joins a team.</div>;
   const cs = contractSeason(league);
-  const now = p.tid === f.tid && salaryFor(p, cs) > 0;
+  const hasDeal = underContract(league, p);
+  // joining a team without a deal, he signs what he asks of that team (your difficulty and its appeal count): that's the salary shown until one is typed
+  const ask = !hasDeal && f.tid !== p.tid ? askingContract(league, p, f.tid) : null;
+  const amount = ask && !f.touched.amount ? (ask.amount / 1000).toFixed(1) : f.amount;
   const touch = (k: keyof ContractEdit, patch: Partial<Form>) => set({ ...patch, touched: { ...f.touched, [k]: true } });
   return (
     <div className="col" style={{ gap: 14 }}>
       <div className="small dim2">
-        {now
+        {hasDeal
           ? `Now ${fmtM(salaryFor(p, cs))} in ${seasonLabel(cs)}, signed through ${seasonLabel(contractExp(p.contract))}${p.contract.option ? ` (${p.contract.option} option)` : ''}.`
-          : 'He signs his asking deal unless you set one here.'}
+          : ask
+            ? 'He signs his asking deal unless you set one here.'
+            : `His deal is up: set one here to sign him from ${seasonLabel(cs)}.`}
       </div>
       <Field label={`Salary in ${seasonLabel(cs)} ($M)`} hint="Later seasons get 5% raises; seasons already under way keep what they paid.">
-        <input className="input" inputMode="decimal" value={f.amount} onChange={(e) => touch('amount', { amount: e.target.value })} />
+        <input className="input" inputMode="decimal" value={amount} onChange={(e) => touch('amount', { amount: e.target.value })} />
       </Field>
       <div className="col" style={{ gap: 6 }}>
         <span className="tiny dim upper bold">Seasons</span>
-        <Chips label="Seasons" value={f.years} options={[1, 2, 3, 4, 5].map((id) => ({ id, label: String(id) }))} onChange={(years) => touch('years', { years })} />
+        {/* a one-season deal can't carry an option: it goes, and stays gone if the deal is made longer again */}
+        <Chips
+          label="Seasons"
+          value={f.years}
+          options={[1, 2, 3, 4, 5].map((id) => ({ id, label: String(id) }))}
+          onChange={(years) => set(years < 2 ? { years, option: 'none', touched: { ...f.touched, years: true, option: true } } : { years, touched: { ...f.touched, years: true } })}
+        />
       </div>
       <div className="col" style={{ gap: 6 }}>
         <span className="tiny dim upper bold">Option on the last season</span>

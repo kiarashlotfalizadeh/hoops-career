@@ -29,7 +29,7 @@ export function OddsView({ league }: { league: League }) {
     <>
       <Trail league={league} />
       <div className="row between">
-        <div className="chips">
+        <div className="chips" role="group" aria-label="Conference">
           {(['E', 'W'] as const).map((c) => (
             <button key={c} className={`chip lg-chip-xs ${conf === c ? 'on' : ''}`} aria-pressed={conf === c} onClick={() => setConf(c)}>
               {c === 'E' ? 'East' : 'West'}
@@ -37,7 +37,7 @@ export function OddsView({ league }: { league: League }) {
           ))}
         </div>
         <div className="row" style={{ gap: 6 }}>
-          <div className="chips">
+          <div className="chips" role="group" aria-label="Forecast">
             {(['playoffs', 'lottery'] as const).map((m) => (
               <button key={m} className={`chip lg-chip-xs ${mode === m ? 'on' : ''}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
                 {m === 'playoffs' ? 'Playoffs' : 'Lottery'}
@@ -105,12 +105,12 @@ function OddsRow({ league, t, rank, mode }: { league: League; t: TeamOdds; rank:
   const spoken =
     mode === 'playoffs'
       ? `, projected ${proj}, ${t.lo} to ${t.hi} wins, playoffs ${pct(t.reach[0], t.clinched || t.out)}, title ${pct(t.reach[4], t.out)}`
-      : `, projected ${proj}, number 1 pick ${pct(t.pick1)}, top 4 ${pct(t.top4)}${t.pick !== null ? `, average pick ${t.pick.toFixed(1)}` : ''}${owner ? `, pick owned by ${owner}` : ''}`;
+      : `, projected ${proj}, lottery ${pct(t.lottery, t.clinched || t.out)}, number 1 pick ${pct(t.pick1, t.clinched)}, top 4 ${pct(t.top4, t.clinched)}${t.pick !== null && t.lottery >= 0.05 ? `, average pick ${t.pick.toFixed(1)}` : ''}${owner ? `, pick owned by ${owner}` : ''}`;
   return (
     <Link to={`/team/${t.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
       <span className="rk">{rank}</span>
       <TeamLogo tid={t.tid} size={24} decorative />
-      <span className="nm">
+      <span className={`nm${mode === 'lottery' && owner ? ' owed' : ''}`}>
         <span>
           <span className="nm-full">{team.name}</span>
           <span className="nm-ab">{team.abbrev}</span>

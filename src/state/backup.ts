@@ -2,7 +2,7 @@
 // (and move between devices) and import it again. A backup is the whole league, results included.
 import { Capacitor } from '@capacitor/core';
 import type { League } from '../core/types';
-import { listLeagues, loadRawLeague, migrate, SAVE_VERSION, saveLeague } from './persistence';
+import { isQuotaError, listLeagues, loadRawLeague, migrate, SAVE_VERSION, saveLeague } from './persistence';
 import { useStore } from './store';
 import { checkpointLive } from './live';
 
@@ -60,7 +60,7 @@ export function exportLeague(league: League): Promise<boolean> {
   const st = useStore.getState();
   if (st.league === league) void st.flush();
   else checkpointLive(league);
-  // in this build's format, even before its first save writes the version (a new league starts at 1)
+  // stamped with this build's format, so an older build refuses it rather than drop what it can't read
   return deliver(JSON.stringify({ ...league, version: SAVE_VERSION }), fileName(league.name, league.season));
 }
 
@@ -71,12 +71,16 @@ export async function exportRawSave(id: string): Promise<boolean> {
   return deliver(JSON.stringify(raw), fileName(typeof raw.name === 'string' ? raw.name : 'league', raw.season ?? 'save'));
 }
 
-/** Read a backup file and store it as a league; a league already on the device is kept, the import becomes a copy. */
-export async function importLeague(file: File): Promise<League> {
-  const st = useStore.getState();
-  if (st.sim) throw new Error('Wait for the simulation to finish, then import.');
-  // the import replaces the open league: don't drop changes of it that never reached the disk
-  if (st.league && !(await st.saveBeforeLeaving())) throw new Error('Your current league could not be saved. Export a backup of it first.');
+/** The open league couldn't be saved before an import would replace it: offer an export of it first. */
+export class UnsavedLeagueError extends Error {}
+
+/**
+ * Read a backup file and store it as a league; a league already on the device is kept, the import
+ * becomes a copy. `force`: go ahead even if the open league can't be saved first (after the user
+ * was offered an export of it).
+ */
+export async function importLeague(file: File, { force = false } = {}): Promise<League> {
+  if (useStore.getState().sim) throw new Error('Wait for the simulation to finish, then import.');
   if (file.size > MAX_IMPORT_BYTES) throw new Error('That file is too big to be a Hoops Career backup.');
   let data: unknown;
   try {
@@ -85,11 +89,22 @@ export async function importLeague(file: File): Promise<League> {
     throw new Error(NOT_A_BACKUP);
   }
   const league = migrate(data, NOT_A_BACKUP);
+  // the import replaces the open league: don't drop changes of it that never reached the disk
+  const st = useStore.getState();
+  if (st.league && !force && !(await st.saveBeforeLeaving())) throw new UnsavedLeagueError('Your current league could not be saved. Export a backup of it first.');
   const existing = await listLeagues();
   if (existing.some((m) => m.id === league.id)) {
     league.id = `${league.id}-${Date.now().toString(36)}`;
     league.name = `${league.name} (imported)`;
   }
-  await saveLeague(league);
+  try {
+    await saveLeague(league);
+  } catch (e) {
+    console.error('import failed', e);
+    const why = isQuotaError(e)
+      ? 'Device storage is full. Free up some space, then import again.'
+      : `Could not save it to device storage${e instanceof Error && e.message ? ` (${e.message})` : ''}.`;
+    throw new Error(why, { cause: e });
+  }
   return league;
 }

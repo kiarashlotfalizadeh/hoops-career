@@ -69,6 +69,56 @@ describe('live court choreography', () => {
     expect(nearest).toBeGreaterThanOrEqual(2.9);
   });
 
+  it('gets the ball to the man an action is for: a ball screen brings him up from the corner, a drive and a post-up start with the pass', () => {
+    // (1 brings it up; 2 stands in the right corner, 5 is the big on the left block)
+    const names = (pid: number) => `P${pid}`;
+    const screen = buildScript(
+      log([
+        { k: 'advance', pid: 1 },
+        { k: 'screen', pid: 5, pid2: 2 },
+      ]),
+      info,
+      undefined,
+      undefined,
+      names,
+    );
+    const at = screen.frames.findIndex((f) => f.cap === 'P5 screens for P2');
+    expect(screen.frames.slice(0, at).some((f) => f.cap === 'P1 finds P2')).toBe(true);
+    expect(screen.frames[at].hold).toBe(off.indexOf(2));
+    // never sent over the baseline
+    for (const f of screen.frames) expect(f.o[off.indexOf(2)].y).toBeGreaterThanOrEqual(4);
+    const drive = buildScript(
+      log([
+        { k: 'advance', pid: 1 },
+        { k: 'drive', pid: 3 },
+      ]),
+      info,
+      undefined,
+      undefined,
+      names,
+    );
+    const drives = drive.frames.find((f) => f.cap === 'P3 drives')!;
+    expect(drives.hold).toBe(off.indexOf(3));
+    // his man stays a step off him, on his hip, not on top of him
+    const driver = drives.o[off.indexOf(3)];
+    expect(Math.min(...drives.d.map((p) => Math.hypot(p.x - driver.x, p.y - driver.y)))).toBeGreaterThanOrEqual(1.9);
+    const post = buildScript(
+      log([
+        { k: 'advance', pid: 1 },
+        { k: 'post', pid: 5 },
+      ]),
+      info,
+    );
+    expect(post.frames.at(-1)!.hold).toBe(off.indexOf(5));
+  });
+
+  it('fills the lanes in transition: the four without the ball never share one', () => {
+    for (const pid of off) {
+      const s = buildScript(log([{ k: 'transition', pid }]), info);
+      expect(closest(s.frames[1])).toBeGreaterThan(2.9);
+    }
+  });
+
   it('draws a 3-2 zone with three defenders up top', () => {
     const s = buildScript(log([{ k: 'advance', pid: 1 }], 'zone32'), info);
     const set = s.frames[s.frames.length - 1].d;

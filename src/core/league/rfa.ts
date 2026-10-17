@@ -108,8 +108,8 @@ export const pendingSheets = (league: League, tid?: number): Player[] =>
 /** The last free-agency day an offer sheet signed on `day` can be matched on. */
 export const matchDeadline = (day: number) => Math.min(FA_DAYS - 1, day + MATCH_DAYS - 1);
 
-/** When a sheet's last match day ends: "day 7" (faDay 6), or "day 30, when free agency closes". */
-export const deadlineLabel = (until: number) => (until >= FA_DAYS - 1 ? `day ${FA_DAYS}, when free agency closes` : `day ${until + 1}`);
+/** When a sheet's last match day ends: "day 7" (faDay 6), or "day 30 (when free agency closes)", which reads the same mid-sentence. */
+export const deadlineLabel = (until: number) => (until >= FA_DAYS - 1 ? `day ${FA_DAYS} (when free agency closes)` : `day ${until + 1}`);
 
 // ---------------------------------------------------------------- qualifying offers
 
@@ -271,7 +271,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
   if (notable(league, p, amount, [tid, r.tid]))
     addNews(league, {
       kind: 'signing',
-      text: `${name} signed a ${years}-year, ${money(total)} offer sheet with the ${t.region} ${t.name}. The ${own.name} can match it by the end of ${deadlineLabel(sheet.until)} of free agency.`,
+      text: `${name} signed a ${years}-year, ${money(total)} offer sheet with the ${t.region} ${t.name}. The ${own.name} can match it by the end of ${deadlineLabel(sheet.until)}${sheet.until < FA_DAYS - 1 ? ' of free agency' : ''}.`,
       tids: [tid, r.tid],
       pids: [p.pid],
     });
@@ -289,9 +289,9 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
 
 /**
  * Would an AI team match this offer sheet, and why: it needs a roster spot under the offseason
- * limit (its own pending offer sheets hold theirs), the contract has to fit what it will pay to keep him (keepBudget), and be worth having
- * (its trade value to the team, under its strategy, contract surplus or burden included, at least
- * MATCH_VALUE: about a rotation player on a fair deal).
+ * limit (its own pending offer sheets hold theirs), and the contract has to fit what it will pay to
+ * keep him (keepBudget) and be worth having (its trade value to the team, under its strategy,
+ * contract surplus or burden included, at least MATCH_VALUE: about a rotation player on a fair deal).
  */
 export function aiMatchVerdict(league: League, p: Player): { match: boolean; why: string } {
   const r = p.rfa!;

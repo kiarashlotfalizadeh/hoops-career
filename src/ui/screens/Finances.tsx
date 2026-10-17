@@ -102,7 +102,7 @@ function Overview({ team }: { team: Team }) {
         <Kpi
           k={`Profit ${shortSeason(league.season)}`}
           v={games || pr ? fmtMs(pr) : '—'}
-          color={pr >= 0 ? 'var(--good)' : 'var(--bad)'}
+          color={games || pr ? (pr >= 0 ? 'var(--good)' : 'var(--bad)') : undefined}
           sub={games ? `after ${games} games` : 'season not started'}
         />
         <Kpi k="Revenue" v={games || ts.revenue ? fmtM(ts.revenue) : '—'} sub="Gate, merch, media" />
@@ -281,6 +281,8 @@ function BudgetTab({ team }: { team: Team }) {
     return best;
   })();
   const totalBudget = items.reduce((a, it) => a + cost(team.budget[it.k]), 0);
+  // what profit counts for in the owner's review this season (his money goal may be the payroll instead)
+  const profitGoal = currentGoals(league)?.goals.find((g) => g.kind === 'profit');
   return (
     <>
       {fired && (
@@ -292,7 +294,8 @@ function BudgetTab({ team }: { team: Team }) {
         </div>
       )}
       <div className="small dim2">
-        Spending comes straight out of profit, which is 20% of how the owner judges you. Budgets are charged per game across the season, so changes take effect immediately.
+        Spending comes straight out of profit{profitGoal ? `, which is ${Math.round(profitGoal.weight * 100)}% of the owner's review this season` : ''}. Budgets are charged per
+        game across the season, so changes take effect immediately.
       </div>
       {items.map((it) => {
         const lvl = team.budget[it.k];
@@ -317,7 +320,7 @@ function BudgetTab({ team }: { team: Team }) {
                 ) : (
                   <span className={`tag ${lvl > a ? 'good' : 'warn'}`}>
                     {tied > 1 ? 'T-' : ''}
-                    {ordinal(rank(it.k))} of 30
+                    {ordinal(rank(it.k))} of {league.teams.length}
                   </span>
                 );
               })()}

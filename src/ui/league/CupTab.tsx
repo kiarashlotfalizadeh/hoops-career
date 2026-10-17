@@ -174,7 +174,7 @@ function GroupCard({ league, table, seeds, decided }: { league: League; table: C
         return (
           <Link key={r.tid} to={`/team/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
             <span className="rk">{r.won + r.lost ? r.rank : '—'}</span>
-            <TeamLogo tid={r.tid} size={22} />
+            <TeamLogo tid={r.tid} size={22} decorative />
             <span className="nm">
               <span>
                 <span className="nm-full">{league.teams[r.tid].name}</span>
@@ -285,7 +285,7 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
   const ptsOf = (tid: number | undefined) => (final && tid !== undefined && final.winner !== undefined ? (tid === final.high ? final.highPts : final.lowPts) : undefined);
   const side = (tid: number | undefined, label: string) => (
     <div className={`side ${final?.winner !== undefined && final.winner !== tid ? 'lose' : ''}`}>
-      {tid !== undefined ? <TeamLogo tid={tid} size={46} /> : <div style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px dashed var(--line-2)' }} />}
+      {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <div style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px dashed var(--line-2)' }} />}
       <div className="bold ellipsis" style={{ maxWidth: '100%' }}>
         {tid !== undefined ? league.teams[tid].name : `${label} winner`}
       </div>
@@ -333,7 +333,7 @@ export function CupBanner({ league, season, tid, runnerUp, mvp, final }: { leagu
   return (
     <div className="lg-champ">
       <div className="row" style={{ gap: 14 }}>
-        <TeamLogo tid={tid} size={60} />
+        <TeamLogo tid={tid} size={60} decorative />
         <div className="grow">
           <div className="kicker">
             <Trophy size={12} style={{ verticalAlign: -1 }} /> {seasonLabel(season)} NBA Cup

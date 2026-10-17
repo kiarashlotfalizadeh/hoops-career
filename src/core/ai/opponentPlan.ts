@@ -14,7 +14,7 @@ import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES } from '../analysis/scouting';
 import { guardingPlan, huntPick } from '../analysis/guarding';
-import { playerName, seasonTotals, teamPlayers } from '../league/helpers';
+import { playerName, seasonLine, seasonTotals, teamPlayers } from '../league/helpers';
 import { defPresetFit, rosterProfile } from './coachAI';
 
 export interface OppPlanItem {
@@ -193,9 +193,10 @@ interface Cand extends OppPlanItem {
   w: number;
 }
 
-/** The user's players who rest tonight, the second night of a back-to-back: none of them is worth a plan. */
+/** The user's players who rest tonight, the second night of a back-to-back (a regular-season game the day after any game, as the engine has it): none of them is worth a plan. */
 function restingTonight(league: League, userTid: number, day: number): Set<number> {
-  const b2b = league.schedule.some((g) => g.type === 'regular' && g.day === day - 1 && (g.home === userTid || g.away === userTid));
+  const plays = (g: ScheduledGame) => g.home === userTid || g.away === userTid;
+  const b2b = !league.schedule.some((g) => g.day === day && g.type !== 'regular' && plays(g)) && league.schedule.some((g) => g.day === day - 1 && plays(g));
   return new Set(b2b ? league.teams[userTid].rotation.restB2B : []);
 }
 
@@ -206,7 +207,8 @@ function userStar(league: League, userTid: number, day: number) {
     .filter((p) => !p.injury && !rest.has(p.pid))
     .map((p) => {
       const here = p.stats.find((s) => s.season === league.season && s.tid === userTid && !s.playoffs && s.gp >= SCOUT_MIN_GAMES);
-      const s = here ?? seasonTotals(p, league.season - 1);
+      // (seasonLine: a real season split by a trade keeps its imported usage)
+      const s = here ?? seasonLine(p, league.season - 1);
       if (!s || s.gp < SCOUT_MIN_GAMES || s.min / s.gp < 20) return { p, usg: 0 };
       const teamUse = s.teamFga + 0.44 * s.teamFta + s.teamTov;
       const usg = s.adv ? s.adv.usg / 100 : teamUse ? (s.fga + 0.44 * s.fta + s.tov) / teamUse : 0;
@@ -380,7 +382,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       id: 'hunt',
       group: 'hunt',
       text: `attacks ${lastName(victim)} on defense`,
-      why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, the rest of your rotation at ${hunt.teamPerDef}.`,
+      why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, your rotation at ${hunt.teamPerDef}.`,
       patch: { offense: { huntTarget: hunt.pid } },
       w: (hunt.teamPerDef - hunt.perDef) / 4,
     });

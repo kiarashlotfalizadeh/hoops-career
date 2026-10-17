@@ -367,4 +367,28 @@ describe('trade finder', () => {
     roster[0].tradeLock = { season: l.season, day: l.day + 30 };
     expect(maxTakeBack(l, U)).toBeLessThan(Math.max(room + out, out * 1.25 + 100));
   });
+
+  it('keeps a team that used the mid-level at the tax line', () => {
+    const l = league();
+    l.phase = 'regular';
+    const top = standardRoster(l, U)
+      .filter((p) => !untradeable(l, p))
+      .sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid));
+    // $1M under the tax, the top contract taking up the rest
+    const tax = CAP_FOR(l).luxuryTax;
+    const raise = tax - 1000 - capPayroll(l, U, l.season);
+    top[0].contract = { start: l.season, salaries: [capSalary(l, top[0].pid) + raise, capSalary(l, top[0].pid) + raise] };
+    const out = capSalary(l, top[0].pid) + capSalary(l, top[1].pid);
+    expect(maxTakeBack(l, U)).toBeCloseTo(out * 1.25 + 100, 6);
+    l.teams[U].mleSeason = l.season;
+    expect(maxTakeBack(l, U)).toBeCloseTo(out + 1000, 6);
+    // the most it allows passes the rules, a dollar more doesn't
+    const them = standardRoster(l, AI).sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid))[0];
+    them.contract = { start: l.season, salaries: [out + 1000, out + 1000] };
+    const deal = offer([top[0].pid, top[1].pid], [them.pid]);
+    const taxError = (o: TradeOffer) => validateTrade(l, o).some((e) => e.includes('tax line'));
+    expect(taxError(deal)).toBe(false);
+    them.contract.salaries = [out + 1001, out + 1001];
+    expect(taxError(deal)).toBe(true);
+  });
 });

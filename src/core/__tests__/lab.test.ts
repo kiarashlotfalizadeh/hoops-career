@@ -180,8 +180,37 @@ describe('tactics lab & reports', () => {
     expect(body()).toMatch(/already rests on back-to-backs: a hard minute cap \(Rotation\)/);
     league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: { [p.pid]: 28 } };
     expect(body()).toMatch(/lowering his 28-minute cap \(Rotation\)/);
+    // the postseason has no back-to-backs, a team that's out has no load to manage, and the summer has none
+    const ts = league.teams[2].seasons.find((s) => s.season === league.season)!;
+    const round = ts.playoffRound;
+    league.phase = 'playoffs';
+    ts.playoffRound = 1;
+    league.teams[2].rotation = { ...rotation, restB2B: [], caps: {} };
+    expect(body()).toMatch(/^Season wear 70\. .* A hard minute cap \(Rotation\) lightens his load\.$/);
+    ts.playoffRound = -1;
+    expect(teamAlerts(league, 2).some((a) => a.id === `wear-${p.pid}`)).toBe(false);
+    league.phase = 'draft';
+    expect(teamAlerts(league, 2).some((a) => a.id === `wear-${p.pid}`)).toBe(false);
+    league.phase = 'regular';
+    ts.playoffRound = round;
     league.teams[2].rotation = rotation;
     p.wear = wear;
+  });
+  it("leaves a newcomer's minutes to an assistant-run rotation, and names a star a manual one leaves out", () => {
+    const rotation = league.teams[2].rotation;
+    const best = teamPlayers(league, 2)
+      .filter((p) => !p.injury)
+      .sort((a, b) => b.ovr - a.ovr)[0];
+    const others = Object.fromEntries(Object.entries(rotation.minutes).filter(([pid]) => +pid !== best.pid));
+    const star = () => teamAlerts(league, 2).find((a) => a.id === 'star-min');
+    // not planned yet (signed in the summer, traded for today): the assistant plans him at the next game
+    league.teams[2].rotation = { ...rotation, minutes: others, manual: false };
+    expect(star()).toBeUndefined();
+    league.teams[2].rotation = { ...rotation, minutes: others, manual: true };
+    expect(star()!.title).toBe(`${best.lastName} isn't getting any minutes`);
+    league.teams[2].rotation = { ...rotation, minutes: { ...others, [best.pid]: 1 }, manual: true };
+    expect(star()!.title).toBe(`${best.lastName} is only playing 1 minute`);
+    league.teams[2].rotation = rotation;
   });
   it("only offers a live game's quick counter when it changes something, and never pulls a slider back", () => {
     const at = (patch: TacticsPatch) => applyPatch(league.teams[0].tactics, patch);

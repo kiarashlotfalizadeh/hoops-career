@@ -165,7 +165,7 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
       <div className="col" style={{ gap: 12 }}>
         <div className="small">
           {step === 'overwrite'
-            ? `Replace "${pb.name}" with your current tactics? ${diff.length ? `${diff.length} setting${diff.length === 1 ? '' : 's'} change in it.` : 'They are the same now.'}`
+            ? `Replace "${pb.name}" with your current tactics? ${diff.length ? `${diff.length} ${diff.length === 1 ? 'setting changes' : 'settings change'} in it.` : 'They are the same now.'}`
             : `Delete "${pb.name}"? Your tactics keep their settings.`}
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -267,6 +267,7 @@ export function MyPlaybooksCard() {
                 className="listrow clickable"
                 role="button"
                 tabIndex={0}
+                aria-haspopup="dialog"
                 aria-label={`${p.name}${using ? (cur.changes.length ? ', in use, edited' : ', in use') : ''}`}
                 onClick={() => setOpen(p.id)}
                 onKeyDown={activateOnKey(() => setOpen(p.id))}
@@ -302,7 +303,8 @@ export function MyPlaybooksCard() {
             if (err) return err;
             useStore.getState().mutate((l) => void savePlaybook(l, name));
             setSaving(false);
-            useStore.getState().toast(`Saved "${name.trim()}"`, 'good');
+            // (named as it was saved: trimmed, runs of spaces as one)
+            useStore.getState().toast(`Saved "${name.trim().replace(/\s+/g, ' ')}"`, 'good');
             return null;
           }}
         />

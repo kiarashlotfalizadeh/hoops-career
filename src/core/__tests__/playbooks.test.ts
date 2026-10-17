@@ -101,7 +101,7 @@ describe('saved playbooks', () => {
     now.defense.chase = [5];
     const loaded = loadPlaybook(now, pb, roster(l));
     expect(loaded.defense.chase).toEqual([5]);
-    expect(tacticsChanges(now, loaded).map(changeText)).toEqual(['Scheme Man-to-Man → Box-and-one', 'Foul to give Off → On']);
+    expect(tacticsChanges(now, loaded).map(changeText)).toEqual(['Scheme Man-to-man → Box-and-one', 'Foul to give Off → On']);
   });
 
   it('roles, shot freedom and screeners only come back for players still on the roster', () => {

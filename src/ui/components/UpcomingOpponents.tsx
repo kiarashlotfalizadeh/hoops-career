@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { planFor } from '../../core/league/gamePlans';
+import { neutralSite } from '../../core/league/games';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { Card, Help, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
@@ -58,7 +59,7 @@ export function UpcomingOpponents() {
               <TeamLogo tid={opp} size={32} decorative />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="bold ellipsis">
-                  {g.home === league.userTid ? 'vs' : '@'} {t.abbrev}{' '}
+                  {g.home === league.userTid || neutralSite(g) ? 'vs' : '@'} {t.abbrev}{' '}
                   <span className="dim num" style={{ fontWeight: 500 }}>
                     {ts.won}-{ts.lost}
                   </span>

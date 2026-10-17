@@ -15,6 +15,7 @@ import {
   EXCEPTION_ORDER,
   type Exception,
   askingContract,
+  exceptionAmount,
   exceptionRoom,
   isException,
   makeContract,
@@ -366,10 +367,10 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                 Once you're over the cap you can still add players on <b>minimum contracts</b> (his is {fmtM(minAmt, 2)} per season), as long as you have a roster spot.
               </p>
               <p style={{ margin: 0 }}>
-                Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {fmtM(cap.salaryCap * EXCEPTIONS.mle.pct)}, {EXCEPTIONS.mle.years} years, once
-                a season, keeping you under the tax line), the <b>bi-annual</b> (up to {fmtM(cap.salaryCap * EXCEPTIONS.bae.pct)}, {EXCEPTIONS.bae.years} years, under the tax, not
-                two seasons running), and for a team that used its cap space this season the <b>room exception</b> in place of the mid-level (up to{' '}
-                {fmtM(cap.salaryCap * EXCEPTIONS.room.pct)}, {EXCEPTIONS.room.years} years). After the mid-level or the bi-annual, trades can't take you past the tax line that
+                Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {fmtM(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
+                once a season, keeping you under the tax line), the <b>bi-annual</b> (up to {fmtM(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the
+                tax, not two seasons running), and for a team that used its cap space this season the <b>room exception</b> in place of the mid-level (up to{' '}
+                {fmtM(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). After the mid-level or the bi-annual, trades can't take you past the tax line that
                 season.
               </p>
               <p style={{ margin: 0 }}>

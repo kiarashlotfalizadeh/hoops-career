@@ -99,6 +99,7 @@ const visit = async (prefix) => {
     ['stats-leaders', '#/league?tab=stats', 3],
     ['stats-players', '#/league?tab=stats&sv=players', 1],
     ['stats-teams', '#/league?tab=stats&sv=teams', 1],
+    ['ratings', '#/league?tab=ratings', 2],
     ['playoffs', '#/league?tab=playoffs', 3],
     ['awards', '#/league?tab=awards', 3],
     ['news', '#/league?tab=news', 2],

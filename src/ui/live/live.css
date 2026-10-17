@@ -94,8 +94,8 @@
 /* ------------------------------------------------------------------ live game: layout
    Every form factor keeps the score, the court and the coaching buttons on screen at once:
    - upright (phones, and tablets held upright): the scorebug and the court stay at the top while the
-     strip, the assistant and the play-by-play scroll under them; on a phone a coaching dock takes the
-     tab bar's place;
+     strip, the assistant and the play-by-play scroll under them, and the coaching buttons are a dock
+     pinned to the bottom: on a phone in the tab bar's place, on a tablet just over it;
    - tablets held sideways: the scorebug and the court fill the left column at the screen's height,
      the coaching buttons and the strip head the right one;
    - phones held sideways: the court fills the left side, the scorebug stays at the top of the right.
@@ -125,24 +125,30 @@
   opacity: 0.7;
 }
 
-/* phones */
-@media (max-width: 759px) and (min-height: 521px) {
-  :root[data-gameday] .bottomnav {
-    display: none;
-  }
+/* upright: the coaching dock pinned to the bottom (in the page's flow on a tablet, a taller scorebug
+   pushed it under the tab bar, and scrolled it slid under the court) */
+@media (max-width: 759px) and (min-height: 521px), (orientation: portrait) and (min-width: 760px) {
   .live-dock {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 40;
-    min-height: calc(var(--nav-h) + var(--safe-b));
     padding: 7px max(10px, var(--safe-r)) calc(7px + var(--safe-b)) max(10px, var(--safe-l));
     background: rgba(11, 15, 21, 0.94);
     background: color-mix(in srgb, var(--bg-2) 94%, transparent);
     backdrop-filter: blur(16px) saturate(150%);
     -webkit-backdrop-filter: blur(16px) saturate(150%);
     border-top: 1px solid var(--line);
+  }
+}
+/* phones: the dock takes the tab bar's place */
+@media (max-width: 759px) and (min-height: 521px) {
+  :root[data-gameday] .bottomnav {
+    display: none;
+  }
+  .live-dock {
+    min-height: calc(var(--nav-h) + var(--safe-b));
   }
   .live-dock.grid4 {
     gap: 6px;
@@ -178,11 +184,22 @@
     background: var(--bg);
   }
 }
-/* tablets held upright: the court leaves room under it for the strip and the coaching buttons */
+/* tablets held upright: the court takes the height the scorebug, the strip and the dock leave it. Live.tsx
+   measures those three into --live-under (they vary with the game, the settings and the coaching depth);
+   the 48px are the stage's padding and gaps, the gap to the strip and a little air over the dock */
 @media (orientation: portrait) and (min-width: 760px) {
   .live-court {
-    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - 430px) * 50 / 47));
+    width: min(100%, calc((100dvh - var(--top-h) - var(--nav-h) - var(--safe-t) - var(--safe-b) - var(--live-under, 400px) - 48px) * 50 / 47));
     margin: 0 auto;
+  }
+  /* the dock sits over the tab bar (and its 1px top border), its buttons in the bar's 640px column */
+  .live-dock {
+    bottom: calc(var(--nav-h) + var(--safe-b) + 1px);
+    padding: 7px max(14px, var(--safe-r), 50vw - 320px) 7px max(14px, var(--safe-l), 50vw - 320px);
+  }
+  /* the page's end scrolls clear of the dock */
+  .live-page:not(.done) {
+    padding-bottom: calc(var(--nav-h) + var(--safe-b) + 84px);
   }
 }
 
@@ -354,14 +371,6 @@
   padding: 4px 2px;
   gap: 1px;
   font-size: 12px;
-}
-/* the transport row (pause, speed, key plays, skip) stays one line on a 360px phone */
-.live-transport .btn.sm {
-  padding: 0 10px;
-  gap: 5px;
-}
-.live-transport .seg button {
-  padding: 0 9px;
 }
 
 /* ------------------------------------------------------------------ live game: the play label and broadcast graphics, over the backcourt */
@@ -640,9 +649,26 @@
   font-weight: 700;
   color: #9aa5b5;
 }
+.live-intro-name {
+  overflow-wrap: anywhere;
+}
 .live-intro-line {
   font-size: 10.5px;
   color: #b4bdca;
+}
+.live-intro-whole {
+  display: none;
+}
+/* a phone's half court: whole numbers on the lines (to the tenth, the assists were cut off), and no
+   series or Cup line, which the scorebug just above already shows, to leave height for a long name's wrap */
+@media (max-width: 759px), (max-height: 520px) {
+  .live-intro-dec,
+  .live-intro-ctx {
+    display: none;
+  }
+  .live-intro-whole {
+    display: inline;
+  }
 }
 .live-intro-bar {
   position: absolute;

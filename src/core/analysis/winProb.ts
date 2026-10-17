@@ -232,7 +232,7 @@ export const marginWords = (abbrev: string, margin: number) => (margin === 0 ? '
 export function swingWords(before: number, after: number): string {
   if (after === before) return after > 0 ? `held a ${after}-point lead` : after < 0 ? `got a stop down ${-after}` : 'got a stop in a tie game';
   if (after > before) {
-    if (after > 0 && before <= 0) return after === 1 ? 'took a 1-point lead' : `took a ${after}-point lead`;
+    if (after > 0 && before <= 0) return `took a ${after}-point lead`;
     if (after === 0) return 'tied it';
     if (after < 0) return `cut it to ${-after}`;
     return `stretched the lead to ${after}`;

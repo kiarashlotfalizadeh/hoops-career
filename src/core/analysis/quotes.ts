@@ -13,7 +13,7 @@ import { COMEBACK_WP, wpStory } from './winProb';
 export interface Quote {
   /** Who said it: "Jalen Brunson" or "Joe Mazzulla". */
   who: string;
-  /** "Player of the game", "Guard", "Head coach". */
+  /** "Player of the game", "Guard", "BOS head coach". */
   role: string;
   tid: number;
   pid?: number;
@@ -422,7 +422,7 @@ export function holdPress(league: League, res: GameResult, choice: PressChoice):
   return effects;
 }
 
-/** The answer's effect in a few words: "Brunson ▲ morale", "Starters ▼ morale · bench ▲ morale". */
+/** The answer's effect in a few words: "Brunson ▲ morale", "4 players ▲ morale · 5 players ▼ morale". */
 export function pressSummary(effects: PressEffect[]): string {
   const up = effects.filter((e) => e.delta > 0);
   const down = effects.filter((e) => e.delta < 0);

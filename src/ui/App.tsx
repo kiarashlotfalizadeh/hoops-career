@@ -61,7 +61,6 @@ async function offerFile(make: () => Promise<boolean>) {
 }
 
 function Boot({ children }: { children: ReactNode }) {
-  const league = useStore((s) => s.league);
   const setLeague = useStore((s) => s.setLeague);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
@@ -106,11 +105,9 @@ function Boot({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', onHide);
     };
   }, []);
-  const userTid = useStore((s) => s.league?.userTid);
-  useEffect(() => {
-    const t = league && userTid !== undefined ? league.teams[userTid] : undefined;
-    applyAccent(t ? t.colors : null);
-  }, [league, userTid]);
+  // the user's team colours: a new team, or god mode recolouring this one (a new array), restyles the app
+  const colors = useStore((s) => s.league?.teams[s.league.userTid]?.colors);
+  useEffect(() => applyAccent(colors ?? null), [colors]);
   if (failed) {
     return (
       <main className="page standalone" role="alert" style={{ paddingTop: 'max(48px, calc(var(--safe-t) + 8px))' }}>
@@ -226,7 +223,7 @@ function TopBar() {
         </button>
         {/* god mode on: the editor is a tap away, and the wand says it's on */}
         {league.settings.godMode && (
-          <button className="iconbtn" style={{ color: 'var(--warn)' }} onClick={() => nav('/god')} aria-label="God mode editor">
+          <button className="iconbtn god-wand" style={{ color: 'var(--warn)' }} onClick={() => nav('/god')} aria-label="God mode editor">
             <Wand2 size={20} />
           </button>
         )}

@@ -273,7 +273,7 @@ describe('two simulated seasons', () => {
       const mail = ends[s].inbox.filter((m) => m.season === season && m.from === 'Owner');
       expect(mail.filter((m) => m.subject === 'All-Star break check-in')).toHaveLength(1);
       expect(mail.filter((m) => m.subject === "We're off pace").length).toBeLessThanOrEqual(1);
-      expect(mail.find((m) => m.subject === 'All-Star break check-in')!.body).toMatch(/^At the break, \d of my \d goals are on track\./);
+      expect(mail.find((m) => m.subject === 'All-Star break check-in')!.body).toMatch(/^At the break, (1 of my \d goals is|[02-9] of my \d goals are) on track\./);
     }
   });
 

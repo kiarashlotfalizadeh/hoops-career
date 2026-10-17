@@ -17,8 +17,9 @@ import './god.css';
  * journal with the rosters it tipped off with).
  */
 export function useEditBlock(league: League): string | null {
-  const simming = useStore((s) => !!s.sim);
-  if (simming) return 'The simulation is running: edits wait for it to stop.';
+  // a sim, or a one-shot job such as opening night or training camp
+  const busy = useStore((s) => s.sim?.label);
+  if (busy) return busy === 'Simulating' ? 'The simulation is running: edits wait for it to stop.' : `The league is busy with ${busy.toLowerCase()}: edits wait for it to finish.`;
   if (liveInProgress(league)) return 'Your live game is in progress: edits wait until it is over, so it plays on as it tipped off.';
   return null;
 }

@@ -196,7 +196,7 @@ await page.locator('.sheet').getByRole('button', { name: /^Max / }).click();
 await page.waitForTimeout(300);
 await scrollSheet();
 await shot('e15-fa-over-cap-exceptions');
-const bae = page.locator('.sheet').getByRole('button', { name: /Use the bi-annual exception/ });
+const bae = page.locator('.sheet').getByRole('radio', { name: 'Bi-annual' });
 if (await bae.count()) {
   await bae.click();
   await page.waitForTimeout(300);

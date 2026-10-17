@@ -43,6 +43,7 @@ export function ScoreBug({
   away,
   quarter,
   over,
+  atBreak,
   ot,
   context,
   wpHome,
@@ -54,6 +55,8 @@ export function ScoreBug({
   away: Team;
   quarter: number;
   over: boolean;
+  /** Stopped at the buzzer between periods: the end of `quarter` (halftime after the 2nd), not a clock at 0.0. */
+  atBreak?: boolean;
   ot: number;
   context?: string;
   /** The home team's win probability, from the drawn game (undefined: not shown). */
@@ -63,13 +66,18 @@ export function ScoreBug({
 }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
+  const brk = !over && !!atBreak;
   const [h, a] = view.sides;
   // "in the bonus": the team that shoots free throws on every foul
   const bonus = [a.bonus ? away.abbrev : '', h.bonus ? home.abbrev : ''].filter(Boolean);
   const run = over ? null : h.run >= RUN_CHIP ? { abbrev: home.abbrev, n: h.run } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, n: a.run } : null;
   const state = over
     ? `final${ot ? ` in ${ot > 1 ? `${ot} overtimes` : 'overtime'}` : ''}`
-    : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.n}-0 run` : ''}`;
+    : brk
+      ? quarter === 2
+        ? 'halftime'
+        : `end of ${qLabel}`
+      : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.n}-0 run` : ''}`;
   const wp = !over && wpHome !== undefined ? wpHome : null;
   const [homeKit, awayKit] = matchupColors(home.colors, away.colors);
   const pct = wpText;
@@ -111,10 +119,10 @@ export function ScoreBug({
         </div>
         <div className="col center" style={{ gap: 0, minWidth: 56 }}>
           <span className="display bold" style={{ fontSize: 15 }}>
-            {over ? finalLabel(ot) : qLabel}
+            {over ? finalLabel(ot) : brk ? (quarter === 2 ? 'HALF' : `END ${qLabel}`) : qLabel}
           </span>
           <span className="display num" style={{ fontSize: 20 }}>
-            {over ? '' : fmtClock(clock)}
+            {over || brk ? '' : fmtClock(clock)}
           </span>
           {run && (
             <span className="tiny warn bold nowrap" aria-hidden="true">

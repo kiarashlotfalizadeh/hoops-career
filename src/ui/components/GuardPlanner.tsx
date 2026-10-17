@@ -134,7 +134,7 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
             {pick &&
               (pick.worth
                 ? `★ ${names(pick.pid)} is their weakest perimeter defender (${pick.perDef}, their rotation ${pick.teamPerDef}).`
-                : `Their weakest perimeter defender, ${names(pick.pid)} (${pick.perDef}), is close to the rest of their rotation (${pick.teamPerDef}): hunting him may not pay.`)}
+                : `Their weakest perimeter defender, ${names(pick.pid)} (${pick.perDef}), is close to their rotation (${pick.teamPerDef}): hunting him may not pay.`)}
           </div>
         </>
       )}

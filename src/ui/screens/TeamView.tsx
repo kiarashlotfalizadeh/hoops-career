@@ -99,10 +99,10 @@ function Hero({ league, tid }: { league: League; tid: number }) {
         style={{ background: `radial-gradient(500px 220px at 100% 0%, ${c1}66, transparent 70%), linear-gradient(160deg, ${shade(c1, -0.55)}, var(--surface) 75%)` }}
       >
         <div className="wm">
-          <TeamLogo tid={tid} size={170} />
+          <TeamLogo tid={tid} size={170} decorative />
         </div>
         <div className="row" style={{ gap: 14, position: 'relative' }}>
-          <TeamLogo tid={tid} size={64} />
+          <TeamLogo tid={tid} size={64} decorative />
           <div className="grow">
             <div className="kick">{team.region}</div>
             <div className="big">{team.name}</div>
@@ -239,7 +239,12 @@ function RosterTab({ league, tid }: { league: League; tid: number }) {
 function RotationList({ league, tid }: { league: League; tid: number }) {
   const team = league.teams[tid];
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
-  if (!roster.length) return <Empty>No players on the roster.</Empty>;
+  if (!roster.length)
+    return (
+      <Card>
+        <Empty>No players on the roster.</Empty>
+      </Card>
+    );
   // the avatar already shows the initials: last names alone fit a phone ("Murray-Boyles", not "C. Murray-Boyl…")
   const nameOf = rosterNames(roster);
   // the five who start the next game: an injured starter is listed with the bench until he's back
@@ -289,8 +294,10 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
         <div className="row" style={{ gap: 6 }}>
           <span className="bold ellipsis">{name}</span>
         </div>
-        {/* what's wrong leads the details: the name line has no room for it on a phone */}
-        <div className="tiny dim ellipsis">
+        {/* what's wrong leads the details: the name line has no room for it on a phone. They wrap rather
+            than lose the archetype or the injury off the end, the archetype next to the position and each
+            dot kept with what's before it */}
+        <div className="tiny dim">
           {p.injury && (
             <span className="bad" style={{ fontWeight: 700 }}>
               Out {p.injury.gamesRemaining}g ({p.injury.type}) ·{' '}
@@ -301,7 +308,7 @@ function PlayerRow({ league, p, name, min }: { league: League; p: Player; name: 
               Wants a trade ·{' '}
             </span>
           )}
-          {p.pos} · {age} yrs{min ? ` · ${Math.round(min)} min` : ''} · {p.archetype}
+          {p.pos}&nbsp;· {p.archetype}&nbsp;· {age}&nbsp;yrs{min ? `\u00a0· ${Math.round(min)}\u00a0min` : ''}
         </div>
       </div>
       <div className="lg-pstats">
@@ -456,7 +463,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
               key={s}
               k={seasonLabel(s)}
               v={<span style={{ fontSize: 18 }}>{fmtM(pay, 0)}</span>}
-              sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'}
+              sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'Committed'}
             />
           );
         })}
@@ -934,7 +941,7 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
             const acquired = d.originalTid !== tid;
             return (
               <div key={d.dpid} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
-                <TeamLogo tid={d.originalTid} size={28} />
+                <TeamLogo tid={d.originalTid} size={28} decorative />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
@@ -958,7 +965,7 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
           <Card className="flush lg-flat">
             {away.map((d) => (
               <Link key={d.dpid} to={`/team/${d.tid}`} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
-                <TeamLogo tid={d.tid} size={28} />
+                <TeamLogo tid={d.tid} size={28} decorative />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
@@ -1005,7 +1012,7 @@ function HistoryTab({ league, tid }: { league: League; tid: number }) {
             <span className="rec">
               {s.won}-{s.lost}
             </span>
-            <span className="tiny dim ellipsis">{s.seed ? `${ordinal(s.seed)} seed` : ''}</span>
+            <span className="tiny dim ellipsis">{s.seed ? `${ordinal(s.seed)} seed` : s.season === league.season && s.won + s.lost === 0 ? 'Not started' : ''}</span>
             <OutcomeTag o={seasonOutcome(league, tid, s)} />
           </div>
         ))}

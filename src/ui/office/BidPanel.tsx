@@ -100,11 +100,11 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
           <div key={k} className="row between small" style={{ gap: 8 }}>
             <span className="row" style={{ gap: 6 }}>
               {fit[k].ok === true ? (
-                <Check size={15} className="good" aria-label="Your team fits" />
+                <Check size={15} className="good" role="img" aria-label="Your team fits" />
               ) : fit[k].ok === false ? (
-                <X size={15} className="bad" aria-label="Your team falls short" />
+                <X size={15} className="bad" role="img" aria-label="Your team falls short" />
               ) : (
-                <Minus size={15} className="dim" aria-label="Neutral" />
+                <Minus size={15} className="dim" role="img" aria-label="Neutral" />
               )}
               <span>
                 <b>{LABEL[k]}</b> <span className="dim">{weight(prefs[k])}</span>

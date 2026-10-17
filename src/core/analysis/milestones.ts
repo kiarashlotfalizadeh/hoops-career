@@ -86,7 +86,8 @@ export function milestonesIn(league: League, res: GameResult): Milestone[] {
     const tid = res.home.players.includes(b) ? res.home.tid : res.away.tid;
     for (const stat of ['pts', 'reb', 'ast'] as const) {
       const after = now[stat] - since.get(b.pid)![stat];
-      for (const mark of marksCrossed(after - lineStat(b, stat), after)) out.push({ pid: b.pid, tid, stat, mark });
+      // the round thousands, and the marks between them that make the league's news (7,500 rebounds)
+      for (const mark of marksCrossed(after - lineStat(b, stat), after, 500)) if (mark % 1000 === 0 || newsworthy(stat, mark)) out.push({ pid: b.pid, tid, stat, mark });
     }
   }
   return out;

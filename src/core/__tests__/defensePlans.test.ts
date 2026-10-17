@@ -93,6 +93,10 @@ describe('guarding their players', () => {
     s.tpa = 2 * s.gp;
     s.tpm = Math.floor(s.tpa / 5);
     expect(guardAdvice(lg, q).why).toMatch(/^Doesn't shoot threes \(\d+\.\d% from three on 2\.0 a game\)\.$/);
+    // last season's numbers (before five games with his team this season) say so
+    q.stats = [{ ...s, season: lg.season - 1, real: undefined }];
+    expect(guardAdvice(lg, q).line.source).toBe('last');
+    expect(guardAdvice(lg, q).why).toMatch(/^Doesn't shoot threes \(\d+\.\d% from three on 2\.0 a game last season\)\.$/);
   });
 
   it('picks their weakest perimeter defender to attack, and says when he isn’t much of a weak link', () => {
@@ -187,7 +191,7 @@ describe('counters and opposing plans', () => {
       if (hunt) {
         hunts++;
         expect(hunt.text).toBe(`attacks ${sieve.lastName} on defense`);
-        expect(hunt.why).toMatch(/defends the perimeter at \d+, the rest of your rotation at \d+\./);
+        expect(hunt.why).toMatch(/defends the perimeter at \d+, your rotation at \d+\./);
         expect(t().offense.huntTarget).toBe(sieve.pid);
       }
       const guard = plan?.items.find((it) => it.group === 'guard');

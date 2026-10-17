@@ -51,7 +51,8 @@ export function withLab<T>(fn: (lab: Lab) => Promise<T>, timeoutMs = 6 * 60_000)
       fail,
       setTimeout(() => resetLab(new Error('The lab timed out.')), timeoutMs),
     );
-    fn(lab).then(
+    // (a call that throws instead of rejecting fails the same way, so its stall timer can't outlive it)
+    new Promise<T>((r) => r(fn(lab))).then(
       (v) => {
         done();
         resolve(v);

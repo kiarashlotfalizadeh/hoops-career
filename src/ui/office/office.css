@@ -344,6 +344,14 @@
 .fo-prow:active {
   background: var(--surface-3);
 }
+/* a long status tag ("Offer sheet · SAS · POR decides day 4") wraps instead of running under the money column */
+.fo-prow .tag {
+  max-width: 100%;
+  height: auto;
+  min-height: 20px;
+  padding-block: 2px;
+  white-space: normal;
+}
 .fo-ovrstack {
   display: flex;
   flex-direction: column;
@@ -458,6 +466,15 @@
   border-radius: 16px;
   padding: 10px 12px 12px;
   box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.45);
+}
+/* on a phone the dock folds the deal's terms and its salary, payroll and roster numbers away until it's
+   opened (their reaction, the meter, their reasons, a broken rule and the buttons stay): all of it covered
+   half the asset list and took its taps. The meter's ticks fold too: its percentage is over it */
+@media (max-width: 759px) {
+  .fo-dock:not(.open) .fo-dock-more,
+  .fo-dock:not(.open) .fo-meter-ticks {
+    display: none;
+  }
 }
 /* a running sim's bar (theme.css .simbar) sits where the dock would: the dock rides above it */
 body:has(.simbar) .fo-dock {

@@ -10,6 +10,7 @@ import { Card, Empty } from '../components/ui';
 import { ordinal, roundName, useGamesByGid, useQueryParam } from './shared';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { nextUserGame } from '../../core/analysis/preview';
+import { neutralSite } from '../../core/league/games';
 
 const TYPE_LABEL: Record<string, string> = { playin: 'Play-In', playoffs: 'Playoffs', allstar: 'All-Star' };
 const CUP_SHORT: Record<string, string> = { group: 'Cup', qf: 'Cup QF', sf: 'Cup SF', final: 'Cup Final' };
@@ -92,7 +93,12 @@ export function TeamScheduleList({
   }, [league, tid, byGid]);
 
   const list = cupOnly ? rows.filter((r) => r.g.cup) : rows;
-  if (!list.length) return <Empty>{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</Empty>;
+  if (!list.length)
+    return (
+      <Card>
+        <Empty>{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</Empty>
+      </Card>
+    );
 
   const nextIdx = list.findIndex((r) => !r.g.played);
   const anchor = nextIdx === -1 ? list.length : nextIdx;
@@ -134,11 +140,13 @@ export function TeamScheduleList({
                 <span className="wd">{today ? 'Today' : fmtDate(league.season, r.g.day, { weekday: 'short' })}</span>
                 <span className="d">{fmtDate(league.season, r.g.day)}</span>
               </div>
-              <span className="lg-g-at">{r.home ? 'vs' : '@'}</span>
-              <TeamLogo tid={r.opp} size={28} />
+              {/* the Cup final is on a neutral floor: nobody's home */}
+              <span className="lg-g-at">{r.home || neutralSite(r.g) ? 'vs' : '@'}</span>
+              <TeamLogo tid={r.opp} size={28} decorative />
               <div style={{ minWidth: 0 }}>
                 <div className="bold ellipsis">{opp.name}</div>
-                <div className="tiny dim ellipsis">
+                {/* (wraps: a long top scorer's name would cut off his points) */}
+                <div className="tiny dim">
                   {typeLabel ? (
                     <span style={{ color: 'var(--accent-text)', fontWeight: 700 }}>
                       {typeLabel}
@@ -178,7 +186,8 @@ function rowSub(league: League, r: Row, tid: number, ranks: Map<number, Standing
     const side = r.res.home.tid === tid ? r.res.home : r.res.away;
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
     // the last word of a box-score name can be a suffix ("Jr."): the player's own last name when he's still in the league
-    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name} ${top.pts} pts` : '';
+    // (his points kept with his name when the line wraps)
+    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name}\u00a0${top.pts}\u00a0pts` : '';
     return [r.g.type === 'regular' ? r.rec : '', lead].filter(Boolean).join(' · ');
   }
   const st = ranks.get(r.opp);
@@ -208,7 +217,12 @@ export function DayScoreboard({ league }: { league: League }) {
   const byGid = useGamesByGid(league);
   const days = useLeagueMemo(() => [...new Set(league.schedule.map((g) => g.day))].sort((a, b) => a - b), [league]);
   const [dayStr, setDayStr] = useQueryParam<string>('day', '');
-  if (!days.length) return <Empty>No games scheduled.</Empty>;
+  if (!days.length)
+    return (
+      <Card>
+        <Empty>No games scheduled.</Empty>
+      </Card>
+    );
   const fallback = days.includes(league.day) ? league.day : (days.find((d) => d >= league.day) ?? days[days.length - 1]);
   const day = dayStr !== '' && days.includes(Number(dayStr)) ? Number(dayStr) : fallback;
   const idx = days.indexOf(day);
@@ -257,12 +271,12 @@ export function DayScoreboard({ league }: { league: League }) {
   );
 }
 
-/** "MIL 72%": the favorite by season net rating plus home court (logistic on the expected margin). */
+/** "MIL 72%": the favorite by season net rating plus home court, none on a neutral floor (logistic on the expected margin). */
 function favorite(league: League, g: ScheduledGame): string {
   const h = curTeamSeason(league, g.home);
   const a = curTeamSeason(league, g.away);
   if (h.won + h.lost < 3 || a.won + a.lost < 3) return '';
-  const margin = teamRatings(h).net - teamRatings(a).net + 2.5;
+  const margin = teamRatings(h).net - teamRatings(a).net + (neutralSite(g) ? 0 : 2.5);
   const pHome = 1 / (1 + Math.exp(-margin / 7));
   const fav = pHome >= 0.5 ? g.home : g.away;
   const p = Math.round(Math.max(pHome, 1 - pHome) * 100);
@@ -294,7 +308,7 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
       </div>
       {lines.map((t) => (
         <div key={t.tid} className={`lg-sb-t ${winner !== undefined && winner !== t.tid ? 'lose' : ''}`}>
-          <TeamLogo tid={t.tid} size={22} />
+          <TeamLogo tid={t.tid} size={22} decorative />
           <span className="ab">
             {league.teams[t.tid].abbrev}
             <span className="rec">{series ? `${seriesWins(t.tid)}-${seriesWins(t.tid === g.home ? g.away : g.home)}` : record(league, t.tid)}</span>

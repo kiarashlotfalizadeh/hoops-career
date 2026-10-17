@@ -143,11 +143,13 @@ export function cupTables(league: League): CupGroupTable[] {
   }
   const pct = (r: CupRow) => (r.won + r.lost ? r.won / (r.won + r.lost) : 0);
   const tables = cup.groups.map((group) => {
-    const rows = group.tids.map((tid) => rec.get(tid)!);
+    const all = group.tids.map((tid) => rec.get(tid)!);
+    const rows = all.slice();
     rows.sort((x, y) => {
       if (Math.abs(pct(x) - pct(y)) > 1e-9) return pct(y) - pct(x);
-      // head-to-head among every team on the same record
-      const tied = rows.filter((r) => Math.abs(pct(r) - pct(x)) < 1e-9);
+      // head-to-head among every team on the same record (read from a copy: an engine may move the
+      // rows around in the array it's sorting)
+      const tied = all.filter((r) => Math.abs(pct(r) - pct(x)) < 1e-9);
       const h2h = (r: CupRow) => tied.reduce((s, o) => s + (beat.get(`${r.tid}-${o.tid}`) ?? 0) - (beat.get(`${o.tid}-${r.tid}`) ?? 0), 0);
       return h2h(y) - h2h(x) || y.pd - x.pd || y.pf - x.pf || prevPct(league, y.tid) - prevPct(league, x.tid) || drawLot(cup.season, x.tid) - drawLot(cup.season, y.tid);
     });

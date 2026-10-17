@@ -16,7 +16,8 @@ import { SectionLabel, seasonTeam, shortName, statTid, teamAbbrev, useQueryParam
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
   const pg = playerSeason(p, season, playoffs);
   if (!pg) return '';
-  return kind === 'def' ? `${f1(pg.stl)} stl · ${f1(pg.blk)} blk · ${f1(pg.reb)} reb` : `${f1(pg.pts)} pts · ${f1(pg.reb)} reb · ${f1(pg.ast)} ast`;
+  // (each number kept with its unit where a line wraps)
+  return kind === 'def' ? `${f1(pg.stl)}\u00a0stl · ${f1(pg.blk)}\u00a0blk · ${f1(pg.reb)}\u00a0reb` : `${f1(pg.pts)}\u00a0pts · ${f1(pg.reb)}\u00a0reb · ${f1(pg.ast)}\u00a0ast`;
 }
 
 export function AwardsTab({ league }: { league: League }) {
@@ -24,8 +25,9 @@ export function AwardsTab({ league }: { league: League }) {
   // before opening night there is no race yet: open on the last season's winners
   const started = league.games.some((g) => g.season === league.season && g.type === 'regular');
   const last = league.awards.filter((a) => a.season < league.season && a.mvp !== undefined).sort((a, b) => b.season - a.season)[0];
-  const [seasonStr, setSeasonStr] = useQueryParam<string>('aseason', String(!started && last ? last.season : league.season));
-  const season = seasons.includes(Number(seasonStr)) ? Number(seasonStr) : league.season;
+  const fallback = !started && last ? last.season : league.season;
+  const [seasonStr, setSeasonStr] = useQueryParam<string>('aseason', String(fallback));
+  const season = seasons.includes(Number(seasonStr)) ? Number(seasonStr) : fallback;
   const aw = league.awards.find((a) => a.season === season);
   const decided = aw?.mvp !== undefined;
   const isCurrent = season === league.season;
@@ -49,7 +51,7 @@ export function AwardsTab({ league }: { league: League }) {
       {aw?.champion !== undefined && (
         <div className="lg-champ">
           <div className="row" style={{ gap: 14 }}>
-            <TeamLogo tid={aw.champion} size={54} />
+            <TeamLogo tid={aw.champion} size={54} decorative />
             <div className="grow">
               <div className="kicker">
                 <Trophy size={12} style={{ verticalAlign: -1 }} /> Champions
@@ -163,7 +165,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
       <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
       {coyTeam && (
         <AwardRow icon={<Award size={18} />} to={`/team/${coyTeam.tid}`}>
-          <TeamLogo tid={coyTeam.tid} size={40} />
+          <TeamLogo tid={coyTeam.tid} size={40} decorative />
           <div style={{ minWidth: 0 }}>
             <div className="lb">Coach of the Year</div>
             <div className="bold ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</div>
@@ -192,7 +194,8 @@ function TeamList({ league, title, pids, season, kind = 'off' }: { league: Leagu
           return (
             <Link key={pid} to={`/player/${pid}`} className="row5">
               {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-              <span className="ellipsis">
+              {/* (a long name wraps rather than lose its end and the position) */}
+              <span>
                 <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
               </span>
               <span className="tiny dim num">{statLine(p, season, kind)}</span>
@@ -238,7 +241,7 @@ function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
               return (
                 <Link key={pid} to={`/player/${pid}`} className="row5">
                   {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-                  <span className="ellipsis">
+                  <span>
                     <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
                     {pid === aw.allStarMvp && (
                       <span className="tag lg-gold" style={{ marginLeft: 6 }}>
@@ -316,9 +319,10 @@ function RaceCard({ league, title, icon, list, kind = 'off' }: { league: League;
                 <div className="bold ellipsis" style={{ color: c.tid === league.userTid ? 'var(--accent)' : undefined }}>
                   {c.p.firstName} {c.p.lastName}
                 </div>
-                <div className="tiny dim ellipsis">
+                {/* (wraps: on a narrow phone the last number was cut off) */}
+                <div className="tiny dim">
                   {teamAbbrev(league, c.tid)}
-                  {ts ? ` (${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
+                  {ts ? `\u00a0(${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
                 </div>
                 <div style={{ marginTop: 5 }}>
                   <Bar value={score - low} max={Math.max(0.01, top - low)} height={4} color={i === 0 ? 'var(--tier-elite)' : undefined} />

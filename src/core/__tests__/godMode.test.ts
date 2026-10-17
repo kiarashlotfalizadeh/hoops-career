@@ -22,9 +22,11 @@ import {
 } from '../league/godMode';
 import { contractSeason, freeAgents, payroll, playerName, standardRoster, teamPlayers } from '../league/helpers';
 import { evaluateTrade } from '../league/trades';
+import { askingContract, marketSalary, preferredYears } from '../league/contracts';
 import { registryProblems } from '../league/coaches';
 import { simDay } from '../league/season';
-import { contractExp, salaryFor } from '../playerGen';
+import { contractExp, followTendencies, salaryFor } from '../playerGen';
+import { Rng } from '../random';
 import { RATING_KEYS } from '../ratings';
 import type { League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
@@ -50,6 +52,25 @@ describe('player edits', () => {
     editPlayer(l, p.pid, { ratings: { tp: 140, ft: -5 } });
     expect([p.ratings.tp, p.ratings.ft]).toEqual([100, 1]);
     expect(l.godEdits).toBe(2);
+  });
+
+  it("tendencies move with his level once: an edit and its undoing leave them as they were, and next summer doesn't count the edit again", () => {
+    const l = fresh();
+    const p = best(l, A)[3];
+    const [tend, ratings, ovr] = [{ ...p.tend! }, { ...p.ratings }, p.ovr];
+    editPlayer(l, p.pid, { ratings: Object.fromEntries(RATING_KEYS.filter((k) => k !== 'hgt').map((k) => [k, p.ratings[k] + 12])) });
+    expect(p.ovr).toBeGreaterThan(ovr + 5);
+    // this season's snapshot holds him as edited: the level his tendencies are now set for
+    expect(p.ratingsHistory.at(-1)).toMatchObject({ season: l.season, ovr: p.ovr, pot: p.pot });
+    const edited = { ...p.tend! };
+    // a summer without a change in level moves the level-driven ones no further
+    const summer = structuredClone(p);
+    followTendencies(summer, summer.ratingsHistory.at(-1)!.ovr, new Rng(1));
+    expect(summer.tend!.three).toBeCloseTo(edited.three, 3);
+    expect(summer.tend!.pass).toBeCloseTo(edited.pass, 3);
+    editPlayer(l, p.pid, { ratings });
+    expect(p.ovr).toBe(ovr);
+    for (const k of ['use', 'create', 'three', 'pass'] as const) expect(p.tend![k]).toBeCloseTo(tend[k]!, 2);
   });
 
   it('bio and health: age moves his birth year, an injury keeps him out and healing clears it', () => {
@@ -81,6 +102,11 @@ describe('player edits', () => {
     const p = best(l, A)[0];
     l.teams[A].retired = [{ jersey: '77', pid: 1, name: 'Old Legend', season: 2000 }];
     expect(checkPlayerEdit(l, p, { jersey: '77' }).errors[0]).toMatch(/retired No. 77/);
+    // a leading zero would make a second 7; 00 is a number of its own
+    expect(checkPlayerEdit(l, p, { jersey: '07' }).errors[0]).toMatch(/0 to 99/);
+    expect(checkPlayerEdit(l, p, { jersey: '00' }).errors).toEqual(teamPlayers(l, A).some((x) => x.jersey === '00') ? [expect.stringMatching(/wears No. 00/)] : []);
+    // (a team that isn't there is named as the problem, not checked for numbers)
+    expect(checkPlayerEdit(l, p, { tid: 99, jersey: '5' }).errors[0]).toMatch(/doesn't exist/);
     editPlayer(l, p.pid, { jersey: '78' });
     expect(p.jersey).toBe('78');
     expect(p.jerseys?.[A]).toBe('78');
@@ -103,11 +129,22 @@ describe('moving players', () => {
 
   it('a free agent joins on his asking deal; a player sent to free agency leaves no dead money', () => {
     const l = fresh();
-    const fa = freeAgents(l).sort((x, y) => y.ovr - x.ovr)[0];
+    const [fa, cut] = freeAgents(l).sort((x, y) => y.ovr - x.ovr);
     editPlayer(l, fa.pid, { tid: B });
     expect(fa.tid).toBe(B);
     expect(salaryFor(fa, contractSeason(l))).toBeGreaterThan(0);
     expect(fa.asking).toBeUndefined();
+    // one whose price came down as the market dried up signs at it, as the editor shows it
+    cut.asking = { amount: Math.round(askingContract(l, cut).amount * 0.7), years: 2 };
+    const shown = askingContract(l, cut, B);
+    editPlayer(l, cut.pid, { tid: B });
+    expect([salaryFor(cut, contractSeason(l)), contractExp(cut.contract) - contractSeason(l) + 1]).toEqual([shown.amount, shown.years]);
+    // an edit that changes what an unsigned one is worth keeps his markdown: his price stays as far under his market value
+    const third = createPlayer(l, { age: 26, heightIn: 79, ovr: 84, growth: 0, tid: FREE_AGENT });
+    third.asking = { amount: Math.round(marketSalary(l, third) * 0.6), years: 2 };
+    editPlayer(l, third.pid, { injury: { type: 'Sprained Ankle', games: 20 } });
+    expect(third.asking!.amount / marketSalary(l, third)).toBeCloseTo(0.6, 1);
+    expect(third.asking!.years).toBe(2);
     const p = best(l, A)[0];
     const dead = l.teams[A].deadMoney.length;
     const pay = payroll(l, A);
@@ -160,6 +197,24 @@ describe('contracts', () => {
     expect(p.contract.option).toBeUndefined();
     expect(contractExp(p.contract)).toBe(cs);
   });
+
+  it('a free agent joining with an option gets it on his asking deal; a new salary on a deal that is up runs his asking length', () => {
+    const l = fresh();
+    const fa = freeAgents(l).find((x) => l.season - x.bornYear <= 30)!;
+    expect(checkPlayerEdit(l, fa, { tid: B, contract: { option: 'player' } }).errors).toEqual([]);
+    editPlayer(l, fa.pid, { tid: B, contract: { option: 'player' } });
+    expect(yearsLeft(l, fa)).toBeGreaterThanOrEqual(2);
+    expect(fa.contract.option).toBe('player');
+    // the re-sign period: a deal that ran out with the season
+    l.phase = 'resign';
+    const up = Object.values(l.players).find((x) => x.tid >= 0 && contractExp(x.contract) === l.season && l.season - x.bornYear <= 31)!;
+    expect(yearsLeft(l, up)).toBe(0);
+    expect(checkPlayerEdit(l, up, { contract: { option: 'team' } }).errors[0]).toMatch(/two seasons or more/);
+    editPlayer(l, up.pid, { contract: { amount: 9_000 } });
+    expect(salaryFor(up, contractSeason(l))).toBe(9_000);
+    expect(yearsLeft(l, up)).toBe(preferredYears(l, up));
+    expect(yearsLeft(l, up)).toBeGreaterThanOrEqual(3);
+  });
 });
 
 describe('team edits', () => {
@@ -183,6 +238,8 @@ describe('team edits', () => {
     expect(teamPlayers(l, A).every((p) => !p.injury && p.wear === 0)).toBe(true);
     setOwnerConfidence(l, 5);
     expect(l.ownerMood.total).toBe(1);
+    expect(() => setOwnerConfidence(l, NaN)).toThrow();
+    expect(l.ownerMood.total).toBe(1);
   });
 });
 
@@ -202,6 +259,12 @@ describe('created players', () => {
     expect(again.ratings).toEqual(p.ratings);
     const q = createPlayer(l, { age: 30, heightIn: 84, ovr: 70, growth: 0, tid: A });
     expect(q.tid).toBe(A);
+    // one with no experience is a rookie in the season he'll play: this one's, in the summer the next one's
+    expect(createPlayer(l, { age: 19, heightIn: 78, ovr: 60, growth: 0.5, tid: FREE_AGENT }).draft.year).toBe(l.season - 1);
+    const phase = l.phase;
+    l.phase = 'freeAgency';
+    expect(createPlayer(l, { age: 19, heightIn: 78, ovr: 60, growth: 0.5, tid: FREE_AGENT }).draft.year).toBe(l.season);
+    l.phase = phase;
     expect(q.firstName.length).toBeGreaterThan(0);
     expect(salaryFor(q, contractSeason(l))).toBeGreaterThan(0);
     expect(l.teams[A].rotation.order).toContain(q.pid);
@@ -223,6 +286,22 @@ describe('forced trades', () => {
     expect(checkForceTrade(l, offer).errors[0]).toMatch(/isn't with/);
     expect(checkForceTrade(l, { a: { tid: A, pids: [], dpids: [] }, b: { tid: B, pids: [], dpids: [] } }).errors[0]).toMatch(/empty/);
     expect(() => forceTrade(l, { a: { tid: A, pids: [], dpids: [] }, b: { tid: A, pids: [], dpids: [] } })).toThrow();
+  });
+
+  it("the arrivals' roles are set at once; a swap needs both teams' own firsts, staying put", () => {
+    const l = fresh();
+    const p = best(l, A)[1];
+    forceTrade(l, { a: { tid: B, pids: [], dpids: [] }, b: { tid: A, pids: [p.pid], dpids: [] } });
+    expect(l.teams[B].tactics.offense.roles[p.pid]).toBeDefined();
+    expect(l.teams[A].tactics.offense.roles[p.pid]).toBeUndefined();
+    const y = l.season + 2;
+    const own = (tid: number) => l.draftPicks.find((d) => d.season === y && d.round === 1 && d.originalTid === tid && d.tid === tid);
+    expect(own(A) && own(B)).toBeTruthy();
+    const swap = { a: { tid: A, pids: [], dpids: [], swaps: [y] }, b: { tid: B, pids: [], dpids: [] } };
+    expect(checkForceTrade(l, swap).errors).toEqual([]);
+    // the pick it rides on can't move in the same deal, nor the swap go both ways
+    expect(checkForceTrade(l, { ...swap, b: { tid: B, pids: [], dpids: [own(B)!.dpid] } }).errors[0]).toMatch(/pick swap/);
+    expect(checkForceTrade(l, { ...swap, b: { tid: B, pids: [], dpids: [], swaps: [y] } }).errors[0]).toMatch(/pick swap/);
   });
 });
 

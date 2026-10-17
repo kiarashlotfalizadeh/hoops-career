@@ -57,7 +57,11 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
           <Clapperboard size={14} style={{ verticalAlign: -2 }} /> Highlights
         </h3>
       }
-      right={<span className="tiny dim">{scripts.length} plays</span>}
+      right={
+        <span className="tiny dim">
+          {scripts.length} play{scripts.length === 1 ? '' : 's'}
+        </span>
+      }
     >
       <div className="col" style={{ gap: 8 }}>
         <div style={{ position: 'relative', maxWidth: 520, width: '100%', margin: '0 auto' }}>

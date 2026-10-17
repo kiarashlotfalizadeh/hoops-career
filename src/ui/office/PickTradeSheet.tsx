@@ -4,7 +4,7 @@
 // draft carries on as after a pick (to your next turn, unless it stops before every pick).
 import { Check, Ticket } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
-import { playerName } from '../../core/league/helpers';
+import { playerName, sentence } from '../../core/league/helpers';
 import { continueDraft } from '../../core/league/season';
 import { evaluateTrade, executeTrade, makeItWork, pickLabel, type TradeOffer } from '../../core/league/trades';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -54,7 +54,7 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
   return (
     <div className="col" style={{ gap: 12 }}>
       <div className="row" style={{ gap: 10 }}>
-        <TeamLogo tid={dp.tid} size={34} />
+        <TeamLogo tid={dp.tid} size={34} decorative />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="bold ellipsis">
             {t.region} {t.name}
@@ -66,7 +66,7 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
         <Empty>
           {ask.why === 'salary'
             ? `The ${t.name} would want salary back, and no player (or pair) of yours makes it match.`
-            : `Nothing you can offer gets the ${t.name} to move ${pickLabel(league, dp)}.`}
+            : sentence(`Nothing you can offer gets the ${t.name} to move the ${pickLabel(league, dp)}`)}
         </Empty>
       ) : (
         <>
@@ -93,7 +93,7 @@ function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDo
         return (
           <div key={o.tid} className="card tight">
             <div className="row" style={{ gap: 8 }}>
-              <TeamLogo tid={o.tid} size={26} />
+              <TeamLogo tid={o.tid} size={26} decorative />
               <span className="bold grow ellipsis">
                 {t.region} {t.name}
               </span>

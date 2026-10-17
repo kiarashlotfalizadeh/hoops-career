@@ -324,8 +324,8 @@ function ProjectionCard({ league, game, pv }: { league: League; game: ScheduledG
         <Help title="Projection">
           <p>
             An estimate, not a simulation: each team&apos;s net rating this season, weighted toward what its rotation tonight is worth until enough games are in, at the two
-            teams&apos; pace, plus home court (about {pv.projection.edge ? Math.abs(pv.projection.edge).toFixed(1) : '1.3'} points). A game&apos;s margin varies by about 13 points
-            either way.
+            teams&apos; pace, {pv.neutral ? 'with no home court on the neutral floor' : `plus home court (about ${Math.abs(pv.projection.edge).toFixed(1)} points)`}. A game&apos;s
+            margin varies by about 13 points either way.
           </p>
           <p>Simulate plays the real engine with both game plans, rests and injuries as they stand, at tonight&apos;s venue.</p>
         </Help>
@@ -460,7 +460,7 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
             <button
               className={`btn xs ${p.cleared ? '' : 'primary'}`}
               disabled={locked}
-              aria-pressed={p.cleared}
+              // (named by what a tap does, so no pressed state: "Sit him, pressed" would read backwards)
               aria-label={p.cleared ? `Sit ${p.name} tonight` : `Clear ${p.name} to play tonight`}
               onClick={() => useStore.getState().mutate((l) => setGameTime(l, game.gid, p.pid, !p.cleared))}
             >

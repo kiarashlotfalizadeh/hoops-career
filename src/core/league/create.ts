@@ -391,7 +391,7 @@ export function createLeague(opts: CreateOpts): League {
     addInbox(league, {
       from: 'Assistant GM',
       subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
-      body: `We carry ${standard.length} players on standard contracts into camp, including camp invites${twoWays ? ` (plus ${twoWays} on two-way deals, who don't count)` : ''}. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Camp and minimum deals signed for this season aren't guaranteed until opening night, so cutting those costs nothing; anyone else's remaining salary stays on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
+      body: `We carry ${standard.length} players on standard contracts into camp, including camp invites${twoWays ? ` (plus ${twoWays === 1 ? "one on a two-way deal, who doesn't count" : `${twoWays} on two-way deals, who don't count`})` : ''}. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Camp and minimum deals signed for this season aren't guaranteed until opening night, so cutting those costs nothing; anyone else's remaining salary stays on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
       tone: 'alert',
       link: '/office',
     });

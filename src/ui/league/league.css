@@ -196,6 +196,8 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--line);
+  /* words: Inter's tabular hyphen would space out "W-L" */
+  font-variant-numeric: normal;
 }
 .lg-st-row .rk {
   color: var(--text-dim);
@@ -227,6 +229,17 @@
 }
 .lg-st-row .nm-ab {
   display: none;
+}
+/* a narrow phone: a traded pick's new owner goes under the name (OddsView), which had been cut to "Timbe…" */
+@media (max-width: 389px) {
+  .lg-st-row .nm.owed {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .lg-st-row .nm.owed > span:first-child {
+    max-width: 100%;
+  }
 }
 .lg-clinch {
   font-size: 10px;
@@ -1417,6 +1430,13 @@ a.lg-rec-row:active {
 .lg-season + .lg-season {
   border-top: 1px solid var(--line);
 }
+/* narrow phones: a slimmer year column leaves the seed room beside the outcome tag ("1st s…") */
+@media (max-width: 389px) {
+  .lg-season {
+    grid-template-columns: 56px 50px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+}
 /* small phones: the seed gives way to the longest outcome tag ("Lost Conf. Finals") */
 @media (max-width: 359px) {
   .lg-season {
@@ -1565,4 +1585,11 @@ a.lg-rec-row:active {
   align-items: flex-end;
   gap: 1px;
   font-weight: 700;
+}
+/* a career's four tiles inside a card (or the coach's sheet) need 375px abreast: a "Playoffs" label
+   doesn't shrink, so a 360px phone gets two rows of two */
+@media (max-width: 374px) {
+  .grid4.lg-coach-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

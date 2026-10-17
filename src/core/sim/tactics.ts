@@ -181,8 +181,8 @@ export const ACTION_META: Record<ActionType, { label: string; help: string }> = 
   pnr: { label: 'Pick-and-roll', help: 'Ball screen for a creator; the screener rolls or pops. Coverage choice decides who gets open.' },
   iso: { label: 'Isolation', help: 'Clear out for a one-on-one. Efficient only for elite creators or vs a mismatch.' },
   post: { label: 'Post-up', help: 'Feed a big (or a switched mismatch) on the block. Draws doubles and fouls.' },
-  handoff: { label: 'Handoffs & Screens', help: 'Dribble handoffs and off-ball screens to spring shooters. Strong vs drop and non-switching teams.' },
-  motion: { label: 'Motion & Cuts', help: 'Ball movement, drive-and-kick and backdoor cuts. Needs passers and shooters; beats over-aggressive defenses.' },
+  handoff: { label: 'Handoffs & screens', help: 'Dribble handoffs and off-ball screens to spring shooters. Strong vs drop and non-switching teams.' },
+  motion: { label: 'Motion & cuts', help: 'Ball movement, drive-and-kick and backdoor cuts. Needs passers and shooters; beats over-aggressive defenses.' },
 };
 
 export const COVERAGE_META: Record<PnrCoverage, { label: string; help: string }> = {
@@ -194,7 +194,7 @@ export const COVERAGE_META: Record<PnrCoverage, { label: string; help: string }>
 };
 
 export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
-  man: { label: 'Man-to-Man', help: 'Each defender has an assignment. Matchups matter.' },
+  man: { label: 'Man-to-man', help: 'Each defender has an assignment. Matchups matter.' },
   zone23: { label: '2-3 Zone', help: 'Protects the paint against drives, cuts and post-ups; vulnerable to open (often corner) threes and offensive boards.' },
   zone32: {
     label: '3-2 Zone',
@@ -242,15 +242,15 @@ export const PLAYER_D_META: Record<PlayerDefense, { label: string; short: string
 };
 
 export const PRESS_META: Record<PressMode, { label: string; help: string }> = {
-  none: { label: 'No Press', help: 'Set up in the half court.' },
-  afterMade: { label: 'After Makes', help: 'Full-court pressure after made baskets and free throws.' },
+  none: { label: 'No press', help: 'Set up in the half court.' },
+  afterMade: { label: 'After makes', help: 'Full-court pressure after made baskets and free throws.' },
   always: { label: 'Always', help: 'Press every time they inbound: after scores, dead balls and at period starts. High turnover upside, high fatigue cost.' },
 };
 
 export const STAR_PLAN_META: Record<StarPlan, { label: string; help: string }> = {
-  none: { label: 'Play Straight', help: 'No special treatment.' },
+  none: { label: 'Play straight', help: 'No special treatment.' },
   deny: { label: 'Deny', help: 'Face-guard to keep the ball away from him. Fewer touches, more fatigue on his defender.' },
-  double: { label: 'Double Team', help: 'Send a second defender whenever he attacks. Forces others to beat you.' },
+  double: { label: 'Double-team', help: 'Send a second defender whenever he attacks. Forces others to beat you.' },
 };
 
 export function defaultManagement(): GameManagement {

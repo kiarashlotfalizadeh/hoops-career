@@ -4,7 +4,7 @@ import { teamPlayers } from '../league/helpers';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import type { PlayCall, PossLog } from '../sim/log';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
-import { composites } from '../ratings';
+import { archetype, composites } from '../ratings';
 import { defaultTactics, situationFromTemplate, situationText } from '../sim/tactics';
 import { Rng } from '../random';
 import type { SituationalPlan, SituationTrigger, Tactics, TacticImpact } from '../types';
@@ -140,6 +140,29 @@ describe('engine tactics', () => {
       s.situate(t);
       expect(sim.situation(0)).toBeNull();
       expect(t.t.defense.pnr).toBe('hedge');
+    });
+
+    it('gives a player his own role back when a plan that changed it ends, or a live edit takes it off', () => {
+      const p0 = teamPlayers(league, 8).find((p) => p.pid === league.teams[8].rotation.order[0])!;
+      const own = league.teams[8].tactics.offense.roles[p0.pid] ?? archetype(p0.ratings).role;
+      const other = own === 'post' ? 'shooter' : 'post';
+      const sim = new GameSim(side(8, man, [sit('late', 'Late', { maxClock: 100 }, { offense: { roles: { [p0.pid]: other } } })]), side(9), opts(7));
+      const s = sim as unknown as In;
+      const role = () => (s.T[0].players.find((x) => x.pid === p0.pid) as unknown as { role: string }).role;
+      expect(role()).toBe(own);
+      s.clock = 60;
+      s.situate(s.T[0]);
+      expect(role()).toBe(other);
+      s.clock = 600;
+      s.situate(s.T[0]);
+      expect(role()).toBe(own);
+      const t = sim.baseTactics(0);
+      t.offense.roles[p0.pid] = other;
+      sim.setTactics(0, t);
+      expect(role()).toBe(other);
+      delete t.offense.roles[p0.pid];
+      sim.setTactics(0, t);
+      expect(role()).toBe(archetype(p0.ratings).role);
     });
 
     it('builds plans from templates with unique ids and describes their triggers', () => {

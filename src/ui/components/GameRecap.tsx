@@ -25,6 +25,7 @@ import { COMEBACK_WP, playAt, swingWords, TURN_MIN, wpStory, wpText, type WpPoin
 import { markText, milestonesIn } from '../../core/analysis/milestones';
 import { recordWhat, recordsHeld } from '../../core/league/records';
 import { seriesLabel } from '../../core/league/playoffs';
+import { neutralSite } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { useStore } from '../../state/store';
@@ -34,7 +35,8 @@ import { TeamLogo } from './TeamLogo';
 import './gameday.css';
 
 const confWord = (c: 'E' | 'W') => (c === 'E' ? 'East' : 'West');
-const gbText = (l: StandingLine) => (l.rank === 1 ? 'in first' : `${l.gb % 1 ? l.gb.toFixed(1) : l.gb} GB`);
+// (none for the leader: "1st" already says it)
+const gbText = (l: StandingLine) => (l.rank === 1 ? '' : `${l.gb % 1 ? l.gb.toFixed(1) : l.gb} GB`);
 const CLINCH: Record<NonNullable<StandingLine['clinched']>, { text: string; tone: 'good' | 'info' | 'bad' }> = {
   x: { text: 'Clinched a playoff spot', tone: 'good' },
   p: { text: 'Clinched a play-in spot', tone: 'info' },
@@ -205,7 +207,7 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
               <span className={`num ${stakes.after.rank < stakes.before.rank ? 'good' : stakes.after.rank > stakes.before.rank ? 'bad' : 'dim'}`}>
                 {stakes.after.rank < stakes.before.rank ? '▲' : stakes.after.rank > stakes.before.rank ? '▼' : '·'}
               </span>
-              <span className="dim num">{gbText(stakes.after)}</span>
+              {gbText(stakes.after) && <span className="dim num">{gbText(stakes.after)}</span>}
             </div>
           )}
           {newly && (
@@ -361,7 +363,8 @@ export function GameRecap({ res, league, report }: { res: GameResult; league: Le
             <div className="grow" style={{ minWidth: 0 }}>
               <div className="tiny dim upper bold">Next up</div>
               <div className="small bold ellipsis">
-                {next.home === tid ? 'vs' : '@'} {league.teams[nextOpp].name}
+                {/* (the Cup final is on a neutral floor: nobody's home) */}
+                {next.home === tid || neutralSite(next) ? 'vs' : '@'} {league.teams[nextOpp].name}
               </div>
               <div className="row tiny dim" style={{ gap: 6 }}>
                 {next.day === league.day ? 'Today' : fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}

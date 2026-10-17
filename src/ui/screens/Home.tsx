@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Target, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, sentence, teamPlayers } from '../../core/league/helpers';
 import { normalizeLink } from '../league/shared';
 import { inAppPath } from '../nav';
 import { userGameOnDay } from '../../core/league/games';
@@ -24,6 +24,7 @@ import { countdownLabel, matchupPreview } from '../../core/analysis/preview';
 import { storylines } from '../../core/analysis/storylines';
 import { ON_TRACK, currentGoals, goalMet, ownerProgress } from '../../core/league/ownerGoals';
 import { leagueForecast } from '../../core/analysis/odds';
+import { fmtM } from '../office/common';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -39,6 +40,16 @@ function phaseTitle(league: League): string {
     default:
       return `${PHASE_LABEL[league.phase]} · ${seasonLabel(league.season)}`;
   }
+}
+
+/** A message's lines run together for a two-line preview: one that doesn't end a sentence (a goal's "… (ahead)") gets its period, or the next line reads on from it. */
+function previewText(body: string): string {
+  return body
+    .split(/\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => (x.endsWith(':') ? x : sentence(x)))
+    .join(' ');
 }
 
 function nextUserGame(league: League) {
@@ -404,7 +415,7 @@ export default function Home() {
                   <div className="small dim">{m.from}</div>
                   <div className="bold small">{m.subject}</div>
                   <div className="small dim2" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {m.body}
+                    {previewText(m.body)}
                   </div>
                 </Link>
               ))}
@@ -609,16 +620,16 @@ function SeasonOutlook({ league }: { league: League }) {
         <Kpi k="Talent" v={`#${leagueRank}`} sub={`${ordinal(confRank)} in ${team.conf === 'E' ? 'East' : 'West'}`} />
         <Kpi
           k="Payroll"
-          v={`$${(pay / 1000).toFixed(0)}M`}
+          v={fmtM(pay)}
           sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
           color={pay > cap.luxuryTax ? 'var(--bad)' : undefined}
         />
         <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length - twoWays} players${twoWays ? ` + ${twoWays} two-way` : ''}`} />
       </div>
+      {/* (the standings card above carries the forecast's line) */}
       <div className="small dim2" style={{ marginTop: 10 }}>
         {outlook}
       </div>
-      <OddsLine league={league} tid={team.tid} />
     </Card>
   );
 }

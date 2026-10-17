@@ -99,6 +99,7 @@ export function RecordBook({ league }: { league: League }) {
         ]}
       />
       <Chips
+        label="Season type"
         value={post}
         onChange={setPost}
         options={[
@@ -170,7 +171,7 @@ function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid
   );
   return (
     <>
-      <Chips value={stat} onChange={setStat} options={GAME_KEYS.map((k) => ({ id: k, label: GAME_SHORT[k] }))} />
+      <Chips label="Record" value={stat} onChange={setStat} options={GAME_KEYS.map((k) => ({ id: k, label: GAME_SHORT[k] }))} />
       <SectionLabel right={<span className="tiny dim">top {keep}</span>}>
         {isTeam ? TEAM_REC_LABEL[stat.slice(5) as TeamRecStat] : REC_LABEL[stat as RecStat][0]} in a game
       </SectionLabel>
@@ -191,7 +192,7 @@ function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid
               ) : (
                 <Row key={`${m.gid}-${m.tid}`} i={i} to={league.teams[m.tid] ? `/team/${m.tid}` : undefined} value={stat === 'team-margin' ? `+${m.v}` : m.v}>
                   <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <TeamLogo tid={m.tid} size={16} />
+                    <TeamLogo tid={m.tid} size={16} decorative />
                     <span className="bold ellipsis">
                       {league.teams[m.tid]?.abbrev ?? '?'} {m.score[0]}-{m.score[1]}
                     </span>
@@ -235,11 +236,16 @@ function SeasonRecords({
   );
   return (
     <>
-      <Chips value={stat} onChange={setStat} options={SEASON_STATS.map((k) => ({ id: k, label: SEASON_SHORT[k] }))} />
+      <Chips label="Player record" value={stat} onChange={setStat} options={SEASON_STATS.map((k) => ({ id: k, label: SEASON_SHORT[k] }))} />
       <SectionLabel>{SEASON_STAT_LABEL[stat]}</SectionLabel>
       <Card>
         {rows.length === 0 ? (
-          <Empty>No qualifying seasons yet. Per-game and percentage records need 70% of the team's games (and 300 field goals, 82 threes or 125 free throws made).</Empty>
+          <Empty>
+            {/* the qualifying lines of records.ts's qualifies() */}
+            {playoffs
+              ? "No qualifying playoff runs yet. Per-game and percentage records need half the team's playoff games, four at least (and 30 field goals, 9 threes or 13 free throws made)."
+              : "No qualifying seasons yet. Per-game and percentage records need 70% of the team's games (and 300 field goals, 82 threes or 125 free throws made)."}
+          </Empty>
         ) : (
           <div className="lg-team5">
             {rows.map((r, i) => (
@@ -249,7 +255,8 @@ function SeasonRecords({
                   <span className="bold ellipsis">{name(r.pid)}</span>
                 </span>
                 <span className="tiny dim ellipsis">
-                  {seasonLabel(r.season)} · {r.gp} games{r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
+                  {seasonLabel(r.season)} · {r.gp} game{r.gp === 1 ? '' : 's'}
+                  {r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
                 </span>
               </Row>
             ))}
@@ -258,7 +265,7 @@ function SeasonRecords({
       </Card>
       {!playoffs && (
         <>
-          <Chips value={teamStat} onChange={setTeamStat} options={TEAM_SEASON_STATS.map((k) => ({ id: k, label: TEAM_SEASON_LABEL[k] }))} />
+          <Chips label="Team record" value={teamStat} onChange={setTeamStat} options={TEAM_SEASON_STATS.map((k) => ({ id: k, label: TEAM_SEASON_LABEL[k] }))} />
           <SectionLabel>Team seasons · {TEAM_SEASON_LABEL[teamStat].toLowerCase()}</SectionLabel>
           <Card>
             {teamRows.length === 0 ? (
@@ -268,7 +275,7 @@ function SeasonRecords({
                 {teamRows.map((r, i) => (
                   <Row key={`${r.tid}-${r.season}`} i={i} to={`/team/${r.tid}`} value={fmtTeam(teamStat, r.v) || `${r.won}-${r.lost}`}>
                     <span className="row" style={{ gap: 6, minWidth: 0 }}>
-                      <TeamLogo tid={r.tid} size={16} />
+                      <TeamLogo tid={r.tid} size={16} decorative />
                       <span className="bold ellipsis">
                         {league.teams[r.tid].region} {league.teams[r.tid].name}
                       </span>
@@ -296,7 +303,7 @@ function CareerRecords({ league, tid, playoffs, stat, setStat }: { league: Leagu
   );
   return (
     <>
-      <Chips value={stat} onChange={setStat} options={CAREER_STATS.map((k) => ({ id: k, label: CAREER_LABEL[k] }))} />
+      <Chips label="Career stat" value={stat} onChange={setStat} options={CAREER_STATS.map((k) => ({ id: k, label: CAREER_LABEL[k] }))} />
       <SectionLabel>
         {tid !== undefined ? 'Franchise' : 'Career'} leaders · {CAREER_LABEL[stat].toLowerCase()}
       </SectionLabel>

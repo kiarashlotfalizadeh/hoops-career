@@ -1000,8 +1000,10 @@ export class GameSim {
     const before = JSON.stringify(t.t.defense);
     t.t = plan ? applyPatch(t.base, plan.patch) : cloneTactics(t.base);
     t.sit = plan && { id: plan.id, label: plan.label };
+    // (a role the tactics no longer set goes back to his archetype's, as at the tip: a plan's role
+    // doesn't outlast the plan)
     for (const p of t.players) {
-      p.role = t.t.offense.roles[p.pid] ?? p.role;
+      p.role = t.t.offense.roles[p.pid] ?? archetype(p.r).role;
       p.freedom = freedomMult(t.t.offense.freedom[p.pid] ?? 0);
     }
     if (rebase || JSON.stringify(t.t.defense) !== before) this.refreshMatchups();
@@ -1923,7 +1925,6 @@ export class GameSim {
     else if (!final && clock <= 24 && clock > 3) res.hold = true;
     else if (final && clock < 50 && diff > 0) res.milk = true;
     if (final && clock <= 35 && diff <= -3 && diff >= -5) res.need3 = true;
-    if (final && clock <= 12 && diff === -3) res.need3 = true;
     // two possessions or more down late, still within reach: quick shots, more of them threes
     if (final && diff <= -4 && diff >= -3 - clock / 12 && clock > 1 && clock <= 20 + 10 * -diff) res.hurry = true;
     if (off.t.manage.twoForOne && clock >= 29 && clock <= 40 && !(final && diff > 0)) res.quick = true;
@@ -2890,11 +2891,12 @@ export class GameSim {
     if (starDouble) doubled = this.rng.chance(0.75);
     else if (adv > 0.7 && help > 0) doubled = this.rng.chance(0.25 * help);
     if (this.record) this.cur!.steps.push({ k: 'drive', pid: A.pid });
-    if (doubled) return this.doubleTeam(off, def, A, 'iso', starDouble);
+    // (a switched pick-and-roll's isolation is booked to the handler's play type throughout)
+    if (doubled) return this.doubleTeam(off, def, A, finish, starDouble);
 
     const pTO = this.toChance(K.toBase * 0.95, A, def);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, this.stealBy(D, 0.55), 'iso');
+      this.turnover(off, def, A, this.stealBy(D, 0.55), finish);
       return 'done';
     }
     if (this.nonShootingFoul(off, def, A, D, finish)) return 'done';
@@ -2972,7 +2974,7 @@ export class GameSim {
    * post player sends the ball out to the pair splitting around him: the cutter or the flare, with the
    * split's edge on the 4-on-3.
    */
-  private doubleTeam(off: ST, def: ST, A: SP, from: 'iso' | 'post', star: boolean, play: SetPlay | null = null): 'done' {
+  private doubleTeam(off: ST, def: ST, A: SP, from: 'iso' | 'pnrBH' | 'post', star: boolean, play: SetPlay | null = null): 'done' {
     if (this.cur) this.cur.label = `${A.name} gets doubled!`;
     if (this.record) this.cur!.steps.push({ k: 'trap', pid: A.pid });
     const escape = (A.c.passing - 55) / 100;
@@ -3007,7 +3009,7 @@ export class GameSim {
       open: -0.55,
       contest: this.defOf(def, A),
       assister: null,
-      finish: from === 'post' ? 'post' : 'iso',
+      finish: from,
       tags: star ? [['star_double', -0.4]] : undefined,
     });
     return 'done';
@@ -3708,7 +3710,7 @@ export class GameSim {
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
     p += this.env.shoot + this.scoreEffect(off, def);
-    // late-game nerves for poor shooters
+    // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better
     if (this.q >= 4 && this.clock < 120 && Math.abs(off.score - def.score) <= 5) p -= (60 - sh.r.oiq) / 2000;
     p = clamp(p, 0.04, 0.93);
 

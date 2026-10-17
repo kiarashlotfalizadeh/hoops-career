@@ -28,6 +28,7 @@ import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
 import { REC_LABEL, REC_STATS, careerHighOf } from '../../core/league/records';
 import { careerOnRecord } from '../../core/analysis/milestones';
+import { neutralSite } from '../../core/league/games';
 import { fmtDate } from '../../core/league/helpers';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerPicker } from '../components/PlayerPicker';
@@ -101,7 +102,9 @@ export default function PlayerView() {
     return (
       <main className="page">
         <PageHeader title="Player" back backTo="/roster" />
-        <Empty>Player not found.</Empty>
+        <Card>
+          <Empty>That player is no longer in the league.</Empty>
+        </Card>
       </main>
     );
   }
@@ -183,7 +186,8 @@ export default function PlayerView() {
             <div className="small dim">
               {p.country}
               {p.college ? ` · ${p.college}` : ''}
-              {p.draft.round > 0 ? ` · ${p.draft.year} R${p.draft.round} #${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ` · Undrafted` : ''}
+              {/* (the draft slot held together: "2018 R1" then "#11" alone on the next line read oddly) */}
+              {p.draft.round > 0 ? ` · ${p.draft.year}\u00a0R${p.draft.round}\u00a0#${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ` · Undrafted` : ''}
             </div>
             <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
               <Tag tone="info">{p.archetype}</Tag>
@@ -352,7 +356,7 @@ export default function PlayerView() {
                   </div>
                   <div className="row between">
                     <span className="dim2 small">{extStart !== null ? 'Current deal ends' : 'Expires'}</span>
-                    <span className="num">
+                    <span>
                       {seasonLabel(extStart !== null ? extStart - 1 : contractExp(p.contract))}
                       {openOption(league, p) ? ` (${openOption(league, p)} option)` : ''}
                       {rookieScaleDeal(p) ? ' · rookie scale' : ''}
@@ -362,7 +366,7 @@ export default function PlayerView() {
                     <>
                       <div className="row between">
                         <span className="small good bold">Extended through</span>
-                        <span className="num">{seasonLabel(contractExp(p.contract))}</span>
+                        <span>{seasonLabel(contractExp(p.contract))}</span>
                       </div>
                       <div className="row between">
                         <span className="dim2 small">Extension starts</span>
@@ -547,6 +551,8 @@ export default function PlayerView() {
   );
 }
 
+const ADV_KEYS = new Set(['per', 'bpm', 'epm', 'ws', 'ws48']);
+
 function StatsTab({ p, league }: { p: Player; league: League }) {
   const [po, setPo] = useState(false);
   const rows = seasonsOf(p).filter((r) => r.playoffs === po);
@@ -592,6 +598,10 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
     // imported seasons carry no plus-minus: "—", not 0.0 (as in the league stats)
     { key: 'pm', label: '+/-', get: (r) => (r.tot.real && !r.tot.pm ? NaN : pg(r).pm), fmt: (v) => signed(v as number) },
   ];
+  // the all-in-one numbers only where a season has them, as in the league stats: BPM and EPM come
+  // with imported seasons alone, and a season played here has no PER or win shares in the playoffs
+  const shown = cols.filter((c) => !ADV_KEYS.has(c.key) || rows.some((r) => Number.isFinite(c.get(r))));
+  const real = p.stats.some((s) => s.real);
   return (
     <>
       <Segmented
@@ -603,10 +613,17 @@ function StatsTab({ p, league }: { p: Player; league: League }) {
           { id: 'po', label: 'Playoffs' },
         ]}
       />
-      {rows.length ? <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} /> : <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>}
+      {rows.length ? (
+        <StatTable rows={rows} cols={shown} rowKey={(r) => r.key} />
+      ) : (
+        <Card>
+          <Empty>{po ? 'No playoff games yet.' : 'No NBA games yet.'}</Empty>
+        </Card>
+      )}
       <div className="tiny dim">
-        “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes, and only they have BPM and EPM; PER and win shares for seasons played in this league
-        are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.
+        {real
+          ? '“real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes, and only they have BPM and EPM; PER and win shares for seasons played in this league are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.'
+          : 'PER and win shares are worked out from each season’s box score the way Basketball Reference does (not in the playoffs).'}
       </div>
       {!po && <CareerHighs p={p} league={league} />}
     </>
@@ -660,7 +677,12 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
     })
     .filter((x): x is NonNullable<typeof x> => !!x)
     .reverse();
-  if (!rows.length) return <Empty>No games this season.</Empty>;
+  if (!rows.length)
+    return (
+      <Card>
+        <Empty>No games this season.</Empty>
+      </Card>
+    );
   type R = (typeof rows)[number];
   const cols: Col<R>[] = [
     {
@@ -671,7 +693,8 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
       get: (r) => r.g.gid,
       fmt: (_, r) => (
         <span className="row" style={{ gap: 4 }}>
-          <span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
+          {/* the Cup final is on a neutral floor: nobody's home */}
+          <span className={r.won ? 'good' : 'bad'}>{r.won ? 'W' : 'L'}</span> {r.home || neutralSite(r.g) ? 'vs' : '@'} {league.teams[r.opp.tid].abbrev}
         </span>
       ),
     },
@@ -736,6 +759,7 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
       {mine && (
         <Card title="Training focus">
           <Chips
+            label="Training focus"
             value={p.training}
             onChange={(f: TrainingFocus) => useStore.getState().mutate((l) => void (l.players[p.pid].training = f))}
             options={(Object.keys(FOCUS_META) as TrainingFocus[]).map((k) => ({ id: k, label: FOCUS_META[k].label }))}

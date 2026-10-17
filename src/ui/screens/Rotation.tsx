@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, BedDouble, Undo2, Wand2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
-import { autoRotation, evaluateLineup } from '../../core/ai/coachAI';
+import { evaluateLineup } from '../../core/ai/coachAI';
+import { ensureRotation } from '../../core/league/games';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Card, Help, Ovr, PageHeader, Sheet, Slider, Tag, Toggle, activateOnKey } from '../components/ui';
 import type { League, Player, Rotation as RotationT } from '../../core/types';
@@ -89,8 +90,10 @@ export default function Rotation() {
             className="btn sm"
             onClick={() => {
               setUndo(structuredClone(rot));
+              // the assistant's rotation as the next game would have it: two-way players at the end of the bench too
               useStore.getState().mutate((l) => {
-                l.teams[l.userTid].rotation = autoRotation(rosterSorted(l, l.userTid), l.teams[l.userTid].rotation);
+                l.teams[l.userTid].rotation.manual = false;
+                ensureRotation(l, l.userTid);
               });
             }}
           >
@@ -363,6 +366,8 @@ function EditPlayer({
                     <span className="dim tiny">{j + 1}</span>
                   )}{' '}
                   {names(pid)}
+                  {/* the S badge and spot number spelled out: "S Dixon, starter", "9 Warren, 9th on the depth chart" */}
+                  <span className="sr-only">{starters.has(pid) ? ', starter' : `, ${ordinal(j + 1)} on the depth chart`}</span>
                 </button>
               );
             })}
@@ -389,7 +394,11 @@ function EditPlayer({
           })
         }
         format={(x) => (x ? `${x} min` : 'None')}
-        help="Load management: never exceed this, even in close games."
+        help={
+          cap && cap < m
+            ? `Load management: never exceed this, even in close games. It's under his ${m}-minute target: he plays ${cap} at most.`
+            : 'Load management: never exceed this, even in close games.'
+        }
       />
       <Toggle
         on={rot.closers.includes(p.pid)}

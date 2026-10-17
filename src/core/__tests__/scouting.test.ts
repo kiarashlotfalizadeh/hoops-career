@@ -76,6 +76,8 @@ describe('scouting data', () => {
     const best = all.find((d) => d.ortg.rank === 1)!;
     expect(Math.max(...all.map((d) => d.ortg.v))).toBe(best.ortg.v);
     expect(Math.min(...all.map((d) => d.drtg.v))).toBe(all.find((d) => d.drtg.rank === 1)!.drtg.v);
+    // and reads as "the league's best", never "1st-best"
+    for (const d of all) for (const x of [...d.tendencies, ...d.exploits]) expect(x).not.toMatch(/\b1st-/);
   });
 
   it("splits the team's possessions into on and off the floor for each key player", () => {

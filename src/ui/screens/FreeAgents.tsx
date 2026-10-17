@@ -364,9 +364,15 @@ export default function FreeAgents() {
       <MyRfas onResign={setSel} />
 
       <div className="col" style={{ gap: 8 }}>
-        <Chips value={pos} onChange={(x) => (setPos(x), setLimit(40))} options={[{ id: 'all' as const, label: 'All' }, ...POSITIONS.map((p) => ({ id: p, label: p }))]} />
+        <Chips
+          label="Position"
+          value={pos}
+          onChange={(x) => (setPos(x), setLimit(40))}
+          options={[{ id: 'all' as const, label: 'All' }, ...POSITIONS.map((p) => ({ id: p, label: p }))]}
+        />
         <div className="row wrap" style={{ gap: 6 }}>
           <Chips
+            label="Minimum OVR"
             value={minOvr}
             onChange={(x) => (setMinOvr(x), setLimit(40))}
             options={[
@@ -433,6 +439,8 @@ export default function FreeAgents() {
               const ai = appealInfo(appeal);
               const bid = bids.find((b) => b.pid === p.pid);
               const w = p.waivers;
+              // days until he clears, as the waiver sheet and the claim's answer count them
+              const wDays = w ? w.until - league.day : 0;
               const rfa = rfaTag(league, p);
               const own = p.rfa?.tid === tid;
               return (
@@ -451,12 +459,8 @@ export default function FreeAgents() {
                       <div className="row wrap" style={{ gap: 6, marginTop: 3 }}>
                         {rfa && <span className={`tag ${rfa.tone}`}>{rfa.label}</span>}
                         {bid && <span className="tag info">Bidding · {bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}</span>}
-                        {w && (
-                          <span className="tag warn">
-                            On waivers · clears {w.until - league.day > 1 ? `in ${w.until - league.day} days` : 'tomorrow'}
-                            {w.claim ? ' · claim in' : ''}
-                          </span>
-                        )}
+                        {w && <span className="tag warn">On waivers · clears {wDays > 1 ? `in ${wDays} days` : wDays === 1 ? 'tomorrow' : 'today'}</span>}
+                        {w?.claim && <span className="tag good">Your claim is in</span>}
                       </div>
                     )}
                     <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
@@ -506,7 +510,9 @@ export default function FreeAgents() {
                   ) : tenDays ? (
                     <div className="fo-money">
                       <div className="a">{fmtM(tenDayPay(league, p, tenDayUntil(league) - league.day), 2)}</div>
-                      <div className="b">{tenDayUntil(league) - league.day} days</div>
+                      <div className="b">
+                        {tenDayUntil(league) - league.day} day{tenDayUntil(league) - league.day === 1 ? '' : 's'}
+                      </div>
                     </div>
                   ) : (
                     <div className="fo-money">
@@ -635,9 +641,12 @@ function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
               );
             })}
           </div>
-          <div className="small">
-            Your place in the waiver order: <b>#{rank}</b> of {order.length}
-          </div>
+          {/* (none when you released him: the order skips his old team) */}
+          {rank > 0 && (
+            <div className="small">
+              Your place in the waiver order: <b>#{rank}</b> of {order.length}
+            </div>
+          )}
           {blocked && !w.claim && <div className="small warn">{blocked}</div>}
           <div className="row">
             <button className="btn grow" onClick={onClose}>

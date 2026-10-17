@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Banknote, Check, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
+import { Ban, Banknote, Check, ChevronDown, ChevronUp, Handshake, Info, Lock, LockKeyhole, Repeat, RotateCcw, Ticket, X, Zap } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX, curTeamSeason, payroll, playerName, rosterMaxNow, teamPlayers, winPct } from '../../core/league/helpers';
@@ -208,11 +208,13 @@ export default function Trade() {
   /** God mode: the deal goes through whatever their GM and the rules say. */
   const forceIt = () => {
     const abbrev = league.teams[offer.b.tid].abbrev;
-    if (checkForceTrade(league, offer).errors.length) return;
-    useStore.getState().mutate((l) => {
+    if (useStore.getState().sim || checkForceTrade(league, offer).errors.length) return;
+    // all of it or none of it, as every god-mode edit
+    const ok = useStore.getState().attempt('The forced trade', (l) => {
       forceTrade(l, offer);
       if (l.phase === 'draft') continueDraft(l);
     });
+    if (!ok) return;
     useStore.getState().toast(`Trade forced through with ${abbrev}.`, 'good');
     reset();
     setAsk(null);
@@ -291,7 +293,7 @@ export default function Trade() {
           <Help title="Trade rules">
             <p style={{ margin: 0 }}>
               <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out,
-              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level exception this season can't take on salary past the tax line (
+              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level or bi-annual exception this season can't take on salary past the tax line (
               {fmtM(CAP_FOR(league, s).luxuryTax)}).
             </p>
             <p style={{ margin: 0 }}>
@@ -398,7 +400,19 @@ export default function Trade() {
               <AssetList league={league} tid={user} offer={offer} season={s} sel={cleanGive} onChange={setGive} title="You send" />
             </div>
           </div>
-          <Dock league={league} offer={offer} ev={ev} empty={empty} season={s} onPropose={propose} onWork={whatWorks} force={force} onForce={forceIt} />
+          {/* (keyed: a new deal or partner starts with the dock folded) */}
+          <Dock
+            key={empty ? 'none' : offer.b.tid}
+            league={league}
+            offer={offer}
+            ev={ev}
+            empty={empty}
+            season={s}
+            onPropose={propose}
+            onWork={whatWorks}
+            force={force}
+            onForce={forceIt}
+          />
         </>
       ) : tab === 'find' ? (
         <TradeFinder league={league} state={finder} onChange={setFinder} onPick={pickTarget} />
@@ -450,7 +464,7 @@ function TeamPicker({ league, partner, onPick }: { league: League; partner: numb
     <div className="fo-teams" ref={ref} role="group" aria-label="Trade partner">
       {teams.map((t) => (
         <button key={t.tid} aria-pressed={t.tid === partner} className={`fo-team ${t.tid === partner ? 'on' : ''}`} onClick={() => onPick(t.tid)}>
-          <TeamLogo tid={t.tid} size={32} />
+          <TeamLogo tid={t.tid} size={32} decorative />
           {t.abbrev}
         </button>
       ))}
@@ -472,7 +486,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
-        <TeamLogo tid={tid} size={42} />
+        <TeamLogo tid={tid} size={42} decorative />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="bold ellipsis">
             {t.region} {t.name}
@@ -494,7 +508,10 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
       <div className="tiny dim" style={{ marginTop: 8 }}>
         {st.help}
         {ts.won + ts.lost >= 10 ? ` Winning ${Math.round(winPct(ts) * 100)}% this season.` : ''}
-        {holds > 0 ? ` Payroll includes ${fmtM(holds)} in cap holds for players they plan to re-sign.` : ''}
+        {/* (in free agency a team's holds are its restricted free agents' and its offer sheets', see capHolds) */}
+        {holds > 0
+          ? ` Payroll includes ${fmtM(holds)} in cap holds for ${league.phase === 'freeAgency' ? 'their restricted free agents and offer sheets' : 'players they plan to re-sign'}.`
+          : ''}
       </div>
       <RecentDeals league={league} tid={tid} />
     </Card>
@@ -643,7 +660,7 @@ function AssetList({
     <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
         <div className="row" style={{ gap: 8, minWidth: 0 }}>
-          <TeamLogo tid={tid} size={22} />
+          <TeamLogo tid={tid} size={22} decorative />
           <h3 className="ellipsis" style={{ fontSize: 14, color: 'var(--text-2)' }}>
             {title}
           </h3>
@@ -791,6 +808,12 @@ function Dock({
   onForce: () => void;
 }) {
   const user = league.userTid;
+  // god-mode edits wait while a sim runs, a forced trade too
+  const simming = useStore((s) => !!s.sim);
+  // on a phone the dock folds the deal's terms and its salary, payroll and roster numbers away until it's
+  // opened (office.css .fo-dock-more): all of it covered half the asset list
+  const [more, setMore] = useState(false);
+  const moreId = useId();
   const cap = CAP_FOR(league, season);
   const key = JSON.stringify(offer);
   // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
@@ -832,13 +855,20 @@ function Dock({
   // the helper can fix our side's salary matching, a full roster and the value, nothing else
   const theyreOver = money.theyreOver;
   const fixable = !ev.accept && money.workable;
+  // god mode's line under Force folds with the details when it only explains (an error or a wait stays)
+  const forcePlain = !!force && !force.errors.length && !force.warnings.length && !simming;
   return (
-    <div className="fo-dock">
+    <div className={`fo-dock${more ? ' open' : ''}`}>
       <div className="row between" style={{ gap: 8, marginBottom: 6 }}>
         <span className="small bold" style={{ color: r.color }}>
           {league.teams[offer.b.tid].abbrev}: {r.label}
         </span>
-        <span className="tiny dim num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
+        <span className="row" style={{ gap: 6, flex: 'none' }}>
+          <span className="tiny dim num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
+          <button className="btn xs ghost fo-only-sm" aria-expanded={more} aria-controls={forcePlain ? `${moreId} ${moreId}f` : moreId} onClick={() => setMore((m) => !m)}>
+            {more ? <ChevronDown size={14} /> : <ChevronUp size={14} />} {more ? 'Less' : 'Details'}
+          </button>
+        </span>
       </div>
       <div className="fo-meter">
         <i style={{ width: `${r.pct}%`, background: r.color }} />
@@ -855,34 +885,42 @@ function Dock({
           <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />
         </div>
       )}
-      {/* what each protection, swap and sum of cash does, a line each */}
-      <TermsList league={league} offer={offer} short />
-      <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
-        <div>
-          <div className="tiny dim upper bold">Salary</div>
-          <div className="small num">
-            Out <b>{fmtM(out)}</b>
+      <div id={moreId} className="fo-dock-more">
+        {/* what each protection, swap and sum of cash does, a line each */}
+        <TermsList league={league} offer={offer} short />
+        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 0.8fr', gap: 6 }}>
+          <div>
+            <div className="tiny dim upper bold">Salary</div>
+            <div className="small num">
+              Out <b>{fmtM(out)}</b>
+            </div>
+            <div className="small num">
+              In <b>{fmtM(inc)}</b>
+            </div>
           </div>
-          <div className="small num">
-            In <b>{fmtM(inc)}</b>
+          <div>
+            <div className="tiny dim upper bold">Payroll after</div>
+            <div className="small num bold" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+              {fmtM(after)}
+            </div>
+            <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
+            {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
           </div>
-        </div>
-        <div>
-          <div className="tiny dim upper bold">Payroll after</div>
-          <div className="small num bold" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-            {fmtM(after)}
+          <div>
+            <div className="tiny dim upper bold">Rosters</div>
+            <div className="small num bold" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
+              {rosterAfter} / {theirAfter}
+            </div>
+            <div className="tiny dim">you / them</div>
           </div>
-          <div className="tiny dim num">{after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}</div>
-          {holds > 0 && <div className="tiny dim num">incl. {fmtM(holds)} cap holds</div>}
-        </div>
-        <div>
-          <div className="tiny dim upper bold">Rosters</div>
-          <div className="small num bold" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
-            {rosterAfter} / {theirAfter}
-          </div>
-          <div className="tiny dim">you / them</div>
         </div>
       </div>
+      {/* folded on a phone, a payroll over the tax still says so */}
+      {!more && after > cap.luxuryTax && (
+        <div className="fo-only-sm tiny warn bold num" style={{ marginTop: 6 }}>
+          Payroll after: {fmtM(after)}, {fmtM(after - cap.luxuryTax)} over the tax
+        </div>
+      )}
       {ruleErrors.length > 0 && (
         <div className="row top small" style={{ marginTop: 8, gap: 6 }}>
           <span className="tag bad" style={{ flex: 'none' }}>
@@ -904,11 +942,14 @@ function Dock({
       </div>
       {force && (
         <div className="col" style={{ marginTop: 8, gap: 4 }}>
-          <button className="btn sm block" disabled={force.errors.length > 0} onClick={onForce}>
+          <button className="btn sm block" disabled={force.errors.length > 0 || simming} onClick={onForce}>
             <Zap size={16} /> Force this trade
           </button>
-          <span className={`tiny ${force.errors.length ? 'bad' : force.warnings.length ? 'warn' : 'dim'}`}>
-            {force.errors[0] ?? force.warnings[0] ?? 'God mode: it goes through whatever their GM and the trade rules say.'}
+          <span id={`${moreId}f`} className={`tiny ${force.errors.length ? 'bad' : force.warnings.length || simming ? 'warn' : 'dim fo-dock-more'}`}>
+            {force.errors[0] ??
+              (simming
+                ? 'The simulation is running: a forced trade waits for it to stop.'
+                : (force.warnings[0] ?? 'God mode: it goes through whatever their GM and the trade rules say.'))}
           </span>
         </div>
       )}
@@ -1001,7 +1042,7 @@ function TradingBlock({
             return (
               <Card key={o.tid} className="tight">
                 <div className="row" style={{ gap: 10 }}>
-                  <TeamLogo tid={o.tid} size={34} />
+                  <TeamLogo tid={o.tid} size={34} decorative />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">
                       {t.region} {t.name}

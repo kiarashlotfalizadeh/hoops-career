@@ -85,6 +85,7 @@ function ScheduleTab() {
       />
       {mode === 'mine' && cup && (
         <Chips
+          label="Games"
           value={games}
           onChange={setGames}
           options={[

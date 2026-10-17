@@ -326,13 +326,38 @@ h3 {
   color: var(--text-dim);
   font-weight: 600;
 }
-/* a 360px phone: the status line under the team name ("Free Agency · day 12") gets the room it needs */
+/* a 360px phone: the status line under the team name ("Free Agency · day 30", "Preseason · 2026-27") gets the room it needs */
 @media (max-width: 380px) {
   .topbar-inner {
-    gap: 6px;
+    gap: 4px;
   }
   .topbar .iconbtn {
     width: 38px;
+  }
+}
+/* god mode's wand makes a fourth control: on a phone they close up so the status line keeps its room */
+@media (max-width: 430px) {
+  .topbar-inner:has(.god-wand) {
+    gap: 4px;
+  }
+  .topbar-inner:has(.god-wand) .iconbtn {
+    width: 36px;
+  }
+  .topbar-inner:has(.god-wand) .btn.sm {
+    padding: 0 10px;
+  }
+}
+/* and on a 360px phone the Play button drops its icon and the bar's sides slim a little: the last few
+   pixels "Preseason · 2026-27" or "Free Agency · day 30" needs */
+@media (max-width: 380px) {
+  .topbar-inner:has(.god-wand) {
+    padding: 0 max(10px, var(--safe-r)) 0 max(10px, var(--safe-l));
+  }
+  .topbar-inner:has(.god-wand) .btn.sm {
+    padding: 0 9px;
+  }
+  .topbar-inner:has(.god-wand) .btn.sm > svg {
+    display: none;
   }
 }
 .iconbtn {
@@ -998,6 +1023,12 @@ table.stats th.l,
 table.stats td.l {
   text-align: left;
 }
+/* the headers and the left-hand cells are names and words: they keep Inter's own hyphen, its tabular one is
+   a figure wide ("Gilgeous - Alexander"). A number in one opts back in with .num */
+table.stats th,
+table.stats td.l {
+  font-variant-numeric: normal;
+}
 table.stats td {
   padding: 8px 8px;
   text-align: right;
@@ -1312,7 +1343,7 @@ body:has(.simbar) .page {
   gap: 5px;
 }
 /* tablets held sideways: the court sits beside the coaching panels instead of filling the screen
-   (held upright they stack, like a phone: see live.css) */
+   (held upright they stack like a phone, the coaching dock pinned just over the tab bar: see live.css) */
 @media (min-width: 760px) and (orientation: landscape) {
   .live-grid {
     display: grid;

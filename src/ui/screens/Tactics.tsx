@@ -557,7 +557,15 @@ function RolesTab() {
             const role = t.offense.roles[pl.pid] ?? archetype(pl.ratings).role;
             const fr = (t.offense.freedom[pl.pid] ?? 0) as ShotFreedom;
             return (
-              <div key={pl.pid} className="listrow clickable" role="button" tabIndex={0} onClick={() => setPick(pl.pid)} onKeyDown={activateOnKey(() => setPick(pl.pid))}>
+              <div
+                key={pl.pid}
+                className="listrow clickable"
+                role="button"
+                tabIndex={0}
+                aria-haspopup="dialog"
+                onClick={() => setPick(pl.pid)}
+                onKeyDown={activateOnKey(() => setPick(pl.pid))}
+              >
                 <Avatar p={pl} />
                 <div className="grow">
                   <div className="bold small ellipsis">{nameOf(pl.pid)}</div>
@@ -658,7 +666,7 @@ function ManageTab({ t, edit }: { t: TacticsT; edit: (fn: (t: TacticsT) => void)
             step={5}
             onChange={(x) => edit((tt) => void (tt.manage.hackThreshold = x))}
             format={(x) => (x === 0 ? 'Off' : `< ${x}% FT`)}
-            help="Intentionally foul opposing players who shoot below this free-throw percentage (not allowed in the last 2 minutes)."
+            help="Intentionally foul opposing players who shoot below this free-throw percentage (never in the last two minutes of a period, where the rules punish it)."
           />
         </div>
       </Card>

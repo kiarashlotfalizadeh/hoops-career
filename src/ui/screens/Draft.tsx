@@ -243,7 +243,7 @@ export default function Draft() {
               </div>
             </div>
             <div className="small dim2">
-              Pick #{overallPick(league, np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie scale deal' : 'second round, 2-year minimum deal'}).
+              Pick #{overallPick(league, np.round, np.pick!)} ({np.round === 1 ? 'first round, 4-year rookie-scale deal' : 'second round, 2-year minimum deal'}).
             </div>
             <div className="row">
               <button className="btn grow" onClick={() => setConfirmPick(null)}>
@@ -430,7 +430,7 @@ function LiveView({
               const body = (
                 <>
                   <span className="n">#{n}</span>
-                  <TeamLogo tid={d.tid} size={26} />
+                  <TeamLogo tid={d.tid} size={26} decorative />
                   <span className="tiny bold">{league.teams[d.tid].abbrev}</span>
                 </>
               );
@@ -534,7 +534,8 @@ function BoardList({
                 <div className="fo-meta">
                   {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
                 </div>
-                <div className="fo-meta tiny">
+                {/* wraps on a phone rather than cut off the chance he's gone before your pick */}
+                <div className="fo-meta tiny" style={{ whiteSpace: 'normal' }}>
                   {p.archetype}
                   {projection(p) ? ` · ${projection(p)}` : ''}
                 </div>
@@ -550,7 +551,7 @@ function BoardList({
       </div>
       {list.length > limit && (
         <button className="btn ghost block" style={{ borderRadius: 0, borderInline: 0, borderBottom: 0 }} onClick={() => setLimit(limit + 30)}>
-          Show more ({list.length - limit})
+          Show more ({list.length - limit} left)
         </button>
       )}
     </Card>
@@ -602,7 +603,7 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
   const mine = s.tid === league.userTid;
   const name = (pid: number) => {
     const x = league.players[pid];
-    return x ? `${x.firstName[0]}. ${x.lastName}` : '?';
+    return x ? `${x.firstName[0]}.\u00a0${x.lastName}` : '?';
   };
   if (!p) return null;
   const via = s.orig !== s.tid ? ` · via ${league.teams[s.orig].abbrev}` : '';
@@ -620,8 +621,13 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
         </div>
         <div className="fo-meta tiny ellipsis">
           {p.pos} · {Math.round(top.p * 100)}% of mocks{via}
-          {alts.length ? ` · or ${alts.map((a) => `${name(a.pid)} ${Math.round(a.p * 100)}%`).join(', ')}` : ''}
         </div>
+        {/* the other names on a line of their own, wrapping: at the end of the line above they were cut off */}
+        {alts.length > 0 && (
+          <div className="fo-meta tiny" style={{ whiteSpace: 'normal' }}>
+            or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}
+          </div>
+        )}
       </div>
       <OvrPot p={p} />
     </button>
@@ -672,7 +678,8 @@ function LotteryView({ league, onTrade }: { league: League; onTrade?: (dpid: num
     <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
         <h3 style={{ fontSize: 14, color: 'var(--text-2)' }}>Lottery order</h3>
-        <span className="tiny dim">{onTrade ? 'Tap a pick to trade for it' : 'Pre-lottery odds for #1'}</span>
+        {/* (the rows' percentages need their caption while trading is open too) */}
+        <span className="tiny dim">Pre-lottery odds for #1{onTrade ? ' · tap a pick to trade' : ''}</span>
       </div>
       <div className="list">
         {order.map((d) => {
@@ -691,7 +698,7 @@ function LotteryView({ league, onTrade }: { league: League; onTrade?: (dpid: num
               onClick={onTrade ? () => onTrade(d.dpid) : undefined}
             >
               <span className="fo-rank">{d.pick}</span>
-              <TeamLogo tid={d.tid} size={32} />
+              <TeamLogo tid={d.tid} size={32} decorative />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="bold ellipsis">
                   {league.teams[d.tid].region} {league.teams[d.tid].name}
@@ -775,7 +782,7 @@ function MyPicks({ league }: { league: League }) {
             <div className="list">
               {owed.map((d) => (
                 <div key={d.dpid} className="listrow">
-                  <TeamLogo tid={d.tid} size={30} />
+                  <TeamLogo tid={d.tid} size={30} decorative />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">{pickLabel(league, d)}</div>
                     <div className="tiny dim">

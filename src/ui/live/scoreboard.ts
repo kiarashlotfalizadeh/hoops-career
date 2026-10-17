@@ -8,6 +8,7 @@
 
 import type { GameResult, League } from '../../core/types';
 import { confStandings } from '../../core/league/standings';
+import { FRANCHISES } from '../../core/teams';
 
 /** Game seconds a real minute of broadcast covers (48 minutes in about 135). */
 export const GAME_SEC_PER_MIN = 2880 / 135;
@@ -35,7 +36,8 @@ const TIP_ZONE: Record<string, number> = {
 
 /** When a game tips, in minutes after 7:00 p.m. ET: its home team's local 7:00, or 7:30 for every other game id. */
 export function tipMinute(league: League, home: number, gid: number): number {
-  return (TIP_ZONE[league.teams[home]?.abbrev] ?? 0) + (gid % 2 ? 30 : 0);
+  // (by the franchise, whose city stays put when god mode renames the team)
+  return (league.teams[home] ? (TIP_ZONE[FRANCHISES[home]?.abbrev] ?? 0) : 0) + (gid % 2 ? 30 : 0);
 }
 
 /** "7:30 PM" (ET), the way a ticker gives a tip time. */

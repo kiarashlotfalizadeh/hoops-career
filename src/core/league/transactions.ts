@@ -1,10 +1,11 @@
 // The transaction log: a durable record of roster moves (trades, signings, re-signings,
 // extensions, releases and waivers (stretched or not), waiver claims, buyouts, two-way deals and
 // conversions, renounced rights, options, draft picks, exercised pick swaps, restricted free
-// agency's qualifying offers, offer sheets and matches, and 10-day contracts) behind the team and player histories. The news log
-// keeps about a year of stories; this keeps every trade (and pick swap) and every move of the
-// user's team for good, and other teams' moves for two seasons. Entries hold names and pick labels as they were, so they
-// read the same after the player retires and his record is compacted away, or the pick is made.
+// agency's qualifying offers, offer sheets and matches, and 10-day contracts) behind the team and
+// player histories. The news log keeps about a year of stories; this keeps every trade (and pick
+// swap) and every move of the user's team for good, and other teams' moves for two seasons. Entries
+// hold names and pick labels as they were, so they read the same after the player retires and his
+// record is compacted away, or the pick is made.
 
 import type { League, Player, Txn, TxnKind, TxnSide } from '../types';
 import { seasonLabel } from '../constants';

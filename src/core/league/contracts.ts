@@ -423,9 +423,6 @@ export function spendRoute(league: League, tid: number, route: SigningRoute | nu
   else if (route === 'bae') t.baeSeason = season;
 }
 
-/** A signing route in running text: "a minimum deal", "cap space", "the bi-annual exception". */
-export const routeName = (r: SigningRoute) => (r === 'min' ? 'a minimum deal' : r === 'space' ? 'cap space' : `the ${EXCEPTIONS[r].name}`);
-
 /** A team's cap space for a signing now: under the cap net of its payroll and what the summer market holds (see marketHolds). */
 export function capSpace(league: League, tid: number, season = contractSeason(league)): number {
   return CAP_FOR(league, season).salaryCap - payroll(league, tid, season) - heldSalary(league, tid, season);
@@ -550,7 +547,7 @@ export function signPlayer(
     addNews(league, {
       kind: 'signing',
       // the total includes the yearly raises, as on the offer sheet
-      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr / $${(p.contract.salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M.`,
+      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr${years === 1 ? '' : 's'} / $${(p.contract.salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M.`,
       tids: [tid],
       pids: [p.pid],
     });
@@ -826,7 +823,7 @@ export function resolveWaivers(league: League) {
           from: 'Assistant GM',
           subject: `${name} went elsewhere`,
           body: yourClaimFailed
-            ? `Our claim on ${name} fell through (${yourClaimFailed}) and the ${teamNameOf(league, claimer.tid)} claimed him.`
+            ? `Our claim on ${name} fell through, and the ${teamNameOf(league, claimer.tid)} claimed him. ${yourClaimFailed}`
             : `The ${teamNameOf(league, claimer.tid)} claimed ${name} ahead of us: worse records come first in the waiver order.`,
           tone: 'neutral',
           link: `/player/${p.pid}`,
@@ -841,7 +838,7 @@ export function resolveWaivers(league: League) {
         body:
           w.from === user
             ? `Nobody claimed ${name}, so he is a free agent and his $${(dead / 1000).toFixed(1)}M stays on our books as dead money.`
-            : `Our claim on ${name} fell through (${claimBlockedReason(league, user, { ...p, waivers: w }) ?? 'the claim no longer fit'}). He is a free agent now.`,
+            : `Our claim on ${name} fell through. ${claimBlockedReason(league, user, { ...p, waivers: w }) ?? 'The claim no longer fit.'} He is a free agent now.`,
         tone: 'neutral',
         link: w.from === user ? '/office' : `/player/${p.pid}`,
       });

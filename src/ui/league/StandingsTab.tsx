@@ -44,7 +44,7 @@ export function StandingsTab({ league }: { league: League }) {
             <span className="small dim">
               {!started ? 'Season has not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}
             </span>
-            <div className="chips lg-only-narrow">
+            <div className="chips lg-only-narrow" role="group" aria-label="Columns">
               <button className={`chip lg-chip-xs ${cols === 'basic' ? 'on' : ''}`} aria-pressed={cols === 'basic'} onClick={() => setCols('basic')}>
                 Standings
               </button>
@@ -241,7 +241,7 @@ function PowerRankings({ league }: { league: League }) {
           return (
             <Link key={x.tid} to={`/team/${x.tid}`} className={`lg-st-row ${x.tid === league.userTid ? 'me' : ''}`}>
               <span className="rk">{i + 1}</span>
-              <TeamLogo tid={x.tid} size={24} />
+              <TeamLogo tid={x.tid} size={24} decorative />
               <span className="nm" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
                 <span style={{ maxWidth: '100%' }}>{t.name}</span>
                 <span className="tiny dim num" style={{ fontWeight: 600 }}>

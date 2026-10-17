@@ -15,8 +15,8 @@ const PAGE = 100;
 
 export function RatingsTab({ league }: { league: League }) {
   const nav = useNavigate();
-  // 'all' (every player on a team), 'fa' (the free agents) or a team id
-  const [team, setTeam] = useQueryParam<string>('rt', 'all');
+  // 'all' (every player on a team), 'fa' (the free agents) or a team id (one the league doesn't have reads 'all')
+  const [team, setTeam] = useQueryParam<string>('rt', 'all', ['all', 'fa', ...league.teams.map((t) => String(t.tid))]);
   const [pos, setPos] = useQueryParam<'all' | Pos>('pos', 'all', ['all', ...POSITIONS]);
   const [q, setQ] = useState('');
   // typing stays responsive: the table catches up with the search a beat later
@@ -57,7 +57,7 @@ export function RatingsTab({ league }: { league: League }) {
 
   return (
     <>
-      <div className="lg-hscroll">
+      <div className="lg-hscroll" role="group" aria-label="Filter players">
         <button
           className={`chip ${team === String(league.userTid) ? 'on' : ''}`}
           aria-pressed={team === String(league.userTid)}

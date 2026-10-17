@@ -1,6 +1,6 @@
 // Sortable tables: the order a tapped column header gives.
 import { describe, expect, it } from 'vitest';
-import { compareCells } from '../components/ui';
+import { compareCells, fmtNum } from '../components/ui';
 
 describe('compareCells', () => {
   it('puts missing numbers last in either direction (a PER column mixing real and simulated seasons)', () => {
@@ -13,5 +13,14 @@ describe('compareCells', () => {
   });
   it('sorts text alphabetically', () => {
     expect(['Webb', 'Hart', 'King'].sort((a, b) => compareCells(a, b, 1))).toEqual(['Hart', 'King', 'Webb']);
+  });
+});
+
+describe('fmtNum', () => {
+  it('reads a value that rounds to zero as 0.0, not -0.0, and a missing one as a dash', () => {
+    expect(fmtNum(-0.03)).toBe('0.0');
+    expect(fmtNum(-0.06)).toBe('-0.1');
+    expect(fmtNum(12)).toBe('12');
+    expect(fmtNum(NaN)).toBe('—');
   });
 });

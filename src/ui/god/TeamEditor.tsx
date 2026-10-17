@@ -25,7 +25,7 @@ interface Form {
   tactics: number;
 }
 
-const formOf = (t: Team): Form => ({
+export const formOf = (t: Team): Form => ({
   region: t.region,
   name: t.name,
   abbrev: t.abbrev,
@@ -37,17 +37,22 @@ const formOf = (t: Team): Form => ({
   tactics: t.coach.tactics,
 });
 
-function editOf(t: Team, f: Form): TeamEdit {
+/**
+ * The edit: only what differs from the form as it opened, `base` (not from the team as it is now: a
+ * sim running while the sheet is open moves its cash, hype and strategy, and saving mustn't put those back).
+ */
+export function editOf(base: Form, f: Form): TeamEdit {
   const e: TeamEdit = {};
-  if (f.region.trim() !== t.region) e.region = f.region;
-  if (f.name.trim() !== t.name) e.name = f.name;
-  if (f.abbrev.trim().toUpperCase() !== t.abbrev) e.abbrev = f.abbrev;
-  if (f.colors.some((c, i) => c.toLowerCase() !== t.colors[i].toLowerCase())) e.colors = f.colors;
-  if (f.strategy !== t.strategy) e.strategy = f.strategy;
+  if (f.region.trim() !== base.region) e.region = f.region;
+  if (f.name.trim() !== base.name) e.name = f.name;
+  if (f.abbrev.trim().toUpperCase() !== base.abbrev) e.abbrev = f.abbrev;
+  if (f.colors.some((c, i) => c.toLowerCase() !== base.colors[i].toLowerCase())) e.colors = f.colors;
+  if (f.strategy !== base.strategy) e.strategy = f.strategy;
   // (shown to $0.1M: an amount left as it was shown keeps the exact balance)
-  if (f.cash.trim() !== formOf(t).cash) e.cash = f.cash.trim() ? Math.round(Number(f.cash) * 1000) : NaN;
-  if (Math.abs(f.hype - t.hype) > 1e-6) e.hype = f.hype;
-  if (f.development !== t.coach.development || f.tactics !== t.coach.tactics) e.coach = { development: f.development, tactics: f.tactics };
+  if (f.cash.trim() !== base.cash) e.cash = f.cash.trim() ? Math.round(Number(f.cash) * 1000) : NaN;
+  if (Math.abs(f.hype - base.hype) > 1e-6) e.hype = f.hype;
+  const coach = { ...(f.development !== base.development ? { development: f.development } : {}), ...(f.tactics !== base.tactics ? { tactics: f.tactics } : {}) };
+  if (Object.keys(coach).length) e.coach = coach;
   return e;
 }
 
@@ -62,13 +67,14 @@ export function TeamEditor({ tid, onClose }: { tid: number | null; onClose: () =
   );
 }
 
-const COLOR_NAMES = ['Main colour', 'Second colour', 'Trim'];
+const COLOR_NAMES = ['Main color', 'Second color', 'Trim'];
 
 function Editor({ league, t, onClose }: { league: League; t: Team; onClose: () => void }) {
-  const [f, setF] = useState(() => formOf(t));
+  const [base] = useState(() => formOf(t));
+  const [f, setF] = useState(base);
   const set = (patch: Partial<Form>) => setF((x) => ({ ...x, ...patch }));
   const block = useEditBlock(league);
-  const edit = editOf(t, f);
+  const edit = editOf(base, f);
   const errors = checkTeamEdit(league, t.tid, edit);
   const hurt = teamPlayers(league, t.tid).filter((p) => p.injury).length;
   const save = () => {
@@ -105,7 +111,7 @@ function Editor({ league, t, onClose }: { league: League; t: Team; onClose: () =
           <input className="input" value={f.abbrev} maxLength={4} autoCapitalize="characters" onChange={(e) => set({ abbrev: e.target.value.toUpperCase() })} />
         </Field>
         <div className="god-field">
-          <span className="tiny dim upper bold">Colours</span>
+          <span className="tiny dim upper bold">Colors</span>
           <div className="god-colors">
             {f.colors.map((c, i) => (
               <input

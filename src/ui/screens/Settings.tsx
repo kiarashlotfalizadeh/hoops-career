@@ -295,6 +295,7 @@ export default function Settings() {
           <button className="btn danger block" disabled={simming} onClick={() => setSheet('delete')}>
             <Trash2 size={17} /> Delete league
           </button>
+          {simming && <div className="tiny dim">Main menu, Switch team and Delete league wait for the simulation to stop.</div>}
         </div>
       </Card>
 
@@ -376,9 +377,11 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
   const [pick, setPick] = useState<number | null>(null);
   const t = pick !== null ? league.teams[pick] : null;
   const books = capSeason(league);
+  // (the sheet also opens from "Find a new job" links, which a running sim doesn't disable)
+  const simming = useStore((s) => !!s.sim);
 
   const take = (tid = pick) => {
-    if (tid === null) return;
+    if (tid === null || simming) return;
     const target = league.teams[tid];
     let err: string | null = null;
     useStore.getState().mutate((l) => void (err = takeJob(l, tid)));
@@ -399,7 +402,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
               {league.fired ? 'Teams that want you after the carousel: ' : 'Teams calling about their openings: '}their offers stand until the draft.
             </div>
             {offers.map((o) => (
-              <OfferCard key={o.tid} league={league} o={o} onTake={() => take(o.tid)} onDecline={() => useStore.getState().mutate((l) => declineJob(l, o.tid))} />
+              <OfferCard key={o.tid} league={league} o={o} busy={simming} onTake={() => take(o.tid)} onDecline={() => useStore.getState().mutate((l) => declineJob(l, o.tid))} />
             ))}
             <div className="tiny dim upper bold">Or take over any team</div>
           </>
@@ -481,11 +484,12 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
               </div>
             </div>
           )}
+          {simming && <div className="tiny dim">Taking a job waits for the simulation to stop.</div>}
           <div className="row">
             <button className="btn grow" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn primary grow" disabled={pick === null} onClick={() => take()}>
+            <button className="btn primary grow" disabled={pick === null || simming} onClick={() => take()}>
               {t ? `Take over ${t.abbrev}` : 'Pick a team'}
             </button>
           </div>
@@ -496,7 +500,7 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 /** One team's offer: who they are, where they stand and what the job is, with the user's two choices. */
-function OfferCard({ league, o, onTake, onDecline }: { league: League; o: JobOffer; onTake: () => void; onDecline: () => void }) {
+function OfferCard({ league, o, busy, onTake, onDecline }: { league: League; o: JobOffer; busy: boolean; onTake: () => void; onDecline: () => void }) {
   const t = league.teams[o.tid];
   const books = capSeason(league);
   return (
@@ -522,7 +526,7 @@ function OfferCard({ league, o, onTake, onDecline }: { league: League; o: JobOff
         <button className="btn grow" onClick={onDecline}>
           Decline
         </button>
-        <button className="btn primary grow" onClick={onTake}>
+        <button className="btn primary grow" disabled={busy} onClick={onTake}>
           Take the job
         </button>
       </div>

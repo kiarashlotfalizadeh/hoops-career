@@ -307,7 +307,7 @@ function side(
 }
 
 /** Regular-season meetings of two teams this season, from `us`'s side. */
-export function seasonSeries(league: League, us: number, them: number, gid?: number): SeasonSeries {
+function seasonSeries(league: League, us: number, them: number, gid?: number): SeasonSeries {
   const games: Meeting[] = [];
   for (const r of league.games) {
     if (r.season !== league.season || r.type !== 'regular') continue;
@@ -333,7 +333,7 @@ export function seasonSeries(league: League, us: number, them: number, gid?: num
 }
 
 /** A playoff game's series as it stands going in, from `us`'s side. */
-export function seriesState(league: League, g: Pick<ScheduledGame, 'seriesId' | 'type'>, us: number): SeriesState | undefined {
+function seriesState(league: League, g: Pick<ScheduledGame, 'seriesId' | 'type'>, us: number): SeriesState | undefined {
   if (g.type !== 'playoffs' || !g.seriesId) return undefined;
   const s = league.playoffs.find((x) => x.id === g.seriesId);
   if (!s) return undefined;

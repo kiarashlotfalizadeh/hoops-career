@@ -1,7 +1,8 @@
-// Picks a player to compare: a search over every active player and free agent (this year's prospects
-// in the draft phases, or against a prospect), and quick picks around the player he'll be set
-// against: his teammates at his position, the user's players there, the prospects ranked nearest him
-// and the players in this device's recent comparisons.
+// Picks a player to compare (or, in god mode, to edit): a search over every active player and free
+// agent (this year's prospects in the draft phases, or against a prospect), and quick picks around
+// the player he'll be set against: his teammates at his position, the user's players there, the
+// prospects ranked nearest him and the players in this device's recent comparisons (with no one to
+// set him against, the user's roster and those recent players).
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import type { League, Player } from '../../core/types';

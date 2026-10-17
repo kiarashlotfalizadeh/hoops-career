@@ -1,7 +1,7 @@
 // Backups: the whole league with its results, written in the current format and checked and cleaned before an import is stored.
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { exportLeague, importLeague } from '../backup';
+import { exportLeague, importLeague, UnsavedLeagueError } from '../backup';
 import { loadLeague, SAVE_VERSION } from '../persistence';
 import { useStore } from '../store';
 import { faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency } from '../../core/league/season';
@@ -131,12 +131,31 @@ describe('import', () => {
     await expect(importLeague(backup(played('other')))).rejects.toThrow('simulation');
     useStore.setState({ sim: null });
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    const put = IDBObjectStore.prototype.put;
     vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
       throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
     });
     useStore.getState().mutate((x) => (x.name = 'renamed'));
     await expect(importLeague(backup(played('other')))).rejects.toThrow('Export a backup');
+    await expect(importLeague(backup(played('other')))).rejects.toBeInstanceOf(UnsavedLeagueError);
     expect(useStore.getState().league).toBe(open);
+    // a file that isn't a backup says so first
+    await expect(importLeague(backup({ id: 'x', teams: [] }))).rejects.toThrow('not a Hoops Career backup');
+    // offered an export and told to go ahead, it imports without saving the open league first
+    vi.mocked(IDBObjectStore.prototype.put).mockImplementation(function (this: IDBObjectStore, ...args) {
+      if (JSON.stringify(args[0] ?? null).includes('"renamed"')) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      return put.apply(this, args);
+    });
+    const other = await importLeague(backup(played('other')), { force: true });
+    expect(await loadLeague(other.id)).toMatchObject({ id: other.id });
+  });
+
+  it('says so when the device has no room for the import', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    });
+    await expect(importLeague(backup(played('full')))).rejects.toThrow('Device storage is full. Free up some space, then import again.');
   });
 });
 

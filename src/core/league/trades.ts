@@ -13,7 +13,9 @@ import {
   TWO_WAY_MAX,
   contractSeason,
   addNews,
+  andList,
   curTeamSeason,
+  sentence,
   dateToDay,
   fmtDate,
   inSeason,
@@ -753,9 +755,10 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     const outSal = sideSalary(league, mine);
     if (salaryMatchGap(league, offer, key) > 0) {
       const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
-      errors.push(
-        `${abbrev} would be over the cap after the trade, so it can take back at most 125% of outgoing salary plus $0.1M ($${(maxIn / 1000).toFixed(1)}M) — incoming is $${(inSal / 1000).toFixed(1)}M.`,
-      );
+      const m = (v: number) => `$${(v / 1000).toFixed(1)}M`;
+      // (sending nothing, the limit is the $0.1M buffer alone: "125% of $0.0M plus $0.1M ($0.1M)" read garbled)
+      const sends = outSal > 0 ? `125% of the ${m(outSal)} it sends, plus $0.1M` : 'it sends no salary out, and the 125% rule adds only $0.1M';
+      errors.push(`${abbrev} would be over the cap after the trade, so it can take back at most ${m(maxIn)} (${sends}) — incoming is ${m(inSal)}.`);
     }
     // the mid-level and the bi-annual are for teams under the tax, so using one caps the team at the tax line for that season
     const tax = CAP_FOR(league, s).luxuryTax;
@@ -959,7 +962,7 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
   const casual = league.settings.difficulty === 'casual';
   const flips = x.flippedIn.filter((a) => matters(Math.max(0, Math.min(a.own, a.neutral * 1.15) - a.neutral) + (casual ? 0.12 * Math.max(0, a.neutral) : 0)));
   if (flips.length) {
-    const names = flips.slice(0, 2).map(nameOf).join(' and ') + (flips.length > 2 ? ` and ${flips.length - 2} more` : '');
+    const names = flips.length > 2 ? `${flips.slice(0, 2).map(nameOf).join(', ')} and ${flips.length - 2} more` : andList(flips.map(nameOf));
     add(
       'info',
       `${names} changed hands this season: face value only`,
@@ -1055,7 +1058,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
     ].join(', ') || 'nothing';
   addNews(league, {
     kind: 'trade',
-    text: `Trade: ${ta.abbrev} send ${desc(offer.a)} to ${tb.abbrev} for ${desc(offer.b)}.`,
+    text: sentence(`Trade: ${ta.abbrev} send ${desc(offer.a)} to ${tb.abbrev} for ${desc(offer.b)}`),
     tids: [ta.tid, tb.tid],
     pids: [...offer.a.pids, ...offer.b.pids],
   });
@@ -1154,7 +1157,10 @@ const withA = (offer: TradeOffer, pids: number[], dpids: number[] = []): TradeOf
 /** Side A would end up over the roster limit: sending one more of its players fixes that. */
 function aRosterOver(league: League, o: TradeOffer): boolean {
   const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
-  return std(o.b.pids) > std(o.a.pids) && tradeRoster(league, o.a.tid).length - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
+  const roster = tradeRoster(league, o.a.tid).length;
+  // (in free agency the spots an offer sheet or a pending offer holds count, as validateTrade counts them)
+  const held = league.phase === 'freeAgency' ? summerRoster(league, o.a.tid) - roster : 0;
+  return std(o.b.pids) > std(o.a.pids) && roster + held - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
 }
 
 /** Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding side A's players can fix (its salary matching, a full roster)? */
@@ -1483,16 +1489,20 @@ export function filterTargets(rows: TradeTarget[], f: TargetFilter): TradeTarget
 /**
  * The most salary a team can take back in one deal right now, sending at most two of its
  * tradeable contracts (as "what would make this work?" does to match salaries): what fits under
- * the cap after they leave, or 125% of them plus $0.1M.
+ * the cap after they leave, or 125% of them plus $0.1M, and no more than keeps a team that used the
+ * mid-level or the bi-annual at the tax line (or as much as they make, past it).
  */
 export function maxTakeBack(league: League, tid: number): number {
   const s = contractSeason(league);
+  const cap = CAP_FOR(league, s);
+  const pay = capPayroll(league, tid, s);
   const sals = standardRoster(league, tid)
     .filter((p) => !untradeable(league, p))
     .map((p) => capSalary(league, p.pid))
     .sort((a, b) => b - a);
   const out = (sals[0] ?? 0) + (sals[1] ?? 0);
-  return Math.max(CAP_FOR(league, s).salaryCap - capPayroll(league, tid, s) + out, out * CAP.tradeMatchPct + CAP.tradeMatchBuffer);
+  const most = Math.max(cap.salaryCap - pay + out, out * CAP.tradeMatchPct + CAP.tradeMatchBuffer);
+  return taxCapped(league.teams[tid], s) ? Math.min(most, Math.max(out, cap.luxuryTax - pay + out)) : most;
 }
 
 // ---------------------------------------------------------------- packages for the user's assets
@@ -1837,10 +1847,15 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
   // an over-the-cap seller can only take back so much salary
   const sellerFits = (p: Player) => salaryMatchGap(league, offer(p), 'b') === 0;
   // an over-the-cap buyer must send back salary first (125% rule), and one that used the
-  // mid-level or the bi-annual enough to stay under the tax: the smallest contract that covers the
-  // gap, else the biggest and keep going
+  // mid-level or the bi-annual enough that the deal doesn't take it past the tax (as validateTrade
+  // has it: one already past it only can't add salary): the smallest contract that covers the gap,
+  // else the biggest and keep going
   const s = contractSeason(league);
-  const taxGap = () => (taxCapped(league.teams[buyer], s) ? capPayroll(league, buyer, s) + sal(vet) - pkg.reduce((a, p) => a + sal(p), 0) - CAP_FOR(league, s).luxuryTax : 0);
+  const taxGap = () => {
+    if (!taxCapped(league.teams[buyer], s)) return 0;
+    const net = sal(vet) - pkg.reduce((a, p) => a + sal(p), 0);
+    return Math.min(net, capPayroll(league, buyer, s) + net - CAP_FOR(league, s).luxuryTax);
+  };
   const gapNow = () => Math.max(salaryMatchGap(league, offer(), 'a'), taxGap());
   while (gapNow() > 0) {
     const gap = gapNow();
@@ -1859,7 +1874,7 @@ function aiPackage(league: League, buyer: number, seller: number, vet: Player): 
     if (!('pid' in x)) {
       // three picks at most: past that the cheapest one in makes way for this better one (else
       // three second-rounders would be as far as an offer ever got)
-      const out = dps.length >= 3 ? dps[0] : null;
+      const out = dps.length >= MAX_PICKS_OUT ? dps[0] : null;
       if (x.round === 1 && dps.filter((d) => d !== out && d.round === 1).length >= MAX_FIRSTS_OUT) continue;
       if (out) dps.shift();
       dps.push(x);

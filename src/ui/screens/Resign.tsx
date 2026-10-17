@@ -126,7 +126,7 @@ function ResignPhase() {
           <Help title="Re-signing your players">
             <p style={{ margin: 0 }}>
               <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. In free agency, a team over the cap can only add players on
-              minimum deals or with its mid-level exception.
+              minimum deals or with an exception (the mid-level, bi-annual or room exception).
             </p>
             <p style={{ margin: 0 }}>
               <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs
@@ -134,8 +134,8 @@ function ResignPhase() {
               {Math.round((FIRM_BUMP - 1) * 100)}%, and he takes nothing less for the rest of the re-sign period.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Options.</b> On a deal of two years or more you can add an option on the last season: a player option (his call) takes about 4% off his price, a team option
-              (yours) adds about 6%.
+              <b>Options on new deals.</b> On a deal of two years or more you can add an option on the last season: a player option (his call) takes about 4% off his price, a team
+              option (yours) adds about 6%.
             </p>
             <p style={{ margin: 0 }}>
               <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
@@ -153,9 +153,9 @@ function ResignPhase() {
               holding it through free agency until he signs or you withdraw the offer.
             </p>
             <p style={{ margin: 0 }}>
-              <b>Options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including rookie-scale
-              fourth years) are your call: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided options get the staff's call when free agency
-              opens.
+              <b>This summer's options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including
+              rookie-scale fourth years) are your call: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided options get the staff's call when
+              free agency opens.
             </p>
           </Help>
         }
@@ -294,7 +294,7 @@ function ResignPhase() {
                         </b>
                         <span className="dim">
                           {' '}
-                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · {playerAge(p, next)} next season
+                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · age {playerAge(p, next)} next season
                         </span>
                       </div>
                     </>
@@ -324,7 +324,7 @@ function ResignPhase() {
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="fo-name small">{playerName(p)}</div>
                     <div className="fo-meta tiny">
-                      {p.pos} · {playerAge(p, next)} next season
+                      {p.pos} · age {playerAge(p, next)} next season
                     </div>
                   </div>
                   <div className="fo-money">
