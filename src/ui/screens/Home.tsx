@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Target, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, sentence, teamPlayers } from '../../core/league/helpers';
 import { normalizeLink } from '../league/shared';
 import { inAppPath } from '../nav';
 import { userGameOnDay } from '../../core/league/games';
@@ -48,7 +48,7 @@ function previewText(body: string): string {
     .split(/\n+/)
     .map((x) => x.trim())
     .filter(Boolean)
-    .map((x) => (/[.!?:]$/.test(x) ? x : `${x}.`))
+    .map((x) => (x.endsWith(':') ? x : sentence(x)))
     .join(' ');
 }
 

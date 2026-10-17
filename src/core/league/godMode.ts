@@ -14,7 +14,7 @@ import { RATING_KEYS, shiftToOvr } from '../ratings';
 import { Rng, clamp, hashString } from '../random';
 import { contractExp, followTendencies, genTendencies, generatePlayer, salaryFor } from '../playerGen';
 import { contractSeason, inSeason, playerName, rosterMaxNow, standardRoster, teamPlayers, TWO_WAY_MAX, twoWayRoster } from './helpers';
-import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract, valueScore } from './contracts';
+import { FA_PRICE_CUT_DAYS, askingContract, leaveTeam, makeContract, marketSalary, valueScore } from './contracts';
 import { refreshDerived } from './progression';
 import { INJURY_TYPES } from './injuries';
 import { numberTeam, retiredNumbers } from './jerseys';
@@ -284,6 +284,8 @@ export function editPlayer(league: League, pid: number, e: PlayerEdit) {
   const moving = e.tid !== undefined && e.tid !== p.tid;
   const prevOvr = p.ovr;
   const worth = valueScore(league, p);
+  // a free agent's price as a share of his market value: marked down by the days he's gone unsigned
+  const markdown = p.tid === FREE_AGENT && p.asking ? Math.min(1, p.asking.amount / Math.max(1, marketSalary(league, p))) : 1;
   if (e.firstName !== undefined) p.firstName = e.firstName.trim();
   if (e.lastName !== undefined) p.lastName = e.lastName.trim();
   if (e.country !== undefined) p.country = e.country.trim();
@@ -325,10 +327,16 @@ export function editPlayer(league: League, pid: number, e: PlayerEdit) {
     p.jersey = e.jersey;
     if (p.tid >= 0) (p.jerseys ??= {})[p.tid] = e.jersey;
   }
-  // a free agent asks for what he's worth now (one sent to free agency already does)
+  // a free agent asks for what he's worth now (one sent to free agency already does), marked down as
+  // much as he was (askingContract keeps a price under his market value, to the minimum)
   if (p.tid === FREE_AGENT && !moving && valueScore(league, p) !== worth) {
+    const years = p.asking?.years;
     p.asking = undefined;
-    p.asking = askingContract(league, p);
+    const fresh = askingContract(league, p);
+    if (markdown < 1) {
+      p.asking = { amount: Math.round((fresh.amount * markdown) / 10) * 10, years: years ?? fresh.years };
+      p.asking = askingContract(league, p);
+    } else p.asking = fresh;
   }
   // trade offers and untouchable marks that no longer stand (he moved) go now, not overnight
   cleanProposals(league);
@@ -474,8 +482,8 @@ export function createPlayer(league: League, o: NewPlayer): Player {
   if (o.pos) p.pos = o.pos;
   p.experience = clamp(o.age - 21, 0, 20);
   // (in the league since the summer before his first season, as a fictional league's undrafted free
-  // agents are: one with no experience is this season's rookie)
-  p.draft = { year: league.season - 1 - p.experience, round: 0, pick: 0, tid: null };
+  // agents are: one with no experience is the coming season's rookie, in the summer next season's)
+  p.draft = { year: contractSeason(league) - 1 - p.experience, round: 0, pick: 0, tid: null };
   p.contract = { start: league.season, salaries: [0] };
   refreshDerived(league, p);
   p.tend = genTendencies(p, rng);

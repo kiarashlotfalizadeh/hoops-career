@@ -268,8 +268,8 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
       case 'transition': {
         holder = st.pid ?? holder;
         moveTo(holder, { x: 0, y: 30 });
-        // (a lane each for the other four: counted among them, two never share one)
-        oPids.filter((pid) => pid !== holder).forEach((pid, i) => moveTo(pid, { x: [-20, 20, -10, 10][i], y: 14 + (i % 2) * 6 }));
+        // (a lane each for the other four: counted among them, two never share one; i % 4 in case the log names no one of the five)
+        oPids.filter((pid) => pid !== holder).forEach((pid, i) => moveTo(pid, { x: [-20, 20, -10, 10][i % 4], y: 14 + (i % 2) * 6 }));
         dPids.forEach((pid, i) => d.set(pid, { x: (i - 2) * 6, y: 18 + i * 3 }));
         ball = { ...o.get(holder)! };
         snap(650, cap(`${N(holder)} pushes it in transition`));

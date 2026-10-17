@@ -223,6 +223,8 @@ describe('career milestones', () => {
     const rebounded = (p: Player) => (lineOf(res, p.pid)?.orb ?? 0) + (lineOf(res, p.pid)?.drb ?? 0) > 0;
     expect(rebounded(a)).toBe(true);
     expect(news.some((n) => n.pids[0] === a.pid && n.text.endsWith('grabbed his 7,500th career rebound.'))).toBe(true);
+    // and the recap names it too
+    expect(marks.some((m) => m.pid === a.pid && m.stat === 'reb' && m.mark === 7500)).toBe(true);
     // 1,000 is for the recap, not the news
     expect(news.some((n) => n.pids[0] === b.pid)).toBe(false);
     // a later game doesn't move it: the recap counts back from his total now

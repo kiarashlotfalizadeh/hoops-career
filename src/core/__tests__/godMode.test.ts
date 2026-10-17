@@ -22,7 +22,7 @@ import {
 } from '../league/godMode';
 import { contractSeason, freeAgents, payroll, playerName, standardRoster, teamPlayers } from '../league/helpers';
 import { evaluateTrade } from '../league/trades';
-import { askingContract, preferredYears } from '../league/contracts';
+import { askingContract, marketSalary, preferredYears } from '../league/contracts';
 import { registryProblems } from '../league/coaches';
 import { simDay } from '../league/season';
 import { contractExp, followTendencies, salaryFor } from '../playerGen';
@@ -139,6 +139,12 @@ describe('moving players', () => {
     const shown = askingContract(l, cut, B);
     editPlayer(l, cut.pid, { tid: B });
     expect([salaryFor(cut, contractSeason(l)), contractExp(cut.contract) - contractSeason(l) + 1]).toEqual([shown.amount, shown.years]);
+    // an edit that changes what an unsigned one is worth keeps his markdown: his price stays as far under his market value
+    const third = createPlayer(l, { age: 26, heightIn: 79, ovr: 84, growth: 0, tid: FREE_AGENT });
+    third.asking = { amount: Math.round(marketSalary(l, third) * 0.6), years: 2 };
+    editPlayer(l, third.pid, { injury: { type: 'Sprained Ankle', games: 20 } });
+    expect(third.asking!.amount / marketSalary(l, third)).toBeCloseTo(0.6, 1);
+    expect(third.asking!.years).toBe(2);
     const p = best(l, A)[0];
     const dead = l.teams[A].deadMoney.length;
     const pay = payroll(l, A);
@@ -253,6 +259,12 @@ describe('created players', () => {
     expect(again.ratings).toEqual(p.ratings);
     const q = createPlayer(l, { age: 30, heightIn: 84, ovr: 70, growth: 0, tid: A });
     expect(q.tid).toBe(A);
+    // one with no experience is a rookie in the season he'll play: this one's, in the summer the next one's
+    expect(createPlayer(l, { age: 19, heightIn: 78, ovr: 60, growth: 0.5, tid: FREE_AGENT }).draft.year).toBe(l.season - 1);
+    const phase = l.phase;
+    l.phase = 'freeAgency';
+    expect(createPlayer(l, { age: 19, heightIn: 78, ovr: 60, growth: 0.5, tid: FREE_AGENT }).draft.year).toBe(l.season);
+    l.phase = phase;
     expect(q.firstName.length).toBeGreaterThan(0);
     expect(salaryFor(q, contractSeason(l))).toBeGreaterThan(0);
     expect(l.teams[A].rotation.order).toContain(q.pid);
