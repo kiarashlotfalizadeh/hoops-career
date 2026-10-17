@@ -291,7 +291,7 @@ export default function Trade() {
           <Help title="Trade rules">
             <p style={{ margin: 0 }}>
               <b>Salary matching.</b> If a team is over the cap ({fmtM(CAP_FOR(league, s).salaryCap)}) after the trade, it can take back at most 125% of the salary it sends out,
-              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level exception this season can't take on salary past the tax line (
+              plus $0.1M. Teams under the cap can absorb salary freely. A team that used its mid-level or bi-annual exception this season can't take on salary past the tax line (
               {fmtM(CAP_FOR(league, s).luxuryTax)}).
             </p>
             <p style={{ margin: 0 }}>
@@ -450,7 +450,7 @@ function TeamPicker({ league, partner, onPick }: { league: League; partner: numb
     <div className="fo-teams" ref={ref} role="group" aria-label="Trade partner">
       {teams.map((t) => (
         <button key={t.tid} aria-pressed={t.tid === partner} className={`fo-team ${t.tid === partner ? 'on' : ''}`} onClick={() => onPick(t.tid)}>
-          <TeamLogo tid={t.tid} size={32} />
+          <TeamLogo tid={t.tid} size={32} decorative />
           {t.abbrev}
         </button>
       ))}
@@ -472,7 +472,7 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
-        <TeamLogo tid={tid} size={42} />
+        <TeamLogo tid={tid} size={42} decorative />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="bold ellipsis">
             {t.region} {t.name}
@@ -494,7 +494,10 @@ function PartnerCard({ league, tid, season }: { league: League; tid: number; sea
       <div className="tiny dim" style={{ marginTop: 8 }}>
         {st.help}
         {ts.won + ts.lost >= 10 ? ` Winning ${Math.round(winPct(ts) * 100)}% this season.` : ''}
-        {holds > 0 ? ` Payroll includes ${fmtM(holds)} in cap holds for players they plan to re-sign.` : ''}
+        {/* (in free agency a team's holds are its restricted free agents' and its offer sheets', see capHolds) */}
+        {holds > 0
+          ? ` Payroll includes ${fmtM(holds)} in cap holds for ${league.phase === 'freeAgency' ? 'their restricted free agents and offer sheets' : 'players they plan to re-sign'}.`
+          : ''}
       </div>
       <RecentDeals league={league} tid={tid} />
     </Card>
@@ -643,7 +646,7 @@ function AssetList({
     <Card className="flush">
       <div className="row between" style={{ padding: '12px 12px 6px' }}>
         <div className="row" style={{ gap: 8, minWidth: 0 }}>
-          <TeamLogo tid={tid} size={22} />
+          <TeamLogo tid={tid} size={22} decorative />
           <h3 className="ellipsis" style={{ fontSize: 14, color: 'var(--text-2)' }}>
             {title}
           </h3>
@@ -1001,7 +1004,7 @@ function TradingBlock({
             return (
               <Card key={o.tid} className="tight">
                 <div className="row" style={{ gap: 10 }}>
-                  <TeamLogo tid={o.tid} size={34} />
+                  <TeamLogo tid={o.tid} size={34} decorative />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">
                       {t.region} {t.name}

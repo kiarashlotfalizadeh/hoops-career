@@ -255,7 +255,10 @@ export default function Office() {
         {holds > 0 && (
           <div className="tiny dim" style={{ marginTop: 4 }}>
             Striped: {fmtM(holds)} in cap holds for your{' '}
-            {league.phase === 'freeAgency' ? (pendingSheets(league, tid).length ? 'restricted free agents and offer sheets' : 'restricted free agents') : 'expiring players'}.
+            {league.phase === 'freeAgency'
+              ? [restrictedFreeAgents(league, tid).length ? 'restricted free agents' : '', pendingSheets(league, tid).length ? 'offer sheets' : ''].filter(Boolean).join(' and ')
+              : 'expiring players'}
+            .
           </div>
         )}
         <div className="grid2" style={{ marginTop: 12 }}>
@@ -570,7 +573,7 @@ function Spotlight({ league }: { league: League }) {
                     key={p.pid}
                     league={league}
                     p={p}
-                    to="/free-agents"
+                    to={`/free-agents?offer=${p.pid}`}
                     right={
                       <div className="fo-money">
                         <div className="a">{fmtM(ask.amount)}</div>

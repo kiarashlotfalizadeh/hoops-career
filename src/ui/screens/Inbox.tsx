@@ -1,6 +1,23 @@
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Briefcase, Check, CheckCheck, ClipboardList, Crown, Landmark, Mail, MailOpen, Stethoscope, Telescope, TrendingUp, type LucideIcon } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  ArrowRight,
+  Briefcase,
+  Check,
+  CheckCheck,
+  ClipboardList,
+  Crown,
+  Handshake,
+  Landmark,
+  Mail,
+  MailOpen,
+  Newspaper,
+  Stethoscope,
+  Telescope,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react';
 import type { InboxMessage, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
@@ -13,6 +30,7 @@ import { continueDraft } from '../../core/league/season';
 import { sheetDecisionBlocked, userDecideSheet } from '../../core/league/rfa';
 import { liveInProgress } from '../../state/live';
 import { TenDayMessage } from '../office/TenDayPanel';
+import { LetGoSheet } from '../office/RfaPanel';
 
 const SENDER_ICON: Record<string, LucideIcon> = {
   Owner: Crown,
@@ -22,6 +40,8 @@ const SENDER_ICON: Record<string, LucideIcon> = {
   'League Office': Landmark,
   'Player Development': TrendingUp,
   'Scouting Department': Telescope,
+  'Media Relations': Newspaper,
+  'Your agent': Handshake,
 };
 
 const TONE_COLOR: Record<NonNullable<InboxMessage['tone']>, string | undefined> = {
@@ -101,7 +121,8 @@ export default function Inbox() {
             const key = `${m.season}:${m.day}`;
             const header = key !== lastKey;
             lastKey = key;
-            const Icon = SENDER_ICON[m.from] ?? Mail;
+            // (an AI GM's trade offer comes from "<team> GM")
+            const Icon = SENDER_ICON[m.from] ?? (m.proposal !== undefined ? ArrowLeftRight : Mail);
             const open = openId === m.id;
             const tone = m.tone ? TONE_COLOR[m.tone] : undefined;
             const paras = m.body.split(/\n+/).filter((x) => x.trim());
@@ -219,25 +240,28 @@ function SheetStatus({ league, pid }: { league: League; pid: number }) {
   return <p className="small dim">{where ? `This offer sheet has been decided: ${where}.` : why}</p>;
 }
 
-/** An offer sheet on the user's restricted free agent, from its message: match it or let him go while it stands. */
+/** An offer sheet on the user's restricted free agent, from its message: match it or let him go (confirmed first) while it stands. */
 function SheetButtons({ league, pid }: { league: League; pid: number }) {
+  const [letGo, setLetGo] = useState(false);
+  const p = league.players[pid];
   const open = !sheetDecisionBlocked(league, pid, false);
   const canMatch = !sheetDecisionBlocked(league, pid, true);
-  const decide = (match: boolean) => {
+  const match = () => {
     let r = { ok: false, reason: '' };
     useStore.getState().mutate((l) => {
-      r = userDecideSheet(l, pid, match);
+      r = userDecideSheet(l, pid, true);
     });
-    useStore.getState().toast(r.reason, r.ok ? (match ? 'good' : 'neutral') : 'bad');
+    useStore.getState().toast(r.reason, r.ok ? 'good' : 'bad');
   };
   return (
     <>
-      <button className="btn sm good" disabled={!canMatch} onClick={() => decide(true)}>
+      <button className="btn sm good" disabled={!canMatch} onClick={match}>
         <Check size={15} /> Match
       </button>
-      <button className="btn sm" disabled={!open} onClick={() => decide(false)}>
+      <button className="btn sm" disabled={!open} onClick={() => setLetGo(true)}>
         Let him go
       </button>
+      {p && <LetGoSheet league={league} p={p} open={letGo} onClose={() => setLetGo(false)} />}
     </>
   );
 }

@@ -54,7 +54,7 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
   return (
     <div className="col" style={{ gap: 12 }}>
       <div className="row" style={{ gap: 10 }}>
-        <TeamLogo tid={dp.tid} size={34} />
+        <TeamLogo tid={dp.tid} size={34} decorative />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="bold ellipsis">
             {t.region} {t.name}
@@ -93,7 +93,7 @@ function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDo
         return (
           <div key={o.tid} className="card tight">
             <div className="row" style={{ gap: 8 }}>
-              <TeamLogo tid={o.tid} size={26} />
+              <TeamLogo tid={o.tid} size={26} decorative />
               <span className="bold grow ellipsis">
                 {t.region} {t.name}
               </span>

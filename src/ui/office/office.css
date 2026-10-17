@@ -344,6 +344,14 @@
 .fo-prow:active {
   background: var(--surface-3);
 }
+/* a long status tag ("Offer sheet · SAS · POR decides day 4") wraps instead of running under the money column */
+.fo-prow .tag {
+  max-width: 100%;
+  height: auto;
+  min-height: 20px;
+  padding-block: 2px;
+  white-space: normal;
+}
 .fo-ovrstack {
   display: flex;
   flex-direction: column;

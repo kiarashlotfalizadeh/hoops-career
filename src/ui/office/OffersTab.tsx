@@ -71,7 +71,7 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
   return (
     <Card className="tight">
       <div className="row" style={{ gap: 10 }}>
-        <TeamLogo tid={p.tid} size={34} />
+        <TeamLogo tid={p.tid} size={34} decorative />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="bold ellipsis">
             {t.region} {t.name}
@@ -116,7 +116,7 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
         <button className="btn sm grow" disabled={!!error} onClick={() => onCounter(p.offer)}>
           <PencilLine size={15} /> Counter
         </button>
-        <button className="btn sm ghost" onClick={decline} aria-label={`Decline the ${t.name}' offer`}>
+        <button className="btn sm ghost" onClick={decline} aria-label={`Decline the offer from the ${t.name}`}>
           <X size={15} /> Decline
         </button>
       </div>

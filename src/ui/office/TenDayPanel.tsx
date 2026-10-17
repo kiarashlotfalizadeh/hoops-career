@@ -49,7 +49,7 @@ export function tenDayLine(league: League, p: Player): string {
   const td = p.contract.tenDay!;
   const n = tenDaysWith(league, p, p.tid);
   return `${n >= 2 ? 'Second' : 'First'} 10-day contract with the ${league.teams[p.tid].name} (${fmtM(p.contract.salaries[0], 2)} paid when he signed): ends after ${tenDayEnds(league, td.until)}${
-    td.hardship ? ', on a hardship spot beyond 15' : ''
+    td.hardship ? `, on a hardship spot beyond ${CAP.rosterMax}` : ''
   }. No dead money if he goes.`;
 }
 
@@ -117,9 +117,9 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
             <OvrPot p={p} />
           </div>
           <div className="small dim2">
-            {fmtM(tenDayPay(league, p, until - league.day), 2)}, his minimum prorated for {until - league.day} days, paid when he signs. He holds a roster spot through{' '}
-            {tenDayEnds(league, until)}, then becomes a free agent again with no dead money, unless you sign him to a second 10-day or for the rest of the season. Two 10-days with
-            one team a season at most{had ? ': this would be his second with you' : ''}.
+            {fmtM(tenDayPay(league, p, until - league.day), 2)}, his minimum prorated for {until - league.day} day{until - league.day === 1 ? '' : 's'}, paid when he signs. He
+            holds a roster spot through {tenDayEnds(league, until)}, then becomes a free agent again with no dead money, unless you sign him to a second 10-day or for the rest of
+            the season. Two 10-days with one team a season at most{had ? ': this would be his second with you' : ''}.
           </div>
           <div className="card tight col" style={{ gap: 4 }}>
             <div className="row between small">
@@ -137,7 +137,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
               {spot === 'hardship'
                 ? `He'd take a hardship spot beyond ${CAP.rosterMax}: with ${h.out} players out you can carry ${h.spots} more on 10-days, and they leave when their days are up.`
                 : spot === 'regular'
-                  ? 'He takes one of your 15 roster spots.'
+                  ? `He takes one of your ${CAP.rosterMax} roster spots.`
                   : `With ${HARDSHIP_OUT} or more players out for 3+ games, the hardship exception lets you carry 10-day players beyond ${CAP.rosterMax}.`}
             </div>
           </div>

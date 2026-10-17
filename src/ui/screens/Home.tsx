@@ -24,6 +24,7 @@ import { countdownLabel, matchupPreview } from '../../core/analysis/preview';
 import { storylines } from '../../core/analysis/storylines';
 import { ON_TRACK, currentGoals, goalMet, ownerProgress } from '../../core/league/ownerGoals';
 import { leagueForecast } from '../../core/analysis/odds';
+import { fmtM } from '../office/common';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -609,16 +610,16 @@ function SeasonOutlook({ league }: { league: League }) {
         <Kpi k="Talent" v={`#${leagueRank}`} sub={`${ordinal(confRank)} in ${team.conf === 'E' ? 'East' : 'West'}`} />
         <Kpi
           k="Payroll"
-          v={`$${(pay / 1000).toFixed(0)}M`}
+          v={fmtM(pay)}
           sub={pay > cap.luxuryTax ? 'Taxpayer' : pay > cap.salaryCap ? 'Over the cap' : 'Under the cap'}
           color={pay > cap.luxuryTax ? 'var(--bad)' : undefined}
         />
         <Kpi k="Avg age" v={avgAge.toFixed(1)} sub={`${roster.length - twoWays} players${twoWays ? ` + ${twoWays} two-way` : ''}`} />
       </div>
+      {/* (the standings card above carries the forecast's line) */}
       <div className="small dim2" style={{ marginTop: 10 }}>
         {outlook}
       </div>
-      <OddsLine league={league} tid={team.tid} />
     </Card>
   );
 }
