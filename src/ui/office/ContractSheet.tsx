@@ -4,7 +4,7 @@
 // player page and Re-sign) is in ExtendBody.tsx.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Ban, Minus, Plus, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Ban, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { Player, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
@@ -42,8 +42,9 @@ import {
 } from '../../core/league/freeAgency';
 import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../../core/league/negotiation';
 import { useLeague, useStore } from '../../state/store';
-import { Avatar, Help, Segmented, Sheet } from '../components/ui';
-import { CapBar, Callout, MoodTag, OvrPot, Range, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from './common';
+import { Segmented, Sheet, Statline } from '../components/ui';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capSeason, fmtM } from './common';
+import { OfferControls, STEP } from './OfferControls';
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
@@ -69,17 +70,16 @@ export function ContractSheet({ pid, mode, onClose }: { pid: number | null; mode
   );
 }
 
-const STEP = 50;
 const yrs = (n: number) => `${n} yr${n > 1 ? 's' : ''}`;
 type OptionChoice = 'none' | 'player' | 'team';
 
 /** The route tag on the cap card: how the signing is paid for. */
 const ROUTE_TAG: Record<string, { label: string; tone: string }> = {
   min: { label: 'Minimum deal', tone: 'good' },
-  space: { label: 'Uses cap space', tone: '' },
-  mle: { label: 'Mid-level exception', tone: 'info' },
+  space: { label: 'Cap space', tone: '' },
+  mle: { label: 'Mid-level', tone: 'info' },
   room: { label: 'Room exception', tone: 'info' },
-  bae: { label: 'Bi-annual exception', tone: 'info' },
+  bae: { label: 'Bi-annual', tone: 'info' },
 };
 
 function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, 'extend'>; onClose: () => void }) {
@@ -197,126 +197,77 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   };
 
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="row" style={{ gap: 12 }}>
-        <Avatar p={p} />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <h2 className="ellipsis" style={{ fontSize: 22 }}>
-            {playerName(p)}
-          </h2>
-          <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-          {/* a free agent weighed against your own player at his position */}
-          {mode === 'fa' && (
-            <Link to={compareHref(p.pid, mine?.pid)} className="btn xs" style={{ marginTop: 8, maxWidth: '100%' }} onClick={onClose}>
-              <Scale size={13} style={{ flex: 'none' }} /> <span className="ellipsis">{mine ? `Compare with ${mine.lastName}` : 'Compare'}</span>
-            </Link>
-          )}
-        </div>
-        <OvrPot p={p} />
-      </div>
+    <div className="col fo-sheet fo-contract">
+      <PlayerHead league={league} p={p} right={<OvrPot p={p} />}>
+        {/* a free agent weighed against your own player at his position */}
+        {mode === 'fa' && (
+          <Link to={compareHref(p.pid, mine?.pid)} className="btn xs fo-compare" onClick={onClose}>
+            <Scale size={13} /> <span className="ellipsis">{mine ? `Compare with ${mine.lastName}` : 'Compare'}</span>
+          </Link>
+        )}
+      </PlayerHead>
 
-      <div className="grid2">
-        <div className="kpi">
-          <span className="k">{talks?.firm ? 'His ask (firm)' : "He's asking"}</span>
-          <span className="v" style={{ fontSize: 21 }}>
-            {fmtM(ask.amount, 2)}
-          </span>
-          <span className="tiny dim">
-            {yrs(ask.years)} · market {fmtM(market, 2)}
-          </span>
-        </div>
-        <div className="kpi">
-          <span className="k row" style={{ gap: 4 }}>
-            {mode === 'fa' ? 'Interest' : 'Mood'}
-            <Help title={mode === 'fa' ? 'Interest in your team' : 'Player mood'}>
-              {mode === 'fa' ? (
-                <>
-                  <p style={{ margin: 0 }}>
-                    Free agents weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and how much <b>playing time</b> they'd get on your roster. Interested players give
-                    you a discount; lukewarm ones want a premium. A lowball costs some of his interest in you for the season.
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    Right now his price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral
-                    team.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p style={{ margin: 0 }}>
-                    Mood reflects playing time vs. expectations, winning, his role and whether he feels fairly paid. Happy players give a hometown discount; unhappy ones want more.
-                  </p>
-                  <p style={{ margin: 0 }}>A player who has requested a trade will not re-sign.</p>
-                </>
-              )}
-            </Help>
-          </span>
+      <div className="fo-ask">
+        <Statline
+          items={[
+            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: fmtM(ask.amount, 2), s: `${yrs(ask.years)} · market ${fmtM(market, 1)}` },
+            mode === 'fa'
+              ? {
+                  k: 'Interest',
+                  v: (
+                    <span className="fo-ask-word" style={{ color: ai.color }}>
+                      {ai.label}
+                    </span>
+                  ),
+                  s: `appeal ×${appeal.toFixed(2)}`,
+                }
+              : { k: 'Mood', v: <MoodTag p={p} />, s: p.mood.notes[0] ?? 'No complaints' },
+          ]}
+        />
+        <HelpSheet title={mode === 'fa' ? 'Interest in your team' : 'Player mood'}>
           {mode === 'fa' ? (
-            <span className="v" style={{ fontSize: 19, color: ai.color }}>
-              {ai.label}
-            </span>
+            <>
+              <p>
+                Free agents weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and the <b>playing time</b> they'd get. Interested players give you a discount; lukewarm
+                ones want a premium. A lowball costs some of his interest for the season.
+              </p>
+              <p>His price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral team.</p>
+            </>
           ) : (
-            <span style={{ marginTop: 4 }}>
-              <MoodTag p={p} />
-            </span>
+            <>
+              <p>
+                Mood reflects playing time against what he expects, winning, his role and whether he feels fairly paid. Happy players give a hometown discount; unhappy ones want
+                more.
+              </p>
+              <p>A player who has asked for a trade won't re-sign.</p>
+            </>
           )}
-          <span className="tiny dim">{mode === 'fa' ? `Appeal ×${appeal.toFixed(2)}` : (p.mood.notes[0] ?? 'No complaints')}</span>
-        </div>
+        </HelpSheet>
       </div>
 
-      <div className="col" style={{ gap: 8 }}>
-        <div className="row between" style={{ alignItems: 'flex-end' }}>
-          <div>
-            <div className="tiny dim upper bold">Your offer · per season</div>
-            <div className="fo-big">{fmtM(amount, 2)}</div>
-          </div>
-          <div className="right">
-            <div className="tiny dim upper bold">Total</div>
-            <div className="fo-mid">{fmtM(total)}</div>
-          </div>
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="fo-stepper" aria-label="Lower by $50K" onClick={() => set(amount - STEP)}>
-            <Minus size={16} />
-          </button>
-          <div className="grow">
-            <Range label="Salary per season" value={amount} min={Math.floor(minAmt / STEP) * STEP} max={Math.floor(maxAmt / STEP) * STEP} step={STEP} onChange={set} />
-          </div>
-          <button className="fo-stepper" aria-label="Raise by $50K" onClick={() => set(amount + STEP)}>
-            <Plus size={16} />
-          </button>
-        </div>
-        <div className="row wrap" style={{ gap: 6 }}>
-          <button className={`chip ${amount === minAmt ? 'on' : ''}`} onClick={() => set(minAmt)}>
-            Min {fmtM(minAmt, 2)}
-          </button>
-          <button className={`chip ${amount === askAt ? 'on' : ''}`} onClick={() => set(askAt)}>
-            His ask {fmtM(askAt, 2)}
-          </button>
-          <button className={`chip ${amount === maxAmt ? 'on' : ''}`} onClick={() => set(maxAmt)}>
-            Max {fmtM(maxAmt, 2)}
-          </button>
-        </div>
-      </div>
-
-      <div className="col" style={{ gap: 6 }}>
-        <div className="tiny dim upper bold">Years</div>
-        <div className="row" style={{ gap: 6 }}>
-          {[1, 2, 3, 4, 5].map((y) => (
-            <button key={y} className={`fo-yr ${years === y ? 'on' : ''}`} aria-pressed={years === y} disabled={sheet && y < SHEET_MIN_YEARS} onClick={() => setYears(y)}>
-              {y}
-              <small>{y === ask.years ? 'wants' : shortSeason(season + y - 1)}</small>
-            </button>
-          ))}
-        </div>
-        <div className="tiny dim">
-          Runs through {seasonLabel(season + years - 1)} with 5% annual raises. Each year away from what he wants adds ~3% to his price.
-          {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS} to 5 years, with no options.` : ''}
-        </div>
-      </div>
+      <OfferControls
+        amount={amount}
+        total={total}
+        set={set}
+        minAmt={minAmt}
+        maxAmt={maxAmt}
+        askAt={askAt}
+        years={years}
+        setYears={setYears}
+        wants={ask.years}
+        firstSeason={season}
+        yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
+        yearsNote={
+          <>
+            Through {seasonLabel(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.
+            {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-5 years, no options.` : ''}
+          </>
+        }
+      />
 
       {optionsOk && (
-        <div className="col" style={{ gap: 6 }}>
-          <div className="tiny dim upper bold">Option on {years >= 2 ? seasonLabel(season + years - 1) : 'the last season'}</div>
+        <div className="fo-years">
+          <div className="over">Option on {years >= 2 ? seasonLabel(season + years - 1) : 'the last season'}</div>
           <Segmented
             label="Option on the final season"
             value={years >= 2 ? optChoice : 'none'}
@@ -328,11 +279,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               { id: 'team', label: 'Team option' },
             ]}
           />
-          <div className="tiny dim">
-            {years < 2
-              ? 'Options need a deal of two years or more.'
-              : 'A player option (his call after the draft) takes about 4% off his price; a team option (yours) adds about 6%.'}
-          </div>
+          <div className="tiny dim">{years < 2 ? 'Options need two years or more.' : 'Player option (his call): about 4% off. Team option (yours): about 6% more.'}</div>
         </div>
       )}
 
@@ -343,9 +290,9 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
       {rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>Your roster is full ({rosterMax}).</b>{' '}
+          <b>Roster full ({rosterMax}).</b>{' '}
           {pendingN > 0
-            ? `Counting your ${pendingN} pending offer${pendingN > 1 ? 's' : ''}: withdraw one, or release or trade someone.`
+            ? `Counting ${pendingN} pending offer${pendingN > 1 ? 's' : ''}: withdraw one, or release or trade someone.`
             : 'Release or trade someone from the Office first.'}
         </Callout>
       )}
@@ -356,32 +303,28 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
       {capBlocked && !rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <div className="row between" style={{ gap: 8 }}>
+          <div className="row between">
             <b>Not enough cap space.</b>
-            <Help title="Why can't I sign him?">
-              <p style={{ margin: 0 }}>
-                The league uses a <b>soft cap</b> of {fmtM(cap.salaryCap)}. You can sign a free agent to any contract that fits under the cap: you have{' '}
-                <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(season)}.
+            <HelpSheet title="Why can't I sign him?">
+              <p>
+                The <b>soft cap</b> is {fmtM(cap.salaryCap)}. A free agent signs to any contract that fits under it: you have <b>{fmtM(Math.max(0, space))}</b> of room for{' '}
+                {seasonLabel(season)}.
               </p>
-              <p style={{ margin: 0 }}>
-                Once you're over the cap you can still add players on <b>minimum contracts</b> (his is {fmtM(minAmt, 2)} per season), as long as you have a roster spot.
+              <p>
+                Over the cap you can still add players on <b>minimum contracts</b> (his is {fmtM(minAmt, 2)} a season) with a roster spot.
               </p>
-              <p style={{ margin: 0 }}>
+              <p>
                 Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {fmtM(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
-                once a season, keeping you under the tax line), the <b>bi-annual</b> (up to {fmtM(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the
-                tax, not two seasons running), and for a team that used its cap space this season the <b>room exception</b> in place of the mid-level (up to{' '}
+                once a season, staying under the tax line), the <b>bi-annual</b> (up to {fmtM(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the tax,
+                not two seasons running), and for a team that used its cap space the <b>room exception</b> in place of the mid-level (up to{' '}
                 {fmtM(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). After the mid-level or the bi-annual, trades can't take you past the tax line that
                 season.
               </p>
-              <p style={{ margin: 0 }}>
-                To create space: trade salary away, let contracts expire, or release players (their remaining salary still counts against the cap as dead money).
-              </p>
-            </Help>
+              <p>To make space: trade salary away, let contracts expire, or release players (what they're owed still counts as dead money).</p>
+            </HelpSheet>
           </div>
-          <div className="small dim2" style={{ marginTop: 2 }}>
-            {offerBlockedReason(league, p, amount, years, via) ?? `This offer would put you ${fmtM(after - cap.salaryCap)} over the cap.`}
-          </div>
-          <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
+          <div className="small">{offerBlockedReason(league, p, amount, years, via) ?? `This offer puts you ${fmtM(after - cap.salaryCap)} over the cap.`}</div>
+          <div className="chips fo-callout-btns">
             {exceptionsOpen.map(({ k, room }) => (
               <button
                 key={k}
@@ -399,21 +342,16 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               Offer the minimum instead
             </button>
           </div>
-          {ask.amount > minAmt && (
-            <div className="tiny dim" style={{ marginTop: 6 }}>
-              He's asking {fmtM(ask.amount, 2)}, so he's unlikely to take a minimum deal.
-            </div>
-          )}
+          {ask.amount > minAmt && <div className="tiny dim">He asks {fmtM(ask.amount, 2)}: a minimum deal is unlikely.</div>}
         </Callout>
       )}
 
       {bidding && !closed && !rosterBlocked && !capBlocked && !tooLong && <BidPanel p={p} amount={amount} years={years} floor={floor} onAmount={set} />}
 
       {sheet && !closed && p.rfa && (
-        <Callout icon={<ShieldCheck size={18} />}>
-          <b>Restricted free agent.</b> This is an offer sheet: when he signs it, the {league.teams[p.rfa.tid].name} have until the end of{' '}
-          {deadlineLabel(matchDeadline(league.faDay))} to match it and keep him on exactly these terms. Until they decide it holds your{' '}
-          {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot; not matched, he's yours.
+        <Callout icon={<ShieldCheck size={18} className="dim" />}>
+          <b>Restricted: this is an offer sheet.</b> Signed, the {league.teams[p.rfa.tid].name} have until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it on
+          these terms. Until then it holds your {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot; unmatched, he's yours.
         </Callout>
       )}
 
@@ -422,81 +360,70 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
 
       {mode === 'fa' ? (
-        <div className="card tight col" style={{ gap: 8 }}>
-          <div className="row between">
-            <div className="small bold">Cap impact · {seasonLabel(season)}</div>
+        <section className="fo-capimpact" aria-label="Cap impact">
+          <div className="fo-capimpact-h">
+            <span className="over">Cap impact · {seasonLabel(season)}</span>
             {route ? <span className={`tag ${ROUTE_TAG[route].tone}`}>{ROUTE_TAG[route].label}</span> : <span className="tag bad">Over the cap</span>}
           </div>
           {covering.length > 1 && (
-            <div className="col" style={{ gap: 4 }}>
-              <div className="tiny dim upper bold">Pay with</div>
+            <div className="col">
+              <div className="over">Pay with</div>
               <Segmented label="Exception to use" value={route as Exception} onChange={(k) => setVia(k)} options={covering.map((k) => ({ id: k, label: EXCEPTIONS[k].short }))} />
             </div>
           )}
-          <div className="grid2">
-            <div>
-              <div className="tiny dim upper bold">Space now</div>
-              <div className="fo-mid" style={{ color: space >= 0 ? 'var(--good)' : 'var(--warn)' }}>
-                {fmtM(space)}
-              </div>
-            </div>
-            <div>
-              <div className="tiny dim upper bold">{bidding ? 'If he signs' : 'After signing'}</div>
-              {/* over the cap is only a problem when no exception covers the signing */}
-              <div className="fo-mid" style={{ color: cap.salaryCap - after >= 0 ? 'var(--good)' : route === 'min' || isException(route) ? 'var(--warn)' : 'var(--bad)' }}>
-                {fmtM(cap.salaryCap - after)}
-              </div>
-            </div>
-          </div>
+          <Statline
+            items={[
+              { k: 'Space now', v: fmtM(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)' },
+              {
+                k: bidding ? 'If he signs' : 'After signing',
+                v: fmtM(cap.salaryCap - after),
+                // over the cap is only a problem when no exception covers the signing
+                color: cap.salaryCap - after >= 0 ? 'var(--good)' : route === 'min' || isException(route) ? 'var(--warn)' : 'var(--bad)',
+              },
+            ]}
+          />
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
-          {route === 'min' && after > cap.salaryCap && <div className="tiny dim">Minimum deals (up to {fmtM(minAmt, 2)} for him) can be signed even when you're over the cap.</div>}
-          {route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0 && (
-            <div className="tiny dim">Signing with cap space replaces your mid-level exception with the smaller room exception for the rest of {seasonLabel(season)}.</div>
-          )}
-          {route === 'mle' && (
-            <div className="tiny dim">Uses your mid-level exception: once a season, up to {EXCEPTIONS.mle.years} years, and it keeps you under the tax line.</div>
-          )}
-          {route === 'room' && <div className="tiny dim">Uses your room exception: once, for a team that used its cap space this season, up to {EXCEPTIONS.room.years} years.</div>}
-          {route === 'bae' && (
-            <div className="tiny dim">Uses your bi-annual exception: up to {EXCEPTIONS.bae.years} years, keeping you under the tax line, and not again next season.</div>
-          )}
-          {held > 0 && (
-            <div className="tiny dim">
-              Counts {fmtM(held)} of cap space held for{' '}
-              {[heldOffers > 0 ? 'your other pending offers and offer sheets' : '', heldRfa > 0 ? "your restricted free agents' cap holds" : ''].filter(Boolean).join(' and ')}.
-            </div>
-          )}
-        </div>
+          <div className="tiny dim">
+            {route === 'min' && after > cap.salaryCap
+              ? `Minimum deals (up to ${fmtM(minAmt, 2)} for him) sign over the cap.`
+              : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
+                ? `Signing with cap space trades your mid-level for the smaller room exception for ${seasonLabel(season)}.`
+                : route === 'mle'
+                  ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years, keeps you under the tax line.`
+                  : route === 'room'
+                    ? `Your room exception: once, after using cap space this season, up to ${EXCEPTIONS.room.years} years.`
+                    : route === 'bae'
+                      ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, under the tax line, not again next season.`
+                      : ''}
+            {held > 0
+              ? ` Counts ${fmtM(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`
+              : ''}
+          </div>
+        </section>
       ) : (
-        <div className="card tight col" style={{ gap: 8 }}>
-          <div className="row between">
-            <div className="small bold">{seasonLabel(season)} payroll</div>
+        <section className="fo-capimpact" aria-label={`${seasonLabel(season)} payroll`}>
+          <div className="fo-capimpact-h">
+            <span className="over">{seasonLabel(season)} payroll</span>
             <span className="tag info">Bird rights</span>
           </div>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           <div className="tiny dim">
-            You can go over the cap to keep your own players.{ownRfa && p.rfa ? ` His ${fmtM(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this contract.` : ''}
+            Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${fmtM(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
             {taxBill > 0 ? (
               <span className="bad">
                 {' '}
-                This puts you {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in luxury tax.
+                {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in tax.
               </span>
             ) : after + otherHolds > cap.salaryCap ? (
-              <>
-                {' '}
-                You'd be over the cap{otherHolds > 0 ? ' counting your other cap holds' : ''}, so in free agency you could only add players on minimum deals or with an exception.
-              </>
+              ` Over the cap${otherHolds > 0 ? ' with your other holds' : ''}: in free agency, minimum deals or an exception only.`
             ) : (
-              <>
-                {' '}
-                You'd still have {fmtM(cap.salaryCap - after - otherHolds)} of cap space{otherHolds > 0 ? ` after ${fmtM(otherHolds)} in other cap holds` : ''}.
-              </>
+              ` Leaves ${fmtM(cap.salaryCap - after - otherHolds)} of cap space${otherHolds > 0 ? ` after ${fmtM(otherHolds)} in other holds` : ''}.`
             )}
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="row" style={{ gap: 8 }}>
+      <div className="fo-sheet-foot">
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>

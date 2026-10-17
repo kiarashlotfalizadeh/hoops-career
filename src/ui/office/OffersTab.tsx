@@ -11,8 +11,8 @@ import { capSalary, neutralBalance, pickLabel, type TradeOffer } from '../../cor
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Card, Empty, Ovr } from '../components/ui';
-import { STRATEGY_META, capSeason, fmtM, fmtMs } from './common';
+import { Empty, More, Ovr, Section } from '../components/ui';
+import { Callout, STRATEGY_META, capSeason, fmtM, fmtMs } from './common';
 import { continueDraft } from '../../core/league/season';
 
 const KIND_LABEL: Record<Proposal['kind'], string> = { buy: 'Wants your player', sell: 'Selling', dump: 'Salary dump', pick: 'Wants your pick' };
@@ -22,24 +22,27 @@ export function OffersTab({ league, closed, onCounter }: { league: League; close
   // why each can't be taken right now (another deal moved a player since), worked out once per change
   const errors = useLeagueMemo(() => withHoldsMemo(() => new Map(openProposals(league).map((p) => [p.id, proposalError(league, p)]))), [league]);
   if (!offers.length)
-    return (
-      <Empty>
-        {closed
-          ? "Teams aren't making offers until trading reopens."
-          : 'No offers right now. Teams call about once every ten days in season and more often before the deadline, for your first-round pick on draft night, and with salary dumps when free agency opens if you have cap space.'}
-      </Empty>
+    return closed ? (
+      <Empty>Teams aren't making offers until trading reopens.</Empty>
+    ) : (
+      <div className="empty">
+        No offers right now.
+        <More label="When teams call">
+          <p className="small">
+            About once every ten days in season and more often before the deadline, for your first-round pick on draft night, and with salary dumps when free agency opens if you
+            have cap space.
+          </p>
+        </More>
+      </div>
     );
   return (
-    <>
-      <div className="fo-sec">
-        {offers.length} offer{offers.length > 1 ? 's' : ''} on the table
-      </div>
+    <Section title={`${offers.length} offer${offers.length > 1 ? 's' : ''} on the table`}>
       {[...offers]
         .sort((a, b) => a.expires - b.expires || a.id - b.id)
         .map((p) => (
           <OfferCard key={p.id} league={league} p={p} error={errors.get(p.id) ?? null} onCounter={onCounter} />
         ))}
-    </>
+    </Section>
   );
 }
 
@@ -53,7 +56,7 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
   // in neutral (league) value: every offer is at worst slightly against the user
   const { net, out: worth } = neutralBalance(league, p.offer);
   const share = worth > 0 ? net / worth : net >= 0 ? 1 : -1;
-  const verdict = share > 0.05 ? { l: 'In your favor', c: 'var(--good)' } : share < -0.05 ? { l: 'A little short', c: 'var(--warn)' } : { l: 'Fair value', c: 'var(--info)' };
+  const verdict = share > 0.05 ? { l: 'In your favor', c: 'good' } : share < -0.05 ? { l: 'A little short', c: 'warn' } : { l: 'Fair value', c: 'info' };
   const until = p.kind === 'pick' && p.expires === league.day ? 'Until the pick is made' : p.expires === league.day ? 'Last day' : `Until ${fmtDate(league.season, p.expires)}`;
   const accept = () => {
     let r = { ok: false, reason: '' };
@@ -69,47 +72,39 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
     useStore.getState().toast(`You turned down the ${t.name}.`, 'neutral');
   };
   return (
-    <Card className="tight">
-      <div className="row" style={{ gap: 10 }}>
+    <section className="card fo-offer" aria-label={`Offer from the ${t.region} ${t.name}`}>
+      <div className="fo-offer-h">
         <TeamLogo tid={p.tid} size={34} decorative />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="bold ellipsis">
+        <div className="grow">
+          <div className="fo-name">
             {t.region} {t.name}
           </div>
-          <div className="row wrap" style={{ gap: 6 }}>
-            <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
-            <span className="tag">{KIND_LABEL[p.kind]}</span>
+          <div className="fo-meta">
+            {STRATEGY_META[t.strategy].label} · {KIND_LABEL[p.kind]}
           </div>
         </div>
-        <div className="right" style={{ flex: 'none' }}>
-          <div className="small bold" style={{ color: verdict.c }}>
-            {verdict.l}
-          </div>
-          <div className="tiny dim row" style={{ gap: 3, justifyContent: 'flex-end' }}>
+        <div className="right">
+          <span className={`tag ${verdict.c}`}>{verdict.l}</span>
+          <div className="fo-offer-until">
             <Clock size={11} /> {until}
           </div>
         </div>
       </div>
-      <div className="small dim2" style={{ marginTop: 8, fontStyle: 'italic' }}>
-        “{p.note}”
-      </div>
-      <div className="grid2" style={{ alignItems: 'start', marginTop: 10 }}>
+      <p className="fo-offer-note">“{p.note}”</p>
+      <div className="fo-offer-sides">
         <Side league={league} title="You send" side={p.offer.a} />
         <Side league={league} title="You get" side={p.offer.b} />
       </div>
-      <div className="tiny dim num" style={{ marginTop: 8 }}>
-        Salary out {fmtM(out)} · in {fmtM(inc)} · payroll after{' '}
-        <b style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>{fmtM(after)}</b> (
+      <div className="tiny dim num">
+        Salary out {fmtM(out)} · in {fmtM(inc)} · payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{fmtM(after)}</b> (
         {after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`})
       </div>
       {error && (
-        <div className="fo-callout warn" style={{ marginTop: 8 }}>
-          <span>
-            <b>No longer available.</b> {error}
-          </span>
-        </div>
+        <Callout tone="warn">
+          <b>No longer available.</b> {error}
+        </Callout>
       )}
-      <div className="row" style={{ marginTop: 10, gap: 8 }}>
+      <div className="row">
         <button className="btn sm good grow" disabled={!!error} onClick={accept}>
           <Check size={15} /> Accept
         </button>
@@ -120,30 +115,30 @@ function OfferCard({ league, p, error, onCounter }: { league: League; p: Proposa
           <X size={15} /> Decline
         </button>
       </div>
-    </Card>
+    </section>
   );
 }
 
 function Side({ league, title, side }: { league: League; title: string; side: TradeOffer['a'] }) {
   const s = capSeason(league);
   return (
-    <div className="col" style={{ gap: 6, minWidth: 0 }}>
-      <div className="row" style={{ gap: 6 }}>
-        <TeamLogo tid={side.tid} size={16} />
-        <span className="tiny upper bold dim">{title}</span>
+    <div className="fo-deal-col">
+      <div className="fo-deal-h">
+        <TeamLogo tid={side.tid} size={16} decorative />
+        <span className="over">{title}</span>
       </div>
-      {!side.pids.length && !side.dpids.length && <div className="small dim">Nothing</div>}
+      {!side.pids.length && !side.dpids.length && <div className="fo-deal-none">Nothing</div>}
       {side.pids.map((pid) => {
         const p = league.players[pid];
         if (!p) return null;
         return (
-          <div key={pid} className="row" style={{ gap: 6, minWidth: 0 }}>
+          <div key={pid} className="fo-offer-item">
             <Ovr v={p.ovr} size="sm" />
-            <div className="grow" style={{ minWidth: 0 }}>
-              <Link to={`/player/${pid}`} className="small bold ellipsis" style={{ display: 'block' }}>
+            <div className="grow">
+              <Link to={`/player/${pid}`} className="fo-name small">
                 {playerName(p)}
               </Link>
-              <div className="tiny dim ellipsis">
+              <div className="fo-meta">
                 {p.pos} · {playerAge(p, league.season)} · {fmtM(salaryFor(p, s))}
               </div>
             </div>
@@ -154,9 +149,9 @@ function Side({ league, title, side }: { league: League; title: string; side: Tr
         const dp = league.draftPicks.find((x) => x.dpid === d);
         if (!dp) return null;
         return (
-          <div key={d} className="row" style={{ gap: 6, minWidth: 0 }}>
-            <Ticket size={16} className="dim" style={{ flex: 'none', width: 24 }} />
-            <span className="small bold ellipsis">{pickLabel(league, dp)}</span>
+          <div key={d} className="fo-offer-item">
+            <Ticket size={16} className="dim fo-pkg-ic" />
+            <span className="fo-name small">{pickLabel(league, dp)}</span>
           </div>
         );
       })}

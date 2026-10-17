@@ -11,9 +11,9 @@ import { capSeason, fmtM, fmtMs } from '../office/common';
 import { TradeNotes } from './common';
 
 const KIND = {
-  add: { icon: Plus, tone: 'var(--info)' },
-  remove: { icon: Minus, tone: 'var(--warn)' },
-  absorb: { icon: PackagePlus, tone: 'var(--bad)' },
+  add: { icon: Plus, tone: 'info' },
+  remove: { icon: Minus, tone: 'warn' },
+  absorb: { icon: PackagePlus, tone: 'bad' },
 } as const;
 
 export function CounterSheet({
@@ -34,13 +34,16 @@ export function CounterSheet({
 }) {
   const open = !!base && counters.length > 0;
   return (
-    <Sheet open={open} onClose={onClose} title={base ? `${league.teams[base.b.tid].abbrev} says no, but would do one of these` : undefined}>
+    <Sheet open={open} onClose={onClose} title={base ? `${league.teams[base.b.tid].abbrev} say no` : undefined}>
       {open && base && (
-        <div className="col" style={{ gap: 10 }}>
-          {counters.map((c, i) => (
-            <CounterCard key={`${i}:${c.label}`} league={league} base={base} c={c} onAccept={onAccept} onEdit={onEdit} />
-          ))}
-          <div className="tiny dim">Each one is a deal they'd sign right now. Values are league-neutral: the best for you comes first.</div>
+        <div className="col fo-sheet">
+          <p className="fo-lede">But they'd sign one of these now. Best for you first.</p>
+          <div className="card flush list">
+            {counters.map((c, i) => (
+              <CounterCard key={`${i}:${c.label}`} league={league} base={base} c={c} onAccept={onAccept} onEdit={onEdit} />
+            ))}
+          </div>
+          <div className="tiny dim">Values are league-neutral.</div>
         </div>
       )}
     </Sheet>
@@ -103,26 +106,24 @@ function CounterCard({
   const k = KIND[c.kind];
   const Icon = k.icon;
   return (
-    <section className="card tight">
-      <div className="row top" style={{ gap: 8 }}>
-        <Icon size={16} style={{ color: k.tone, flex: 'none', marginTop: 2 }} aria-hidden />
-        <div className="small bold grow">{c.label}</div>
+    <section className="fo-counter">
+      <div className="fo-counter-h">
+        <span className={`fo-counter-ic ${k.tone}`} aria-hidden="true">
+          <Icon size={15} />
+        </span>
+        <div className="grow bold">{c.label}</div>
       </div>
-      <div className="col" style={{ gap: 4, marginTop: 8 }}>
+      <div className="fo-counter-sides">
         <Side title="You send" items={items(c.offer.a, base.a)} />
         <Side title="You get" items={items(c.offer.b, base.b)} />
       </div>
-      <div className="tiny dim num" style={{ marginTop: 6 }}>
+      <div className="tiny dim num">
         Net salary {fmtMs(info.inc - info.out)} · payroll after{' '}
-        <b style={{ color: info.after > cap.luxuryTax ? 'var(--bad)' : info.after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>{fmtM(info.after)}</b>
+        <b className={info.after > cap.luxuryTax ? 'bad' : info.after > cap.salaryCap ? 'warn' : 'good'}>{fmtM(info.after)}</b>
         {info.after > cap.luxuryTax ? ' (over the tax)' : info.after > cap.salaryCap ? ' (over the cap)' : ''}
       </div>
-      {info.warn.length > 0 && (
-        <div style={{ marginTop: 6 }}>
-          <TradeNotes notes={info.warn} />
-        </div>
-      )}
-      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+      {info.warn.length > 0 && <TradeNotes notes={info.warn} />}
+      <div className="row">
         <button className="btn sm grow" onClick={() => onEdit(c.offer)} aria-label={`Edit in builder: ${c.label}`}>
           Edit in builder
         </button>
@@ -136,17 +137,15 @@ function CounterCard({
 
 function Side({ title, items }: { title: string; items: Item[] }) {
   return (
-    <div className="row top small" style={{ gap: 8 }}>
-      <span className="tiny upper bold dim" style={{ flex: 'none', width: 72, marginTop: 2, whiteSpace: 'nowrap' }}>
-        {title}
-      </span>
-      <span className="grow" style={{ minWidth: 0 }}>
+    <div className="fo-counter-side">
+      <span className="over">{title}</span>
+      <span className="grow">
         {items.length === 0 && <span className="dim">Nothing</span>}
         {items.map((x, i) => (
           <span key={x.key}>
             {i > 0 && <span className="dim">, </span>}
             {x.change === 'added' ? (
-              <b style={{ color: 'var(--accent-text)' }}>
+              <b className="accent-text">
                 + {x.name}
                 <span className="sr-only"> (added)</span>
               </b>

@@ -52,14 +52,14 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
   );
   const t = league.teams[dp.tid];
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="row" style={{ gap: 10 }}>
+    <div className="col fo-sheet">
+      <div className="fo-pkg-h">
         <TeamLogo tid={dp.tid} size={34} decorative />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="bold ellipsis">
+        <div className="grow">
+          <div className="fo-name">
             {t.region} {t.name}
           </div>
-          <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>
+          <div className="fo-meta">{STRATEGY_META[t.strategy].label}</div>
         </div>
       </div>
       {!ask.offer ? (
@@ -70,8 +70,10 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
         </Empty>
       ) : (
         <>
-          <div className="small dim2">The {t.name} would move it for:</div>
-          <Assets league={league} side={ask.offer.a} />
+          <div className="over">They'd move it for</div>
+          <div className="card flush">
+            <Assets league={league} side={ask.offer.a} />
+          </div>
           <button className="btn good block" onClick={() => take(ask.offer, onDone)}>
             <Check size={16} /> Accept: get {pickLabel(league, dp)}
           </button>
@@ -86,51 +88,51 @@ function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDo
   const offers = useLeagueMemo(() => blockOffers(league, { pids: [], dpids: [dp.dpid] }), [league, dp.dpid]);
   if (!offers.length) return <Empty>No team has a package for {pickLabel(league, dp)} right now.</Empty>;
   return (
-    <div className="col" style={{ gap: 10 }}>
-      <div className="small dim2">The best package each team would give you for {pickLabel(league, dp)}, most valuable to you first.</div>
-      {offers.slice(0, 8).map((o) => {
-        const t = league.teams[o.tid];
-        return (
-          <div key={o.tid} className="card tight">
-            <div className="row" style={{ gap: 8 }}>
-              <TeamLogo tid={o.tid} size={26} decorative />
-              <span className="bold grow ellipsis">
-                {t.region} {t.name}
-              </span>
-              <span className="tiny dim num">{o.targetValue > 0 ? `${Math.round((o.myValue / o.targetValue) * 100)}% of its value` : ''}</span>
-            </div>
-            <div style={{ marginTop: 8 }}>
+    <div className="col fo-sheet">
+      <p className="fo-lede">Each team's best package for {pickLabel(league, dp)}, most valuable to you first.</p>
+      <div className="card flush list">
+        {offers.slice(0, 8).map((o) => {
+          const t = league.teams[o.tid];
+          return (
+            <div key={o.tid} className="fo-pkg">
+              <div className="fo-pkg-h">
+                <TeamLogo tid={o.tid} size={28} decorative />
+                <span className="fo-name grow">
+                  {t.region} {t.name}
+                </span>
+                <span className="tiny dim num">{o.targetValue > 0 ? `${Math.round((o.myValue / o.targetValue) * 100)}% of its value` : ''}</span>
+              </div>
               <Assets league={league} side={o.offer.b} />
+              <button className="btn sm good block" onClick={() => take(o.offer, onDone)}>
+                <Check size={15} /> Accept
+              </button>
             </div>
-            <button className="btn sm good block" style={{ marginTop: 8 }} onClick={() => take(o.offer, onDone)}>
-              <Check size={15} /> Accept
-            </button>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function Assets({ league, side }: { league: League; side: TradeOffer['a'] }) {
   return (
-    <div className="col" style={{ gap: 6 }}>
+    <div className="fo-pkg-items fo-pkg-flat">
       {side.pids.map((pid) => {
         const p = league.players[pid];
         return (
-          <div key={pid} className="row" style={{ gap: 8 }}>
+          <div key={pid} className="fo-pkg-item">
             <Ovr v={p.ovr} size="sm" />
-            <span className="small bold ellipsis grow">{playerName(p)}</span>
-            <span className="tiny dim">{p.pos}</span>
+            <span className="grow ellipsis bold">{playerName(p)}</span>
+            <span className="dim">{p.pos}</span>
           </div>
         );
       })}
       {side.dpids.map((d) => {
         const x = league.draftPicks.find((y) => y.dpid === d);
         return x ? (
-          <div key={d} className="row" style={{ gap: 8 }}>
-            <Ticket size={16} className="dim" style={{ width: 28 }} />
-            <span className="small bold ellipsis">{pickLabel(league, x)}</span>
+          <div key={d} className="fo-pkg-item">
+            <Ticket size={16} className="dim fo-pkg-ic" />
+            <span className="grow ellipsis bold">{pickLabel(league, x)}</span>
           </div>
         ) : null;
       })}

@@ -8,6 +8,7 @@ import { LOWBALL, type TalkKind, askFor, breakdownRule, closedLabel, patienceTex
 import { makeContract } from '../../core/league/contracts';
 import { playerName } from '../../core/league/helpers';
 import { useLeague } from '../../state/store';
+import { More } from '../components/ui';
 import { Callout, fmtM } from './common';
 
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
@@ -59,33 +60,32 @@ export function TalkPanel({
   const c = st.counter;
   const cWhy = c ? counterBlocked(c) : null;
   const cTotal = c ? makeContract(league, c.amount, c.years, season, p.experience).salaries.reduce((a, x) => a + x, 0) : 0;
+  const tone = st.patience <= 1 ? 'bad' : st.patience === 2 ? 'warn' : 'good';
   return (
-    <div className="card tight col" style={{ gap: 8 }}>
-      <div className="row between" style={{ gap: 8 }}>
-        <div className="row small bold" style={{ gap: 6 }}>
-          <MessagesSquare size={15} /> Talks with his agent
-        </div>
-        <span className="row" style={{ gap: 3 }} role="img" aria-label={patienceText(st.patience)}>
+    <section className="fo-talk" aria-label="Talks with his agent">
+      <div className="fo-talk-h">
+        <MessagesSquare size={15} className="dim" />
+        <span className="over grow">Talks with his agent</span>
+        <span className={`fo-patience ${tone}`} role="img" aria-label={patienceText(st.patience)}>
           {Array.from({ length: Math.max(st.patience, 0) }, (_, i) => (
-            <i key={i} className="fo-dot" style={{ background: st.patience <= 1 ? 'var(--bad)' : st.patience === 2 ? 'var(--warn)' : 'var(--good)', margin: 0 }} />
+            <i key={i} />
           ))}
         </span>
       </div>
       {st.firm ? (
         <div className="small warn">
-          He has had enough: he signs only at his ask now, {fmtM(askAt, 2)} for {yrs(years)}
+          He's had enough: only his ask now, {fmtM(askAt, 2)} for {yrs(years)}
           {option ? ` with a ${option} option` : ''}, for the rest of the re-sign period.
         </div>
       ) : (
         <div className="small dim2">
-          His ask for these terms is <b className="num">{fmtM(askAt, 2)}</b>: offer it and he signs on the spot. He may take a little less (how much, he keeps to himself); below
-          that he counters.
+          Offer his ask (<b className="num">{fmtM(askAt, 2)}</b> on these terms) and he signs. A little less may do; below that he counters.
         </div>
       )}
       {c && (
-        <div className="row" style={{ gap: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-          <Handshake size={16} className="good" style={{ flex: 'none' }} />
-          <div className="grow small" style={{ minWidth: 0 }}>
+        <div className="fo-counter-row">
+          <Handshake size={16} className="good" />
+          <div className="grow">
             <b>His counter:</b> <span className="num">{fmtM(c.amount, 2)}</span> × {yrs(c.years)}
             <span className="dim"> · {fmtM(cTotal)} total</span>
             {cWhy && <div className="tiny warn">{cWhy}</div>}
@@ -95,15 +95,9 @@ export function TalkPanel({
           </button>
         </div>
       )}
-      {!st.firm && (
-        <div className="tiny dim">
-          {patienceText(st.patience)} A lowball (under {Math.round(LOWBALL * 100)}% of his ask) counts twice and costs some of his interest in you. If talks break down,{' '}
-          {breakdownRule(league, kind)}.
-        </div>
-      )}
       {lowball && !st.firm && (
-        <div className="row small warn" style={{ gap: 6 }}>
-          <TriangleAlert size={14} style={{ flex: 'none' }} /> This offer is under {Math.round(LOWBALL * 100)}% of his ask: {name} will take it as a lowball.
+        <div className="fo-talk-warn">
+          <TriangleAlert size={14} /> Under {Math.round(LOWBALL * 100)}% of his ask: {name} takes it as a lowball.
         </div>
       )}
       {reply && (
@@ -111,6 +105,14 @@ export function TalkPanel({
           {reply.text}
         </Callout>
       )}
-    </div>
+      {!st.firm && (
+        <More label="How talks go">
+          <p className="tiny dim">
+            {patienceText(st.patience)} A lowball (under {Math.round(LOWBALL * 100)}% of his ask) counts twice and costs some of his interest in you. If talks break down,{' '}
+            {breakdownRule(league, kind)}.
+          </p>
+        </More>
+      )}
+    </section>
   );
 }

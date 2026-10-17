@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarClock, CircleCheck, DoorOpen, PenLine, ShieldCheck } from 'lucide-react';
+import { CircleCheck, DoorOpen, PenLine, ShieldCheck } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
@@ -19,9 +19,9 @@ import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../
 import { startFreeAgency } from '../../core/league/season';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { Avatar, Card, Help, Kpi, PageHeader, Sheet } from '../components/ui';
+import { Avatar, PageHeader, Section, Sheet, Statline } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { CapBar, Callout, MoodTag, OvrPot, SecTitle, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { QualifyRow } from '../office/RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE, restrictedFreeAgents } from '../../core/league/rfa';
@@ -39,7 +39,7 @@ function StatLine({ league, p }: { league: League; p: Player }) {
   const s = line.pg;
   return (
     <div className="fo-statline">
-      <span className="tiny upper bold">{seasonLabel(line.season)}</span>
+      <span className="over">{shortSeason(line.season)}</span>
       <span>
         <b>{f1(s.pts)}</b> pts
       </span>
@@ -58,6 +58,22 @@ function StatLine({ league, p }: { league: League; p: Player }) {
       <span>
         <b>{s.gp}</b> gp
       </span>
+    </div>
+  );
+}
+
+/** A player in a Re-sign list: his jersey, name (to his page), line of detail and rating. */
+function PlayerTop({ league, p, pot = true }: { league: League; p: Player; pot?: boolean }) {
+  return (
+    <div className="fo-rs-top">
+      <Avatar p={p} />
+      <div className="grow">
+        <Link to={`/player/${p.pid}`} className="fo-name">
+          {playerName(p)}
+        </Link>
+        <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+      </div>
+      <OvrPot p={p} showPot={pot} />
     </div>
   );
 }
@@ -90,6 +106,7 @@ function ResignPhase() {
   // who leaves as a restricted free agent (qualified) and who unrestricted when the market opens
   const qualified = expiring.filter((p) => p.rfa).length;
   const unrestricted = expiring.length - qualified;
+  const space = cap.salaryCap - committed - holds;
 
   const doRenounce = (p: Player) => {
     let res = { ok: false, reason: '' };
@@ -117,242 +134,217 @@ function ResignPhase() {
   };
 
   return (
-    <main className="page">
+    <main className="page fo-page">
       <PageHeader
-        title="Re-sign Players"
-        sub={`Contracts start ${seasonLabel(next)} · before free agency`}
+        title="Re-sign"
+        sub={`Deals from ${seasonLabel(next)} · before free agency`}
         back
         right={
-          <Help title="Re-signing your players">
-            <p style={{ margin: 0 }}>
-              <b>Bird rights.</b> You may re-sign your own players for any amount, even if it takes you over the cap. In free agency, a team over the cap can only add players on
-              minimum deals or with an exception (the mid-level, bi-annual or room exception).
+          <HelpSheet title="Re-signing your players">
+            <p>
+              <b>Bird rights.</b> Re-sign your own players for any amount, even over the cap. In free agency, a team over the cap only adds players on minimum deals or with an
+              exception (the mid-level, bi-annual or room exception).
             </p>
-            <p style={{ margin: 0 }}>
-              <b>Asking price.</b> Each player asks for roughly his market value, adjusted by how much he likes playing for you. Pay the ask (for his preferred length) and he signs
-              on the spot. He'd take a little less, how much he keeps to himself; below that he counters, and he only hears so many offers. Run out his patience and his ask goes up{' '}
+            <p>
+              <b>Asking price.</b> About his market value, moved by how much he likes playing for you. Pay the ask (for his preferred length) and he signs on the spot. He'd take a
+              little less, how much he keeps to himself; below that he counters, and he only hears so many offers. Run out his patience and his ask goes up{' '}
               {Math.round((FIRM_BUMP - 1) * 100)}%, and he takes nothing less for the rest of the re-sign period.
             </p>
-            <p style={{ margin: 0 }}>
-              <b>Options on new deals.</b> On a deal of two years or more you can add an option on the last season: a player option (his call) takes about 4% off his price, a team
-              option (yours) adds about 6%.
+            <p>
+              <b>Options on new deals.</b> On two years or more you can add an option on the last season: a player option (his call) takes about 4% off his price, a team option
+              (yours) adds about 6%.
             </p>
-            <p style={{ margin: 0 }}>
+            <p>
               <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
             </p>
-            <p style={{ margin: 0 }}>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens. Other teams may sign him.</p>
-            <p style={{ margin: 0 }}>
-              <b>Restricted free agents.</b> A first-round pick finishing his rookie-scale deal, or a player with {RFA_MAX_SERVICE} seasons or fewer in the league, can get a{' '}
+            <p>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens, and other teams may sign him.</p>
+            <p>
+              <b>Restricted free agents.</b> A first-round pick finishing his rookie-scale deal, or a player with {RFA_MAX_SERVICE} seasons or fewer, can get a{' '}
               <b>qualifying offer</b>: one season at 125% of his last salary (a rookie-scale pick: 130% for #1 up to 150% for #30), at least the minimum plus $0.2M. In free agency
-              you can still re-sign him, and when another team signs him to an offer sheet (2 to 5 years) you have {MATCH_DAYS} days to match it and keep him on exactly its terms.
-              Unsigned when the market closes, he plays a season on the qualifying offer and is unrestricted after it. You can withdraw the offer until he signs a sheet.
+              you can still re-sign him, and when another team signs him to an offer sheet (2 to 5 years) you have {MATCH_DAYS} days to match it on exactly its terms. Unsigned when
+              the market closes, he plays a season on the qualifying offer and is unrestricted after it. You can withdraw the offer until he signs a sheet.
             </p>
-            <p style={{ margin: 0 }}>
-              <b>Cap holds.</b> Until then, each expiring player counts against next season's cap at about his asking price, so you can't spend the same room twice (say, on salary
-              taken back in a trade). Renounce a player to clear his hold: he leaves for free agency. A qualified player holds the larger of his offer and his ask, and keeps
-              holding it through free agency until he signs or you withdraw the offer.
+            <p>
+              <b>Cap holds.</b> Until then each expiring player counts against next season's cap at about his ask, so you can't spend the same room twice (say, on salary taken back
+              in a trade). Renounce a player to clear his hold: he leaves for free agency. A qualified player holds the larger of his offer and his ask, through free agency too,
+              until he signs or you withdraw the offer.
             </p>
-            <p style={{ margin: 0 }}>
-              <b>This summer's options.</b> Players with a player option on next season have already decided: those who opted out are in the expiring list. Team options (including
-              rookie-scale fourth years) are your call: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided options get the staff's call when
-              free agency opens.
+            <p>
+              <b>This summer's options.</b> Players with a player option on next season have decided: those who opted out are in the expiring list. Team options (rookie-scale
+              fourth years included) are yours: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided ones get the staff's call when free agency
+              opens.
             </p>
-          </Help>
+          </HelpSheet>
         }
       />
 
-      <Card className="fo-hero" title={<h3>{seasonLabel(next)} payroll</h3>} right={<span className="tag info">Bird rights</span>}>
-        <div className="row between" style={{ alignItems: 'flex-end' }}>
-          <div>
-            <div className="tiny dim upper bold">Committed</div>
-            <div className="fo-big">{fmtM(committed)}</div>
-          </div>
-          <div className="right">
-            <div className="tiny dim upper bold">If you keep everyone</div>
-            <div className="fo-mid" style={{ color: ifAll > cap.luxuryTax ? 'var(--bad)' : ifAll > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-              {fmtM(ifAll)}
+      <Section title={`${seasonLabel(next)} payroll`} right={<span className="tag info">Bird rights</span>}>
+        <div className="card fo-capsheet fo-hero">
+          <div className="fo-pay">
+            <div className="grow">
+              <div className="over">Committed</div>
+              <div className="fo-pay-v num">{fmtM(committed)}</div>
+            </div>
+            <div className="right">
+              <div className="over">Keep everyone</div>
+              <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>{fmtM(ifAll)}</div>
             </div>
           </div>
-        </div>
-        <div style={{ marginTop: 4 }}>
-          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} />
-        </div>
-        <div className="grid2" style={{ marginTop: 12 }}>
-          <Kpi
-            k="Cap space"
-            v={fmtM(cap.salaryCap - committed - holds)}
-            color={cap.salaryCap - committed - holds > 0 ? 'var(--good)' : 'var(--warn)'}
-            sub={holds > 0 ? 'after cap holds' : undefined}
-          />
-          <Kpi k="Cap holds" v={fmtM(holds)} sub={holds > 0 ? 'renounce to clear' : 'none'} />
-          <Kpi k="Under tax" v={fmtM(cap.luxuryTax - committed)} color={cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined} sub="committed only" />
-          <Kpi
-            k="Roster"
-            v={`${rosterNext}/${CAP.rosterMax}`}
-            sub={rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut by opening night` : 'under contract'}
-            color={rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined}
-          />
-        </div>
-        {rosterNext > CAP.rosterMax && (
-          <div className="small warn" style={{ marginTop: 8 }}>
-            You already have {rosterNext} players under contract for {seasonLabel(next)}. The offseason allows {OFFSEASON_ROSTER_MAX}, but only {CAP.rosterMax} make opening night:
-            trade or release before then.
+          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} legend={false} />
+          <div className="fo-cap-ends num">
+            Cap {fmtM(cap.salaryCap)} · tax line {fmtM(cap.luxuryTax)}
+            {holders.length > 0 ? ` · striped: ${holders.length} cap hold${holders.length === 1 ? '' : 's'} at their asks` : ''}
           </div>
-        )}
-        {holders.length > 0 && (
-          <div className="tiny dim" style={{ marginTop: 8 }}>
-            Striped: what the {holders.length} expiring player{holders.length === 1 ? '' : 's'} on standard deals would add at their current asks (a qualified one at least his
-            offer). Until free agency opens they hold that cap room unless you renounce them, and a qualified one keeps holding it through free agency; what's left after re-signing
-            is yours to use in free agency.
+          <div className="fo-figs">
+            <Statline
+              items={[
+                { k: 'Cap space', v: fmtM(space), color: space > 0 ? 'var(--good)' : 'var(--warn)', s: holds > 0 ? 'after cap holds' : 'for free agency' },
+                { k: 'Cap holds', v: fmtM(holds), s: holds > 0 ? 'renounce to clear' : 'none' },
+              ]}
+            />
+            <Statline
+              items={[
+                { k: 'Under tax', v: fmtM(cap.luxuryTax - committed), color: cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined, s: 'committed only' },
+                {
+                  k: 'Roster',
+                  v: `${rosterNext}/${CAP.rosterMax}`,
+                  s: rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut by opening night` : 'under contract',
+                  color: rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined,
+                },
+              ]}
+            />
           </div>
-        )}
-      </Card>
+          {rosterNext > CAP.rosterMax && (
+            <div className="small warn">
+              Up to {OFFSEASON_ROSTER_MAX} in the offseason, {CAP.rosterMax} on opening night: trade or release before then.
+            </div>
+          )}
+          {holders.length > 0 && (
+            <div className="tiny dim">
+              Holds stay until free agency opens unless you renounce (a qualified player's through free agency). What's left after re-signing is yours to spend.
+            </div>
+          )}
+        </div>
+      </Section>
 
       {options.length > 0 && (
-        <>
-          <SecTitle>Team options · {options.length}</SecTitle>
-          {options.map((p) => {
-            const sal = salaryFor(p, next);
-            const worth = teamOptionWorth(league, p);
-            return (
-              <Card key={p.pid} className="tight">
-                <div className="row" style={{ gap: 10 }}>
-                  <Avatar p={p} />
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <Link to={`/player/${p.pid}`} className="fo-name" style={{ display: 'block' }}>
-                      {playerName(p)}
-                    </Link>
-                    <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-                  </div>
-                  <OvrPot p={p} />
-                </div>
-                <div className="row" style={{ marginTop: 10, gap: 10 }}>
-                  <div className="grow">
-                    <div className="tiny dim upper bold">
-                      {seasonLabel(next)} option{rookieScaleDeal(p) ? ' · rookie scale' : ''}
+        <Section title={`Team options · ${options.length}`}>
+          <div className="card flush list">
+            {options.map((p) => {
+              const sal = salaryFor(p, next);
+              const worth = teamOptionWorth(league, p);
+              return (
+                <div key={p.pid} className="fo-rs">
+                  <PlayerTop league={league} p={p} />
+                  <div className="fo-rs-act">
+                    <div className="grow">
+                      <div className="fo-rs-ask">
+                        <b className="num">{fmtM(sal)}</b> <span className="dim">{shortSeason(next)} option</span>
+                      </div>
+                      <div className="tiny">
+                        {rookieScaleDeal(p) ? <span className="dim">Rookie scale · </span> : null}
+                        <span className={worth ? 'good' : 'warn'}>staff: {worth ? 'exercise' : 'decline'}</span>
+                      </div>
                     </div>
-                    <div className="small">
-                      <b className="num" style={{ fontSize: 16 }}>
-                        {fmtM(sal)}
-                      </b>
-                      <span className={worth ? 'good' : 'warn'}> · staff: {worth ? 'exercise' : 'decline'}</span>
-                    </div>
+                    <button className="btn sm" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
+                      Decline
+                    </button>
+                    <button className="btn sm primary" aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
+                      Exercise
+                    </button>
                   </div>
-                  <button className="btn sm" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
-                    Decline
-                  </button>
-                  <button className="btn sm primary" aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
-                    Exercise
-                  </button>
                 </div>
-              </Card>
-            );
-          })}
-          <div className="tiny dim">Declined players join the expiring list below with Bird rights. Options left open get the staff's call when free agency opens.</div>
-        </>
+              );
+            })}
+          </div>
+          <div className="tiny dim">Declined players join the expiring list with Bird rights. Open options get the staff's call when free agency opens.</div>
+        </Section>
       )}
 
-      <SecTitle>Expiring contracts · {expiring.length}</SecTitle>
-      {expiring.length === 0 ? (
-        <Card>
-          <div className="row" style={{ gap: 10 }}>
+      <Section title={`Expiring contracts · ${expiring.length}`}>
+        {expiring.length === 0 ? (
+          <div className="card fo-done">
             <CircleCheck className="good" />
-            <div className="small dim2">Nobody left to re-sign. Open free agency when you're ready.</div>
+            <span className="small dim2">Nobody left to re-sign. Open free agency when you're ready.</span>
           </div>
-        </Card>
-      ) : (
-        expiring.map((p) => {
-          const ask = asks.get(p.pid)!;
-          return (
-            <Card key={p.pid} className="tight">
-              <div className="row" style={{ gap: 10 }}>
-                <Avatar p={p} />
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <Link to={`/player/${p.pid}`} className="fo-name" style={{ display: 'block' }}>
-                    {playerName(p)}
-                  </Link>
-                  <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+        ) : (
+          <div className="card flush list">
+            {expiring.map((p) => {
+              const ask = asks.get(p.pid)!;
+              return (
+                <div key={p.pid} className="fo-rs">
+                  <PlayerTop league={league} p={p} />
+                  <MoodTag p={p} withNotes />
+                  <StatLine league={league} p={p} />
+                  <div className="fo-rs-act">
+                    <div className="grow">
+                      {wantsOut(p) ? (
+                        <span className="small bad bold">{p.mood.tradeRequest ? "Wants a trade: won't re-sign" : "Asked for a trade: on hold, won't re-sign"}</span>
+                      ) : (
+                        <>
+                          <div className="fo-rs-ask">
+                            <span className="dim">Asks </span>
+                            <b className="num">{fmtM(ask.amount)}</b>
+                            <span className="dim">
+                              {' '}
+                              × {ask.years} yr{ask.years > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="tiny dim">
+                            {playerAge(p, next)} next season{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
+                      Renounce
+                    </button>
+                    <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} disabled={wantsOut(p)} onClick={() => setSel(p.pid)}>
+                      <PenLine size={15} /> Negotiate
+                    </button>
+                  </div>
+                  <QualifyRow league={league} p={p} />
                 </div>
-                <OvrPot p={p} />
-              </div>
-              <div className="row" style={{ marginTop: 8, gap: 6, minWidth: 0 }}>
-                <MoodTag p={p} withNotes />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <StatLine league={league} p={p} />
-              </div>
-              <div className="row" style={{ marginTop: 10, gap: 10 }}>
-                <div className="grow">
-                  {wantsOut(p) ? (
-                    <span className="small bad bold">{p.mood.tradeRequest ? "Wants a trade: won't re-sign" : "Asked for a trade: on hold, won't re-sign"}</span>
-                  ) : (
-                    <>
-                      <div className="tiny dim upper bold">{talkState(league, p, 'resign').firm ? 'Asking · firm' : 'Asking'}</div>
-                      <div className="small">
-                        <b className="num" style={{ fontSize: 16 }}>
-                          {fmtM(ask.amount)}
-                        </b>
-                        <span className="dim">
-                          {' '}
-                          × {ask.years} yr{ask.years > 1 ? 's' : ''} · age {playerAge(p, next)} next season
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
-                  Renounce
-                </button>
-                <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} disabled={wantsOut(p)} onClick={() => setSel(p.pid)}>
-                  <PenLine size={15} /> Negotiate
-                </button>
-              </div>
-              <QualifyRow league={league} p={p} />
-            </Card>
-          );
-        })
-      )}
+              );
+            })}
+          </div>
+        )}
+      </Section>
 
       {resigned.length > 0 && (
-        <>
-          <SecTitle>Signed this summer</SecTitle>
-          <Card className="flush">
-            <div className="list">
-              {resigned.map((p) => (
-                <div key={p.pid} className="listrow">
-                  <OvrPot p={p} showPot={false} />
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="fo-name small">{playerName(p)}</div>
-                    <div className="fo-meta tiny">
-                      {p.pos} · age {playerAge(p, next)} next season
-                    </div>
-                  </div>
-                  <div className="fo-money">
-                    <div className="a">{fmtM(salaryFor(p, next))}</div>
-                    <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
+        <Section title="Signed this summer">
+          <div className="card flush list">
+            {resigned.map((p) => (
+              <div key={p.pid} className="listrow">
+                <OvrPot p={p} showPot={false} />
+                <div className="grow fo-min0">
+                  <div className="fo-name">{playerName(p)}</div>
+                  <div className="fo-meta">
+                    {p.pos} · {playerAge(p, next)} next season
                   </div>
                 </div>
-              ))}
-            </div>
-          </Card>
-        </>
+                <div className="fo-money">
+                  <div className="a">{fmtM(salaryFor(p, next))}</div>
+                  <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
       )}
 
       {extendable.length > 0 && (
-        <>
-          <SecTitle>Up after {seasonLabel(next)} · extend now</SecTitle>
-          <Card className="flush">
-            <div className="list">
-              {extendable.map((p) => (
-                <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />
-              ))}
-            </div>
-          </Card>
-          <div className="tiny dim">Their deals run through next season. An extension starts the season after, and can be signed any time until the end of the regular season.</div>
-        </>
+        <Section title={`Up after ${shortSeason(next)} · extend now`}>
+          <div className="card flush list">
+            {extendable.map((p) => (
+              <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />
+            ))}
+          </div>
+          <div className="tiny dim">Signed through next season. An extension starts the season after, any time until the end of the regular season.</div>
+        </Section>
       )}
 
-      <div className="fo-dock">
+      <div className="fo-dock fo-dock-go">
         <button className="btn primary block big" disabled={busy} onClick={() => (expiring.length || options.length ? setConfirm(true) : void openFA())}>
           <DoorOpen size={20} /> Done — open free agency
         </button>
@@ -363,15 +355,14 @@ function ResignPhase() {
 
       <Sheet open={!!renounce} onClose={() => setRenounce(null)} title={renounce ? `Renounce ${renounce.lastName}?` : undefined}>
         {renounce && (
-          <div className="col" style={{ gap: 12 }}>
-            <div className="dim2">
-              You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he becomes an unrestricted free agent when the market
-              opens
+          <div className="col fo-sheet">
+            <p className="fo-lede">
+              You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he's an unrestricted free agent when the market opens
               {renounce.contract.twoWay || (wantsOut(renounce) && !renounce.rfa)
                 ? ''
                 : `, and his ${fmtM(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}
               . To bring him back you'd have to outbid other teams with cap space.
-            </div>
+            </p>
             <div className="row">
               <button className="btn grow" onClick={() => setRenounce(null)}>
                 Keep his rights
@@ -386,11 +377,11 @@ function ResignPhase() {
 
       <Sheet open={!!decline} onClose={() => setDecline(null)} title={decline ? `Decline ${decline.lastName}'s option?` : undefined}>
         {decline && (
-          <div className="col" style={{ gap: 12 }}>
-            <div className="dim2">
-              His {seasonLabel(next)} season ({fmtM(salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency opens, at
-              about {fmtM(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
-            </div>
+          <div className="col fo-sheet">
+            <p className="fo-lede">
+              His {seasonLabel(next)} season ({fmtM(salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency, at about{' '}
+              {fmtM(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
+            </p>
             <div className="row">
               <button className="btn grow" onClick={() => setDecline(null)}>
                 Keep the option
@@ -404,30 +395,30 @@ function ResignPhase() {
       </Sheet>
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} title="Open free agency?">
-        <div className="col" style={{ gap: 12 }}>
+        <div className="col fo-sheet">
           {unrestricted > 0 && (
-            <div className="dim2">
-              {unrestricted} player{unrestricted > 1 ? 's' : ''} will become unrestricted free agent{unrestricted > 1 ? 's' : ''}. Other teams can sign them on day one; you'd have
-              to compete like everyone else, using cap space.
-            </div>
+            <p className="fo-lede">
+              {unrestricted} player{unrestricted > 1 ? 's' : ''} become{unrestricted > 1 ? '' : 's'} unrestricted: other teams can sign {unrestricted > 1 ? 'them' : 'him'} on day
+              one, and you'd compete with cap space like everyone else.
+            </p>
           )}
           {qualified > 0 && (
-            <div className="dim2">
-              {qualified === 1 ? 'One qualified player becomes a restricted free agent' : `${qualified} qualified players become restricted free agents`}: you can still re-sign{' '}
-              {qualified === 1 ? 'him' : 'them'}, and match any offer sheet within {MATCH_DAYS} days. {qualified === 1 ? 'His' : 'Their'} cap hold
+            <p className="fo-lede">
+              {qualified === 1 ? 'One qualified player becomes restricted' : `${qualified} qualified players become restricted`}: you can still re-sign{' '}
+              {qualified === 1 ? 'him' : 'them'} and match any offer sheet within {MATCH_DAYS} days. {qualified === 1 ? 'His' : 'Their'} cap hold
               {qualified === 1 ? ' stays' : 's stay'} on your books until {qualified === 1 ? 'he signs' : 'they sign'}.
-            </div>
+            </p>
           )}
           {options.length > 0 && (
-            <div className="dim2">
+            <p className="fo-lede">
               Open team option{options.length > 1 ? 's' : ''}: the staff will{' '}
               {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${p.lastName}'s`).join(', ')}.
-            </div>
+            </p>
           )}
           {expiring.length > 0 && (
-            <div className="card tight col" style={{ gap: 6 }}>
+            <div className="card flush list">
               {expiring.map((p) => (
-                <div key={p.pid} className="row small" style={{ gap: 8 }}>
+                <div key={p.pid} className="fo-confirm-row">
                   <OvrPot p={p} showPot={false} />
                   <span className="grow ellipsis bold">{playerName(p)}</span>
                   {p.rfa && <span className="tag good">RFA</span>}
@@ -461,30 +452,32 @@ function ExtendRow({ league, p, onExtend }: { league: League; p: Player; onExten
   const exp = contractExp(p.contract);
   const ask = extensionAsk(league, p);
   return (
-    <div className="col" style={{ gap: 6, padding: '10px 12px' }}>
-      <Link to={`/player/${p.pid}`} className="row" style={{ gap: 10, minWidth: 0 }}>
-        <OvrPot p={p} />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="fo-name">{playerName(p)}</div>
+    <div className="fo-rs">
+      <div className="fo-rs-top">
+        <Avatar p={p} />
+        <div className="grow">
+          <Link to={`/player/${p.pid}`} className="fo-name">
+            {playerName(p)}
+          </Link>
           <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-          <div style={{ marginTop: 4 }}>
-            <MoodTag p={p} />
-          </div>
         </div>
         <div className="fo-money">
           <div className="a">{fmtM(salaryFor(p, exp))}</div>
           <div className="b">thru {shortSeason(exp)}</div>
         </div>
-      </Link>
-      <div className="row" style={{ gap: 8 }}>
-        <div className="small dim2 grow" style={{ minWidth: 0 }}>
-          {extensionRefusal(league, p) ? (
-            <span className="warn">Won't extend now</span>
-          ) : (
-            <>
-              Extension: asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''}
-            </>
-          )}
+      </div>
+      <div className="fo-rs-act">
+        <div className="grow">
+          <MoodTag p={p} />
+          <div className="small dim2 fo-rs-ext">
+            {extensionRefusal(league, p) ? (
+              <span className="warn">Won't extend now</span>
+            ) : (
+              <>
+                Extension: asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''}
+              </>
+            )}
+          </div>
         </div>
         <button className="btn sm primary" aria-label={`Extend ${playerName(p)}`} onClick={() => onExtend(p.pid)}>
           <PenLine size={15} /> Extend
@@ -521,65 +514,61 @@ function OffPhase({ league }: { league: League }) {
   const rfas = useLeagueMemo(() => (league.phase === 'freeAgency' ? restrictedFreeAgents(league, tid) : []), [league, tid]);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
-  const when =
+  const [title, when] =
     league.phase === 'freeAgency'
-      ? 'The re-sign period for this summer has closed. These contracts run out after next season: extend them now, or re-sign them next summer.'
+      ? ['Closed for this summer', 'These deals run out after next season: extend them now, or re-sign them next summer.']
       : league.phase === 'draft' || league.phase === 'draftLottery'
-        ? 'The re-sign period opens right after the draft.'
+        ? ['Opens after the draft', 'Then re-sign your own players for any amount, even over the cap.']
         : league.phase === 'preseason' || league.phase === 'regular'
-          ? 'The re-sign period opens after the playoffs and the draft. Until the end of the regular season you can extend these players instead.'
-          : 'The re-sign period opens after the playoffs and the draft. Until then you can review who is up.';
+          ? ['Opens after the playoffs', 'Until the end of the regular season you can extend these players instead.']
+          : ['Opens after the draft', 'Until then, review who is up.'];
   return (
-    <main className="page">
-      <PageHeader title="Re-sign Players" sub={`Contracts expiring after ${seasonLabel(s)}`} back />
-      <Card className="fo-hero">
-        <div className="row top" style={{ gap: 12 }}>
-          <CalendarClock size={30} className="dim" />
-          <div className="grow">
-            <div className="fo-mid">Not the re-sign period</div>
-            <div className="small dim2" style={{ marginTop: 4 }}>
-              {when} With Bird rights you can then re-sign your own players for any amount, even over the cap.
-            </div>
-          </div>
+    <main className="page fo-page">
+      <PageHeader title="Re-sign" sub={`Contracts up after ${seasonLabel(s)}`} back />
+      <section className="card fo-now" aria-label="Re-sign period">
+        <div className="fo-now-over">Re-sign period</div>
+        <h2 className="fo-now-t">{title}</h2>
+        <p className="fo-now-s">{when}</p>
+        <div className="fo-figs">
+          <Statline
+            items={[
+              { k: `Expiring ${shortSeason(s)}`, v: String(list.length), s: `${fmtM(freed)} off the books` },
+              {
+                k: `${shortSeason(s + 1)} committed`,
+                v: fmtM(after),
+                s: after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`,
+                color: after < cap.salaryCap ? 'var(--good)' : 'var(--warn)',
+              },
+            ]}
+          />
         </div>
-      </Card>
+      </section>
 
       {rfas.length > 0 && (
-        <Callout icon={<ShieldCheck size={16} />}>
-          Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => p.lastName).join(', ')}) can still be re-signed with Bird rights until{' '}
+        <Callout icon={<ShieldCheck size={16} className="dim" />}>
+          Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => p.lastName).join(', ')}) can still re-sign with Bird rights until{' '}
           {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet, and you can match any sheet.{' '}
-          <Link to="/free-agents" className="bold" style={{ color: 'var(--accent-text)' }}>
-            Free Agents
+          <Link to="/free-agents" className="bold accent-text">
+            Free agents
           </Link>
         </Callout>
       )}
 
-      <div className="grid2">
-        <Kpi k={`Expiring ${shortSeason(s)}`} v={String(list.length)} sub={`${fmtM(freed)} coming off the books`} />
-        <Kpi
-          k={`${shortSeason(s + 1)} committed`}
-          v={fmtM(after)}
-          sub={after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`}
-          color={after < cap.salaryCap ? 'var(--good)' : 'var(--warn)'}
-        />
-      </div>
-
-      <SecTitle>Contracts up after {seasonLabel(s)}</SecTitle>
-      {list.length === 0 ? (
-        <Callout>No contracts expire after {seasonLabel(s)}.</Callout>
-      ) : (
-        <Card className="flush">
-          <div className="list">
+      <Section title={`Up after ${seasonLabel(s)}`}>
+        {list.length === 0 ? (
+          <div className="card small dim">No contracts expire after {seasonLabel(s)}.</div>
+        ) : (
+          <div className="card flush list">
             {list.map((p) => {
               if (canExtend.has(p.pid)) return <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />;
               const ask = askingContract(league, p, tid);
               return (
                 <Link key={p.pid} to={`/player/${p.pid}`} className="fo-prow">
-                  <OvrPot p={p} />
-                  <div className="grow" style={{ minWidth: 0 }}>
+                  <Avatar p={p} />
+                  <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
                     <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-                    <div style={{ marginTop: 4 }}>
+                    <div className="fo-rs-mood">
                       <MoodTag p={p} />
                     </div>
                   </div>
@@ -591,35 +580,32 @@ function OffPhase({ league }: { league: League }) {
               );
             })}
           </div>
-        </Card>
-      )}
-      <div className="tiny dim">
-        Projected asks use today's ratings and mood; both will change by the summer.{canExtend.size > 0 ? " An extension's ask is for the season after his deal ends." : ''}
-      </div>
+        )}
+        <div className="tiny dim">
+          Asks use today's ratings and mood; both change by the summer.{canExtend.size > 0 ? " An extension's ask is for the season after his deal ends." : ''}
+        </div>
+      </Section>
 
       {extended.length > 0 && (
-        <>
-          <SecTitle>Extended</SecTitle>
-          <Card className="flush">
-            <div className="list">
-              {extended.map((p) => (
-                <Link key={p.pid} to={`/player/${p.pid}`} className="listrow">
-                  <OvrPot p={p} showPot={false} />
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="fo-name small">{playerName(p)}</div>
-                    <div className="fo-meta tiny">
-                      {p.pos} · {playerAge(p, s + 1)} in {shortSeason(s + 1)}
-                    </div>
+        <Section title="Extended">
+          <div className="card flush list">
+            {extended.map((p) => (
+              <Link key={p.pid} to={`/player/${p.pid}`} className="listrow">
+                <OvrPot p={p} showPot={false} />
+                <div className="grow fo-min0">
+                  <div className="fo-name">{playerName(p)}</div>
+                  <div className="fo-meta">
+                    {p.pos} · {playerAge(p, s + 1)} in {shortSeason(s + 1)}
                   </div>
-                  <div className="fo-money">
-                    <div className="a">{fmtM(salaryFor(p, s + 1))}</div>
-                    <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </>
+                </div>
+                <div className="fo-money">
+                  <div className="a">{fmtM(salaryFor(p, s + 1))}</div>
+                  <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Section>
       )}
 
       <ContractSheet pid={ext} mode="extend" onClose={() => setExt(null)} />

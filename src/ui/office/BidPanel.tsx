@@ -6,7 +6,7 @@ import type { Player } from '../../core/types';
 import { PREF_KEYS, type PlayerPrefs, appealTerms, playerPrefs, willSign } from '../../core/league/contracts';
 import { bidDecideDay, bidStanding, faInterest, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { Callout, fmtM } from './common';
+import { Callout, Line, fmtM } from './common';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
 
@@ -49,19 +49,12 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   };
 
   return (
-    <div className="col" style={{ gap: 10 }}>
-      <Callout icon={<Gavel size={18} />}>
-        <b>Top free agents weigh offers:</b> he decides {when}.{' '}
-        {rivals.length ? (
-          <>
-            Interest: {rivals.slice(0, 2).join(', ')}
-            {rivals.length > 2 ? `, +${rivals.length - 2}` : ''}.
-          </>
-        ) : (
-          'No other team is bidding right now.'
-        )}
+    <section className="fo-bid" aria-label="Competing offers">
+      <Callout icon={<Gavel size={18} className="dim" />}>
+        <b>He weighs offers and decides {when}.</b>{' '}
+        {rivals.length ? `Bidding: ${rivals.slice(0, 2).join(', ')}${rivals.length > 2 ? `, +${rivals.length - 2}` : ''}.` : 'No other team is bidding yet.'}
         {bid && (
-          <div className="row between" style={{ marginTop: 6, gap: 8 }}>
+          <div className="fo-bid-mine">
             <span className="small dim2">
               Your offer: {bid.years} yr{bid.years > 1 ? 's' : ''} · {fmtM(bid.amount, 2)}
             </span>
@@ -74,46 +67,47 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
 
       {amount < floor ? (
         <Callout tone="bad" icon={<X size={18} className="bad" />}>
-          <b>Too low to consider.</b> He won't look at less than {fmtM(floor, 2)} a season for {years} year{years > 1 ? 's' : ''}.
+          <b>Too low to consider.</b> Not under {fmtM(floor, 2)} a season for {years} year{years > 1 ? 's' : ''}.
         </Callout>
       ) : standing.leads ? (
         <Callout tone="good" icon={<Check size={18} className="good" />}>
-          <b>{best ? 'Your offer leads the field right now.' : "No rival bids: at this price he's yours if nothing changes."}</b>
-          <span className="dim2"> Teams can still join or drop out before he decides.</span>
+          <b>{best ? 'Your offer leads right now.' : "No rival bids: at this price he's yours if nothing changes."}</b> Teams can still join or drop out.
         </Callout>
       ) : (
         <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
-          <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead.` : "No rival bids, so he'll hold out for his asking price."}</b>{' '}
+          <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead.` : "No rival bids, so he'll hold out for his ask."}</b>{' '}
           {standing.toLead !== null ? (
-            <button className="btn xs" style={{ marginTop: 4 }} onClick={() => onAmount(standing.toLead!)}>
+            <button className="btn xs fo-lead" onClick={() => onAmount(standing.toLead!)}>
               {best ? 'Lead with' : 'Offer'} {fmtM(standing.toLead, 2)}
             </button>
           ) : (
-            <span className="dim2">Even a max offer wouldn't top theirs now.</span>
+            'Even a max offer would not top theirs now.'
           )}
         </Callout>
       )}
 
-      <div className="card tight col" style={{ gap: 6 }}>
-        <div className="small bold">What matters to him</div>
+      <div className="fo-lines">
+        <div className="over fo-lines-h">What matters to him</div>
         {order.map((k) => (
-          <div key={k} className="row between small" style={{ gap: 8 }}>
-            <span className="row" style={{ gap: 6 }}>
-              {fit[k].ok === true ? (
-                <Check size={15} className="good" role="img" aria-label="Your team fits" />
-              ) : fit[k].ok === false ? (
-                <X size={15} className="bad" role="img" aria-label="Your team falls short" />
-              ) : (
-                <Minus size={15} className="dim" role="img" aria-label="Neutral" />
-              )}
-              <span>
+          <Line
+            key={k}
+            k={
+              <span className="fo-fit">
+                {fit[k].ok === true ? (
+                  <Check size={15} className="good" role="img" aria-label="Your team fits" />
+                ) : fit[k].ok === false ? (
+                  <X size={15} className="bad" role="img" aria-label="Your team falls short" />
+                ) : (
+                  <Minus size={15} className="dim" role="img" aria-label="Neutral" />
+                )}
                 <b>{LABEL[k]}</b> <span className="dim">{weight(prefs[k])}</span>
               </span>
-            </span>
-            <span className="tiny dim2">{fit[k].note}</span>
-          </div>
+            }
+          >
+            <span className="small dim2">{fit[k].note}</span>
+          </Line>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
