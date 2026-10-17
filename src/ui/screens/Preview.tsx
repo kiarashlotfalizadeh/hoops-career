@@ -480,8 +480,9 @@ function InjuryList({ league, s, game, locked }: { league: League; s: SidePrevie
       {s.out.map((p) => (
         <Link key={p.pid} to={`/player/${p.pid}`} className="gd-row small">
           <Tag tone="bad">Out</Tag>
+          {/* (a suspension reads "Suspended" where an injury names itself) */}
           <span className="grow ellipsis">
-            <b>{p.name}</b> <span className="dim">{p.injury}</span>
+            <b>{p.name}</b> <span className={p.suspended ? 'bad' : 'dim'}>{p.injury}</span>
           </span>
           <span className="tiny dim num nowrap">
             {p.games} game{p.games === 1 ? '' : 's'}

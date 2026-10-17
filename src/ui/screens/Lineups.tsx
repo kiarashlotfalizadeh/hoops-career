@@ -9,6 +9,7 @@ import { sortByPosition } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import type { Player } from '../../core/types';
+import { isOut } from '../../core/availability';
 import { Avatar, Card, Chips, Empty, Help, Kpi, Ovr, PageHeader, Segmented, Sheet, Tag, activateOnKey } from '../components/ui';
 import { f1, rosterNames, signed, startingFive } from '../stats';
 import '../league/league.css';
@@ -317,7 +318,7 @@ function UnitSheet({
   const league = useLeague();
   const onTeam = new Set(roster.map((p) => p.pid));
   const gone = u.pids.filter((pid) => !onTeam.has(pid));
-  const hurt = u.pids.filter((pid) => onTeam.has(pid) && league.players[pid]?.injury);
+  const hurt = u.pids.filter((pid) => onTeam.has(pid) && league.players[pid] && isOut(league.players[pid]));
   const isStarters = u.pids.every((pid) => starters.has(pid));
   const isClosers = u.pids.length === closers.size && u.pids.every((pid) => closers.has(pid));
   const names = (pids: number[]) => pids.map(name).join(' and ');
@@ -346,7 +347,7 @@ function UnitSheet({
                 <div className="small bold ellipsis">{name(pid)}</div>
                 <div className="tiny dim">{p.pos}</div>
               </div>
-              {!onTeam.has(pid) ? <Tag>Gone</Tag> : p.injury ? <Tag tone="bad">Out</Tag> : null}
+              {!onTeam.has(pid) ? <Tag>Gone</Tag> : isOut(p) ? <Tag tone="bad">Out</Tag> : null}
               <Ovr v={p.ovr} size="sm" />
             </div>
           );

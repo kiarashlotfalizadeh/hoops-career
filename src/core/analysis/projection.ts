@@ -5,6 +5,7 @@
 
 import type { League } from '../types';
 import type { GameSim } from '../sim/engine';
+import { isOut } from '../availability';
 
 /** Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated seasons, r ≈ 0.8). */
 export const TALENT_NET = 1.7;
@@ -102,7 +103,7 @@ function rotationTalent(league: League, tid: number) {
   for (const pid of rot.order) {
     const p = league.players[pid];
     const m = rot.minutes[pid] ?? 0;
-    if (!p || p.tid !== tid || p.injury || m <= 0) continue;
+    if (!p || p.tid !== tid || isOut(p) || m <= 0) continue;
     sum += p.ovr * m;
     min += m;
   }

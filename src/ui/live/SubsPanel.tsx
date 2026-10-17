@@ -6,8 +6,9 @@ import { subsLine, type Drawn } from './drawn';
 
 /**
  * Substitutions: who's on and off comes from the game itself (a sub has to be possible now); each
- * player's energy, fouls, points, minutes and whether he's out (fouled out, hurt, resting) from the
- * possession the court last drew (see subsLine), so a foul-out still being drawn isn't given away.
+ * player's energy, fouls (technicals too), points, minutes and whether he's out (fouled out, ejected,
+ * hurt, resting, suspended) from the possession the court last drew (see subsLine), so a foul-out or
+ * an ejection still being drawn isn't given away.
  * `initialOut` arrives picked to come out. The changes go through the live game (`substitute`,
  * `setManualSubs`), which journals them, and a sub the game can't make now says so.
  */
@@ -46,7 +47,7 @@ export function SubsPanel({
           onChange();
         }}
         label="I'll handle substitutions"
-        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries and foul-outs excepted), and the staff calls no timeouts to stop runs."
+        help="Off: your staff follows the rotation plan. On: lineups only change when you sub (injuries, foul-outs and ejections excepted), and the staff calls no timeouts to stop runs."
       />
       <div className="small dim">{outPid === null ? 'Tap a player on the floor, then a bench player.' : `${nameOf(outPid)} comes out: now pick who comes in.`}</div>
       <div className="col" style={{ gap: 6 }}>
@@ -60,7 +61,7 @@ export function SubsPanel({
               </span>
               <span className="small num">{l.energy}%</span>
               <span className="small dim num">
-                {l.fouls}F · {l.pts}p · {l.min}m
+                {l.fouls}F{l.tf ? ` · ${l.tf}T` : ''} · {l.pts}p · {l.min}m
               </span>
             </button>
           );
@@ -90,13 +91,13 @@ export function SubsPanel({
                 onChange();
               }}
             >
-              <Tag>{l.out === 1 ? 'FOULED OUT' : l.out === 2 ? (p.dnp === 'Rest' ? 'REST' : 'OUT') : 'BENCH'}</Tag>
+              <Tag>{l.out === 1 ? 'FOULED OUT' : l.out === 3 ? 'EJECTED' : l.out === 2 ? (p.dnp === 'Rest' ? 'REST' : p.dnp === 'Suspended' ? 'SUSP.' : 'OUT') : 'BENCH'}</Tag>
               <span className="grow" style={{ textAlign: 'left' }}>
                 {nameOf(p.pid)}
               </span>
               <span className="small num">{l.energy}%</span>
               <span className="small dim num">
-                {l.fouls}F · {l.min}m
+                {l.fouls}F{l.tf ? ` · ${l.tf}T` : ''} · {l.min}m
               </span>
             </button>
           );

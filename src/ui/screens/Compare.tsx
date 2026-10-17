@@ -7,6 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight, UserPlus } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT } from '../../core/types';
+import { suspensionLabel } from '../../core/availability';
 import { fmtHeight } from '../../core/ratings';
 import { playerName } from '../../core/league/helpers';
 import { askingContract, waiverSalary } from '../../core/league/contracts';
@@ -98,6 +99,7 @@ function Head({ league, p, pid, onPick }: { league: League; p: Player | undefine
           {p.injury.type} · {p.injury.gamesRemaining}g
         </span>
       )}
+      {p.suspension && <span className="tag bad cmp-tag">{suspensionLabel(p)}</span>}
       <div className="cmp-foot">
         <button className="btn xs" aria-haspopup="dialog" aria-label={`Change ${playerName(p)} for another player`} onClick={onPick}>
           Change

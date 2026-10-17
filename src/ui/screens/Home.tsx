@@ -203,7 +203,10 @@ export default function Home() {
                     <span className="bold">{league.teams[side.tid].abbrev}</span>{' '}
                     {side.out.length > 0 && (
                       <>
-                        <span className="bad">out:</span> {side.out.map((p) => `${league.players[p.pid]?.lastName ?? p.name} (${p.games}g)`).join(', ')}
+                        <span className="bad">out:</span>{' '}
+                        {side.out
+                          .map((p) => `${league.players[p.pid]?.lastName ?? p.name} (${p.suspended ? `Suspended (${p.games} game${p.games === 1 ? '' : 's'})` : `${p.games}g`})`)
+                          .join(', ')}
                       </>
                     )}
                     {side.out.length > 0 && side.resting.length > 0 && ' · '}

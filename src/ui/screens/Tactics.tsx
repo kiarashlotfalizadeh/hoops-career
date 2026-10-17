@@ -22,6 +22,7 @@ import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
+import { isOut } from '../../core/availability';
 import { CrunchTimeCard } from '../tactics/CrunchTimeCard';
 import { SetPackageCard } from '../tactics/SetPackageCard';
 import { SituationToggles, SituationsCard } from '../tactics/SituationsCard';
@@ -71,10 +72,10 @@ export default function Tactics() {
       tt.manual = true;
     });
 
-  // personnel hints, for the five who start next: the first healthy ones in the depth chart
+  // personnel hints, for the five who start next: the first available ones in the depth chart
   const starters = team.rotation.order
     .map((pid) => league.players[pid])
-    .filter((p) => p && p.tid === team.tid && !p.injury)
+    .filter((p) => p && p.tid === team.tid && !isOut(p))
     .slice(0, 5);
   const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt)[0];
   const bigC = big ? composites(big.ratings) : null;

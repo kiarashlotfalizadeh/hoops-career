@@ -17,6 +17,7 @@ import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
 import { SETS } from '../sim/sets';
+import { isOut } from '../availability';
 
 export interface Threat {
   pid: number;
@@ -35,7 +36,7 @@ export interface ScoutReport {
 
 function rotationPlayers(league: League, tid: number, n = 8): Player[] {
   const team = league.teams[tid];
-  const healthy = rosterSorted(league, tid).filter((p) => !p.injury);
+  const healthy = rosterSorted(league, tid).filter((p) => !isOut(p));
   return healthy.sort((a, b) => (team.rotation.minutes[b.pid] ?? 0) - (team.rotation.minutes[a.pid] ?? 0)).slice(0, n);
 }
 
@@ -475,7 +476,7 @@ export interface Alert {
 export function teamAlerts(league: League, tid: number): Alert[] {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
-  const healthy = players.filter((p) => !p.injury);
+  const healthy = players.filter((p) => !isOut(p));
   const alerts: Alert[] = [];
   // the roster and fit scores the Tactics screen shows next to each playbook
   const pr = rosterProfile(fitRoster(players));
@@ -510,7 +511,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
   // the five who start: the first healthy ones in the depth chart, as the engine and the Rotation screen have it
   const starters = rot.order
     .map((pid) => league.players[pid])
-    .filter((p) => p && p.tid === tid && !p.injury)
+    .filter((p) => p && p.tid === tid && !isOut(p))
     .slice(0, 5);
   if (starters.length === 5) {
     const ev = evaluateLineup(starters);

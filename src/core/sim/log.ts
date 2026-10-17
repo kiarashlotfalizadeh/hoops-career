@@ -35,7 +35,9 @@ export type StepKind =
   | 'steal'
   | 'foul'
   | 'ft'
-  | 'timeout';
+  | 'timeout'
+  | 'tech' // a technical foul on pid (none: a coach) of the side that isn't t, and t's free throw for it (pid2 shoots it; v: 1 made)
+  | 'eject'; // pid of side t (none: its coach) is ejected
 
 /** One beat of a possession, used by the 2D court to animate and by the PBP feed. */
 export interface PossStep {
@@ -52,9 +54,9 @@ export interface PossStep {
   f?: FinishType;
   /** For free throws: attempts (v counts the makes). */
   n?: number;
-  /** For timeouts: the team that called it (0 home, 1 away). */
+  /** For timeouts: the team that called it (0 home, 1 away); for a technical, the team shooting its free throw; for an ejection, his team. */
   t?: 0 | 1;
-  /** For shots: how the play-by-play calls it ('step-back three', 'driving layup'). */
+  /** For shots: how the play-by-play calls it ('step-back three', 'driving layup'); for a foul, 'flagrant1' or 'flagrant2' when it was one. */
   d?: string;
 }
 

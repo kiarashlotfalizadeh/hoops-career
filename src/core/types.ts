@@ -125,6 +125,13 @@ export interface PlayerStats {
   teamFga: number;
   teamFta: number;
   teamTov: number;
+  /**
+   * Technical fouls and flagrant foul points (a Flagrant 1 is one, a Flagrant 2 two), absent when
+   * none: the league counts them over his whole regular season or postseason toward a suspension
+   * (see league/discipline.ts).
+   */
+  tf?: number;
+  fp?: number;
   // real advanced numbers (seed seasons only)
   adv?: {
     per: number;
@@ -260,6 +267,14 @@ export interface Player {
   highs?: Partial<Record<RecStat, HighRow>>;
   /** The number he last wore for each team that numbered him (tid -> number), so a franchise retiring it after he moved on knows which (see jerseys.ts); dropped when he retires. */
   jerseys?: Record<number, string>;
+  /** A suspension he's serving (see league/discipline.ts): his team's next `games` games, whatever the phase or season. */
+  suspension?: Suspension;
+}
+
+/** A suspension: team games still to sit, and what it was for ("his 16th technical foul", "a Flagrant 2 against MEM"). */
+export interface Suspension {
+  games: number;
+  why: string;
 }
 
 /** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
@@ -815,6 +830,12 @@ export interface BoxLine {
   pm: number;
   energy: number; // energy at end (0..1)
   dnp?: string;
+  /** Technical fouls, Flagrant 1s and Flagrant 2s (absent when none): a technical isn't one of his personal fouls, a flagrant is. */
+  tf?: number;
+  f1?: number;
+  f2?: number;
+  /** Ejected: for two technicals ('tech') or a Flagrant 2 ('flagrant'). Not a foul-out: he leaves whatever his fouls. */
+  ej?: 'tech' | 'flagrant';
 }
 
 export interface TeamBox {
@@ -827,6 +848,9 @@ export interface TeamBox {
   timeoutsLeft: number;
   /** Points per possession and possession counts by finishing play type. */
   playTypes: Record<string, { poss: number; pts: number }>;
+  /** Technical fouls on the head coach, and whether two got him ejected (absent when none: the game goes on without him). */
+  coachTf?: number;
+  coachEj?: true;
   /** Biggest lead, fast break pts, paint pts, second chance, pts off TOs, bench pts. */
   extra: {
     biggestLead: number;
@@ -1009,8 +1033,11 @@ export interface NewsItem {
   id: number;
   season: number;
   day: number;
-  /** 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts). */
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record' | 'coach';
+  /**
+   * 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts).
+   * 'discipline': a suspension, or a coach ejected (see league/discipline.ts).
+   */
+  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record' | 'coach' | 'discipline';
   text: string;
   tids: number[];
   pids: number[];

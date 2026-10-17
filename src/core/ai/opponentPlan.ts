@@ -10,6 +10,7 @@
 import type { GameSim } from '../sim/engine';
 import type { League, Player, PlayerDefense, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
 import { Rng, clamp, hashString } from '../random';
+import { isOut } from '../availability';
 import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES } from '../analysis/scouting';
@@ -203,7 +204,7 @@ function restingTonight(league: League, userTid: number, day: number): Set<numbe
 function userStar(league: League, userTid: number, day: number) {
   const rest = restingTonight(league, userTid, day);
   const rows = teamPlayers(league, userTid)
-    .filter((p) => !p.injury && !rest.has(p.pid))
+    .filter((p) => !isOut(p) && !rest.has(p.pid))
     .map((p) => {
       const here = p.stats.find((s) => s.season === league.season && s.tid === userTid && !s.playoffs && s.gp >= SCOUT_MIN_GAMES);
       const s = here ?? seasonTotals(p, league.season - 1);
@@ -276,7 +277,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     // ---- ball screens (coverages are a man-to-man thing: a zone stays a zone), in the coverage his
     // healthy roster plays best: hedging takes mobile bigs, icing perimeter defenders, dropping a rim protector
     const roster = teamPlayers(league, aiTid);
-    const healthy = roster.filter((x) => !x.injury);
+    const healthy = roster.filter((x) => !isOut(x));
     const pr = rosterProfile(healthy.length >= 8 ? healthy : roster);
     const fit = defPresetFit(pr);
     const best = (opts: PnrCoverage[]) => opts.filter((c) => c !== d.pnr).sort((a, b) => fit[b] - fit[a])[0];

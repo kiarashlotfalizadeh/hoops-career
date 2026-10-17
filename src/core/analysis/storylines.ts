@@ -12,6 +12,7 @@ import { playerName } from '../league/helpers';
 import { seriesLabel } from '../league/playoffs';
 import { awardLadder } from '../league/awards';
 import { careerOnRecord, careerTotals, STAT_WORD, type MilestoneStat } from './milestones';
+import { isOut, suspendedGames } from '../availability';
 
 export type StorylineKind = 'revenge' | 'milestone' | 'streak' | 'hot' | 'rematch' | 'mvp' | 'picks';
 
@@ -167,7 +168,7 @@ export function storylines(league: League, g: Pick<ScheduledGame, 'gid' | 'home'
   const sides = [g.home, g.away];
   const roster = (tid: number) => Object.values(league.players).filter((p) => p.tid === tid);
   const cleared = new Set(league.gameTime?.gid === g.gid ? league.gameTime.play : []);
-  const playing = (p: Player) => (out ? !out.has(p.pid) : !(p.injury && p.injury.gamesRemaining > 0) || cleared.has(p.pid));
+  const playing = (p: Player) => (out ? !out.has(p.pid) : !isOut(p) || (cleared.has(p.pid) && !suspendedGames(p)));
   const both = [...roster(g.home), ...roster(g.away)];
   const name = namer(both);
   const players = both.filter(playing);

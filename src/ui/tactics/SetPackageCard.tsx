@@ -2,6 +2,7 @@ import type { Player, SetId, Tactics } from '../../core/types';
 import { MAX_SETS, SETS, SET_IDS, SET_K, bestFor, fitPlayer, setFit, setPackage } from '../../core/sim/sets';
 import { Card, Help, Tag } from '../components/ui';
 import { rosterNames } from '../stats';
+import { isOut } from '../../core/availability';
 
 /**
  * The set package (Offense, from Advanced depth): up to four named sets the half court mixes in now
@@ -11,9 +12,9 @@ import { rosterNames } from '../stats';
 export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t: Tactics) => void) => void; players: Player[] }) {
   const names = rosterNames(players);
   const pkg = setPackage(t);
-  // the rotation's top nine, healthy, as the sets weigh them with your roles
+  // the rotation's top nine, available, as the sets weigh them with your roles
   const pool = players
-    .filter((p) => !p.injury)
+    .filter((p) => !isOut(p))
     .slice(0, 9)
     .map((p) => fitPlayer(p, t));
   const toggle = (id: SetId) =>

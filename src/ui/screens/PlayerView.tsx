@@ -41,6 +41,8 @@ import { fmtDate } from '../../core/league/helpers';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { compareHref } from '../compare';
+import { isOut, suspendedGames, suspensionLabel } from '../../core/availability';
+import { SUSPEND, disciplineTotals, nextTechLine } from '../../core/league/discipline';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -194,6 +196,7 @@ export default function PlayerView() {
                   {p.injury.type} · {p.injury.gamesRemaining}g
                 </Tag>
               )}
+              {p.suspension && <Tag tone="bad">{suspensionLabel(p)}</Tag>}
               {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
             </div>
           </div>
@@ -289,7 +292,7 @@ export default function PlayerView() {
                 {team && (
                   <div className="small dim2">
                     Shot freedom: {['Limited', 'Normal', 'Green light'][(team.tactics.offense.freedom[p.pid] ?? 0) + 1]} · Planned minutes:{' '}
-                    {p.injury ? 'out (injured)' : (team.rotation.minutes[p.pid] ?? 0)}
+                    {isOut(p) ? (suspendedGames(p) ? 'out (suspended)' : 'out (injured)') : (team.rotation.minutes[p.pid] ?? 0)}
                   </div>
                 )}
                 {cur && (
@@ -310,6 +313,7 @@ export default function PlayerView() {
               </div>
             </Card>
           </div>
+          <DisciplineCard league={league} p={p} />
           <div className="md-grid2">
             {/* retired players and prospects have no mood to show */}
             {p.tid !== RETIRED && p.tid !== DRAFT_PROSPECT && (
@@ -749,5 +753,48 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
         </Card>
       )}
     </>
+  );
+}
+
+/**
+ * This season's technicals and flagrant points against the lines that cost a game (the postseason's
+ * too once he has any), and a suspension he's serving: only when there is any of it.
+ */
+function DisciplineCard({ league, p }: { league: League; p: Player }) {
+  const reg = disciplineTotals(p, league.season, false);
+  const post = disciplineTotals(p, league.season, true);
+  const n = suspendedGames(p);
+  if (!n && !reg.tf && !reg.fp && !post.tf && !post.fp) return null;
+  const rows: string[] = [];
+  for (const [d, playoffs] of [
+    [reg, false],
+    [post, true],
+  ] as const) {
+    const when = playoffs ? 'in the playoffs' : 'this season';
+    if (d.tf) {
+      const next = nextTechLine(d.tf, playoffs);
+      const line = playoffs ? SUSPEND.tech.playoffs : SUSPEND.tech.regular;
+      rows.push(`Technicals ${when}: ${d.tf} · the ${next}${ordinalSuffix(next)} costs ${next === line ? 'a game' : 'another game'}`);
+    }
+    if (d.fp) {
+      const line = playoffs ? SUSPEND.flagrant.playoffs : SUSPEND.flagrant.regular;
+      rows.push(`Flagrant points ${when}: ${d.fp} · ${d.fp < line ? `${line} cost a game` : 'every flagrant now costs a game (a Flagrant 2, two)'}`);
+    }
+  }
+  return (
+    <Card title="Discipline">
+      <div className="col small" style={{ gap: 4 }}>
+        {n > 0 && (
+          <div className="bad bold">
+            {suspensionLabel(p)}: {p.suspension!.why}
+          </div>
+        )}
+        {rows.map((r) => (
+          <div key={r} className="dim2">
+            {r}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
