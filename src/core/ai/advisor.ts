@@ -555,7 +555,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       link: '/rotation',
     });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
-  if (best) {
+  // (an assistant-run rotation plans a newcomer at the next game: in the offseason, or the day of a trade, it hasn't yet)
+  if (best && (rot.manual || rot.minutes[best.pid] !== undefined)) {
     // stamina sets a ceiling; only flag minutes well below what he can carry
     const sustain = Math.round(sustainableMinutes(best));
     const m = rot.minutes[best.pid] ?? 0;
@@ -563,18 +564,28 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       alerts.push({
         id: 'star-min',
         tone: 'alert',
-        title: `${best.lastName} is only playing ${m} minutes`,
+        title: m ? `${best.lastName} is only playing ${m} minute${m === 1 ? '' : 's'}` : `${best.lastName} isn't getting any minutes`,
         body: sustain < 32 ? `His stamina supports about ${sustain} minutes. Give him most of them.` : 'Your best player should usually play 32-36 minutes.',
         link: '/rotation',
       });
   }
+  // wear builds over the season and the postseason (the next season starts it again): only a team
+  // with games left has a load to manage, and only the regular season has back-to-backs to rest on
+  const ts = team.seasons.find((s) => s.season === league.season);
+  const lostSeries = league.playoffs.some((s) => s.winner !== undefined && s.winner !== tid && (s.high === tid || s.low === tid));
+  const playing = league.phase === 'regular' || ((league.phase === 'playin' || league.phase === 'playoffs') && (ts?.playoffRound ?? -1) >= 0 && !lostSeries);
+  const b2b = league.phase === 'regular';
   for (const p of players) {
-    if (p.wear >= 55) {
-      // a player who already sits back-to-backs needs a lighter load instead
+    if (playing && p.wear >= 55) {
+      // a player who already sits back-to-backs (or has none to sit) needs a lighter load instead
       const cap = rot.caps[p.pid];
-      const ease = !rot.restB2B.includes(p.pid)
-        ? 'Rest him on back-to-backs (Rotation).'
-        : `He already rests on back-to-backs: ${cap ? `lowering his ${cap}-minute cap` : 'a hard minute cap'} (Rotation) lightens his load further.`;
+      const lighter = cap ? `lowering his ${cap}-minute cap` : 'a hard minute cap';
+      const ease =
+        b2b && !rot.restB2B.includes(p.pid)
+          ? 'Rest him on back-to-backs (Rotation).'
+          : b2b
+            ? `He already rests on back-to-backs: ${lighter} (Rotation) lightens his load further.`
+            : `${lighter.charAt(0).toUpperCase()}${lighter.slice(1)} (Rotation) lightens his load.`;
       alerts.push({
         id: `wear-${p.pid}`,
         tone: 'alert',

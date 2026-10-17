@@ -27,7 +27,7 @@ export interface Storyline {
 
 const BIG_GAMES = { pts20: 6, pts30: 3, dbl: 6 };
 
-/** A player's team ids by season, in the order he played for them (stats rows are added as he plays). */
+/** A player's season lines with games in them, in the order he played them (stats rows are added as he plays). */
 function teamsPlayedFor(p: Player) {
   return p.stats.filter((s) => s.gp > 0);
 }
@@ -177,10 +177,12 @@ export function storylines(league: League, g: Pick<ScheduledGame, 'gid' | 'home'
   const rev = players.flatMap((p) => revenge(league, p, p.tid === g.home ? g.away : g.home, name(p)) ?? []);
   res.push(...rev.sort((a, b) => b.weight - a.weight).slice(0, 2));
 
-  for (const p of players) {
-    const m = milestoneWatch(league, p, name(p));
-    if (m) res.push(m);
-  }
+  // (career totals are regular-season ones: a postseason night doesn't add to them)
+  if (g.type === 'regular')
+    for (const p of players) {
+      const m = milestoneWatch(league, p, name(p));
+      if (m) res.push(m);
+    }
 
   // players' big-night runs, from this season's stored games in order
   const lines = new Map(players.map((p) => [p.pid, [] as { pts: number; dbl: boolean }[]]));

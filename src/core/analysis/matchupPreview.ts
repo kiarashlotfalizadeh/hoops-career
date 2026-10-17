@@ -32,7 +32,7 @@ export interface MatchupPreview {
  * How much an offense runs through a player at tip-off (fresh legs, nothing in the box yet): the
  * engine's usage weight for isolations plus pick-and-rolls, which is what its matchups weigh.
  */
-export function tipOffThreat(p: Player, t: Tactics, perf = 1): number {
+function tipOffThreat(p: Player, t: Tactics, perf = 1): number {
   const role = t.offense.roles[p.pid] ?? archetype(p.ratings).role;
   const c = composites(p.ratings);
   const fr = t.offense.freedom[p.pid] ?? 0;

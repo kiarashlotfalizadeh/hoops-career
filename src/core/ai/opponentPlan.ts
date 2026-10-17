@@ -193,9 +193,10 @@ interface Cand extends OppPlanItem {
   w: number;
 }
 
-/** The user's players who rest tonight, the second night of a back-to-back: none of them is worth a plan. */
+/** The user's players who rest tonight, the second night of a back-to-back (a regular-season game the day after any game, as the engine has it): none of them is worth a plan. */
 function restingTonight(league: League, userTid: number, day: number): Set<number> {
-  const b2b = league.schedule.some((g) => g.type === 'regular' && g.day === day - 1 && (g.home === userTid || g.away === userTid));
+  const plays = (g: ScheduledGame) => g.home === userTid || g.away === userTid;
+  const b2b = !league.schedule.some((g) => g.day === day && g.type !== 'regular' && plays(g)) && league.schedule.some((g) => g.day === day - 1 && plays(g));
   return new Set(b2b ? league.teams[userTid].rotation.restB2B : []);
 }
 
@@ -380,7 +381,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       id: 'hunt',
       group: 'hunt',
       text: `attacks ${lastName(victim)} on defense`,
-      why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, the rest of your rotation at ${hunt.teamPerDef}.`,
+      why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, your rotation at ${hunt.teamPerDef}.`,
       patch: { offense: { huntTarget: hunt.pid } },
       w: (hunt.teamPerDef - hunt.perDef) / 4,
     });

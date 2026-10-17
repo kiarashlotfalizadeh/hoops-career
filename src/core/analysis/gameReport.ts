@@ -248,7 +248,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Stop running a shooter off the line when he can put it on the floor (Game plan > How to guard them).',
     uses: (t) => instructs(t, 'tight'),
   },
-  'pd_tight:d': { text: (X, _Y, w) => `${X} ran their shooters off the three-point line${w}.` },
+  'pd_tight:d': { text: (X, _Y, w) => `${X} ran shooters off the three-point line${w}.` },
   'pd_sag:o': {
     text: (X, Y, w) => `${X} made ${Y} pay for sagging off them with open kick-out shots${w}.`,
     advice: 'Stop sagging off a player who makes open threes (Game plan > How to guard them).',
@@ -507,7 +507,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
         title: opts.partial
           ? `${star.name} has ${star.pts} points so far (${star.fgm}/${star.fga} FG).`
           : `${star.name} erupted for ${star.pts} points (${star.fgm}/${star.fga} FG).`,
-        detail: opts.partial ? `On pace for ${Math.round(star.pts / played)}.` : `The ${side.name} rode their star.`,
+        // (no pace to be on once regulation is played)
+        detail: opts.partial && played < 1 ? `On pace for ${Math.round(star.pts / played)}.` : `The ${side.name} rode their star.`,
         pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
         // (not named: a Star plan goes after their primary creator, who isn't always the scorer)

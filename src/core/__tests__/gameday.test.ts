@@ -247,6 +247,8 @@ describe('storylines', () => {
     const text = stories.map((s) => s.text);
     expect(text).toContain(`${traded.lastName} faces the ${l.teams[opp].name} for the first time since he left (his team until ${seasonLabel(l.season - 1)}).`);
     expect(text).toContain(`${kid.lastName} needs 6 points for 1,000 in his career (he averages 15.1).`);
+    // (a postseason night doesn't count toward a career's regular-season totals)
+    expect(storylines(l, { ...g, type: 'playoffs' }).some((s) => s.kind === 'milestone')).toBe(false);
     expect(text).toContain(`The ${l.teams[opp].name} have won 5 straight.`);
     // (the best No. 1 pick on each side: there may be real ones)
     const picks = stories.find((s) => s.kind === 'picks')!;

@@ -255,7 +255,8 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
   // what their defense does to teams, to beat or go after
   add('ball', 'Take care of the ball', 'us', 'tov', 'max', 'against', (v, r) => `Their defense forces ${v} turnovers a game, ${r}.`);
   add('crash', 'Crash the offensive glass', 'us', 'orb', 'min', 'against', (v, r) => `Teams rebound ${v}% of their misses against them, ${r}.`);
-  add('attack', 'Get to the line', 'us', 'fta', 'min', 'against', (v, r) => `They put teams on the line ${v} times a game, ${r}.`);
+  // (attempts, not trips to the line)
+  add('attack', 'Get to the line', 'us', 'fta', 'min', 'against', (v, r) => `They give up ${v} free throws a game, ${r}.`);
   add('fly', 'Let it fly', 'us', 'tpm', 'min', 'against', (v, r) => `They give up ${v} threes a game, ${r}.`);
   // their own loose handling
   {
@@ -277,20 +278,21 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
     }
   }
   // the player they run it through
-  const star = [...agg.scorers.entries()]
-    .filter(([pid, s]) => s.gp >= MIN_GAMES && league.players[pid]?.tid === them && !(league.players[pid]?.injury?.gamesRemaining ?? 0))
-    .sort((a, b) => b[1].pts / b[1].gp - a[1].pts / a[1].gp)[0];
+  const scorers = [...agg.scorers.entries()].filter(([pid, s]) => s.gp >= MIN_GAMES && league.players[pid]?.tid === them).sort((a, b) => b[1].pts / b[1].gp - a[1].pts / a[1].gp);
+  const star = scorers.find(([pid]) => !(league.players[pid].injury?.gamesRemaining ?? 0));
   if (star) {
     const ppg = star[1].pts / star[1].gp;
     if (ppg >= 20) {
       const p = league.players[star[0]];
       // a scorer's nights spread out above his average more than below it: a point and a half under it is about even money
       const target = Math.round(ppg - 1.5);
+      // (with their leading scorer out, the most of those who play)
+      const most = star === scorers[0] ? 'the most on his team' : 'the most of their healthy players';
       out.push({
         id: 'star',
         title: `Make ${p.lastName} work`,
         goal: `Hold ${playerName(p)} to ${plural(target, 'pts')} or fewer`,
-        why: label ? `He scored ${ppg.toFixed(1)} a game${label}, the most on his team.` : `He scores ${ppg.toFixed(1)} a game, the most on his team.`,
+        why: label ? `He scored ${ppg.toFixed(1)} a game${label}, ${most}.` : `He scores ${ppg.toFixed(1)} a game, ${most}.`,
         side: 'them',
         stat: 'pts',
         pid: p.pid,

@@ -56,7 +56,7 @@ export interface TeamOdds {
 export interface Forecast {
   season: number;
   day: number;
-  /** Simulated seasons it's read from (0: nothing left to forecast). */
+  /** Simulated seasons it's read from. */
   sims: number;
   /** Before the season's first game: strength is the rosters' talent alone. */
   preseason: boolean;
@@ -202,7 +202,7 @@ function homeChance(netH: number, netA: number, paceH: number, paceA: number, ne
   return phi((((netH - netA) * (paceH + paceA)) / 200 + (neutral ? 0 : HOME_EDGE)) / MARGIN_SD);
 }
 
-/** phi by table, for the regular season's hundreds of thousands of simulated games: margins within ±5 SD, to within 0.0003. */
+/** phi by table, for the regular season's hundreds of thousands of simulated games: margins within ±5 SD, to within 0.0005. */
 const PHI_STEPS = 4096;
 const PHI_RANGE = 5;
 const PHI_TABLE = Float64Array.from({ length: PHI_STEPS + 1 }, (_, i) => phi(-PHI_RANGE + (2 * PHI_RANGE * i) / PHI_STEPS));

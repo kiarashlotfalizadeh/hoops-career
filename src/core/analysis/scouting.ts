@@ -364,7 +364,7 @@ const ppp = (v: number) => v.toFixed(2);
 /** Play types as a sentence names them. */
 const PT_NOUN: Record<FinishType, string> = {
   pnrBH: 'pick-and-roll ball-handler plays',
-  pnrRoll: 'pick-and-roll roll and pop plays',
+  pnrRoll: 'rolls and pops off the pick-and-roll',
   iso: 'isolations',
   post: 'post-ups',
   spotup: 'spot-up shots',
@@ -552,10 +552,10 @@ function read(league: League, d: ScoutData) {
     tendencies.push({ text: `Get to the line: ${d.off.ftr.v.toFixed(2)} free throws per shot, ${most(d.off.ftr.rank)} in the league.`, weight: 4 - d.off.ftr.rank });
   if (d.def.tov.rank <= 3)
     tendencies.push({ text: `Force turnovers on ${pct1(d.def.tov.v)} of opponents' possessions, ${most(d.def.tov.rank)} in the league.`, weight: 4 - d.def.tov.rank });
-  if (d.ortg.rank <= 3)
-    tendencies.push({ text: `Score ${d.ortg.v.toFixed(1)} points per 100 possessions, the league's ${nth(d.ortg.rank)}-best offense.`, weight: 3.5 - d.ortg.rank });
-  if (d.drtg.rank <= 3)
-    tendencies.push({ text: `Allow ${d.drtg.v.toFixed(1)} points per 100 possessions, the league's ${nth(d.drtg.rank)}-best defense.`, weight: 3.5 - d.drtg.rank });
+  // "the league's best offense", "the league's 2nd-best"
+  const best = (k: number) => (k === 1 ? 'best' : `${nth(k)}-best`);
+  if (d.ortg.rank <= 3) tendencies.push({ text: `Score ${d.ortg.v.toFixed(1)} points per 100 possessions, the league's ${best(d.ortg.rank)} offense.`, weight: 3.5 - d.ortg.rank });
+  if (d.drtg.rank <= 3) tendencies.push({ text: `Allow ${d.drtg.v.toFixed(1)} points per 100 possessions, the league's ${best(d.drtg.rank)} defense.`, weight: 3.5 - d.drtg.rank });
   // the player who swings them most (enough minutes on and off to mean something)
   const swing = d.players
     .filter((p) => p.on !== undefined && p.off !== undefined && p.onPoss >= 300 && p.offPoss >= 200)

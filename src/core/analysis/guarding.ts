@@ -72,11 +72,13 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
   // his threes as his games show them: a percentage only on enough of them to mean something, else how many he took
   const few = games && line.tpa < FEW_THREES;
   const taken = Math.round(line.tpa * line.gp);
+  // (last season's numbers say so, as the guard planner's line does)
+  const when = line.source === 'last' ? ' last season' : '';
   const shoots = !games
     ? `three-point shooting ${attrDisplay(c.c3)}`
     : !few
-      ? `${pct1(line.tpPct)} from three on ${per(line.tpa)} a game`
-      : `${taken ? `${taken} three${taken === 1 ? '' : 's'}` : 'no threes'} in his ${line.gp} games`;
+      ? `${pct1(line.tpPct)} from three on ${per(line.tpa)} a game${when}`
+      : `${taken ? `${taken} three${taken === 1 ? '' : 's'}` : 'no threes'} in his ${line.gp} games${when}`;
   // a ball handler who runs their screens and is no threat to pull up (about the bottom third of
   // pull-up shooters on the ratings' 40-99 scale)
   if (c.pnrHandle >= 60 && c.pu3 < 45 && (!games || line.tpa < 3 || line.tpPct < 0.33))
@@ -91,7 +93,7 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     return { pid: p.pid, suggest: 'tight', why: `A shooter (${shoots}) who rarely beats his man off the dribble (creation ${attrDisplay(c.create)}).`, line };
   // a post scorer or driver who misses free throws (before sagging off him: his scoring is the threat)
   const ftShown =
-    games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? `${pct1(line.ftPct)} from the line on ${per(line.fta)} a game` : `free throws ${attrDisplay(p.ratings.ft)}`;
+    games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? `${pct1(line.ftPct)} from the line on ${per(line.fta)} a game${when}` : `free throws ${attrDisplay(p.ratings.ft)}`;
   const ftPoor = games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? line.ftPct < 0.68 : p.ratings.ft < 55;
   if ((c.postScore >= 62 || c.rim >= 66) && ftPoor)
     return {
