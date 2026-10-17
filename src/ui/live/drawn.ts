@@ -15,12 +15,8 @@ export interface DrawnPlayer {
   fga: number;
   ftm: number;
   fta: number;
-  /** 0 ok, 1 fouled out, 2 injured or held out, 3 ejected. */
-  out: 0 | 1 | 2 | 3;
-  /** Technical fouls tonight. */
-  tf: number;
-  /** Ejected: for two technicals or a Flagrant 2. */
-  ej?: 'tech' | 'flagrant';
+  /** 0 ok, 1 fouled out, 2 injured or held out. */
+  out: 0 | 1 | 2;
   on: boolean;
   /** Field goals in a row: made (positive) or missed (negative), the latest shots first. */
   streak: number;
@@ -119,8 +115,6 @@ export function snapshot(sim: GameSim): Drawn {
         ftm: p.b.ftm,
         fta: p.b.fta,
         out: p.out,
-        tf: p.b.tf,
-        ...(p.ej ? { ej: p.ej } : {}),
         on: p.on,
         streak: streak.get(p.pid) ?? 0,
         ftPct: p.ftPct,
@@ -159,18 +153,17 @@ export interface SubsSource {
   pid: number;
   energy: number;
   fouls: number;
-  out: 0 | 1 | 2 | 3;
-  b: { pts: number; sec: number; tf: number };
+  out: 0 | 1 | 2;
+  b: { pts: number; sec: number };
 }
 
 /**
  * One of a side's players as the Subs sheet lists him, as the court has drawn the game: his energy,
- * fouls, points and minutes, his technicals (only when he has one), and whether he can't play (1 fouled out,
- * 2 hurt or resting, 3 ejected). The sim
+ * fouls, points and minutes, and whether he can't play (1 fouled out, 2 hurt or resting). The sim
  * runs a possession ahead, so read from it a foul-out or an injury in the play still being drawn
  * would show before it happens. The sim's own numbers only stand in for a player the drawing lacks.
  */
-export function subsLine(d: Drawn, side: 0 | 1, sp: SubsSource): { energy: number; fouls: number; pts: number; min: number; out: 0 | 1 | 2 | 3; tf?: number } {
+export function subsLine(d: Drawn, side: 0 | 1, sp: SubsSource): { energy: number; fouls: number; pts: number; min: number; out: 0 | 1 | 2 } {
   const p = d.sides[side].players.find((x) => x.pid === sp.pid);
   const box = (side === 0 ? d.box.home : d.box.away).players.find((x) => x.pid === sp.pid);
   return {
@@ -179,6 +172,5 @@ export function subsLine(d: Drawn, side: 0 | 1, sp: SubsSource): { energy: numbe
     pts: p?.pts ?? sp.b.pts,
     min: Math.round(box?.min ?? sp.b.sec / 60),
     out: p?.out ?? sp.out,
-    ...((p?.tf ?? sp.b.tf) ? { tf: p?.tf ?? sp.b.tf } : {}),
   };
 }

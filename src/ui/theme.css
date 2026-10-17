@@ -1018,16 +1018,6 @@ table.stats th.sticky {
   background: var(--surface-2);
   z-index: 2;
 }
-/* a box-score line's technicals, flagrants and ejection ("2 T · Ejected"), under the name */
-table.stats .box-marks {
-  display: block;
-  margin-top: 1px;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 0.02em;
-  color: var(--bad);
-}
 table.stats tr.me td {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }

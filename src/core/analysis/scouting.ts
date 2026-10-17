@@ -8,7 +8,6 @@ import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { DEFAULT_PPP, zScore } from './playTypes';
 import { IMPACT_TEXT, impactSentence, teamRef } from './gameReport';
 import { playerName, seasonTotals, teamPlayers } from '../league/helpers';
-import { isOut } from '../availability';
 
 /** Games a team needs this season before its own numbers are read instead of last season's. */
 export const SCOUT_MIN_GAMES = 5;
@@ -300,7 +299,7 @@ export function projectedRotation(league: League, tid: number, n: number, out?: 
   const team = league.teams[tid];
   const order = new Map(team.rotation.order.map((pid, i) => [pid, i]));
   return teamPlayers(league, tid)
-    .filter((p) => !isOut(p) && !out?.has(p.pid))
+    .filter((p) => !p.injury && !out?.has(p.pid))
     .sort((a, b) => (team.rotation.minutes[b.pid] ?? 0) - (team.rotation.minutes[a.pid] ?? 0) || (order.get(a.pid) ?? 99) - (order.get(b.pid) ?? 99) || b.ovr - a.ovr)
     .slice(0, n);
 }

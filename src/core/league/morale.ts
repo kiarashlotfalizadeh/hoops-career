@@ -11,7 +11,6 @@ import { addInbox, addNews, contractSeason, curTeamSeason, fmtDate, playerName, 
 import { marketSalary } from './contracts';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import { sustainableMinutes } from '../ai/coachAI';
-import { isOut } from '../availability';
 
 export function moodLevel(score: number): MoodLevel {
   if (score >= 5) return 'ecstatic';
@@ -53,8 +52,7 @@ export function updateMorale(league: League, tid: number, notify = false) {
     const exp = expectedMinutes(rank, p.ovr, sustainableMinutes(p));
     const st = seasonTotals(p, league.season);
     const mpg = st && st.gp ? st.min / st.gp : 0;
-    // (one who's out, hurt or suspended, isn't judged on the minutes he isn't getting)
-    const healthy = !isOut(p);
+    const healthy = !p.injury;
     const assigned = league.teams[tid].rotation.minutes[p.pid] ?? 0;
     const actual = games >= 5 && st && st.gp >= 3 ? mpg : assigned;
     let pt = healthy || games < 5 ? clamp((actual - exp) / 3.5, -4, 2.5) : 0;

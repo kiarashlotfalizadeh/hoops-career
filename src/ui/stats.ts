@@ -1,9 +1,8 @@
 // Derived stat helpers shared by screens.
-import type { BoxLine, League, Player, PlayerStats, TeamSeason } from '../core/types';
+import type { League, Player, PlayerStats, TeamSeason } from '../core/types';
 import { seasonTotals } from '../core/league/helpers';
 import { gameScore } from '../core/league/awards';
 import { seasonAdvanced } from '../core/analysis/advanced';
-import { isOut } from '../core/availability';
 
 export interface PerGame {
   gp: number;
@@ -209,30 +208,16 @@ export const pbpOpacity = (kind?: string) => (kind === 'sub' ? 0.7 : 1);
 export { wholeMinutes } from '../core/league/helpers';
 
 /**
- * Who starts the next game, from players in depth-chart order: the first five available ones, as the
- * engine starts them (an injured or suspended starter's spot goes to the next man up), as the Rotation
- * screen shows.
+ * Who starts the next game, from players in depth-chart order: the first five healthy ones, as the
+ * engine starts them (an injured starter's spot goes to the next man up), as the Rotation screen shows.
  */
-export function startingFive(players: { pid: number; injury: { gamesRemaining: number } | null; suspension?: { games: number } }[]): Set<number> {
+export function startingFive(players: { pid: number; injury: unknown }[]): Set<number> {
   return new Set(
     players
-      .filter((p) => !isOut(p))
+      .filter((p) => !p.injury)
       .slice(0, 5)
       .map((p) => p.pid),
   );
-}
-
-/** A box-score line's technicals, flagrants and ejection, as the line marks them: "1 T", "F1", "F2", "Ejected". */
-export function disciplineMarks(b: Pick<BoxLine, 'tf' | 'f1' | 'f2' | 'ej'>): string[] {
-  const out: string[] = [];
-  if (b.tf) out.push(`${b.tf} T`);
-  for (const [k, n] of [
-    ['F1', b.f1],
-    ['F2', b.f2],
-  ] as const)
-    if (n) out.push(n > 1 ? `${n} ${k}` : k);
-  if (b.ej) out.push('Ejected');
-  return out;
 }
 
 /** A finished game's scorebug: FINAL, F/OT, F/2OT. */

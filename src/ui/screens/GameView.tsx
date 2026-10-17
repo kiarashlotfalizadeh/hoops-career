@@ -12,7 +12,7 @@ import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { GAME } from '../../core/constants';
 import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
-import { disciplineMarks, finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
+import { finalLabel, fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
 import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 import { GameRecap } from '../components/GameRecap';
@@ -501,8 +501,6 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
                         POG
                       </span>
                     )}
-                    {/* (on a line of their own under the name: tags beside it would widen the pinned column on a phone) */}
-                    {disciplineMarks(p).length > 0 && <span className="box-marks">{disciplineMarks(p).join(' · ')}</span>}
                   </Link>
                 </td>
                 <td>{min(p.pid)}</td>
@@ -554,12 +552,6 @@ function BoxTable({ box, title, pog, league }: { box: TeamBox; title: string; po
           DNP: {dnp.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}
         </div>
       )}
-      {box.coachTf ? (
-        <div className="tiny dim" style={{ padding: '8px 12px' }}>
-          Coach: {box.coachTf} technical{box.coachTf === 1 ? '' : 's'}
-          {box.coachEj ? ', ejected' : ''}
-        </div>
-      ) : null}
     </Card>
   );
 }

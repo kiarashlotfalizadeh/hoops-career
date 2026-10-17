@@ -245,8 +245,7 @@ describe('engine defense', () => {
       let isoAt = [0, 0];
       let screens = [0, 0];
       const tags = [0, 0];
-      // (20 games: twelve left a handful of isolations either way, which a change anywhere in the engine could tip)
-      for (let g = 0; g < 20; g++)
+      for (let g = 0; g < 12; g++)
         for (const i of [0, 1]) {
           const sim = new GameSim(side(5, i ? { offense: { huntTarget: target.pid } } : undefined), side(3), opts(60 + g, true));
           const s = sim as unknown as In;
@@ -331,34 +330,32 @@ describe('engine defense', () => {
 
   it('leaves games that use none of it exactly as they were', () => {
     // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
-    // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
-    // technical fouls came in: their free throws count in a box score's, and shooting fouls became 2.5% rarer to keep
-    // free-throw attempts where they were)
+    // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays)
     const expected: Record<string, number[][]> = {
       default: [
-        [118, 122, 83, 44, 15, 15, 19, 0],
+        [137, 136, 94, 49, 15, 17, 19, 1],
         [111, 97, 97, 19, 14, 32, 10, 0],
-        [117, 106, 101, 32, 13, 17, 7, 0],
+        [116, 106, 101, 32, 13, 16, 7, 0],
       ],
       zone23: [
-        [116, 103, 79, 48, 11, 11, 15, 0],
-        [119, 115, 80, 21, 6, 37, 13, 0],
+        [117, 106, 78, 49, 11, 9, 15, 0],
+        [118, 114, 80, 21, 6, 36, 13, 0],
         [115, 109, 91, 37, 9, 20, 15, 0],
       ],
       zone32: [
         [108, 105, 82, 33, 20, 18, 14, 0],
-        [109, 103, 84, 17, 9, 30, 10, 0],
-        [118, 103, 93, 32, 12, 21, 14, 0],
+        [108, 102, 84, 17, 9, 29, 10, 0],
+        [117, 103, 93, 32, 12, 21, 14, 0],
       ],
       double: [
-        [102, 114, 82, 40, 13, 30, 19, 0],
-        [117, 105, 94, 28, 11, 15, 9, 0],
-        [116, 98, 96, 26, 16, 13, 13, 0],
+        [101, 114, 83, 40, 13, 30, 19, 0],
+        [118, 104, 92, 24, 9, 16, 10, 0],
+        [126, 111, 96, 28, 15, 19, 12, 0],
       ],
       hunt: [
-        [129, 124, 86, 48, 16, 10, 14, 0],
-        [128, 103, 92, 19, 9, 27, 10, 0],
-        [117, 106, 102, 32, 14, 17, 7, 0],
+        [132, 119, 84, 47, 15, 10, 15, 0],
+        [127, 103, 92, 19, 9, 27, 10, 0],
+        [116, 106, 102, 32, 14, 16, 7, 0],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

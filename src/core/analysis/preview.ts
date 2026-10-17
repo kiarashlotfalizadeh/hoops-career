@@ -15,7 +15,6 @@ import { standings } from '../league/standings';
 import { seriesLabel } from '../league/playoffs';
 import { planFor } from '../league/gamePlans';
 import { clearedToPlay, isQuestionable } from '../league/injuries';
-import { suspendedGames } from '../availability';
 import { scoutTeam } from '../ai/advisor';
 import { oppPlanIn, type OppPlanItem } from '../ai/opponentPlan';
 import { COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META } from '../sim/tactics';
@@ -66,11 +65,8 @@ export interface SidePreview {
   threes: Ranked;
   /** Second night of a back-to-back. */
   b2b: boolean;
-  /**
-   * Players out: suspended first (`suspended`, with "Suspended" for the injury and the games he still
-   * sits), then the injured, worst first (the user's questionable ones for his next game are listed apart).
-   */
-  out: (PreviewPlayer & { injury: string; games: number; suspended?: true })[];
+  /** Injured players, worst first (the user's questionable ones for his next game are listed apart). */
+  out: (PreviewPlayer & { injury: string; games: number })[];
   /**
    * The user's team, its next game: players one game from returning from a minor or moderate
    * injury (see isQuestionable), who sit unless he clears them (`cleared`).
@@ -240,9 +236,7 @@ function side(
     const [stood] = missing.splice(i, 1);
     return { ...preview(p), for: preview(stood) };
   });
-  // a suspended player sits whatever his health (and an injured one serving a suspension is listed for it)
-  const suspended = roster.filter((p) => suspendedGames(p) > 0);
-  const injured = roster.filter((p) => p.injury && p.injury.gamesRemaining > 0 && !suspendedGames(p));
+  const injured = roster.filter((p) => p.injury && p.injury.gamesRemaining > 0);
   // game-time decisions are the user's, for his next game
   const decides = tid === league.userTid && nextUserGame(league)?.gid === g.gid;
   const questionable = decides ? injured.filter(isQuestionable) : [];
@@ -287,17 +281,14 @@ function side(
     pace: ratings.rank(tid, 'pace'),
     threes: ratings.rank(tid, 'threes'),
     b2b: playedOn(league, tid, g.day - 1),
-    out: [
-      ...suspended.sort((a, b) => b.ovr - a.ovr).map((p) => ({ ...preview(p), injury: 'Suspended', games: suspendedGames(p), suspended: true as const })),
-      ...injured
-        .filter((p) => !questionable.includes(p))
-        .sort((a, b) => b.ovr - a.ovr)
-        .map((p) => ({ ...preview(p), injury: p.injury!.type, games: p.injury!.gamesRemaining })),
-    ],
+    out: injured
+      .filter((p) => !questionable.includes(p))
+      .sort((a, b) => b.ovr - a.ovr)
+      .map((p) => ({ ...preview(p), injury: p.injury!.type, games: p.injury!.gamesRemaining })),
     questionable: questionable.sort((a, b) => b.ovr - a.ovr).map((p) => ({ ...preview(p), injury: p.injury!.type, cleared: cleared.has(p.pid) })),
-    resting: roster.filter((p) => restSet.has(p.pid) && !injured.includes(p) && !suspended.includes(p)).map(preview),
+    resting: roster.filter((p) => restSet.has(p.pid) && !injured.includes(p)).map(preview),
     worn: roster
-      .filter((p) => p.wear >= 55 && !injured.includes(p) && !suspended.includes(p))
+      .filter((p) => p.wear >= 55 && !injured.includes(p))
       .sort((a, b) => b.wear - a.wear)
       .map((p) => ({ ...preview(p), wear: Math.round(p.wear) })),
     starters,

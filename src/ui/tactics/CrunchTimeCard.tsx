@@ -4,7 +4,6 @@ import { ACTION_META } from '../../core/sim/tactics';
 import { SETS, SET_IDS, isSetId } from '../../core/sim/sets';
 import { Card, Chips, Help, Toggle } from '../components/ui';
 import { rosterNames } from '../stats';
-import { suspendedGames } from '../../core/availability';
 
 /**
  * Expert game management: who takes over in crunch time, the play after your timeouts (an action, or
@@ -52,10 +51,7 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
             label="Go-to player"
             value={goTo}
             onChange={(pid: number) => edit((tt) => void (tt.manage.goTo = pid < 0 ? null : pid))}
-            options={[
-              { id: -1, label: 'None' },
-              ...listed(t.manage.goTo).map((p) => ({ id: p.pid, label: `${names(p.pid)}${p.injury ? ' (inj.)' : suspendedGames(p) ? ' (susp.)' : ''}` })),
-            ]}
+            options={[{ id: -1, label: 'None' }, ...listed(t.manage.goTo).map((p) => ({ id: p.pid, label: `${names(p.pid)}${p.injury ? ' (inj.)' : ''}` }))]}
           />
         </div>
         <div>

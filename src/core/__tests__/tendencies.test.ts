@@ -43,9 +43,7 @@ describe('generated tendencies', () => {
     for (const b of lines) games.set(b.pid, [...(games.get(b.pid) ?? []), b.pts]);
     const best = Math.max(...[...games.values()].filter((g) => g.length >= 5).map((g) => g.reduce((a, x) => a + x, 0) / g.length));
     expect(best).toBeLessThan(42);
-    // (the NBA has about one 50-point game a week, so five in these three weeks can happen: this sample had five once
-    // technical fouls changed its games)
-    expect(lines.filter((b) => b.pts >= 50).length).toBeLessThan(7);
+    expect(lines.filter((b) => b.pts >= 50).length).toBeLessThan(5);
     expect(lines.filter((b) => b.pts >= 60).length).toBeLessThanOrEqual(1);
   });
 

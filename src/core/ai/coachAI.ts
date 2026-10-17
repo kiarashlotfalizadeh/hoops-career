@@ -6,7 +6,6 @@ import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
 import { clamp } from '../random';
-import { gamesOut, isOut } from '../availability';
 
 export interface LineupEval {
   score: number;
@@ -209,8 +208,7 @@ function healthyMinutes(mpg: number): number {
 }
 
 export function autoRotation(players: Player[], prev?: Rotation): Rotation {
-  // (a suspended player is planned around like an injured one)
-  const healthy = players.filter((p) => !isOut(p));
+  const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 0);
   const season = rosterSeason(players);
   const roles = new Map(players.map((p) => [p.pid, roleMemory(p, season)]));
   const starters = sortByPosition(bestLineup(healthy, 9, roles));
@@ -481,9 +479,9 @@ export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; 
   return { roles, freedom };
 }
 
-/** The players a playbook is fitted to: a knock (or a suspension) of five games or fewer doesn't swing the fits, nor do absences that leave fewer than eight. */
+/** The players a playbook is fitted to: a knock of five games or fewer doesn't swing the fits, nor do injuries that leave fewer than eight. */
 export function fitRoster(players: Player[]): Player[] {
-  const healthy = players.filter((p) => gamesOut(p) <= 5);
+  const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
   return healthy.length >= 8 ? healthy : players;
 }
 

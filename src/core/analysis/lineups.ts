@@ -4,7 +4,6 @@
 // starters (by the Rotation screen's own swap of depth-chart spots) or as the closers.
 
 import type { League, LineupStat, Player, Rotation } from '../types';
-import { isOut } from '../availability';
 
 /** Possessions under which a unit's ratings are mostly noise: a net rating over 100 possessions has a standard error of about 16. */
 export const LOW_SAMPLE_POSS = 100;
@@ -167,19 +166,19 @@ export function swapSpots(r: Rotation, order: number[], a: number, b: number) {
   r.minutes[b] = mine;
 }
 
-type RosterPlayer = Pick<Player, 'pid' | 'injury' | 'suspension'>;
+type RosterPlayer = Pick<Player, 'pid' | 'injury'>;
 
 /**
  * Make a five-man unit the starters: each of them not starting trades spots (and minutes) with a
  * starter outside the unit, as a swap on the Rotation screen does, and the rotation becomes the
- * coach's. False (nothing changed) when one of them isn't on the roster or is out (hurt or suspended).
+ * coach's. False (nothing changed) when one of them isn't on the roster or is hurt.
  */
 export function unitToStarters(r: Rotation, roster: RosterPlayer[], unit: number[]): boolean {
   const byId = new Map(roster.map((p) => [p.pid, p]));
-  if (unit.length !== 5 || unit.some((pid) => !byId.get(pid) || isOut(byId.get(pid)!))) return false;
+  if (unit.length !== 5 || unit.some((pid) => !byId.get(pid) || byId.get(pid)!.injury)) return false;
   let order = depthOrder(r, roster);
   // the engine starts the first five healthy players
-  const starters = order.filter((pid) => !isOut(byId.get(pid)!)).slice(0, 5);
+  const starters = order.filter((pid) => !byId.get(pid)!.injury).slice(0, 5);
   const incoming = unit.filter((pid) => !starters.includes(pid)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const outgoing = starters.filter((pid) => !unit.includes(pid));
   incoming.forEach((pid, i) => {

@@ -6,7 +6,7 @@ import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { Card, Chips, Segmented } from '../components/ui';
 import { FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
-import { disciplineMarks, fmtClock, periodLabel, wholeMinutes } from '../stats';
+import { fmtClock, periodLabel, wholeMinutes } from '../stats';
 import type { Drawn } from './drawn';
 
 type Tab = 'box' | 'team' | 'shots' | 'flow';
@@ -100,10 +100,7 @@ export function BoxPanel({
                   .filter((p) => p.min > 0 || onFloor.has(p.pid))
                   .map((p) => (
                     <tr key={p.pid}>
-                      <td className="l sticky">
-                        {nameOf(p.pid)}
-                        {disciplineMarks(p).length > 0 && <span className="box-marks">{disciplineMarks(p).join(' · ')}</span>}
-                      </td>
+                      <td className="l sticky">{nameOf(p.pid)}</td>
                       <td>{min(p.pid)}</td>
                       <td className="bold">{p.pts}</td>
                       <td>{p.orb + p.drb}</td>

@@ -18,11 +18,9 @@ import { App } from './ui/App';
 import { Capacitor } from '@capacitor/core';
 import { initNative } from './native';
 import { useStore } from './state/store';
-import { DISC } from './core/sim/discipline';
 
-// QA scripts drive the store directly in dev builds (save, inspect the league), and can make tempers
-// flare (the technical and flagrant rates) to see an ejection.
-if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __hc: unknown }).__hc = { store: useStore, disc: DISC };
+// QA scripts drive the store directly in dev builds (save, inspect the league).
+if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __hc: unknown }).__hc = { store: useStore };
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

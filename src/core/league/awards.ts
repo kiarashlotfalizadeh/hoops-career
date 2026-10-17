@@ -2,7 +2,6 @@ import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites } from '../ratings';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
-import { gamesOut, suspendedGames } from '../availability';
 
 /** Hollinger's game score, for a box line or a season's totals. */
 export function gameScore(s: Pick<PlayerStats, 'pts' | 'fgm' | 'fga' | 'ftm' | 'fta' | 'orb' | 'drb' | 'ast' | 'stl' | 'blk' | 'tov' | 'pf'>): number {
@@ -211,18 +210,14 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
 /** A knock this short heals over the All-Star break: the player keeps his place and plays. */
 const ALL_STAR_KNOCK_GAMES = 2;
 
-/** Out longer than a knock the break heals (hurt, or serving a long suspension): an All-Star who sits the game out and is replaced. */
-export const missesAllStarGame = (p: Player) => gamesOut(p) > ALL_STAR_KNOCK_GAMES;
-
-/** An injury short enough to heal over the break (whatever suspension he's serving besides). */
-export const healsOverBreak = (p: Player) => !!p.injury && p.injury.gamesRemaining <= ALL_STAR_KNOCK_GAMES;
+/** Hurt worse than a knock the break heals: an All-Star who sits the game out and is replaced. */
+export const missesAllStarGame = (p: Player) => (p.injury?.gamesRemaining ?? 0) > ALL_STAR_KNOCK_GAMES;
 
 /** The reserves are named about two and a half weeks before the game: some seven games. */
 const ALL_STAR_VOTE_GAMES = 7;
 
 /** Already out when the coaches voted and not back for the game: they pass him over (one hurt since is picked, then replaced). */
-const outAtTheVote = (p: Player) =>
-  missesAllStarGame(p) && (suspendedGames(p) > ALL_STAR_KNOCK_GAMES || (!!p.injury && p.injury.gamesTotal - p.injury.gamesRemaining >= ALL_STAR_VOTE_GAMES));
+const outAtTheVote = (p: Player) => missesAllStarGame(p) && p.injury!.gamesTotal - p.injury!.gamesRemaining >= ALL_STAR_VOTE_GAMES;
 
 export function selectAllStars(league: League): SeasonAwards['allStars'] {
   const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0 && !outAtTheVote(c.p));

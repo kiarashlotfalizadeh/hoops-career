@@ -51,7 +51,7 @@ const isBig = (p: Player) => planRoles(p.ratings, p.pos).big;
  */
 function projected(input: SimTeamInput, n: number, type: ScheduledGame['type']): { opening: Player[]; all: Player[] } {
   const rot = input.team.rotation;
-  const rest = new Set([...(input.rest ?? []), ...(input.suspended ?? [])]);
+  const rest = new Set(input.rest ?? []);
   const order = new Map(rot.order.map((pid, i) => [pid, i]));
   const roster = [...input.players].sort((a, b) => (order.get(a.pid) ?? 99 + (100 - a.ovr)) - (order.get(b.pid) ?? 99 + (100 - b.ovr)));
   const available = (p: Player) => !(p.injury && p.injury.gamesRemaining > 0) && !rest.has(p.pid);

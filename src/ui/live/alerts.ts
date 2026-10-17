@@ -29,7 +29,7 @@ export interface LiveAlert {
 /** Something that happened in the game, shown once the court has drawn the possession it happened in. */
 export interface LiveEvent {
   id: string;
-  kind: 'injury' | 'foulout' | 'eject' | 'adjust';
+  kind: 'injury' | 'foulout' | 'adjust';
   /** The team it happened to (0 home, 1 away). */
   side: 0 | 1;
   pid?: number;
@@ -117,10 +117,6 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
   for (const p of onFloor) {
     if (view.q >= 4 && p.fouls === 5) out.push({ id: `fouls-${p.pid}-5`, tone: 'warn', text: `${names(p.pid)} has 5 fouls: one more and he's out.`, action: sit(p, 'Sit him') });
   }
-  // a technical already in the fourth quarter, when tempers run hottest: one more and he's ejected
-  for (const p of onFloor) {
-    if (view.q >= 4 && p.tf === 1) out.push({ id: `tech-${p.pid}`, tone: 'warn', text: `${names(p.pid)} has a technical: one more and he's ejected.`, action: sit(p, 'Sit him') });
-  }
 
   // a run the staff won't stop for you (it calls its own timeouts unless you handle subs)
   if (them.run >= 8 && me.timeouts > 0 && !a.atBreak && !a.timeoutPending && !staffCallsTimeout(view, side, tactics.manage, a.manualSubs))
@@ -201,8 +197,8 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
 }
 
 /**
- * What happened in the possessions between two snapshots: injuries, foul-outs and ejections on either
- * side, and the coaches' adjustments (the engine's lists, read up to `next`'s counts).
+ * What happened in the possessions between two snapshots: injuries and foul-outs on either side,
+ * and the coaches' adjustments (the engine's lists, read up to `next`'s counts).
  */
 export function newEvents(
   prev: Drawn | null,
@@ -218,19 +214,10 @@ export function newEvents(
     out.push({ id: `inj-${inj.pid}`, kind: 'injury', side: sideOf(inj.tid), pid: inj.pid, text: `${names(inj.pid)} is hurt and out for the game.`, at: next.elapsed });
   next.sides.forEach((s, i) => {
     for (const p of s.players) {
-      if (p.out !== 1 && p.out !== 3) continue;
+      if (p.out !== 1) continue;
       const before = prev?.sides[i].players.find((x) => x.pid === p.pid);
-      if (prev && before?.out === p.out) continue;
-      if (p.out === 3)
-        out.push({
-          id: `ej-${p.pid}`,
-          kind: 'eject',
-          side: i as 0 | 1,
-          pid: p.pid,
-          text: `${names(p.pid)} has been ejected (${p.ej === 'flagrant' ? 'Flagrant 2' : '2 technicals'}).`,
-          at: next.elapsed,
-        });
-      else out.push({ id: `fo-${p.pid}`, kind: 'foulout', side: i as 0 | 1, pid: p.pid, text: `${names(p.pid)} has fouled out.`, at: next.elapsed });
+      if (prev && before?.out === 1) continue;
+      out.push({ id: `fo-${p.pid}`, kind: 'foulout', side: i as 0 | 1, pid: p.pid, text: `${names(p.pid)} has fouled out.`, at: next.elapsed });
     }
   });
   adjustments

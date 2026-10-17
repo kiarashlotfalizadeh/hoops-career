@@ -31,7 +31,7 @@ import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { aiTicketPrice, assessLuxuryTax, shareRevenue, taxRepeater } from './finances';
 import { resolvePromises, settleExpiringPromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
-import { computeRegularSeasonAwards, finalsMvp, gameScore, healsOverBreak, missesAllStarGame, selectAllStars } from './awards';
+import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { allStarSaturday } from './allStarSaturday';
 import { risingStars } from './risingStars';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
@@ -243,7 +243,7 @@ export function advanceDay(league: League) {
       if (league.day === league.allStarDay) {
         selectAllStars(league);
         // a knock short enough to keep an All-Star his place heals over the break, for everyone
-        for (const p of Object.values(league.players)) if (p.tid >= 0 && healsOverBreak(p)) while (p.injury) healOneGame(league, p, rng);
+        for (const p of Object.values(league.players)) if (p.tid >= 0 && p.injury && !missesAllStarGame(p)) while (p.injury) healOneGame(league, p, rng);
         // the Rising Stars game, then the Three-Point and Slam Dunk Contests, each on a random stream of its own
         risingStars(league);
         allStarSaturday(league);
@@ -754,7 +754,6 @@ function compactRetired(league: League) {
     delete p.prospect;
     delete p.asking;
     delete p.faDays;
-    delete p.suspension;
     p.injury = null;
     p.mood = blankMood();
   }

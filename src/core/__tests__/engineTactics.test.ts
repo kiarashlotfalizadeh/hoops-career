@@ -454,8 +454,7 @@ describe('engine tactics', () => {
         glassTag: 0.12,
       });
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
-      // side-out fouls started restarting the shot clock at 14, and when technical fouls came in with shooting fouls
-      // 2.5% rarer)
+      // side-out fouls started restarting the shot clock at 14)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -463,10 +462,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [127, 120, 99, 95, 45, 30, 12, 11],
+        [127, 115, 96, 93, 44, 29, 11, 11],
         [119, 133, 91, 90, 43, 27, 11, 11],
-        [102, 123, 90, 91, 43, 39, 11, 7],
-        [111, 121, 86, 81, 32, 22, 13, 12],
+        [102, 120, 90, 91, 43, 38, 11, 8],
+        [112, 123, 86, 80, 32, 22, 13, 11],
       ]);
     });
 
