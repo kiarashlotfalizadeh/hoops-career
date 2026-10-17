@@ -203,6 +203,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.tx-preset-t.accent-text {
+  color: var(--accent-text);
+}
 .tx-fit {
   flex: none;
   display: grid;
