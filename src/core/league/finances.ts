@@ -13,8 +13,8 @@ export const NATIONAL_REVENUE = 140_000;
 /** Arena, travel, front office and other fixed operating costs per season. */
 export const OPERATIONS_PER_SEASON = 62_000;
 /** Merchandise and local TV per home game for an average market at average hype. */
-const MERCH_PER_GAME = 1_150;
-const LOCAL_TV_PER_GAME = 600;
+export const MERCH_PER_GAME = 1_150;
+export const LOCAL_TV_PER_GAME = 600;
 /** Playoff tickets sell at this multiple of the regular-season price. */
 export const PLAYOFF_PRICE_MULT = 1.6;
 

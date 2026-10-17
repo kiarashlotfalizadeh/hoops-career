@@ -2,6 +2,7 @@
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
 import type { CoachRecord } from './league/coaches';
+import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PlayCall, PossLog } from './sim/log';
 
@@ -1244,8 +1245,16 @@ export interface League {
   regularSeasonDays: number;
   tradeDeadlineDay: number;
   allStarDay: number;
-  /** Owner standing 0..100 for job security. */
-  ownerMood: { wins: number; playoffs: number; money: number; total: number };
+  /**
+   * The owner's standing for job security (−1..1, shown ×100): `total` is the running average of the
+   * seasons' grades (see ownerEvaluation), the others the running averages of the goals behind it (wins,
+   * the postseason, money, and `youth`, the development goals, since a season had one).
+   */
+  ownerMood: { wins: number; playoffs: number; money: number; total: number; youth?: number };
+  /** The owner's goals for the user's season, set on opening night (or from the day he took over mid-season): see ownerGoals.ts. */
+  ownerGoals?: OwnerGoals;
+  /** The owner's reviews of the user's last seasons, oldest first (at most REVIEWS_KEPT). */
+  ownerReviews?: OwnerReview[];
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;

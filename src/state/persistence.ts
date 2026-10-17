@@ -10,6 +10,7 @@ import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
 import { registryProblems, seedCoaches } from '../core/league/coaches';
+import { REVIEWS_KEPT, type OwnerGoalKind } from '../core/league/ownerGoals';
 import { MAX_STEPS } from './live';
 
 export interface LeagueMeta {
@@ -465,6 +466,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   migrateCoaches(x);
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
+  migrateOwner(x);
   x.version = SAVE_VERSION;
   return x;
 }
@@ -480,6 +482,56 @@ function trailIntact(x: League, t: unknown): boolean {
     Array.isArray(t.pts) &&
     t.pts.length <= 60 &&
     t.pts.every((p) => Array.isArray(p) && p.length === 3 && int(p[0]) && permille(p[1]) && permille(p[2]))
+  );
+}
+
+/**
+ * The owner's goals and reviews (both optional): damaged goals go (the owner sets new ones on the next
+ * opening night, or from the next day of a season under way: see ownerCheckIn), as does each damaged
+ * review, and a development part of the standing that isn't a number.
+ */
+function migrateOwner(x: League) {
+  if (x.ownerGoals !== undefined && !ownerGoalsIntact(x, x.ownerGoals)) delete x.ownerGoals;
+  if (x.ownerReviews !== undefined) x.ownerReviews = Array.isArray(x.ownerReviews) ? x.ownerReviews.filter((r) => ownerReviewIntact(x, r)).slice(-REVIEWS_KEPT) : [];
+  if (obj(x.ownerMood) && x.ownerMood.youth !== undefined && !num(x.ownerMood.youth)) delete x.ownerMood.youth;
+}
+
+const GOAL_KINDS: ReadonlySet<unknown> = new Set<OwnerGoalKind>(['wins', 'postseason', 'profit', 'payroll', 'youth']);
+
+/** A goal as the Owner tab and the review read it: a kind, a title, a target and a weight (and the plan's numbers, when it has them). */
+const goalIntact = (g: unknown): g is Record<string, unknown> =>
+  obj(g) &&
+  GOAL_KINDS.has(g.kind) &&
+  str(g.title) &&
+  (g.title as string).length <= 120 &&
+  num(g.target) &&
+  num(g.weight) &&
+  (g.weight as number) >= 0 &&
+  (g.weight as number) <= 1 &&
+  (g.perGame === undefined || num(g.perGame)) &&
+  (g.end === undefined || num(g.end)) &&
+  (g.rank === undefined || int(g.rank));
+
+function ownerGoalsIntact(x: League, og: unknown): boolean {
+  if (!obj(og) || !int(og.season) || !int(og.tid) || !x.teams[og.tid] || !int(og.games) || og.games < 0 || og.games > 82) return false;
+  if (!Array.isArray(og.goals) || !og.goals.length || og.goals.length > 5 || !og.goals.every(goalIntact)) return false;
+  const f = og.from;
+  if (f !== undefined && !(obj(f) && int(f.day) && int(f.won) && int(f.lost) && num(f.profit) && num(f.youth))) return false;
+  return og.sent === undefined || (Array.isArray(og.sent) && og.sent.every((s) => s === 'allStar' || s === 'pace'));
+}
+
+function ownerReviewIntact(x: League, r: unknown): boolean {
+  return (
+    obj(r) &&
+    int(r.season) &&
+    int(r.tid) &&
+    !!x.teams[r.tid] &&
+    num(r.grade) &&
+    num(r.total) &&
+    (r.fired === undefined || r.fired === true) &&
+    Array.isArray(r.goals) &&
+    r.goals.length <= 5 &&
+    r.goals.every((g) => goalIntact(g) && num(g.result) && num(g.grade))
   );
 }
 

@@ -57,6 +57,7 @@ import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openi
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
 import { ownerEvaluation } from './owner';
+import { ownerCheckIn, setOwnerGoals } from './ownerGoals';
 import { coachingCarousel } from './coaches';
 import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
@@ -102,6 +103,8 @@ export function startRegularSeason(league: League): string[] {
     tone: 'neutral',
     link: '/',
   });
+  // the owner sets the season's goals from the roster the team opens with (frozen for the season)
+  setOwnerGoals(league);
   cleanProposals(league);
   openingProposal(league);
   return [];
@@ -150,6 +153,8 @@ function periodic(league: League, rng: Rng) {
   aiProposals(league);
   // the user's playoff and title odds, once a week (the forecast draws on a stream of its own)
   if (d % 7 === 6) recordTrail(league);
+  // the owner's word when the team falls off pace, and his check-in at the All-Star break
+  ownerCheckIn(league);
 }
 
 function playAllStarGame(league: League, rng: Rng) {

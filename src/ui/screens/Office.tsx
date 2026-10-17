@@ -333,6 +333,8 @@ export default function Office() {
                 ['Wins', om.wins],
                 ['Playoffs', om.playoffs],
                 ['Finances', om.money],
+                // the development goals' part, once a season had one
+                ...(om.youth !== undefined ? [['Youth', om.youth] as const] : []),
               ] as const
             ).map(([k, val]) => (
               <div key={k} className="row" style={{ gap: 8 }}>
