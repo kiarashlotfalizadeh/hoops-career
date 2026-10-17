@@ -1,40 +1,89 @@
-/* Hoops Career — dark broadcast design system */
+/* Hoops Career — "Courtside": a dark, game-first broadcast design system.
+   One brand orange runs the controls; team colours live on identity surfaces only (slabs, jerseys,
+   floors, your own rows). Surfaces are flat and separated by hairlines and space, not boxes. */
+
+/* Archivo, one variable font for everything: condensed (wdth 62-70%) for headlines and scoreboard
+   figures, semi-condensed (90%) for text, so long names keep their room on a phone. Latin + Latin
+   Extended cover every player name (Dončić, Şengün, Valančiūnas). */
+@font-face {
+  font-family: 'Archivo Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('../../node_modules/@fontsource-variable/archivo/files/archivo-latin-ext-wdth-normal.woff2') format('woff2-variations');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Archivo Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('../../node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
-  --bg: #06080c;
-  --bg-2: #0b0f15;
-  --surface: #10151d;
-  --surface-2: #161d28;
-  --surface-3: #1e2734;
+  /* grounds, darkest to lightest */
+  --bg: #07090c;
+  --bg-2: #0b0e13;
+  --raised: #0e1218;
+  --surface: #131921;
+  --surface-2: #1a212b;
+  --surface-3: #232c38;
   --line: rgba(255, 255, 255, 0.07);
-  --line-2: rgba(255, 255, 255, 0.13);
-  --text: #eef2f7;
-  --text-2: #bcc5d2;
-  --text-dim: #8590a1;
-  --accent: #3b82f6;
-  --accent-2: #f59e0b;
+  --line-2: rgba(255, 255, 255, 0.12);
+  --line-3: rgba(255, 255, 255, 0.2);
+  /* ink: every one keeps 4.5:1 on every ground above */
+  --text: #f2f5f9;
+  --text-2: #b8c1ce;
+  --text-dim: #8a94a4;
+  /* the brand: controls, the active tab, focus, links */
+  --accent: #ff7a1a;
+  --accent-2: #ffc83d;
   --accent-ink: #0b0f15;
-  --good: #2fd27a;
-  --bad: #ff5468;
-  --warn: #ffb547;
+  --accent-text: #ff8a33;
+  /* signals */
+  --good: #34d27b;
+  --bad: #ff5466;
+  --warn: #ffc83d;
   --info: #5aa9ff;
+  /* rating tiers (OVR badges) */
   --tier-elite: #ffd166;
   --tier-star: #c39bff;
   --tier-good: #4cc3ff;
   --tier-avg: #4ade80;
   --tier-low: #c4cfdc;
   --tier-bad: #8a94a6;
-  --radius: 14px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --display: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
-  --nav-h: 64px;
-  --top-h: 56px;
+  /* your team: set by applyAccent from its colours (identity surfaces only) */
+  --team: #1d428a;
+  --team-2: #ffc72c;
+  --team-ink: #ffffff;
+  --team-text: #8fb1ff;
+  --team-slab: #18366f;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --font: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Archivo Variable', system-ui, sans-serif;
+  /* widths of the one family: text, labels, display */
+  --text-w: 90%;
+  --display-w: 68%;
+  --nav-h: 60px;
+  --top-h: 54px;
+  /* the Continue bar over the tab bar: its height and the gap above the nav */
+  --cont-h: 52px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
-  /* accent for text and outlines: the team colour, lightened when needed to stay readable on dark */
-  --accent-text: var(--accent);
+  /* the page's side gutter */
+  --gut-l: max(16px, var(--safe-l));
+  --gut-r: max(16px, var(--safe-r));
   color-scheme: dark;
 }
 
@@ -50,28 +99,27 @@ body,
   min-height: 100%;
   color: var(--text);
   font-family: var(--font);
+  font-stretch: var(--text-w);
   font-size: 15px;
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
 
-/* the page colour lives on html alone: a background on body (index.html gives it one for the first
-   frame) would paint over the glow below */
 html {
   background: var(--bg);
 }
 body {
   background: transparent;
 }
-/* the team-tinted glow stays put while content scrolls (background-attachment: fixed is ignored on iOS) */
+/* a faint floodlight from the top of the screen, neutral whatever the team */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(1200px 600px at 50% -200px, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+  background: radial-gradient(900px 420px at 50% -160px, rgba(255, 255, 255, 0.045), transparent 70%);
 }
 body.sheet-open {
   overflow: hidden;
@@ -81,11 +129,9 @@ body.sheet-open {
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
-/* a slider rings its thumb instead (below) */
 input[type='range']:focus-visible {
   outline: none;
 }
-/* rows fill flush cards edge to edge, where an outside ring would be clipped */
 .card.flush :focus-visible {
   outline-offset: -2px;
 }
@@ -108,6 +154,7 @@ a {
 
 button {
   font: inherit;
+  font-stretch: inherit;
   color: inherit;
   background: none;
   border: none;
@@ -119,16 +166,20 @@ input,
 select,
 textarea {
   font: inherit;
+  font-stretch: inherit;
   color: inherit;
 }
 
+/* ------------------------------------------------------------------ type */
 .num {
   font-variant-numeric: tabular-nums;
 }
 
 .display {
   font-family: var(--display);
-  letter-spacing: 0.02em;
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 h1,
@@ -136,23 +187,39 @@ h2,
 h3,
 h4 {
   font-family: var(--display);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  letter-spacing: 0.01em;
   margin: 0;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 h1 {
-  font-size: 30px;
+  font-size: 32px;
+  text-transform: uppercase;
 }
 h2 {
   font-size: 22px;
   text-transform: uppercase;
 }
 h3 {
-  font-size: 17px;
+  font-size: 18px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
+}
+
+/* the overline: small, wide, spaced capitals that name a section or a figure */
+.over,
+.card-h h3,
+.sec-h h3 {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  line-height: 1.2;
 }
 
 .dim {
@@ -170,11 +237,14 @@ h3 {
 .warn {
   color: var(--warn);
 }
+.accent-text {
+  color: var(--accent-text);
+}
 .small {
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .tiny {
-  font-size: 11px;
+  font-size: 11.5px;
 }
 .upper {
   text-transform: uppercase;
@@ -197,6 +267,13 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* two lines, then an ellipsis */
+.clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* ------------------------------------------------------------------ layout */
 .app {
@@ -210,10 +287,12 @@ h3 {
   width: 100%;
   max-width: 820px;
   margin: 0 auto;
-  padding: 12px max(14px, var(--safe-r)) calc(var(--nav-h) + var(--safe-b) + 24px) max(14px, var(--safe-l));
+  padding: 14px var(--gut-r) calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 36px) var(--gut-l);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+  /* opacity only: a transform would make the page the frame of its fixed docks while it runs */
+  animation: fade 0.2s ease;
 }
 
 .page.full {
@@ -248,7 +327,6 @@ h3 {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
-/* buttons side by side: a label too long for its half takes two lines instead of widening the pair */
 .grid2 > .btn {
   white-space: normal;
   line-height: 1.15;
@@ -272,18 +350,15 @@ h3 {
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
-/* small phones: four tiles abreast can't fit labels like "Playoffs" or "Off Rtg", so two rows of two
-   (the live controls keep their single row) */
 @media (max-width: 359px) {
   .grid4:not(.live-ctl) {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-/* phones: one column with the page's own 14px between cards (not stacked edge to edge) */
 .md-grid2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 @media (min-width: 760px) {
   .md-grid2 {
@@ -292,73 +367,92 @@ h3 {
   }
 }
 
+/* a page's title block: the overline it belongs to, the title, one line under it */
+.ph {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.ph h1 {
+  font-size: 30px;
+  line-height: 1;
+}
+.ph .ph-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.ph .back {
+  margin-left: -10px;
+}
+
+/* a section without a box: an overline heading (with an optional link) and its content */
+.sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sec-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+}
+.sec-h h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ------------------------------------------------------------------ top bar */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 30;
   padding-top: var(--safe-t);
-  /* solid fallback first: iOS before 16.2 has no color-mix and would leave the bar see-through */
-  background: rgba(6, 8, 12, 0.82);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  background: rgba(7, 9, 12, 0.86);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   border-bottom: 1px solid var(--line);
 }
 .topbar-inner {
   height: var(--top-h);
   max-width: 1100px;
   margin: 0 auto;
-  padding: 0 max(12px, var(--safe-r)) 0 max(12px, var(--safe-l));
+  padding: 0 max(10px, var(--safe-r)) 0 max(12px, var(--safe-l));
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+.topbar .tb-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 44px;
+  padding-right: 6px;
 }
 .topbar .title {
   font-family: var(--display);
-  font-weight: 700;
-  font-size: 20px;
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+}
+.topbar .title .num {
+  color: var(--text-2);
+  margin-left: 2px;
 }
 .topbar .sub {
+  margin-top: 3px;
   font-size: 12px;
   color: var(--text-dim);
   font-weight: 600;
-}
-/* a 360px phone: the status line under the team name ("Free Agency · day 30", "Preseason · 2026-27") gets the room it needs */
-@media (max-width: 380px) {
-  .topbar-inner {
-    gap: 4px;
-  }
-  .topbar .iconbtn {
-    width: 38px;
-  }
-}
-/* god mode's wand makes a fourth control: on a phone they close up so the status line keeps its room */
-@media (max-width: 430px) {
-  .topbar-inner:has(.god-wand) {
-    gap: 4px;
-  }
-  .topbar-inner:has(.god-wand) .iconbtn {
-    width: 36px;
-  }
-  .topbar-inner:has(.god-wand) .btn.sm {
-    padding: 0 10px;
-  }
-}
-/* and on a 360px phone the Play button drops its icon and the bar's sides slim a little: the last few
-   pixels "Preseason · 2026-27" or "Free Agency · day 30" needs */
-@media (max-width: 380px) {
-  .topbar-inner:has(.god-wand) {
-    padding: 0 max(10px, var(--safe-r)) 0 max(10px, var(--safe-l));
-  }
-  .topbar-inner:has(.god-wand) .btn.sm {
-    padding: 0 9px;
-  }
-  .topbar-inner:has(.god-wand) .btn.sm > svg {
-    display: none;
-  }
 }
 .iconbtn {
   width: 42px;
@@ -368,6 +462,7 @@ h3 {
   place-items: center;
   color: var(--text-2);
   position: relative;
+  flex: none;
 }
 .iconbtn:active {
   background: var(--surface-2);
@@ -378,21 +473,23 @@ h3 {
 }
 .badge-dot {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  min-width: 16px;
-  height: 16px;
+  top: 5px;
+  right: 4px;
+  min-width: 17px;
+  height: 17px;
   padding: 0 4px;
-  border-radius: 8px;
-  background: var(--bad);
-  color: var(--bg-2);
-  font-size: 10px;
-  font-weight: 700;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 80%;
   display: grid;
   place-items: center;
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
-/* ------------------------------------------------------------------ bottom nav */
+/* ------------------------------------------------------------------ tab bar */
 .bottomnav {
   position: fixed;
   left: 0;
@@ -400,10 +497,10 @@ h3 {
   bottom: 0;
   z-index: 40;
   padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
-  background: rgba(11, 15, 21, 0.9);
-  background: color-mix(in srgb, var(--bg-2) 90%, transparent);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  background: rgba(11, 14, 19, 0.94);
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
   border-top: 1px solid var(--line);
 }
 .bottomnav-inner {
@@ -418,36 +515,218 @@ h3 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   color: var(--text-dim);
   font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   position: relative;
+}
+.navitem svg {
+  transition: transform 0.18s ease;
 }
 .navitem.active {
   color: var(--text);
 }
+.navitem.active svg {
+  color: var(--accent);
+  transform: translateY(-1px);
+}
 .navitem.active::before {
   content: '';
   position: absolute;
-  top: 0;
-  width: 28px;
+  top: -1px;
+  width: 30px;
   height: 3px;
   border-radius: 0 0 3px 3px;
   background: var(--accent);
 }
 
+/* ------------------------------------------------------------------ the Continue bar
+   Football Manager's Continue, in thumb reach over the tab bar: the next step's name runs it, the arrow
+   opens every option, and while a sim runs it becomes the progress bar with Stop */
+.continue {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  z-index: 45;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--gut-r) 0 var(--gut-l);
+  pointer-events: none;
+}
+.continue-inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  height: var(--cont-h);
+  width: min(100%, 420px);
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  overflow: hidden;
+  position: relative;
+  animation: cont-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cont-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.continue-go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px 0 16px;
+  text-align: left;
+}
+.continue-go > svg {
+  flex: none;
+}
+.continue-go .cg-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.continue-go .cg-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 650;
+  opacity: 0.78;
+}
+.continue-more {
+  flex: none;
+  width: 50px;
+  display: grid;
+  place-items: center;
+  border-left: 1px solid rgba(0, 0, 0, 0.18);
+}
+.continue-go:active,
+.continue-more:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+.continue-inner.busy {
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px var(--line-2) inset;
+}
+/* the sim's progress fills the bar from the left */
+.continue-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  transition: width 0.25s ease;
+  pointer-events: none;
+}
+.continue-fill.pulse {
+  width: 100%;
+}
+.continue-busy {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 16px;
+}
+.continue-stop {
+  position: relative;
+  flex: none;
+  margin: 8px 8px 8px 0;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  font-weight: 700;
+  font-size: 13.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* the Play options sheet: one row per step, the primary one in brand */
+.flow-opt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 56px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+.flow-opt .fo-l {
+  font-weight: 750;
+  font-size: 15.5px;
+}
+.flow-opt .fo-s {
+  grid-column: 1;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.flow-opt .fo-c {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--text-dim);
+}
+.flow-opt.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.flow-opt.primary .fo-l {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.flow-opt.primary .fo-s,
+.flow-opt.primary .fo-c {
+  color: var(--accent-ink);
+  opacity: 0.78;
+}
+.flow-opt:active {
+  transform: scale(0.99);
+}
+.flow-opt:disabled {
+  opacity: 0.5;
+}
+/* while the bar shows, the end of a page scrolls clear of it */
+body:has(.continue) .page {
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 36px);
+}
+
 /* ------------------------------------------------------------------ cards */
 .card {
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  background: var(--raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px;
 }
 .card.tight {
-  padding: 10px;
+  padding: 10px 12px;
 }
 .card.flush {
   padding: 0;
@@ -461,32 +740,39 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  min-height: 18px;
 }
 .card-h h3 {
-  color: var(--text-2);
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-/* "All" / "Full" style links in a card header: small text, 40px+ target */
+.card-h h3 svg {
+  color: var(--text-dim);
+}
+/* "All" / "Full" style links in a card or section header: small, brand, a 40px+ target */
 .card-link {
   position: relative;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-dim);
+  font-weight: 700;
+  color: var(--accent-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .card-link::after {
   content: '';
   position: absolute;
   inset: -12px;
 }
+/* a highlighted card: a thin brand edge, nothing loud */
 .card.accent {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface-2)), var(--surface));
-  /* dim text keeps 4.5:1 on a gold team's tint */
-  --text-dim: var(--text-2);
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: linear-gradient(170deg, color-mix(in srgb, var(--accent) 7%, var(--raised)), var(--raised) 60%);
 }
-/* the other surfaces tinted with the team's colour (your standings row, today's game, the chosen chip,
-   playbook, asset or player of the game): dim text and red figures lighter, so they keep 4.5:1 on any tint */
+/* tinted surfaces (your row, the chosen chip, the picked playbook...): dim text and red figures lighter,
+   so they keep 4.5:1 on any tint */
 .chip.on,
 table.stats tr.me,
 .lg-st-row.me,
@@ -494,14 +780,22 @@ table.stats tr.me,
 .bk-s.me,
 .fo-asset.on,
 .gd-pog.mine,
-.card.preset.on {
+.card.preset.on,
+.card.accent,
+.slab {
   --text-dim: var(--text-2);
   --bad: #ff7686;
+}
+.card.clickable {
+  cursor: pointer;
 }
 .card.clickable:active {
   transform: scale(0.995);
 }
-/* cards that are buttons (pickers, the live bench) */
+button.card {
+  text-align: left;
+  width: 100%;
+}
 button.card:disabled {
   opacity: 0.55;
   cursor: default;
@@ -511,39 +805,108 @@ button.card:disabled {
   background: var(--line);
   margin: 6px 0;
 }
+
+/* ------------------------------------------------------------------ team slabs
+   Identity surfaces: a team's colour as a panel, cut at a corner like a jersey's number plate, a
+   faint diagonal weave and its trim along the bottom. Set --slab (and --slab-2 for the trim) inline
+   for another team; your own team's are the defaults */
+.slab {
+  --slab: var(--team-slab);
+  --slab-2: var(--team-2);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--radius);
+  padding: 16px;
+  color: #fff;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 9px),
+    linear-gradient(150deg, color-mix(in srgb, var(--slab) 92%, #fff 8%), color-mix(in srgb, var(--slab) 70%, #000) 70%);
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+  box-shadow: inset 0 -3px 0 var(--slab-2);
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.82);
+  --text-dim: rgba(255, 255, 255, 0.72);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-2: rgba(255, 255, 255, 0.24);
+}
+.slab.plain {
+  clip-path: none;
+}
+/* a big faded mark behind the slab's content */
+.slab-mark {
+  position: absolute;
+  right: -26px;
+  bottom: -30px;
+  z-index: -1;
+  opacity: 0.16;
+  pointer-events: none;
+  filter: saturate(0.6);
+}
+/* controls on a slab: glassy, so the team colour shows through */
+.slab .btn:not(.primary) {
+  background: rgba(0, 0, 0, 0.26);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.slab .tag {
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+.slab .card-link {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-underline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ lists */
 .list > * + * {
   border-top: 1px solid var(--line);
 }
 .listrow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  min-height: 52px;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 58px;
 }
-/* depth-chart arrows: two 40px targets stacked into the row's own padding */
 .move-arrows {
   display: flex;
   flex-direction: column;
   flex: none;
-  margin: -10px -4px -10px -8px;
+  margin: -10px -6px -10px -10px;
 }
 .move-arrows .iconbtn {
   width: 40px;
   height: 40px;
 }
 .list-divider {
-  padding: 8px 12px 6px;
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  padding: 9px 14px 7px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--text-dim);
-  background: var(--surface-2);
+  background: var(--bg-2);
+}
+.listrow.clickable {
+  cursor: pointer;
 }
 .listrow.clickable:active {
-  background: var(--surface-3);
+  background: var(--surface);
+}
+/* a row's name line and its line of detail */
+.lr-name {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.lr-meta {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
 }
 
 /* ------------------------------------------------------------------ buttons */
@@ -554,58 +917,60 @@ button.card:disabled {
   gap: 8px;
   height: 44px;
   padding: 0 16px;
-  border-radius: 12px;
-  background: var(--surface-3);
+  border-radius: 10px;
+  background: var(--surface-2);
   border: 1px solid var(--line-2);
   color: var(--text);
   font-weight: 700;
   font-size: 14.5px;
   white-space: nowrap;
   transition:
-    transform 0.06s ease,
-    background 0.15s ease;
+    transform 0.08s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 .btn:active {
   transform: scale(0.97);
 }
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   pointer-events: none;
 }
 .btn.primary {
   background: var(--accent);
   border-color: transparent;
   color: var(--accent-ink);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.btn.primary:active {
+  background: color-mix(in srgb, var(--accent) 88%, #000);
 }
 .btn.ghost {
   background: transparent;
   border-color: var(--line-2);
 }
 .btn.danger {
-  background: color-mix(in srgb, var(--bad) 18%, var(--surface-2));
-  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-  color: color-mix(in srgb, var(--bad) 22%, white);
+  background: color-mix(in srgb, var(--bad) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--bad) 42%, transparent);
+  color: color-mix(in srgb, var(--bad) 30%, white);
 }
 .btn.good {
-  background: color-mix(in srgb, var(--good) 20%, var(--surface-2));
+  background: color-mix(in srgb, var(--good) 16%, var(--surface));
   border-color: color-mix(in srgb, var(--good) 40%, transparent);
 }
 .btn.sm {
   height: 34px;
   padding: 0 12px;
   font-size: 13px;
-  border-radius: 10px;
+  border-radius: 9px;
 }
 .btn.xs {
   position: relative;
   height: 28px;
   padding: 0 10px;
   font-size: 12px;
-  border-radius: 8px;
+  border-radius: 7px;
 }
 .btn.xs::after {
-  /* keep the compact look but give fingers a 40px target */
   content: '';
   position: absolute;
   inset: -6px -2px;
@@ -613,20 +978,25 @@ button.card:disabled {
 .btn.block {
   width: 100%;
 }
+/* the big call to action: display capitals, the number-plate cut */
 .btn.big {
   height: 54px;
-  font-size: 17px;
   font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  border-radius: 4px;
 }
 
-/* ------------------------------------------------------------------ segmented & chips */
+/* ------------------------------------------------------------------ segmented, tabs & chips */
 .seg {
   display: flex;
-  background: var(--surface);
+  background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 11px;
   padding: 3px;
   gap: 2px;
   overflow-x: auto;
@@ -639,16 +1009,55 @@ button.card:disabled {
   flex: 1;
   height: 34px;
   padding: 0 12px;
-  border-radius: 9px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
   color: var(--text-dim);
   white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 .seg button.on {
   background: var(--surface-3);
   color: var(--text);
   box-shadow: inset 0 0 0 1px var(--line-2);
+}
+/* a screen's own sections: underlined tabs on the page, not another box */
+.seg.tabs {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0;
+  gap: 4px;
+}
+.seg.tabs button {
+  flex: 0 0 auto;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-stretch: 100%;
+  position: relative;
+}
+.seg.tabs button.on {
+  background: none;
+  box-shadow: none;
+  color: var(--text);
+}
+.seg.tabs button.on::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
 }
 .chips {
   display: flex;
@@ -660,24 +1069,24 @@ button.card:disabled {
   padding: 0 12px;
   border-radius: 16px;
   border: 1px solid var(--line-2);
-  background: var(--surface);
+  background: transparent;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-2);
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .chip.on {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 16%, var(--raised));
   color: var(--text);
 }
 .chip:disabled,
 .seg button:disabled {
   opacity: 0.5;
 }
-/* compact 32-34px controls keep their look but take taps on the bar and gaps around them (about 40px) */
 .btn.sm,
 .seg button,
 .chip {
@@ -700,32 +1109,35 @@ button.card:disabled {
   gap: 4px;
   height: 20px;
   padding: 0 7px;
-  border-radius: 6px;
+  border-radius: 5px;
   font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   background: var(--surface-3);
   color: var(--text-2);
   white-space: nowrap;
 }
 .tag.good {
-  background: color-mix(in srgb, var(--good) 18%, transparent);
+  background: color-mix(in srgb, var(--good) 16%, transparent);
   color: var(--good);
 }
 .tag.bad {
-  background: color-mix(in srgb, var(--bad) 18%, transparent);
-  color: var(--bad);
-  /* a little lighter, to keep 4.5:1 on its own tint over a card */
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: color-mix(in srgb, var(--bad) 80%, white);
 }
 .tag.warn {
-  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
 }
 .tag.info {
-  background: color-mix(in srgb, var(--info) 18%, transparent);
+  background: color-mix(in srgb, var(--info) 16%, transparent);
   color: var(--info);
+}
+.tag.brand {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-text);
 }
 
 /* ------------------------------------------------------------------ ovr badge */
@@ -735,10 +1147,11 @@ button.card:disabled {
   min-width: 34px;
   height: 30px;
   padding: 0 4px;
-  border-radius: 8px;
+  border-radius: 7px;
   font-family: var(--display);
-  font-weight: 700;
-  font-size: 19px;
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
   font-variant-numeric: tabular-nums;
   color: var(--bg-2);
   line-height: 1;
@@ -746,71 +1159,48 @@ button.card:disabled {
 .ovr.sm {
   min-width: 28px;
   height: 24px;
-  font-size: 15px;
+  font-size: 16px;
   border-radius: 6px;
 }
 .ovr.lg {
-  min-width: 56px;
-  height: 52px;
-  font-size: 32px;
-  border-radius: 12px;
+  min-width: 58px;
+  height: 54px;
+  font-size: 36px;
+  border-radius: 10px;
 }
 .pot {
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
   color: var(--text-dim);
 }
 
-/* ------------------------------------------------------------------ avatar */
+/* ------------------------------------------------------------------ jerseys (player badges) */
 .avatar {
   position: relative;
   flex: none;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 16px;
-  color: white;
+}
+.avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 .avatar.lg {
-  width: 72px;
-  height: 72px;
-  font-size: 28px;
-}
-.avatar .jn {
-  position: absolute;
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: var(--font);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 12px;
-  white-space: nowrap;
-  background: var(--bg);
-  border: 1px solid var(--line-2);
-  color: var(--text-dim);
-  padding: 0 4px;
-  border-radius: 6px;
-}
-.avatar.lg .jn {
-  font-size: 11px;
-  line-height: 15px;
-  bottom: -7px;
+  width: 76px;
+  height: 76px;
 }
 
 /* ------------------------------------------------------------------ forms */
-/* a 0-100 tactic as five named settings: one row of equal steps, names wrapping onto a second line
-   (every word fits a step on a 360px phone at 11px); the steps below the chosen one are tinted like
-   a slider's fill */
 .levels {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 .levels-row {
   display: grid;
@@ -820,10 +1210,10 @@ button.card:disabled {
 .levels-row button {
   min-height: 44px;
   padding: 4px 2px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--line-2);
-  background: var(--surface);
-  font-size: 11px;
+  background: var(--bg-2);
+  font-size: 11.5px;
   font-weight: 650;
   line-height: 1.15;
   color: var(--text-2);
@@ -832,13 +1222,14 @@ button.card:disabled {
   overflow-wrap: anywhere;
 }
 .levels-row button.below {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--line-2));
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--line-2));
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-2));
 }
 .levels-row button.on {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg-2));
   color: var(--text);
+  font-weight: 750;
 }
 .slider {
   display: flex;
@@ -857,14 +1248,16 @@ button.card:disabled {
 }
 .slider-val {
   font-family: var(--display);
-  font-weight: 700;
-  font-size: 15px;
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 17px;
   color: var(--text);
 }
 .slider-ends {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
+  font-weight: 650;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -909,8 +1302,6 @@ input[type='range']::-moz-range-thumb {
   background: white;
   border: 3px solid var(--accent);
 }
-/* keyboard focus: a ring around the thumb (one rule per engine: a selector list with the other
-   engine's pseudo-element would be dropped whole) */
 input[type='range']:focus-visible::-webkit-slider-thumb {
   box-shadow:
     0 0 0 2px var(--bg),
@@ -923,16 +1314,17 @@ input[type='range']:focus-visible::-moz-range-thumb {
     0 0 0 4px var(--accent-text);
 }
 .input {
-  height: 44px;
+  height: 46px;
   width: 100%;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--line-2);
-  background: var(--surface);
+  background: var(--bg-2);
   padding: 0 12px;
   font-size: 16px;
 }
 .input:focus {
   border-color: var(--accent-text);
+  outline: none;
 }
 .toggle {
   position: relative;
@@ -954,11 +1346,12 @@ input[type='range']:focus-visible::-moz-range-thumb {
   border-radius: 50%;
   background: var(--text-2);
   transition:
-    transform 0.15s,
+    transform 0.18s cubic-bezier(0.3, 0.7, 0.3, 1.2),
     background 0.15s;
 }
 .toggle.on {
   background: var(--accent);
+  border-color: transparent;
 }
 .toggle.on::after {
   transform: translateX(18px);
@@ -992,7 +1385,7 @@ input[type='range']:focus-visible::-moz-range-thumb {
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--raised);
 }
 table.stats {
   border-collapse: separate;
@@ -1004,16 +1397,17 @@ table.stats {
 table.stats th {
   position: sticky;
   top: 0;
-  background: var(--surface-2);
+  background: var(--bg-2);
   color: var(--text-dim);
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 750;
+  font-stretch: 100%;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 8px;
+  letter-spacing: 0.07em;
+  padding: 9px 8px;
   text-align: right;
   white-space: nowrap;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
   user-select: none;
 }
 table.stats th:has(.th-sort) {
@@ -1023,14 +1417,12 @@ table.stats th.l,
 table.stats td.l {
   text-align: left;
 }
-/* the headers and the left-hand cells are names and words: they keep Inter's own hyphen, its tabular one is
-   a figure wide ("Gilgeous - Alexander"). A number in one opts back in with .num */
 table.stats th,
 table.stats td.l {
   font-variant-numeric: normal;
 }
 table.stats td {
-  padding: 8px 8px;
+  padding: 9px 8px;
   text-align: right;
   white-space: nowrap;
   border-bottom: 1px solid var(--line);
@@ -1041,21 +1433,24 @@ table.stats tr:last-child td {
 table.stats .sticky {
   position: sticky;
   left: 0;
-  background: var(--surface);
+  background: var(--raised);
   z-index: 1;
   box-shadow: 1px 0 0 var(--line);
 }
 table.stats th.sticky {
-  background: var(--surface-2);
+  background: var(--bg-2);
   z-index: 2;
 }
+/* your rows: a team-coloured edge and a faint tint */
 table.stats tr.me td {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  background: color-mix(in srgb, var(--team-text) 9%, var(--raised));
+}
+table.stats tr.me td:first-child {
+  box-shadow: inset 3px 0 0 var(--team-text);
 }
 table.stats th.sorted {
-  color: var(--text);
+  color: var(--accent-text);
 }
-/* a focused row rings its cells from inside, where the scroller and the sticky name cell can't hide it */
 table.stats tr[tabindex]:focus-visible {
   outline: none;
 }
@@ -1081,9 +1476,11 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: 80;
-  animation: fade 0.15s ease;
+  animation: fade 0.18s ease;
 }
 .sheet {
   position: fixed;
@@ -1097,29 +1494,31 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   overscroll-behavior: contain;
   background: var(--bg-2);
   border-top: 1px solid var(--line-2);
-  border-radius: 20px 20px 0 0;
-  padding: 8px 16px calc(20px + var(--safe-b));
-  animation: slideup 0.2s ease;
+  border-radius: 22px 22px 0 0;
+  padding: 6px var(--gut-r) calc(22px + var(--safe-b)) var(--gut-l);
+  animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
   max-width: 720px;
   margin: 0 auto;
+  box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.5);
 }
 .sheet-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+.sheet-head h2 {
+  font-size: 24px;
 }
 .sheet-close {
   margin-right: -8px;
 }
-/* untitled sheets bring their own header: keep the close button tucked into the corner */
 .sheet-head.bare {
   height: 30px;
   margin: -8px 0 0;
 }
 @media (min-width: 768px) {
-  /* tablets: a centred dialog instead of a bottom sheet */
   .sheet {
     top: 0;
     margin: auto;
@@ -1135,11 +1534,17 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   }
 }
 .sheet-grip {
-  width: 40px;
+  width: 38px;
   height: 5px;
   border-radius: 3px;
-  background: var(--line-2);
+  background: var(--line-3);
   margin: 4px auto 12px;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
 }
 @keyframes slideup {
   from {
@@ -1163,36 +1568,46 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   align-items: center;
   gap: 8px;
   pointer-events: none;
+  padding: 0 var(--gut-r) 0 var(--gut-l);
 }
 .toast {
   pointer-events: auto;
-  max-width: 92vw;
-  padding: 10px 14px;
+  max-width: 520px;
+  padding: 11px 14px 11px 12px;
   border-radius: 12px;
-  background: var(--surface-3);
+  background: var(--surface-2);
   border: 1px solid var(--line-2);
+  border-left: 3px solid var(--text-dim);
   box-shadow: var(--shadow);
   font-size: 14px;
   font-weight: 600;
-  animation: slideup 0.2s ease;
+  animation: toast-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
 }
 .toast.good {
-  border-color: color-mix(in srgb, var(--good) 50%, transparent);
+  border-left-color: var(--good);
 }
 .toast.bad {
-  border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+  border-left-color: var(--bad);
 }
 
-/* ------------------------------------------------------------------ sim overlay */
-.simbar {
+/* ------------------------------------------------------------------ docks
+   A screen's own action bar (unsaved tactics or rotation changes): fixed where the Continue bar
+   would be, which steps aside while one shows */
+.dockbar {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(var(--nav-h) + var(--safe-b) + 10px);
-  z-index: 45;
+  left: var(--gut-l);
+  right: var(--gut-r);
+  bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  z-index: 46;
   max-width: 560px;
   margin: 0 auto;
-  background: var(--surface-3);
+  background: var(--surface-2);
   border: 1px solid var(--line-2);
   border-radius: 14px;
   padding: 10px 12px;
@@ -1200,23 +1615,24 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   display: flex;
   align-items: center;
   gap: 10px;
+  animation: cont-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-/* while it shows, the end of the page clears it (it is about 56px tall; office.css lifts its docks) */
-body:has(.simbar) .page {
-  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 80px);
+body:has(.dockbar, .fo-dock, .gd-dock) .continue {
+  display: none;
 }
 
-/* ------------------------------------------------------------------ misc */
+/* ------------------------------------------------------------------ figures */
+/* a figure with its label: the label as an overline, the value in scoreboard type */
 .kpi {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 10px;
-  border-radius: 12px;
-  background: var(--surface);
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--raised);
   border: 1px solid var(--line);
+  min-width: 0;
 }
-/* in a row of three a tile shrinks to its column, so a long name ellipsizes instead of widening the row */
 .grid3 > .kpi {
   min-width: 0;
 }
@@ -1224,15 +1640,58 @@ body:has(.simbar) .page {
   font-size: 10.5px;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-weight: 750;
+  font-stretch: 100%;
   white-space: nowrap;
 }
 .kpi .v {
   font-family: var(--display);
-  font-size: 24px;
-  font-weight: 700;
+  font-stretch: 72%;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
+}
+/* figures in a row with hairlines between them instead of boxes */
+.statline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.statline > * {
+  padding: 2px 12px;
+  min-width: 0;
+}
+.statline > * + * {
+  border-left: 1px solid var(--line-2);
+}
+.statline > :first-child {
+  padding-left: 0;
+}
+.statline .k {
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.statline .v {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.statline .s {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .empty {
   padding: 28px 16px;
@@ -1259,13 +1718,39 @@ body:has(.simbar) .page {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-dim);
-  border: 1px solid var(--line-2);
   flex: none;
 }
 .help-btn::after {
   content: '';
   position: absolute;
   inset: -10px;
+}
+/* "More" under a short line: the rest of an explanation, one tap away */
+.more {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.more > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: var(--accent-text);
+  min-height: 28px;
+}
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+.more > summary svg {
+  transition: transform 0.18s ease;
+}
+.more[open] > summary svg {
+  transform: rotate(180deg);
+}
+.more > :not(summary) {
+  margin-top: 6px;
 }
 .scorebug {
   display: grid;
@@ -1275,8 +1760,9 @@ body:has(.simbar) .page {
 }
 .scorebug .score {
   font-family: var(--display);
+  font-stretch: 70%;
   font-weight: 800;
-  font-size: clamp(28px, 9vw, 40px);
+  font-size: clamp(30px, 10vw, 44px);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -1284,11 +1770,11 @@ body:has(.simbar) .page {
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  /* sideways only: room above and below for tap areas and focus rings, so a vertical swipe scrolls the page */
   overflow-y: hidden;
   scrollbar-width: none;
-  margin: -4px 0;
-  padding: 4px 0 6px;
+  margin: -4px calc(-1 * var(--gut-r)) -4px calc(-1 * var(--gut-l));
+  padding: 4px var(--gut-r) 6px var(--gut-l);
+  scroll-padding: 0 var(--gut-l);
 }
 .hscroll::-webkit-scrollbar {
   display: none;
@@ -1303,6 +1789,7 @@ body:has(.simbar) .page {
   border: 2.5px solid var(--line-2);
   border-top-color: var(--accent);
   animation: spin 0.8s linear infinite;
+  flex: none;
 }
 @keyframes spin {
   to {
@@ -1324,11 +1811,9 @@ body:has(.simbar) .page {
   flex-direction: column;
   gap: 10px;
 }
-/* three-digit scores still clear the team names on a phone */
 .live-bug .score {
-  font-size: clamp(26px, 8vw, 40px);
+  font-size: clamp(28px, 9vw, 44px);
 }
-/* compact live controls, 42px to the finger */
 .live-ctl .btn.sm::after,
 .live-ctl .seg button::after {
   content: '';
@@ -1342,8 +1827,6 @@ body:has(.simbar) .page {
   padding: 0 6px;
   gap: 5px;
 }
-/* tablets held sideways: the court sits beside the coaching panels instead of filling the screen
-   (held upright they stack like a phone, the coaching dock pinned just over the tab bar: see live.css) */
 @media (min-width: 760px) and (orientation: landscape) {
   .live-grid {
     display: grid;
@@ -1357,7 +1840,6 @@ body:has(.simbar) .page {
   }
 }
 
-/* sortable table headers are buttons for keyboard and screen readers, styled as plain text */
 .th-sort {
   font: inherit;
   color: inherit;
@@ -1375,17 +1857,17 @@ body:has(.simbar) .page {
   white-space: nowrap;
   border: 0;
 }
-/* screens outside the game shell (no top bar) clear the notch themselves */
 .page.standalone {
-  padding-top: max(12px, calc(var(--safe-t) + 8px));
+  padding-top: max(14px, calc(var(--safe-t) + 10px));
+  padding-bottom: calc(var(--safe-b) + 36px);
 }
-/* typing: the on-screen keyboard pushes fixed bars up, so get the nav out of the way */
+/* typing: the on-screen keyboard pushes fixed bars up, so get them out of the way */
 body:has(.input:focus, .lg-search input:focus) .bottomnav,
-body:has(.input:focus, .lg-search input:focus) .simbar {
+body:has(.input:focus, .lg-search input:focus) .continue,
+body:has(.input:focus, .lg-search input:focus) .dockbar {
   display: none;
 }
 
-/* tablets: long lists flow into two columns */
 @media (min-width: 760px) {
   .list.wide2 {
     display: grid;
@@ -1411,11 +1893,12 @@ body:has(.input:focus, .lg-search input:focus) .simbar {
   }
 }
 
-/* phones held sideways: slimmer chrome, and the live game puts the court beside the controls */
+/* phones held sideways: slimmer chrome */
 @media (orientation: landscape) and (max-height: 520px) {
   :root {
     --nav-h: 46px;
     --top-h: 48px;
+    --cont-h: 44px;
   }
   .navitem .nav-label {
     display: none;
@@ -1432,11 +1915,13 @@ body:has(.input:focus, .lg-search input:focus) .simbar {
   }
 }
 
-/* touch screens: every compact control answers a 44px finger. Tab-bar options and chips grow a little
-   (the bar's own padding and the gaps around chips make up the rest); buttons only widen their hit area */
+/* touch screens: every compact control answers a 44px finger */
 @media (pointer: coarse) {
   .seg button {
     height: 38px;
+  }
+  .seg.tabs button {
+    height: 44px;
   }
   .chip {
     height: 36px;
@@ -1453,7 +1938,6 @@ body:has(.input:focus, .lg-search input:focus) .simbar {
   .help-btn::after {
     inset: -11px;
   }
-  /* the live transport row stays one slim line: its speed options keep their size and reach out instead */
   .live-ctl .seg button {
     height: 34px;
   }

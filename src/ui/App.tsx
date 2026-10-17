@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
-import { AlertTriangle, Bell, Briefcase, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Wand2, Workflow, X } from 'lucide-react';
+import { AlertTriangle, Bell, Briefcase, ChevronRight, ChevronUp, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Wand2, Workflow, X } from 'lucide-react';
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
@@ -14,7 +14,8 @@ import { ordinal } from './league/shared';
 import { gamesMemo } from './stats';
 import { LeagueLook, TeamLogo } from './components/TeamLogo';
 import { Sheet, Spinner } from './components/ui';
-import { flowActions } from './flow';
+import { flowActions, type FlowAction } from './flow';
+import { userGameOnDay } from '../core/league/games';
 import { useFlowRunner } from './useFlow';
 import { lazyRetry } from './lazyRetry';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -185,21 +186,16 @@ function statusLine(league: League): string {
 function TopBar() {
   const league = useLeague();
   const nav = useNavigate();
-  const [open, setOpen] = useState(false);
-  const run = useFlowRunner();
-  const { pathname } = useLocation();
-  const simming = useStore((s) => !!s.sim);
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
   // the standings scan every game: worked out again when a game is played, not on every edit
   const status = gamesMemo(statusLines, league, () => statusLine(league));
-  const actions = open ? flowActions(league, { onLive: pathname === '/live' }) : [];
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
         {/* named by what it shows ("OKC 47-13 Feb 27 · 1st West"), then the team and where it goes */}
-        <button className="row" style={{ gap: 8, minWidth: 0 }} onClick={() => nav('/')}>
+        <button className="tb-team" onClick={() => nav('/')}>
           <TeamLogo tid={t.tid} size={34} decorative />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
@@ -215,49 +211,22 @@ function TopBar() {
           </span>
         </button>
         <div className="grow" />
-        {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
-        <button className="iconbtn" onClick={() => nav('/inbox')}>
-          <Bell size={20} aria-hidden="true" />
-          {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
-          <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
-        </button>
         {/* god mode on: the editor is a tap away, and the wand says it's on */}
         {league.settings.godMode && (
           <button className="iconbtn god-wand" style={{ color: 'var(--warn)' }} onClick={() => nav('/god')} aria-label="God mode editor">
             <Wand2 size={20} />
           </button>
         )}
+        {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
+        <button className="iconbtn" onClick={() => nav('/inbox')}>
+          <Bell size={20} aria-hidden="true" />
+          {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
+          <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
+        </button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
           <SettingsIcon size={20} />
         </button>
-        <button className="btn primary sm" onClick={() => setOpen(true)} disabled={simming} aria-label="Play">
-          <Play size={16} fill="currentColor" /> Play
-        </button>
       </div>
-      <Sheet open={open} onClose={() => setOpen(false)} title="What next?">
-        <div className="col" style={{ gap: 8 }}>
-          {actions.map((a) => (
-            <button
-              key={a.id}
-              className={`btn block ${a.primary ? 'primary' : ''}`}
-              style={{ height: 'auto', minHeight: 48, padding: '8px 14px', justifyContent: 'flex-start', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
-              disabled={!!a.disabled}
-              onClick={() => {
-                setOpen(false);
-                haptic();
-                void run(a);
-              }}
-            >
-              <span>{a.label}</span>
-              {(a.disabled || a.sub) && (
-                <span className="small" style={{ opacity: 0.9, fontWeight: 500, whiteSpace: 'normal', textAlign: 'left' }}>
-                  {a.disabled ?? a.sub}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </Sheet>
     </header>
   );
 }
@@ -293,38 +262,102 @@ function BottomNav() {
   );
 }
 
-function SimBar() {
+/**
+ * The Continue bar, Football Manager style: in thumb reach over the tab bar, it names the next step and
+ * runs it, its arrow opens every option, and while a sim runs it turns into the progress bar with Stop.
+ * The live screen's coaching dock and a screen's own dock (a deal, unsaved changes) take its place.
+ */
+function ContinueBar() {
+  const league = useLeague();
   const sim = useStore((s) => s.sim);
   const stop = useStore((s) => s.stopSim);
+  const nav = useNavigate();
+  const run = useFlowRunner();
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
   // screen readers hear a sim start and finish, not every simmed day: the status region stays put and its text only changes then
   const [ran, setRan] = useState(false);
   if (sim && !ran) setRan(true);
+  const onLive = pathname === '/live';
+  const actions = flowActions(league, { onLive });
+  const primary = actions.find((a) => a.primary) ?? actions[0];
   const pct = sim ? Math.min(100, (sim.done / Math.max(1, sim.total)) * 100) : 0;
   const steps = !!sim && sim.total > 1;
+  // game day: the bar's Watch & coach opens the pre-game screen first (Settings), as Home's does; the
+  // menu's "Watch & coach live" goes straight to the court
+  const go = (a: FlowAction) => {
+    haptic();
+    const live = liveInProgress(league);
+    const today = userGameOnDay(league, league.day);
+    if (a === primary && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/preview')) {
+      nav(`/preview/${today.gid}`);
+      return;
+    }
+    void run(a);
+  };
+  const label = primary ? (primary.cmd === 'watchLive' && primary.label === 'Watch & coach live' ? 'Watch & coach' : primary.label) : '';
   return (
     <>
       <div className="sr-only" role="status">
         {sim ? `${sim.label}…` : ran ? 'Done.' : ''}
       </div>
-      {sim && (
-        <div className="simbar fade-in">
-          <Spinner />
-          <div className="grow">
-            <div className="small bold">
-              {sim.label}…{sim.total > 1 ? ` day ${sim.done}` : ''}
+      {sim ? (
+        <div className="continue is-busy">
+          <div className="continue-inner busy simbar">
+            <div className={`continue-fill ${steps ? '' : 'pulse'}`} style={steps ? { width: `${pct}%` } : undefined} />
+            <div className="continue-busy">
+              <Spinner />
+              <div className="grow">
+                <span className="cg-label">{sim.label}…</span>
+                {steps && <span className="cg-sub num">Day {sim.done}</span>}
+              </div>
             </div>
-            <div className="bar" style={{ marginTop: 6 }}>
-              {/* one-shot jobs (new season, free agency) can't be stopped midway: show them as busy */}
-              <div className={steps ? '' : 'pulse'} style={{ width: steps ? `${pct}%` : '100%' }} />
+            {/* one-shot jobs (new season, free agency) can't be stopped midway: they show as busy */}
+            {steps && (
+              <button className="continue-stop" onClick={stop}>
+                <X size={16} /> Stop
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        !onLive &&
+        primary && (
+          <div className="continue">
+            <div className="continue-inner">
+              <button className="continue-go" disabled={!!primary.disabled} onClick={() => go(primary)}>
+                <Play size={18} fill="currentColor" aria-hidden="true" />
+                <span className="grow">
+                  <span className="cg-label ellipsis">{label}</span>
+                  {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{primary.disabled ?? primary.sub}</span>}
+                </span>
+              </button>
+              <button className="continue-more" onClick={() => setOpen(true)} aria-label="Play options">
+                <ChevronUp size={22} />
+              </button>
             </div>
           </div>
-          {steps && (
-            <button className="btn sm" onClick={stop}>
-              <X size={16} /> Stop
-            </button>
-          )}
-        </div>
+        )
       )}
+      <Sheet open={open} onClose={() => setOpen(false)} title="What next?">
+        <div className="col" style={{ gap: 8 }}>
+          {actions.map((a) => (
+            <button
+              key={a.id}
+              className={`flow-opt ${a.primary ? 'primary' : ''}`}
+              disabled={!!a.disabled || !!sim}
+              onClick={() => {
+                setOpen(false);
+                go(a);
+              }}
+            >
+              <span className="fo-l">{a.label}</span>
+              {(a.disabled || a.sub) && <span className="fo-s">{a.disabled ?? a.sub}</span>}
+              <ChevronRight size={18} className="fo-c" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </Sheet>
     </>
   );
 }
@@ -347,7 +380,7 @@ function SaveBanner() {
       role="alert"
       style={{
         // lined up with the page column below
-        width: 'min(792px, calc(100% - max(14px, var(--safe-l)) - max(14px, var(--safe-r))))',
+        width: 'min(788px, calc(100% - var(--gut-l) - var(--gut-r)))',
         margin: '8px auto 0',
         gap: 10,
         borderColor: 'var(--bad)',
@@ -529,7 +562,7 @@ function GameShell() {
           </Routes>
         </Suspense>
       </ErrorBoundary>
-      <SimBar />
+      <ContinueBar />
       <BottomNav />
     </div>
   );

@@ -162,7 +162,7 @@ await shot('d09-fa-sheet-decision');
 await go('/office');
 await shot('d10-office-fa-sheet');
 // the season can't start until he decides
-await page.getByRole('button', { name: 'Play', exact: true }).click();
+await page.getByRole('button', { name: 'Play options', exact: true }).click();
 await page.waitForTimeout(400);
 await shot('d11-play-menu-blocked');
 await closeSheet();

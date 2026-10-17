@@ -68,7 +68,7 @@ export function LineChart({
               <g key={i}>
                 <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
                 {values && points.length <= 12 && (
-                  <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Barlow Condensed">
+                  <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Archivo Variable" style={{ fontStretch: '72%' }}>
                     {Math.round(v)}
                   </text>
                 )}

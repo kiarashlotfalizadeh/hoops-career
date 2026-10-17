@@ -89,7 +89,7 @@ export default function Tactics() {
   const schemes = schemesFor(complexity).concat(schemesFor(complexity).includes(t.defense.scheme) ? [] : [t.defense.scheme]);
 
   return (
-    <main className="page" style={{ paddingBottom: changed ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
+    <main className="page">
       <PageHeader
         title="Tactics"
         sub={
@@ -410,10 +410,10 @@ export default function Tactics() {
       {tab === 'playbook' && complexity === 'advanced' && <SituationToggles t={t} edit={edit} />}
 
       {changed && !simming && (
-        <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
+        <div className="dockbar">
           <div className="grow small">
             <div className="bold">Changes saved</div>
-            <div className="dim">See what they do before tip-off.</div>
+            <div className="dim">Test them before tip-off.</div>
           </div>
           <button
             className="btn sm"

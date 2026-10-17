@@ -102,6 +102,7 @@ body:has(.simbar) .gd-dock {
   background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
   color: var(--accent-text);
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 13px;
 }

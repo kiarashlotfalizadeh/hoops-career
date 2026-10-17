@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, HelpCircle, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { ovrColor } from '../../core/ratings';
 import { LEVEL_VALUES, levelIndex, type LevelNames } from '../../core/sim/tactics';
 import { FRANCHISES } from '../../core/teams';
 import { useBack } from '../nav';
-import { inkOn } from '../teamColors';
+import { jerseyKit } from '../teamColors';
 import { useTeamLook } from './TeamLogo';
 
 export function Card({
@@ -62,22 +62,39 @@ export function Ovr({ v, size = '' }: { v: number; size?: '' | 'sm' | 'lg' }) {
   );
 }
 
+/** The jersey's outline, its neckline and armholes (a 40-unit square). */
+const JERSEY_BODY = 'M11 3.5 L15.5 3.5 Q20 10.5 24.5 3.5 L29 3.5 Q29.6 10.6 35 13.4 L35 37.4 Q20 39 5 37.4 L5 13.4 Q10.4 10.6 11 3.5 Z';
+const JERSEY_TRIM = 'M15.5 3.5 Q20 10.5 24.5 3.5 M29 3.5 Q29.6 10.6 35 13.4 M5 13.4 Q10.4 10.6 11 3.5';
+/** A free agent's or a prospect's: no team, so a neutral kit. */
+const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
+
+/** A player's badge: a jersey in his team's colours with his number (his initials when he has none). */
 export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastName' | 'tid' | 'jersey'>; size?: '' | 'lg' }) {
   const look = useTeamLook(p.tid);
-  const colors = p.tid >= 0 ? (look.colors ?? FRANCHISES[p.tid]?.colors) : undefined;
-  const c1 = colors?.[0] ?? '#334155';
-  const c2 = colors?.[1] ?? '#64748b';
-  const initials = `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`;
+  const colors = p.tid >= 0 ? (look.colors ?? FRANCHISES[p.tid]?.colors ?? NO_TEAM) : NO_TEAM;
+  const kit = jerseyKit(colors);
+  const label = p.jersey || `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`;
+  // three characters ("00" fits at the usual width) squeeze into the narrowest cut
+  const long = label.length > 2;
   return (
-    <div
-      className={`avatar ${size}`}
-      // a monogram beside the name it stands for: nothing more for a screen reader to read
-      aria-hidden="true"
-      // initials sit mid-gradient: dark on light team colours (Spurs silver), white on the rest
-      style={{ background: `linear-gradient(140deg, ${c1}, ${shade(c1, -0.35)})`, boxShadow: `inset 0 0 0 2px ${c2}55`, color: inkOn(shade(c1, -0.175)) }}
-    >
-      {initials}
-      {p.jersey && <span className="jn">#{p.jersey}</span>}
+    // a badge beside the name it stands for: nothing more for a screen reader to read
+    <div className={`avatar ${size}`} aria-hidden="true">
+      <svg viewBox="0 0 40 40">
+        <path d={JERSEY_BODY} fill={kit.fill} stroke="rgba(255,255,255,0.16)" strokeWidth="0.8" />
+        <path d={JERSEY_TRIM} fill="none" stroke={kit.trim} strokeWidth="2.2" strokeLinecap="round" />
+        <text
+          x="20"
+          y="30"
+          textAnchor="middle"
+          fontFamily="Archivo Variable, sans-serif"
+          fontWeight="800"
+          fontSize={p.jersey ? (label.length > 1 ? 15 : 16) : 12}
+          fill={kit.num}
+          style={{ fontStretch: long ? '62%' : '70%' }}
+        >
+          {label}
+        </text>
+      </svg>
     </div>
   );
 }
@@ -98,12 +115,15 @@ export function Segmented<T extends string>({
   onChange,
   label,
   disabled,
+  tabs,
 }: {
   value: T;
   options: { id: T; label: ReactNode }[];
   onChange: (v: T) => void;
   label?: string;
   disabled?: boolean;
+  /** A screen's own sections: underlined tabs on the page instead of a boxed switch. */
+  tabs?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // when the options overflow a narrow phone, keep the selected one in view
@@ -126,7 +146,7 @@ export function Segmented<T extends string>({
     ref.current?.querySelectorAll<HTMLElement>('button')[j]?.focus();
   };
   return (
-    <div className="seg" role="radiogroup" aria-label={label} ref={ref}>
+    <div className={`seg ${tabs ? 'tabs' : ''}`} role="radiogroup" aria-label={label} ref={ref}>
       {options.map((o, i) => (
         <button
           key={o.id}
@@ -485,17 +505,59 @@ export function Help({ title, children }: { title: string; children: ReactNode }
 export function PageHeader({ title, sub, back, backTo = '/', right }: { title: ReactNode; sub?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode }) {
   const goBack = useBack(backTo);
   return (
-    <div className="row" style={{ gap: 8, minHeight: 44 }}>
+    <div className="ph">
       {back && (
-        <button className="iconbtn" onClick={goBack} aria-label="Back">
-          <ChevronLeft size={22} />
+        <button className="iconbtn back" onClick={goBack} aria-label="Back">
+          <ChevronLeft size={24} />
         </button>
       )}
       <div className="grow">
-        <h1 style={{ fontSize: 26, textTransform: 'uppercase' }}>{title}</h1>
-        {sub && <div className="small dim">{sub}</div>}
+        <h1>{title}</h1>
+        {sub && <div className="ph-sub">{sub}</div>}
       </div>
       {right}
+    </div>
+  );
+}
+
+/** A section without a box: an overline heading, an optional link or control on its right, then its content. */
+export function Section({ title, right, children, className = '' }: { title: ReactNode; right?: ReactNode; children?: ReactNode; className?: string }) {
+  return (
+    <section className={`sec ${className}`}>
+      <div className="sec-h">
+        {typeof title === 'string' ? <h3>{title}</h3> : title}
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** The rest of an explanation, one tap away under its short line. */
+export function More({ label = 'More', children }: { label?: ReactNode; children: ReactNode }) {
+  return (
+    <details className="more">
+      <summary>
+        {label} <ChevronDown size={14} aria-hidden="true" />
+      </summary>
+      {children}
+    </details>
+  );
+}
+
+/** Figures in a row, hairlines between them: an overline label, the value in scoreboard type, an optional line under it. */
+export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: ReactNode; color?: string }[] }) {
+  return (
+    <div className="statline">
+      {items.map((it, i) => (
+        <div key={i}>
+          <div className="k">{it.k}</div>
+          <div className="v" style={it.color ? { color: it.color } : undefined}>
+            {it.v}
+          </div>
+          {it.s && <div className="s">{it.s}</div>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -638,6 +700,6 @@ export function Spinner() {
   return <div className="spinner" />;
 }
 
-export function Tag({ children, tone }: { children: ReactNode; tone?: 'good' | 'bad' | 'warn' | 'info' }) {
+export function Tag({ children, tone }: { children: ReactNode; tone?: 'good' | 'bad' | 'warn' | 'info' | 'brand' }) {
   return <span className={`tag ${tone ?? ''}`}>{children}</span>;
 }

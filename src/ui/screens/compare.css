@@ -37,6 +37,7 @@
 }
 .cmp-name > span:last-child {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-size: 21px;
   font-weight: 700;
   text-transform: uppercase;
@@ -91,6 +92,7 @@
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-size: 16px;
   font-weight: 700;
   text-transform: uppercase;

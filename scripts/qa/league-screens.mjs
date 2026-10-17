@@ -64,7 +64,7 @@ const waitSim = async () => {
 
 /** Open the top-bar Play sheet and run the action with this label. Returns false if unavailable. */
 const play = async (label) => {
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page.waitForTimeout(250);
   const btn = page.locator('.sheet button', { hasText: label }).first();
   if (!(await btn.count()) || (await btn.isDisabled())) {

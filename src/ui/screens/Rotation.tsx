@@ -79,7 +79,7 @@ export default function Rotation() {
   const ep = edit !== null ? byId.get(edit) : null;
 
   return (
-    <main className="page" style={{ paddingBottom: undo ? 'calc(var(--nav-h) + var(--safe-b) + 96px)' : undefined }}>
+    <main className="page">
       <PageHeader
         title="Rotation"
         back
@@ -239,7 +239,7 @@ export default function Rotation() {
       </Sheet>
 
       {undo && !simming && (
-        <div className="simbar fade-in" style={{ bottom: 'calc(var(--nav-h) + var(--safe-b) + 10px)' }}>
+        <div className="dockbar">
           <div className="grow small">
             <div className="bold">Assistant's rotation applied</div>
             <div className="dim">{undo.manual ? 'Your custom rotation was replaced.' : 'Refreshed for the current roster.'}</div>

@@ -34,6 +34,7 @@
   display: grid;
   place-items: center;
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 11px;
   line-height: 1;
@@ -287,6 +288,7 @@
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #fff;
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 15px;
 }
@@ -578,6 +580,7 @@
 }
 .live-intro-kicker {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 20px;
   letter-spacing: 0.05em;
@@ -641,6 +644,7 @@
   display: grid;
   place-items: center;
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 11px;
 }

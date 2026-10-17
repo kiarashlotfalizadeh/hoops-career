@@ -66,7 +66,7 @@ try {
   await page.waitForSelector('.topbar', { timeout: 30_000 });
   step('created the real league');
 
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page
     .locator('.sheet')
     .getByRole('button', { name: /^Start regular season/ })
@@ -74,7 +74,7 @@ try {
   await page.waitForTimeout(800);
 
   // the opening-night game, live: the court plays, then sims to the final
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   const watch = page.locator('.sheet').getByRole('button', { name: /^Watch & coach live/ });
   if (!(await watch.count())) {
     await page
@@ -82,7 +82,7 @@ try {
       .getByRole('button', { name: /^Sim to next game/ })
       .click();
     await waitSim();
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole('button', { name: 'Play options', exact: true }).click();
   }
   await watch.click();
   // the starting lineups go up first: tip it off
@@ -107,7 +107,7 @@ try {
   step(`coached a live game to the final (${await bug.getAttribute('aria-label')})`);
 
   await page.goto(`${base}/#/`);
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page
     .locator('.sheet')
     .getByRole('button', { name: /^Sim 1 week/ })
@@ -207,14 +207,14 @@ try {
   // the app closed mid-game (a reload, last: a file input doesn't take a file after one): a pause
   // saves where the game is, and the game picks up there instead of at tip-off
   await page.goto(`${base}/#/`);
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   if (!(await watch.count())) {
     await page
       .locator('.sheet')
       .getByRole('button', { name: /^Sim to next game/ })
       .click();
     await waitSim();
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole('button', { name: 'Play options', exact: true }).click();
   }
   await watch.click();
   await page

@@ -34,7 +34,7 @@ const waitSim = async (pg) => {
 };
 const phase = async () => `${await phone.locator('.topbar').first().getAttribute('data-phase')} · ${(await phone.locator('.topbar .sub').first().textContent())?.trim()}`;
 const play = async (label) => {
-  await phone.getByRole('button', { name: 'Play', exact: true }).click();
+  await phone.getByRole('button', { name: 'Play options', exact: true }).click();
   await phone.waitForTimeout(300);
   const b = phone
     .locator('.sheet')
@@ -165,7 +165,7 @@ if (want('mid')) await play('Start regular season');
 if (stages.includes('mid')) {
   await play('Sim to next game');
   // a live game for the game view and live screens
-  await phone.getByRole('button', { name: 'Play', exact: true }).click();
+  await phone.getByRole('button', { name: 'Play options', exact: true }).click();
   await phone.waitForTimeout(300);
   const live = phone
     .locator('.sheet')

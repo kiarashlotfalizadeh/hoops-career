@@ -1,9 +1,9 @@
-// Team accent colours for the UI shell: pick the most vivid readable team colour, then derive
-// an ink that stays legible on it and a text variant that stays legible on the dark theme.
+// Team colours for identity surfaces (slabs, jerseys, floors, your rows): readable variants of a
+// team's colours on the dark theme. The app's controls keep the brand accent whatever the team.
 
 const DEFAULT_ACCENT = '#3b82f6';
-/** --surface-2, the lightest neutral surface accent-coloured text sits on. */
-const SURFACE_2 = '#161d28';
+/** --surface-2, the lightest neutral surface team-coloured text sits on. */
+const SURFACE_2 = '#1a212b';
 const INK = '#0b0f15';
 
 function rgb(hex: string): [number, number, number] {
@@ -70,17 +70,65 @@ export function jerseyColors(home: [string, string, string], away: [string, stri
   return [kit(home), colorDistance(home[0], away[0]) < CLASH ? ['#f1f1f1', away[0]] : kit(away)];
 }
 
-/** Set --accent, --accent-ink (text on accent fills) and --accent-text (accent-coloured text). */
-export function applyAccent(colors: [string, string, string] | null) {
-  const accent = colors ? teamAccent(colors) : DEFAULT_ACCENT;
-  const ink = inkOn(accent);
-  // accent-coloured text is drawn on the page, raised surfaces and accent-tinted cards (.card.accent mixes
-  // 22% of the accent into --surface-2): lighten it until it reads on the lightest of them
-  const grounds = [SURFACE_2, mix(accent, SURFACE_2, 0.78)];
+/** A team's identity colours, for its slabs, its jersey badges and your rows. */
+export interface TeamLook {
+  /** The slab's base: the primary, darkened until white text reads on it (a near-white primary gives way to the darkest other). */
+  slab: string;
+  /** The trim along a slab and a jersey's neck and armholes: the next colour that stands apart from the slab. */
+  trim: string;
+  /** The colour it's known by (identityColor), lightened until it reads as text on the dark theme's raised surfaces. */
+  text: string;
+}
+
+/** --surface-2 and --raised: the grounds team-coloured text sits on (a row of yours is tinted toward --raised). */
+const RAISED = '#0e1218';
+
+export function teamLook(colors: [string, string, string]): TeamLook {
+  const [p, ...rest] = colors;
+  // a near-white primary (the Spurs' silver) makes a grey slab: the darkest other colour leads instead
+  const base = luminance(p) > 0.45 ? ([...rest].sort((a, b) => luminance(a) - luminance(b))[0] ?? p) : p;
+  let slab = base;
+  // white text on the slab's lightest corner (the base with 8% white mixed in) keeps 4.5:1
+  for (let t = 0.08; contrast('#ffffff', mix(slab, '#ffffff', 0.08)) < 4.5 && t <= 1; t += 0.08) slab = mix(base, '#000000', t);
+  const trim = [...colors, '#ffffff'].find((c) => c.toLowerCase() !== base.toLowerCase() && colorDistance(c, slab) >= CLASH) ?? '#ffffff';
+  // the primary, unless it's near-black or near-white (the Nets' black, the Spurs' silver): then the most vivid other
+  const accent = identityColor(colors);
   let text = accent;
-  for (let t = 0.1; grounds.some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(accent, '#ffffff', t);
+  for (let t = 0.1; [SURFACE_2, RAISED].some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(accent, '#ffffff', t);
+  return { slab, trim, text };
+}
+
+/** The colour a team is known by: its primary, unless that's too dark or too light to read as a colour on the dark theme. */
+export function identityColor(colors: [string, string, string]): string {
+  const l = luminance(colors[0]);
+  return l > 0.03 && l < 0.6 ? colors[0] : teamAccent(colors);
+}
+
+/** A slab in another team's colours: the custom properties `.slab` reads. */
+export function slabVars(colors: [string, string, string]): Record<string, string> {
+  const l = teamLook(colors);
+  return { '--slab': l.slab, '--slab-2': l.trim };
+}
+
+/** A jersey badge's colours: its fill, the trim, and the number (in the trim when it stands out from the fill, else white or ink). */
+export function jerseyKit(colors: [string, string, string]): { fill: string; trim: string; num: string } {
+  const fill = colors[0];
+  const trim = colors[1].toLowerCase() === fill.toLowerCase() ? colors[2] : colors[1];
+  return { fill, trim, num: contrast(trim, fill) >= 3 ? trim : inkOn(fill) };
+}
+
+/** Your team's identity tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text and --team-ink. The brand accent stays put. */
+export function applyAccent(colors: [string, string, string] | null) {
   const root = document.documentElement.style;
-  root.setProperty('--accent', accent);
-  root.setProperty('--accent-ink', ink);
-  root.setProperty('--accent-text', text);
+  if (!colors) {
+    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-slab']) root.removeProperty(k);
+    return;
+  }
+  const l = teamLook(colors);
+  const team = identityColor(colors);
+  root.setProperty('--team', team);
+  root.setProperty('--team-2', l.trim);
+  root.setProperty('--team-ink', inkOn(team));
+  root.setProperty('--team-text', l.text);
+  root.setProperty('--team-slab', l.slab);
 }

@@ -44,6 +44,7 @@
 }
 .fo-big {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 34px;
   line-height: 1;
@@ -52,6 +53,7 @@
 }
 .fo-mid {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 700;
   font-size: 22px;
   line-height: 1.05;
@@ -123,6 +125,7 @@
 }
 .fo-tile .t {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 700;
   font-size: 19px;
   line-height: 1.05;
@@ -558,6 +561,7 @@ table.stats.fo-contracts tr.clickable td {
   flex: none;
   text-align: center;
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 20px;
   color: var(--text-2);
@@ -582,6 +586,7 @@ table.stats.fo-contracts tr.clickable td {
 }
 .fo-pickchip .n {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 15px;
   line-height: 1;
@@ -691,6 +696,7 @@ table.stats.fo-contracts tr.clickable td {
 }
 .fo-gauge text {
   font-family: var(--display);
+  font-stretch: var(--display-w);
 }
 .fo-minichart {
   display: flex;

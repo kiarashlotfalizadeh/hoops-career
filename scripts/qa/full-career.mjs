@@ -25,7 +25,7 @@ const waitSim = async () => {
 };
 const phase = async () => `${await page.locator('.topbar').first().getAttribute('data-phase')} · ${(await page.locator('.topbar .sub').first().textContent())?.trim()}`;
 const play = async (label) => {
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page.waitForTimeout(300);
   const b = page
     .locator('.sheet')
@@ -62,7 +62,7 @@ log(`created → ${await phase()}`);
 await play('Start regular season');
 // one live game, coached to the end
 await play('Sim to next game');
-await page.getByRole('button', { name: 'Play', exact: true }).click();
+await page.getByRole('button', { name: 'Play options', exact: true }).click();
 await page.waitForTimeout(300);
 const live = page
   .locator('.sheet')
@@ -160,7 +160,7 @@ await shot('14-roster-y2');
 // the draft can leave more than 15 standard contracts: cut the cheapest one, as a player would, until the season can start
 for (let i = 0; i < 5; i++) {
   await page.goto(`${base}/#/`);
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page.waitForTimeout(300);
   const start = page
     .locator('.sheet')

@@ -46,7 +46,17 @@ export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: 
     <svg width={size} height={size} viewBox="0 0 100 100" {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': ab })} style={{ flex: 'none' }}>
       {body}
       <path d="M22 62 Q50 40 78 62" fill="none" stroke={ring} strokeOpacity="0.35" strokeWidth="3" />
-      <text x="50" y="58" textAnchor="middle" fontFamily="Barlow Condensed, sans-serif" fontWeight="800" fontSize={text.length === 3 ? 30 : 36} fill={ink} letterSpacing="1">
+      <text
+        x="50"
+        y="58"
+        textAnchor="middle"
+        fontFamily="Archivo Variable, sans-serif"
+        fontWeight="800"
+        style={{ fontStretch: '68%' }}
+        fontSize={text.length === 3 ? 30 : 36}
+        fill={ink}
+        letterSpacing="1"
+      >
         {text}
       </text>
     </svg>

@@ -26,6 +26,7 @@
 }
 .scout-ranks .v {
   font-family: var(--display);
+  font-stretch: var(--display-w);
   font-weight: 700;
   font-size: 18px;
   white-space: nowrap;
