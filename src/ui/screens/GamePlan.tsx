@@ -104,7 +104,7 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
   const where = (g: (typeof next)[number]) => (neutralSite(g) ? 'neutral floor' : g.home === league.userTid ? 'at home' : 'away');
 
   return (
-    <main className="page tx-page">
+    <main className="page">
       <PageHeader
         title="Game plan"
         back
@@ -301,11 +301,14 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
       {tab === 'scouting' &&
         (data.enough ? (
           <>
-            <Section title="League ranks" right={<span className="tiny dim">{scoutSource(data)}</span>}>
-              <RankStrip d={data} complexity={complexity === 'simple' ? 'simple' : 'advanced'} />
-            </Section>
+            {/* the ranks from Advanced depth (the four factors at Expert) */}
+            {complexity !== 'simple' && (
+              <Section title="League ranks" right={<span className="tiny dim">{scoutSource(data)}</span>}>
+                <RankStrip d={data} complexity={complexity === 'expert' ? 'advanced' : 'simple'} />
+              </Section>
+            )}
             {data.tendencies.length > 0 && (
-              <Section title="Tendencies">
+              <Section title="Tendencies" right={complexity === 'simple' ? <span className="tiny dim">{scoutSource(data)}</span> : undefined}>
                 <ul className="card tx-bullets info">
                   {data.tendencies.slice(0, 3).map((x) => (
                     <li key={x}>{x}</li>

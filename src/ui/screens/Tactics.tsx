@@ -73,7 +73,7 @@ export default function Tactics() {
     });
 
   return (
-    <main className="page tx-page">
+    <main className="page">
       <PageHeader
         title="Tactics"
         sub={
@@ -609,7 +609,7 @@ function RolesTab() {
           <Help title="Screeners">Who sets ball screens in your pick-and-roll. Rollers dive to the rim; poppers stretch the defense. Leave empty to let the offense choose.</Help>
         }
       >
-        <div className="card tight">
+        <div className="card col tx-group tight">
           <div className="chips">
             {players
               .filter((pl) => pl.ratings.hgt >= 50)

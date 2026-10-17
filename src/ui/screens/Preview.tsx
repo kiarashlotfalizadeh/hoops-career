@@ -124,7 +124,7 @@ function PreviewBody({ league, game, pv, simming }: { league: League; game: Sche
   ].filter(Boolean);
 
   return (
-    <main className="page tx-page pv-page">
+    <main className="page">
       <PageHeader title="Preview" back backTo="/" />
 
       <section className="slab pv-slab" style={slab} aria-label={`${league.teams[away.tid].name} ${pv.neutral ? 'vs' : 'at'} ${league.teams[home.tid].name}`}>

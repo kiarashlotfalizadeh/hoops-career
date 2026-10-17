@@ -13,7 +13,7 @@ import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
-import { Chips, Empty, Help, PageHeader, Section, Segmented, Spinner, Statline, Tag } from '../components/ui';
+import { Chips, Empty, Help, PageHeader, Section, Segmented, Spinner, Statline, Tag, scrollBehavior } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { matchupColors } from '../teamColors';
@@ -199,12 +199,17 @@ export default function TacticsLab() {
     const btn = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
     if (row && btn) row.scrollLeft = Math.max(0, btn.offsetLeft - (row.clientWidth - btn.offsetWidth) / 2);
   }, []);
+  // a finished run brings its results up under the header: they start below the opponent and the Run bar
+  const results = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (run) results.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  }, [run]);
 
   const oppTeam = league.teams[opp];
   const ts = curTeamSeason(league, opp);
   const shown = run && run.opp === opp && run.mode === mode ? run : null;
   return (
-    <main className="page tx-page">
+    <main className="page">
       <PageHeader title="Tactics Lab" back backTo="/tactics" sub="Real engine games, before you commit." />
       <Segmented
         tabs
@@ -361,6 +366,7 @@ export default function TacticsLab() {
         </Empty>
       )}
 
+      <div ref={results} className="tx-anchor" aria-hidden="true" />
       {shown?.result && mode === 'project' && <Summary r={shown.result} league={league} oppTid={shown.opp} />}
       {shown?.result && shown.base && mode === 'compare' && <CompareView before={shown.base} after={shown.result} league={league} />}
       {shown?.cands && shown.base && (

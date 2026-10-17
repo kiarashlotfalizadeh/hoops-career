@@ -685,6 +685,12 @@
 .tx-empty-btn {
   margin-top: 12px;
 }
+/* where a finished run scrolls to: no box of its own, so the page's gap stays as it is */
+.tx-anchor {
+  height: 0;
+  margin-bottom: -16px;
+  scroll-margin-top: calc(var(--top-h) + var(--safe-t) + 12px);
+}
 /* results: the big figures first */
 .tx-hero {
   display: flex;
