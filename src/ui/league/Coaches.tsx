@@ -68,7 +68,7 @@ export function CoachesView({ league }: { league: League }) {
         <>
           <SectionLabel right={<span className="tiny dim">{plural(me.k.stints.length, 'job')}</span>}>Your career</SectionLabel>
           <Card>
-            <div className="grid4">
+            <div className="grid4 lg-coach-kpis">
               <Kpi k="Seasons" v={me.k.seasons} />
               <RecordKpi k={me.k} />
               <Kpi k="Playoffs" v={me.k.playoffs} />
@@ -157,7 +157,7 @@ function JobRow({ league, j }: { league: League; j: CoachTotals & { stint: Coach
   const best = j.titles ? plural(j.titles, 'title') : j.playoffs ? plural(j.playoffs, 'playoff run') : '';
   return (
     <div className="row5" style={{ gridTemplateColumns: '24px minmax(0, 1fr) auto', minHeight: 44 }}>
-      <TeamLogo tid={team.tid} size={22} />
+      <TeamLogo tid={team.tid} size={22} decorative />
       <span className="col" style={{ minWidth: 0, gap: 1 }}>
         <Link to={`/team/${team.tid}`} className="bold ellipsis">
           {team.region} {team.name}
@@ -193,7 +193,7 @@ function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: 
             {off} · {def} · Development {r.dev} · Adjustments {r.tac}
           </div>
         </div>
-        <div className="grid4">
+        <div className="grid4 lg-coach-kpis">
           <Kpi k="Seasons" v={k.seasons} />
           <RecordKpi k={k} />
           <Kpi k="Playoffs" v={k.playoffs} />

@@ -10,7 +10,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
-import { confName, roundName, useQueryParam } from './shared';
+import { confName, ordinal, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
 interface Slot {
@@ -162,7 +162,7 @@ function ChampionBanner({ league, season, tid, runnerUp, fmvp }: { league: Leagu
   return (
     <div className="lg-champ">
       <div className="row" style={{ gap: 14 }}>
-        <TeamLogo tid={tid} size={60} />
+        <TeamLogo tid={tid} size={60} decorative />
         <div className="grow">
           <div className="kicker">
             <Trophy size={12} style={{ verticalAlign: -1 }} /> {seasonLabel(season)} Champions
@@ -249,7 +249,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
         <span className="sd">{seed ?? ''}</span>
         {tid !== undefined ? (
           <>
-            <TeamLogo tid={tid} size={18} />
+            <TeamLogo tid={tid} size={18} decorative />
             <span className="ellipsis">{league.teams[tid].abbrev}</span>
           </>
         ) : (
@@ -287,7 +287,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
 function FinalsCard({ league, finals, onOpen }: { league: League; finals?: PlayoffSeries; onOpen: (s: PlayoffSeries) => void }) {
   const side = (tid: number | undefined, wins: number, conf: string) => (
     <div className={`side ${finals?.winner !== undefined && finals.winner !== tid ? 'lose' : ''}`}>
-      {tid !== undefined ? <TeamLogo tid={tid} size={46} /> : <div style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px dashed var(--line-2)' }} />}
+      {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <div style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px dashed var(--line-2)' }} />}
       <div className="bold ellipsis" style={{ maxWidth: '100%' }}>
         {tid !== undefined ? league.teams[tid].name : `${conf} champion`}
       </div>
@@ -361,7 +361,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
           const line = (tid: number | undefined, pts: number | undefined, tbd: string) => (
             <div className={`bk-t ${winner === undefined ? '' : winner === tid ? 'win' : 'lose'}`}>
               <span className="sd">{tid !== undefined ? (seedOf.get(tid) ?? '') : ''}</span>
-              {tid !== undefined ? <TeamLogo tid={tid} size={18} /> : <span />}
+              {tid !== undefined ? <TeamLogo tid={tid} size={18} decorative /> : <span />}
               {tid !== undefined ? (
                 <span className="ellipsis">
                   {league.teams[tid].abbrev}{' '}
@@ -441,9 +441,9 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
         <div className="bk-finals">
           {[series.high, series.low].map((tid, i) => (
             <div key={tid} className={`side ${series.winner !== undefined && series.winner !== tid ? 'lose' : ''}`} style={{ order: i === 0 ? 0 : 2 }}>
-              <TeamLogo tid={tid} size={44} />
+              <TeamLogo tid={tid} size={44} decorative />
               <div className="bold">{league.teams[tid].name}</div>
-              <div className="tiny dim">{i === 0 ? series.highSeed : series.lowSeed} seed</div>
+              <div className="tiny dim">{ordinal(i === 0 ? series.highSeed : series.lowSeed)} seed</div>
             </div>
           ))}
           <div className="col" style={{ alignItems: 'center', gap: 2, order: 1 }}>

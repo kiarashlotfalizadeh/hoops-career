@@ -62,7 +62,7 @@ export function NewsTab({ league }: { league: League }) {
   let lastKey = '';
   return (
     <>
-      <div className="lg-hscroll">
+      <div className="lg-hscroll" role="group" aria-label="Filter news">
         <button className={`chip ${mine === '1' ? 'on' : ''}`} aria-pressed={mine === '1'} onClick={() => setMine(mine === '1' ? '0' : '1')}>
           <TeamLogo tid={league.userTid} size={16} /> My team
         </button>
@@ -129,7 +129,7 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
           <div className="lg-news-meta">
             {tids.map((t) => (
               <Link key={`t${t}`} to={`/team/${t}`} className="lg-pchip" style={{ paddingLeft: 3 }}>
-                <TeamLogo tid={t} size={18} />
+                <TeamLogo tid={t} size={18} decorative />
                 <span>{league.teams[t].abbrev}</span>
               </Link>
             ))}

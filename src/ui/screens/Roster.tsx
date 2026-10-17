@@ -51,11 +51,11 @@ export default function Roster() {
   ];
 
   // before anyone plays, each player's latest season (as the team page does) instead of a table of zeros;
-  // a player without one reads "-" and sorts last
+  // a player without one reads "—" and sorts last
   const anyCur = roster.some((p) => (playerSeason(p, league.season)?.gp ?? 0) > 0);
   const lines = new Map(roster.map((p) => [p.pid, anyCur ? playerSeason(p, league.season) : (latestLine(league, p)?.pg ?? null)]));
   const stat = (p: Player, k: keyof PerGame) => lines.get(p.pid)?.[k] ?? -Infinity;
-  // a percentage needs an attempt: none reads "-" too, not 0.0
+  // a percentage needs an attempt: none reads "—" too, not 0.0
   const shooting = (p: Player, k: 'tsPct' | 'tpPct', attempts: number | undefined) => (attempts ? stat(p, k) : -Infinity);
   const statCols: Col<Player>[] = [
     { key: 'name', label: 'Player', get: (p) => p.lastName, left: true, sticky: true, fmt: (_, p) => <span className="bold">{nameOf(p.pid)}</span> },

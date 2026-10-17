@@ -1566,3 +1566,10 @@ a.lg-rec-row:active {
   gap: 1px;
   font-weight: 700;
 }
+/* a career's four tiles inside a card (or the coach's sheet) need 375px abreast: a "Playoffs" label
+   doesn't shrink, so a 360px phone gets two rows of two */
+@media (max-width: 374px) {
+  .grid4.lg-coach-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

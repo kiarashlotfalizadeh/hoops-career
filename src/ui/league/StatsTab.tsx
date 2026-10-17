@@ -57,7 +57,8 @@ export function StatsTab({ league }: { league: League }) {
   const started = league.games.some((g) => g.season === league.season);
   const fallback = started ? league.season : ([...seasons].filter((s) => s.season < league.season).sort((a, b) => b.season - a.season)[0]?.season ?? league.season);
   const [seasonStr, setSeasonStr] = useQueryParam<string>('season', String(fallback));
-  const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : league.season;
+  // a season the league doesn't have (an old or garbled link) opens the default one
+  const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : fallback;
   const [po, setPo] = useQueryParam<'reg' | 'po'>('po', 'reg', ['reg', 'po']);
   // team stats are kept for the regular season only
   const playoffs = po === 'po' && view !== 'teams';
@@ -85,7 +86,7 @@ export function StatsTab({ league }: { league: League }) {
             </option>
           ))}
         </select>
-        <div className="chips">
+        <div className="chips" role="group" aria-label="Season type">
           <button className={`chip ${!playoffs ? 'on' : ''}`} style={{ height: 34 }} aria-pressed={!playoffs} onClick={() => setPo('reg')}>
             Regular season
           </button>
@@ -157,7 +158,12 @@ function Leaders({ league, rows, season, playoffs }: { league: League; rows: Sta
   const games = teamGames(league, season, rows, playoffs);
   const minGp = Math.max(1, Math.ceil(games * (playoffs ? 0.3 : 0.5)));
   const qualified = rows.filter((r) => r.s.gp >= minGp && r.pg.min >= (playoffs ? 10 : 15));
-  if (!rows.length) return <Empty>No games played {playoffs ? 'in the playoffs ' : ''}yet this season.</Empty>;
+  if (!rows.length)
+    return (
+      <Card>
+        <Empty>No games played {playoffs ? 'in the playoffs ' : ''}yet this season.</Empty>
+      </Card>
+    );
   return (
     <>
       <div className="lg-leaders">
@@ -191,7 +197,7 @@ function LeaderCard({ league, cat, top }: { league: League; cat: Cat; top: StatR
                 {first.p.firstName} {first.p.lastName}
               </div>
               <div className="row small dim" style={{ gap: 6, marginTop: 2 }}>
-                {first.tid !== null && <TeamLogo tid={first.tid} size={16} />}
+                {first.tid !== null && <TeamLogo tid={first.tid} size={16} decorative />}
                 <span>
                   {teamAbbrev(league, first.tid)} · {first.p.pos}
                 </span>
@@ -405,7 +411,7 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
 
   return (
     <>
-      <div className="lg-hscroll">
+      <div className="lg-hscroll" role="group" aria-label="Filter players">
         <button className={`chip ${qual === 'q' ? 'on' : ''}`} aria-pressed={qual === 'q'} onClick={() => setQual(qual === 'q' ? 'all' : 'q')}>
           Qualified ({minGp}+ GP)
         </button>
@@ -481,7 +487,7 @@ function TeamStatsTable({ league, season }: { league: League; season: number }) 
         get: (r) => league.teams[r.tid].abbrev,
         fmt: (_v, r) => (
           <span className="lg-tcell">
-            <TeamLogo tid={r.tid} size={20} />
+            <TeamLogo tid={r.tid} size={20} decorative />
             {league.teams[r.tid].abbrev}
           </span>
         ),

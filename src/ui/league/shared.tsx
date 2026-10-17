@@ -123,8 +123,9 @@ export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outc
   if (ts.season === league.season) {
     if (league.phase === 'preseason' || league.phase === 'regular') return { label: 'In progress', short: 'Ongoing' };
     if (r === 5) return { label: 'Champion', short: 'Champion', tone: 'good', gold: true };
-    const alive = league.playoffs.some((s) => (s.high === tid || s.low === tid) && s.winner === undefined);
-    if (alive) return { label: `Playing in the ${roundName(r)}`, short: `In ${roundName(r, true)}`, tone: 'info' };
+    // still in it: in a series, or through to a round that isn't drawn until the other series end
+    const out = league.playoffs.some((s) => s.winner !== undefined && s.winner !== tid && (s.high === tid || s.low === tid));
+    if (league.phase === 'playoffs' && r >= 1 && !out) return { label: `Playing in the ${roundName(r)}`, short: `In ${roundName(r, true)}`, tone: 'info' };
     if (league.phase === 'playin') {
       if (r >= 1) return { label: 'Qualified for the playoffs', short: 'Qualified', tone: 'good' };
       if (r === 0) return { label: 'In the play-in', short: 'Play-In', tone: 'info' };

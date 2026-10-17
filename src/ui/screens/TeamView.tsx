@@ -99,10 +99,10 @@ function Hero({ league, tid }: { league: League; tid: number }) {
         style={{ background: `radial-gradient(500px 220px at 100% 0%, ${c1}66, transparent 70%), linear-gradient(160deg, ${shade(c1, -0.55)}, var(--surface) 75%)` }}
       >
         <div className="wm">
-          <TeamLogo tid={tid} size={170} />
+          <TeamLogo tid={tid} size={170} decorative />
         </div>
         <div className="row" style={{ gap: 14, position: 'relative' }}>
-          <TeamLogo tid={tid} size={64} />
+          <TeamLogo tid={tid} size={64} decorative />
           <div className="grow">
             <div className="kick">{team.region}</div>
             <div className="big">{team.name}</div>
@@ -239,7 +239,12 @@ function RosterTab({ league, tid }: { league: League; tid: number }) {
 function RotationList({ league, tid }: { league: League; tid: number }) {
   const team = league.teams[tid];
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
-  if (!roster.length) return <Empty>No players on the roster.</Empty>;
+  if (!roster.length)
+    return (
+      <Card>
+        <Empty>No players on the roster.</Empty>
+      </Card>
+    );
   // the avatar already shows the initials: last names alone fit a phone ("Murray-Boyles", not "C. Murray-Boyl…")
   const nameOf = rosterNames(roster);
   // the five who start the next game: an injured starter is listed with the bench until he's back
@@ -456,7 +461,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
               key={s}
               k={seasonLabel(s)}
               v={<span style={{ fontSize: 18 }}>{fmtM(pay, 0)}</span>}
-              sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'committed'}
+              sub={s === cs ? (pay > cap.salaryCap ? 'Over cap' : 'Under cap') : 'Committed'}
             />
           );
         })}
@@ -934,7 +939,7 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
             const acquired = d.originalTid !== tid;
             return (
               <div key={d.dpid} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
-                <TeamLogo tid={d.originalTid} size={28} />
+                <TeamLogo tid={d.originalTid} size={28} decorative />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
@@ -958,7 +963,7 @@ function PicksTab({ league, tid }: { league: League; tid: number }) {
           <Card className="flush lg-flat">
             {away.map((d) => (
               <Link key={d.dpid} to={`/team/${d.tid}`} className="lg-season" style={{ gridTemplateColumns: '28px minmax(0,1fr) auto' }}>
-                <TeamLogo tid={d.tid} size={28} />
+                <TeamLogo tid={d.tid} size={28} decorative />
                 <div style={{ minWidth: 0 }}>
                   <div className="bold">{pickLabel(league, d)}</div>
                   <div className="tiny dim">
@@ -1005,7 +1010,7 @@ function HistoryTab({ league, tid }: { league: League; tid: number }) {
             <span className="rec">
               {s.won}-{s.lost}
             </span>
-            <span className="tiny dim ellipsis">{s.seed ? `${ordinal(s.seed)} seed` : ''}</span>
+            <span className="tiny dim ellipsis">{s.seed ? `${ordinal(s.seed)} seed` : s.season === league.season && s.won + s.lost === 0 ? 'Not started' : ''}</span>
             <OutcomeTag o={seasonOutcome(league, tid, s)} />
           </div>
         ))}

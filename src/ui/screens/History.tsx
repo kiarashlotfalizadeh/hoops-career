@@ -11,7 +11,7 @@ import { AccoladeChips, OutcomeTag, SectionLabel, TabBar, accoladeScore, careerT
 import { rosterNames } from '../stats';
 import { RecordBook } from '../league/RecordBook';
 import { RetiredBanners } from '../league/RetiredBanners';
-import { CoachesView } from '../league/Coaches';
+import { CoachesView, winPctLabel } from '../league/Coaches';
 
 type View = 'franchise' | 'league' | 'records' | 'coaches' | 'hof';
 
@@ -80,7 +80,7 @@ function Franchise({ league }: { league: League }) {
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
-        <TeamLogo tid={tid} size={48} />
+        <TeamLogo tid={tid} size={48} decorative />
         <div className="grow">
           <div className="display bold" style={{ fontSize: 22, textTransform: 'uppercase', lineHeight: 1.05 }}>
             {team.region} {team.name}
@@ -103,7 +103,8 @@ function Franchise({ league }: { league: League }) {
           k="Record"
           // a multi-season record stays on one line in a phone-width tile
           v={<span style={{ fontSize: rec.length > 7 ? 15 : rec.length > 5 ? 17 : 20, whiteSpace: 'nowrap' }}>{rec}</span>}
-          sub={w + l ? `${((w / (w + l)) * 100).toFixed(1)}%` : ''}
+          // ".634", as a coach's record reads (the Coaches view)
+          sub={w + l ? winPctLabel(w, l) : ''}
         />
         <Kpi k="Playoffs" v={apps} />
         <Kpi k="Titles" v={titles.length} color={titles.length ? 'var(--tier-elite)' : undefined} />
@@ -150,6 +151,7 @@ function Franchise({ league }: { league: League }) {
           <SectionLabel>Franchise leaders</SectionLabel>
           <Card>
             <Chips
+              label="Franchise leaders in"
               value={cat}
               onChange={setCat}
               options={[
@@ -228,7 +230,7 @@ function LeagueHistory({ league }: { league: League }) {
           >
             {a.champion !== undefined ? (
               <Link to={`/team/${a.champion}`} className="row" style={{ gap: 12, marginBottom: 8 }}>
-                <TeamLogo tid={a.champion} size={42} />
+                <TeamLogo tid={a.champion} size={42} decorative />
                 <div className="grow">
                   <div className="tiny upper bold" style={{ color: 'var(--tier-elite)', letterSpacing: '0.1em' }}>
                     <Trophy size={11} style={{ verticalAlign: -1 }} /> Champion
@@ -253,7 +255,7 @@ function LeagueHistory({ league }: { league: League }) {
                 <span className="k">NBA Cup</span>
                 <span className="row" style={{ gap: 8, minWidth: 0 }}>
                   <span className="bold ellipsis">{league.teams[a.cupWinner].name}</span>
-                  <TeamLogo tid={a.cupWinner} size={18} />
+                  <TeamLogo tid={a.cupWinner} size={18} decorative />
                 </span>
               </Link>
             )}
@@ -401,7 +403,7 @@ function LegendCard({ league, p, hof }: { league: League; p: Player; hof?: boole
             {hof && <Crown size={14} style={{ color: 'var(--tier-elite)', flex: 'none' }} />}
           </div>
           <div className="tiny dim ellipsis">
-            {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp} games
+            {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp.toLocaleString('en-US')} game{c.gp === 1 ? '' : 's'}
             {tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
           </div>
         </div>

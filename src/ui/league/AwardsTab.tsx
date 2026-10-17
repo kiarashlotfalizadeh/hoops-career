@@ -24,8 +24,9 @@ export function AwardsTab({ league }: { league: League }) {
   // before opening night there is no race yet: open on the last season's winners
   const started = league.games.some((g) => g.season === league.season && g.type === 'regular');
   const last = league.awards.filter((a) => a.season < league.season && a.mvp !== undefined).sort((a, b) => b.season - a.season)[0];
-  const [seasonStr, setSeasonStr] = useQueryParam<string>('aseason', String(!started && last ? last.season : league.season));
-  const season = seasons.includes(Number(seasonStr)) ? Number(seasonStr) : league.season;
+  const fallback = !started && last ? last.season : league.season;
+  const [seasonStr, setSeasonStr] = useQueryParam<string>('aseason', String(fallback));
+  const season = seasons.includes(Number(seasonStr)) ? Number(seasonStr) : fallback;
   const aw = league.awards.find((a) => a.season === season);
   const decided = aw?.mvp !== undefined;
   const isCurrent = season === league.season;
@@ -49,7 +50,7 @@ export function AwardsTab({ league }: { league: League }) {
       {aw?.champion !== undefined && (
         <div className="lg-champ">
           <div className="row" style={{ gap: 14 }}>
-            <TeamLogo tid={aw.champion} size={54} />
+            <TeamLogo tid={aw.champion} size={54} decorative />
             <div className="grow">
               <div className="kicker">
                 <Trophy size={12} style={{ verticalAlign: -1 }} /> Champions
@@ -163,7 +164,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
       <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
       {coyTeam && (
         <AwardRow icon={<Award size={18} />} to={`/team/${coyTeam.tid}`}>
-          <TeamLogo tid={coyTeam.tid} size={40} />
+          <TeamLogo tid={coyTeam.tid} size={40} decorative />
           <div style={{ minWidth: 0 }}>
             <div className="lb">Coach of the Year</div>
             <div className="bold ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</div>
