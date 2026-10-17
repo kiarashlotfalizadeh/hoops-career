@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Zap } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Eye, FastForward, Handshake, Mail, Target, Zap } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { CAP_FOR, age, curTeamSeason, fmtDate, payroll, teamPlayers } from '../../core/league/helpers';
@@ -22,6 +22,8 @@ import type { League } from '../../core/types';
 import { clearPlan, planFor } from '../../core/league/gamePlans';
 import { countdownLabel, matchupPreview } from '../../core/analysis/preview';
 import { storylines } from '../../core/analysis/storylines';
+import { ON_TRACK, currentGoals, goalMet, ownerProgress } from '../../core/league/ownerGoals';
+import { leagueForecast } from '../../core/analysis/odds';
 
 /** The phase card's heading: offseason events are named by the year they happen in. */
 function phaseTitle(league: League): string {
@@ -369,6 +371,8 @@ export default function Home() {
         </Card>
       )}
 
+      <OwnerCard league={league} />
+
       <div className="md-grid2">
         <Card
           title={
@@ -521,6 +525,43 @@ export default function Home() {
         </div>
       </Card>
     </main>
+  );
+}
+
+/**
+ * The owner's goals at a glance, linking to the Owner tab: how many are on track and the one most
+ * behind (after the playoffs, how many were met and the season's grade; before opening night, when
+ * he sets them).
+ */
+function OwnerCard({ league }: { league: League }) {
+  const og = currentGoals(league);
+  // the wins projected as the odds line beside it projects them (the forecast is shared, worked out once)
+  const progress = useLeagueMemo(() => (og ? ownerProgress(league, og, leagueForecast(league)) : []), [league, og]);
+  if (league.fired) return null;
+  const review = og && league.ownerReviews?.find((r) => r.season === og.season && r.tid === og.tid && r.goals.length);
+  const signed = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}`;
+  let title: string;
+  let sub: string;
+  if (review) {
+    title = `Owner's review: ${review.goals.filter((g) => goalMet(g, g.result)).length} of ${review.goals.length} goals met`;
+    sub = `Season grade ${signed(review.grade)} · overall standing ${signed(review.total)}`;
+  } else if (og && progress.length) {
+    title = `Owner's goals: ${progress.filter((p) => ON_TRACK.has(p.status)).length} of ${progress.length} on track`;
+    const worst = progress.find((p) => p.status === 'missed') ?? progress.find((p) => p.status === 'behind') ?? progress[0];
+    sub = `${worst.goal.title}: ${worst.text}`;
+  } else if (league.phase === 'preseason') {
+    title = "Owner's goals: set on opening night";
+    sub = 'See what he expects from this roster';
+  } else return null;
+  return (
+    <Link to="/owner" className="card clickable row" style={{ gap: 10 }}>
+      <Target size={18} className="dim" aria-hidden="true" />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div className="bold small">{title}</div>
+        <div className="small dim ellipsis">{sub}</div>
+      </div>
+      <ChevronRight size={16} className="dim" />
+    </Link>
   );
 }
 

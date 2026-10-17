@@ -1,10 +1,25 @@
-import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, seasonsInCharge } from '../../core/league/owner';
+import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
+import {
+  ON_TRACK,
+  PAYROLL_SCALE,
+  PERSONALITY,
+  PROFIT_SCALE,
+  WIN_SCALE,
+  YOUNG_AGE,
+  currentGoals,
+  ownerPersonality,
+  ownerProgress,
+  planOwnerGoals,
+  resultText,
+  type GoalStatus,
+} from '../../core/league/ownerGoals';
 import { seasonOutcome, useQueryParam } from '../league/shared';
+import { leagueForecast } from '../../core/analysis/odds';
 import { useLocation } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert, Users } from 'lucide-react';
 import type { Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster, winPct } from '../../core/league/helpers';
+import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster } from '../../core/league/helpers';
 import { salaryFor } from '../../core/playerGen';
 import {
   ARENA_CAPACITY,
@@ -18,8 +33,8 @@ import {
   profit,
   referencePrice,
 } from '../../core/league/finances';
-import { useLeague, useStore } from '../../state/store';
-import { Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Toggle, type Col } from '../components/ui';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { Bar, Card, Help, Kpi, PageHeader, Segmented, Slider, StatTable, Tag, Toggle, type Col } from '../components/ui';
 import { CenterBar, Gauge, PRACTICE, SecTitle, capSeason, fmtM, fmtMs, isOffseason, ordinal, ownerVerdict, shortSeason } from '../office/common';
 
 type Tab = 'overview' | 'budget' | 'owner' | 'history';
@@ -404,26 +419,33 @@ function OwnerTab() {
   const om = league.ownerMood;
   const verdict = ownerVerdict(om.total);
   const seasonsIn = seasonsInCharge(league);
-  const ts = curTeamSeason(league, league.userTid);
-  const games = ts.won + ts.lost;
-  const outcome = seasonOutcome(league, league.userTid, ts);
-  // the owner's profit target and range grow with league revenue
+  const tid = league.userTid;
+  const who = PERSONALITY[ownerPersonality(league, tid)];
+  const og = currentGoals(league);
+  // before opening night: the goals the owner would set with today's roster
+  const provisional = useLeagueMemo(() => (!og && !league.fired && league.phase === 'preseason' ? planOwnerGoals(league, tid) : null), [league, og, tid]);
+  const shown = og ?? provisional ?? undefined;
+  // the wins projected as Home's odds line projects them
+  const progress = useLeagueMemo(() => ownerProgress(league, shown, og ? leagueForecast(league) : null), [league, shown, og]);
+  const reviews = [...(league.ownerReviews ?? [])].reverse();
+  // after the playoffs the season's review stands in for its progress
+  const review = og ? reviews.find((r) => r.season === og.season && r.tid === og.tid && r.goals.length) : undefined;
+  const past = reviews.filter((r) => r !== review);
+  const onTrack = progress.filter((p) => ON_TRACK.has(p.status)).length;
   const scale = revenueScale(league);
-  const [target, range] = [OWNER_PROFIT_TARGET * scale, OWNER_PROFIT_RANGE * scale];
-  const rows: { k: string; w: string; v: number; how: string }[] = [
+  const cap = CAP_FOR(league);
+  const rows: { k: string; how: string }[] = [
+    { k: 'Wins', how: `Each win above or below his target counts ${Math.round(100 / WIN_SCALE)} (±100 at ${WIN_SCALE} wins either way).` },
+    { k: 'Postseason', how: 'Reaching his goal is +30 and each round beyond it 30 more; each round short costs 35 (the play-in counts as one).' },
     {
-      k: 'Wins',
-      w: '40%',
-      v: om.wins,
-      how: 'Regular-season win % against .500: each win above 41 adds about +3, each win below costs about 3. It maxes out around a 74-win pace.',
+      k: 'Profit',
+      how: `Every ${fmtM((PROFIT_SCALE * scale) / 10)} above or below his target counts 10 (±100 at ${fmtM(PROFIT_SCALE * scale)}). His budget is the season's revenue and costs at today's prices and payroll (and any shortfall under the salary floor), a little more for a roster that should win.`,
     },
-    { k: 'Playoffs', w: '40%', v: om.playoffs, how: 'Missing the playoffs −25 · first round 0 · second round +20 · conference finals +45 · Finals +70 · title +100.' },
     {
-      k: 'Finances',
-      w: '20%',
-      v: om.money,
-      how: `Season profit against his ${fmtM(target)} target: every ${fmtM(range / 10)} above it is +10 and every ${fmtM(range / 10)} short costs 10, maxing out at ${fmtMs(target + range)} (or ${fmtMs(target - range)}). The target rises with league revenue.`,
+      k: 'Payroll',
+      how: `Keeping it under his line is +15 (up to +30 with room to spare); going over costs 25, down to −100 at ${fmtM(PAYROLL_SCALE * cap.luxuryTax)} over.`,
     },
+    { k: 'Development', how: `Minutes for players ${YOUNG_AGE} or under against his target: ±100 at half of it either way.` },
   ];
   return (
     <>
@@ -443,60 +465,174 @@ function OwnerTab() {
             {Math.round(om.total * 100)}
           </div>
           <div className="small dim">Overall standing (−100 to +100)</div>
+          {!league.fired && (
+            <div className="small dim2 center" style={{ marginTop: 6 }}>
+              Owner type: <b>{who.label}</b> · {who.blurb}
+            </div>
+          )}
         </div>
       </Card>
+
+      {shown && (
+        <Card
+          title={<h3>{review ? `${seasonLabel(shown.season)} review` : `${seasonLabel(shown.season)} goals`}</h3>}
+          right={
+            review ? (
+              <Tag tone={review.grade >= 0.1 ? 'good' : review.grade <= -0.1 ? 'bad' : 'warn'}>Season {fmtGrade(review.grade)}</Tag>
+            ) : provisional ? (
+              <Tag tone="info">Provisional</Tag>
+            ) : (
+              <Tag tone={onTrack === progress.length ? 'good' : onTrack * 2 >= progress.length ? 'info' : 'warn'}>
+                {onTrack} of {progress.length} on track
+              </Tag>
+            )
+          }
+        >
+          {provisional && (
+            <div className="small dim2" style={{ marginBottom: 10 }}>
+              Set on opening night from the roster you open with: these are the goals he would set with today's.
+            </div>
+          )}
+          {shown.from && !review && (
+            <div className="small dim2" style={{ marginBottom: 10 }}>
+              Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? `games after ${shown.from.won}-${shown.from.lost}` : 'rest of the season'} count.
+            </div>
+          )}
+          <div className="col" style={{ gap: 14 }}>
+            {review
+              ? review.goals.map((g) => (
+                  <div key={g.kind} className="col" style={{ gap: 5 }}>
+                    <div className="row between top" style={{ gap: 8 }}>
+                      <span className="bold small">{g.title}</span>
+                      <span className="num bold small" style={{ color: gradeColor(g.grade) }}>
+                        {fmtGrade(g.grade)}
+                      </span>
+                    </div>
+                    <CenterBar value={g.grade} />
+                    <div className="tiny dim">
+                      {capitalize(resultText(g, g.result))} · {Math.round(g.weight * 100)}% of the review
+                    </div>
+                  </div>
+                ))
+              : progress.map((p) => (
+                  <div key={p.goal.kind} className="col" style={{ gap: 5 }}>
+                    <div className="row between top" style={{ gap: 8 }}>
+                      <span className="bold small">{p.goal.title}</span>
+                      {!provisional && <Tag tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Tag>}
+                    </div>
+                    {/* (no bar before opening night: nothing has happened yet) */}
+                    {!provisional && (
+                      <div aria-hidden="true">
+                        <Bar value={p.fill} max={1} color={`var(--${STATUS_TONE[p.status]})`} />
+                      </div>
+                    )}
+                    <div className="tiny dim">
+                      {p.text} · {Math.round(p.goal.weight * 100)}% of the review
+                    </div>
+                  </div>
+                ))}
+          </div>
+          {review && (
+            <div className="tiny dim" style={{ marginTop: 10 }}>
+              Next season's goals are set on opening night.
+            </div>
+          )}
+        </Card>
+      )}
+      {!shown && !league.fired && (
+        <Card title="Goals">
+          <div className="small dim">
+            {isOffseason(league) || seasonsIn < 1
+              ? "The owner sets next season's goals on opening night."
+              : league.phase === 'regular'
+                ? 'The owner sets his goals for the rest of the season tomorrow.'
+                : 'This season is graded on wins, the playoffs and profit. His goals start on opening night.'}
+          </div>
+        </Card>
+      )}
 
       <Card title="How the owner grades you">
-        <div className="col" style={{ gap: 14 }}>
-          {rows.map((r) => (
-            <div key={r.k} className="col" style={{ gap: 5 }}>
-              <div className="row between">
-                <span className="bold">
-                  {r.k} <span className="tiny dim">· {r.w}</span>
-                </span>
-                <span className="num bold" style={{ color: r.v >= 0.1 ? 'var(--good)' : r.v <= -0.1 ? 'var(--bad)' : 'var(--warn)' }}>
-                  {r.v >= 0 ? '+' : ''}
-                  {Math.round(r.v * 100)}
-                </span>
-              </div>
-              <CenterBar value={r.v} />
-              <div className="tiny dim">{r.how}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Review schedule">
         <div className="col small dim2" style={{ gap: 8 }}>
           <div>
-            The owner reviews your work <b>after every season's playoffs</b>. Your first season sets the baseline; after that each new season counts for 40% and your track record
-            for 60%, so one bad year won't sink you, but a pattern will.
+            On opening night he sets three or four goals from the roster you open with: a win total (what its talent should win against the league&apos;s), a postseason goal from
+            where that projects you in the conference (or, for a rebuild, minutes for the young players), and a money goal. After the playoffs each goal is graded from −100 to +100
+            by how far you beat or missed it, and their weights make the season&apos;s grade.
+          </div>
+          {rows.map((r) => (
+            <div key={r.k}>
+              <b>{r.k}.</b> {r.how}
+            </div>
+          ))}
+          <div>
+            Your first season sets your standing; after that each new season counts for 40% and your track record for 60%, so one bad year won&apos;t sink you, but a pattern will.
+            A win-now owner asks for a couple more wins and weighs the playoffs more; a builder asks for a win less and cares about the young players; a frugal one wants more
+            profit and weighs money more.
           </div>
           <div>
             {/* a team taken over after the season is his from the next one */}
             {seasonsIn < 1 ? 'Your tenure starts next season.' : `This is season ${seasonsIn} of your tenure.`}{' '}
             {seasonsIn <= 2 ? <span className="good">You're in your grace period: you can't be fired before the end of your third season.</span> : 'Your grace period is over.'}
           </div>
-          {games > 0 && (
-            <div>
-              This season so far: {ts.won}-{ts.lost} ({Math.round(winPct(ts) * 100)}%), {fmtMs(profit(league, league.userTid))} profit.
-              {outcome.short !== 'Ongoing' ? ` ${outcome.label}.` : ''}
-            </div>
-          )}
         </div>
       </Card>
+
+      {past.length > 0 && (
+        <Card title="Past reviews">
+          <div className="col" style={{ gap: 10 }}>
+            {past.map((r, i) => (
+              <div key={r.season} className="col" style={{ gap: 3 }}>
+                <div className="row between" style={{ gap: 8 }}>
+                  <span className="small bold">
+                    {seasonLabel(r.season)}
+                    {r.tid !== tid ? ` · ${league.teams[r.tid].abbrev}` : ''}
+                    {r.fired ? ' · fired' : ''}
+                  </span>
+                  <span className="small num">
+                    <span className="bold" style={{ color: gradeColor(r.grade) }}>
+                      {fmtGrade(r.grade)}
+                    </span>
+                    <span className="dim"> · standing {fmtGrade(r.total)}</span>
+                  </span>
+                </div>
+                {/* the latest three goal by goal, older seasons by their grades */}
+                {i < 3 && (
+                  <div className="col tiny dim" style={{ gap: 2 }}>
+                    {r.goals.length
+                      ? r.goals.map((g) => (
+                          <div key={g.kind}>
+                            {g.title} — {resultText(g, g.result)} ({fmtGrade(g.grade)})
+                          </div>
+                        ))
+                      : 'Graded on wins, the playoffs and profit (before goals).'}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <Toggle
           on={league.settings.jobSecurity}
           onChange={(on) => useStore.getState().mutate((l) => (l.settings.jobSecurity = on))}
           label="Job security"
-          help={league.settings.jobSecurity ? 'On: an overall standing below −50 after your grace period gets you fired.' : 'Off: the owner grumbles but never fires you.'}
+          help={
+            league.settings.jobSecurity
+              ? `On: an overall standing below ${Math.round(FIRING_LINE * 100)} after your grace period gets you fired.`
+              : 'Off: the owner grumbles but never fires you.'
+          }
         />
       </Card>
     </>
   );
 }
+
+const STATUS_LABEL: Record<GoalStatus, string> = { ahead: 'Ahead', 'on track': 'On track', behind: 'Behind', met: 'Met', missed: 'Missed' };
+const STATUS_TONE: Record<GoalStatus, 'good' | 'info' | 'warn' | 'bad'> = { ahead: 'good', 'on track': 'info', behind: 'warn', met: 'good', missed: 'bad' };
+const fmtGrade = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}`;
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const gradeColor = (x: number) => (x >= 0.1 ? 'var(--good)' : x <= -0.1 ? 'var(--bad)' : 'var(--warn)');
 
 // ------------------------------------------------------------------ history
 

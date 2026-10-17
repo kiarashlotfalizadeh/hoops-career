@@ -234,7 +234,7 @@ export default function Settings() {
             on={st.jobSecurity}
             onChange={(v) => mutate((l) => (l.settings.jobSecurity = v))}
             label="Job security"
-            help="The owner can fire you after repeated bad seasons (never in your first two). See Owner in Finances."
+            help="The owner can fire you after repeated seasons short of his goals for your roster (never in your first two). See Owner in Finances."
           />
           <Toggle
             on={st.stopOnNews !== false}
@@ -386,7 +386,10 @@ function SwitchTeamSheet({ open, onClose }: { open: boolean; onClose: () => void
             <div className="tiny dim upper bold">Or take over any team</div>
           </>
         )}
-        <div className="small dim2">The {cur.name} go back to the AI staff. Your owner mood resets to neutral; the season, finances and league history carry on.</div>
+        <div className="small dim2">
+          The {cur.name} go back to the AI staff. Your owner mood resets to neutral and the new owner sets his goals: in season from that day (in the playoffs, the next round),
+          otherwise on opening night. The season, finances and league history carry on.
+        </div>
         <Segmented
           value={conf}
           onChange={setConf}
