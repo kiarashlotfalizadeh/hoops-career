@@ -26,7 +26,8 @@ import { fmtDate, rosterSorted } from '../../core/league/helpers';
 import type { League, SavedPlaybook } from '../../core/types';
 import { rosterNames } from '../stats';
 import { setLabBaseline } from '../screens/labBridge';
-import { Card, Help, Sheet, Tag, activateOnKey } from './ui';
+import { Help, Section, Sheet, Tag, activateOnKey } from './ui';
+import '../screens/tactics.css';
 
 /** The user's roster and how its players are named in the changes lists. */
 function useRoster(league: League) {
@@ -47,7 +48,7 @@ export function PlaybookLine() {
   const cur = useCurrent(league);
   if (!cur) return null;
   return (
-    <div className="ellipsis" style={{ color: 'var(--text-2)', fontWeight: 650 }}>
+    <div className="tx-pbline ellipsis">
       Playbook: {cur.pb.name}
       {cur.changes.length > 0 && ' · edited'}
     </div>
@@ -58,23 +59,25 @@ function Changes({ list, max = 8 }: { list: TacticsChange[]; max?: number }) {
   const [all, setAll] = useState(false);
   const shown = all ? list : list.slice(0, max);
   return (
-    <div className="col" style={{ gap: 4 }}>
+    <div className="card flush list tx-changes">
       {shown.map((c) => (
-        <div key={changeText(c)} className="small">
-          <span className="bold">{c.label}</span>{' '}
+        <div key={changeText(c)} className="tx-change">
+          <span className="tx-change-l">{c.label}</span>
           {c.from || c.to ? (
-            <span className="dim2">
-              {c.from} → <span style={{ color: 'var(--accent-text)' }}>{c.to}</span>
+            <span className="tx-change-v">
+              {c.from} → <span className="accent-text">{c.to}</span>
             </span>
           ) : (
-            <span className="dim2">changes</span>
+            <span className="tx-change-v">changes</span>
           )}
         </div>
       ))}
       {list.length > shown.length && (
-        <button className="btn xs ghost" style={{ alignSelf: 'flex-start', marginTop: 4 }} onClick={() => setAll(true)}>
-          {list.length - shown.length} more
-        </button>
+        <div className="tx-change">
+          <button className="btn xs ghost" onClick={() => setAll(true)}>
+            {list.length - shown.length} more
+          </button>
+        </div>
       )}
     </div>
   );
@@ -88,7 +91,7 @@ function NameForm({ initial, submit, label, onCancel }: { initial: string; submi
     setError(submit(name));
   };
   return (
-    <form className="col" style={{ gap: 8 }} onSubmit={onSubmit}>
+    <form className="col tx-form" onSubmit={onSubmit}>
       <input
         className="input"
         value={name}
@@ -102,11 +105,11 @@ function NameForm({ initial, submit, label, onCancel }: { initial: string; submi
         }}
       />
       {error && (
-        <div className="small" role="alert" style={{ color: 'var(--bad)' }}>
+        <div className="small bad" role="alert">
           {error}
         </div>
       )}
-      <div className="row" style={{ gap: 8 }}>
+      <div className="row tx-btns">
         {onCancel && (
           <button type="button" className="btn grow" onClick={onCancel}>
             Cancel
@@ -162,13 +165,13 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
     );
   if (step === 'overwrite' || step === 'delete')
     return (
-      <div className="col" style={{ gap: 12 }}>
+      <div className="col tx-confirm">
         <div className="small">
           {step === 'overwrite'
             ? `Replace "${pb.name}" with your current tactics? ${diff.length ? `${diff.length} ${diff.length === 1 ? 'setting changes' : 'settings change'} in it.` : 'They are the same now.'}`
             : `Delete "${pb.name}"? Your tactics keep their settings.`}
         </div>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row tx-btns">
           <button className="btn grow" onClick={() => setStep('view')}>
             Cancel
           </button>
@@ -192,20 +195,20 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
       </div>
     );
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="small dim2">
+    <div className="col tx-pbsheet">
+      <div className="tx-sheet-lead">
         {playbookLabel(pb)} · saved {fmtDate(pb.saved.season, pb.saved.day, { month: 'short', day: 'numeric', year: 'numeric' })}
       </div>
       {diff.length ? (
-        <div className="col" style={{ gap: 6 }}>
-          <div className="tiny dim upper bold">{inUse ? 'Loading it again puts back' : 'Loading it changes'}</div>
+        <div className="col tx-sub">
+          <div className="over">{inUse ? 'Loading it again puts back' : 'Loading it changes'}</div>
           <Changes list={diff} />
         </div>
       ) : (
         <div className="small">Your tactics are the same as this playbook{inUse ? '' : ' (loading it marks them as coming from it)'}.</div>
       )}
       <div className="tiny dim">Roles, shot freedom and screeners load for the players still on your roster; everyone else keeps his own.</div>
-      <div className="row" style={{ gap: 8 }}>
+      <div className="row tx-btns">
         <button className="btn primary grow" onClick={load} disabled={inUse && !diff.length}>
           {inUse && !diff.length ? 'In use' : 'Load'}
         </button>
@@ -213,7 +216,7 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
           <FlaskConical size={16} /> Compare
         </button>
       </div>
-      <div className="row wrap" style={{ gap: 8 }}>
+      <div className="row wrap tx-btns">
         <button className="btn sm" onClick={() => setStep('overwrite')}>
           Overwrite with current
         </button>
@@ -237,10 +240,10 @@ export function MyPlaybooksCard() {
   const pb = lib.find((p) => p.id === open);
   const full = lib.length >= MAX_PLAYBOOKS;
   return (
-    <Card
+    <Section
       title="My playbooks"
       right={
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row tx-sec-r">
           <span className="tiny dim num">
             {lib.length}/{MAX_PLAYBOOKS}
           </span>
@@ -248,53 +251,54 @@ export function MyPlaybooksCard() {
             <p>Save your tactics as a playbook to come back to them: a playbook for the regular season, one for the playoffs, a small-ball set for when your center is hurt.</p>
             <p>
               A playbook keeps the schemes, every setting and your game management. Roles, shot freedom and screeners are saved by player and only load for players still on your
-              roster. Matchups and star targets are game by game, so they aren't saved.
+              roster. Matchups and star targets are game by game, so they aren&apos;t saved.
             </p>
             <p>Your playbooks are yours: they come with you if you take over another team.</p>
+            <p>Load one, or compare it with your current tactics in the Lab.</p>
           </Help>
         </div>
       }
     >
-      {lib.length === 0 ? (
-        <div className="small dim">No saved playbooks yet. Save your tactics as they are to load them again later, or to compare them with a change in the Lab.</div>
-      ) : (
-        <div className="list" style={{ margin: '0 -14px' }}>
-          {lib.map((p) => {
-            const using = cur?.pb.id === p.id;
-            return (
-              <div
-                key={p.id}
-                className="listrow clickable"
-                role="button"
-                tabIndex={0}
-                aria-haspopup="dialog"
-                aria-label={`${p.name}${using ? (cur.changes.length ? ', in use, edited' : ', in use') : ''}`}
-                onClick={() => setOpen(p.id)}
-                onKeyDown={activateOnKey(() => setOpen(p.id))}
-              >
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="row" style={{ gap: 6, minWidth: 0 }}>
-                    <span className="bold ellipsis" style={{ minWidth: 0 }}>
-                      {p.name}
-                    </span>
-                    {using && <Tag tone={cur.changes.length ? 'warn' : 'good'}>{cur.changes.length ? 'Edited' : 'In use'}</Tag>}
+      <div className="card flush">
+        {lib.length === 0 ? (
+          <div className="tx-empty">No saved playbooks yet.</div>
+        ) : (
+          <div className="list">
+            {lib.map((p) => {
+              const using = cur?.pb.id === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className="listrow clickable tx-pb"
+                  role="button"
+                  tabIndex={0}
+                  aria-haspopup="dialog"
+                  aria-label={`${p.name}${using ? (cur.changes.length ? ', in use, edited' : ', in use') : ''}`}
+                  onClick={() => setOpen(p.id)}
+                  onKeyDown={activateOnKey(() => setOpen(p.id))}
+                >
+                  <div className="grow">
+                    <div className="tx-pb-n">
+                      <span className="lr-name ellipsis">{p.name}</span>
+                      {using && <Tag tone={cur.changes.length ? 'warn' : 'good'}>{cur.changes.length ? 'Edited' : 'In use'}</Tag>}
+                    </div>
+                    <div className="lr-meta ellipsis">{playbookLabel(p)}</div>
                   </div>
-                  <div className="tiny dim ellipsis">{playbookLabel(p)}</div>
+                  <ChevronRight size={16} className="dim tx-chev" />
                 </div>
-                <ChevronRight size={16} className="dim" style={{ flex: 'none' }} />
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
+        <div className="tx-pb-foot">
+          <button className="btn block" onClick={() => setSaving(true)} disabled={full}>
+            <Save size={16} /> Save current as…
+          </button>
+          {full && <div className="tiny dim">{`You have ${MAX_PLAYBOOKS}: overwrite or delete one to save another.`}</div>}
         </div>
-      )}
-      <button className="btn block" style={{ marginTop: 12 }} onClick={() => setSaving(true)} disabled={full}>
-        <Save size={16} /> Save current as…
-      </button>
-      {full && <div className="tiny dim" style={{ marginTop: 6 }}>{`You have ${MAX_PLAYBOOKS}: overwrite or delete one to save another.`}</div>}
+      </div>
       <Sheet open={saving} onClose={() => setSaving(false)} title="Save as a playbook">
-        <div className="small dim2" style={{ marginBottom: 10 }}>
-          {playbookLabel(league.teams[league.userTid].tactics)}, with your roles, shot freedom, screeners and game management.
-        </div>
+        <div className="tx-sheet-lead">{playbookLabel(league.teams[league.userTid].tactics)}, with your roles, shot freedom, screeners and game management.</div>
         <NameForm
           initial=""
           label="Save"
@@ -312,6 +316,6 @@ export function MyPlaybooksCard() {
       <Sheet open={!!pb} onClose={() => setOpen(null)} title={pb?.name}>
         {pb && <PlaybookSheet key={pb.id} pb={pb} close={() => setOpen(null)} />}
       </Sheet>
-    </Card>
+    </Section>
   );
 }

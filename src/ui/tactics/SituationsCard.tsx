@@ -13,7 +13,8 @@ import {
   situationText,
   type SituationTemplate,
 } from '../../core/sim/tactics';
-import { Card, Chips, Help, Sheet, Slider, Toggle } from '../components/ui';
+import { Chips, Help, Section, Sheet, Slider, Toggle } from '../components/ui';
+import '../screens/tactics.css';
 
 type Edit = (fn: (t: Tactics) => void) => void;
 
@@ -104,54 +105,62 @@ export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
       [cur[i - 1], cur[i]] = [cur[i], cur[i - 1]];
       tt.situations = cur;
     });
+  const openAt = open ? list.indexOf(open) : -1;
+  const close = () => {
+    // a name cleared while typing comes back as "Plan"
+    if (open && !open.label.trim()) change(open.id, (p) => void (p.label = 'Plan'));
+    setEditing(null);
+  };
   return (
-    <Card
+    <Section
       title="Situations"
       right={
-        <Help title="Situational plans">
-          <p>
-            Each plan changes your tactics while its situation lasts: a quarter, the time left, the score, or your second unit on the floor. The first enabled plan that matches
-            applies (top to bottom), and your tactics come back when it ends.
-          </p>
-          <p>Changes like "Pace −25" build on whatever playbook you run. Up to {MAX_SITUATIONS} plans.</p>
-        </Help>
+        <div className="row tx-sec-r">
+          <span className="tiny dim num">
+            {list.length}/{MAX_SITUATIONS}
+          </span>
+          <Help title="Situational plans">
+            <p>
+              Each plan changes your tactics while its situation lasts: a quarter, the time left, the score, or your second unit on the floor. The first enabled plan that matches
+              applies (top to bottom), and your tactics come back when it ends.
+            </p>
+            <p>Changes like &quot;Pace −25&quot; build on whatever playbook you run. Up to {MAX_SITUATIONS} plans.</p>
+            {(Object.keys(SITUATION_TEMPLATES) as SituationTemplate[]).map((k) => (
+              <p key={k}>
+                <b>{SITUATION_TEMPLATES[k].label}:</b> {SITUATION_TEMPLATES[k].help}
+              </p>
+            ))}
+          </Help>
+        </div>
       }
     >
-      <div className="col" style={{ gap: 12 }}>
-        {list.length === 0 && <div className="small dim">No plans: your tactics stay the same all game.</div>}
-        {list.map((s, i) => (
-          <div key={s.id} className="col" style={{ gap: 6 }}>
-            <Toggle
-              on={s.enabled}
-              onChange={(x) => change(s.id, (p) => void (p.enabled = x))}
-              label={s.label}
-              help={
-                <>
-                  <span>{situationText(s.when)}</span>
-                  <br />
-                  <span className="dim2">{patchText(s.patch)}</span>
-                </>
-              }
-            />
-            <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-              {i > 0 && (
-                <button className="btn xs ghost" aria-label={`Move ${s.label} up`} onClick={() => moveUp(i)}>
-                  <ArrowUp size={14} />
+      <div className="card flush">
+        {list.length === 0 ? (
+          <div className="tx-empty">No plans: your tactics stay the same all game.</div>
+        ) : (
+          <div className="list">
+            {list.map((s) => (
+              <div key={s.id} className="tx-sit">
+                <button className="tx-sit-edit" aria-label={`Edit ${s.label}`} aria-haspopup="dialog" onClick={() => setEditing(s.id)}>
+                  <span className="lr-name">
+                    {s.label} <Pencil size={13} className="dim" aria-hidden="true" />
+                  </span>
+                  <span className="lr-meta">{situationText(s.when)}</span>
+                  <span className="tx-sit-then">{patchText(s.patch)}</span>
                 </button>
-              )}
-              <button className="btn xs ghost" aria-label={`Remove ${s.label}`} onClick={() => remove(s.id)}>
-                <Trash2 size={14} />
-              </button>
-              <button className="btn xs" aria-label={`Edit ${s.label}`} onClick={() => setEditing(s.id)}>
-                <Pencil size={14} /> Edit
-              </button>
-            </div>
+                <button
+                  className={`toggle ${s.enabled ? 'on' : ''}`}
+                  role="switch"
+                  aria-checked={s.enabled}
+                  aria-label={s.label}
+                  onClick={() => change(s.id, (p) => void (p.enabled = !s.enabled))}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-        <div>
-          <div className="small bold" style={{ marginBottom: 6 }}>
-            Add a plan{full && <span className="dim"> (up to {MAX_SITUATIONS})</span>}
-          </div>
+        )}
+        <div className="tx-add">
+          <div className="over">Add a plan{full && ` (up to ${MAX_SITUATIONS})`}</div>
           <div className="chips" role="group" aria-label="Add a situational plan">
             {(Object.keys(SITUATION_TEMPLATES) as SituationTemplate[]).map((k) => (
               <button key={k} className="chip" disabled={full} onClick={() => add(k)}>
@@ -164,18 +173,29 @@ export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
           </div>
         </div>
       </div>
-      <Sheet
-        open={!!open}
-        onClose={() => {
-          // a name cleared while typing comes back as "Plan"
-          if (open && !open.label.trim()) change(open.id, (p) => void (p.label = 'Plan'));
-          setEditing(null);
-        }}
-        title={open ? `Plan: ${open.label || 'Plan'}` : 'Plan'}
-      >
+      <Sheet open={!!open} onClose={close} title={open ? `Plan: ${open.label || 'Plan'}` : 'Plan'}>
         {open && <SituationEditor s={open} change={(fn) => change(open.id, fn)} />}
+        {open && (
+          <div className="row tx-btns tx-sheet-foot">
+            {openAt > 0 && (
+              <button className="btn grow" aria-label={`Move ${open.label} up`} onClick={() => moveUp(openAt)}>
+                <ArrowUp size={16} /> Move up
+              </button>
+            )}
+            <button
+              className="btn danger grow"
+              aria-label={`Remove ${open.label}`}
+              onClick={() => {
+                remove(open.id);
+                setEditing(null);
+              }}
+            >
+              <Trash2 size={16} /> Remove
+            </button>
+          </div>
+        )}
       </Sheet>
-    </Card>
+    </Section>
   );
 }
 
@@ -217,9 +237,9 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
   // only what the controls above don't show
   const extras = patchParts(extraPatch(s.patch));
   return (
-    <div className="col" style={{ gap: 16 }}>
-      <label className="col" style={{ gap: 4 }}>
-        <span className="small dim">Name</span>
+    <div className="col tx-editor">
+      <label className="col tx-field">
+        <span className="over">Name</span>
         <input
           className="input"
           value={s.label}
@@ -228,125 +248,130 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
           onBlur={() => !s.label.trim() && change((p) => void (p.label = 'Plan'))}
         />
       </label>
-      <div className="small bold">When</div>
+      <div className="tx-sub">
+        <div className="over">When</div>
+        <div className="tx-when">{situationText(w)}</div>
+      </div>
       {/* the quarters and the leads move together, so a plan can't be set to a situation that never comes */}
-      <Slider
-        label="From"
-        value={w.fromQ ?? 1}
-        min={1}
-        max={4}
-        onChange={(v) =>
-          change((p) => {
-            setWhen(p, 'fromQ', v > 1 ? v : undefined);
-            if (v > (p.when.untilQ ?? 4)) setWhen(p, 'untilQ', v < 4 ? v : undefined);
-          })
-        }
-        format={q}
-      />
-      <Slider
-        label="Until"
-        value={w.untilQ ?? 4}
-        min={1}
-        max={4}
-        onChange={(v) =>
-          change((p) => {
-            setWhen(p, 'untilQ', v < 4 ? v : undefined);
-            if (v < (p.when.fromQ ?? 1)) setWhen(p, 'fromQ', v > 1 ? v : undefined);
-          })
-        }
-        format={q}
-      />
-      <Slider
-        label="Time left in the period"
-        value={w.maxClock ?? 720}
-        min={15}
-        max={720}
-        step={15}
-        onChange={(v) => change((p) => setWhen(p, 'maxClock', v < 720 ? v : undefined))}
-        format={(v) => (v >= 720 ? 'Any time' : `Last ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`)}
-      />
-      <Slider
-        label="Our lead at least"
-        value={lead(w.minLead, ANY_LO)}
-        min={ANY_LO}
-        max={30}
-        onChange={(v) =>
-          change((p) => {
-            setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
-            if (p.when.maxLead !== undefined && v > p.when.maxLead) setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
-          })
-        }
-        format={(v) => (v <= ANY_LO ? 'Any' : signed(v))}
-        help="Negative: trailing by at most that much."
-      />
-      <Slider
-        label="Our lead at most"
-        value={lead(w.maxLead, ANY_HI)}
-        min={-30}
-        max={ANY_HI}
-        onChange={(v) =>
-          change((p) => {
-            setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
-            if (p.when.minLead !== undefined && v < p.when.minLead) setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
-          })
-        }
-        format={(v) => (v >= ANY_HI ? 'Any' : signed(v))}
-        help="Negative: trailing by at least that much."
-      />
-      <Toggle
-        on={!!w.benchUnit}
-        onChange={(x) => change((p) => setWhen(p, 'benchUnit', x || undefined))}
-        label="Only with the second unit"
-        help="Three or more reserves on the floor."
-      />
-      <div className="small dim">{situationText(w)}</div>
-      <div className="small bold">Then</div>
-      {nudgeSlider('offense', 'pace', 'Pace')}
-      {nudgeSlider('offense', 'threePoint', 'Three-point emphasis')}
-      {nudgeSlider('offense', 'crashBoards', 'Crash the offensive glass')}
-      {nudgeSlider('defense', 'pressure', 'Ball pressure')}
-      {nudgeSlider('defense', 'help', 'Help defense')}
-      {nudgeSlider('defense', 'getBack', 'Transition defense')}
-      <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>
-          Base scheme
-        </div>
-        <Chips
-          label="Base scheme"
-          value={s.patch.defense?.scheme ?? 'keep'}
-          onChange={(x: DefScheme | 'keep') =>
+      <div className="card col tx-group">
+        <Slider
+          label="From"
+          value={w.fromQ ?? 1}
+          min={1}
+          max={4}
+          onChange={(v) =>
             change((p) => {
-              const d = { ...p.patch.defense };
-              if (x === 'keep') delete d.scheme;
-              else d.scheme = x;
-              p.patch.defense = d;
-              if (!Object.keys(d).length) delete p.patch.defense;
+              setWhen(p, 'fromQ', v > 1 ? v : undefined);
+              if (v > (p.when.untilQ ?? 4)) setWhen(p, 'untilQ', v < 4 ? v : undefined);
             })
           }
-          options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))]}
+          format={q}
         />
-      </div>
-      <div>
-        <div className="small bold" style={{ marginBottom: 6 }}>
-          Full-court press
-        </div>
-        <Chips
-          label="Full-court press"
-          value={s.patch.defense?.press ?? 'keep'}
-          onChange={(x: PressMode | 'keep') =>
+        <Slider
+          label="Until"
+          value={w.untilQ ?? 4}
+          min={1}
+          max={4}
+          onChange={(v) =>
             change((p) => {
-              const d = { ...p.patch.defense };
-              if (x === 'keep') delete d.press;
-              else d.press = x;
-              p.patch.defense = d;
-              if (!Object.keys(d).length) delete p.patch.defense;
+              setWhen(p, 'untilQ', v < 4 ? v : undefined);
+              if (v < (p.when.fromQ ?? 1)) setWhen(p, 'fromQ', v > 1 ? v : undefined);
             })
           }
-          options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))]}
+          format={q}
+        />
+        <Slider
+          label="Time left in the period"
+          value={w.maxClock ?? 720}
+          min={15}
+          max={720}
+          step={15}
+          onChange={(v) => change((p) => setWhen(p, 'maxClock', v < 720 ? v : undefined))}
+          format={(v) => (v >= 720 ? 'Any time' : `Last ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`)}
+        />
+        <Slider
+          label="Our lead at least"
+          value={lead(w.minLead, ANY_LO)}
+          min={ANY_LO}
+          max={30}
+          onChange={(v) =>
+            change((p) => {
+              setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
+              if (p.when.maxLead !== undefined && v > p.when.maxLead) setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
+            })
+          }
+          format={(v) => (v <= ANY_LO ? 'Any' : signed(v))}
+          help="Negative: trailing by at most that much."
+        />
+        <Slider
+          label="Our lead at most"
+          value={lead(w.maxLead, ANY_HI)}
+          min={-30}
+          max={ANY_HI}
+          onChange={(v) =>
+            change((p) => {
+              setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
+              if (p.when.minLead !== undefined && v < p.when.minLead) setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
+            })
+          }
+          format={(v) => (v >= ANY_HI ? 'Any' : signed(v))}
+          help="Negative: trailing by at least that much."
+        />
+        <Toggle
+          on={!!w.benchUnit}
+          onChange={(x) => change((p) => setWhen(p, 'benchUnit', x || undefined))}
+          label="Only with the second unit"
+          help="Three or more reserves on the floor."
         />
       </div>
-      {extras.length > 0 && <div className="small dim">Also in this plan: {extras.join(' · ')}.</div>}
-      {ACTIONS.some((a) => s.patch.nudge?.actions?.[a]) && <div className="tiny dim">Action changes come from the template and stay as they are.</div>}
+      <div className="tx-sub">
+        <div className="over">Then</div>
+        <div className="tx-when">{patchText(s.patch)}</div>
+      </div>
+      <div className="card col tx-group">
+        {nudgeSlider('offense', 'pace', 'Pace')}
+        {nudgeSlider('offense', 'threePoint', 'Three-point emphasis')}
+        {nudgeSlider('offense', 'crashBoards', 'Crash the offensive glass')}
+        {nudgeSlider('defense', 'pressure', 'Ball pressure')}
+        {nudgeSlider('defense', 'help', 'Help defense')}
+        {nudgeSlider('defense', 'getBack', 'Transition defense')}
+        <div className="tx-ctl-chips">
+          <div className="slider-label">Base scheme</div>
+          <Chips
+            label="Base scheme"
+            value={s.patch.defense?.scheme ?? 'keep'}
+            onChange={(x: DefScheme | 'keep') =>
+              change((p) => {
+                const d = { ...p.patch.defense };
+                if (x === 'keep') delete d.scheme;
+                else d.scheme = x;
+                p.patch.defense = d;
+                if (!Object.keys(d).length) delete p.patch.defense;
+              })
+            }
+            options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))]}
+          />
+        </div>
+        <div className="tx-ctl-chips">
+          <div className="slider-label">Full-court press</div>
+          <Chips
+            label="Full-court press"
+            value={s.patch.defense?.press ?? 'keep'}
+            onChange={(x: PressMode | 'keep') =>
+              change((p) => {
+                const d = { ...p.patch.defense };
+                if (x === 'keep') delete d.press;
+                else d.press = x;
+                p.patch.defense = d;
+                if (!Object.keys(d).length) delete p.patch.defense;
+              })
+            }
+            options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))]}
+          />
+        </div>
+        {extras.length > 0 && <div className="small dim">Also in this plan: {extras.join(' · ')}.</div>}
+        {ACTIONS.some((a) => s.patch.nudge?.actions?.[a]) && <div className="tiny dim">Action changes come from the template and stay as they are.</div>}
+      </div>
     </div>
   );
 }
@@ -356,31 +381,41 @@ export function SituationToggles({ t, edit }: { t: Tactics; edit: Edit }) {
   const list = plans(t);
   const keys: SituationTemplate[] = ['protectLead', 'chasing'];
   return (
-    <Card
+    <Section
       title="Late-game plans"
-      right={<Help title="Late-game plans">Changes to your tactics that kick in by themselves late in close or lopsided games, and end when the situation does.</Help>}
+      right={
+        <Help title="Late-game plans">
+          <p>Changes to your tactics that kick in by themselves late in close or lopsided games, and end when the situation does.</p>
+          {keys.map((k) => (
+            <p key={k}>
+              <b>{SITUATION_TEMPLATES[k].label}:</b> {SITUATION_TEMPLATES[k].help}
+            </p>
+          ))}
+        </Help>
+      }
     >
-      <div className="col" style={{ gap: 12 }}>
+      <div className="card flush list">
         {keys.map((k) => {
           const s = list.find((x) => x.id === k);
           return (
-            <Toggle
-              key={k}
-              on={!!s?.enabled}
-              onChange={(on) =>
-                edit((tt) => {
-                  const cur = plans(tt);
-                  const have = cur.find((x) => x.id === k);
-                  if (have) have.enabled = on;
-                  else if (on && cur.length < MAX_SITUATIONS) tt.situations = [...cur, situationFromTemplate(k, cur)];
-                })
-              }
-              label={SITUATION_TEMPLATES[k].label}
-              help={SITUATION_TEMPLATES[k].help}
-            />
+            <div key={k} className="tx-ctl">
+              <Toggle
+                on={!!s?.enabled}
+                onChange={(on) =>
+                  edit((tt) => {
+                    const cur = plans(tt);
+                    const have = cur.find((x) => x.id === k);
+                    if (have) have.enabled = on;
+                    else if (on && cur.length < MAX_SITUATIONS) tt.situations = [...cur, situationFromTemplate(k, cur)];
+                  })
+                }
+                label={SITUATION_TEMPLATES[k].label}
+                help={situationText(SITUATION_TEMPLATES[k].when)}
+              />
+            </div>
           );
         })}
       </div>
-    </Card>
+    </Section>
   );
 }
