@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import { useLeague, useStore } from '../../state/store';
+import { act } from '../../state/actions';
 import { ROLE_META, archetype } from '../../core/ratings';
 import type { OffRole, Player, ShotFreedom, Tactics } from '../../core/types';
 import { Section, Segmented } from './ui';
@@ -10,8 +11,9 @@ export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
   const natural = archetype(p.ratings).role;
-  const edit = (fn: (tt: Tactics) => void) =>
-    useStore.getState().mutate((l) => {
+  const busy = useStore((s) => !!s.sim);
+  const edit = (label: string, fn: (tt: Tactics) => void) =>
+    act(label, (l) => {
       const tt = l.teams[l.userTid].tactics;
       fn(tt);
       tt.manual = true;
@@ -23,7 +25,13 @@ export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
           {(Object.keys(ROLE_META) as OffRole[]).map((r) => {
             const on = (t.offense.roles[p.pid] ?? natural) === r;
             return (
-              <button key={r} className={`tm-role-opt ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => edit((tt) => void (tt.offense.roles[p.pid] = r))}>
+              <button
+                key={r}
+                className={`tm-role-opt ${on ? 'on' : ''}`}
+                aria-pressed={on}
+                disabled={busy}
+                onClick={() => edit('Set his role', (tt) => void (tt.offense.roles[p.pid] = r))}
+              >
                 <span className="grow">
                   <span className="tm-role-opt-l">
                     {ROLE_META[r].label}
@@ -42,7 +50,8 @@ export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
       <Section title="Shot freedom">
         <Segmented
           value={String(t.offense.freedom[p.pid] ?? 0)}
-          onChange={(x) => edit((tt) => void (tt.offense.freedom[p.pid] = Number(x) as ShotFreedom))}
+          disabled={busy}
+          onChange={(x) => edit('Set his shot freedom', (tt) => void (tt.offense.freedom[p.pid] = Number(x) as ShotFreedom))}
           label="Shot freedom"
           options={[
             { id: '-1', label: 'Limited' },

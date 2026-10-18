@@ -1,7 +1,7 @@
 // Two players side by side (/compare?a=<pid>&b=<pid>): who each is (team, size, contract, health),
-// then the rows a GM weighs one against the other on (the scouting profile, ratings, this season's
-// line, career totals and highs, honors), each with its better side lit. Either side can be changed
-// through the player picker, and the two can swap sides.
+// then the rows a GM weighs one against the other on, each with its better side lit, in three views:
+// Profile (the overview, the scouting profile, honors), Ratings, and Stats (this season, career totals
+// and highs). Either side can be changed through the player picker, and the two can swap sides.
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight, UserPlus } from 'lucide-react';
@@ -13,7 +13,7 @@ import { askingContract, waiverSalary } from '../../core/league/contracts';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { FRANCHISES } from '../../core/teams';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Avatar, Bar, Empty, Ovr, PageHeader, Section } from '../components/ui';
+import { Avatar, Bar, Empty, Help, Ovr, PageHeader, Section, Segmented } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { capSeason, fmtM, openOption, shortSeason } from '../office/common';
@@ -22,6 +22,10 @@ import { skillColor, useSkillPercentiles } from '../playerSkills';
 import { identityColor } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
+
+type View = 'profile' | 'ratings' | 'stats';
+/** The view each section is in: who they are first, then the ratings, then the numbers. */
+const VIEW_OF: Record<CmpSection['id'], View> = { overview: 'profile', skills: 'profile', honors: 'profile', ratings: 'ratings', season: 'stats', career: 'stats', highs: 'stats' };
 
 /** His deal as a line and a note: salary and years left, a free agent's asking price, a prospect's board rank. */
 function contractOf(league: League, p: Player): { main: string; sub?: string } {
@@ -157,9 +161,8 @@ function Heads({ names, mid }: { names: [string, string]; mid?: string }) {
 
 function Block({ s, names }: { s: CmpSection; names: [string, string] }) {
   return (
-    <Section title={s.title}>
+    <Section title={s.title} right={s.note ? <Help title={s.title}>{s.note}</Help> : undefined}>
       <div className="card cmp-card">
-        {s.note && <div className="cmp-note">{s.note}</div>}
         {!s.rows.length ? (
           <div className="small dim">{s.empty}</div>
         ) : s.id === 'skills' ? (
@@ -236,6 +239,7 @@ export default function Compare() {
   const pa = ids.a !== null ? league.players[ids.a] : undefined;
   const pb = ids.b !== null ? league.players[ids.b] : undefined;
   const [picking, setPicking] = useState<Side | null>(null);
+  const [view, setView] = useState<View>('profile');
   const pctile = useSkillPercentiles(league);
   const sections = useLeagueMemo(() => compareSections(league, pa, pb, pctile), [league, pa, pb, pctile]);
   // the picker's recent comparisons (this device's)
@@ -255,7 +259,7 @@ export default function Compare() {
         title="Compare"
         sub={pa && pb ? `${pa.lastName} vs ${pb.lastName}` : 'Two players side by side'}
         back
-        backTo={pa ? `/player/${pa.pid}` : '/roster'}
+        backTo={pa ? `/player/${pa.pid}` : '/team'}
         right={
           <button className="btn sm ghost" disabled={ids.a === null && ids.b === null} onClick={() => set(ids.b, ids.a)} aria-label="Swap sides">
             <ArrowLeftRight size={16} /> Swap
@@ -282,9 +286,21 @@ export default function Compare() {
               </Fragment>
             ))}
           </div>
-          {sections.map((s) => (
-            <Block key={s.id} s={s} names={names} />
-          ))}
+          <Segmented
+            value={view}
+            onChange={setView}
+            label="Compare"
+            options={[
+              { id: 'profile', label: 'Profile' },
+              { id: 'ratings', label: 'Ratings' },
+              { id: 'stats', label: 'Stats' },
+            ]}
+          />
+          {sections
+            .filter((s) => VIEW_OF[s.id] === view)
+            .map((s) => (
+              <Block key={s.id} s={s} names={names} />
+            ))}
         </>
       ) : (
         <Empty>Pick two players to set them side by side, or open Compare from any player's page.</Empty>

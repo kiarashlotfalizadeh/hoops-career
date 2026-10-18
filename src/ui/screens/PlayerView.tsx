@@ -1,8 +1,9 @@
 import { accolades, useQueryParam } from '../league/shared';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, ChevronLeft, ChevronRight, MessageCircle, PenLine, Pencil, Scale } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Clock, MessageCircle, PenLine, Pencil, Scale } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { act, edit } from '../../state/actions';
 import type { League, Player, PlayerStats, RatingKey, TrainingFocus } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
 import { RATING_META, ROLE_META, archetype, attrDisplay, composites, fmtHeight, ovrWeights, tierLabel } from '../../core/ratings';
@@ -14,7 +15,9 @@ import { advancedView, f1, ordinal, ordinalSuffix, perGame, playerSeason, season
 import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
-import { moodLevel, MOOD_META, meetBlockedReason, promiseStatus, wantsMeeting } from '../../core/league/morale';
+import { meetBlockedReason, promiseStatus, wantsMeeting } from '../../core/league/morale';
+import { effectLine, moodMeta, moodReasons, moraleEffect, roomLine } from '../../core/league/moraleView';
+import { Term } from '../components/Glossary';
 import { MeetingPanel } from '../office/PlayerMeeting';
 import { FOCUS_META, ratingMeans } from '../../core/league/progression';
 import { askingContract, convertTwoWay, extensionBlockedReason, marketSalary, releaseBlockedReason, rookieScaleDeal } from '../../core/league/contracts';
@@ -113,22 +116,47 @@ export default function PlayerView() {
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
   const [extending, setExtending] = useState(false);
-  // the trade-request mail links here with ?meet=1
-  const [params] = useSearchParams();
-  const [meeting, setMeeting] = useState(() => params.get('meet') === '1');
+  const [meeting, setMeeting] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const simming = useStore((s) => !!s.sim);
+  // the agenda's trade request and the staff's mail link here with ?meet=1: the meeting opens, once
+  const [params, setParams] = useSearchParams();
+  const meetAsked = params.get('meet') === '1';
+  useEffect(() => {
+    if (!meetAsked) return;
+    setMeeting(true);
+    setParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        n.delete('meet');
+        return n;
+      },
+      { replace: true },
+    );
+  }, [meetAsked, setParams]);
   const pctile = useSkillPercentiles(league);
   // this season's award ladders, as the Awards tab draws them (once games are played)
   const races = useLeagueMemo(() => {
     if (league.phase !== 'regular' || !league.teams.some((t) => t.seasons.some((s) => s.season === league.season && s.won + s.lost > 0))) return null;
     return awardRaces(league, 5);
   }, [league]);
-  const goBack = useBack(p && p.tid === league.userTid ? '/roster' : p && p.tid >= 0 ? `/team/${p.tid}` : '/');
+  // back with nothing behind: your player to Team, another team's to its page, the rest to where they're kept
+  const goBack = useBack(
+    !p || p.tid === league.userTid
+      ? '/team'
+      : p.tid >= 0
+        ? `/teams/${p.tid}`
+        : p.tid === FREE_AGENT
+          ? '/office/free-agents'
+          : p.tid === DRAFT_PROSPECT
+            ? '/office/draft'
+            : '/league/history',
+  );
   if (!p) {
     return (
       <main className="page">
-        <PageHeader title="Player" back backTo="/roster" />
+        <PageHeader title="Player" back backTo="/team" />
         <div className="card">
           <Empty>That player is no longer in the league.</Empty>
         </div>
@@ -151,7 +179,6 @@ export default function PlayerView() {
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
   const role = team ? (team.tactics.offense.roles[p.pid] ?? arch.role) : arch.role;
-  const mood = MOOD_META[moodLevel(p.mood.score)];
   const cur = playerSeason(p, league.season);
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
@@ -173,12 +200,6 @@ export default function PlayerView() {
             ? `${team.region} ${team.name}`
             : '';
   const colors = team ? (team.colors ?? FRANCHISES[team.tid]?.colors ?? NO_TEAM) : NO_TEAM;
-  const contribs = ovrContributions(league, p);
-  const pluses = contribs.parts.filter((x) => x.delta > 0).slice(0, 4);
-  const minuses = contribs.parts
-    .filter((x) => x.delta < 0)
-    .slice(-3)
-    .reverse();
   const inRaces = races
     ? RACES.flatMap(([k, label]) => {
         const i = races[k].findIndex((x) => x.c.p.pid === p.pid);
@@ -198,6 +219,11 @@ export default function PlayerView() {
   ];
   const whys = [...new Set([tradeWhy, releaseWhy, extendWhy])].filter(Boolean).join(' ');
   const honors = accolades(p);
+  const convert = () => {
+    let res = { ok: false, reason: '' };
+    if (!act('Convert his deal', (l) => void (res = convertTwoWay(l, p.pid)))) return;
+    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
+  };
 
   return (
     <main className="page">
@@ -292,6 +318,9 @@ export default function PlayerView() {
 
       {tab === 'overview' && (
         <>
+          {/* a rostered player's mood: free agents, prospects and retired players have none to show */}
+          {p.tid >= 0 && <Morale league={league} p={p} mine={mine} busyWhy={busyWhy} onMeet={() => setMeeting(true)} />}
+
           <Section
             title="Scouting profile"
             right={
@@ -318,35 +347,6 @@ export default function PlayerView() {
           </Section>
 
           <div className="md-grid2">
-            <Section title={`Why he's a ${p.ovr}`}>
-              <div className="card tm-why">
-                <div className="tm-why-sum">
-                  {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} OVR ${contribs.gap > 0 ? 'above' : 'below'}`} an average player ({AVERAGE_OVR}). The biggest
-                  reasons:
-                </div>
-                <div className="tm-why-cols">
-                  {[
-                    { title: 'Lifts him', list: pluses },
-                    { title: 'Holds him back', list: minuses },
-                  ].map((g) => (
-                    <div key={g.title} className="tm-why-col">
-                      <div className="over">{g.title}</div>
-                      {!g.list.length && <div className="tm-why-row dim">Nothing</div>}
-                      {g.list.map((x) => (
-                        <div key={x.key} className="tm-why-row">
-                          <span className="ellipsis">{x.label}</span>
-                          <span className={`num ${x.delta > 0 ? 'good' : 'bad'}`}>
-                            {x.delta > 0 ? '+' : ''}
-                            {x.delta}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Section>
-
             <Section
               title="Role & usage"
               right={
@@ -355,7 +355,7 @@ export default function PlayerView() {
                     <button className="card-link" aria-haspopup="dialog" onClick={() => setRoleOpen(true)}>
                       Set role
                     </button>
-                    <Link to="/rotation" className="card-link">
+                    <Link to="/team/rotation" className="card-link">
                       Minutes <ChevronRight size={14} />
                     </Link>
                   </span>
@@ -366,45 +366,13 @@ export default function PlayerView() {
                 <div className="row between top">
                   <div className="grow">
                     <div className="tm-role-name">{ROLE_META[role].label}</div>
-                    <div className="tm-role-help">{ROLE_META[role].help}</div>
+                    {arch.role !== role && <div className="small warn">Natural role: {ROLE_META[arch.role].label}</div>}
                   </div>
-                  {freedom && <Tag tone={freedom === 'Green light' ? 'good' : freedom === 'Limited' ? 'warn' : undefined}>{freedom}</Tag>}
+                  {freedom && freedom !== 'Normal' && <Tag tone={freedom === 'Green light' ? 'good' : 'warn'}>{freedom}</Tag>}
                 </div>
-                {arch.role !== role && <div className="small warn">Natural role: {ROLE_META[arch.role].label}.</div>}
                 {usage.length > 0 && <Statline items={usage} />}
               </div>
             </Section>
-          </div>
-
-          <div className="md-grid2">
-            {/* retired players and prospects have no mood to show */}
-            {p.tid !== RETIRED && p.tid !== DRAFT_PROSPECT && (
-              <Section title="Mood">
-                <div className="card tm-mood-card">
-                  <div className="row">
-                    <span className="tm-mood-ic" style={{ color: mood.color }} aria-hidden="true">
-                      {mood.emoji}
-                    </span>
-                    <span className="tm-mood-l grow">{mood.label}</span>
-                    {p.mood.tradeRequest && <Tag tone="bad">Wants a trade</Tag>}
-                  </div>
-                  <ul className="tm-notes">
-                    {p.mood.notes.length ? p.mood.notes.map((n) => <li key={n}>{n}</li>) : <li>No complaints</li>}
-                    {p.mood.expectedMin > 0 && <li className="dim">Expects about {p.mood.expectedMin} minutes a night</li>}
-                  </ul>
-                  {/* one who asked out or is unhappy can be met, and promised something */}
-                  {mine && p.promise && <div className="small bold">{promiseStatus(league, p)}</div>}
-                  {mine && !p.promise && wantsMeeting(p) && (
-                    <div className="row wrap tm-acts">
-                      <button className="btn sm" disabled={!!(busyWhy ?? meetBlockedReason(league, p))} onClick={() => setMeeting(true)}>
-                        <MessageCircle size={15} /> Meet with him
-                      </button>
-                      {(busyWhy ?? meetBlockedReason(league, p)) && <span className="tm-why-line">{busyWhy ?? meetBlockedReason(league, p)}</span>}
-                    </div>
-                  )}
-                </div>
-              </Section>
-            )}
 
             <Section title="Contract">
               <div className="card tm-deal">
@@ -427,11 +395,15 @@ export default function PlayerView() {
                         <span className="good bold">Extended through {seasonLabel(contractExp(p.contract))}</span> · {fmtM(salaryFor(p, extStart))} from {shortSeason(extStart)}
                       </div>
                     )}
-                    {p.contract.twoWay && <div className="tm-deal-note">Two-way: off the 15-man roster and the cap. Plays only when the team is short-handed.</div>}
+                    {p.contract.twoWay && (
+                      <div className="tm-deal-note">
+                        <Term id="twoway">Two-way</Term>: off the 15-man roster and the cap.
+                      </div>
+                    )}
                     {p.contract.tenDay && <div className="tm-deal-note">{tenDayLine(league, p)}</div>}
                     {p.rfa && (
                       <div className="tm-deal-note">
-                        Qualifying offer out ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): a restricted free agent when free agency opens.
+                        <Term id="qo">Qualifying offer</Term> out ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): restricted when free agency opens.
                       </div>
                     )}
                   </>
@@ -443,14 +415,14 @@ export default function PlayerView() {
                         : p.rfa?.sheet
                           ? `Signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
                           : p.rfa?.tid === league.userTid
-                            ? `Your restricted free agent: re-sign him with Bird rights (asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}), or match any offer sheet. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
+                            ? `Your restricted free agent: asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
                             : p.rfa
                               ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
                               : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                     </div>
                     {/* straight to his offer (or claim) sheet on the Free Agents screen */}
                     {!p.rfa?.sheet && (
-                      <Link className="btn sm primary tm-deal-go" to={`/free-agents?offer=${p.pid}`}>
+                      <Link className="btn sm primary tm-deal-go" to={`/office/free-agents?offer=${p.pid}`}>
                         {p.waivers ? 'Claim off waivers' : p.rfa?.tid === league.userTid ? 'Re-sign' : p.rfa ? 'Offer sheet' : 'Make an offer'}
                       </Link>
                     )}
@@ -463,34 +435,26 @@ export default function PlayerView() {
                 {mine ? (
                   <>
                     <div className="row wrap tm-acts">
-                      {tradeWhy ? (
+                      {tradeWhy || simming ? (
                         <button className="btn sm" disabled>
                           <ArrowLeftRight size={15} /> Trade
                         </button>
                       ) : (
-                        <Link className="btn sm" to={`/trade?give=${p.pid}`}>
+                        <Link className="btn sm" to={`/office/trade?give=${p.pid}`}>
                           <ArrowLeftRight size={15} /> Trade
                         </Link>
                       )}
                       {finalSeason && (
-                        <button className="btn sm" disabled={!!extendWhy} onClick={() => setExtending(true)}>
+                        <button className="btn sm" disabled={!!extendWhy || simming} onClick={() => setExtending(true)}>
                           <PenLine size={15} /> Extend
                         </button>
                       )}
                       {p.contract.twoWay && (
-                        <button
-                          className="btn sm"
-                          disabled={!!busyWhy}
-                          onClick={() => {
-                            let res = { ok: false, reason: '' };
-                            useStore.getState().mutate((l) => void (res = convertTwoWay(l, p.pid)));
-                            useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-                          }}
-                        >
+                        <button className="btn sm" disabled={!!busyWhy || simming} onClick={convert}>
                           Convert to standard
                         </button>
                       )}
-                      <button className="btn sm danger" disabled={!!releaseWhy} onClick={() => setConfirmRelease(true)}>
+                      <button className="btn sm danger" disabled={!!releaseWhy || simming} onClick={() => setConfirmRelease(true)}>
                         Release
                       </button>
                     </div>
@@ -501,7 +465,7 @@ export default function PlayerView() {
                   p.tid >= 0 &&
                   p.tid !== league.userTid && (
                     <div className="row tm-acts">
-                      <Link className="btn sm" to={`/trade?with=${p.tid}&get=${p.pid}`}>
+                      <Link className="btn sm" to={`/office/trade?with=${p.tid}&get=${p.pid}`}>
                         <ArrowLeftRight size={15} /> Trade for him
                       </Link>
                     </div>
@@ -528,7 +492,7 @@ export default function PlayerView() {
         </>
       )}
 
-      {tab === 'ratings' && <RatingsTab p={p} />}
+      {tab === 'ratings' && <RatingsTab p={p} league={league} />}
       {tab === 'stats' && <StatsTab p={p} league={league} />}
       {tab === 'log' && <GameLog p={p} league={league} onOpen={(gid) => nav(`/game/${gid}`)} />}
       {tab === 'dev' && <DevTab p={p} league={league} mine={mine} />}
@@ -540,7 +504,7 @@ export default function PlayerView() {
       </Sheet>
       <Sheet open={confirmRelease && mine && !releaseWhy} onClose={() => setConfirmRelease(false)} title={`Release ${p.lastName}?`}>
         <div className="col" style={{ gap: 12 }}>
-          <ReleaseConfirm league={league} p={p} onKeep={() => setConfirmRelease(false)} onDone={() => (setConfirmRelease(false), nav('/roster'))} />
+          <ReleaseConfirm league={league} p={p} onKeep={() => setConfirmRelease(false)} onDone={() => (setConfirmRelease(false), nav('/team'))} />
         </div>
       </Sheet>
       <ContractSheet pid={extending && mine ? p.pid : null} mode="extend" onClose={() => setExtending(false)} />
@@ -552,14 +516,119 @@ export default function PlayerView() {
   );
 }
 
+/**
+ * His morale: how he feels, what it does to his play (the engine's own multipliers), what pulls his
+ * mood up or down, and for your own player a promise that's running or a meeting to have.
+ */
+function Morale({ league, p, mine, busyWhy, onMeet }: { league: League; p: Player; mine: boolean; busyWhy: string | null; onMeet: () => void }) {
+  const meta = moodMeta(p);
+  const e = moraleEffect(league, p);
+  const reasons = moodReasons(p);
+  const room = roomLine(e);
+  const meetWhy = busyWhy ?? meetBlockedReason(league, p);
+  const minutesReason = reasons.some((r) => r.key === 'minutes' && r.v < 0);
+  return (
+    <Section
+      title="Morale"
+      right={
+        <Help title="Morale">
+          <p>
+            His mood moves each week toward the sum of what pulls on it: his minutes against what he expects, winning, his role and his pay. The figures are each pull, from about
+            −4 to +3.
+          </p>
+          <p>
+            Mood changes how well he plays, from about 3% below his best when he&apos;s furious to 2% above it when he&apos;s ecstatic. Each teammate who has asked for a trade
+            costs the others 0.6% (two at most). Mood also decides whether he re-signs, and an unhappy star can ask for a trade.
+          </p>
+          <p>Meet a player who is unhappy or has asked out: promise him a bigger role, a trade, or ask for patience.</p>
+        </Help>
+      }
+    >
+      <div className="card tm-morale">
+        <div className="tm-morale-head" style={{ color: meta.color }}>
+          <span className="tm-morale-ic" aria-hidden="true">
+            {meta.emoji}
+          </span>
+          <span className="tm-morale-l">{p.mood.tradeRequest ? 'Wants a trade' : meta.label}</span>
+        </div>
+        <div className={`tm-morale-fx ${e.total < -0.0025 ? 'bad' : e.total > 0.0025 ? 'good' : ''}`}>
+          {effectLine(e)}
+          {room && <span className="dim"> · {room}</span>}
+        </div>
+        {reasons.length > 0 && (
+          <ul className="tm-reasons" aria-label="What moves his mood">
+            {reasons.map((r) => (
+              <li key={r.key}>
+                <span className="grow">{r.text}</span>
+                <span className={`num ${r.v < 0 ? 'bad' : 'good'}`}>
+                  {r.v > 0 ? '+' : '−'}
+                  {Math.abs(r.v).toFixed(1)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!minutesReason && p.mood.expectedMin > 0 && <div className="tm-why-line">Expects about {p.mood.expectedMin} minutes a night.</div>}
+        {mine && p.promise && (
+          <div className="tm-promise">
+            <Clock size={15} aria-hidden="true" />
+            <span className="grow">{promiseStatus(league, p)}</span>
+          </div>
+        )}
+        {mine && !p.promise && wantsMeeting(p) && (
+          <div className="row wrap tm-acts">
+            <button className="btn sm primary" disabled={!!meetWhy} onClick={onMeet}>
+              <MessageCircle size={15} /> Meet with him
+            </button>
+            {meetWhy && <span className="tm-why-line">{meetWhy}</span>}
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 const RATING_GROUPS = ['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const;
 
 /** Every rating on the 40-99 scale, by group, with last season's change; a tap opens what it does. */
-function RatingsTab({ p }: { p: Player }) {
+function RatingsTab({ p, league }: { p: Player; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
   const was = p.ratingsHistory.length > 1 ? p.ratingsHistory[p.ratingsHistory.length - 2].r : undefined;
+  const contribs = ovrContributions(league, p);
+  const pluses = contribs.parts.filter((x) => x.delta > 0).slice(0, 4);
+  const minuses = contribs.parts
+    .filter((x) => x.delta < 0)
+    .slice(-3)
+    .reverse();
   return (
     <>
+      <Section title={`Why he's a ${p.ovr}`}>
+        <div className="card tm-why">
+          <div className="tm-why-sum">
+            {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} ${contribs.gap > 0 ? 'above' : 'below'}`} an average player ({AVERAGE_OVR} <Term id="ovr">OVR</Term>)
+          </div>
+          <div className="tm-why-cols">
+            {[
+              { title: 'Lifts him', list: pluses },
+              { title: 'Holds him back', list: minuses },
+            ].map((g) => (
+              <div key={g.title} className="tm-why-col">
+                <div className="over">{g.title}</div>
+                {!g.list.length && <div className="tm-why-row dim">Nothing</div>}
+                {g.list.map((x) => (
+                  <div key={x.key} className="tm-why-row">
+                    <span className="ellipsis">{x.label}</span>
+                    <span className={`num ${x.delta > 0 ? 'good' : 'bad'}`}>
+                      {x.delta > 0 ? '+' : ''}
+                      {x.delta}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
       <div className="card flush">
         <div className="list">
           {RATING_GROUPS.map((g) => (
@@ -590,7 +659,7 @@ function RatingsTab({ p }: { p: Player }) {
           ))}
         </div>
       </div>
-      <div className="tm-foot">Tap a rating for what it does in the engine. Changes are since last season.</div>
+      <div className="tm-foot">Tap a rating for what it does. Changes are since last season.</div>
     </>
   );
 }
@@ -777,6 +846,7 @@ function GameLog({ p, league, onOpen }: { p: Player; league: League; onOpen: (gi
 function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean }) {
   const hist = p.ratingsHistory;
   const age = playerAge(p, league.season);
+  const busy = useStore((s) => !!s.sim);
   return (
     <>
       <Section title="Overall by season">
@@ -831,10 +901,11 @@ function DevTab({ p, league, mine }: { p: Player; league: League; mine: boolean 
             <Chips
               label="Training focus"
               value={p.training}
-              onChange={(f: TrainingFocus) => useStore.getState().mutate((l) => void (l.players[p.pid].training = f))}
+              disabled={busy}
+              onChange={(f: TrainingFocus) => edit((l) => void (l.players[p.pid].training = f))}
               options={(Object.keys(FOCUS_META) as TrainingFocus[]).map((k) => ({ id: k, label: FOCUS_META[k].label }))}
             />
-            <div className="small dim">{FOCUS_META[p.training].help} Focused areas grow faster; the rest a little slower.</div>
+            <div className="small dim">{FOCUS_META[p.training].help}</div>
           </div>
         </Section>
       )}

@@ -1,10 +1,11 @@
-// The coach's saved playbooks on the Tactics screen: the "My playbooks" card (load, compare in the
-// Lab, overwrite, rename, delete, save the current tactics as a new one) and the header line that
-// names the playbook the tactics came from, with "· edited" once they have moved from it.
+// The coach's saved playbooks on Team → Tactics: the "My playbooks" card (load, compare in the Lab,
+// overwrite, rename, delete, save the current tactics as a new one), the one in use marked, and
+// "Edited" once the tactics have moved from it.
 import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, FlaskConical, Save } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { act } from '../../state/actions';
 import {
   MAX_PLAYBOOKS,
   PLAYBOOK_NAME_MAX,
@@ -40,19 +41,6 @@ function useCurrent(league: League) {
   const { name } = useRoster(league);
   const manual = league.teams[league.userTid].tactics.manual;
   return useLeagueMemo(() => (manual ? playbookStatus(league, name) : null), [league, name, manual]);
-}
-
-/** "Playbook: Opening night · edited", for the Tactics header. */
-export function PlaybookLine() {
-  const league = useLeague();
-  const cur = useCurrent(league);
-  if (!cur) return null;
-  return (
-    <div className="tx-pbline ellipsis">
-      Playbook: {cur.pb.name}
-      {cur.changes.length > 0 && ' · edited'}
-    </div>
-  );
 }
 
 function Changes({ list, max = 8 }: { list: TacticsChange[]; max?: number }) {
@@ -134,10 +122,10 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
   // what loading it would change, and (for overwriting) what the playbook would take from the tactics
   const diff = useLeagueMemo(() => playbookDiff(t, pb, roster.pids, roster.name), [t, pb, roster]);
   const inUse = t.manual && t.playbook?.id === pb.id;
-  const mutate = useStore.getState().mutate;
+  const busy = useStore((s) => !!s.sim);
   const toast = useStore.getState().toast;
   const load = () => {
-    mutate((l) => void applyPlaybook(l, pb.id));
+    if (!act('Load the playbook', (l) => void applyPlaybook(l, pb.id))) return;
     toast(`Loaded "${pb.name}"`, 'good');
     close();
   };
@@ -157,8 +145,7 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
           // (checked first, so a name that can't be used changes nothing)
           const err = playbookNameError(league, name, pb.id);
           if (err) return err;
-          mutate((l) => void renamePlaybook(l, pb.id, name));
-          setStep('view');
+          if (act('Rename the playbook', (l) => void renamePlaybook(l, pb.id, name))) setStep('view');
           return null;
         }}
       />
@@ -177,13 +164,14 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
           </button>
           <button
             className={`btn grow ${step === 'delete' ? 'danger' : 'primary'}`}
+            disabled={busy}
             onClick={() => {
               if (step === 'overwrite') {
-                mutate((l) => void overwritePlaybook(l, pb.id));
+                if (!act('Overwrite the playbook', (l) => void overwritePlaybook(l, pb.id))) return;
                 toast(`Saved your tactics as "${pb.name}"`, 'good');
                 setStep('view');
               } else {
-                mutate((l) => deletePlaybook(l, pb.id));
+                if (!act('Delete the playbook', (l) => void deletePlaybook(l, pb.id))) return;
                 toast(`Deleted "${pb.name}"`);
                 close();
               }
@@ -209,7 +197,7 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
       )}
       <div className="tiny dim">Roles, shot freedom and screeners load for the players still on your roster; everyone else keeps his own.</div>
       <div className="row tx-btns">
-        <button className="btn primary grow" onClick={load} disabled={inUse && !diff.length}>
+        <button className="btn primary grow" onClick={load} disabled={busy || (inUse && !diff.length)}>
           {inUse && !diff.length ? 'In use' : 'Load'}
         </button>
         <button className="btn grow" onClick={compare} disabled={!diff.length} aria-label={`Compare "${pb.name}" with your current tactics in the Lab`}>
@@ -217,13 +205,13 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
         </button>
       </div>
       <div className="row wrap tx-btns">
-        <button className="btn sm" onClick={() => setStep('overwrite')}>
+        <button className="btn sm" disabled={busy} onClick={() => setStep('overwrite')}>
           Overwrite with current
         </button>
         <button className="btn sm" onClick={() => setStep('rename')}>
           Rename
         </button>
-        <button className="btn sm danger" onClick={() => setStep('delete')}>
+        <button className="btn sm danger" disabled={busy} onClick={() => setStep('delete')}>
           Delete
         </button>
       </div>
@@ -237,6 +225,7 @@ export function MyPlaybooksCard() {
   const cur = useCurrent(league);
   const [open, setOpen] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const busy = useStore((s) => !!s.sim);
   const pb = lib.find((p) => p.id === open);
   const full = lib.length >= MAX_PLAYBOOKS;
   return (
@@ -291,7 +280,7 @@ export function MyPlaybooksCard() {
           </div>
         )}
         <div className="tx-pb-foot">
-          <button className="btn block" onClick={() => setSaving(true)} disabled={full}>
+          <button className="btn block" onClick={() => setSaving(true)} disabled={full || busy}>
             <Save size={16} /> Save current as…
           </button>
           {full && <div className="tiny dim">{`You have ${MAX_PLAYBOOKS}: overwrite or delete one to save another.`}</div>}
@@ -305,7 +294,7 @@ export function MyPlaybooksCard() {
           submit={(name) => {
             const err = playbookNameError(league, name);
             if (err) return err;
-            useStore.getState().mutate((l) => void savePlaybook(l, name));
+            if (!act('Save the playbook', (l) => void savePlaybook(l, name))) return null;
             setSaving(false);
             // (named as it was saved: trimmed, runs of spaces as one)
             useStore.getState().toast(`Saved "${name.trim().replace(/\s+/g, ' ')}"`, 'good');

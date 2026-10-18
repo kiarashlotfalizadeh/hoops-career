@@ -1,16 +1,17 @@
-// The lineup lab: your five-man units, the trios and pairs inside them and each player's on/off
-// split, this season or last, sorted and filtered; a five-man unit can become the starters or the
-// closers. Opened from the Rotation screen, where its edits show.
+// Team → Lineups: your five-man units this season (the old "Lineups this season" card, now the
+// tab's first view), the trios and pairs inside them and each player's on/off split, this season
+// or last, sorted and filtered; a five can become the starters or the closers.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { act } from '../../state/actions';
 import { LOW_SAMPLE_POSS, lineupUnits, netSE, onOffSplits, unitToClosers, unitToStarters, type LineupAgg, type OnOff } from '../../core/analysis/lineups';
 import { sortByPosition } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
-import { seasonLabel } from '../../core/constants';
 import type { Player } from '../../core/types';
-import { Avatar, Chips, Empty, Help, More, Ovr, PageHeader, Section, Segmented, Sheet, Statline, Tag, activateOnKey } from '../components/ui';
+import { Avatar, Chips, Empty, Help, More, Ovr, Section, Segmented, Sheet, Statline, Tag, activateOnKey } from '../components/ui';
+import { Term } from '../components/Glossary';
 import { f1, rosterNames, signed, startingFive } from '../stats';
 import '../league/league.css';
 import './team.css';
@@ -40,6 +41,7 @@ const SPLIT_SORT: Record<Sort, (a: OnOff, b: OnOff) => number> = {
   ortg: (a, b) => b.on.ortg - b.off.ortg - (a.on.ortg - a.off.ortg),
   drtg: (a, b) => a.on.drtg - a.off.drtg - (b.on.drtg - b.off.drtg),
 };
+const SORT_LABEL: Record<Sort, string> = { min: 'Minutes', net: 'Net', ortg: 'ORtg', drtg: 'DRtg' };
 
 const Net = ({ v }: { v: number }) => <span className={`tm-net num ${v >= 0 ? 'good' : 'bad'}`}>{signed(v)}</span>;
 
@@ -47,13 +49,13 @@ export default function Lineups() {
   const league = useLeague();
   const tid = league.userTid;
   const team = league.teams[tid];
-  const advanced = true;
   const [view, setView] = useState<View>('5');
   const [season, setSeason] = useState(league.season);
   const [sort, setSort] = useState<Sort>('min');
   const [minIx, setMinIx] = useState(1);
   const [only, setOnly] = useState<number | null>(null);
   const [pick, setPick] = useState<LineupAgg | null>(null);
+  const [filtering, setFiltering] = useState(false);
   // a season of trios runs to hundreds: the first rows, then more on request
   const [limit, setLimit] = useState(PAGE);
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
@@ -73,9 +75,8 @@ export default function Lineups() {
   const fullName = useMemo(() => rosterNames(people, { initial: true }), [people]);
   const thresholds = view === 'onoff' ? MIN_PLAYER : MIN_UNIT;
   const minMin = thresholds[minIx];
-  const sortBy: Sort = advanced || sort === 'min' || sort === 'net' ? sort : 'min';
-  const shownUnits = units.filter((u) => u.min >= minMin && (only === null || u.pids.includes(only))).sort(UNIT_SORT[sortBy]);
-  const shownSplits = splits.filter((r) => r.min >= minMin && (only === null || r.pid === only)).sort(SPLIT_SORT[sortBy]);
+  const shownUnits = units.filter((u) => u.min >= minMin && (only === null || u.pids.includes(only))).sort(UNIT_SORT[sort]);
+  const shownSplits = splits.filter((r) => r.min >= minMin && (only === null || r.pid === only)).sort(SPLIT_SORT[sort]);
   // the filter lists who is in this view's numbers, most minutes first
   const filterPeople = useMemo(() => {
     const min = new Map<number, number>();
@@ -91,141 +92,86 @@ export default function Lineups() {
     return ps.length === pids.length ? sortByPosition(ps).map((p) => p.pid) : pids;
   };
 
-  const views: { id: View; label: string }[] = [
-    { id: '5', label: '5-man' },
-    ...(advanced
-      ? [
-          { id: '3' as View, label: '3-man' },
-          { id: '2' as View, label: '2-man' },
-        ]
-      : []),
-    { id: 'onoff', label: 'On-off' },
-  ];
   const lowCount = view === 'onoff' ? shownSplits.filter(lowSplit).length : shownUnits.filter(lowUnit).length;
   const rows = view === 'onoff' ? shownSplits.length : shownUnits.length;
   const any = view === 'onoff' ? splits.length > 0 : units.length > 0;
+  // what the list shows, in a line: "Last season · 25+ min · with Holmgren", sorted by …
+  const scope = [
+    season !== league.season ? 'Last season' : 'This season',
+    minMin ? `${minMin}+ min` : 'any minutes',
+    ...(only !== null ? [view === 'onoff' ? fullName(only) : `with ${fullName(only)}`] : []),
+  ].join(' · ');
+  const reset = () => {
+    setOnly(null);
+    setLimit(PAGE);
+  };
 
   return (
-    <main className="page">
-      <PageHeader title="Lineups" back backTo="/rotation" sub={`${team.region} ${team.name} · ${seasonLabel(season)}${view === 'onoff' ? ' regular season' : ''}`} />
-      <div className="tm-tabs">
-        <Segmented
-          tabs
-          value={view}
-          onChange={(v) => {
-            setView(v);
-            setOnly(null);
-            setLimit(PAGE);
-          }}
-          label="Lineup view"
-          options={views}
-        />
-      </div>
-      <div className="tm-filters">
-        <div className="tm-frow">
-          <span className="over">Sort</span>
-          <Chips
-            label="Sort by"
-            value={sortBy}
-            onChange={setSort}
-            options={[
-              { id: 'min' as Sort, label: 'Minutes' },
-              { id: 'net' as Sort, label: view === 'onoff' ? 'On-off' : 'Net' },
-              ...(advanced
-                ? [
-                    { id: 'ortg' as Sort, label: 'ORtg' },
-                    { id: 'drtg' as Sort, label: 'DRtg' },
-                  ]
-                : []),
-            ]}
-          />
-        </div>
-        <div className="tm-frow">
-          <span className="over">Min</span>
-          <Chips label="Minimum minutes" value={minIx} onChange={setMinIx} options={thresholds.map((m, i) => ({ id: i, label: m ? `${m}+` : 'All' }))} />
-        </div>
-        {(hasLast || filterPeople.length > 0) && (
-          <div className="tm-frow">
-            <span className="over">Show</span>
-            <div className="tm-frow-r">
-              {hasLast && (
-                <Chips
-                  label="Season"
-                  value={season}
-                  onChange={(s) => {
-                    setSeason(s);
-                    setOnly(null);
-                    setLimit(PAGE);
-                  }}
-                  options={[
-                    { id: league.season, label: 'This season' },
-                    { id: league.season - 1, label: 'Last season' },
-                  ]}
-                />
-              )}
-              {filterPeople.length > 0 && (
-                <select
-                  className="lg-select tm-select"
-                  aria-label={view === 'onoff' ? 'Show one player' : 'Show lineups with a player'}
-                  value={only ?? ''}
-                  onChange={(e) => setOnly(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">{view === 'onoff' ? 'All players' : 'With anyone'}</option>
-                  {filterPeople.map((pid) => (
-                    <option key={pid} value={pid}>
-                      {view === 'onoff' ? '' : 'With '}
-                      {fullName(pid)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+    <>
+      <Segmented
+        value={view}
+        onChange={(v) => {
+          setView(v);
+          reset();
+        }}
+        label="Lineup view"
+        options={[
+          { id: '5', label: '5-man' },
+          { id: '3', label: '3-man' },
+          { id: '2', label: '2-man' },
+          { id: 'onoff', label: 'On-off' },
+        ]}
+      />
 
-      {!any ? (
-        <div className="card">
-          <Empty>
-            {view === 'onoff'
-              ? `No on-off numbers for the ${team.name} ${season === league.season ? 'yet this season' : 'last season'}: they come from regular-season games.`
-              : season === league.season
-                ? 'No lineup data yet: lineups are tracked in your games, from the first one this season.'
-                : `No lineups kept for the ${team.name} last season (only your own games keep them).`}
-          </Empty>
-        </div>
-      ) : !rows ? (
-        <div className="card">
-          <Empty>
-            Nothing with {minMin}+ minutes{only !== null ? ` and ${fullName(only)}` : ''}. Lower the minimum to see more.
-          </Empty>
-        </div>
-      ) : (
-        <Section
-          title={
-            <h3>
-              {view === 'onoff' ? 'On the floor vs off it' : view === '5' ? 'Five-man units' : view === '3' ? 'Trios' : 'Pairs'} · {rows}
-              <Help title={view === 'onoff' ? 'On-off' : 'Lineup ratings'}>
-                {view === 'onoff' ? (
-                  <p>
-                    The team's net rating (points scored minus allowed per 100 possessions) with each player on the floor, against the rest of its regular season with him off it.
-                    The big number is the difference. Starters share the floor with the best teammates, so their numbers lean on who they play with.
-                  </p>
-                ) : (
-                  <p>
-                    Points scored (ORtg) and allowed (DRtg) per 100 of the unit's own possessions while those players shared the floor; net is the difference.{' '}
-                    {view !== '5' && 'Trios and pairs count every five-man stint they were part of.'}
-                  </p>
-                )}
+      <Section
+        title={
+          <h3>
+            {view === 'onoff' ? 'On the floor vs off it' : view === '5' ? 'Five-man units' : view === '3' ? 'Trios' : 'Pairs'}
+            {any && ` · ${rows}`}
+            <Help title={view === 'onoff' ? 'On-off' : 'Lineup ratings'}>
+              {view === 'onoff' ? (
                 <p>
-                  Faded rows have fewer than {LOW_SAMPLE_POSS} possessions{view === 'onoff' ? ' on or off the floor' : ''}: over that few, a net rating can swing ±16 or more by
-                  chance.
+                  The team&apos;s net rating (points scored minus allowed per 100 possessions) with each player on the floor, against the rest of its regular season with him off
+                  it. The big number is the difference. Starters share the floor with the best teammates, so their numbers lean on who they play with.
                 </p>
-              </Help>
-            </h3>
-          }
-        >
-          {view === '5' && <div className="tm-foot tm-hint">Tap a five to make it your starters or closers.</div>}
+              ) : (
+                <p>
+                  Points scored (ORtg) and allowed (DRtg) per 100 of the unit&apos;s own possessions while those players shared the floor; net is the difference.{' '}
+                  {view !== '5' && 'Trios and pairs count every five-man stint they were part of.'}
+                </p>
+              )}
+              <p>
+                Faded rows have fewer than {LOW_SAMPLE_POSS} possessions{view === 'onoff' ? ' on or off the floor' : ''}: over that few, a net rating can swing ±16 or more by
+                chance. Trust the ones with more minutes.
+              </p>
+              {view === '5' && <p>Tap a five to make it your starters or closers.</p>}
+            </Help>
+          </h3>
+        }
+        right={
+          (any || hasLast) && (
+            <button className="card-link tm-filter-btn" aria-haspopup="dialog" onClick={() => setFiltering(true)}>
+              <SlidersHorizontal size={14} aria-hidden="true" /> {SORT_LABEL[sort]}
+            </button>
+          )
+        }
+      >
+        {(any || hasLast) && <div className="tm-scope">{scope}</div>}
+        {!any ? (
+          <div className="card">
+            <Empty>
+              {view === 'onoff'
+                ? `No on-off numbers ${season === league.season ? 'yet this season' : 'from last season'}: they come from regular-season games.`
+                : season === league.season
+                  ? 'No lineups yet: they’re tracked from your first game this season.'
+                  : `No lineups kept from last season (only your own games keep them).`}
+            </Empty>
+          </div>
+        ) : !rows ? (
+          <div className="card">
+            <Empty>Nothing with {minMin}+ minutes. Lower the minimum in the filters.</Empty>
+          </div>
+        ) : (
           <div className="card flush">
             <div className="list">
               {view === 'onoff'
@@ -239,11 +185,9 @@ export default function Lineups() {
                           <div className="lr-meta num">
                             {Math.round(r.min)}m · on {signed(r.on.net)} · off {signed(r.off.net)}
                           </div>
-                          {advanced && (
-                            <div className="lr-meta num">
-                              ORtg {f1(r.on.ortg)} ({signed(r.on.ortg - r.off.ortg)}) · DRtg {f1(r.on.drtg)} ({signed(r.on.drtg - r.off.drtg)})
-                            </div>
-                          )}
+                          <div className="lr-meta num">
+                            ORtg {f1(r.on.ortg)} ({signed(r.on.ortg - r.off.ortg)}) · DRtg {f1(r.on.drtg)} ({signed(r.on.drtg - r.off.drtg)})
+                          </div>
                         </div>
                         <Net v={r.diff} />
                       </div>
@@ -252,21 +196,14 @@ export default function Lineups() {
                 : shownUnits.slice(0, limit).map((u) => {
                     const five = view === '5';
                     const open = () => setPick(u);
+                    const now = five && season === league.season;
                     return (
                       <div
                         key={u.key}
                         className={`listrow tm-lurow ${five ? 'clickable' : ''} ${lowUnit(u) ? 'lu-faded' : ''}`}
-                        {...(five
-                          ? {
-                              role: 'button',
-                              tabIndex: 0,
-                              onClick: open,
-                              onKeyDown: activateOnKey(open),
-                              // named by what it shows: the five, then minutes, possessions and net
-                              'aria-haspopup': 'dialog' as const,
-                            }
-                          : {})}
+                        {...(five ? { role: 'button', tabIndex: 0, onClick: open, onKeyDown: activateOnKey(open), 'aria-haspopup': 'dialog' as const } : {})}
                       >
+                        <Net v={u.net} />
                         <div className="grow">
                           <div className="tm-lu-who">
                             {ordered(u.pids)
@@ -275,18 +212,12 @@ export default function Lineups() {
                           </div>
                           <div className="tm-lu-meta lr-meta num">
                             <span>
-                              {Math.round(u.min)}m · {u.poss} poss
+                              {Math.round(u.min)}m · ORtg {f1(u.ortg)} · DRtg {f1(u.drtg)}
                             </span>
-                            {advanced && (
-                              <span>
-                                ORtg {f1(u.ortg)} · DRtg {f1(u.drtg)}
-                              </span>
-                            )}
-                            {five && season === league.season && sameSet(u.pids, starters) && <Tag tone="info">Starters</Tag>}
-                            {five && season === league.season && sameSet(u.pids, closers) && <Tag>Closers</Tag>}
+                            {now && sameSet(u.pids, starters) && <Tag tone="info">Starters</Tag>}
+                            {now && sameSet(u.pids, closers) && <Tag>Closers</Tag>}
                           </div>
                         </div>
-                        <Net v={u.net} />
                         {five && <ChevronRight size={16} className="dim tm-lu-chev" aria-hidden="true" />}
                       </div>
                     );
@@ -300,19 +231,65 @@ export default function Lineups() {
               </div>
             )}
           </div>
-          {lowCount > 0 && (
-            <div className="tm-foot">
-              Faded: {lowCount === rows ? 'all of these have' : `${lowCount} ha${lowCount === 1 ? 's' : 've'}`} under {LOW_SAMPLE_POSS} possessions
-              {view === 'onoff' ? ' on or off the floor' : ''}, too few to trust.
+        )}
+        {any && rows > 0 && lowCount > 0 && <div className="tm-foot">Faded: under {LOW_SAMPLE_POSS} possessions, too few to trust.</div>}
+      </Section>
+
+      <Sheet open={filtering} onClose={() => setFiltering(false)} title="Sort and filter">
+        <div className="col tm-fsheet">
+          <div className="tm-fgroup">
+            <div className="over">Sort by</div>
+            <Chips
+              label="Sort by"
+              value={sort}
+              onChange={setSort}
+              options={(['min', 'net', 'ortg', 'drtg'] as Sort[]).map((id) => ({ id, label: id === 'net' && view === 'onoff' ? 'On-off' : SORT_LABEL[id] }))}
+            />
+          </div>
+          <div className="tm-fgroup">
+            <div className="over">Minimum minutes</div>
+            <Chips label="Minimum minutes" value={minIx} onChange={setMinIx} options={thresholds.map((m, i) => ({ id: i, label: m ? `${m}+` : 'All' }))} />
+          </div>
+          {hasLast && (
+            <div className="tm-fgroup">
+              <div className="over">Season</div>
+              <Chips
+                label="Season"
+                value={season}
+                onChange={(s) => {
+                  setSeason(s);
+                  reset();
+                }}
+                options={[
+                  { id: league.season, label: 'This season' },
+                  { id: league.season - 1, label: 'Last season' },
+                ]}
+              />
             </div>
           )}
-        </Section>
-      )}
+          {filterPeople.length > 0 && (
+            <label className="tm-fgroup">
+              <span className="over">{view === 'onoff' ? 'Player' : 'With'}</span>
+              <select className="lg-select tm-select" value={only ?? ''} onChange={(e) => setOnly(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">{view === 'onoff' ? 'All players' : 'Anyone'}</option>
+                {filterPeople.map((pid) => (
+                  <option key={pid} value={pid}>
+                    {fullName(pid)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button className="btn block" onClick={() => setFiltering(false)}>
+            Done
+          </button>
+        </div>
+      </Sheet>
 
       <Sheet open={!!pick} onClose={() => setPick(null)} title="Five-man unit">
         {pick && <UnitSheet u={pick} roster={roster} close={() => setPick(null)} starters={starters} closers={closers} name={fullName} order={ordered} />}
       </Sheet>
-    </main>
+    </>
   );
 }
 
@@ -334,6 +311,7 @@ function UnitSheet({
   order: (pids: number[]) => number[];
 }) {
   const league = useLeague();
+  const busy = useStore((s) => !!s.sim);
   const onTeam = new Set(roster.map((p) => p.pid));
   const gone = u.pids.filter((pid) => !onTeam.has(pid));
   const hurt = u.pids.filter((pid) => onTeam.has(pid) && league.players[pid]?.injury);
@@ -341,13 +319,14 @@ function UnitSheet({
   const isClosers = u.pids.length === closers.size && u.pids.every((pid) => closers.has(pid));
   const names = (pids: number[]) => pids.map(name).join(' and ');
   const why = gone.length ? `${names(gone)} ${gone.length === 1 ? 'is' : 'are'} no longer on the team.` : null;
-  const act = (kind: 'starters' | 'closers') => {
-    useStore.getState().mutate((l) => {
+  const make = (kind: 'starters' | 'closers') => {
+    const ok = act(kind === 'starters' ? 'New starters' : 'New closers', (l) => {
       const r = l.teams[l.userTid].rotation;
       const players = rosterSorted(l, l.userTid);
       if (kind === 'starters') unitToStarters(r, players, u.pids);
       else unitToClosers(r, players, u.pids);
     });
+    if (!ok) return;
     useStore.getState().toast(kind === 'starters' ? 'These five now start' : 'These five now close games', 'good');
     close();
   };
@@ -374,17 +353,17 @@ function UnitSheet({
       <Statline
         items={[
           { k: 'Net', v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-          { k: 'ORtg', v: f1(u.ortg) },
+          { k: <Term id="ortg">ORtg</Term>, v: f1(u.ortg) },
           { k: 'DRtg', v: f1(u.drtg) },
           { k: 'Minutes', v: Math.round(u.min), s: `${u.poss} poss` },
         ]}
       />
       <div className="tm-foot">{u.poss < LOW_SAMPLE_POSS ? 'A small sample: the ratings can swing a lot by chance.' : `The net rating's 95% range is about ± ${f1(2 * se)}.`}</div>
       <div className="col" style={{ gap: 8 }}>
-        <button className="btn primary block" disabled={!!why || hurt.length > 0 || isStarters} onClick={() => act('starters')}>
+        <button className="btn primary block" disabled={busy || !!why || hurt.length > 0 || isStarters} onClick={() => make('starters')}>
           {isStarters ? 'Your starters' : 'Make these the starters'}
         </button>
-        <button className="btn block" disabled={!!why || isClosers} onClick={() => act('closers')}>
+        <button className="btn block" disabled={busy || !!why || isClosers} onClick={() => make('closers')}>
           {isClosers ? 'Your closers' : 'Make these the closers'}
         </button>
         {(why || hurt.length > 0) && (
@@ -396,11 +375,11 @@ function UnitSheet({
       <div className="row between top tm-sheet-foot">
         <More label="What changes">
           <p className="tm-more-p">
-            Starters swap into the first five spots on your depth chart and take those spots’ minutes, as a swap on the Rotation screen does. Either one makes your rotation custom.
+            Starters swap into the first five spots on your depth chart and take those spots’ minutes, as a swap on the Rotation tab does. Either one makes your rotation custom.
           </p>
         </More>
-        <Link to="/rotation" className="card-link" onClick={close}>
-          Open Rotation <ChevronRight size={14} />
+        <Link to="/team/rotation" className="card-link" onClick={close}>
+          Rotation <ChevronRight size={14} />
         </Link>
       </div>
     </div>
