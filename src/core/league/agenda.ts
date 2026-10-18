@@ -10,7 +10,7 @@ import type { League, Player } from '../types';
 import { CAP } from '../constants';
 import { addInbox, fmtDate, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
 import { FIRED_REASON, releaseDeadMoney, releasePlayer, valueScore } from './contracts';
-import { acceptProposal, declineProposal, openProposals, proposalError } from './proposals';
+import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError } from './proposals';
 import { restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from './rfa';
 import { tenDayBlockedReason, tenDayEndBlockedReason, tenDayRestBlockedReason, userEndTenDay, userTenDay, userTenDayRest } from './tenDay';
 import { autoDraftUserPick, continueDraft } from './season';
@@ -295,15 +295,14 @@ export function agenda(league: League): AgendaItem[] {
   for (const pr of openProposals(league)) {
     const err = proposalError(league, pr);
     if (err) continue;
-    const them = league.teams[pr.tid];
     const want = pr.offer.a.pids.map((pid) => league.players[pid]).filter(Boolean);
-    const what = want.length ? `for ${want.map((p) => p.lastName).join(' and ')}` : pr.offer.a.dpids.length ? 'for a pick' : '';
     items.push({
       id: `tradeOffer:${pr.id}`,
       kind: 'tradeOffer',
       required: false,
-      title: `${them.abbrev} offer a trade ${what}`.trim(),
-      line: pr.note,
+      // the inbox's subject, and the other GM's pitch in his name (it isn't your staff talking)
+      title: offerSubject(league, pr.offer),
+      line: `${league.teams[pr.tid].abbrev} GM: “${pr.note}”`,
       tone: 'info',
       to: `/office/trade?offer=${pr.id}`,
       due: `Stands until ${short(league, pr.expires)}`,
