@@ -1,5 +1,6 @@
 // The agenda as rows (see core/league/agenda.ts): each decision with the staff's call and its quick
 // choices one tap away, settled in place, and the screen with the whole decision behind the row.
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -19,6 +20,14 @@ export function runAgenda(label: string, a: AgendaAction) {
 
 export function AgendaRow({ item }: { item: AgendaItem }) {
   const choices = [...(item.suggestion ? [item.suggestion] : []), ...(item.choices ?? [])];
+  // a choice that can't be undone takes a second tap, its cost said in between
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const armedChoice = choices.find((c) => c.label === armed);
   const head = (
     <>
       <div className="grow">
@@ -47,14 +56,23 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
           {choices.map((c, i) => (
             <button
               key={c.label}
-              className={`btn xs ${i === 0 && item.suggestion ? 'primary' : c.tone === 'good' ? 'good' : ''}`}
+              className={`btn xs ${armed === c.label ? 'danger' : i === 0 && item.suggestion ? 'primary' : c.tone === 'good' ? 'good' : ''}`}
               disabled={!!c.blocked}
               title={c.blocked}
-              onClick={() => runAgenda(item.title, c.action)}
+              onClick={() => {
+                if (c.confirm && armed !== c.label) return setArmed(c.label);
+                setArmed(null);
+                runAgenda(item.title, c.action);
+              }}
             >
-              {c.label}
+              {armed === c.label ? `Confirm: ${c.label}` : c.label}
             </button>
           ))}
+        </div>
+      )}
+      {armedChoice?.confirm && (
+        <div className="ag-why" role="status">
+          {armedChoice.confirm} Tap again to confirm.
         </div>
       )}
       {choices.some((c) => c.blocked) && <div className="ag-why">{[...new Set(choices.map((c) => c.blocked).filter(Boolean))].join(' ')}</div>}

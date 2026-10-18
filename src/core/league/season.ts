@@ -100,9 +100,9 @@ export function startRegularSeason(league: League): string[] {
   addInbox(league, {
     from: 'Assistant Coach',
     subject: 'Opening night',
-    body: 'The regular season tips off. I will flag rotation and tactical issues as they come up, and scout every opponent before the game. Tap the next-game card on Home to see the scouting report.',
+    body: 'The regular season tips off. I will flag rotation and tactical issues as they come up, and every opponent has a scouting report on its matchup page (Games).',
     tone: 'neutral',
-    link: '/',
+    link: '/games',
   });
   // the owner sets the season's goals from the roster the team opens with (frozen for the season)
   setOwnerGoals(league);

@@ -38,6 +38,8 @@ export interface AgendaChoice {
   /** Why it can't be taken now (shown, and the button is off). */
   blocked?: string;
   tone?: 'good' | 'bad';
+  /** It can't be undone and costs something: a second tap confirms it, with this said first. */
+  confirm?: string;
 }
 
 export interface AgendaItem {
@@ -61,6 +63,16 @@ export interface AgendaItem {
   due?: string;
   /** Pids it's about (for a jersey or a link). */
   pids?: number[];
+}
+
+/** Releasing a player: free for camp and minimum deals before opening night; anything owed stays on the books, so it's confirmed. */
+function releaseChoice(league: League, p: Player): AgendaChoice {
+  const dead = releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0);
+  return {
+    label: `Release ${playerName(p)}`,
+    action: { kind: 'release', pid: p.pid },
+    ...(dead > 0 ? { confirm: `$${(dead / 1000).toFixed(1)}M stays on your books as dead money.` } : {}),
+  };
 }
 
 const short = (l: League, day: number) => fmtDate(l.season, day, { month: 'short', day: 'numeric' });
@@ -181,7 +193,7 @@ export function agenda(league: League): AgendaItem[] {
         line: `${std.length} on standard deals; ${CAP.rosterMax} allowed on opening night.`,
         tone: 'bad',
         to: '/team',
-        suggestion: { label: `Release ${playerName(first)}`, action: { kind: 'release', pid: first.pid } },
+        suggestion: releaseChoice(league, first),
         pids: cutOrder(league, std)
           .slice(0, over)
           .map((p) => p.pid),
@@ -209,7 +221,7 @@ export function agenda(league: League): AgendaItem[] {
         line: `${tw.length} on two-way deals; ${TWO_WAY_MAX} allowed.`,
         tone: 'bad',
         to: '/team',
-        suggestion: { label: `Release ${playerName(first)}`, action: { kind: 'release', pid: first.pid } },
+        suggestion: releaseChoice(league, first),
       });
     }
   }
@@ -229,7 +241,12 @@ export function agenda(league: League): AgendaItem[] {
       due: `Decide by ${short(league, sheet.until)}`,
       choices: [
         { label: 'Match', action: { kind: 'sheet', pid: p.pid, match: true }, blocked: sheetDecisionBlocked(league, p.pid, true) ?? undefined, tone: 'good' },
-        { label: 'Let him go', action: { kind: 'sheet', pid: p.pid, match: false }, blocked: sheetDecisionBlocked(league, p.pid, false) ?? undefined },
+        {
+          label: 'Let him go',
+          action: { kind: 'sheet', pid: p.pid, match: false },
+          blocked: sheetDecisionBlocked(league, p.pid, false) ?? undefined,
+          confirm: `${playerName(p)} joins ${team.abbrev}.`,
+        },
       ],
       pids: [p.pid],
     });
