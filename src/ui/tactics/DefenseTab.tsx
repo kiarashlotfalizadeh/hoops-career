@@ -6,6 +6,7 @@ import { useLeague } from '../../state/store';
 import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
 import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS } from '../../core/sim/tactics';
 import { attrDisplay, composites } from '../../core/ratings';
+import { shortName } from '../../core/league/helpers';
 import { Chips, Help, Levels, Section, Tag, Toggle } from '../components/ui';
 import { tweak } from './edit';
 import { PlaybookLine, defPresetOf } from './PlaybookLine';
@@ -89,7 +90,7 @@ export function DefenseTab({ t }: { t: Tactics }) {
           {big && bigC && (t.defense.pnr === 'drop' || t.defense.pnr === 'switch' || t.defense.pnr === 'hedge') && (
             <div className="tx-bigfit">
               <span className="grow">
-                <b>{big.lastName}</b>: rim protection {attrDisplay(bigC.rimProt)} · speed {attrDisplay(big.ratings.spd)}
+                <b>{shortName(league, big)}</b>: rim protection {attrDisplay(bigC.rimProt)} · speed {attrDisplay(big.ratings.spd)}
               </span>
               {t.defense.pnr === 'drop' && fit(bigC.rimProt >= 60, 'Built for drop', 'Weak rim deterrent')}
               {t.defense.pnr === 'switch' && fit(big.ratings.spd >= 45, 'Mobile enough', 'Guards will hunt him')}

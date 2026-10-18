@@ -7,7 +7,7 @@
 // games), the live game (after them) and the result (recorded later still) all read the same keys.
 
 import type { GameResult, KeyGrade, KeyStat, League, ScheduledGame, TeamBox, TeamTotals } from '../types';
-import { playerName } from '../league/helpers';
+import { playerName, shortName } from '../league/helpers';
 
 export interface GameKey {
   id: string;
@@ -290,7 +290,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
       const most = star === scorers[0] ? 'the most on his team' : 'the most of their healthy players';
       out.push({
         id: 'star',
-        title: `Make ${p.lastName} work`,
+        title: `Make ${shortName(league, p)} work`,
         goal: `Hold ${playerName(p)} to ${plural(target, 'pts')} or fewer`,
         why: label ? `He scored ${ppg.toFixed(1)} a game${label}, ${most}.` : `He scores ${ppg.toFixed(1)} a game, ${most}.`,
         side: 'them',
@@ -368,7 +368,7 @@ function fromPriors(league: League, them: number): Candidate[] {
   if (star && star.ppg >= 20)
     out.push({
       id: 'star',
-      title: `Make ${star.p.lastName} work`,
+      title: `Make ${shortName(league, star.p)} work`,
       goal: `Hold ${playerName(star.p)} to ${plural(Math.round(star.ppg - 1.5), 'pts')} or fewer`,
       why: `He scored ${star.ppg.toFixed(1)} a game last season.`,
       side: 'them',

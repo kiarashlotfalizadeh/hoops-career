@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
+import { boxNames } from './report/names';
 import { neutralSite } from '../../core/league/games';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { planFor } from '../../core/league/gamePlans';
@@ -216,12 +217,12 @@ function GameRow({ r, league, tid, h2hTid, ranks, brief }: RowProps & { r: Row }
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
     const rec = r.g.type === 'regular' && !brief ? `${r.rec} · ` : '';
     // the top scorer's points stay in view when a long name is cut short (the player's own last
-    // name while he's in the league: a box-score name can end in "Jr.")
+    // name while he's in the league: a box-score name can end in "Jr."; a teammate's namesake told apart)
     sub = top ? (
       <>
         <span className="gs-lead">
           {rec}
-          {league.players[top.pid]?.lastName ?? top.name}
+          {boxNames(league, side)(top.pid) || top.name}
         </span>
         <span className="num">{top.pts}</span>
       </>

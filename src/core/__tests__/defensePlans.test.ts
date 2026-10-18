@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { testLeague } from '../../state/__tests__/fixtures';
 import { simDay } from '../league/season';
-import { teamPlayers } from '../league/helpers';
+import { shortName, teamPlayers } from '../league/helpers';
 import { buildSimInput, ensureRotation } from '../league/games';
 import { counterCandidates, impactCounter } from '../ai/advisor';
 import { aiGamePlan, nextMeeting } from '../ai/opponentPlan';
@@ -150,7 +150,7 @@ describe('counters and opposing plans', () => {
       const box = plan?.items.find((it) => it.id === 'box1');
       if (!box) continue;
       found++;
-      expect(box.text).toBe(`plays a box-and-one on ${star.lastName}`);
+      expect(box.text).toBe(`plays a box-and-one on ${shortName(l, star)}`);
       expect(box.why).toMatch(/uses 38% of your possessions, and the rest of your team makes 2\d\.\d% of its threes/);
       const t = buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics;
       expect(t.defense).toMatchObject({ scheme: 'box1', chase: [star.pid] });
@@ -190,7 +190,7 @@ describe('counters and opposing plans', () => {
       const hunt = plan?.items.find((it) => it.id === 'hunt');
       if (hunt) {
         hunts++;
-        expect(hunt.text).toBe(`attacks ${sieve.lastName} on defense`);
+        expect(hunt.text).toBe(`attacks ${shortName(l, sieve)} on defense`);
         expect(hunt.why).toMatch(/defends the perimeter at \d+, your rotation at \d+\./);
         expect(t().offense.huntTarget).toBe(sieve.pid);
       }

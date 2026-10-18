@@ -8,6 +8,7 @@ import type { ActionType, Player, Tactics } from '../../core/types';
 import { ACTION_META, TACTIC_LEVELS } from '../../core/sim/tactics';
 import { effectiveTactics } from '../../core/league/gamePlans';
 import { nextUserGame } from '../../core/analysis/preview';
+import { shortName } from '../../core/league/helpers';
 import { Help, Levels, Section, Toggle } from '../components/ui';
 import { SetPackageCard } from './SetPackageCard';
 import { tweak } from './edit';
@@ -86,7 +87,7 @@ function ShotProfile({ t }: { t: Tactics }) {
     if (!g) return null;
     const opp = g.home === league.userTid ? g.away : g.home;
     const pid = effectiveTactics(league, opp, g).offense.huntTarget;
-    return pid != null && league.players[pid] ? { opp, name: league.players[pid].lastName } : null;
+    return pid != null && league.players[pid] ? { opp, name: shortName(league, league.players[pid]) } : null;
   }, [league]);
   return (
     <Section

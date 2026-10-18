@@ -15,7 +15,7 @@ import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES } from '../analysis/scouting';
 import { guardingPlan, huntPick } from '../analysis/guarding';
-import { playerName, seasonLine, seasonTotals, teamPlayers } from '../league/helpers';
+import { playerName, seasonLine, seasonTotals, shortName, teamPlayers } from '../league/helpers';
 import { defPresetFit, rosterProfile } from './coachAI';
 
 export interface OppPlanItem {
@@ -219,8 +219,6 @@ function userStar(league: League, userTid: number, day: number) {
   return rows[0] as { p: Player; usg: number } | undefined;
 }
 
-const lastName = (p: Player) => p.lastName || p.firstName;
-
 /**
  * The three-point shooting of a team's players other than its star(s): what a junk defense dares.
  * Their regular-season lines with the team this season once it has played five games, else each
@@ -382,7 +380,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     out.push({
       id: 'hunt',
       group: 'hunt',
-      text: `attacks ${lastName(victim)} on defense`,
+      text: `attacks ${shortName(league, victim)} on defense`,
       why: `${playerName(victim)} defends the perimeter at ${hunt.perDef}, your rotation at ${hunt.teamPerDef}.`,
       patch: { offense: { huntTarget: hunt.pid } },
       w: (hunt.teamPerDef - hunt.perDef) / 4,
@@ -400,7 +398,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       out.push({
         id: `guard-${read.suggest}`,
         group: 'guard',
-        text: GUARD_TEXT[read.suggest](lastName(who)),
+        text: GUARD_TEXT[read.suggest](shortName(league, who)),
         why: `${playerName(who)}: ${read.why}`,
         patch: { defense: { playerD: { [who.pid]: read.suggest } } },
         // a small edge (see the README's numbers): the plan's second item at most, unless nothing else stands out
@@ -416,7 +414,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     out.push({
       id: 'box1',
       group: 'star',
-      text: `plays a box-and-one on ${lastName(star.p)}`,
+      text: `plays a box-and-one on ${shortName(league, star.p)}`,
       why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions, and the rest of your team makes ${pct1(cast.pct)} of its threes (league ${pct1(lgTp)}).`,
       patch: { defense: { scheme: 'box1', chase: [star.p.pid] } },
       w: 1.5 + (star.usg - 0.28) * 25 + (lgTp - cast.pct) / 0.01,
@@ -430,7 +428,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     out.push({
       id: double ? 'star-double' : 'star-deny',
       group: 'star',
-      text: double ? `doubles ${lastName(star.p)}` : `denies ${lastName(star.p)} the ball`,
+      text: double ? `doubles ${shortName(league, star.p)}` : `denies ${shortName(league, star.p)} the ball`,
       why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions when he plays.`,
       patch: { defense: { starPlan: double ? 'double' : 'deny', starTarget: star.p.pid } },
       w: 1.5 + (star.usg - 0.28) * 25 + (iso && iso.z >= 1.5 ? 1 : 0),
@@ -466,7 +464,7 @@ export function aiGamePlan(league: League, aiTid: number, userTid: number, game:
       items.push({
         id: 'star-deny',
         group: 'star',
-        text: `denies ${lastName(star.p)} the ball`,
+        text: `denies ${shortName(league, star.p)} the ball`,
         why: star.usg > 0 ? `${playerName(star.p)} uses the most of your possessions (${pct(star.usg)}).` : `${playerName(star.p)} is your best player.`,
         patch: { defense: { starPlan: 'deny', starTarget: star.p.pid } },
       });

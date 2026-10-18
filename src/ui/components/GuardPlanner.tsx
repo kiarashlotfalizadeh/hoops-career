@@ -25,7 +25,7 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
   const set = (pid: number | null) =>
     edit((l) => {
       if (pid === null) removePlanItem(l, opp, 'hunt');
-      else setPlanItem(l, opp, { id: 'hunt', label: `Attack ${l.players[pid]?.lastName ?? ''}`, group: 'hunt', patch: { offense: { huntTarget: pid } } });
+      else setPlanItem(l, opp, { id: 'hunt', label: `Attack ${names(pid) || (l.players[pid]?.lastName ?? '')}`, group: 'hunt', patch: { offense: { huntTarget: pid } } });
     });
   const sorted = [...theirs].sort((a, b) => per(a) - per(b) || a.pid - b.pid);
   if (!theirs.length) return null;
@@ -80,7 +80,7 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
         if (chasers(base)) setPlanItem(l, opp, { id: 'junk', label: SCHEME_META.man.label, group: 'coverage', patch: { defense: { scheme: 'man' } } });
         return;
       }
-      const who = pids.map((pid) => l.players[pid]?.lastName ?? '').join(' and ');
+      const who = pids.map((pid) => names(pid) || (l.players[pid]?.lastName ?? '')).join(' and ');
       setPlanItem(l, opp, { id: 'junk', label: `${SCHEME_META[s].label} on ${who}`, group: 'coverage', patch: { defense: { scheme: s, chase: pids } } });
     });
   const pickScheme = (s: DefScheme) => {
