@@ -68,6 +68,11 @@ const league = () =>
       rookie: Object.values(l.players).find((p) => p.tid === l.userTid && p.draft?.year === l.season)?.pid,
       gid: g?.gid,
       other: (l.userTid + 7) % 30,
+      // the next opponent (or any other team between seasons), for its matchup page
+      opp: (() => {
+        const n = l.schedule.filter((x) => !x.played && x.day >= l.day && (x.home === l.userTid || x.away === l.userTid)).sort((a, b) => a.day - b.day)[0];
+        return n ? (n.home === l.userTid ? n.away : n.home) : (l.userTid + 7) % 30;
+      })(),
       phase: l.phase,
     };
   });
@@ -96,23 +101,29 @@ async function tour(stage) {
   await save();
   const ids = await league();
   const routes = [
-    ['home', '/'],
+    ['today', '/'],
+    ['inbox', '/inbox'],
+    ['settings', '/settings'],
     ['roster', '/team'],
-    ['player', `/player/${ids.star}`],
     ['rotation', '/team/rotation'],
     ['tactics', '/team/tactics'],
+    ['lineups', '/team/lineups'],
+    ['player', `/player/${ids.star}`],
+    ['games', '/games'],
+    ['matchup', `/games/${ids.opp}`],
     ['lab', '/lab'],
     ['league', '/league'],
     ['team', `/teams/${ids.other}`],
+    ['history', '/league/history'],
     ['office', '/office'],
     ['trade', '/office/trade'],
     ['fa', '/office/free-agents'],
     ['resign', '/office/resign'],
     ['draft', '/office/draft'],
+    ['assets', '/office/assets'],
     ['finances', '/office/finances'],
-    ['inbox', '/inbox'],
-    ['settings', '/settings'],
-    ['history', '/league/history'],
+    ['owner', '/office/owner'],
+    ['career', '/office/career'],
   ];
   if (ids.gid) routes.push(['game', `/game/${ids.gid}`]);
   if (ids.rookie) routes.push(['rookie', `/player/${ids.rookie}`]);
