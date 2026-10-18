@@ -28,6 +28,7 @@ import type { League, SavedPlaybook } from '../../core/types';
 import { rosterNames } from '../stats';
 import { setLabBaseline } from '../screens/labBridge';
 import { Help, Section, Sheet, Tag, activateOnKey } from '../components/ui';
+import { onScreen } from './changes';
 import '../screens/tactics.css';
 
 /** The user's roster and how its players are named in the changes lists. */
@@ -120,7 +121,7 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
   const roster = useRoster(league);
   const [step, setStep] = useState<Step>('view');
   // what loading it would change, and (for overwriting) what the playbook would take from the tactics
-  const diff = useLeagueMemo(() => playbookDiff(t, pb, roster.pids, roster.name), [t, pb, roster]);
+  const diff = useLeagueMemo(() => onScreen(playbookDiff(t, pb, roster.pids, roster.name)), [t, pb, roster]);
   const inUse = t.manual && t.playbook?.id === pb.id;
   const busy = useStore((s) => !!s.sim);
   const toast = useStore.getState().toast;

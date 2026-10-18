@@ -10,40 +10,38 @@
   color: var(--text-dim);
 }
 .tx-empty {
-  padding: 14px;
+  padding: var(--pad-card);
   font-size: 13.5px;
   color: var(--text-dim);
-}
-.card.tx-empty {
-  padding: 16px 14px;
 }
 .tx-chev {
   flex: none;
 }
-/* a card of controls: Levels, sliders and switches, 16px apart */
+/* a card of controls: Levels, sliders and switches */
 .tx-group {
-  gap: 16px;
+  gap: 12px;
 }
 .tx-group.tight {
   gap: 10px;
-  padding: 12px 14px;
 }
-/* one control as a list row: a switch or a slider with room around it */
+/* one control as a list row: a switch or a slider */
 .tx-ctl {
-  padding: 12px 14px;
-  min-height: 56px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .tx-ctl-chips {
   gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 .tx-toggles {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-top: 14px;
+  gap: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 .tx-btns {
@@ -55,9 +53,6 @@
   margin-bottom: 12px;
 }
 .tx-sheet-foot {
-  margin-top: 16px;
-}
-.tx-gotit {
   margin-top: 16px;
 }
 .tx-lead {
@@ -82,7 +77,7 @@
   letter-spacing: 0;
 }
 .tx-about-body {
-  gap: 12px;
+  gap: 10px;
   font-size: 14.5px;
   color: var(--text-2);
 }
@@ -94,7 +89,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 .tx-sub {
@@ -110,10 +105,39 @@
   gap: 8px;
 }
 
+/* the playbook a tab starts from: its name, what's moved, Put back */
+.tx-pbline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.tx-pbline-n {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 750;
+  font-size: 15px;
+}
+/* the dot that marks a playbook's own setting (Levels draws its own in the corner) */
+.tx-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 1px 1px 5px;
+  border-radius: 50%;
+  background: var(--text-2);
+  vertical-align: middle;
+}
+.tx-note .tx-dot {
+  margin: 0 2px 1px 0;
+}
+
 /* ------------------------------------------------------------ the assistant's switch, the Lab, the changes dock */
 /* flat on the page: a hairline under it, no box */
 .tx-auto {
-  padding: 2px 0 12px;
+  padding: 0 0 8px;
   border-bottom: 1px solid var(--line);
 }
 /* the way to the Lab, at the foot of every tab */
@@ -121,7 +145,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 48px;
+  min-height: var(--row-min);
   padding: 0 2px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -162,11 +186,12 @@
 }
 .tx-tabs .seg button {
   min-width: 0;
+  height: 32px;
   padding: 0 6px;
 }
 /* how teams see you: the rank grid, the play types, what they'll attack */
 .tx-seen {
-  gap: 12px;
+  gap: 10px;
 }
 .tx-seen .more .tx-bullets {
   margin-top: 8px;
@@ -174,17 +199,17 @@
 
 .tx-bullets {
   margin: 0;
-  padding: 12px 14px;
+  padding: var(--pad-card);
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .tx-bullets li {
   position: relative;
   padding-left: 16px;
   font-size: 13.5px;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--text-2);
 }
 .tx-bullets li::before {

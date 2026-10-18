@@ -30,9 +30,9 @@
 .tx-set {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 56px;
-  padding-right: 4px;
+  gap: 2px;
+  min-height: var(--row-min);
+  padding-right: 2px;
 }
 .tx-set-pick {
   flex: 1;
@@ -40,8 +40,8 @@
   align-self: stretch;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 4px 8px 14px;
+  gap: 10px;
+  padding: var(--row-py) 4px var(--row-py) var(--row-px);
   text-align: left;
 }
 .tx-set-pick:disabled {
@@ -53,8 +53,8 @@
 }
 .tx-check {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
   border: 2px solid var(--line-3);
   display: grid;
@@ -76,8 +76,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 52px;
-  padding: 8px 10px 8px 14px;
+  min-height: var(--row-min);
+  padding: var(--row-py) 10px var(--row-py) var(--row-px);
   text-align: left;
 }
 .tx-pickrow:active {
@@ -97,7 +97,7 @@
   color: var(--accent-text);
 }
 .tx-pick > .tx-note {
-  padding: 0 14px 12px;
+  padding: 0 var(--row-px) 10px;
   margin-top: -4px;
 }
 .tx-optgroup {
@@ -113,8 +113,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 50px;
-  padding: 8px 14px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
   text-align: left;
 }
 .tx-opt:active {

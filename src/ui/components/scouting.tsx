@@ -1,6 +1,7 @@
-// Scouting numbers as the Scouting tab and the game plan screen show them: league ranks, play types
-// against the league, key players with on/off, the user's meetings with the team and what its coach
-// has planned for the next one.
+// Scouting numbers as a matchup page's Scout and Tactics → Insights show them: league ranks, play
+// types against the league, key players with on/off, the user's meetings with the team and what its
+// coach has planned for the next one. Colours always rate the team shown: green where it is better
+// than the league, red where it is worse, whoever's team it is.
 import { Link } from 'react-router-dom';
 import type { League } from '../../core/types';
 import type { PlayTypeRow, Ranked, ScoutData, ScoutPlayer } from '../../core/analysis/scouting';
@@ -70,12 +71,15 @@ export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' })
   );
 }
 
+/** Beyond this many standard errors from the league a play type's PPP is coloured. */
+const PT_Z = 1.5;
+
 /** Play types at one end against the league's points per possession, with z-scores. */
 export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense: boolean }) {
   const tone = (r: PlayTypeRow) => {
-    // a good number for them: scoring above the league on offense, allowing below it on defense
+    // good for the team shown: scoring above the league on offense, allowing below it on defense
     const z = defense ? -r.z : r.z;
-    return Math.abs(z) < 1.5 ? undefined : z > 0 ? 'var(--bad)' : 'var(--good)';
+    return Math.abs(z) < PT_Z ? undefined : z > 0 ? 'var(--good)' : 'var(--bad)';
   };
   const cols: Col<PlayTypeRow>[] = [
     { key: 'type', label: 'Play type', get: (r) => FINISH_LABEL[r.key], left: true, sticky: true, width: 120, help: 'How the possession finished' },
@@ -95,7 +99,15 @@ export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense:
     { key: 'base', label: 'Lg', get: (r) => r.base, fmt: (v) => (+v).toFixed(2), help: 'League points per possession' },
     { key: 'z', label: 'z', get: (r) => r.z, fmt: (v) => signed(+v), help: 'Standard errors from the league: beyond ±2 is more than noise' },
   );
-  return <StatTable rows={rows.filter((r) => r.key !== 'misc')} cols={cols} rowKey={(r) => r.key} initialSort="share" />;
+  return (
+    <>
+      <StatTable rows={rows.filter((r) => r.key !== 'misc')} cols={cols} rowKey={(r) => r.key} initialSort="share" />
+      <div className="tiny dim">
+        PPP in <span className="good">green</span>: {defense ? 'allows less' : 'scores more'} than the league, in <span className="bad">red</span>: {defense ? 'more' : 'less'}{' '}
+        (beyond {PT_Z} z).
+      </div>
+    </>
+  );
 }
 
 /** Key players: minutes, scoring and efficiency, and how the team does with them on and off the floor. */

@@ -44,7 +44,7 @@ export function InsightsTab() {
           <Section title="What's working" right={<span className="tiny dim">pts a game · {`${games} game${games === 1 ? '' : 's'}`}</span>}>
             <div className="card flush list">{helping.length ? helping.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}</div>
           </Section>
-          <Section title="What's hurting you">
+          <Section title="What's hurting you" right={<span className="tiny dim">pts a game</span>}>
             <div className="card flush list">{hurting.length ? hurting.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}</div>
           </Section>
         </>
@@ -70,8 +70,8 @@ function SeenBy({ league }: { league: League }) {
           <Help title="How teams see you">
             <p>Your numbers as other coaches scout them: league ranks (1st is the best, or the most for style numbers like pace) and your play types at both ends.</p>
             <p>
-              <Term id="ppp">PPP</Term> is points per possession by how the possession finished, against the league&apos;s. The colours are an opponent&apos;s: red marks a strength
-              of yours he has to stop, green a weakness he can attack.
+              <Term id="ppp">PPP</Term> is points per possession by how the possession finished, against the league&apos;s. Green is where you are better than the league, red where
+              you are worse: red is what they&apos;ll go after.
             </p>
           </Help>
         </h3>

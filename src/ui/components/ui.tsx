@@ -286,7 +286,8 @@ export function Slider({
 /**
  * A 0-100 tactic as five named settings, low to high, in place of a slider. The setting nearest the
  * value is the one marked (presets and the staff's adjustments can land between them); picking one
- * sets its value. The settings below the chosen one are tinted, like a slider's fill.
+ * sets its value. The settings below the chosen one are tinted, like a slider's fill. `mark`: a
+ * reference value (the playbook's own setting) whose level carries a dot.
  */
 export function Levels({
   label,
@@ -295,6 +296,7 @@ export function Levels({
   onChange,
   help,
   disabled,
+  mark,
 }: {
   label: string;
   value: number;
@@ -302,10 +304,12 @@ export function Levels({
   onChange: (v: number) => void;
   help?: ReactNode;
   disabled?: boolean;
+  mark?: number;
 }) {
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
   const cur = levelIndex(value);
+  const marked = mark === undefined ? -1 : levelIndex(mark);
   // a radio group: arrows move along the scale (no wrapping from one end to the other), Home and End jump to its ends
   const onKey = (e: ReactKeyboardEvent, i: number) => {
     const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
@@ -329,7 +333,7 @@ export function Levels({
             aria-checked={i === cur}
             tabIndex={i === cur ? 0 : -1}
             disabled={disabled}
-            className={i === cur ? 'on' : i < cur ? 'below' : undefined}
+            className={[i === cur ? 'on' : i < cur ? 'below' : '', i === marked ? 'mark' : ''].filter(Boolean).join(' ') || undefined}
             // the setting already marked stays as it is: a preset's or the staff's value between levels isn't snapped to the level's
             onClick={() => i !== cur && onChange(LEVEL_VALUES[i])}
             onKeyDown={(e) => onKey(e, i)}

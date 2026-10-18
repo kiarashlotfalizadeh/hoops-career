@@ -1,5 +1,6 @@
-// Tactics → Offense: tempo, how often each action is run, the set package and the shot profile
-// (threes, the rim, the offensive glass, hunting mismatches, the hot hand).
+// Tactics → Offense: the playbook it starts from, tempo, how often each action is run, the shot
+// profile (threes, the rim, the offensive glass, hunting mismatches, the hot hand) and the set
+// package. Each control marks the playbook's own setting.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -10,10 +11,13 @@ import { nextUserGame } from '../../core/analysis/preview';
 import { Help, Levels, Section, Toggle } from '../components/ui';
 import { SetPackageCard } from './SetPackageCard';
 import { tweak } from './edit';
+import { PlaybookLine, offPresetOf } from './PlaybookLine';
 
 export function OffenseTab({ t, players }: { t: Tactics; players: Player[] }) {
+  const pv = offPresetOf(t).values;
   return (
     <>
+      <PlaybookLine kind="off" />
       <Section
         title="Tempo"
         right={
@@ -28,8 +32,14 @@ export function OffenseTab({ t, players }: { t: Tactics; players: Player[] }) {
         }
       >
         <div className="card col tx-group">
-          <Levels label="Pace" value={t.offense.pace} names={TACTIC_LEVELS.pace} onChange={(x) => tweak((tt) => void (tt.offense.pace = x))} />
-          <Levels label="Push in transition" value={t.offense.transition} names={TACTIC_LEVELS.transition} onChange={(x) => tweak((tt) => void (tt.offense.transition = x))} />
+          <Levels label="Pace" value={t.offense.pace} mark={pv.pace} names={TACTIC_LEVELS.pace} onChange={(x) => tweak((tt) => void (tt.offense.pace = x))} />
+          <Levels
+            label="Push in transition"
+            value={t.offense.transition}
+            mark={pv.transition}
+            names={TACTIC_LEVELS.transition}
+            onChange={(x) => tweak((tt) => void (tt.offense.transition = x))}
+          />
         </div>
       </Section>
       <Section
@@ -54,20 +64,22 @@ export function OffenseTab({ t, players }: { t: Tactics; players: Player[] }) {
               key={a}
               label={ACTION_META[a].label}
               value={t.offense.actions[a]}
+              mark={pv.actions[a]}
               names={TACTIC_LEVELS.action}
               onChange={(x) => tweak((tt) => void (tt.offense.actions[a] = x))}
             />
           ))}
         </div>
       </Section>
-      <SetPackageCard t={t} edit={tweak} players={players} />
       <ShotProfile t={t} />
+      <SetPackageCard t={t} edit={tweak} players={players} />
     </>
   );
 }
 
 function ShotProfile({ t }: { t: Tactics }) {
   const league = useLeague();
+  const pv = offPresetOf(t).values;
   // the defender the game plan for the next opponent attacks (game by game: never in these tactics)
   const hunt = useLeagueMemo(() => {
     const g = nextUserGame(league);
@@ -100,11 +112,24 @@ function ShotProfile({ t }: { t: Tactics }) {
       }
     >
       <div className="card col tx-group">
-        <Levels label="Three-point emphasis" value={t.offense.threePoint} names={TACTIC_LEVELS.threePoint} onChange={(x) => tweak((tt) => void (tt.offense.threePoint = x))} />
-        <Levels label="Attack the rim" value={t.offense.rimAttack} names={TACTIC_LEVELS.rimAttack} onChange={(x) => tweak((tt) => void (tt.offense.rimAttack = x))} />
+        <Levels
+          label="Three-point emphasis"
+          value={t.offense.threePoint}
+          mark={pv.threePoint}
+          names={TACTIC_LEVELS.threePoint}
+          onChange={(x) => tweak((tt) => void (tt.offense.threePoint = x))}
+        />
+        <Levels
+          label="Attack the rim"
+          value={t.offense.rimAttack}
+          mark={pv.rimAttack}
+          names={TACTIC_LEVELS.rimAttack}
+          onChange={(x) => tweak((tt) => void (tt.offense.rimAttack = x))}
+        />
         <Levels
           label="Crash the offensive glass"
           value={t.offense.crashBoards}
+          mark={pv.crashBoards}
           names={TACTIC_LEVELS.crashBoards}
           onChange={(x) => tweak((tt) => void (tt.offense.crashBoards = x))}
         />

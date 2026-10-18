@@ -1,11 +1,26 @@
-// Tactics → Defense: the base scheme, pick-and-roll coverage (with how your starting big suits it),
-// help and pressure, the full-court press and the star plan.
+// Tactics → Defense: the identity it starts from, the base scheme, pick-and-roll coverage (with how
+// your starting big suits it), help and pressure, the full-court press and the star plan. Each
+// control marks the identity's own setting.
+import type { ReactNode } from 'react';
 import { useLeague } from '../../state/store';
 import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
 import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS } from '../../core/sim/tactics';
 import { attrDisplay, composites } from '../../core/ratings';
 import { Chips, Help, Levels, Section, Tag, Toggle } from '../components/ui';
 import { tweak } from './edit';
+import { PlaybookLine, defPresetOf } from './PlaybookLine';
+
+/** A choice's name, with the dot when it's the identity's own. */
+const own = (label: string, mine: boolean): ReactNode =>
+  mine ? (
+    <>
+      {label}
+      <i className="tx-dot" aria-hidden="true" />
+      <span className="sr-only"> (the identity&apos;s own)</span>
+    </>
+  ) : (
+    label
+  );
 
 export function DefenseTab({ t }: { t: Tactics }) {
   const league = useLeague();
@@ -18,8 +33,10 @@ export function DefenseTab({ t }: { t: Tactics }) {
   const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt)[0];
   const bigC = big ? composites(big.ratings) : null;
   const fit = (good: boolean, yes: string, no: string) => <Tag tone={good ? 'good' : 'warn'}>{good ? yes : no}</Tag>;
+  const pv = defPresetOf(t).values;
   return (
     <>
+      <PlaybookLine kind="def" />
       <Section
         title="Base scheme"
         right={
@@ -41,7 +58,7 @@ export function DefenseTab({ t }: { t: Tactics }) {
             label="Base scheme"
             value={t.defense.scheme}
             onChange={(x: DefScheme) => tweak((tt) => void (tt.defense.scheme = x))}
-            options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
+            options={ALL_SCHEMES.map((k) => ({ id: k, label: own(SCHEME_META[k].label, k === pv.scheme) }))}
           />
         </div>
       </Section>
@@ -67,7 +84,7 @@ export function DefenseTab({ t }: { t: Tactics }) {
             label="Pick-and-roll coverage"
             value={t.defense.pnr}
             onChange={(x: PnrCoverage) => tweak((tt) => void (tt.defense.pnr = x))}
-            options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
+            options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: own(COVERAGE_META[k].label, k === pv.pnr) }))}
           />
           {big && bigC && (t.defense.pnr === 'drop' || t.defense.pnr === 'switch' || t.defense.pnr === 'hedge') && (
             <div className="tx-bigfit">
@@ -105,10 +122,28 @@ export function DefenseTab({ t }: { t: Tactics }) {
         }
       >
         <div className="card col tx-group">
-          <Levels label="Help defense" value={t.defense.help} names={TACTIC_LEVELS.help} onChange={(x) => tweak((tt) => void (tt.defense.help = x))} />
-          <Levels label="Ball pressure" value={t.defense.pressure} names={TACTIC_LEVELS.pressure} onChange={(x) => tweak((tt) => void (tt.defense.pressure = x))} />
-          <Levels label="Physicality" value={t.defense.physicality} names={TACTIC_LEVELS.physicality} onChange={(x) => tweak((tt) => void (tt.defense.physicality = x))} />
-          <Levels label="Transition defense" value={t.defense.getBack} names={TACTIC_LEVELS.getBack} onChange={(x) => tweak((tt) => void (tt.defense.getBack = x))} />
+          <Levels label="Help defense" value={t.defense.help} mark={pv.help} names={TACTIC_LEVELS.help} onChange={(x) => tweak((tt) => void (tt.defense.help = x))} />
+          <Levels
+            label="Ball pressure"
+            value={t.defense.pressure}
+            mark={pv.pressure}
+            names={TACTIC_LEVELS.pressure}
+            onChange={(x) => tweak((tt) => void (tt.defense.pressure = x))}
+          />
+          <Levels
+            label="Physicality"
+            value={t.defense.physicality}
+            mark={pv.physicality}
+            names={TACTIC_LEVELS.physicality}
+            onChange={(x) => tweak((tt) => void (tt.defense.physicality = x))}
+          />
+          <Levels
+            label="Transition defense"
+            value={t.defense.getBack}
+            mark={pv.getBack}
+            names={TACTIC_LEVELS.getBack}
+            onChange={(x) => tweak((tt) => void (tt.defense.getBack = x))}
+          />
         </div>
       </Section>
       <Section
@@ -128,7 +163,7 @@ export function DefenseTab({ t }: { t: Tactics }) {
             label="Full-court press"
             value={t.defense.press}
             onChange={(x: PressMode) => tweak((tt) => void (tt.defense.press = x))}
-            options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
+            options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: own(PRESS_META[k].label, k === pv.press) }))}
           />
         </div>
       </Section>
