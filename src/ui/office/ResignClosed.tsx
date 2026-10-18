@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
 import type { League } from '../../core/types';
-import { seasonLabel } from '../../core/constants';
-import { CAP_FOR, payroll, playerName, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, shortName, teamPlayers } from '../../core/league/helpers';
 import { askingContract } from '../../core/league/contracts';
-import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
+import { capHolds } from '../../core/league/freeAgency';
+import { extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { PageHeader, Section, Statline } from '../components/ui';
-import { Callout, MoodTag, OvrPot, capRoomText, capSeason, forYears, playerMeta, shortSeason } from './common';
+import { Callout, MoodTag, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, playerMeta, salaryText, shortSeason } from './common';
 import { ContractSheet } from './ContractSheet';
 import { restrictedFreeAgents } from '../../core/league/rfa';
 import { money } from '../../core/format';
@@ -20,14 +20,8 @@ export function ResignClosed({ league }: { league: League }) {
   const tid = league.userTid;
   const [ext, setExt] = useState<number | null>(null);
   // during the lottery and the draft, the contracts up are this season's: the ones the coming re-sign period is for
-  const s = league.phase === 'draftLottery' || league.phase === 'draft' ? league.season : capSeason(league);
-  const list = useLeagueMemo(
-    () =>
-      teamPlayers(league, tid)
-        .filter((p) => contractExp(p.contract) === s)
-        .sort((a, b) => b.ovr - a.ovr),
-    [league, tid, s],
-  );
+  const { season: s, players: up } = useLeagueMemo(() => contractsUp(league, tid), [league, tid]);
+  const list = [...up].sort((a, b) => b.ovr - a.ovr);
   const canExtend = useLeagueMemo(() => new Set(extendablePlayers(league).map((p) => p.pid)), [league]);
   // the ones already extended: their deals end after this season too, but they're staying
   const extended = useLeagueMemo(
@@ -43,6 +37,8 @@ export function ResignClosed({ league }: { league: League }) {
   const rfas = useLeagueMemo(() => (league.phase === 'freeAgency' ? restrictedFreeAgents(league, tid) : []), [league, tid]);
   const cap = CAP_FOR(league, s + 1);
   const after = payroll(league, tid, s + 1);
+  // from the lottery on, the expiring players hold room against it (their cap holds), as on the Office's cap sheet
+  const holds = s + 1 === league.season + 1 ? capHolds(league, tid).reduce((a, h) => a + h.amount, 0) : 0;
   const [title, when] =
     league.phase === 'freeAgency'
       ? ['Closed for this summer', 'These deals run out after next season: extend them now, or re-sign them next summer.']
@@ -53,27 +49,24 @@ export function ResignClosed({ league }: { league: League }) {
           : ['Opens after the draft', 'Until then, review who is up.'];
   return (
     <main className="page fo-page">
-      <PageHeader title="Re-sign" sub={`Contracts up after ${seasonLabel(s)}`} back />
+      <PageHeader title="Re-sign" sub={`Contracts up after ${shortSeason(s)}`} back />
       <section className="card fo-capsheet" aria-label="Re-sign period">
         <div className="small dim2">
           <b className="fo-closed-t">The re-sign period {title.charAt(0).toLowerCase() + title.slice(1)}.</b> {when}
         </div>
         <Statline
           items={[
-            { k: `Expiring ${shortSeason(s)}`, v: String(list.length), s: `${money(freed)} off the books` },
-            {
-              k: `${shortSeason(s + 1)} committed`,
-              v: money(after),
-              s: capRoomText(cap.salaryCap - after),
-              color: after < cap.salaryCap ? 'var(--good)' : 'var(--warn)',
-            },
+            // (the same cap figure as the Office's cap sheet, holds said; the season they're about once)
+            { ...capRoomFig(cap.salaryCap - after - holds), s: holds > 0 ? `after ${money(holds)} in holds` : shortSeason(s + 1) },
+            { k: 'Committed', v: money(after), s: holds > 0 ? shortSeason(s + 1) : undefined },
+            { k: 'Expiring', v: String(list.length), s: `frees ${money(freed)}` },
           ]}
         />
       </section>
 
       {rfas.length > 0 && (
         <Callout icon={<ShieldCheck size={16} className="dim" />}>
-          Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => p.lastName).join(', ')}) can still re-sign with Bird rights until{' '}
+          Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => shortName(league, p)).join(', ')}) can still re-sign with Bird rights until{' '}
           {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet, and you can match any sheet.{' '}
           <Link to="/office/free-agents" className="bold accent-text">
             Free agents
@@ -81,9 +74,9 @@ export function ResignClosed({ league }: { league: League }) {
         </Callout>
       )}
 
-      <Section title={`Up after ${seasonLabel(s)}`}>
+      <Section title={`Up after ${shortSeason(s)}`}>
         {list.length === 0 ? (
-          <div className="card small dim">No contracts expire after {seasonLabel(s)}.</div>
+          <div className="card small dim">No contracts expire after {shortSeason(s)}.</div>
         ) : (
           <div className="card flush list">
             {list.map((p) => {
@@ -100,9 +93,9 @@ export function ResignClosed({ league }: { league: League }) {
                     </div>
                   </div>
                   <div className="fo-money">
-                    <div className="a">{money(salaryFor(p, s))}</div>
+                    <div className="a">{salaryText(league, salaryFor(p, s))}</div>
                     <div className="b">
-                      asks ~{money(ask.amount)} {forYears(ask.years)}
+                      asks ~{salaryText(league, ask.amount)} {forYears(ask.years)}
                     </div>
                   </div>
                 </Link>
@@ -111,7 +104,8 @@ export function ResignClosed({ league }: { league: League }) {
           </div>
         )}
         <div className="tiny dim">
-          Asks use today's ratings and mood; both change by the summer.{canExtend.size > 0 ? " An extension's ask is for the season after his deal ends." : ''}
+          Asks use today's ratings and mood; both change by the summer.
+          {canExtend.size > 0 ? ` An extension's ask is from ${shortSeason(s + 1)}, the season after his deal ends.` : ''}
         </div>
       </Section>
 
@@ -128,8 +122,8 @@ export function ResignClosed({ league }: { league: League }) {
                   </div>
                 </div>
                 <div className="fo-money">
-                  <div className="a">{money(salaryFor(p, s + 1))}</div>
-                  <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
+                  <div className="a">{salaryText(league, salaryFor(p, s + 1))}</div>
+                  <div className="b">{contractEnd(league, p, s)}</div>
                 </div>
               </Link>
             ))}

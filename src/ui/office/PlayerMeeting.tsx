@@ -4,7 +4,7 @@
 import { Link } from 'react-router-dom';
 import { Clock, Handshake, Hourglass, TrendingUp } from 'lucide-react';
 import type { League, Player } from '../../core/types';
-import { fmtDate, seasonTotals } from '../../core/league/helpers';
+import { fmtDate, seasonTotals, shortName } from '../../core/league/helpers';
 import { MEET_DAYS, PATIENCE_GAMES, ROLE_GAMES, complaints, meetBlockedReason, meetPlayer, patienceOdds, promiseStatus, type MeetChoice } from '../../core/league/morale';
 import { archetype } from '../../core/ratings';
 import { liveInProgress } from '../../state/live';
@@ -68,7 +68,11 @@ export function MeetingPanel({ league, p, onDone }: { league: League; p: Player;
   return (
     <div className="col fo-sheet">
       <p className="fo-lede">
-        {p.mood.tradeRequest ? `${p.lastName} has asked for a trade.` : p.promise?.request ? `${p.lastName} has put his trade request on hold.` : `${p.lastName} is unhappy.`}{' '}
+        {p.mood.tradeRequest
+          ? `${shortName(league, p)} has asked for a trade.`
+          : p.promise?.request
+            ? `${shortName(league, p)} has put his trade request on hold.`
+            : `${shortName(league, p)} is unhappy.`}{' '}
         {gripes.length ? `${gripes.join('. ')}.` : ''}
         {p.mood.expectedMin > 0 ? ` He expects about ${p.mood.expectedMin} minutes a night.` : ''}
       </p>

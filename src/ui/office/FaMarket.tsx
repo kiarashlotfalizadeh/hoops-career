@@ -3,7 +3,7 @@
 // on its last day, starts the new season).
 import { FastForward, Gavel, Play, SkipForward } from 'lucide-react';
 import { seasonLabel } from '../../core/constants';
-import { freeAgents, playerName } from '../../core/league/helpers';
+import { freeAgents, playerName, shortName } from '../../core/league/helpers';
 import { withdrawBid } from '../../core/league/freeAgency';
 import { faDayNumber, faOver, newSeasonBlockedReason } from '../../core/league/season';
 import { pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
@@ -114,16 +114,20 @@ export function FaDock() {
     const verdicts = [
       ...decided
         .filter(Boolean)
-        .map((p) => (p.tid === l.userTid ? `${p.lastName} chose you!` : p.tid >= 0 ? `${p.lastName} chose ${l.teams[p.tid].abbrev}.` : `${p.lastName} passed on your offer.`)),
-      ...settled.map((p) => (p.tid === l.userTid ? `${p.lastName}'s offer sheet wasn't matched: he's yours!` : `${l.teams[p.tid].abbrev} matched ${p.lastName}'s offer sheet.`)),
-      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${p.lastName} to an offer sheet: match it or let him go.`),
+        .map((p) =>
+          p.tid === l.userTid ? `${shortName(l, p)} chose you!` : p.tid >= 0 ? `${shortName(l, p)} chose ${l.teams[p.tid].abbrev}.` : `${shortName(l, p)} passed on your offer.`,
+        ),
+      ...settled.map((p) =>
+        p.tid === l.userTid ? `${shortName(l, p)}'s offer sheet wasn't matched: he's yours!` : `${l.teams[p.tid].abbrev} matched ${shortName(l, p)}'s offer sheet.`,
+      ),
+      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${shortName(l, p)} to an offer sheet: match it or let him go.`),
     ].join(' ');
     useStore.getState().toast(
       `${verdicts ? `${verdicts} ` : ''}${
         signed.length
           ? `${when}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
               .slice(0, 2)
-              .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
+              .map((p) => `${shortName(l, p)} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
               .join(', ')}${signed.length > 2 ? '…' : ''}`
           : `${when}: ${day > from ? (day - from >= 6 ? 'a quiet week' : 'a few quiet days') : 'a quiet day'} on the market.`
       }`,

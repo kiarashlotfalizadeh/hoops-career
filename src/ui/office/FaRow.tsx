@@ -5,10 +5,9 @@ import type { League, Player, SigningRoute } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
 import { EXCEPTIONS, twoWaySalary, twoWayYears, waiverSalary, type Ask } from '../../core/league/contracts';
 import { tenDayPay, tenDayUntil } from '../../core/league/tenDay';
-import { contractExp } from '../../core/playerGen';
-import { OvrPot, appealInfo, forYears, playerMeta, shortSeason } from './common';
+import { OvrPot, appealInfo, contractEnd, forYears, outTag, playerMeta, salaryText } from './common';
 import { rfaTag } from './RfaPanel';
-import { money } from '../../core/format';
+import { moneyExact } from '../../core/format';
 
 /** Which list the row is in: free agents' asks, two-way offers or 10-day contracts. */
 export type FaListMode = 'standard' | 'twoWay' | 'tenDay';
@@ -52,10 +51,10 @@ export function FaRow({
       <div className="grow">
         <div className="fo-prow-name">
           <span className="fo-name">{playerName(p)}</span>
-          {p.injury && <span className="fo-flag bad">INJ</span>}
         </div>
-        {(bid || w || rfa) && (
+        {(bid || w || rfa || p.injury) && (
           <div className="fo-prow-tags">
+            {p.injury && <span className="tag bad">{outTag(p)}</span>}
             {rfa && <span className={`tag ${rfa.tone}`}>{rfa.label}</span>}
             {bid && <span className="tag info">Bidding · {bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}</span>}
             {w && <span className="tag warn">On waivers · clears {wDays > 1 ? `in ${wDays} days` : wDays === 1 ? 'tomorrow' : 'today'}</span>}
@@ -95,26 +94,26 @@ export function FaRow({
       </div>
       {w ? (
         <div className="fo-money">
-          <div className="a">{money(waiverSalary(league, p))}</div>
-          <div className="b">thru {shortSeason(contractExp(w.contract))}</div>
+          <div className="a">{salaryText(league, waiverSalary(league, p))}</div>
+          <div className="b">{contractEnd(league, { contract: w.contract }, league.season)}</div>
         </div>
       ) : twoWayMode ? (
         <div className="fo-money">
-          <div className="a">{money(twoWaySalary(league, s), 2)}</div>
+          <div className="a">{moneyExact(twoWaySalary(league, s))}</div>
           <div className="b">
             two-way · {twoWayYears(p)} yr{twoWayYears(p) > 1 ? 's' : ''}
           </div>
         </div>
       ) : tenDays ? (
         <div className="fo-money">
-          <div className="a">{money(tenDayPay(league, p, tenDayUntil(league) - league.day), 2)}</div>
+          <div className="a">{moneyExact(tenDayPay(league, p, tenDayUntil(league) - league.day))}</div>
           <div className="b">
             {tenDayUntil(league) - league.day} day{tenDayUntil(league) - league.day === 1 ? '' : 's'}
           </div>
         </div>
       ) : (
         <div className="fo-money">
-          <div className="a">{money(ask.amount)}</div>
+          <div className="a">{salaryText(league, ask.amount)}</div>
           <div className="b">{forYears(ask.years)}</div>
         </div>
       )}

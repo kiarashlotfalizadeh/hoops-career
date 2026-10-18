@@ -20,6 +20,7 @@ import { HelpSheet, OvrPot } from '../office/common';
 import { PickTradeSheet } from '../office/PickTradeSheet';
 import { overallPick } from '../league/shared';
 import { BoardList } from '../draft/rows';
+import { boardRank, picksText } from '../draft/common';
 import { LiveView, OnTheClock } from '../draft/LiveView';
 import { MockView } from '../draft/MockView';
 import { CombineView } from '../draft/CombineView';
@@ -146,7 +147,8 @@ export default function Draft() {
               not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p>
-              <b>Big board.</b> The consensus ranking mixes potential and current ability. OVR is what they can do now; ▲POT is the ceiling scouts see.
+              <b>Big board.</b> Rank is the scouts' consensus order of the class, mixing potential and current ability; proj. is where the league's mock drafts have him going, by
+              each team's needs, so the two can differ. OVR is what he can do now; POT is the ceiling scouts see.
             </p>
             <p>Undrafted prospects with promise become free agents after the draft.</p>
           </HelpSheet>
@@ -202,13 +204,14 @@ export default function Draft() {
               <div className="grow">
                 <h2 className="ellipsis">{playerName(league.players[confirmPick])}</h2>
                 <div className="fo-meta">
-                  {league.players[confirmPick].pos} · {league.players[confirmPick].archetype} · Big board #{league.players[confirmPick].prospect?.rank ?? '—'}
+                  {league.players[confirmPick].pos} · {league.players[confirmPick].archetype}
+                  {boardRank(league, league.players[confirmPick]) ? ` · rank ${boardRank(league, league.players[confirmPick])}` : ''}
                 </div>
               </div>
               <OvrPot p={league.players[confirmPick]} />
             </div>
             <p className="fo-lede">
-              Pick #{overallPick(league, np.round, np.pick!)}: {np.round === 1 ? 'first round, a 4-year rookie-scale deal' : 'second round, a 2-year minimum deal'}.
+              Pick #{overallPick(league, np.round, np.pick!)}: {np.round === 1 ? '1st round, a 4-year rookie-scale deal' : '2nd round, a 2-year minimum deal'}.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setConfirmPick(null)}>
@@ -225,8 +228,7 @@ export default function Draft() {
       <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Auto-draft the rest?">
         <div className="col fo-sheet">
           <p className="fo-lede">
-            Your staff make your {myRemaining.length > 1 ? `${myRemaining.length} picks` : 'pick'} ({myRemaining.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}
-            ), then re-signing opens.
+            Your staff make your {myRemaining.length > 1 ? `${myRemaining.length} picks` : 'pick'} ({picksText(league, myRemaining)}), then re-signing opens.
           </p>
           <div className="row">
             <button className="btn grow" onClick={() => setConfirmSim(false)}>

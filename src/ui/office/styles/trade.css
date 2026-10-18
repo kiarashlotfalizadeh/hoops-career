@@ -252,20 +252,10 @@
   font-size: inherit;
 }
 
+/* neutral text: trade value is its own scale, not the OVR badge's */
 .fo-tier-v {
-  font-weight: 750;
-  color: var(--tier);
-}
-
-.fo-tier-v::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  margin-right: 5px;
-  vertical-align: 1px;
-  background: var(--tier);
+  font-weight: 700;
+  color: var(--text-2);
 }
 
 /* ------------------------------------------------------------ trade: the asset lists */

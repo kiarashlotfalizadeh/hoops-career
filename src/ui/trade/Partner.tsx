@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 import type { League } from '../../core/types';
 import { CAP_FOR, curTeamSeason, payroll } from '../../core/league/helpers';
 import { capPayroll } from '../../core/league/freeAgency';
-import { tradeRoster } from '../../core/league/trades';
 import { TeamLogo } from '../components/TeamLogo';
 import { scrollBehavior } from '../components/ui';
 import { slabVars } from '../teamColors';
@@ -42,8 +41,6 @@ export function PartnerSlab({ league, tid, season }: { league: League; tid: numb
   const holds = pay - payroll(league, tid, season);
   const cap = CAP_FOR(league, season);
   const st = STRATEGY_META[t.strategy];
-  // standard contracts the deal counts, as the dock does: two-way deals sit outside the 15, and after the season expiring ones are leaving
-  const n = tradeRoster(league, tid).length;
   return (
     <section className="slab fo-partner" style={slabVars(t.colors)} aria-label={`Trade partner: ${t.region} ${t.name}`}>
       <span className="slab-mark">
@@ -63,8 +60,6 @@ export function PartnerSlab({ league, tid, season }: { league: League; tid: numb
       <div className="fo-partner-meta">
         <span className="tag">{st.label}</span>
         <span className="num">{rec}</span>
-        <span>·</span>
-        <span className="num">{n} players</span>
         <span>·</span>
         {/* (cap holds count: in free agency a team's restricted free agents' and offer sheets', see capHolds) */}
         <span className="num">

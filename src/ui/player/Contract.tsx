@@ -17,7 +17,7 @@ import { act } from '../../state/actions';
 import { useStore } from '../../state/store';
 import { Section, Statline } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { capSeason, contractUpNote, openOption, shortSeason, tradeClosedNote } from '../office/common';
+import { capSeason, contractEnd, contractUpNote, openOption, salaryText, shortSeason, tradeClosedNote } from '../office/common';
 import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
 
@@ -57,11 +57,12 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
           <>
             <Statline
               items={[
-                { k: 'Salary', v: money(sal), s: seasonLabel(salSeason) },
+                { k: 'Salary', v: salaryText(league, sal), s: shortSeason(salSeason) },
                 {
-                  k: extStart !== null ? 'Deal ends' : 'Expires',
-                  v: shortSeason(extStart !== null ? extStart - 1 : contractExp(p.contract)),
-                  s: openOption(league, p) ? `${openOption(league, p)} option` : rookieScaleDeal(p) ? 'rookie scale' : undefined,
+                  // when it ends as every desk says it ("thru 30-31 PO", "expiring"), an extension's seasons included
+                  k: 'Ends',
+                  v: contractEnd(league, p, salSeason),
+                  s: extStart !== null ? 'extended' : openOption(league, p) ? `${openOption(league, p)} option` : rookieScaleDeal(p) ? 'rookie scale' : undefined,
                 },
                 { k: 'Market', v: money(marketSalary(league, p)), s: 'value' },
               ]}
@@ -69,7 +70,7 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
             {openOption(league, p) && rookieScaleDeal(p) && <div className="tm-deal-note">Rookie scale deal.</div>}
             {extStart !== null && (
               <div className="tm-deal-note">
-                <span className="good bold">Extended through {seasonLabel(contractExp(p.contract))}</span> · {money(salaryFor(p, extStart))} from {shortSeason(extStart)}
+                <span className="good bold">Extended</span> · {salaryText(league, salaryFor(p, extStart))} from {shortSeason(extStart)}
               </div>
             )}
             {p.contract.twoWay && (

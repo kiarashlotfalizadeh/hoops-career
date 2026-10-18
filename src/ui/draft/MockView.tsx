@@ -38,7 +38,7 @@ export function MockView({ league, mock, onOpen }: { league: League; mock: MockD
         </div>
         {mock.slots.some((s) => s.round === 2) && (
           <button className="btn ghost block fo-more-btn" onClick={() => setRound2(!round2)}>
-            {round2 ? 'First round only' : 'Show the second round'}
+            {round2 ? '1st round only' : 'Show the 2nd round'}
           </button>
         )}
       </div>

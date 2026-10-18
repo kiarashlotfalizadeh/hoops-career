@@ -2,11 +2,10 @@
 // goes, the right to swap firsts in a future draft, and cash (see the deal terms in
 // core/league/trades.ts), plus the dock's plain-words account of what each one does.
 import type { DraftPick, League } from '../../core/types';
-import { seasonLabel } from '../../core/constants';
 import { PROTECTIONS, cashRoom, dealTerms, inSwap, swapSeasons, type TradeOffer } from '../../core/league/trades';
 import { contractSeason } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
-import { Range } from '../office/common';
+import { Range, shortSeason } from '../office/common';
 import { moneyExact } from '../../core/format';
 
 /** Can the team sending this pick put a protection on it: its own first, its draft order still open, no swap on it? */
@@ -102,7 +101,8 @@ export function CashControl({
   const max = Math.min(send.send, take.receive);
   const mine = from === league.userTid;
   const f = league.teams[from].abbrev;
-  const s = seasonLabel(contractSeason(league));
+  // (the season as the rest of the Trade screen writes it: "26-27")
+  const s = shortSeason(contractSeason(league));
   return (
     <div className="fo-term">
       <div className="fo-term-row">

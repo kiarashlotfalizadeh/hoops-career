@@ -13,7 +13,7 @@ import { type WorkResult } from '../../core/league/tradeHelp';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Chips, Empty, Section } from '../components/ui';
-import { Callout, HelpSheet, OvrPot, capSeason, contractEnd, isOffseason } from '../office/common';
+import { Callout, HelpSheet, OvrPot, capSeason, contractEnd, isOffseason, outTag, salaryText } from '../office/common';
 import { TierLine } from './common';
 import { money } from '../../core/format';
 
@@ -75,7 +75,8 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
             <p>Every player on another team who can be traded now. Tap one to open the builder with his team and hear their ask.</p>
             <p>
               <b>Value tiers</b> rank league-neutral trade value (ability, age, potential, contract) among everyone on a roster: Franchise (about one for every two teams),
-              All-Star, Starter, Rotation and Depth. Negative is a contract worth less than nothing.
+              All-Star, Starter, Rotation and Depth. Negative is a contract worth less than nothing. A tier is trade value, not his rating: a cheap young 78 can outrank an
+              expensive 84.
             </p>
             <p>
               <b>On the block</b>: his team looks ready to move him (he asked out, his contract is a burden, or he's a rebuilder's veteran). <b>Cornerstone</b>: a young star his
@@ -164,15 +165,16 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                     <div className="fo-prow-name">
                       <TeamLogo tid={p.tid} size={16} decorative />
                       <span className="fo-name">{playerName(p)}</span>
-                      {p.injury && <span className="fo-flag bad">INJ</span>}
                     </div>
-                    <div className="fo-meta">
+                    <div className="fo-meta fo-wrap">
                       <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
+                      {/* (the name line keeps its room for the full name: an injury leads the details) */}
+                      {p.injury && <span className="bad bold">{outTag(p)} · </span>}
                       {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
                     </div>
                   </div>
                   <div className="fo-money">
-                    <div className="a">{p.contract.twoWay ? 'Two-way' : money(salary)}</div>
+                    <div className="a">{p.contract.twoWay ? 'Two-way' : salaryText(league, salary)}</div>
                     <div className="b">{contractEnd(league, p, s)}</div>
                   </div>
                 </button>

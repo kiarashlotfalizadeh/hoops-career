@@ -4,28 +4,19 @@ import type { TradeNote } from '../../core/league/trades';
 import type { Availability, ValueTier } from '../../core/league/tradeFinder';
 import '../office/office.css';
 
-/** The theme's tier palette, best to worst; a contract worth less than nothing in the bad color. */
-export const TIER_COLOR: Record<ValueTier, string> = {
-  Franchise: 'var(--tier-elite)',
-  'All-Star': 'var(--tier-star)',
-  Starter: 'var(--tier-good)',
-  Rotation: 'var(--tier-avg)',
-  Depth: 'var(--tier-low)',
-  Negative: 'var(--bad)',
-};
-
 const NOTE_COLOR: Record<TradeNote['tone'], string> = { good: 'var(--good)', bad: 'var(--bad)', warn: 'var(--warn)', info: 'var(--info)' };
 
 /**
  * "Starter value · On the block": where a player's neutral trade value ranks league-wide, and
  * whether his team looks ready to move him (or builds around him). A line of its own, or `inline`
- * at the end of a row's details.
+ * at the end of a row's details. Plain text: trade value is its own scale, so it doesn't borrow the
+ * OVR badge's colours (only a contract worth less than nothing reads in the bad colour).
  */
 export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; avail: Availability; inline?: boolean }) {
   const Tag = inline ? 'span' : 'div';
   return (
-    <Tag className={inline ? 'fo-tier inline' : 'fo-tier'} style={{ ['--tier' as string]: TIER_COLOR[tier] }}>
-      <span className="fo-tier-v">{tier} value</span>
+    <Tag className={inline ? 'fo-tier inline' : 'fo-tier'}>
+      <span className={`fo-tier-v ${tier === 'Negative' ? 'bad' : ''}`}>{tier} value</span>
       {avail === 'block' && <span className="good bold"> · On the block</span>}
       {avail === 'franchise' && <span className="dim2"> · Cornerstone</span>}
     </Tag>

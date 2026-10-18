@@ -3,6 +3,7 @@
 // withdrawn.
 import { LockKeyhole } from 'lucide-react';
 import type { League, Player } from '../../core/types';
+import { shortName } from '../../core/league/helpers';
 import { isUntouchable, setUntouchable } from '../../core/league/proposals';
 import { edit } from '../../state/actions';
 import { Toggle } from '../components/ui';
@@ -21,7 +22,7 @@ export function UntouchableToggle({ league, p }: { league: League; p: Player }) 
           Untouchable
         </span>
       }
-      help={on ? `AI teams won't ask for ${p.lastName}.` : `Take ${p.lastName} off the table: AI teams stop asking for him.`}
+      help={on ? `AI teams won't ask for ${shortName(league, p)}.` : `Take ${shortName(league, p)} off the table: AI teams stop asking for him.`}
     />
   );
 }

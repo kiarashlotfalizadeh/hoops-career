@@ -6,7 +6,7 @@ import { Handshake, MessagesSquare, PhoneOff, TriangleAlert } from 'lucide-react
 import type { Player, TalkTerms } from '../../core/types';
 import { LOWBALL, type TalkKind, askFor, breakdownRule, closedLabel, patienceText, talkState } from '../../core/league/negotiation';
 import { makeContract } from '../../core/league/contracts';
-import { playerName } from '../../core/league/helpers';
+import { playerName, shortName } from '../../core/league/helpers';
 import { useLeague } from '../../state/store';
 import { More } from '../components/ui';
 import { Callout } from './common';
@@ -48,7 +48,7 @@ export function TalkPanel({
 }) {
   const league = useLeague();
   const st = talkState(league, p, kind);
-  const name = p.lastName;
+  const name = shortName(league, p);
   if (st.closed)
     return (
       <Callout tone="bad" icon={<PhoneOff size={18} className="bad" />}>

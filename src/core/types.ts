@@ -1098,6 +1098,8 @@ export interface InboxMessage {
   important?: boolean;
   /** The AI trade offer (Proposal id) this message carries: the inbox offers Accept and Review while it stands. */
   proposal?: number;
+  /** What an AI trade pitch is about ("sell:812", "dump:14"), so the same pitch rests a while and replaces its earlier mail. */
+  pitch?: string;
   /** The user's restricted free agent (pid) whose offer sheet this message is about: the inbox offers Match and Let him go while it stands. */
   sheet?: number;
   /** The user's player (pid) whose 10-day contract is ending: the inbox offers a second 10-day, the rest of the season or letting him go while it runs. */

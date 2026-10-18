@@ -17,7 +17,7 @@ import { act } from '../../state/actions';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, More, Ovr } from '../components/ui';
-import { capSeason, contractEnd } from './common';
+import { capSeason, contractEnd, salaryText } from './common';
 import { useBusy } from '../../state/actions/office';
 import { money } from '../../core/format';
 
@@ -141,7 +141,7 @@ function Side({ league, title, side }: { league: League; title: string; side: Tr
                 {playerName(p)}
               </Link>
               <div className="fo-meta num">
-                {money(salaryFor(p, s))} · {contractEnd(league, p)}
+                {salaryText(league, salaryFor(p, s))} · {contractEnd(league, p)}
               </div>
             </div>
           </div>

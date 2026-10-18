@@ -9,13 +9,14 @@
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
 import { Rng, hashString } from '../random';
-import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, sentence, standardRoster } from './helpers';
+import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, sentence, shortName, standardRoster } from './helpers';
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
 import { MAX_FIRSTS_OUT, capSalary, evaluateTrade, executeTrade, pickLabel, pickValue, stepienError, tradedAwayBy, untradeable, validateTrade, type TradeOffer } from './trades';
 import { MAX_PICKS_OUT, neutralBalance, packageFor } from './tradePackages';
 import { makeItWork } from './tradeHelp';
+import { plural } from '../format';
 
 /** Offers open at once, at most (one per team). */
 export const MAX_OPEN = 4;
@@ -26,7 +27,8 @@ const STANDS = [5, 7] as const;
 /** Days before the same pitch (the same player bought or sold, the same team's salary dump) can come again. */
 const PITCH_REST = 21;
 
-type Pitch = { tid: number; offer: TradeOffer; kind: Proposal['kind']; note: string; subject: string };
+/** An offer found, before it's posted; `pitch` names what it's about, for the rest between pitches ("sell:812"). */
+type Pitch = { tid: number; offer: TradeOffer; kind: Proposal['kind']; note: string; pitch: string };
 
 export const openProposals = (league: League): Proposal[] => league.proposals ?? [];
 
@@ -111,6 +113,25 @@ const assetText = (league: League, side: TradeOffer['a']) =>
     }),
   ]) || 'nothing';
 
+/** One side of a deal in a headline: its players by name (a teammate's twin told apart), then its picks counted ("Kennard + 2 picks"); a lone pick of this draft whose slot is set, by number ("pick #12"). */
+function sideHeadline(league: League, side: TradeOffer['a']): string {
+  const picks = side.dpids.map((d) => league.draftPicks.find((x) => x.dpid === d)).filter((d): d is DraftPick => !!d);
+  const lone = !side.pids.length && picks.length === 1 && picks[0].pick && picks[0].season === league.season ? picks[0] : null;
+  if (lone) return `pick #${(lone.round - 1) * league.teams.length + lone.pick!}`;
+  return [...side.pids.map((pid) => shortName(league, league.players[pid])), ...(picks.length ? [plural(picks.length, 'pick')] : [])].join(' + ');
+}
+
+/**
+ * An offer's headline, the same in the inbox and on the agenda, naming both sides: "PHX want
+ * Kenrich Williams + 3 picks for Kennard", "MIL offer Portis + 2 picks for nothing".
+ */
+export function offerSubject(league: League, offer: TradeOffer): string {
+  const abbrev = league.teams[offer.b.tid].abbrev;
+  const yours = sideHeadline(league, offer.a);
+  const theirs = sideHeadline(league, offer.b);
+  return yours ? `${abbrev} want ${yours} for ${theirs || 'nothing'}` : `${abbrev} offer ${theirs} for nothing`;
+}
+
 /** Post an offer (if it is still one the team accepts and the user would want), with its inbox message. */
 function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposal | null {
   const open = openProposals(league);
@@ -140,10 +161,11 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
   const ask = p.offer.a.pids.length || p.offer.a.dpids.length ? `for ${assetText(league, p.offer.a)}` : 'and want nothing back';
   const from = `${t.region} ${t.name} GM`;
   // the same pitch made again this season replaces its earlier mail: one message per pitch, the latest on top
-  league.inbox = league.inbox.filter((m) => !(m.season === league.season && m.subject === pitch.subject && m.from === from));
+  league.inbox = league.inbox.filter((m) => !(m.season === league.season && m.pitch === pitch.pitch && m.from === from));
   addInbox(league, {
     from,
-    subject: pitch.subject,
+    subject: offerSubject(league, p.offer),
+    pitch: pitch.pitch,
     body: `${p.note}\n${sentence(`We'd send ${assetText(league, p.offer.b)} ${ask}`)} ${until}`,
     tone: 'neutral',
     link: '/office/trade?tab=offers',
@@ -172,9 +194,9 @@ const free = (league: League) => {
  * PITCH_REST days? Then it isn't made again: a player has one live pitch at a time, and a declined
  * or lapsed one rests a while before it comes back.
  */
-function pitchedLately(league: League, pid: number, subject: string): boolean {
+function pitchedLately(league: League, pid: number, pitch: string): boolean {
   if (openProposals(league).some((p) => p.offer.a.pids.includes(pid) || p.offer.b.pids.includes(pid))) return true;
-  return league.inbox.some((m) => m.season === league.season && m.subject === subject && league.day - m.day < PITCH_REST);
+  return league.inbox.some((m) => m.season === league.season && m.pitch === pitch && league.day - m.day < PITCH_REST);
 }
 
 /**
@@ -184,14 +206,14 @@ function pitchedLately(league: League, pid: number, subject: string): boolean {
  */
 function tryBuy(league: League, rng: Rng): Pitch | null {
   const targets = standardRoster(league, league.userTid).filter(
-    (p) => p.ovr >= 70 && !isUntouchable(league, p.pid) && !untradeable(league, p) && !pitchedLately(league, p.pid, `Offer for ${playerName(p)}`),
+    (p) => p.ovr >= 70 && !isUntouchable(league, p.pid) && !untradeable(league, p) && !pitchedLately(league, p.pid, `buy:${p.pid}`),
   );
   for (let k = 0; k < 2 && targets.length; k++) {
     const target = targets.splice(rng.weighted(targets.map((p) => (p.mood.tradeRequest ? 3 : 1))), 1)[0];
     for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target))).slice(0, 6)) {
       const pkg = packageFor(league, t.tid, { pids: [target.pid], dpids: [] });
       if (!pkg || !fair(league, pkg.offer)) continue;
-      const last = target.lastName;
+      const last = shortName(league, target);
       const note = target.mood.tradeRequest
         ? `We hear ${last} wants out. We'd give him a fresh start.`
         : t.strategy === 'contend'
@@ -199,7 +221,7 @@ function tryBuy(league: League, rng: Rng): Pitch | null {
           : t.strategy === 'rebuild'
             ? `${last} fits our timeline: we're building around young players.`
             : `${last} would fit right in with what we're building.`;
-      return { tid: t.tid, offer: pkg.offer, kind: 'buy', note, subject: `Offer for ${playerName(target)}` };
+      return { tid: t.tid, offer: pkg.offer, kind: 'buy', note, pitch: `buy:${target.pid}` };
     }
   }
   return null;
@@ -221,14 +243,7 @@ function trySell(league: League, rng: Rng): Pitch | null {
     .map((p) => p.pid);
   for (const t of rng.shuffle(free(league).filter((x) => x.strategy === 'rebuild')).slice(0, 4)) {
     const vets = standardRoster(league, t.tid)
-      .filter(
-        (p) =>
-          p.ovr >= 74 &&
-          age(league, p) >= 27 &&
-          !untradeable(league, p) &&
-          !tradedAwayBy(league, p, user) &&
-          !pitchedLately(league, p.pid, `${t.abbrev} would move ${playerName(p)}`),
-      )
+      .filter((p) => p.ovr >= 74 && age(league, p) >= 27 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && !pitchedLately(league, p.pid, `sell:${p.pid}`))
       .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
     for (const vet of vets.slice(0, 3)) {
       const ask = makeItWork(league, { a: { tid: user, pids: [], dpids: [] }, b: { tid: t.tid, pids: [vet.pid], dpids: [] } }, keep);
@@ -237,8 +252,8 @@ function trySell(league: League, rng: Rng): Pitch | null {
         tid: t.tid,
         offer: ask.offer,
         kind: 'sell',
-        note: `We're rebuilding, and ${vet.lastName} doesn't fit our timeline. He can help a team like yours win now.`,
-        subject: `${t.abbrev} would move ${playerName(vet)}`,
+        note: `We're rebuilding, and ${shortName(league, vet)} doesn't fit our timeline. He can help a team like yours win now.`,
+        pitch: `sell:${vet.pid}`,
       };
     }
   }
@@ -258,7 +273,7 @@ function tryDump(league: League, rng: Rng): Pitch | null {
     const bad = standardRoster(league, t.tid)
       .filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && tradeValue(league, p) < 0)
       .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
-    if (!bad || pitchedLately(league, bad.pid, `${t.abbrev} want to shed salary`)) continue;
+    if (!bad || pitchedLately(league, bad.pid, `dump:${t.tid}`)) continue;
     const dps: DraftPick[] = [];
     const offer = (): TradeOffer => ({ a: { tid: user, pids: [], dpids: [] }, b: { tid: t.tid, pids: [bad.pid], dpids: dps.map((d) => d.dpid) } });
     if (validateTrade(league, offer()).length) continue;
@@ -280,8 +295,8 @@ function tryDump(league: League, rng: Rng): Pitch | null {
       tid: t.tid,
       offer: offer(),
       kind: 'dump',
-      note: `We need to get under the luxury tax. Take ${bad.lastName}'s contract and the pick${dps.length > 1 ? 's are' : ' is'} yours.`,
-      subject: `${t.abbrev} want to shed salary`,
+      note: `We need to get under the luxury tax. Take ${shortName(league, bad)}'s contract and the pick${dps.length > 1 ? 's are' : ' is'} yours.`,
+      pitch: `dump:${t.tid}`,
     };
   }
   return null;
@@ -343,8 +358,8 @@ export function draftProposals(league: League) {
   if (!dp || dp.tid !== league.userTid || dp.round !== 1 || openProposals(league).some((p) => p.offer.a.dpids.includes(dp.dpid))) return;
   // teams call once about a pick: offers the user turned down aren't made again that night (the
   // same stream would make them again after his next trade)
-  const subject = `Offer for pick #${dp.pick}`;
-  if (league.inbox.some((m) => m.season === league.season && m.day === league.day && m.subject === subject)) return;
+  const pitch = `pick:${dp.dpid}`;
+  if (league.inbox.some((m) => m.season === league.season && m.day === league.day && m.pitch === pitch)) return;
   const rng = offerRng(league, `pick:${dp.dpid}`);
   const n = rng.chance(0.5) ? 2 : 1;
   const found = withHoldsMemo(() =>
@@ -364,7 +379,7 @@ export function draftProposals(league: League) {
         offer: pkg.offer,
         kind: 'pick',
         note: `There's a player on the board we like at #${dp.pick}. Move down and pick up extra assets.`,
-        subject,
+        pitch,
       },
       rng,
       league.day,
