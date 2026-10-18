@@ -3,7 +3,8 @@
 import { Activity, ChevronsRight } from 'lucide-react';
 import type { GameResult, League, Team } from '../../core/types';
 import { Empty, PageHeader } from '../components/ui';
-import { FinalSlab, GameRecap } from '../components/GameRecap';
+import { GameRecap } from '../components/GameRecap';
+import { FinalSlab } from '../components/FinalSlab';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { stillAlive } from '../flow';
 
