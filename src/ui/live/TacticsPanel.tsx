@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Hand } from 'lucide-react';
-import type { DefScheme, PnrCoverage, PressMode, Settings, StarPlan, Tactics } from '../../core/types';
-import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, schemesFor, startHacking, stopHacking } from '../../core/sim/tactics';
+import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
+import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, ALL_SCHEMES, startHacking, stopHacking } from '../../core/sim/tactics';
 import { Chips, Levels, Segmented, Slider, Tag, Toggle } from '../components/ui';
 
 /** A setting picked from chips: its name over them. */
@@ -24,7 +24,6 @@ export function TacticsPanel({
   apply,
   persist,
   setPersist,
-  complexity,
   plan,
   oppOn,
   myOn,
@@ -37,7 +36,6 @@ export function TacticsPanel({
   apply: (fn: (t: Tactics) => void) => void;
   persist: boolean;
   setPersist: (on: boolean) => void;
-  complexity: Settings['complexity'];
   /** Tonight's game plan items. */
   plan: { id: string; label: string }[];
   oppOn: number[];
@@ -48,11 +46,11 @@ export function TacticsPanel({
   /** The period: a threshold set now starts a game plan's later Hack-a quarter now. */
   q: number;
 }) {
-  const adv = complexity !== 'simple';
-  const expert = complexity === 'expert';
+  const adv = true;
+  const expert = true;
   const [tab, setTab] = useState<'def' | 'off' | 'late'>('def');
   // the junk defenses from Advanced (one already in play stays on offer)
-  const schemes = schemesFor(complexity).concat(schemesFor(complexity).includes(t.defense.scheme) ? [] : [t.defense.scheme]);
+  const schemes = ALL_SCHEMES;
   const n = chasers(t.defense.scheme);
   const chase = (t.defense.chase ?? []).slice(0, n);
   const set = apply;

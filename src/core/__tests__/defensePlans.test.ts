@@ -68,7 +68,7 @@ describe('guarding their players', () => {
   });
 
   it('reads his games when there are enough, and says so', () => {
-    const lg = leagueAt('casual', 14);
+    const lg = leagueAt('easy', 14);
     const them = projectedRotation(lg, 3, 8);
     const withGames = them.map((x) => guardAdvice(lg, x)).filter((a) => a.line.source === 'season');
     expect(withGames.length).toBeGreaterThan(4);
@@ -76,7 +76,7 @@ describe('guarding their players', () => {
   });
 
   it('quotes his three-point percentage only on enough threes to mean something', () => {
-    const lg = leagueAt('casual', 14);
+    const lg = leagueAt('easy', 14);
     const q = structuredClone(projectedRotation(lg, 3, 8).find((x) => (x.stats.find((s) => s.season === lg.season && s.tid === 3 && !s.playoffs)?.gp ?? 0) >= 5)!);
     const s = q.stats.find((x) => x.season === lg.season && x.tid === 3 && !x.playoffs)!;
     // a non-shooter who isn't a handler or a post scorer, and makes his free throws
@@ -117,7 +117,7 @@ describe('guarding their players', () => {
 
 describe('counters and opposing plans', () => {
   it('the assistant suggests a box-and-one on a one-man offense whose others can’t shoot, with the numbers', () => {
-    const l = leagueAt('casual');
+    const l = leagueAt('easy');
     const opp = 3;
     const star = oneManTeam(l, opp);
     const box = counterCandidates(l, l.userTid, opp).find((c) => c.id === 'box-1');
@@ -128,7 +128,7 @@ describe('counters and opposing plans', () => {
   });
 
   it('the assistant suggests attacking a real weak link', () => {
-    const l = leagueAt('casual', 2);
+    const l = leagueAt('easy', 2);
     const opp = 4;
     ensureRotation(l, opp);
     const rot = projectedRotation(l, opp, 8);

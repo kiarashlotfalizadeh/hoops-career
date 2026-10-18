@@ -155,8 +155,8 @@ describe('what he asks, and whether he talks', () => {
     expect(extensionAsk(l, vet).amount).toBe(expected(vet, 0.95));
     expect(extensionAsk(l, star).amount).toBe(expected(star, 1.05));
     expect(extensionAsk(l, star).amount).toBeGreaterThan(extensionAsk(l, mid).amount);
-    // on a casual setting the user's own players ask 10% less
-    l.settings.difficulty = 'casual';
+    // on a easy setting the user's own players ask 10% less
+    l.settings.difficulty = 'easy';
     expect(extensionAsk(l, mid).amount).toBe(expected(mid, 0.9));
     // a veteran's extension runs four years at most
     expect(extensionAsk(l, finalYear(l, a, 78, 23)).years).toBeLessThanOrEqual(4);

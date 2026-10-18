@@ -70,7 +70,6 @@ function Fact({ k, children }: { k: string; children: ReactNode }) {
 function PlanScreen({ league, opp }: { league: League; opp: number }) {
   const team = league.teams[opp];
   const me = league.teams[league.userTid];
-  const complexity = league.settings.complexity;
   const mutate = useStore.getState().mutate;
   const [params, setParams] = useSearchParams();
   const data = useLeagueMemo(() => scoutData(league, opp), [league, opp]);
@@ -93,7 +92,7 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
   const base = me.tactics;
   const tabs: { id: Tab; label: string }[] = [
     { id: 'plan', label: 'Plan' },
-    ...(complexity !== 'simple' ? [{ id: 'matchups' as Tab, label: 'Matchups' }] : []),
+    { id: 'matchups' as Tab, label: 'Matchups' },
     { id: 'scouting', label: 'Scouting' },
   ];
   const tab = tabs.find((t) => t.id === params.get('tab'))?.id ?? 'plan';
@@ -272,9 +271,9 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
 
           <StarPlanCard league={league} opp={opp} />
 
-          {complexity !== 'simple' && <JunkCard league={league} opp={opp} />}
+          <JunkCard league={league} opp={opp} />
 
-          {complexity === 'expert' && <HackCard league={league} opp={opp} />}
+          <HackCard league={league} opp={opp} />
 
           <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
         </>
@@ -302,13 +301,13 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
         (data.enough ? (
           <>
             {/* the ranks from Advanced depth (the four factors at Expert) */}
-            {complexity !== 'simple' && (
+            {
               <Section title="League ranks" right={<span className="tiny dim">{scoutSource(data)}</span>}>
-                <RankStrip d={data} complexity={complexity === 'expert' ? 'advanced' : 'simple'} />
+                <RankStrip d={data} />
               </Section>
-            )}
+            }
             {data.tendencies.length > 0 && (
-              <Section title="Tendencies" right={complexity === 'simple' ? <span className="tiny dim">{scoutSource(data)}</span> : undefined}>
+              <Section title="Tendencies">
                 <ul className="card tx-bullets info">
                   {data.tendencies.slice(0, 3).map((x) => (
                     <li key={x}>{x}</li>
@@ -325,7 +324,7 @@ function PlanScreen({ league, opp }: { league: League; opp: number }) {
                 </ul>
               </Section>
             )}
-            {complexity === 'expert' && <TopPlayTypes league={league} opp={opp} />}
+            <TopPlayTypes league={league} opp={opp} />
           </>
         ) : (
           <Section title="Scouting">

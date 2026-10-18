@@ -1,4 +1,4 @@
-// AI coaches game-plan against the user's team: never on casual, about half the games on normal,
+// AI coaches game-plan against the user's team: never on easy, about half the games on normal,
 // every game on hard; only in games against the user; the same plan for a game whatever is asked
 // when (preview, Lab, live or simmed game, other games that day); items that answer the user's
 // measured strengths; and the plan kept with the user's game results only.
@@ -12,7 +12,7 @@ import { matchupPreview } from '../analysis/preview';
 import { simDay } from '../league/season';
 import type { League, ScheduledGame } from '../types';
 
-/** A real-league season `days` in (on casual, so far no plans), then at `difficulty`. */
+/** A real-league season `days` in (on easy, so far no plans), then at `difficulty`. */
 function leagueAt(difficulty: League['settings']['difficulty'], days = 12): League {
   const l = testLeague();
   for (let i = 0; i < days; i++) simDay(l);
@@ -24,8 +24,8 @@ const aiTeams = (l: League) => l.teams.map((t) => t.tid).filter((tid) => tid !==
 const oppOf = (l: League, g: ScheduledGame) => (g.home === l.userTid ? g.away : g.home);
 
 describe('AI game plans against the user', () => {
-  it('never on casual, about half the games for an average coach on normal, every game on hard', () => {
-    const l = leagueAt('casual');
+  it('never on easy, about half the games for an average coach on normal, every game on hard', () => {
+    const l = leagueAt('easy');
     const tid = aiTeams(l)[0];
     expect(oppPlanChance(l, tid)).toBe(0);
     for (const opp of aiTeams(l)) {
@@ -105,8 +105,8 @@ describe('AI game plans against the user', () => {
       expect(r.oppPlan?.length).toBeGreaterThan(0);
       expect(r.oppPlan!.length).toBeLessThanOrEqual(2);
     }
-    // and none on casual
-    l.settings.difficulty = 'casual';
+    // and none on easy
+    l.settings.difficulty = 'easy';
     const n = userGames(l).length;
     for (let i = 0; i < 6; i++) simDay(l);
     for (const r of userGames(l).slice(n)) expect(r.oppPlan).toBeUndefined();
@@ -138,7 +138,7 @@ describe('AI game plans against the user', () => {
   });
 
   it("leaves the user's counters reading their usual tactics", () => {
-    const l = leagueAt('casual');
+    const l = leagueAt('easy');
     toGameDay(l);
     const opp = oppOf(l, userGameOnDay(l, l.day)!);
     const casual = counterCandidates(l, l.userTid, opp);

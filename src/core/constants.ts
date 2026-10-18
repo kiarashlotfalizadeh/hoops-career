@@ -5,11 +5,12 @@ export const START_SEASON = 2027; // 2026-27 season (named by end year, like Bas
 /**
  * Format of the league record. Bump it, with a step in migrate() (src/state/persistence.ts), when
  * that format changes.
- * 2: older ratings snapshots keep only OVR and potential (no `r`), which version-1 builds read unguarded.
- * 3: game plans per opponent (`gamePlans`, replacing the single `gamePlan`) and contract extensions
- *    (`contract.next`), which version-2 builds would silently drop.
+ * 4: the redesign (difficulty presets, no coaching depth, the agenda, the owner's hot seat, the
+ *    assistant's feed). Saves from before it can't be opened: migrate() turns them away.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
+/** The oldest save format this build opens. */
+export const MIN_SAVE_VERSION = 4;
 
 export const CAP = {
   salaryCap: 165_000,

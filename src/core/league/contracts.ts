@@ -7,6 +7,7 @@
 // walk-away price, counters, patience) are in negotiation.ts, 10-day contracts in tenDay.ts.
 
 import type { League, Player, SigningRoute, Team } from '../types';
+import { preset } from './difficulty';
 import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE, seasonLabel } from '../constants';
 import { Rng, clamp, hashString } from '../random';
@@ -237,8 +238,7 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   // a minimum-level player takes the minimum from anyone
   if (amount <= min) return { amount: min, years };
-  const diff = league.settings.difficulty;
-  if (tid === league.userTid) amount *= diff === 'casual' ? 0.9 : diff === 'hard' ? 1.12 : 1;
+  if (tid === league.userTid) amount *= preset(league).contractAsk;
   if (tid !== undefined) amount /= teamAppeal(league, tid, p);
   return { amount: clamp(Math.round(amount / 50) * 50, min, cap.maxContract(p.experience)), years };
 }
@@ -1154,8 +1154,7 @@ export function extensionAsk(league: League, p: Player): Ask {
   const a = age(league, p);
   if (rookieScaleDeal(p) || a >= 31) amount *= 0.95;
   else if (a <= 27 && valueScore(league, p) >= 82) amount *= 1.05;
-  const diff = league.settings.difficulty;
-  if (p.tid === league.userTid) amount *= diff === 'casual' ? 0.9 : diff === 'hard' ? 1.12 : 1;
+  if (p.tid === league.userTid) amount *= preset(league).contractAsk;
   if (p.tid >= 0) amount /= teamAppeal(league, p.tid, p);
   return { amount: clamp(Math.round(amount / 50) * 50, min, cap.maxContract(p.experience)), years };
 }

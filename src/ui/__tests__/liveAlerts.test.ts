@@ -33,7 +33,6 @@ function input(g: ReturnType<typeof game>, view: Drawn, over: Partial<AlertInput
     events: [],
     names: (pid) => `P${pid}`,
     baselines: DEFAULT_PPP,
-    complexity: 'expert',
     subFor: (pid) => sim.T[0].players.find((p) => !p.on && p.out === 0 && p.pid !== pid)?.pid,
     ...over,
   };

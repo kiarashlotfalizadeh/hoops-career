@@ -19,7 +19,7 @@ import { slabVars } from '../teamColors';
 import './start.css';
 import './settings.css';
 import { STRATEGY_META, capSeason, fmtM, shortSeason } from '../office/common';
-import { COMPLEXITY, DIFFICULTY, LIVE_SPEEDS, helpFor } from '../settingsOptions';
+import { DIFFICULTY_OPTIONS, LIVE_SPEEDS, helpFor } from '../settingsOptions';
 
 export default function Settings() {
   const league = useLeague();
@@ -185,13 +185,8 @@ export default function Settings() {
         <div className="card col set-group">
           <div className="col set-item">
             <div className="set-label">Difficulty</div>
-            <Chips label="Difficulty" value={st.difficulty} onChange={(d) => mutate((l) => (l.settings.difficulty = d))} options={DIFFICULTY} />
-            <div className="small dim">{helpFor(DIFFICULTY, st.difficulty)}</div>
-          </div>
-          <div className="col set-item">
-            <div className="set-label">Coaching depth</div>
-            <Chips label="Coaching depth" value={st.complexity} onChange={(c) => mutate((l) => (l.settings.complexity = c))} options={COMPLEXITY} />
-            <div className="small dim">{helpFor(COMPLEXITY, st.complexity)} Only what the Tactics screens show changes; your game plan stays.</div>
+            <Chips label="Difficulty" value={st.difficulty} onChange={(d) => mutate((l) => (l.settings.difficulty = d))} options={DIFFICULTY_OPTIONS} />
+            <div className="small dim">{helpFor(DIFFICULTY_OPTIONS, st.difficulty)}</div>
           </div>
           <Toggle
             on={st.injuries}

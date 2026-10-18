@@ -214,9 +214,8 @@ export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
 export const isJunk = (s: DefScheme) => s === 'box1' || s === 'tri2';
 /** How many players a junk defense chases (none for man-to-man or a zone). */
 export const chasers = (s: DefScheme) => (s === 'box1' ? 1 : s === 'tri2' ? 2 : 0);
-/** Schemes from Advanced coaching depth: the junk defenses. */
-export const schemesFor = (complexity: 'simple' | 'advanced' | 'expert'): DefScheme[] =>
-  (Object.keys(SCHEME_META) as DefScheme[]).filter((k) => complexity !== 'simple' || !isJunk(k));
+/** Every defensive scheme, junk defenses included. */
+export const ALL_SCHEMES = Object.keys(SCHEME_META) as DefScheme[];
 
 export const PLAYER_D_META: Record<PlayerDefense, { label: string; short: string; help: string }> = {
   under: {

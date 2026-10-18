@@ -1,4 +1,4 @@
-// The live game's quick pills: as deep as the coaching depth, each one a real change, a pressed one
+// The live game's quick pills: each one a real change, a pressed one
 // going back to the game plan, a Hack-a only when the engine would send that shooter to the line.
 import { describe, expect, it } from 'vitest';
 import { defaultTactics, cloneTactics } from '../../core/sim/tactics';
@@ -6,7 +6,6 @@ import type { Tactics } from '../../core/types';
 import { hackThreshold, livePills, type PillContext } from '../live/pills';
 
 const ctx = (over: Partial<PillContext> = {}): PillContext => ({
-  complexity: 'expert',
   q: 2,
   clock: 400,
   oppOn: [
@@ -48,14 +47,9 @@ describe('live pills', () => {
     expect(on.manage.hackFromQ).toBe(2);
   });
 
-  it('follow the coaching depth', () => {
+  it('offer every pill, the late-game fouls in the fourth', () => {
     const t = defaultTactics();
-    const simple = ids(t, ctx({ complexity: 'simple' }));
-    expect(simple).toEqual(['push', 'slow', 'zone', 'pack', 'home', 'hot']);
-    const adv = ids(t, ctx({ complexity: 'advanced' }));
-    expect(adv).toEqual([...simple, 'press', 'crash', 'getback', 'deny', 'double']);
-    const expert = ids(t, ctx({ q: 4 }));
-    expect(expert).toEqual([...adv, 'hack', 'trailing', 'up3']);
+    expect(ids(t, ctx({ q: 4 }))).toEqual(['push', 'slow', 'zone', 'pack', 'home', 'hot', 'press', 'crash', 'getback', 'deny', 'double', 'hack', 'trailing', 'up3']);
     // the fouling rules are fourth-quarter business
     expect(ids(t, ctx({ q: 2 }))).not.toContain('trailing');
   });

@@ -14,7 +14,7 @@ import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
-import { COMPLEXITY, DIFFICULTY, helpFor } from '../settingsOptions';
+import { DIFFICULTY_OPTIONS, helpFor } from '../settingsOptions';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -287,12 +287,8 @@ export default function NewLeague() {
             </div>
           </Section>
           <Section title="Difficulty">
-            <Chips label="Difficulty" value={settings.difficulty} onChange={(d) => setSettings({ ...settings, difficulty: d })} options={DIFFICULTY} />
-            <div className="small dim">{helpFor(DIFFICULTY, settings.difficulty)}</div>
-          </Section>
-          <Section title="Coaching depth">
-            <Chips label="Coaching depth" value={settings.complexity} onChange={(c) => setSettings({ ...settings, complexity: c })} options={COMPLEXITY} />
-            <div className="small dim">{helpFor(COMPLEXITY, settings.complexity)}</div>
+            <Chips label="Difficulty" value={settings.difficulty} onChange={(d) => setSettings({ ...settings, difficulty: d })} options={DIFFICULTY_OPTIONS} />
+            <div className="small dim">{helpFor(DIFFICULTY_OPTIONS, settings.difficulty)}</div>
           </Section>
           <div className="card col" style={{ gap: 16 }}>
             <Toggle on={settings.injuries} onChange={(v) => setSettings({ ...settings, injuries: v })} label="Injuries" help="Fatigue, age and history raise the risk." />

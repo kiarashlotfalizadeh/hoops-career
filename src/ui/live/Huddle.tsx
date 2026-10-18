@@ -157,15 +157,7 @@ export function Huddle({
           )}
         </div>
         {drawing ? (
-          <PlayPicker
-            league={league}
-            tactics={tactics}
-            me={me}
-            calls={calls}
-            nameOf={nameOf}
-            late={view.q >= 4 && view.clock <= 120}
-            sets={league.settings.complexity !== 'simple'}
-          />
+          <PlayPicker league={league} tactics={tactics} me={me} calls={calls} nameOf={nameOf} late={view.q >= 4 && view.clock <= 120} sets />
         ) : (
           <button className="btn block" onClick={() => setDrawing(true)}>
             <ClipboardList size={16} /> Draw up a play

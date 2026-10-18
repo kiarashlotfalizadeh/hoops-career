@@ -5,6 +5,7 @@
 // deals (the AI's offers to the user are in proposals.ts).
 
 import type { DraftPick, League, Player, Pos, TeamSeason } from '../types';
+import { preset } from './difficulty';
 import { CAP, seasonLabel } from '../constants';
 import { Rng, clamp } from '../random';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -560,7 +561,7 @@ interface Verdict {
 /**
  * One team's verdict on a deal: what it receives (net of the luxury tax and cap room it takes on
  * and the players it would have to waive) against what it sends. `generosity` below 1 accepts a
- * little less than fair value (casual difficulty), above 1 wants a premium.
+ * little less than fair value (easy difficulty), above 1 wants a premium.
  */
 function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): Verdict {
   const mine = offer.a.tid === tid ? offer.a : offer.b;
@@ -846,9 +847,8 @@ export function valueVerdict(ev: { delta: number; valueOut: number }): { gap: nu
 
 function evaluate(league: League, offer: TradeOffer): TradeEval {
   const errors = validateTrade(league, offer);
-  const diff = league.settings.difficulty;
-  // casual AIs accept slightly unfavorable deals; hard AIs want a premium
-  const generosity = diff === 'casual' ? 0.88 : diff === 'hard' ? 1.12 : 1.0;
+  // on easy AIs accept slightly unfavorable deals; on hard they want a premium
+  const generosity = preset(league).tradeAsk;
   const { delta, valueIn, valueOut, accept: likes, tooManyFirsts, parts } = judge(league, offer, offer.b.tid, generosity);
   const accept = errors.length === 0 && likes;
   let message: string;
@@ -958,9 +958,9 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
       );
   }
 
-  // face value for anything that changed hands this season: no strategy premium, no casual discount
-  const casual = league.settings.difficulty === 'casual';
-  const flips = x.flippedIn.filter((a) => matters(Math.max(0, Math.min(a.own, a.neutral * 1.15) - a.neutral) + (casual ? 0.12 * Math.max(0, a.neutral) : 0)));
+  // face value for anything that changed hands this season: no strategy premium, no easy-mode discount
+  const discount = Math.max(0, 1 - preset(league).tradeAsk);
+  const flips = x.flippedIn.filter((a) => matters(Math.max(0, Math.min(a.own, a.neutral * 1.15) - a.neutral) + discount * Math.max(0, a.neutral)));
   if (flips.length) {
     const names = flips.length > 2 ? `${flips.slice(0, 2).map(nameOf).join(', ')} and ${flips.length - 2} more` : andList(flips.map(nameOf));
     add(
@@ -990,7 +990,7 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
   // the difficulty decides a close call
   const fair = ev.valueIn - ev.valueOut;
   if (x.slack > 0 && fair >= 0 && ev.delta < 0) add('info', 'Fair value, but on hard they want a premium', x.slack);
-  if (x.slack < 0 && fair < 0 && ev.delta >= 0) add('info', 'A little under fair value: on casual they take it', -x.slack);
+  if (x.slack < 0 && fair < 0 && ev.delta >= 0) add('info', 'A little under fair value: on easy they take it', -x.slack);
 
   return notes.sort((a, b) => b.weight - a.weight).map(({ tone, text }) => ({ tone, text }));
 }
@@ -1574,9 +1574,10 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
       picks.map((d) => pickValueFor(league, d, tid, true)),
       PICK_DEPTH,
     );
-  // the casual discount covers the user's own assets, not ones he got in a trade this season
+  // the easy-mode discount covers the user's own assets, not ones he got in a trade this season
   const own = gives.filter((x) => !flipped(league, x)).length / gives.length;
-  const gen = league.settings.difficulty === 'casual' ? 1 - 0.12 * own : league.settings.difficulty === 'hard' ? 1.12 : 1;
+  const ask = preset(league).tradeAsk;
+  const gen = ask < 1 ? 1 - (1 - ask) * own : ask;
   const budget = want / gen;
   // after the season, only next season's contracts take a spot
   const max = rosterMaxNow(league);

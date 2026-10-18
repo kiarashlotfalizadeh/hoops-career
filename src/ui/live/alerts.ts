@@ -2,13 +2,12 @@
 // never from the sim running a possession ahead. Pure: the Live screen turns their actions into
 // timeouts, substitutions and tactic changes.
 
-import type { GameAdjustment, GameManagement, Settings, Tactics } from '../../core/types';
+import type { GameAdjustment, GameManagement, Tactics } from '../../core/types';
 import type { InGameInjury } from '../../core/sim/engine';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
-import { adviceFor } from '../seasonAnalysis';
 import type { Drawn, DrawnPlayer } from './drawn';
 
 export type AlertAction =
@@ -87,7 +86,6 @@ export interface AlertInput {
   names: (pid: number) => string;
   /** This season's points per possession by play type. */
   baselines: Record<string, number>;
-  complexity: Settings['complexity'];
   /** Who the staff would bring in for `pid`, if anyone can come in. */
   subFor: (pid: number) => number | undefined;
 }
@@ -179,7 +177,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     out.push({
       id: `imp-${worst.key}`,
       tone: 'warn',
-      text: `${impactSentence(worst.key, teamRef(themTeam), teamRef(meTeam))} ${adviceFor(impactAdvice(worst.key, tactics)!, a.complexity)}`,
+      text: `${impactSentence(worst.key, teamRef(themTeam), teamRef(meTeam))} ${impactAdvice(worst.key, tactics)!}`,
       action: fix && { kind: 'tactics', apply: fix.apply, label: fix.label },
     });
   }

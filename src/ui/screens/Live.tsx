@@ -243,11 +243,10 @@ export default function Live() {
         events,
         names: nameOf,
         baselines,
-        complexity: league.settings.complexity,
         subFor,
       };
     },
-    [home, away, atBreak, toPending, events, nameOf, baselines, league.settings.complexity, subFor],
+    [home, away, atBreak, toPending, events, nameOf, baselines, subFor],
   );
   // the night's other games (played before this one: see prepareLive), for the bottom line
   const showScores = league.settings.liveScores !== false;
@@ -884,13 +883,12 @@ export default function Live() {
     const top = [...five].sort((a, b) => b.pts - a.pts)[0];
     const threat = targeted ?? hot ?? top;
     return livePills(tactics, game.planned, {
-      complexity: league.settings.complexity,
       q: view.q,
       clock: view.clock,
       oppOn,
       oppThreat: threat && { pid: threat.pid, name: nameOf(threat.pid) },
     });
-  }, [game, view, tactics, over, nameOf, league.settings.complexity]);
+  }, [game, view, tactics, over, nameOf]);
 
   const gameNo = useMemo(() => {
     const s = game?.game.seriesId ? league.playoffs.find((x) => x.id === game.game.seriesId) : undefined;
@@ -988,7 +986,7 @@ export default function Live() {
   const pickedOpp = panel === 'player' && picked !== undefined ? drawnPlayer(view, picked) : undefined;
   const pickedMine = panel === 'mine' && picked !== undefined ? drawnPlayer(view, picked) : undefined;
   // the Plays sheet and its sets from Advanced depth (Simple keeps the Late game card)
-  const playsOn = league.settings.complexity !== 'simple';
+  const playsOn = true;
   // whose floor: the home team's, or a neutral one for the Cup final
   const floor = courtFloor(home, neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
   const nextPeriod = periodLabel(view.q + 1);
@@ -1355,7 +1353,6 @@ export default function Live() {
           apply={applyTactics}
           persist={persist}
           setPersist={setKeep}
-          complexity={league.settings.complexity}
           plan={plan?.items ?? []}
           oppOn={sim.T[1 - userSide].on.map((p) => p.pid)}
           myOn={me.on.map((p) => p.pid)}
@@ -1378,9 +1375,7 @@ export default function Live() {
         />
       </Sheet>
       <Sheet open={panel === 'player' && !!pickedOpp} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>
-        {pickedOpp && (
-          <OppPlayer p={pickedOpp} name={nameOf(pickedOpp.pid)} tactics={tactics} complexity={league.settings.complexity} clock={view.clock} q={view.q} apply={applyTactics} />
-        )}
+        {pickedOpp && <OppPlayer p={pickedOpp} name={nameOf(pickedOpp.pid)} tactics={tactics} clock={view.clock} q={view.q} apply={applyTactics} />}
       </Sheet>
       <Sheet open={panel === 'mine' && !!pickedMine} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>
         {pickedMine && (
@@ -1389,7 +1384,6 @@ export default function Live() {
             p={pickedMine}
             name={nameOf(pickedMine.pid)}
             tactics={tactics}
-            complexity={league.settings.complexity}
             oppOn={view.sides[1 - userSide].on}
             guarding={[...me.guardOf].find(([, d]) => d.pid === pickedMine.pid)?.[0]}
             nameOf={nameOf}

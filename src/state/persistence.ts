@@ -3,8 +3,8 @@
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
 import { openDB, type IDBPDatabase } from 'idb';
-import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GamePlanItem, type GameResult, type League, type Player, type PlayerDefense, type Tactics } from '../core/types';
-import { SAVE_VERSION } from '../core/constants';
+import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type GameResult, type League, type Player, type PlayerDefense, type Tactics } from '../core/types';
+import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
 import { defaultTactics } from '../core/sim/tactics';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
@@ -27,7 +27,12 @@ export interface LeagueMeta {
   updated: number;
   /** Bumped by every save; absent on saves from before revisions. */
   rev?: number;
+  /** The save format (absent before format 4): older ones can't be opened (see `openable`). */
+  version?: number;
 }
+
+/** Whether this build can open a saved league (the start screen offers older ones for deletion only). */
+export const openable = (m: LeagueMeta) => (m.version ?? 0) >= MIN_SAVE_VERSION;
 
 // the save format lives in core, so a new league is stamped with it too
 export { SAVE_VERSION };
@@ -43,19 +48,38 @@ export class SaveConflictError extends Error {
   }
 }
 
+/** A save from before the redesign (format 4): its league can't be opened by this build. */
+export class OldSaveError extends Error {
+  constructor() {
+    super('This league was saved by an older version of Hoops Career, before the redesign, and can no longer be opened. Start a new league.');
+    this.name = 'OldSaveError';
+  }
+}
+
 export const isQuotaError = (e: unknown) => e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === DOMException.QUOTA_EXCEEDED_ERR);
 
-/** What this window last read or wrote for a league object: the revision, and the results on disk. */
+/**
+ * What this window last read or wrote for a league object: the revision, and the results on disk
+ * by game id (with whether each still had its play-by-play). Results are only ever added, apart
+ * from an older game of the user's dropping its play-by-play, so that is all a save compares; a
+ * copy of the league (one coming back from the sim worker) takes it over with `adoptSync`.
+ */
 interface Synced {
   rev: number | undefined;
-  games: Map<number, { g: GameResult; pbp: boolean }>;
+  games: Map<number, boolean>;
 }
 const synced = new WeakMap<League, Synced>();
 
 /** Whether this league object came from the device or has been saved to it from this window. */
 export const onDevice = (league: League) => synced.has(league);
 
-const tracked = (league: League, rev: number | undefined): Synced => ({ rev, games: new Map(league.games.map((g) => [g.gid, { g, pbp: !!g.pbp }])) });
+const tracked = (league: League, rev: number | undefined): Synced => ({ rev, games: new Map(league.games.map((g) => [g.gid, !!g.pbp])) });
+
+/** A copy of a league (from the sim worker) takes over what this window knows the device holds for the original. */
+export function adoptSync(from: League, to: League) {
+  const s = synced.get(from);
+  if (s) synced.set(to, s);
+}
 
 /** Key range of one league's results. */
 const gamesOf = (id: string) => IDBKeyRange.bound([id], [id, []]);
@@ -159,6 +183,7 @@ export function metaFor(league: League): LeagueMeta {
     phase: league.phase,
     record: ts ? `${ts.won}-${ts.lost}` : '0-0',
     updated: Date.now(),
+    version: SAVE_VERSION,
   };
 }
 
@@ -173,7 +198,7 @@ async function write(d: IDBPDatabase, league: League) {
   // checked inside the write transaction, so no other window can save in between
   if ((cur ? (cur.rev ?? 0) : undefined) !== prev?.rev) throw new SaveConflictError(!cur);
   const rev = (prev?.rev ?? 0) + 1;
-  const next = new Map<number, { g: GameResult; pbp: boolean }>();
+  const next = new Map<number, boolean>();
   const ops: Promise<unknown>[] = [];
   try {
     league.version = SAVE_VERSION;
@@ -181,10 +206,9 @@ async function write(d: IDBPDatabase, league: League) {
     // a league this window didn't read (new or imported) replaces whatever results its id had
     if (!prev) ops.push(games.delete(gamesOf(league.id)));
     for (const g of league.games) {
-      const was = prev?.games.get(g.gid);
       // played results only change when an older game of yours drops its play-by-play
-      if (was?.g !== g || was.pbp !== !!g.pbp) ops.push(games.put(g, [league.id, g.gid]));
-      next.set(g.gid, { g, pbp: !!g.pbp });
+      if (prev?.games.get(g.gid) !== !!g.pbp) ops.push(games.put(g, [league.id, g.gid]));
+      next.set(g.gid, !!g.pbp);
     }
     for (const gid of prev?.games.keys() ?? []) if (!next.has(gid)) ops.push(games.delete([league.id, gid]));
     ops.push(metas.put({ ...metaFor(league), rev }, league.id));
@@ -240,22 +264,6 @@ export function isLeague(x: unknown): x is League {
 const isRoute = (s: unknown) => typeof s === 'string' && /^\/(?![/\\])/.test(s);
 /** Team colours go into the screens' styles as they are: from a crafted save, one could pull in a remote url(). */
 const isColor = (s: unknown) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
-
-/**
- * Version 2 kept one game plan (`gamePlan`, for the next game against one opponent); version 3
- * keeps one per opponent. Version-2 plans also left tonight's opponent's matchups in the user's
- * own tactics when live changes were kept: those name players of one opponent, so they go.
- */
-function migrateGamePlan(x: League, fromV2: boolean) {
-  const user = x.teams[x.userTid];
-  if (fromV2 && user && obj(user.tactics) && obj(user.tactics.defense)) user.tactics.defense.matchups = {};
-  const old = (x as League & { gamePlan?: unknown }).gamePlan;
-  if (old === undefined) return;
-  delete (x as League & { gamePlan?: unknown }).gamePlan;
-  if (!obj(old) || !num(old.oppTid) || !Array.isArray(old.items) || !old.items.length || !x.teams[old.oppTid as number]) return;
-  const items = (old.items as unknown[]).filter((it): it is GamePlanItem => obj(it) && str(it.id) && str(it.label) && obj(it.patch));
-  if (items.length) x.gamePlans = { ...x.gamePlans, [old.oppTid as number]: { oppTid: old.oppTid as number, items, scope: 'next' } };
-}
 
 const SCHEMES = new Set<string>(['man', 'zone23', 'zone32', 'box1', 'tri2']);
 const PD = new Set<string>(PLAYER_DEFENSES);
@@ -424,15 +432,13 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   const version = obj(x) ? x.version : undefined;
   if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Hoops Career. Update the app to open it.');
   if (!isLeague(x)) throw new Error(notALeague);
+  if (!num(version) || (version as number) < MIN_SAVE_VERSION) throw new OldSaveError();
   for (const m of x.inbox) if (m.link !== undefined && !isRoute(m.link)) delete m.link;
   for (const t of x.teams) {
     if (t.colors.length === 3 && t.colors.every(isColor)) continue;
     const [a, b, c] = FRANCHISES[t.tid]?.colors ?? ['#334155', '#94a3b8', '#ffffff'];
     t.colors = [a, b, c];
   }
-  // 1 → 2: nothing to change (version-1 snapshots all carry full ratings)
-  // 2 → 3: new data is optional (absent in older saves); the steps below read old data into it
-  migrateGamePlan(x, !num(version) || (version as number) < 3);
   // junk defenses, chase and hunt targets, instructions by player and the foul to give: a damaged
   // setting goes (an unknown scheme is man-to-man), in every team's tactics, the saved playbooks
   // and the game plans; a live journal's tactics are checked with the journal below (one out of
@@ -483,12 +489,6 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   migrateOwner(x);
-  // leftovers of the Rising Stars game and of suspensions, both since removed: the MVP award would
-  // count toward a career's honors as a full award, and the news would tell of rules the game no longer has
-  const risingMvp = (a: unknown) => obj(a) && a.type === 'Rising Stars MVP';
-  for (const p of Object.values(x.players)) if (Array.isArray(p.awards) && p.awards.some(risingMvp)) p.awards = p.awards.filter((a) => !risingMvp(a));
-  const suspension = (n: unknown) => obj(n) && n.kind === 'discipline';
-  if (x.news.some(suspension)) x.news = x.news.filter((n) => !suspension(n));
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
@@ -767,9 +767,7 @@ function migrateContracts(x: League) {
     }
     const n = p.tenDays as unknown;
     if (n !== undefined) {
-      // (saves from before the count was kept by team held one team's: { tid, season, n })
-      if (obj(n) && n.by === undefined && teamOk(n.tid) && int(n.season) && int(n.n) && n.n >= 1 && n.n <= 2) p.tenDays = { season: n.season, by: { [n.tid as number]: n.n } };
-      else if (!(obj(n) && int(n.season) && obj(n.by) && !Array.isArray(n.by) && Object.entries(n.by).every(([tid, c]) => teamOk(Number(tid)) && int(c) && c >= 1 && c <= 2)))
+      if (!(obj(n) && int(n.season) && obj(n.by) && !Array.isArray(n.by) && Object.entries(n.by).every(([tid, c]) => teamOk(Number(tid)) && int(c) && c >= 1 && c <= 2)))
         delete p.tenDays;
     }
     const td = p.contract?.tenDay as unknown;

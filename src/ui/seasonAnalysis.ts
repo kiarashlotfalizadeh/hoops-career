@@ -1,5 +1,5 @@
 // Season-level aggregation of the user's stored games: lineups, play types, tactical effects.
-import type { League, Settings } from '../core/types';
+import type { League } from '../core/types';
 
 export { seasonPlayTypes, type PlayTypeAgg } from '../core/analysis/playTypes';
 export { seasonLineups, type LineupAgg } from '../core/analysis/lineups';
@@ -28,17 +28,4 @@ export function seasonImpacts(league: League, tid = league.userTid): { games: nu
     })
     .sort((a, b) => b.perGame - a.perGame);
   return { games, effects };
-}
-
-/**
- * Advice names Tactics tabs as Expert mode lays them out: point at what the user's coaching depth
- * shows instead (roles are set from a player's page; Simple has no Offense or Defense tab, and only
- * Expert has Game Mgmt).
- */
-export function adviceFor(text: string, complexity: Settings['complexity']): string {
-  if (complexity === 'expert') return text;
-  const out = text.replace(/\(Tactics > Roles\)/g, "(Set role, on the player's page)");
-  const noExpert = out.replace(/ \(Game Mgmt( > [^)]*)?\)/g, '');
-  const bare = complexity === 'simple' ? noExpert.replace(/ \((Offense|Defense)( > [^)]*)?\)/g, '') : noExpert;
-  return bare === out ? out : `${bare} (Needs ${noExpert !== out ? 'Expert' : 'Advanced'} coaching depth, in Settings.)`;
 }

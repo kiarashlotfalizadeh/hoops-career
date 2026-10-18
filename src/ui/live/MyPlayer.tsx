@@ -1,5 +1,5 @@
 import { Users } from 'lucide-react';
-import type { League, OffRole, Settings, ShotFreedom, Tactics } from '../../core/types';
+import type { League, OffRole, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { Chips, Statline, Toggle } from '../components/ui';
@@ -41,7 +41,6 @@ export function MyPlayer({
   p,
   name,
   tactics,
-  complexity,
   oppOn,
   guarding,
   nameOf,
@@ -53,7 +52,6 @@ export function MyPlayer({
   p: DrawnPlayer;
   name: string;
   tactics: Tactics;
-  complexity: Settings['complexity'];
   /** Their five on the floor. */
   oppOn: number[];
   /** The one of theirs he guards now, if any. */
@@ -63,8 +61,8 @@ export function MyPlayer({
   calls: Calls;
   onSub: () => void;
 }) {
-  const adv = complexity !== 'simple';
-  const expert = complexity === 'expert';
+  const adv = true;
+  const expert = true;
   const pid = p.pid;
   const freedom = tactics.offense.freedom[pid] ?? 0;
   const fp = fitPlayers(league, [pid], tactics)[0];

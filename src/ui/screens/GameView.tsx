@@ -11,7 +11,6 @@ import { TeamComparison } from '../components/gameBlocks';
 import { GAME } from '../../core/constants';
 import type { GameResult, League, PbpEntry, TeamBox } from '../../core/types';
 import { fmtClock, p1, pbpOpacity, periodLabel, rosterNames, signed, wholeMinutes } from '../stats';
-import { adviceFor } from '../seasonAnalysis';
 import { matchupColors } from '../teamColors';
 import { FinalSlab, GameRecap } from '../components/GameRecap';
 import { HighlightsCard } from '../components/HighlightsCard';
@@ -96,7 +95,7 @@ export default function GameView() {
                       <div className="gv-factor-d">{f.detail}</div>
                       {f.advice && (
                         <div className="gv-advice">
-                          <Lightbulb size={13} aria-hidden="true" /> {adviceFor(f.advice, league.settings.complexity)}
+                          <Lightbulb size={13} aria-hidden="true" /> {f.advice}
                         </div>
                       )}
                     </div>

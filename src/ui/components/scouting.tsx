@@ -2,7 +2,7 @@
 // against the league, key players with on/off, the user's meetings with the team and what its coach
 // has planned for the next one.
 import { Link } from 'react-router-dom';
-import type { League, Settings } from '../../core/types';
+import type { League } from '../../core/types';
 import type { PlayTypeRow, Ranked, ScoutData, ScoutPlayer } from '../../core/analysis/scouting';
 import type { OppPlanItem } from '../../core/ai/opponentPlan';
 import { FINISH_LABEL } from '../../core/sim/log';
@@ -12,8 +12,6 @@ import { seasonLabel } from '../../core/constants';
 import { StatTable, type Col } from './ui';
 import { f1, ordinal, p0, p1, signed } from '../stats';
 import './scouting.css';
-
-type Complexity = Settings['complexity'];
 
 /** A rank's color: the top third reads good, the bottom third bad; style numbers (pace, shot mix) stay neutral. */
 function rankTone(r: Ranked, teams: number, style: boolean) {
@@ -32,8 +30,8 @@ interface Cell {
 /** Where the numbers come from, for a heading: "12 games", "Last season, 82 games". */
 export const scoutSource = (d: ScoutData) => `${d.lastSeason ? `${seasonLabel(d.season)} season, ` : ''}${d.gp} game${d.gp === 1 ? '' : 's'}`;
 
-/** League ranks: the ratings for everyone, the four factors at both ends from Advanced coaching depth up. */
-export function RankStrip({ d, complexity }: { d: ScoutData; complexity: Complexity }) {
+/** League ranks: the ratings, the four factors at both ends and the shot mix. */
+export function RankStrip({ d }: { d: ScoutData }) {
   const n = d.teams;
   const cells: Cell[] = [
     { k: 'Pace', r: d.pace, fmt: f1, style: true, help: 'Possessions a game (1st = fastest)' },
@@ -41,19 +39,18 @@ export function RankStrip({ d, complexity }: { d: ScoutData; complexity: Complex
     { k: 'Def Rtg', r: d.drtg, fmt: f1, help: 'Points allowed per 100 possessions (1st = fewest)' },
     { k: 'Net', r: d.net, fmt: (v) => signed(v), help: 'Net rating' },
   ];
-  if (complexity !== 'simple')
-    cells.push(
-      { k: 'eFG%', r: d.off.efg, fmt: p1, help: 'Effective field-goal percentage' },
-      { k: 'TOV%', r: d.off.tov, fmt: p1, help: 'Turnovers per possession (1st = fewest)' },
-      { k: 'ORB%', r: d.off.orb, fmt: p1, help: 'Share of their misses they rebound' },
-      { k: 'FTR', r: d.off.ftr, fmt: (v) => v.toFixed(2), help: 'Free-throw attempts per shot' },
-      { k: 'Opp eFG%', r: d.def.efg, fmt: p1, help: "Opponents' effective field-goal percentage (1st = lowest)" },
-      { k: 'Opp TOV%', r: d.def.tov, fmt: p1, help: 'Turnovers they force per opponent possession' },
-      { k: 'Opp ORB%', r: d.def.orb, fmt: p1, help: 'Share of opponents’ misses they let opponents rebound (1st = fewest)' },
-      { k: 'Opp FTR', r: d.def.ftr, fmt: (v) => v.toFixed(2), help: 'Free throws they allow per opponent shot (1st = fewest)' },
-      { k: '3PA rate', r: d.threeRate, fmt: p0, style: true, help: 'Share of their shots from three (1st = most)' },
-      { k: 'Rim rate', r: d.rimRate, fmt: p0, style: true, help: 'Share of their shots at the rim (1st = most)' },
-    );
+  cells.push(
+    { k: 'eFG%', r: d.off.efg, fmt: p1, help: 'Effective field-goal percentage' },
+    { k: 'TOV%', r: d.off.tov, fmt: p1, help: 'Turnovers per possession (1st = fewest)' },
+    { k: 'ORB%', r: d.off.orb, fmt: p1, help: 'Share of their misses they rebound' },
+    { k: 'FTR', r: d.off.ftr, fmt: (v) => v.toFixed(2), help: 'Free-throw attempts per shot' },
+    { k: 'Opp eFG%', r: d.def.efg, fmt: p1, help: "Opponents' effective field-goal percentage (1st = lowest)" },
+    { k: 'Opp TOV%', r: d.def.tov, fmt: p1, help: 'Turnovers they force per opponent possession' },
+    { k: 'Opp ORB%', r: d.def.orb, fmt: p1, help: 'Share of opponents’ misses they let opponents rebound (1st = fewest)' },
+    { k: 'Opp FTR', r: d.def.ftr, fmt: (v) => v.toFixed(2), help: 'Free throws they allow per opponent shot (1st = fewest)' },
+    { k: '3PA rate', r: d.threeRate, fmt: p0, style: true, help: 'Share of their shots from three (1st = most)' },
+    { k: 'Rim rate', r: d.rimRate, fmt: p0, style: true, help: 'Share of their shots at the rim (1st = most)' },
+  );
   return (
     <div className="scout-ranks" role="list" aria-label="League ranks">
       {cells.map((c) => (
@@ -69,8 +66,8 @@ export function RankStrip({ d, complexity }: { d: ScoutData; complexity: Complex
   );
 }
 
-/** Play types at one end against the league's points per possession (z-scores at Expert depth). */
-export function PlayTypeTable({ rows, defense, complexity }: { rows: PlayTypeRow[]; defense: boolean; complexity: Complexity }) {
+/** Play types at one end against the league's points per possession, with z-scores. */
+export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense: boolean }) {
   const tone = (r: PlayTypeRow) => {
     // a good number for them: scoring above the league on offense, allowing below it on defense
     const z = defense ? -r.z : r.z;
@@ -90,16 +87,15 @@ export function PlayTypeTable({ rows, defense, complexity }: { rows: PlayTypeRow
     { key: 'ppp', label: 'PPP', get: (r) => r.ppp, fmt: (v, r) => <span style={{ color: tone(r) }}>{(+v).toFixed(2)}</span>, help: 'Points per possession' },
     { key: 'diff', label: '+/-', get: (r) => r.ppp - r.base, fmt: (v) => signed(+v, 2), help: 'Points per possession against the league' },
   ];
-  if (complexity === 'expert')
-    cols.push(
-      { key: 'base', label: 'Lg', get: (r) => r.base, fmt: (v) => (+v).toFixed(2), help: 'League points per possession' },
-      { key: 'z', label: 'z', get: (r) => r.z, fmt: (v) => signed(+v), help: 'Standard errors from the league: beyond ±2 is more than noise' },
-    );
+  cols.push(
+    { key: 'base', label: 'Lg', get: (r) => r.base, fmt: (v) => (+v).toFixed(2), help: 'League points per possession' },
+    { key: 'z', label: 'z', get: (r) => r.z, fmt: (v) => signed(+v), help: 'Standard errors from the league: beyond ±2 is more than noise' },
+  );
   return <StatTable rows={rows.filter((r) => r.key !== 'misc')} cols={cols} rowKey={(r) => r.key} initialSort="share" />;
 }
 
 /** Key players: minutes, scoring and efficiency, and how the team does with them on and off the floor. */
-export function KeyPlayers({ d, complexity }: { d: ScoutData; complexity: Complexity }) {
+export function KeyPlayers({ d }: { d: ScoutData }) {
   const onOff = (p: ScoutPlayer) => (p.on !== undefined && p.off !== undefined ? p.on - p.off : NaN);
   const cols: Col<ScoutPlayer>[] = [
     { key: 'name', label: 'Player', get: (p) => p.name, fmt: (_, p) => <Link to={`/player/${p.pid}`}>{p.name}</Link>, left: true, sticky: true, width: 130 },
@@ -107,11 +103,10 @@ export function KeyPlayers({ d, complexity }: { d: ScoutData; complexity: Comple
     { key: 'pts', label: 'PTS', get: (p) => p.pts, fmt: (v) => f1(+v), help: 'Points per game' },
     { key: 'ts', label: 'TS%', get: (p) => p.ts, fmt: (v) => p1(+v), help: 'True shooting percentage' },
   ];
-  if (complexity !== 'simple')
-    cols.push(
-      { key: 'usg', label: 'USG', get: (p) => p.usg, fmt: (v) => p1(+v), help: 'Share of team possessions used on the floor' },
-      { key: 'ft', label: 'FT%', get: (p) => p.ft, fmt: (v, p) => (p.fta > 0 ? p1(+v) : '—'), help: 'Free-throw percentage' },
-    );
+  cols.push(
+    { key: 'usg', label: 'USG', get: (p) => p.usg, fmt: (v) => p1(+v), help: 'Share of team possessions used on the floor' },
+    { key: 'ft', label: 'FT%', get: (p) => p.ft, fmt: (v, p) => (p.fta > 0 ? p1(+v) : '—'), help: 'Free-throw percentage' },
+  );
   cols.push({
     key: 'onoff',
     label: 'On/off',
@@ -119,13 +114,12 @@ export function KeyPlayers({ d, complexity }: { d: ScoutData; complexity: Comple
     fmt: (v) => <span style={{ color: !isFinite(+v) ? undefined : +v >= 3 ? 'var(--good)' : +v <= -3 ? 'var(--bad)' : undefined }}>{isFinite(+v) ? signed(+v) : '—'}</span>,
     help: 'Net rating per 100 possessions with him on the floor minus with him off (this team only)',
   });
-  if (complexity === 'expert')
-    cols.push({ key: 'on', label: 'On', get: (p) => p.on ?? NaN, fmt: (v) => (isFinite(+v) ? signed(+v) : '—'), help: 'Net rating with him on the floor' });
+  cols.push({ key: 'on', label: 'On', get: (p) => p.on ?? NaN, fmt: (v) => (isFinite(+v) ? signed(+v) : '—'), help: 'Net rating with him on the floor' });
   return <StatTable rows={d.players} cols={cols} rowKey={(p) => p.pid} />;
 }
 
-/** The user's meetings with the team (this season and last), and at Expert depth the tactical effects that decided them. */
-export function HeadToHead({ league, d, complexity }: { league: League; d: ScoutData; complexity: Complexity }) {
+/** The user's meetings with the team (this season and last), and the tactical effects that decided them. */
+export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
   const opp = league.teams[d.tid];
   const me = league.teams[league.userTid];
   if (!d.h2h.games.length) return <div className="small dim">No meetings with the {opp.name} this season or last.</div>;
@@ -149,7 +143,7 @@ export function HeadToHead({ league, d, complexity }: { league: League; d: Scout
           </Link>
         ))}
       </div>
-      {complexity === 'expert' && effects.length > 0 && (
+      {effects.length > 0 && (
         <div className="col" style={{ gap: 6 }}>
           <div className="tiny upper dim bold">What decided them</div>
           {effects.map((e) => (
@@ -171,23 +165,20 @@ const gameDayWord = (league: League, day: number) =>
 
 /**
  * What the other coach has planned for his next game against you: "Expect from them tonight: hedges
- * ball screens, denies Brunson the ball", and from Advanced coaching depth the numbers of yours each
- * answers. Nothing when he hasn't game-planned for it.
+ * ball screens, denies Brunson the ball", with the numbers of yours each answers. Nothing when he hasn't game-planned for it.
  */
 export function OppPlanNote({ league, items, day }: { league: League; items: readonly OppPlanItem[] | null | undefined; day: number }) {
   if (!items?.length) return null;
-  const detail = league.settings.complexity !== 'simple';
   return (
     <div className="col" style={{ gap: 4 }}>
       <div className="small">
         <b>Expect from them {gameDayWord(league, day)}:</b> {items.map((it) => it.text).join(', ')}.
       </div>
-      {detail &&
-        items.map((it) => (
-          <div key={it.id} className="tiny dim">
-            {it.why}
-          </div>
-        ))}
+      {items.map((it) => (
+        <div key={it.id} className="tiny dim">
+          {it.why}
+        </div>
+      ))}
     </div>
   );
 }

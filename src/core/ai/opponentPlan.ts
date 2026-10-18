@@ -7,6 +7,7 @@
 // game reads the same in the preview, the Lab and the game itself, whatever else is played that
 // day. AI-vs-AI games never get one, so the league's numbers are unchanged.
 
+import { preset } from '../league/difficulty';
 import type { GameSim } from '../sim/engine';
 import type { League, Player, PlayerDefense, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
 import { Rng, clamp, hashString } from '../random';
@@ -42,13 +43,13 @@ export const OPP_PLAN_MAX = 2;
 const MIN_PT_POSS = 40;
 
 /**
- * The chance an AI coach game-plans for a game against the user: never on casual, every game on
+ * The chance an AI coach game-plans for a game against the user: never on easy, every game on
  * hard, and on normal about half of them, more often the better he is at tactics.
  */
 export function oppPlanChance(league: League, aiTid: number): number {
-  const d = league.settings.difficulty;
-  if (d === 'casual') return 0;
-  if (d === 'hard') return 1;
+  const d = preset(league).opponentPlans;
+  if (d === 'never') return 0;
+  if (d === 'always') return 1;
   return clamp(0.5 + (league.teams[aiTid].coach.tactics - 60) / 100, 0.15, 0.85);
 }
 

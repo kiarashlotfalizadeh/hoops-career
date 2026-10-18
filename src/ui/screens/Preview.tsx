@@ -580,7 +580,7 @@ function StartingFives({ league, away, home }: { league: League; away: SidePrevi
 
 function TendenciesCard({ league, s, pv }: { league: League; s: SidePreview; pv: MatchupPreview }) {
   const t = league.teams[s.tid];
-  const detail = league.settings.complexity !== 'simple';
+  const detail = true;
   const pts = s.playTypes.slice(0, 5);
   const maxShare = Math.max(0.01, ...pts.map((x) => x.share));
   // league ranks once they have played
@@ -657,7 +657,7 @@ function TendenciesCard({ league, s, pv }: { league: League; s: SidePreview; pv:
 
 function MatchupsCard({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
   const opp = pv.them.tid;
-  const canPlan = league.settings.complexity !== 'simple';
+  const canPlan = true;
   // our available players, the depth chart's order (the starters first)
   const unavailable = new Set([...pv.us.out, ...pv.us.resting].map((p) => p.pid));
   const order = league.teams[league.userTid].rotation.order;

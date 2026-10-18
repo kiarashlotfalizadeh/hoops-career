@@ -47,7 +47,7 @@ export default function Lineups() {
   const league = useLeague();
   const tid = league.userTid;
   const team = league.teams[tid];
-  const advanced = league.settings.complexity !== 'simple';
+  const advanced = true;
   const [view, setView] = useState<View>('5');
   const [season, setSeason] = useState(league.season);
   const [sort, setSort] = useState<Sort>('min');

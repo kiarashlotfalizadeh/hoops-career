@@ -1179,11 +1179,10 @@ export interface Dunker {
 }
 
 export interface Settings {
-  difficulty: 'casual' | 'normal' | 'hard';
+  difficulty: 'easy' | 'normal' | 'hard';
   injuries: boolean;
   /** Can the owner fire you? */
   jobSecurity: boolean;
-  complexity: 'simple' | 'advanced' | 'expert';
   /** Auto-play speed for live game. */
   liveSpeed: number;
   /** Where a live game stops for a break with a period report (default 'quarters'). */

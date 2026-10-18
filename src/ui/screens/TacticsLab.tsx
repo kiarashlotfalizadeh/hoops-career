@@ -18,7 +18,6 @@ import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { matchupColors } from '../teamColors';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
-import { adviceFor } from '../seasonAnalysis';
 import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
 import type { GameType, League, SetId, Tactics, TacticsPatch } from '../../core/types';
 import './tactics.css';
@@ -558,7 +557,7 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
                   <span className={`tx-imp-v num ${v >= 0 ? 'good' : 'bad'}`}>{signed(v)}</span>
                   <span className="grow">
                     <span className="tx-imp-t">{impactSentence(k, X, Y)}</span>
-                    {advice && <span className="tx-imp-a">{adviceFor(advice, league.settings.complexity)}</span>}
+                    {advice && <span className="tx-imp-a">{advice}</span>}
                   </span>
                 </div>
               );

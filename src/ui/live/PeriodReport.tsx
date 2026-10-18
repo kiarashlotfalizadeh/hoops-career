@@ -8,7 +8,6 @@ import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { Statline } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { periodLabel, signed } from '../stats';
-import { adviceFor } from '../seasonAnalysis';
 import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { wpText } from '../../core/analysis/winProb';
@@ -150,7 +149,7 @@ export function PeriodReport({
                   <div>{f.title}</div>
                   {f.advice && !fix && (
                     <div className="pr-advice">
-                      <Lightbulb size={12} aria-hidden="true" /> {adviceFor(f.advice, league.settings.complexity)}
+                      <Lightbulb size={12} aria-hidden="true" /> {f.advice}
                     </div>
                   )}
                 </div>

@@ -418,7 +418,7 @@ describe('AI trade valuation', () => {
     const there = offer([a.pid], [b.pid], [pick.dpid]);
     expect(evaluateTrade(l, there).accept).toBe(true);
     executeTrade(l, there);
-    // on casual a there-and-back pair would pay out a sweetener every time
+    // on easy a there-and-back pair would pay out a sweetener every time
     const back = offer([b.pid], [a.pid], [], [pick.dpid]);
     expect(validateTrade(l, back).filter((e) => /can't get (him|it) back/.test(e)).length).toBe(3);
     // nor does a pick come straight back as the player it became
@@ -506,15 +506,16 @@ describe('AI trade valuation', () => {
     expect(untradeableReason(l, fall)).toBeNull();
   });
 
-  it("gives a casual player's own assets the casual discount, but not ones he just traded for", () => {
+  it("gives an easy-mode player's own assets the easy discount, but not ones he just traded for", () => {
     const l = league();
+    l.settings.difficulty = 'easy';
     l.phase = 'regular';
     l.teams[2].strategy = 'retool';
     const vetMin = CAP_FOR(l).vetMin;
     const mine = shape(l, standardRoster(l, U)[0], 80, 27, vetMin);
     const better = shape(l, standardRoster(l, 2)[0], 80.4, 27, vetMin);
     const deal: TradeOffer = { a: { tid: U, pids: [mine.pid], dpids: [] }, b: { tid: 2, pids: [better.pid], dpids: [] } };
-    // a few percent short of fair value: fine on casual from his own roster...
+    // a few percent short of fair value: fine on easy from his own roster...
     expect(tradeValue(l, better) / tradeValue(l, mine)).toBeLessThan(1.1);
     expect(evaluateTrade(l, deal).accept).toBe(true);
     // ...but once he arrived in a trade this season, flipping him on is judged at fair value

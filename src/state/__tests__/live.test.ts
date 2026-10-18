@@ -537,8 +537,8 @@ describe('a live game survives the app being closed (W12)', () => {
     for (let i = 0; i < 10; i++) lg.step();
     await useStore.getState().flush();
     const back = (await loadLeague(l.id))!;
-    // casual coaches never plan, and a backup imported as a copy gets a new id (plans are drawn from it)
-    back.settings.difficulty = 'casual';
+    // easy-mode coaches never plan, and a backup imported as a copy gets a new id (plans are drawn from it)
+    back.settings.difficulty = 'easy';
     back.id = `${back.id}-copy`;
     useStore.getState().setLeague(back);
     const again = prepareLive(back)!;

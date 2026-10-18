@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, FlaskConical, Sparkles, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import type { ActionType, DefScheme, PnrCoverage, PressMode, ShotFreedom, StarPlan, Tactics as TacticsT } from '../../core/types';
-import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, cloneTactics, isJunk, schemesFor } from '../../core/sim/tactics';
+import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, cloneTactics, isJunk, ALL_SCHEMES } from '../../core/sim/tactics';
 import { effectiveTactics } from '../../core/league/gamePlans';
 import { nextUserGame } from '../../core/analysis/preview';
 import { autoTactics } from '../../core/ai/coachAI';
@@ -17,13 +17,13 @@ import { RoleEditor } from '../components/RoleEditor';
 import { UpcomingOpponents } from '../components/UpcomingOpponents';
 import { teamAlerts } from '../../core/ai/advisor';
 import { setLabBaseline } from './labBridge';
-import { adviceFor, seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
+import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { rosterNames } from '../stats';
 import { CrunchTimeCard } from '../tactics/CrunchTimeCard';
 import { SetPackageCard } from '../tactics/SetPackageCard';
-import { SituationToggles, SituationsCard } from '../tactics/SituationsCard';
+import { SituationsCard } from '../tactics/SituationsCard';
 import './tactics.css';
 
 type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
@@ -33,21 +33,12 @@ export default function Tactics() {
   const league = useLeague();
   const nav = useNavigate();
   const [params, setParams] = useSearchParams();
-  const complexity = league.settings.complexity;
   const tabs: { id: Tab; label: string }[] = [
     { id: 'playbook', label: 'Playbook' },
-    ...(complexity !== 'simple'
-      ? [
-          { id: 'offense' as Tab, label: 'Offense' },
-          { id: 'defense' as Tab, label: 'Defense' },
-        ]
-      : []),
-    ...(complexity === 'expert'
-      ? [
-          { id: 'roles' as Tab, label: 'Roles' },
-          { id: 'manage' as Tab, label: 'Game Mgmt' },
-        ]
-      : []),
+    { id: 'offense', label: 'Offense' },
+    { id: 'defense', label: 'Defense' },
+    { id: 'roles', label: 'Roles' },
+    { id: 'manage', label: 'Game Mgmt' },
     { id: 'insights', label: 'Insights' },
   ];
   const tab = (tabs.find((t) => t.id === params.get('tab'))?.id ?? 'playbook') as Tab;
@@ -150,14 +141,6 @@ export default function Tactics() {
           >
             <PresetPicker kind="def" />
           </Section>
-          {complexity === 'simple' && (
-            <Section title="Tempo" right={<Help title="Pace">Faster pace means more possessions and transition chances, but more turnovers and fatigue.</Help>}>
-              <div className="card">
-                <Levels label="Pace" value={t.offense.pace} names={TACTIC_LEVELS.pace} onChange={(x) => edit((tt) => void (tt.offense.pace = x))} />
-              </div>
-            </Section>
-          )}
-          {complexity === 'advanced' && <SituationToggles t={t} edit={edit} />}
           <UpcomingOpponents />
           <MyPlaybooksCard />
         </>
@@ -325,7 +308,6 @@ function ShotProfile({ t, edit }: { t: TacticsT; edit: Edit }) {
 
 function DefenseTab({ t, edit }: { t: TacticsT; edit: Edit }) {
   const league = useLeague();
-  const complexity = league.settings.complexity;
   const team = league.teams[league.userTid];
   // personnel hints, for the five who start next: the first healthy ones in the depth chart
   const starters = team.rotation.order
@@ -334,7 +316,7 @@ function DefenseTab({ t, edit }: { t: TacticsT; edit: Edit }) {
     .slice(0, 5);
   const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt)[0];
   const bigC = big ? composites(big.ratings) : null;
-  const schemes = schemesFor(complexity).concat(schemesFor(complexity).includes(t.defense.scheme) ? [] : [t.defense.scheme]);
+  const schemes = ALL_SCHEMES;
   const fit = (good: boolean, yes: string, no: string) => <Tag tone={good ? 'good' : 'warn'}>{good ? yes : no}</Tag>;
   const two = chasers(t.defense.scheme) === 2;
   return (
@@ -499,7 +481,7 @@ function InsightsTab() {
         </span>
         <span className="grow">
           <span className="tx-imp-t">{impactSentence(x.key, X, Y)}</span>
-          {advice && <span className="tx-imp-a">{adviceFor(advice, league.settings.complexity)}</span>}
+          {advice && <span className="tx-imp-a">{advice}</span>}
         </span>
       </div>
     );

@@ -649,7 +649,6 @@ function Onboarding() {
           return <li key={s.title}>{s.to ? <Link to={s.to}>{body}</Link> : <div>{body}</div>}</li>;
         })}
       </ol>
-      <div className="tiny dim">Coaching depth (Simple, Advanced, Expert) is in Settings.</div>
     </section>
   );
 }

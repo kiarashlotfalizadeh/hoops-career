@@ -2,7 +2,7 @@
 // gated by coaching depth like the Tactics screen. Pure: the Live screen applies them through
 // sim.baseTactics → setTactics.
 
-import type { Settings, Tactics } from '../../core/types';
+import type { Tactics } from '../../core/types';
 import { cloneTactics, hacks, levelName, startHacking, stopHacking } from '../../core/sim/tactics';
 
 export interface Pill {
@@ -17,7 +17,6 @@ export interface Pill {
 }
 
 export interface PillContext {
-  complexity: Settings['complexity'];
   q: number;
   /** Seconds left in the period. */
   clock: number;
@@ -33,14 +32,13 @@ export const HACK_BELOW = 0.6;
 /** The Hack-a threshold that sends this shooter to the line: the engine fouls players under it (FT% × 100 < threshold). */
 export const hackThreshold = (ftPct: number) => Math.ceil(ftPct * 100) + 1;
 
-const levels: Record<Settings['complexity'], number> = { simple: 0, advanced: 1, expert: 2 };
-
 /**
  * The pills on offer: `t` is what the team plays now, `plan` what it started the game with (the
  * saved tactics with tonight's game plan), which a pressed pill goes back to.
  */
 export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
-  const lvl = levels[ctx.complexity];
+  // every pill is on offer (the live overhaul trims them)
+  const lvl = 2;
   const out: Pill[] = [];
   // a pair of opposite settings: pressing the one in effect goes back to the plan (or the middle, when the plan was that setting too)
   const pair = <T>(id: string, read: (x: Tactics) => T, write: (x: Tactics, v: T) => void, on: (v: T) => boolean, set: T, middle: T, label: string, help: string) => {

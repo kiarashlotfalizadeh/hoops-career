@@ -685,7 +685,6 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
   }, [league, tid]);
   const [ptSide, setPtSide] = useState<'off' | 'def'>('off');
   const isUser = tid === league.userTid;
-  const complexity = league.settings.complexity;
   const abbrev = league.teams[tid].abbrev;
   return (
     <>
@@ -717,7 +716,7 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           {data.enough ? (
             <>
               {data.lastSeason && <div className="lg-note">Too few games this season: last season&apos;s numbers.</div>}
-              <RankStrip d={data} complexity={complexity} />
+              <RankStrip d={data} />
               {data.tendencies.length > 0 && <Bullets items={data.tendencies} tone="var(--info)" />}
             </>
           ) : (
@@ -725,7 +724,7 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
           )}
         </div>
       </Section>
-      {data.enough && complexity !== 'simple' && data.playTypes.length > 0 && (
+      {data.enough && data.playTypes.length > 0 && (
         <Section
           title="Play types"
           right={
@@ -751,7 +750,7 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
               { id: 'def', label: 'Their defense' },
             ]}
           />
-          <PlayTypeTable rows={ptSide === 'off' ? data.playTypes : data.defPlayTypes} defense={ptSide === 'def'} complexity={complexity} />
+          <PlayTypeTable rows={ptSide === 'off' ? data.playTypes : data.defPlayTypes} defense={ptSide === 'def'} />
         </Section>
       )}
       <div className="md-grid2">
@@ -803,7 +802,7 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
       </Section>
       {data.players.length > 0 && (
         <Section title="Key players" right={<span className="lg-sec-meta">{data.lastSeason ? `${seasonLabel(data.season)} numbers` : 'This season'}</span>}>
-          <KeyPlayers d={data} complexity={complexity} />
+          <KeyPlayers d={data} />
           {data.players.some((p) => p.elsewhere) && <div className="lg-note">Newcomers show their numbers from their last team, without on/off.</div>}
         </Section>
       )}
@@ -825,7 +824,7 @@ function ScoutingTab({ league, tid }: { league: League; tid: number }) {
       {!isUser && (
         <Section title={`Head to head with ${abbrev}`}>
           <div className="card lg-tac">
-            <HeadToHead league={league} d={data} complexity={complexity} />
+            <HeadToHead league={league} d={data} />
           </div>
         </Section>
       )}

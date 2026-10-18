@@ -1,4 +1,4 @@
-import { PLAYER_DEFENSES, type PlayerDefense, type Settings, type Tactics } from '../../core/types';
+import { PLAYER_DEFENSES, type PlayerDefense, type Tactics } from '../../core/types';
 import type { DrawnPlayer } from './drawn';
 import { PlayerLine } from './MyPlayer';
 import { HACK_BELOW, hackThreshold } from './pills';
@@ -12,7 +12,6 @@ export function OppPlayer({
   p,
   name,
   tactics,
-  complexity,
   clock,
   q,
   apply,
@@ -20,7 +19,6 @@ export function OppPlayer({
   p: DrawnPlayer;
   name: string;
   tactics: Tactics;
-  complexity: Settings['complexity'];
   /** Seconds left in the period (a hack isn't allowed in its last two minutes). */
   clock: number;
   /** The period: hacking from now on starts a game plan's later Hack-a quarter now. */
@@ -70,7 +68,7 @@ export function OppPlayer({
       ) : (
         <div className="tiny dim">At {ft}% from the line he's no Hack-a target: fouling him gives away points.</div>
       )}
-      {complexity !== 'simple' && (
+      {
         <div className="row" style={{ gap: 8 }}>
           {(['deny', 'double'] as const).map((plan) => (
             <button
@@ -89,8 +87,8 @@ export function OppPlayer({
             </button>
           ))}
         </div>
-      )}
-      {complexity !== 'simple' && (
+      }
+      {
         <>
           <div className="ps-blk">
             <div className="over">Guard him</div>
@@ -112,7 +110,7 @@ export function OppPlayer({
               : 'Run isolations, post-ups and ball screens at the player he guards while he plays: worth it against a weak defender, costly against a good one.'}
           </div>
         </>
-      )}
+      }
     </div>
   );
 }
