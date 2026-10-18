@@ -1,7 +1,7 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
-import { finalLabel, fmtClock, periodLabel } from '../stats';
+import { fmtClock, periodLabel } from '../stats';
 import { matchupColors, matchupLooks } from '../teamColors';
 import { wpText } from '../../core/analysis/winProb';
 import type { Drawn } from './drawn';
@@ -32,10 +32,11 @@ export function gameContext(league: League, g: ScheduledGame, gameNo?: number): 
 }
 
 /**
- * The live scorebug, as a broadcast has it: each team's colour block (its name, timeouts and team
- * fouls), the scores, the period and the clock as the court animates them (`ticker`), a run, and
- * each team's chance to win (`wpHome`, unless switched off); everything but the clock and score as
- * of the possession the court last finished drawing (`view`).
+ * The live scorebug, slim, as a broadcast has it over the court: each team's colour block (its name,
+ * timeouts and team fouls), the scores, the period and the clock as the court animates them
+ * (`ticker`), a run, the sliver of each team's chance to win (`wpHome`, unless switched off) and the
+ * night's other scores under it; everything but the clock and score as of the possession the court
+ * last finished drawing (`view`). The final is the final card's (FinalSlab).
  */
 export function ScoreBug({
   ticker,
@@ -43,9 +44,7 @@ export function ScoreBug({
   home,
   away,
   quarter,
-  over,
   atBreak,
-  ot,
   context,
   wpHome,
   children,
@@ -55,10 +54,8 @@ export function ScoreBug({
   home: Team;
   away: Team;
   quarter: number;
-  over: boolean;
   /** Stopped at the buzzer between periods: the end of `quarter` (halftime after the 2nd), not a clock at 0.0. */
   atBreak?: boolean;
-  ot: number;
   context?: string;
   /** The home team's win probability, from the drawn game (undefined: not shown). */
   wpHome?: number;
@@ -67,27 +64,23 @@ export function ScoreBug({
 }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
-  const brk = !over && !!atBreak;
+  const brk = !!atBreak;
   const [h, a] = view.sides;
   // "in the bonus": the team that shoots free throws on every foul
   const bonus = [a.bonus ? away.abbrev : '', h.bonus ? home.abbrev : ''].filter(Boolean);
-  const run = over ? null : h.run >= RUN_CHIP ? { abbrev: home.abbrev, n: h.run } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, n: a.run } : null;
-  const state = over
-    ? `final${ot ? ` in ${ot > 1 ? `${ot} overtimes` : 'overtime'}` : ''}`
-    : brk
-      ? quarter === 2
-        ? 'halftime'
-        : `end of ${qLabel}`
-      : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.n}-0 run` : ''}`;
-  const wp = !over && wpHome !== undefined ? wpHome : null;
+  const run = h.run >= RUN_CHIP ? { abbrev: home.abbrev, n: h.run } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, n: a.run } : null;
+  const state = brk
+    ? quarter === 2
+      ? 'halftime'
+      : `end of ${qLabel}`
+    : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.n}-0 run` : ''}`;
+  const wp = wpHome !== undefined ? wpHome : null;
   const [homeKit, awayKit] = matchupColors(home.colors, away.colors);
   // the two colour blocks never read as one: on a clash the away side wears its second colour
   const looks = matchupLooks(home.colors, away.colors);
   const pct = wpText;
-  // after the final the loser's score steps back
-  const lost = (s: 0 | 1) => over && score[s] < score[1 - s];
   // a team's fouls light up once they put the other team in the bonus
-  const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean, dim: boolean) => {
+  const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean) => {
     const look = looks[isHome ? 0 : 1];
     return (
       <div className={`lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
@@ -102,40 +95,37 @@ export function ScoreBug({
             <span className="sr-only">
               {s.timeouts} timeout{s.timeouts === 1 ? '' : 's'} left
             </span>
-            {!over && (
-              <span className={`lb-tf${penalty ? ' on' : ''}`} title={penalty ? 'In the penalty' : undefined}>
-                <span className="sr-only">, </span>TF {s.fouls}
-                {penalty && <span className="sr-only"> (in the penalty)</span>}
-              </span>
-            )}
+            <span className={`lb-tf${penalty ? ' on' : ''}`} title={penalty ? 'In the penalty' : undefined}>
+              <span className="sr-only">, </span>TF {s.fouls}
+              {penalty && <span className="sr-only"> (in the penalty)</span>}
+            </span>
           </span>
         </div>
-        <span className={`lb-score num${dim ? ' dim' : ''}`} aria-hidden="true">
+        <span className="lb-score num" aria-hidden="true">
           {pts}
         </span>
       </div>
     );
   };
   return (
-    // (on the page's own colour: on a phone the strip and the play-by-play scroll under it)
-    <div className="live-bugcard lb">
+    <div className="lb">
       {context && <div className="lb-ctx ellipsis">{context}</div>}
       <div
-        className="live-bug lb-main"
+        className="lb-main live-bug"
         role="group"
         aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. Win probability: ${away.abbrev} ${pct(1 - wp)}, ${home.abbrev} ${pct(wp)}` : ''}`}
       >
-        {side(away, a, score[1], h.bonus, false, lost(1))}
+        {side(away, a, score[1], h.bonus, false)}
         <div className="lb-mid" aria-hidden="true">
-          <span className="lb-q">{over ? finalLabel(ot) : brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : qLabel}</span>
-          {!over && !brk && <span className="lb-clock num">{fmtClock(clock)}</span>}
+          <span className="lb-q">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : qLabel}</span>
+          {!brk && <span className="lb-clock num">{fmtClock(clock)}</span>}
           {run && (
             <span className="lb-run num">
               {run.abbrev} {run.n}-0
             </span>
           )}
         </div>
-        {side(home, h, score[0], a.bonus, true, lost(0))}
+        {side(home, h, score[0], a.bonus, true)}
       </div>
       {wp !== null && (
         <div className="lb-wp" aria-hidden="true" title="Win probability">

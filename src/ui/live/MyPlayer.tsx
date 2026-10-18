@@ -1,15 +1,16 @@
-import { Users } from 'lucide-react';
+import { ArrowLeftRight, Lightbulb } from 'lucide-react';
 import type { League, OffRole, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
-import { Chips, Statline, Toggle } from '../components/ui';
+import { Chips, Help, Statline, Tag, Toggle } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
+import { fitPlayers, setsFor, type Calls } from './plays';
 
 /** A player's night so far, at the top of his sheet (yours or theirs). */
 export function PlayerLine({ p }: { p: DrawnPlayer }) {
   const e = Math.round(p.energy * 100);
   return (
-    <div className="card ps-fig">
+    <div className="ps-fig">
       <Statline
         items={[
           { k: 'Pts', v: p.pts },
@@ -21,7 +22,6 @@ export function PlayerLine({ p }: { p: DrawnPlayer }) {
     </div>
   );
 }
-import { callLabel, fitPlayers, setsFor, type Calls } from './plays';
 
 const FREEDOM: { id: ShotFreedom; label: string }[] = [
   { id: 1, label: 'Green light' },
@@ -29,10 +29,21 @@ const FREEDOM: { id: ShotFreedom; label: string }[] = [
   { id: -1, label: 'Limited' },
 ];
 
+/** Who can swap places with him: bench players for one on the floor, the five for one on the bench. */
+export interface SubOptions {
+  /** He's on the floor now (in the game itself, which runs a possession ahead of the court). */
+  on: boolean;
+  /** He can't play: 1 fouled out, 2 hurt or resting. */
+  out: 0 | 1 | 2;
+  /** "Rest" when he's resting tonight. */
+  dnp?: string;
+  options: { pid: number; line: string; staff?: boolean }[];
+}
+
 /**
- * One of your players on the floor: his line tonight, and orders for him (as deep as the coaching
- * depth): sub him out (the Subs sheet opens with him picked), his shot freedom, and from Advanced his
- * role and a play run for him, from Expert crunch-time go-to and who he guards. Everything goes through your tactics or a play call,
+ * One of your players: his line tonight, the sub (the bench players who can come in for him, the
+ * staff's pick first, or the five he can come in for), and his orders: shot freedom, role, crunch-time
+ * go-to, a play run for him and who he guards. Every order goes through your tactics or a play call,
  * so the game's journal keeps it, and "Keep changes after this game" treats it like any other change
  * (tonight's matchups excepted).
  */
@@ -46,6 +57,7 @@ export function MyPlayer({
   nameOf,
   apply,
   calls,
+  subs,
   onSub,
 }: {
   league: League;
@@ -59,10 +71,10 @@ export function MyPlayer({
   nameOf: (pid: number) => string;
   apply: (fn: (t: Tactics) => void) => void;
   calls: Calls;
-  onSub: () => void;
+  subs: SubOptions;
+  /** Swap him with `other` (out for in, or in for out, as he stands). */
+  onSub: (other: number) => void;
 }) {
-  const adv = true;
-  const expert = true;
   const pid = p.pid;
   const freedom = tactics.offense.freedom[pid] ?? 0;
   const fp = fitPlayers(league, [pid], tactics)[0];
@@ -75,23 +87,51 @@ export function MyPlayer({
   return (
     <div className="ps">
       <PlayerLine p={p} />
-      <button className="btn block" onClick={onSub}>
-        <Users size={16} /> Sub him out
-      </button>
+
+      {subs.out ? (
+        <div className="ps-out">
+          <Tag tone={subs.out === 1 ? 'bad' : undefined}>{subs.out === 1 ? 'Fouled out' : subs.dnp === 'Rest' ? 'Resting tonight' : 'Out for the game'}</Tag>
+        </div>
+      ) : (
+        <div className="ps-blk">
+          <div className="over">
+            <ArrowLeftRight size={12} aria-hidden="true" /> {subs.on ? 'Sub him out' : 'Put him in for'}
+          </div>
+          {subs.options.length ? (
+            <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
+              {subs.options.map((o) => (
+                <button key={o.pid} className={`chip ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
+                  {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
+                  {nameOf(o.pid)} <span className="ps-sub-l num">{o.line}</span>
+                  {o.staff && <span className="sr-only"> (the staff&apos;s pick)</span>}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="small dim">Nobody can come in for him right now.</div>
+          )}
+        </div>
+      )}
 
       <div className="ps-blk">
-        <div className="over">Shot freedom tonight</div>
-        <Chips label={`Shot freedom for ${name}`} value={freedom} onChange={(v: ShotFreedom) => apply((t) => void (t.offense.freedom[pid] = v))} options={FREEDOM} />
-        <div className="tiny dim">
-          {freedom === 1
-            ? 'He looks for his own shot more and gets the ball more.'
-            : freedom === -1
-              ? 'He passes up shots and gets the ball less.'
-              : 'He takes the shots his role and tendencies give him.'}
+        <div className="over">
+          Shot freedom
+          <Help title="Shot freedom">
+            <p>
+              <b>Green light:</b> he looks for his own shot more and gets the ball more.
+            </p>
+            <p>
+              <b>Normal:</b> he takes the shots his role and tendencies give him.
+            </p>
+            <p>
+              <b>Limited:</b> he passes up shots and gets the ball less.
+            </p>
+          </Help>
         </div>
+        <Chips label={`Shot freedom for ${name}`} value={freedom} onChange={(v: ShotFreedom) => apply((t) => void (t.offense.freedom[pid] = v))} options={FREEDOM} />
       </div>
 
-      {adv && role && (
+      {role && (
         <div className="ps-blk">
           <div className="over">Role</div>
           <Chips
@@ -104,19 +144,21 @@ export function MyPlayer({
         </div>
       )}
 
-      {expert && (
-        <Toggle
-          on={goTo}
-          onChange={(on) => apply((t) => void (t.manage.goTo = on ? pid : null))}
-          label="Crunch-time go-to"
-          help="In the last two minutes of a close fourth quarter or overtime the ball finds him much more, and the offense runs more of what he does best."
-        />
-      )}
+      <Toggle
+        on={goTo}
+        onChange={(on) => apply((t) => void (t.manage.goTo = on ? pid : null))}
+        label="Crunch-time go-to"
+        help="In the last two minutes of a close fourth quarter or overtime the ball finds him much more, and the offense runs more of what he does best."
+      />
 
-      {adv && (
+      {subs.on && (
         <div className="ps-blk">
-          <div className="over">Run a play for him</div>
-          {pending && <div className="small">Called: {callLabel(pending, nameOf)}</div>}
+          <div className="over">
+            Run a play for him
+            <Help title="A play for him">
+              <p>His best sets, run on your next half-court trip; a clear-out isolation always fits. Each run, their defense reads a set a little better.</p>
+            </Help>
+          </div>
           <div className="chips" role="group" aria-label={`Plays for ${name}`}>
             {fits.map((id) => {
               const c = { kind: 'set' as const, set: id, pid };
@@ -130,17 +172,17 @@ export function MyPlayer({
               {CLEAR_OUT.name}
             </button>
           </div>
-          <div className="tiny dim">
-            {fits.length
-              ? 'His best sets, run on your next half-court trip. Each run, their defense reads it a little better.'
-              : 'No set fits him well; a clear-out isolation always does.'}
-          </div>
         </div>
       )}
 
-      {expert && oppOn.length > 0 && (
+      {subs.on && oppOn.length > 0 && (
         <div className="ps-blk">
-          <div className="over">Who he guards</div>
+          <div className="over">
+            Who he guards
+            <Help title="Matchups">
+              <p>An assignment holds whenever both are on the floor, for tonight only. Otherwise the staff matches by size and threat.</p>
+            </Help>
+          </div>
           <div className="chips" role="group" aria-label={`Who ${name} guards`}>
             <button
               className={`chip ${assigned === undefined ? 'on' : ''}`}
@@ -151,7 +193,7 @@ export function MyPlayer({
                 })
               }
             >
-              Staff's pick
+              Staff&apos;s pick
             </button>
             {oppOn.map((o) => {
               const on = assigned !== undefined && +assigned === o;
@@ -168,12 +210,11 @@ export function MyPlayer({
                   }
                 >
                   {nameOf(o)}
-                  {guarding === o ? ' (now)' : ''}
+                  {guarding === o ? ' · now' : ''}
                 </button>
               );
             })}
           </div>
-          <div className="tiny dim">An assignment holds whenever both are on the floor, for tonight only.</div>
         </div>
       )}
     </div>

@@ -1,6 +1,8 @@
 // The live assistant's alerts, worked out from the game as the court has drawn it (see drawn.ts),
-// never from the sim running a possession ahead. Pure: the Live screen turns their actions into
-// timeouts, substitutions and tactic changes.
+// never from the sim running a possession ahead. Each is a headline and one line, as the shared
+// assistant rows have them: the Live screen shows a new one in the banner over the court, offers the
+// top fix as the pill in its quick actions, and turns their actions into timeouts, substitutions and
+// tactic changes. Pure.
 
 import type { GameAdjustment, GameManagement, Tactics } from '../../core/types';
 import type { InGameInjury } from '../../core/sim/engine';
@@ -15,14 +17,23 @@ export type AlertAction =
   /** Take `out` off the floor for `in`. */
   | { kind: 'sub'; out: number; in: number }
   | { kind: 'tactics'; apply: (t: Tactics) => void }
-  /** Open the substitutions sheet. */
+  /** Open the lineup (your five and the bench). */
   | { kind: 'subs' };
 
 export interface LiveAlert {
   id: string;
+  /** The headline: what's happening, in a few words. */
+  title: string;
+  /** One line under it: the number or the why (may be empty). */
   text: string;
   tone: 'warn' | 'bad' | 'info';
   action?: AlertAction & { label: string };
+}
+
+/** An event as an alert: "SAS adjusts: hedges ball screens…" reads as a headline and its line. */
+export function eventLines(e: Pick<LiveEvent, 'kind' | 'text'>): { title: string; text: string } {
+  const i = e.kind === 'adjust' ? e.text.indexOf(': ') : -1;
+  return i < 0 ? { title: e.text.replace(/\.$/, ''), text: '' } : { title: e.text.slice(0, i), text: e.text.slice(i + 2).replace(/^./, (c) => c.toUpperCase()) };
 }
 
 /** Something that happened in the game, shown once the court has drawn the possession it happened in. */
@@ -102,26 +113,29 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
   const onFloor = me.on.map((pid) => me.players.find((p) => p.pid === pid)).filter((p): p is DrawnPlayer => !!p);
   const sit = (p: DrawnPlayer, label: string): LiveAlert['action'] => {
     const sub = a.subFor(p.pid);
-    return sub === undefined ? undefined : { kind: 'sub', out: p.pid, in: sub, label };
+    return sub === undefined ? undefined : { kind: 'sub', out: p.pid, in: sub, label: `${label} ${names(p.pid)}` };
   };
 
   // your players lost for the game (the staff has already sent someone in, unless you handle subs)
   for (const e of a.events) {
     if (e.side !== side || e.kind === 'adjust' || view.elapsed - e.at > EVENT_SEC) continue;
-    out.push({ id: e.id, tone: 'bad', text: e.text, action: a.manualSubs ? { kind: 'subs', label: 'Subs' } : undefined });
+    out.push({ id: e.id, tone: 'bad', ...eventLines(e), action: a.manualSubs ? { kind: 'subs', label: 'Subs' } : undefined });
   }
 
   // one foul from fouling out late: worth a decision every time, crunch time or not
   for (const p of onFloor) {
-    if (view.q >= 4 && p.fouls === 5) out.push({ id: `fouls-${p.pid}-5`, tone: 'warn', text: `${names(p.pid)} has 5 fouls: one more and he's out.`, action: sit(p, 'Sit him') });
+    if (view.q >= 4 && p.fouls === 5)
+      out.push({ id: `fouls-${p.pid}-5`, tone: 'warn', title: `${names(p.pid)} has 5 fouls`, text: "One more and he's out.", action: sit(p, 'Sit') });
   }
 
   // a run the staff won't stop for you (it calls its own timeouts unless you handle subs)
   if (them.run >= 8 && me.timeouts > 0 && !a.atBreak && !a.timeoutPending && !staffCallsTimeout(view, side, tactics.manage, a.manualSubs))
     out.push({
-      id: `run-${them.score}`,
+      // (one alert a run, however long it gets: a dismissal holds until the run ends)
+      id: `run-${them.score - them.run}`,
       tone: 'warn',
-      text: `The ${themTeam.name} are on ${aRun(them.run)}. A timeout rests legs (+5% energy) and resets the run, but it also gives their coach a chance to adjust.`,
+      title: `${themTeam.abbrev} on ${aRun(them.run)}`,
+      text: 'A timeout rests legs (+5% energy) and resets the run, but gives their coach a chance to adjust.',
       action: { kind: 'timeout', label: 'Timeout' },
     });
 
@@ -133,8 +147,9 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
       out.push({
         id: `tired-${p.pid}-${Math.round(p.energy * 10)}`,
         tone: 'warn',
-        text: `${names(p.pid)} is gassed (${Math.round(p.energy * 100)}% energy).`,
-        action: sub === undefined ? undefined : { kind: 'sub', out: p.pid, in: sub, label: `Sub ${names(sub)}` },
+        title: `${names(p.pid)} is gassed`,
+        text: `${Math.round(p.energy * 100)}% energy.`,
+        action: sub === undefined ? undefined : { kind: 'sub', out: p.pid, in: sub, label: `${names(sub)} for ${names(p.pid)}` },
       });
     }
 
@@ -146,8 +161,9 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
       out.push({
         id: `fouls-${p.pid}-${p.fouls}`,
         tone: 'warn',
-        text: `${names(p.pid)} has ${p.fouls} fouls (your staff sits players at ${limit} in ${view.q <= 4 ? `Q${view.q}` : 'overtime'}).`,
-        action: sit(p, 'Sit him'),
+        title: `${names(p.pid)} has ${p.fouls} fouls`,
+        text: `Your staff sits players at ${limit} in ${view.q <= 4 ? `Q${view.q}` : 'overtime'}.`,
+        action: sit(p, 'Sit'),
       });
     }
   }
@@ -155,7 +171,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
   // the other coach changed something
   for (const e of a.events) {
     if (e.side === side || e.kind !== 'adjust' || view.elapsed - e.at > EVENT_SEC) continue;
-    out.push({ id: e.id, tone: 'info', text: e.text });
+    out.push({ id: e.id, tone: 'info', ...eventLines(e) });
   }
 
   // opponent play types torching us: well above this season's norm for that play, on a real sample
@@ -166,8 +182,14 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     const ft = k as FinishType;
     // only a button that changes something: none once the tactics already do it
     const counter = liveCounter(ft, tactics);
-    const text = `Their ${playType(ft)} plays are scoring ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}).${counter?.note ? ` ${counter.note}` : ''}`;
-    out.push({ id: `pt-${k}`, tone: 'warn', text, action: counter && { kind: 'tactics', apply: counter.apply, label: counter.label } });
+    const text = `${(v.pts / v.poss).toFixed(2)} points a trip (league ${base.toFixed(2)}).${counter?.note ? ` ${counter.note}` : ''}`;
+    out.push({
+      id: `pt-${k}`,
+      tone: 'warn',
+      title: `Their ${playType(ft)} plays are hot`,
+      text,
+      action: counter && { kind: 'tactics', apply: counter.apply, label: counter.label },
+    });
   }
 
   // the biggest tactical edge against us so far, while the tactics still give it to them
@@ -177,7 +199,8 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     out.push({
       id: `imp-${worst.key}`,
       tone: 'warn',
-      text: `${impactSentence(worst.key, teamRef(themTeam), teamRef(meTeam))} ${impactAdvice(worst.key, tactics)!}`,
+      title: impactSentence(worst.key, teamRef(themTeam), teamRef(meTeam)).replace(/\.$/, ''),
+      text: impactAdvice(worst.key, tactics)!,
       action: fix && { kind: 'tactics', apply: fix.apply, label: fix.label },
     });
   }
@@ -188,11 +211,19 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
       out.push({
         id: `mypt-${k}`,
         tone: 'info',
-        text: `Our ${playType(k as FinishType)} plays are stalling at ${(v.pts / v.poss).toFixed(2)} per possession (league ${base.toFixed(2)}). Consider running other actions.`,
+        title: `Our ${playType(k as FinishType)} plays are stalling`,
+        text: `${(v.pts / v.poss).toFixed(2)} points a trip (league ${base.toFixed(2)}): try other actions.`,
       });
   }
+
+  // the last two minutes of a close fourth quarter or overtime: the late-game calls are open (said once a period)
+  if (lateGame(view.q, view.clock, me.score - them.score) && !a.atBreak)
+    out.push({ id: `late-${view.q}`, tone: 'info', title: 'Crunch time', text: 'Late-game calls are open: tap Call.' });
   return out;
 }
+
+/** The late-game window: the last two minutes of a fourth quarter or overtime within eight points (the Calls tab leads with the late-game calls). */
+export const lateGame = (q: number, clock: number, margin: number) => q >= 4 && clock <= 120 && clock > 0.05 && Math.abs(margin) <= 8;
 
 /**
  * What happened in the possessions between two snapshots: injuries and foul-outs on either side,

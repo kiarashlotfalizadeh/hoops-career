@@ -180,8 +180,8 @@ if (stages.includes('mid')) {
     await phone.waitForTimeout(4000);
     mkdirSync(`${out}/live`, { recursive: true });
     await phone.screenshot({ path: `${out}/live/phone-live.png` });
-    // the in-game sheets: substitutions, the game plan and the box score
-    for (const name of ['Subs', 'Adjust', 'Box']) {
+    // the in-game sheets: the lineup, the calls and the clipboard
+    for (const name of ['Subs', 'Call', 'Clipboard']) {
       const b = phone.getByRole('button', { name, exact: true }).first();
       if (await b.count()) {
         await b.click().catch(() => {});
@@ -191,6 +191,8 @@ if (stages.includes('mid')) {
         await phone.waitForTimeout(200);
       }
     }
+    // the live game's playback controls come up with a tap on the court
+    if (await phone.locator('.pb:not(.up)').count()) await phone.locator('.pb').click({ position: { x: 12, y: 12 } });
     await phone
       .getByRole('button', { name: 'Skip ahead', exact: true })
       .click()

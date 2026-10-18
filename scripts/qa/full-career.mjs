@@ -76,6 +76,8 @@ if (await live.count()) {
   await live.click();
   await page.waitForTimeout(5000);
   await shot('01-live', false);
+  // the live game's playback controls come up with a tap on the court
+  if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
   await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
   await page
     .locator('.sheet')

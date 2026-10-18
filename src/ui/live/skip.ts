@@ -1,4 +1,4 @@
-// The Skip sheet's choices in a live game (see LiveGame.simTo).
+// The Skip ahead sheet's choices in a live game (see LiveGame.simTo).
 import { CLUTCH_SEC } from '../../state/live';
 import { periodLabel } from '../stats';
 
@@ -19,10 +19,10 @@ export interface SkipChoice {
  */
 export function skipChoices(playing: number, atBreak: boolean, sim: { q: number; clock: number }): SkipChoice[] {
   return [
-    { id: 'quarter', label: `End of ${periodLabel(playing)}`, sub: 'Stops at the break with the period report.' },
+    { id: 'quarter', label: `End of ${periodLabel(playing)}`, sub: 'Stops at the break, with its report.' },
     // (from the first quarter's break, the end of the next quarter is halftime)
     ...(playing === 1 && !atBreak ? [{ id: 'half' as SkipTo, label: 'Halftime', sub: 'Plays through the second quarter too.' }] : []),
     ...(playing <= 4 && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC) ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: '5:00 left in the fourth quarter.' }] : []),
-    { id: 'end', label: 'Sim to final', sub: 'The rest plays out instantly with your current plan and rotation.' },
+    { id: 'end', label: 'Sim to final', sub: 'The rest plays out at once, with your plan and rotation as they are.' },
   ];
 }

@@ -3,10 +3,13 @@ import type { DrawnPlayer } from './drawn';
 import { PlayerLine } from './MyPlayer';
 import { HACK_BELOW, hackThreshold } from './pills';
 import { PLAYER_D_META, hacks, startHacking, stopHacking } from '../../core/sim/tactics';
+import { Help } from '../components/ui';
+import { Term } from '../components/Glossary';
 
 /**
- * One of their players on the floor: his line tonight, his free throws, and the shortcuts to go after
- * him (or stop): Hack-a, deny or double him, how to guard him, attack the man he guards.
+ * One of their players: his line tonight and his free throws, and the ways to go after him or stop
+ * him: a Hack-a, deny or double him (the star plan), how his defender plays him, and attacking the
+ * man he guards. Everything goes through your tactics, so the game's journal keeps it.
  */
 export function OppPlayer({
   p,
@@ -41,34 +44,19 @@ export function OppPlayer({
   return (
     <div className="ps">
       <PlayerLine p={p} />
-      <div className="small">
-        Free throws: <b>{ft}%</b> shooter
-        {p.fta > 0 ? (
-          <span className="dim">
-            {' '}
-            · {p.ftm}/{p.fta} tonight
-          </span>
-        ) : null}
-        .
-      </div>
-      {hacking ? (
-        <button className="btn block" onClick={() => apply((t) => stopHacking(t.manage))}>
-          Stop the Hack-a
-        </button>
-      ) : p.ftPct < HACK_BELOW ? (
-        <>
-          <button className="btn primary block" onClick={() => apply((t) => startHacking(t.manage, hackThreshold(p.ftPct), q))}>
-            Hack-a-{name}
-          </button>
-          <div className="tiny dim">
-            Your defense fouls him away from the ball whenever he's on the floor
-            {clock < 120 ? ', from the next period: not in the last two minutes of one' : ' (not in the last two minutes of a period)'}.
-          </div>
-        </>
-      ) : (
-        <div className="tiny dim">At {ft}% from the line he's no Hack-a target: fouling him gives away points.</div>
-      )}
-      {
+
+      <div className="ps-blk">
+        <div className="over">
+          Stop him
+          <Help title="Deny or double">
+            <p>
+              <b>Deny:</b> face-guard him: fewer touches, a tired defender.
+            </p>
+            <p>
+              <b>Double:</b> send a second defender when he attacks: make the others beat you.
+            </p>
+          </Help>
+        </div>
         <div className="row" style={{ gap: 8 }}>
           {(['deny', 'double'] as const).map((plan) => (
             <button
@@ -87,30 +75,61 @@ export function OppPlayer({
             </button>
           ))}
         </div>
-      }
-      {
-        <>
-          <div className="ps-blk">
-            <div className="over">Guard him</div>
-            <div className="chips" role="group" aria-label={`How to guard ${name}`}>
-              {PLAYER_DEFENSES.map((d) => (
-                <button key={d} className={`chip ${how === d ? 'on' : ''}`} aria-pressed={how === d} title={PLAYER_D_META[d].help} onClick={() => setHow(d)}>
-                  {PLAYER_D_META[d].label}
-                </button>
-              ))}
-            </div>
-            <div className="tiny dim">{how ? PLAYER_D_META[how].help : 'Straight up. Tap an instruction for his defender; tap it again to take it off.'}</div>
-          </div>
-          <button className={`btn block ${hunting ? 'primary' : ''}`} aria-pressed={hunting} onClick={() => apply((t) => void (t.offense.huntTarget = hunting ? null : p.pid))}>
-            {hunting ? `Attacking ${name}: stop` : `Attack ${name}`}
+      </div>
+
+      <div className="ps-blk">
+        <div className="over">Guard him</div>
+        <div className="chips" role="group" aria-label={`How to guard ${name}`}>
+          {PLAYER_DEFENSES.map((d) => (
+            <button key={d} className={`chip ${how === d ? 'on' : ''}`} aria-pressed={how === d} title={PLAYER_D_META[d].help} onClick={() => setHow(d)}>
+              {PLAYER_D_META[d].label}
+            </button>
+          ))}
+        </div>
+        <div className="tiny dim">{how ? PLAYER_D_META[how].help : 'Straight up. Tap one for his defender; again to take it off.'}</div>
+      </div>
+
+      <div className="ps-blk">
+        <div className="over">
+          Attack his man
+          <Help title="Attacking a defender">
+            <p>Your isolations, post-ups and ball screens go at the player he guards while he plays, at some cost in ball movement.</p>
+            <p>Worth it against a weak defender, costly against a good one.</p>
+          </Help>
+        </div>
+        <button className={`btn block ${hunting ? 'primary' : ''}`} aria-pressed={hunting} onClick={() => apply((t) => void (t.offense.huntTarget = hunting ? null : p.pid))}>
+          {hunting ? `Attacking ${name}` : `Attack ${name}`}
+        </button>
+      </div>
+
+      <div className="ps-blk">
+        <div className="over">
+          <Term id="hack">Hack-a</Term>
+        </div>
+        <div className="small">
+          <b className="num">{ft}%</b> from the line
+          {p.fta > 0 ? (
+            <span className="dim num">
+              {' '}
+              · {p.ftm}/{p.fta} tonight
+            </span>
+          ) : null}
+        </div>
+        {hacking ? (
+          <button className="btn block" onClick={() => apply((t) => stopHacking(t.manage))}>
+            Stop the Hack-a
           </button>
-          <div className="tiny dim">
-            {hunting
-              ? 'Your isolations, post-ups and ball screens go at the player he guards while he plays, at some cost in ball movement.'
-              : 'Run isolations, post-ups and ball screens at the player he guards while he plays: worth it against a weak defender, costly against a good one.'}
-          </div>
-        </>
-      }
+        ) : p.ftPct < HACK_BELOW ? (
+          <>
+            <button className="btn block" onClick={() => apply((t) => startHacking(t.manage, hackThreshold(p.ftPct), q))}>
+              Hack-a-{name}
+            </button>
+            <div className="tiny dim">Fouled away from the ball whenever he plays{clock < 120 ? ', from the next period' : ''} (never in a period&apos;s last two minutes).</div>
+          </>
+        ) : (
+          <div className="tiny dim">At {ft}% he&apos;s no target: fouling him gives away points.</div>
+        )}
+      </div>
     </div>
   );
 }

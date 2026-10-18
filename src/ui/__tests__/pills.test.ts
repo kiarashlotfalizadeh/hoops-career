@@ -1,9 +1,9 @@
-// The live game's quick pills: each one a real change, a pressed one
-// going back to the game plan, a Hack-a only when the engine would send that shooter to the line.
+// The live game's quick changes: a short curated row, each one a real change, a pressed one going
+// back to the game plan, a Hack-a only when the engine would send that shooter to the line.
 import { describe, expect, it } from 'vitest';
 import { defaultTactics, cloneTactics } from '../../core/sim/tactics';
 import type { Tactics } from '../../core/types';
-import { hackThreshold, livePills, type PillContext } from '../live/pills';
+import { hackThreshold, livePills, offPlan, resetToPlan, type PillContext } from '../live/pills';
 
 const ctx = (over: Partial<PillContext> = {}): PillContext => ({
   q: 2,
@@ -47,11 +47,20 @@ describe('live pills', () => {
     expect(on.manage.hackFromQ).toBe(2);
   });
 
-  it('offer every pill, the late-game fouls in the fourth', () => {
+  it('offer a short curated row, slowing it down instead of pushing only to protect a lead in the fourth', () => {
     const t = defaultTactics();
-    expect(ids(t, ctx({ q: 4 }))).toEqual(['push', 'slow', 'zone', 'pack', 'home', 'hot', 'press', 'crash', 'getback', 'deny', 'double', 'hack', 'trailing', 'up3']);
-    // the fouling rules are fourth-quarter business
-    expect(ids(t, ctx({ q: 2 }))).not.toContain('trailing');
+    expect(ids(t, ctx({ q: 4 }))).toEqual(['zone', 'push', 'pack', 'getback', 'deny', 'double', 'hack']);
+    expect(ids(t, ctx({ q: 4, margin: 6 }))).toEqual(['zone', 'slow', 'pack', 'getback', 'deny', 'double', 'hack']);
+    // a lead earlier on: still push
+    expect(ids(t, ctx({ q: 2, margin: 6 }))).toContain('push');
+    // never more than seven
+    expect(livePills(t, t, ctx({ q: 4 })).length).toBeLessThanOrEqual(7);
+    // the one in effect stays on offer, pressed, whatever the score
+    const fast = press(t, t, ctx(), 'push');
+    expect(livePills(fast, t, ctx({ q: 4, margin: 6 })).find((p) => p.id === 'push')!.on).toBe(true);
+    const slow = press(t, t, ctx({ q: 4, margin: 6 }), 'slow');
+    expect(slow.offense.pace).toBe(20);
+    expect(livePills(slow, t, ctx({ q: 1, margin: -4 })).find((p) => p.id === 'slow')!.on).toBe(true);
   });
 
   it('change something, and pressed go back to the game plan', () => {
@@ -85,12 +94,14 @@ describe('live pills', () => {
     expect(ids(t, ctx({ oppOn: [{ pid: 1, name: 'Shooter', ftPct: 0.88 }] }))).not.toContain('hack');
   });
 
-  it('offer a reset only once the tactics differ from the game plan, and the reset gets them back', () => {
+  it('know when the tactics are off the game plan, and the reset gets them back', () => {
     const plan = defaultTactics();
-    expect(ids(plan, ctx())).not.toContain('reset');
+    expect(offPlan(plan, plan)).toBe(false);
     const t = press(press(plan, plan, ctx(), 'push'), plan, ctx(), 'pack');
     t.defense.matchups = { 7: 3 };
-    const back = press(t, plan, ctx(), 'reset');
+    expect(offPlan(t, plan)).toBe(true);
+    const back = cloneTactics(t);
+    resetToPlan(back, plan);
     expect(back).toEqual(plan);
   });
 });

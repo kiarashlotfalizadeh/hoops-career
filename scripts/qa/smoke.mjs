@@ -106,13 +106,16 @@ try {
   await page
     .waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, tipoff, { timeout: 15_000 })
     .catch(() => fail.push(`live game clock never moved (${tipoff})`));
+  // the live game's playback controls come up with a tap on the court
+  if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
   await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
   await page
     .locator('.sheet')
     .getByRole('button', { name: /Sim to final/ })
     .click();
   await page.getByRole('button', { name: /Game report/ }).waitFor({ timeout: 30_000 });
-  step(`coached a live game to the final (${await bug.getAttribute('aria-label')})`);
+  // (the final card takes the scorebug's place: its heading names the result)
+  step(`coached a live game to the final (${await page.locator('main h1').first().textContent()})`);
 
   await page.goto(`${base}/#/`);
   await clearMoments(page);
@@ -234,6 +237,8 @@ try {
     .catch(() => {});
   const start = await bug.getAttribute('aria-label', { timeout: 15_000 });
   await page.waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, start, { timeout: 15_000 }).catch(() => {});
+  // the live game's playback controls come up with a tap on the court
+  if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await page.waitForTimeout(2500);
   const left = await bug.getAttribute('aria-label');

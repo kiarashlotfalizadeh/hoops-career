@@ -81,9 +81,11 @@ await shot('18c-preview-sim', true);
 await page.goto(`${base}/#/live`);
 await page.waitForTimeout(6000);
 await shot('19-live');
-await page.getByRole('button', { name: 'Adjust' }).click();
+await page.getByRole('button', { name: 'Clipboard' }).click();
 await shot('20-live-plan');
 await page.keyboard.press('Escape');
+// the live game's playback controls come up with a tap on the court
+if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
 await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
 await page
   .locator('.sheet')
