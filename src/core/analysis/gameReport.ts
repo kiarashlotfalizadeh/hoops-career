@@ -440,7 +440,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const Y = teamRef(benefitUser ? ot : ut);
     factors.push({
       title: impactSentence(im.key, X, Y, names(league, im)),
-      detail: `Worth about ${im.pts.toFixed(1)} points over ${im.count} play${im.count === 1 ? '' : 's'}.`,
+      // (the report leads the row with what it was worth)
+      detail: `Over ${im.count} play${im.count === 1 ? '' : 's'}.`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
       advice: benefitUser ? undefined : impactAdvice(im.key, tactics),
