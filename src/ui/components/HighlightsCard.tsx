@@ -11,6 +11,7 @@ import { jerseyColors } from '../teamColors';
 import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { teamPlayers } from '../../core/league/helpers';
 import { neutralSite } from '../../core/league/games';
+import { plural } from '../../core/format';
 import { Section } from './ui';
 import './gameday.css';
 
@@ -65,12 +66,10 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
       right={
         sc === null ? (
           <button className="btn sm" onClick={() => go(0)}>
-            <Play size={14} fill="currentColor" aria-hidden="true" /> Watch {scripts.length} play{scripts.length === 1 ? '' : 's'}
+            <Play size={14} fill="currentColor" aria-hidden="true" /> Watch {plural(scripts.length, 'play')}
           </button>
         ) : (
-          <span className="tiny dim">
-            {scripts.length} play{scripts.length === 1 ? '' : 's'}
-          </span>
+          <span className="tiny dim">{plural(scripts.length, 'play')}</span>
         )
       }
     >

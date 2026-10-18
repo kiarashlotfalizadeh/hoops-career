@@ -1,6 +1,7 @@
 import { memo, type CSSProperties } from 'react';
 import { Flame, Snowflake } from 'lucide-react';
 import type { GameManagement } from '../../core/types';
+import { plural } from '../../core/format';
 import { inkOn } from '../teamColors';
 import { foulLimit } from './alerts';
 import type { Drawn, DrawnPlayer } from './drawn';
@@ -66,7 +67,7 @@ export const OnCourt = memo(function OnCourt({
           const cold = !hot && isCold(p);
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
           // named by what it shows, number and name first ("7 Holmgren"), then the rest for a screen reader
-          const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a'}`;
+          const more = `: ${e}% energy, ${plural(p.fouls, 'foul')}, ${plural(p.pts, 'point')}${what}. ${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a'}`;
           const tone = p.energy < fat ? 'bad' : p.energy < fat + 0.15 ? 'warn' : 'good';
           return (
             <button

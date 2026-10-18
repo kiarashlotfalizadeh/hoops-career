@@ -8,6 +8,7 @@ import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
 import { atoLabel } from '../../core/sim/sets';
 import { wpText } from '../../core/analysis/winProb';
+import { plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
 import { More, Section, Statline } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
@@ -199,9 +200,7 @@ export function Break({
                     <div className="small num">
                       <span className={tired ? 'warn' : 'dim'}>{Math.round(energy * 100)}% energy</span>
                       <span className="dim"> · </span>
-                      <span className={fouls ? 'warn' : 'dim'}>
-                        {p.fouls} foul{p.fouls === 1 ? '' : 's'}
-                      </span>
+                      <span className={fouls ? 'warn' : 'dim'}>{plural(p.fouls, 'foul')}</span>
                     </div>
                   </div>
                   {sub !== undefined ? (

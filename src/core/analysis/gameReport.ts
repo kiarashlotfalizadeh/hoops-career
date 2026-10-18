@@ -7,6 +7,7 @@ import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
 import { shortName, wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
+import { plural } from '../format';
 
 export interface Factor {
   title: string;
@@ -398,7 +399,7 @@ export function setLines(res: Pick<GameResult, 'sets'>, side: 0 | 1): SetLine[] 
 
 /** "3 runs, 0.67 PPP, read by the 3rd". */
 export function setLineText(l: SetLine): string {
-  return `${l.runs} run${l.runs === 1 ? '' : 's'}, ${l.ppp.toFixed(2)} PPP${l.readAt ? `, read by the ${nth(l.readAt)}` : ''}`;
+  return `${plural(l.runs, 'run')}, ${l.ppp.toFixed(2)} PPP${l.readAt ? `, read by the ${nth(l.readAt)}` : ''}`;
 }
 
 export interface ReportOptions {
@@ -441,7 +442,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     factors.push({
       title: impactSentence(im.key, X, Y, names(league, im)),
       // (the report leads the row with what it was worth)
-      detail: `Over ${im.count} play${im.count === 1 ? '' : 's'}.`,
+      detail: `Over ${plural(im.count, 'play')}.`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
       advice: benefitUser ? undefined : impactAdvice(im.key, tactics),
