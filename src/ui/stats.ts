@@ -148,12 +148,8 @@ export const signed = (v: number, d = 1) => {
   const s = fixed(v, d);
   return Number(s) > 0 ? `+${s}` : s;
 };
-/** 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th ... 21st, 22nd, 101st, 111th. */
-export const ordinalSuffix = (n: number) => {
-  const v = Math.abs(n) % 100;
-  return v >= 11 && v <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][v % 10] ?? 'th');
-};
-export const ordinal = (n: number) => `${n}${ordinalSuffix(n)}`;
+// (ordinals live with the game's other formats, in core/format.ts)
+export { ordinal, ordinalSuffix } from '../core/format';
 /** Q1..Q4, then OT, 2OT, 3OT. */
 export const periodLabel = (q: number) => (q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`);
 /**

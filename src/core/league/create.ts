@@ -19,6 +19,7 @@ import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './he
 import { teamStrategyUpdate } from './aiTrades';
 import { fillRosters, trimRosters } from './freeAgency';
 import { ratingMeans, ratingSpreads } from './progression';
+import { injuryName } from '../format';
 
 export interface SeedPlayer {
   id: string;
@@ -533,7 +534,7 @@ function applySeedInjuries(league: League, seed: SeedData) {
       if (inj.returnDay > last) games += Math.min(28, Math.round((inj.returnDay - last) / 2.5));
     }
     if (games <= 0) continue;
-    p.injury = { type: inj.type, gamesRemaining: games, gamesTotal: games, severity: inj.severity };
+    p.injury = { type: injuryName(inj.type), gamesRemaining: games, gamesTotal: games, severity: inj.severity };
     p.injuryCount++;
   }
 }
