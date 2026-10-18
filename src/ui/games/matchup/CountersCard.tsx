@@ -1,7 +1,8 @@
 // The Plan's counters: what the staff would change against this team, each with exactly what it
-// changes in the Tactics screen's words, why, and the numbers behind it. Test runs every one through
-// the same Lab games against your plan now and ranks them in place, each with its change in net
-// rating and that change's range; Add puts one in the plan, Always in your tactics for every game.
+// changes in the Tactics screen's words, why, and the numbers behind it. Run plays every one through
+// the same Lab games against your plan now (Run, as the Lab's own button) and ranks them in place,
+// each with its change in net rating and that change's range; Add puts one in the plan, Always in
+// your tactics for every game.
 import { useState } from 'react';
 import { ChevronDown, Play } from 'lucide-react';
 import { applyPatch, type Candidate, type CandidateResult, type LabSummary } from '../../../core/ai/lab';
@@ -38,7 +39,8 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
   const sig = JSON.stringify(now);
   const inPlan = new Set(planFor(league, opp)?.items.map((it) => it.id));
   const lab = useLabRunner();
-  const [games, setGames] = useState(40);
+  // games each counter (and the plan now) plays: the chips say what runs
+  const [games, setGames] = useState(30);
   const [test, setTest] = useState<CounterTest | null>(null);
   const [all, setAll] = useState(false);
   const them = league.teams[opp];
@@ -49,7 +51,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       ensureRotation(l, user);
       ensureRotation(l, opp);
     });
-    const n = Math.max(20, Math.round(games * 0.75));
+    const n = games;
     // each counter plays as the plan would play it: in place of the plan's item in its group
     const tested: Candidate[] = cands.map((c) => ({ ...c, patch: toTactics(tacticsWithCounter(league, opp, c)) }));
     const byId = new Map(cands.map((c) => [c.id, c]));
@@ -84,7 +86,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
             replaces any item of the same kind in your plan.
           </p>
           <p>
-            Test plays each one through the same Lab games against your plan now and ranks them by the change in <Term id="ortg">net rating</Term> (points per 100 possessions). A
+            Run plays each one through the same Lab games against your plan now and ranks them by the change in <Term id="ortg">net rating</Term> (points per 100 possessions). A
             counter is only called better or worse when its change clears its <Term id="range">± range</Term>; with several tested at once the range is wider, so one that changes
             nothing rarely looks like a win. More games, tighter ranges.
           </p>
@@ -94,16 +96,16 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       <div className="card flush list">
         {cands.length > 0 || shown ? (
           <div className="mu-run">
-            <span className="over">Games</span>
+            <span className="over">Games each</span>
             <Chips
-              label="Games to simulate"
+              label="Games each counter plays"
               value={games}
               onChange={setGames}
               disabled={lab.busy}
               options={[
                 { id: 20, label: '20' },
-                { id: 40, label: '40' },
-                { id: 100, label: '100' },
+                { id: 30, label: '30' },
+                { id: 75, label: '75' },
               ]}
             />
             <span className="grow" />
@@ -111,9 +113,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
               className="btn sm primary"
               onClick={() => void run()}
               disabled={lab.busy || simming || !cands.length}
-              aria-label={`Test the counters over ${games} games against the ${them.name}`}
+              aria-label={`Run each counter over ${games} games against the ${them.name}`}
             >
-              {lab.busy ? <Spinner /> : <Play size={14} fill="currentColor" />} Test all
+              {lab.busy ? <Spinner /> : <Play size={14} fill="currentColor" />} Run
             </button>
           </div>
         ) : null}
@@ -128,7 +130,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
               Your plan now: <b className="num">{p0(shown.base.winPct)}</b> wins, net <b className={`num ${shown.base.net >= 0 ? 'good' : 'bad'}`}>{signed(shown.base.net)}</b> over{' '}
               {shown.base.games} games. Each counter: change in net per 100, ± its range.
             </span>
-            {shown.sig !== sig && <span className="warn">Your plan has changed since: test again for numbers against it.</span>}
+            {shown.sig !== sig && <span className="warn">Your plan has changed since: run again for numbers against it.</span>}
           </div>
         )}
         {!list.length && <div className="mu-empty">Your plan already covers what the staff sees.</div>}

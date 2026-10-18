@@ -53,8 +53,8 @@ export function CompareResult({ before, after, league }: { before: LabSummary; a
         <Statline
           items={[
             { k: 'Win %', v: p0(after.winPct), s: `was ${p0(before.winPct)}` },
-            { k: 'Off rtg', v: f1(after.ortg), s: signed(after.ortg - before.ortg) },
-            { k: 'Def rtg', v: f1(after.drtg), s: signed(after.drtg - before.drtg) },
+            { k: 'ORtg', v: f1(after.ortg), s: signed(after.ortg - before.ortg) },
+            { k: 'DRtg', v: f1(after.drtg), s: signed(after.drtg - before.drtg) },
           ]}
         />
       </section>
@@ -64,7 +64,7 @@ export function CompareResult({ before, after, league }: { before: LabSummary; a
           <CompareBar label="3PA rate" a={before.shot.threeRate * 100} b={after.shot.threeRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
           <CompareBar label="Rim rate" a={before.shot.rimRate * 100} b={after.shot.rimRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
           <CompareBar label="Opp eFG%" a={before.oppShot.efg * 100} b={after.oppShot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" higherBetter={false} />
-          <CompareBar label="Opp turnover %" a={before.oppShot.tov * 100} b={after.oppShot.tov * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
+          <CompareBar label="Opp TOV%" a={before.oppShot.tov * 100} b={after.oppShot.tov * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
         </div>
       </Section>
       <Section title="Play types" right={<span className="tiny dim">share · pts/poss</span>}>
@@ -116,7 +116,7 @@ export function CompareResult({ before, after, league }: { before: LabSummary; a
           </div>
         </Section>
       )}
-      <Section title="Touches" right={<span className="tiny dim">usage · pts</span>}>
+      <Section title="Touches" right={<span className="tiny dim">usage · PTS a game</span>}>
         <div className="card flush list">
           {players.map(({ p, a, b }) => (
             <div key={p.pid} className="lab-tr c3">
@@ -124,7 +124,7 @@ export function CompareResult({ before, after, league }: { before: LabSummary; a
               <span className="num dim2 nowrap">
                 {b ? p1(b.usg) : '—'} → {p1(a.usg)}
               </span>
-              <span className="num">{f1(a.pts)} pts</span>
+              <span className="num">{f1(a.pts)}</span>
             </div>
           ))}
         </div>

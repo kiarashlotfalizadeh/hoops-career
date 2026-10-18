@@ -41,7 +41,7 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
       }
     >
       <div className="mu-group">
-        <div className="tiny dim">Their rotation by perimeter defense (40-99), weakest first · ★ the staff&apos;s pick</div>
+        <div className="tiny dim">Their rotation by perimeter defense (40-99), weakest first{pick?.worth ? ' · ★ the staff’s pick' : ''}</div>
         <Chips
           label="Defender to attack"
           value={target ?? -1}

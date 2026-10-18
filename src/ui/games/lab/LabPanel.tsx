@@ -119,9 +119,9 @@ export function LabPanel({
             : 'Your tactics before and after an edit, through the same games.')}
       </div>
       <div className="lab-run">
-        <span className="over">Games</span>
+        <span className="over">Games to run</span>
         <Chips
-          label="Games to simulate"
+          label="Games to run"
           value={games}
           onChange={setGames}
           disabled={busy}
