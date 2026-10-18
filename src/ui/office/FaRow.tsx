@@ -51,10 +51,10 @@ export function FaRow({
       <div className="grow">
         <div className="fo-prow-name">
           <span className="fo-name">{playerName(p)}</span>
-          {p.injury && <span className="fo-flag bad">{outTag(p)}</span>}
         </div>
-        {(bid || w || rfa) && (
+        {(bid || w || rfa || p.injury) && (
           <div className="fo-prow-tags">
+            {p.injury && <span className="tag bad">{outTag(p)}</span>}
             {rfa && <span className={`tag ${rfa.tone}`}>{rfa.label}</span>}
             {bid && <span className="tag info">Bidding · {bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}</span>}
             {w && <span className="tag warn">On waivers · clears {wDays > 1 ? `in ${wDays} days` : wDays === 1 ? 'tomorrow' : 'today'}</span>}

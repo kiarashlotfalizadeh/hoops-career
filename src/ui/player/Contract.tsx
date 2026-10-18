@@ -60,7 +60,7 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
                 { k: 'Salary', v: salaryText(league, sal), s: shortSeason(salSeason) },
                 {
                   // when it ends as every desk says it ("thru 30-31 PO", "expiring"), an extension's seasons included
-                  k: 'Contract',
+                  k: 'Ends',
                   v: contractEnd(league, p, salSeason),
                   s: extStart !== null ? 'extended' : openOption(league, p) ? `${openOption(league, p)} option` : rookieScaleDeal(p) ? 'rookie scale' : undefined,
                 },

@@ -70,7 +70,7 @@ export function OnTheClock({
       <div className="fo-clock-over">
         <span className="fo-live">On the clock</span>
         <span>
-          Round {np.round} · Pick {np.pick}
+          {np.round === 1 ? '1st' : '2nd'} round · pick {np.pick}
         </span>
       </div>
       <div className="fo-clock-main">

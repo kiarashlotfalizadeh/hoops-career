@@ -531,7 +531,8 @@ function Desks({ league }: { league: League }) {
               : thisDraft.every((d) => !d.pick && proj(d) === undefined)
                 ? `${plural(thisDraft.length, 'pick')} this year`
                 : `${draftNight ? 'You pick' : thisDraft.some((d) => !d.pick) ? 'Your picks project' : 'Your picks:'} ${picksText(league, thisDraft, proj)}`,
-            draftNight ? '' : `${prospectsN} prospects`,
+            // (the picks say enough when there are some: the prospects count stands in when there aren't)
+            draftNight || thisDraft.some((d) => d.pick || proj(d) !== undefined) ? '' : `${prospectsN} prospects`,
           ]
             .filter(Boolean)
             .join(' · '),

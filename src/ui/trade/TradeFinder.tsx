@@ -165,10 +165,11 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                     <div className="fo-prow-name">
                       <TeamLogo tid={p.tid} size={16} decorative />
                       <span className="fo-name">{playerName(p)}</span>
-                      {p.injury && <span className="fo-flag bad">{outTag(p)}</span>}
                     </div>
                     <div className="fo-meta fo-wrap">
                       <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
+                      {/* (the name line keeps its room for the full name: an injury leads the details) */}
+                      {p.injury && <span className="bad bold">{outTag(p)} · </span>}
                       {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
                     </div>
                   </div>
