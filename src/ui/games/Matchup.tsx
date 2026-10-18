@@ -22,6 +22,7 @@ import { slabVars } from '../teamColors';
 import { ordinal } from '../stats';
 import { useBack } from '../nav';
 import { TabBar, useQueryParam } from '../league/shared';
+import { plural } from '../../core/format';
 import { liveSeries, meetings, planStatus } from './data';
 import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
@@ -188,10 +189,17 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
         )}
         {h2h.total > 0 && (
           <Fact k="Season">
-            <span className="num">
-              {h2h.won}-{h2h.lost}
-            </span>
-            {h2h.left > 0 ? ` · ${h2h.left} left` : ''}
+            {/* (no record before the first meeting: just how many there are) */}
+            {h2h.games.length ? (
+              <>
+                <span className="num">
+                  {h2h.won}-{h2h.lost}
+                </span>
+                {h2h.left > 0 ? ` · ${h2h.left} left` : ''}
+              </>
+            ) : (
+              plural(h2h.total, 'meeting')
+            )}
             {last && (
               <>
                 {' · last '}
