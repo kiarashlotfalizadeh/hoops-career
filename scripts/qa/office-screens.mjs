@@ -183,9 +183,25 @@ if (stage === 'all') {
     await page.waitForTimeout(600);
     await shot('s07-draft-after-pick');
   }
-  // the staff make the rest of your picks (from the Play menu, on the clock or not), then re-signing opens
-  await go('/');
-  for (let i = 0; i < 3 && (await play(/Auto-draft the rest/)); i++) await waitSim();
+  // the rest of the draft from its own screen: the staff's pick whenever you're on the clock, else
+  // "Auto-draft the rest" (confirmed while you hold a pick), until it's over and re-signing opens
+  const button = (name) => page.getByRole('button', { name }).first();
+  const inDraft = (phase) => /NBA Draft/.test(phase ?? '');
+  for (let i = 0; i < 12 && inDraft(await page.locator('.topbar').first().getAttribute('data-phase')); i++) {
+    await go('/office/draft');
+    await waitSim();
+    await page.waitForTimeout(600);
+    await clearMoments(page);
+    if (await button(/Continue to re-signing/).count()) await button(/Continue to re-signing/).click();
+    else if (await button(/Take the staff's pick/).count()) await button(/Take the staff's pick/).click();
+    else if (await button(/Auto-draft the rest/).count()) {
+      await button(/Auto-draft the rest/).click();
+      await page.waitForTimeout(400);
+      if (await page.locator('.sheet').getByRole('button', { name: 'Auto-draft the rest' }).count())
+        await page.locator('.sheet').getByRole('button', { name: 'Auto-draft the rest' }).click();
+    } else break;
+    await waitSim();
+  }
   await page.waitForTimeout(800);
   await go('/office/resign');
   await shot('s08-resign', true);
