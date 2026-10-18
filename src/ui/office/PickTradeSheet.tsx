@@ -5,9 +5,9 @@
 import { Check, Ticket } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
 import { playerName, sentence } from '../../core/league/helpers';
-import { continueDraft } from '../../core/league/season';
-import { evaluateTrade, executeTrade, makeItWork, pickLabel, type TradeOffer } from '../../core/league/trades';
-import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { makeItWork, pickLabel, type TradeOffer } from '../../core/league/trades';
+import { useLeague, useLeagueMemo } from '../../state/store';
+import { makeTrade, useBusy } from '../../state/actions/office';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, Ovr, Sheet } from '../components/ui';
 import { overallPick } from '../league/shared';
@@ -15,21 +15,8 @@ import { STRATEGY_META } from './common';
 import { blockOffers } from './tradeBlock';
 
 /** Make the deal (checked again first) and let the draft carry on. */
-function take(offer: TradeOffer, onDone: () => void) {
-  let msg = '';
-  let ok = false;
-  useStore.getState().mutate((l) => {
-    const ev = evaluateTrade(l, offer);
-    if (!ev.accept) {
-      msg = ev.message;
-      return;
-    }
-    executeTrade(l, offer);
-    continueDraft(l);
-    ok = true;
-  });
-  useStore.getState().toast(ok ? 'Trade done.' : msg, ok ? 'good' : 'bad');
-  if (ok) onDone();
+function take(league: League, offer: TradeOffer, onDone: () => void) {
+  if (makeTrade(league, offer, 'The draft-day trade')) onDone();
 }
 
 export function PickTradeSheet({ dpid, onClose }: { dpid: number | null; onClose: () => void }) {
@@ -46,6 +33,7 @@ export function PickTradeSheet({ dpid, onClose }: { dpid: number | null; onClose
 
 /** What the team holding the pick wants for it. */
 function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDone: () => void }) {
+  const busy = useBusy();
   const ask = useLeagueMemo(
     () => makeItWork(league, { a: { tid: league.userTid, pids: [], dpids: [] }, b: { tid: dp.tid, pids: [], dpids: [dp.dpid] } }),
     [league, dp.tid, dp.dpid],
@@ -74,7 +62,7 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
           <div className="card flush">
             <Assets league={league} side={ask.offer.a} />
           </div>
-          <button className="btn good block" onClick={() => take(ask.offer, onDone)}>
+          <button className="btn good block" disabled={busy} onClick={() => take(league, ask.offer, onDone)}>
             <Check size={16} /> Accept: get {pickLabel(league, dp)}
           </button>
         </>
@@ -85,6 +73,7 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
 
 /** Each team's best package for the user's pick (trading down). */
 function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDone: () => void }) {
+  const busy = useBusy();
   const offers = useLeagueMemo(() => blockOffers(league, { pids: [], dpids: [dp.dpid] }), [league, dp.dpid]);
   if (!offers.length) return <Empty>No team has a package for {pickLabel(league, dp)} right now.</Empty>;
   return (
@@ -103,7 +92,7 @@ function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDo
                 <span className="tiny dim num">{o.targetValue > 0 ? `${Math.round((o.myValue / o.targetValue) * 100)}% of its value` : ''}</span>
               </div>
               <Assets league={league} side={o.offer.b} />
-              <button className="btn sm good block" onClick={() => take(o.offer, onDone)}>
+              <button className="btn sm good block" disabled={busy} onClick={() => take(league, o.offer, onDone)}>
                 <Check size={15} /> Accept
               </button>
             </div>

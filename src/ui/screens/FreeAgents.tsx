@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FastForward, Gavel, Lock, SkipForward } from 'lucide-react';
+import { FastForward, Gavel, Lock, Play, SkipForward } from 'lucide-react';
 import type { Player, Pos } from '../../core/types';
 import { FREE_AGENT, POSITIONS } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
@@ -24,18 +24,21 @@ import {
   wantsTwoWay,
 } from '../../core/league/contracts';
 import { bidHolds, capPayroll, offerRoute, signingClosedReason, userExceptionRoom, userTwoWayOffer, withdrawBid } from '../../core/league/freeAgency';
-import { FA_DAYS, faDayNumber, faOver } from '../../core/league/season';
+import { FA_DAYS, faDayNumber, faOver, newSeasonBlockedReason } from '../../core/league/season';
 import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
 import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, tenDayPay, tenDayUntil, wantsTenDay } from '../../core/league/tenDay';
 import { contractExp, playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { Bar, Chips, Empty, PageHeader, Section, Sheet, Statline } from '../components/ui';
+import { settle, useBusy } from '../../state/actions/office';
+import { useFlowRunner } from '../useFlow';
+import { Bar, Chips, Empty, More, PageHeader, Section, Sheet, Statline } from '../components/ui';
 import { Callout, HelpSheet, Line, OvrPot, PlayerHead, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { MyRfas, MySheets, rfaTag } from '../office/RfaPanel';
 import { TenDaySheet } from '../office/TenDayPanel';
 import { FilterSelect } from '../trade/TradeFinder';
 import { MATCH_DAYS, SHEET_MIN_YEARS, pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
+import { agendaBlocker } from '../../core/league/agenda';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
 
@@ -84,13 +87,7 @@ export default function FreeAgents() {
     setWaiverSel(null);
     if (params.has('offer')) setParams({}, { replace: true });
   };
-  const withdraw = (pid: number) => {
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = withdrawBid(l, pid);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
-  };
+  const withdraw = (pid: number) => settle('Withdrawing your offer', (l) => withdrawBid(l, pid), 'neutral');
   const fa = league.phase === 'freeAgency';
 
   const all = useLeagueMemo(
@@ -139,7 +136,7 @@ export default function FreeAgents() {
       }
     });
 
-  const busy = useStore((st) => !!st.sim);
+  const busy = useBusy();
   const over = faOver(league);
   const advance = async (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
@@ -188,12 +185,18 @@ export default function FreeAgents() {
         .reverse()
     : [];
   const sheetWaiting = restrictedFreeAgents(league, tid).some((p) => p.rfa!.sheet);
+  // the market's last day: the new season is next (the Continue bar's words)
+  const runFlow = useFlowRunner();
+  const newSeasonLabel = `Start ${seasonLabel(league.season + 1)} season`;
+  const seasonBlocked = fa && over ? newSeasonBlockedReason(league) : null;
+  // a decision the league waits on (an offer sheet on your restricted free agent) holds the calendar, as it holds the Continue bar
+  const held = fa ? agendaBlocker(league) : null;
 
   return (
     <main className="page fo-page">
       <PageHeader
         title="Free Agents"
-        sub={`${all.length} available · deals from ${seasonLabel(s)}`}
+        sub={`${all.length} available`}
         back
         right={
           <HelpSheet title="How free agency works">
@@ -286,7 +289,7 @@ export default function FreeAgents() {
               k: 'Roster',
               v: `${n}/${max}`,
               color: n >= max ? 'var(--bad)' : n > CAP.rosterMax ? 'var(--warn)' : undefined,
-              s: `${n >= max ? 'full' : n > CAP.rosterMax ? `${n - CAP.rosterMax} to cut` : `${max - n} open`} · ${tw}/${TWO_WAY_MAX} 2W`,
+              s: n >= max ? 'full' : n > CAP.rosterMax ? `${n - CAP.rosterMax} to cut` : `${max - n} open`,
             },
             {
               k: 'Exception',
@@ -310,21 +313,7 @@ export default function FreeAgents() {
           <div className="card fo-market">
             <Bar value={faDayNumber(league)} max={FA_DAYS} />
             <div className="small dim2">
-              {over ? (
-                'The market is winding down. Start the new season from the Play button when your roster is set.'
-              ) : sheetWaiting ? (
-                <span className="warn">An offer sheet on your restricted free agent waits for your call: the market moves a day at a time until then.</span>
-              ) : (
-                'AI teams make offers daily. Players who wait may lower their price.'
-              )}
-            </div>
-            <div className="row">
-              <button className="btn sm grow" disabled={over || busy} onClick={() => void advance(1)}>
-                <SkipForward size={16} /> Next day
-              </button>
-              <button className="btn sm grow" disabled={over || busy} onClick={() => void advance(7)}>
-                <FastForward size={16} /> Advance a week
-              </button>
+              {over ? 'The market is winding down.' : sheetWaiting ? <span className="warn">An offer sheet waits for your call.</span> : 'Players who wait lower their price.'}
             </div>
             <MySheets onOpen={setSel} />
             {bids.length > 0 && (
@@ -340,7 +329,7 @@ export default function FreeAgents() {
                         <b>{playerName(bp)}</b> · {b.years} yr{b.years > 1 ? 's' : ''} · {fmtM(b.amount)}
                         <span className="dim"> · {b.decideDay > league.faDay ? `decides day ${b.decideDay + 1}` : 'decides at the close'}</span>
                       </button>
-                      <button className="btn xs" aria-label={`Withdraw your offer to ${playerName(bp)}`} onClick={() => withdraw(b.pid)}>
+                      <button className="btn xs" disabled={busy} aria-label={`Withdraw your offer to ${playerName(bp)}`} onClick={() => withdraw(b.pid)}>
                         Withdraw
                       </button>
                     </div>
@@ -349,14 +338,13 @@ export default function FreeAgents() {
               </div>
             )}
             {recent.length > 0 && (
-              <div className="fo-pending">
-                <div className="over">Latest signings</div>
+              <More label="Latest signings">
                 <ul className="fo-notes">
                   {recent.map((x) => (
                     <li key={x.id}>{x.text}</li>
                   ))}
                 </ul>
-              </div>
+              </More>
             )}
           </div>
         </Section>
@@ -538,6 +526,26 @@ export default function FreeAgents() {
         </div>
       )}
 
+      {fa && (
+        <div className={`fo-dock ${over ? 'fo-dock-go' : 'fo-dock-days'}`}>
+          {over ? (
+            <button className="btn primary block big" disabled={busy || !!seasonBlocked} onClick={() => void runFlow({ id: 'new', label: newSeasonLabel, cmd: 'newSeason' })}>
+              <Play size={18} fill="currentColor" /> {newSeasonLabel}
+            </button>
+          ) : (
+            <div className="grid2">
+              <button className="btn primary" disabled={busy || !!held} onClick={() => void advance(1)}>
+                <SkipForward size={17} /> Advance 1 day
+              </button>
+              <button className="btn" disabled={busy || !!held} onClick={() => void advance(7)}>
+                <FastForward size={17} /> Advance 1 week
+              </button>
+            </div>
+          )}
+          {(held || (over && seasonBlocked)) && <div className="tiny warn fo-dock-why">{held ? `${held.title.replace(/\?$/, '')} first.` : seasonBlocked}</div>}
+        </div>
+      )}
+
       <ContractSheet pid={sel} mode="fa" onClose={closeSheet} />
       <TwoWaySheet p={twoWaySel !== null ? league.players[twoWaySel] : undefined} onClose={() => setTwoWaySel(null)} />
       <TenDaySheet p={tenDaySel !== null ? league.players[tenDaySel] : undefined} onClose={() => setTenDaySel(null)} />
@@ -556,14 +564,9 @@ function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
     ? null
     : (signingClosedReason(league) ??
       (used >= TWO_WAY_MAX ? `All ${TWO_WAY_MAX} two-way slots are taken.` : !wantsTwoWay(league, p, league.userTid) ? `${p.lastName} wants a standard contract.` : null));
+  const busy = useBusy();
   const offer = () => {
-    if (!p) return;
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = userTwoWayOffer(l, p.pid);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-    if (res.ok) onClose();
+    if (p && settle('The two-way deal', (l) => userTwoWayOffer(l, p.pid))?.ok) onClose();
   };
   return (
     <Sheet open={open} onClose={onClose} title="Two-way offer">
@@ -587,7 +590,7 @@ function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
             <button className="btn grow" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn primary grow" disabled={!!blocked} onClick={offer}>
+            <button className="btn primary grow" disabled={!!blocked || busy} onClick={offer}>
               Offer two-way deal
             </button>
           </div>
@@ -607,14 +610,8 @@ function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
   const order = waiverOrder(league).filter((t) => t.tid !== w?.from);
   const rank = order.findIndex((t) => t.tid === tid) + 1;
   const days = w ? Math.max(0, w.until - league.day) : 0;
-  const claim = (on: boolean) => {
-    if (!p) return;
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = userClaim(l, p.pid, on);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-  };
+  const busy = useBusy();
+  const claim = (on: boolean) => p && settle(on ? 'The waiver claim' : 'Withdrawing the claim', (l) => userClaim(l, p.pid, on));
   return (
     <Sheet open={open} onClose={onClose} title="Waiver claim">
       {open && p && w && (
@@ -646,11 +643,11 @@ function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
               Close
             </button>
             {w.claim ? (
-              <button className="btn grow" onClick={() => claim(false)}>
+              <button className="btn grow" disabled={busy} onClick={() => claim(false)}>
                 Withdraw claim
               </button>
             ) : (
-              <button className="btn primary grow" disabled={!!blocked} onClick={() => claim(true)}>
+              <button className="btn primary grow" disabled={!!blocked || busy} onClick={() => claim(true)}>
                 Put in a claim
               </button>
             )}

@@ -1,21 +1,6 @@
-import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
-import {
-  ON_TRACK,
-  PAYROLL_SCALE,
-  PERSONALITY,
-  PROFIT_SCALE,
-  WIN_SCALE,
-  YOUNG_AGE,
-  currentGoals,
-  ownerPersonality,
-  ownerProgress,
-  planOwnerGoals,
-  resultText,
-  type GoalStatus,
-} from '../../core/league/ownerGoals';
+import { currentGoals } from '../../core/league/ownerGoals';
 import { seasonOutcome, useQueryParam } from '../league/shared';
-import { leagueForecast } from '../../core/analysis/odds';
-import { useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert } from 'lucide-react';
 import type { Team } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
@@ -33,21 +18,21 @@ import {
   profit,
   referencePrice,
 } from '../../core/league/finances';
-import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, Tag, Toggle, type Col } from '../components/ui';
-import { Callout, CenterBar, Gauge, HelpSheet, Line, PRACTICE, capSeason, fmtGrade, fmtM, fmtMs, isOffseason, ordinal, ownerVerdict, shortSeason } from '../office/common';
+import { useLeague } from '../../state/store';
+import { edit } from '../../state/actions';
+import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
+import { Callout, HelpSheet, Line, PRACTICE, capSeason, fmtM, fmtMs, isOffseason, ordinal, shortSeason } from '../office/common';
 
-type Tab = 'overview' | 'budget' | 'owner' | 'history';
+type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
 
 export default function Finances() {
   const league = useLeague();
-  const loc = useLocation();
-  const [tab, setTab] = useQueryParam<Tab>('tab', loc.pathname === '/office/owner' ? 'owner' : 'overview', ['overview', 'budget', 'owner', 'history']);
+  const [tab, setTab] = useQueryParam<Tab>('tab', 'overview', ['overview', 'budget', 'history']);
   const team = league.teams[league.userTid];
   return (
     <main className="page fo-page">
-      <PageHeader title={tab === 'owner' ? 'Owner' : 'Finances'} sub={`${team.region} ${team.name} · ${seasonLabel(league.season)}`} back />
+      <PageHeader title="Finances" back backTo="/office" />
       <Segmented
         tabs
         label="Finances sections"
@@ -56,13 +41,11 @@ export default function Finances() {
         options={[
           { id: 'overview', label: 'Overview' },
           { id: 'budget', label: 'Budget' },
-          { id: 'owner', label: 'Owner' },
           { id: 'history', label: 'History' },
         ]}
       />
       {tab === 'overview' && <Overview team={team} />}
       {tab === 'budget' && <BudgetTab team={team} />}
-      {tab === 'owner' && <OwnerTab />}
       {tab === 'history' && <HistoryTab team={team} />}
     </main>
   );
@@ -100,55 +83,49 @@ function Overview({ team }: { team: Team }) {
   return (
     <>
       <div className="card fo-capsheet">
-        <div className="fo-figs fo-figs-top">
+        <div className="fo-pay">
+          <div className="grow">
+            <div className="over">Cash</div>
+            <div className="fo-pay-v num" style={team.cash < 0 ? { color: 'var(--bad)' } : undefined}>
+              {fmtM(team.cash)}
+            </div>
+          </div>
+        </div>
+        {(games > 0 || ts.revenue > 0) && (
           <Statline
             items={[
-              { k: 'Cash', v: fmtM(team.cash), color: team.cash < 0 ? 'var(--bad)' : undefined, s: 'in the bank' },
               {
                 k: `Profit ${shortSeason(league.season)}`,
                 v: games || pr ? fmtMs(pr) : '—',
                 color: games || pr ? (pr >= 0 ? 'var(--good)' : 'var(--bad)') : undefined,
-                s: games ? `after ${games} games` : 'season not started',
+                s: games ? `${games} games` : 'not started',
               },
+              { k: 'Revenue', v: games || ts.revenue ? fmtM(ts.revenue) : '—' },
+              { k: 'Expenses', v: games || ts.expenses ? fmtM(ts.expenses) : '—' },
             ]}
           />
-          <Statline
-            items={[
-              { k: 'Revenue', v: games || ts.revenue ? fmtM(ts.revenue) : '—', s: 'gate, merch, media' },
-              { k: 'Expenses', v: games || ts.expenses ? fmtM(ts.expenses) : '—', s: 'payroll, staff, arena' },
-            ]}
-          />
-        </div>
+        )}
       </div>
 
-      <Section title="Attendance">
-        <div className="card fo-att">
-          <div className="fo-pay">
-            <div className="grow">
-              <div className="fo-pay-v num">{Math.round(attShown).toLocaleString()}</div>
-              <div className="tiny dim">
-                {homeGames ? 'a home game' : 'projected a game'} · capacity {ARENA_CAPACITY.toLocaleString()}
-              </div>
-            </div>
-            <div className="right">
-              <div className="fo-pay-v2 num">{full}%</div>
-              <div className="tiny dim">full</div>
-            </div>
-          </div>
-          <Bar value={Math.min(100, full)} height={8} />
-          <div className="fo-att-hype">
-            <span className="over">Hype</span>
-            <div className="grow">
-              <Bar value={team.hype * 100} color="var(--accent-2)" />
-            </div>
-            <span className="num bold">{Math.round(team.hype * 100)}</span>
-          </div>
-          <More label="What fills the arena">
-            <p className="small dim2">
+      <Section
+        title="Attendance"
+        right={
+          <HelpSheet title="What fills the arena">
+            <p>
               Winning, hype, market size, facilities and ticket price drive crowds. Hype rises with wins (playoff wins count double), falls with losses and drifts back toward
               average every offseason.
             </p>
-          </More>
+          </HelpSheet>
+        }
+      >
+        <div className="card fo-att">
+          <Statline
+            items={[
+              { k: homeGames ? 'A home game' : 'Projected', v: Math.round(attShown).toLocaleString(), s: `${full}% of ${ARENA_CAPACITY.toLocaleString()}` },
+              { k: 'Hype', v: Math.round(team.hype * 100), s: 'of 100' },
+            ]}
+          />
+          <Bar value={Math.min(100, full)} height={6} />
         </div>
       </Section>
 
@@ -224,10 +201,7 @@ function DeadMoney({ team, from }: { team: Team; from: number }) {
           );
         })}
       </div>
-      <div className="tiny dim">
-        Still owed to players you released: it counts against the cap and is paid like payroll until it runs out.
-        {any ? ' Stretched money is spread over twice the seasons left, plus one.' : ''}
-      </div>
+      <div className="tiny dim">Owed to players you released: on the cap and paid like payroll.{any ? ' Stretched: spread over twice the seasons left, plus one.' : ''}</div>
     </Section>
   );
 }
@@ -238,7 +212,7 @@ function BudgetTab({ team }: { team: Team }) {
   const league = useLeague();
   // a fired coach's old team isn't his to run
   const fired = !!league.fired;
-  const set = (fn: (t: Team) => void) => !fired && useStore.getState().mutate((l) => fn(l.teams[l.userTid]));
+  const set = (fn: (t: Team) => void) => !fired && edit((l) => fn(l.teams[l.userTid]));
   const rank = (k: BudgetKey) => 1 + league.teams.filter((t) => t.budget[k] > team.budget[k]).length;
   const avg = (k: BudgetKey) => league.teams.reduce((a, t) => a + t.budget[k], 0) / league.teams.length;
   const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
@@ -304,14 +278,14 @@ function BudgetTab({ team }: { team: Team }) {
     <>
       {fired && (
         <Callout tone="bad" icon={<TriangleAlert size={18} className="bad" />}>
-          <b>You've been fired.</b> Budgets, ticket prices and practice are no longer yours. Take over another team from Settings to keep your career going.
+          <b>You were fired.</b> These aren't yours to set.{' '}
+          <Link to="/office/career" className="bold accent-text">
+            Find a new job
+          </Link>
         </Callout>
       )}
       <Section title="Staff & facilities" right={<span className="fo-faday num">{fmtM(totalBudget)}/season</span>}>
-        <p className="fo-lede small">
-          Spending comes straight out of profit{profitGoal ? `, ${Math.round(profitGoal.weight * 100)}% of the owner's review this season` : ''}. Charged per game, so changes count
-          at once.
-        </p>
+        <div className="tiny dim">Out of profit, charged per game{profitGoal ? `: profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review` : ''}.</div>
         <div className="card flush list">
           {items.map((it) => {
             const lvl = team.budget[it.k];
@@ -347,8 +321,6 @@ function BudgetTab({ team }: { team: Team }) {
                   max={100}
                   onChange={(x) => set((t) => (t.budget[it.k] = x))}
                   format={(x) => `${fmtM(cost(x))}/season`}
-                  left="Bare bones"
-                  right="Best in league"
                   disabled={fired}
                 />
                 <div className={`small ${lvl > 50 ? 'good' : lvl < 50 ? 'warn' : 'dim2'}`}>{it.effect(lvl)}</div>
@@ -430,229 +402,6 @@ function BudgetTab({ team }: { team: Team }) {
     </>
   );
 }
-
-// ------------------------------------------------------------------ owner
-
-function OwnerTab() {
-  const league = useLeague();
-  const om = league.ownerMood;
-  const verdict = ownerVerdict(om.total);
-  const seasonsIn = seasonsInCharge(league);
-  const tid = league.userTid;
-  const who = PERSONALITY[ownerPersonality(league, tid)];
-  const og = currentGoals(league);
-  // before opening night: the goals the owner would set with today's roster
-  const provisional = useLeagueMemo(() => (!og && !league.fired && league.phase === 'preseason' ? planOwnerGoals(league, tid) : null), [league, og, tid]);
-  const shown = og ?? provisional ?? undefined;
-  // the wins projected as Home's odds line projects them
-  const progress = useLeagueMemo(() => ownerProgress(league, shown, og ? leagueForecast(league) : null), [league, shown, og]);
-  const reviews = [...(league.ownerReviews ?? [])].reverse();
-  // after the playoffs the season's review stands in for its progress
-  const review = og ? reviews.find((r) => r.season === og.season && r.tid === og.tid && r.goals.length) : undefined;
-  const past = reviews.filter((r) => r !== review);
-  const onTrack = progress.filter((p) => ON_TRACK.has(p.status)).length;
-  const scale = revenueScale(league);
-  const cap = CAP_FOR(league);
-  const rows: { k: string; how: string }[] = [
-    { k: 'Wins', how: `Each win above or below his target counts ${Math.round(100 / WIN_SCALE)} (±100 at ${WIN_SCALE} wins either way).` },
-    { k: 'Postseason', how: 'Reaching his goal is +30 and each round beyond it 30 more; each round short costs 35 (the play-in counts as one).' },
-    {
-      k: 'Profit',
-      how: `Every ${fmtM((PROFIT_SCALE * scale) / 10)} above or below his target counts 10 (±100 at ${fmtM(PROFIT_SCALE * scale)}). His budget is the season's revenue and costs at today's prices and payroll (and any shortfall under the salary floor), a little more for a roster that should win.`,
-    },
-    {
-      k: 'Payroll',
-      how: `Keeping it under his line is +15 (up to +30 with room to spare); going over costs 25, down to −100 at ${fmtM(PAYROLL_SCALE * cap.luxuryTax)} over.`,
-    },
-    { k: 'Development', how: `Minutes for players ${YOUNG_AGE} or under against his target: ±100 at half of it either way.` },
-  ];
-  return (
-    <>
-      {league.fired && (
-        <Callout tone="bad" icon={<TriangleAlert size={18} className="bad" />}>
-          <b>You've been fired.</b> Take over another team from Settings to keep your career going.
-        </Callout>
-      )}
-      <section className="card fo-ownerhero" aria-label="The owner">
-        <Gauge value={om.total} size={200} />
-        <div className="fo-ownerhero-v num" style={{ color: verdict.color }}>
-          {fmtGrade(om.total)}
-        </div>
-        <div className="over">Standing · −100 to +100</div>
-        {!league.fired && (
-          <div className="small dim2 center">
-            <b>{who.label}</b> owner · {who.blurb}
-          </div>
-        )}
-        <div className="fo-owner-parts">
-          {([['Wins', om.wins], ['Playoffs', om.playoffs], ['Money', om.money], ...(om.youth !== undefined ? [['Youth', om.youth] as const] : [])] as const).map(([k, val]) => (
-            <div key={k} className="fo-owner-row">
-              <span className="over">{k}</span>
-              <CenterBar value={val} />
-              <span className="num">{fmtGrade(val)}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {shown && (
-        <Section
-          title={review ? `${seasonLabel(shown.season)} review` : `${seasonLabel(shown.season)} goals`}
-          right={
-            review ? (
-              <Tag tone={review.grade >= 0.1 ? 'good' : review.grade <= -0.1 ? 'bad' : 'warn'}>Season {fmtGrade(review.grade)}</Tag>
-            ) : provisional ? (
-              <Tag tone="info">Provisional</Tag>
-            ) : (
-              <Tag tone={onTrack === progress.length ? 'good' : onTrack * 2 >= progress.length ? 'info' : 'warn'}>
-                {onTrack} of {progress.length} on track
-              </Tag>
-            )
-          }
-        >
-          {provisional && <p className="fo-lede small">Set on opening night from the roster you open with: these are the goals he'd set with today's.</p>}
-          {shown.from && !review && (
-            <p className="fo-lede small">
-              Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? `games after ${shown.from.won}-${shown.from.lost}` : 'rest of the season'} count.
-            </p>
-          )}
-          <div className="card flush list">
-            {review
-              ? review.goals.map((g) => (
-                  <div key={g.kind} className="fo-goal">
-                    <div className="fo-goal-h">
-                      <span className="bold grow">{g.title}</span>
-                      <span className="fo-goal-v num" style={{ color: gradeColor(g.grade) }}>
-                        {fmtGrade(g.grade)}
-                      </span>
-                    </div>
-                    <CenterBar value={g.grade} />
-                    <div className="tiny dim">
-                      {capitalize(resultText(g, g.result))} · {Math.round(g.weight * 100)}% of the review
-                    </div>
-                  </div>
-                ))
-              : progress.map((p) => (
-                  <div key={p.goal.kind} className="fo-goal">
-                    <div className="fo-goal-h">
-                      <span className="bold grow">{p.goal.title}</span>
-                      {!provisional && <Tag tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Tag>}
-                    </div>
-                    {/* (no bar before opening night: nothing has happened yet) */}
-                    {!provisional && (
-                      <div aria-hidden="true">
-                        <Bar value={p.fill} max={1} color={`var(--${STATUS_TONE[p.status]})`} />
-                      </div>
-                    )}
-                    <div className="tiny dim">
-                      {p.text} · {Math.round(p.goal.weight * 100)}% of the review
-                    </div>
-                  </div>
-                ))}
-          </div>
-          {review && <div className="tiny dim">Next season's goals are set on opening night.</div>}
-        </Section>
-      )}
-      {!shown && !league.fired && (
-        <Section title="Goals">
-          <div className="card small dim2">
-            {isOffseason(league) || seasonsIn < 1
-              ? "The owner sets next season's goals on opening night."
-              : league.phase === 'regular'
-                ? 'The owner sets his goals for the rest of the season tomorrow.'
-                : 'This season is graded on wins, the playoffs and profit. His goals start on opening night.'}
-          </div>
-        </Section>
-      )}
-
-      <Section
-        title="Your tenure"
-        right={
-          <HelpSheet title="How the owner grades you">
-            <p>
-              On opening night he sets three or four goals from the roster you open with: a win total (what its talent should win against the league&apos;s), a postseason goal from
-              where that projects you in the conference (or, for a rebuild, minutes for the young players), and a money goal. After the playoffs each goal is graded from −100 to
-              +100 by how far you beat or missed it, and their weights make the season&apos;s grade.
-            </p>
-            {rows.map((r) => (
-              <p key={r.k}>
-                <b>{r.k}.</b> {r.how}
-              </p>
-            ))}
-            <p>
-              Your first season sets your standing; after that each new season counts 40% and your track record 60%, so one bad year won&apos;t sink you, but a pattern will. A
-              win-now owner asks for a couple more wins and weighs the playoffs more; a builder asks for a win less and cares about the young players; a frugal one wants more
-              profit and weighs money more.
-            </p>
-          </HelpSheet>
-        }
-      >
-        <div className="card fo-tenure">
-          <div className="small">
-            {/* a team taken over after the season is his from the next one */}
-            {seasonsIn < 1 ? 'Your tenure starts next season.' : `Season ${seasonsIn} of your tenure.`}{' '}
-            {seasonsIn <= 2 ? (
-              <span className="good">Grace period: you can't be fired before the end of your third season.</span>
-            ) : (
-              <span className="dim2">Your grace period is over.</span>
-            )}
-          </div>
-          <Toggle
-            on={league.settings.jobSecurity}
-            onChange={(on) => useStore.getState().mutate((l) => (l.settings.jobSecurity = on))}
-            label="Job security"
-            help={
-              league.settings.jobSecurity
-                ? `On: a standing below ${Math.round(FIRING_LINE * 100)} after your grace period gets you fired.`
-                : 'Off: the owner grumbles but never fires you.'
-            }
-          />
-        </div>
-      </Section>
-
-      {past.length > 0 && (
-        <Section title="Past reviews">
-          <div className="card flush list">
-            {past.map((r, i) => (
-              <div key={r.season} className="fo-goal">
-                <div className="fo-goal-h">
-                  <span className="bold grow">
-                    {seasonLabel(r.season)}
-                    {r.tid !== tid ? ` · ${league.teams[r.tid].abbrev}` : ''}
-                    {r.fired ? ' · fired' : ''}
-                  </span>
-                  <span className="small num">
-                    <span className="bold" style={{ color: gradeColor(r.grade) }}>
-                      {fmtGrade(r.grade)}
-                    </span>
-                    <span className="dim"> · standing {fmtGrade(r.total)}</span>
-                  </span>
-                </div>
-                {/* the latest three goal by goal, older seasons by their grades */}
-                {i < 3 && (
-                  <div className="tiny dim">
-                    {r.goals.length
-                      ? r.goals.map((g) => (
-                          <div key={g.kind}>
-                            {g.title}: {resultText(g, g.result)} ({fmtGrade(g.grade)})
-                          </div>
-                        ))
-                      : 'Graded on wins, the playoffs and profit (before goals).'}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-    </>
-  );
-}
-
-const STATUS_LABEL: Record<GoalStatus, string> = { ahead: 'Ahead', 'on track': 'On track', behind: 'Behind', met: 'Met', missed: 'Missed' };
-const STATUS_TONE: Record<GoalStatus, 'good' | 'info' | 'warn' | 'bad'> = { ahead: 'good', 'on track': 'info', behind: 'warn', met: 'good', missed: 'bad' };
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const gradeColor = (x: number) => (x >= 0.1 ? 'var(--good)' : x <= -0.1 ? 'var(--bad)' : 'var(--warn)');
 
 // ------------------------------------------------------------------ history
 

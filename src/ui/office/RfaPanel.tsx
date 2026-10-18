@@ -21,19 +21,16 @@ import {
   userQualify,
   userWithdrawQualifying,
 } from '../../core/league/rfa';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague } from '../../state/store';
+import { agenda } from '../../core/league/agenda';
+import { AgendaRow } from '../components/Agenda';
+import { Term } from '../components/Glossary';
+import { settle } from '../../state/actions/office';
 import { Section, Sheet } from '../components/ui';
 import { Callout, OvrPot, fmtM, playerMeta, shortSeason } from './common';
 
-/** Run a core action on the league and toast its answer. */
-function act(fn: (l: League) => { ok: boolean; reason: string }, good: 'good' | 'neutral' = 'good') {
-  let res = { ok: false, reason: '' };
-  useStore.getState().mutate((l) => {
-    res = fn(l);
-  });
-  useStore.getState().toast(res.reason, res.ok ? good : 'bad');
-  return res.ok;
-}
+/** Run a core move as one league action and toast its answer. */
+const act = (label: string, fn: (l: League) => { ok: boolean; reason: string }, good: 'good' | 'neutral' = 'good') => !!settle(label, fn, good)?.ok;
 
 /** An offer sheet's terms as signed: "4 yrs · $48.2M · $11.0M in 27-28". */
 export function sheetTerms(league: League, p: Player): string {
@@ -76,11 +73,15 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
         )}
       </div>
       {qualified ? (
-        <button className="btn xs ghost" aria-label={`Withdraw ${playerName(p)}'s qualifying offer`} onClick={() => act((l) => userWithdrawQualifying(l, p.pid), 'neutral')}>
+        <button
+          className="btn xs ghost"
+          aria-label={`Withdraw ${playerName(p)}'s qualifying offer`}
+          onClick={() => act('Withdrawing the qualifying offer', (l) => userWithdrawQualifying(l, p.pid), 'neutral')}
+        >
           Withdraw
         </button>
       ) : (
-        <button className="btn xs" aria-label={`Extend ${playerName(p)} a qualifying offer`} onClick={() => act((l) => userQualify(l, p.pid))}>
+        <button className="btn xs" aria-label={`Extend ${playerName(p)} a qualifying offer`} onClick={() => act('The qualifying offer', (l) => userQualify(l, p.pid))}>
           Qualify
         </button>
       )}
@@ -115,12 +116,24 @@ export function SheetDecision({ league, p }: { league: League; p: Player }) {
         <button className="btn sm grow" onClick={() => setLetGo(true)}>
           Let him go
         </button>
-        <button className="btn sm primary grow" disabled={!!blocked} onClick={() => act((l) => userDecideSheet(l, p.pid, true))}>
+        <button className="btn sm primary grow" disabled={!!blocked} onClick={() => act('Matching the offer sheet', (l) => userDecideSheet(l, p.pid, true))}>
           Match
         </button>
       </div>
       <LetGoSheet league={league} p={p} open={letGo} onClose={() => setLetGo(false)} />
     </Callout>
+  );
+}
+
+/** The agenda's decision on an offer sheet (Match / Let him go, settled in place), with the sheet's terms. */
+export function SheetItem({ league, p }: { league: League; p: Player }) {
+  const item = agenda(league).find((i) => i.id === `offerSheet:${p.pid}`);
+  if (!item) return <SheetDecision league={league} p={p} />;
+  return (
+    <div className="fo-sheet-item">
+      {/* (its screen is this one: the row doesn't link) */}
+      <AgendaRow item={{ ...item, to: undefined, line: `${sheetTerms(league, p)}. Match to keep him on those terms.` }} />
+    </div>
   );
 }
 
@@ -139,7 +152,7 @@ export function LetGoSheet({ league, p, open, onClose }: { league: League; p: Pl
             <button className="btn grow" onClick={onClose}>
               Keep deciding
             </button>
-            <button className="btn danger grow" onClick={() => (act((l) => userDecideSheet(l, p.pid, false), 'neutral'), onClose())}>
+            <button className="btn danger grow" onClick={() => (act('Letting him go', (l) => userDecideSheet(l, p.pid, false), 'neutral'), onClose())}>
               Let him go
             </button>
           </div>
@@ -160,11 +173,17 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
   if (league.phase !== 'freeAgency' || !mine.length) return null;
   const full = summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX;
   return (
-    <Section title={`Your restricted free agents · ${mine.length}`}>
-      <p className="fo-lede small">
-        Re-sign them with Bird rights until an offer sheet comes in; then you have {MATCH_DAYS} days to match. Unsigned at the close, each plays {seasonLabel(league.season + 1)} on
-        his qualifying offer{full ? ` if you have a roster spot (full at ${OFFSEASON_ROSTER_MAX})` : ''}.
-      </p>
+    <Section
+      title={
+        <h3>
+          Your <Term id="rfa">restricted free agents</Term> · {mine.length}
+        </h3>
+      }
+    >
+      <div className="tiny dim">
+        Re-sign with Bird rights, or match an offer sheet within {MATCH_DAYS} days. Unsigned at the close, he plays {seasonLabel(league.season + 1)} on his qualifying offer
+        {full ? ` (with a roster spot: full at ${OFFSEASON_ROSTER_MAX})` : ''}.
+      </div>
       <div className="card flush list">
         {mine.map((p) => {
           const r = p.rfa!;
@@ -185,7 +204,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                 </div>
               </div>
               {r.sheet ? (
-                <SheetDecision league={league} p={p} />
+                <SheetItem league={league} p={p} />
               ) : (
                 <>
                   <div className="small dim2">
@@ -223,7 +242,10 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
               <button className="btn grow" onClick={() => setWithdraw(null)}>
                 Keep his rights
               </button>
-              <button className="btn danger grow" onClick={() => (act((l) => userWithdrawQualifying(l, withdraw.pid), 'neutral'), setWithdraw(null))}>
+              <button
+                className="btn danger grow"
+                onClick={() => (act('Withdrawing the qualifying offer', (l) => userWithdrawQualifying(l, withdraw.pid), 'neutral'), setWithdraw(null))}
+              >
                 Withdraw
               </button>
             </div>

@@ -12,6 +12,7 @@ import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContra
 import { type OfferResult, askFor, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
+import { settle, useBusy } from '../../state/actions/office';
 import { Statline } from '../components/ui';
 import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, fmtM, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
@@ -32,6 +33,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const [years, setYears] = useState(ask.years);
   const [reply, setReply] = useState<Reply | null>(null);
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
+  const busy = useBusy();
 
   const askAt = askFor(league, p, 'extend', years);
   const blocked = extensionBlockedReason(league, p);
@@ -44,10 +46,8 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const total = makeContract(league, amount, years, season, p.experience).salaries.reduce((a, b) => a + b, 0);
 
   const submit = (terms: TalkTerms = { amount, years }) => {
-    let res: OfferResult = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = userExtend(l, p.pid, terms.amount, terms.years);
-    });
+    const res = settle<OfferResult>('The extension', (l) => userExtend(l, p.pid, terms.amount, terms.years), 'good', true);
+    if (!res) return;
     if (res.ok) {
       useStore.getState().toast(res.reason, 'good');
       onClose();
@@ -145,7 +145,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>
-        <button className={`btn grow ${!blocked && !refusal && !off ? 'primary' : ''}`} disabled={!!blocked || !!refusal || off} onClick={() => submit()}>
+        <button className={`btn grow ${!blocked && !refusal && !off ? 'primary' : ''}`} disabled={!!blocked || !!refusal || off || busy} onClick={() => submit()}>
           Make offer · {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
         </button>
       </div>

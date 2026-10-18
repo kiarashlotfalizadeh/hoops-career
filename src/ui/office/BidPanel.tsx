@@ -5,7 +5,8 @@ import { Check, Gavel, Minus, TriangleAlert, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { PREF_KEYS, type PlayerPrefs, appealTerms, playerPrefs, willSign } from '../../core/league/contracts';
 import { bidDecideDay, bidStanding, faInterest, pendingBid, withdrawBid } from '../../core/league/freeAgency';
-import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
+import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, fmtM } from './common';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
@@ -40,13 +41,8 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   };
   const order = [...PREF_KEYS].sort((a, b) => prefs[b] - prefs[a]);
 
-  const withdraw = () => {
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = withdrawBid(l, p.pid);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
-  };
+  const busy = useBusy();
+  const withdraw = () => settle('Withdrawing your offer', (l) => withdrawBid(l, p.pid), 'neutral');
 
   return (
     <section className="fo-bid" aria-label="Competing offers">
@@ -58,7 +54,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
             <span className="small dim2">
               Your offer: {bid.years} yr{bid.years > 1 ? 's' : ''} · {fmtM(bid.amount, 2)}
             </span>
-            <button className="btn xs" onClick={withdraw}>
+            <button className="btn xs" disabled={busy} onClick={withdraw}>
               Withdraw
             </button>
           </div>

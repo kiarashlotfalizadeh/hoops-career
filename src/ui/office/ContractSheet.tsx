@@ -42,6 +42,7 @@ import {
 } from '../../core/league/freeAgency';
 import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../../core/league/negotiation';
 import { useLeague, useStore } from '../../state/store';
+import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
 import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capSeason, fmtM } from './common';
 import { OfferControls, STEP } from './OfferControls';
@@ -114,6 +115,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const [via, setVia] = useState<Exception | undefined>(undefined);
   const [reply, setReply] = useState<Reply | null>(null);
   const set = (v: number) => setAmount(clamp(v, minAmt, maxAmt));
+  const busy = useBusy();
 
   const askAt = bidding ? Math.min(maxAmt, Math.ceil((ask.amount * (1 + Math.abs(years - ask.years) * 0.03)) / STEP) * STEP) : askFor(league, p, kind, years, option);
   const talks = bidding ? null : talkState(league, p, kind);
@@ -174,15 +176,19 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       : (closed ?? (rosterBlocked ? `Your roster is full for next season (${rosterMax}).` : null));
 
   const submit = (terms: TalkTerms = { amount, years, option }) => {
-    let res: OfferResult = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res =
+    // a refused offer still counts in the talks (his patience): only the answer differs
+    const res = settle<OfferResult>(
+      mode === 'fa' ? (bidding ? 'Your offer' : sheet ? 'The offer sheet' : 'The signing') : 'The re-signing',
+      (l) =>
         mode === 'fa'
           ? bidding
             ? userBid(l, p.pid, terms.amount, terms.years)
             : userOffer(l, p.pid, terms.amount, terms.years, { option: terms.option, via })
-          : userResign(l, p.pid, terms.amount, terms.years, { option: terms.option });
-    });
+          : userResign(l, p.pid, terms.amount, terms.years, { option: terms.option }),
+      'good',
+      true,
+    );
+    if (!res) return;
     if (res.ok) {
       useStore.getState().toast(res.reason, 'good');
       onClose();
@@ -427,7 +433,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         <Link to={`/player/${p.pid}`} className="btn" onClick={onClose}>
           Profile
         </Link>
-        <button className={`btn grow ${!blocked ? 'primary' : ''}`} disabled={blocked} onClick={() => submit()}>
+        <button className={`btn grow ${!blocked ? 'primary' : ''}`} disabled={blocked || busy} onClick={() => submit()}>
           {bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Offer sheet' : 'Make offer'} · {yrs(years)} · {fmtM(total)}
         </button>
       </div>

@@ -21,20 +21,14 @@ import {
   userTenDay,
   userTenDayRest,
 } from '../../core/league/tenDay';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague } from '../../state/store';
+import { settle } from '../../state/actions/office';
 import { liveInProgress } from '../../state/live';
 import { Sheet } from '../components/ui';
 import { Line, OvrPot, PlayerHead, fmtM } from './common';
 
-/** Run a core action on the league and toast its answer. */
-function act(fn: (l: League) => { ok: boolean; reason: string }) {
-  let res = { ok: false, reason: '' };
-  useStore.getState().mutate((l) => {
-    res = fn(l);
-  });
-  useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-  return res.ok;
-}
+/** Run a core move as one league action and toast its answer. */
+const act = (label: string, fn: (l: League) => { ok: boolean; reason: string }) => !!settle(label, fn)?.ok;
 
 /** "10-day · 4 days left" (with "hardship" when he's beyond 15), or null for anyone else. */
 export function tenDayLabel(league: League, p: Player): string | null {
@@ -66,13 +60,13 @@ export function TenDayActions({ league, p }: { league: League; p: Player }) {
   return (
     <div className="col">
       <div className="chips">
-        <button className="btn xs" disabled={!!again} onClick={() => act((l) => userTenDay(l, p.pid))}>
+        <button className="btn xs" disabled={!!again} onClick={() => act('A second 10-day', (l) => userTenDay(l, p.pid))}>
           Second 10-day{again ? '' : ` · ${fmtM(tenDayPay(league, p, next - p.contract.tenDay.until), 2)}`}
         </button>
-        <button className="btn xs primary" disabled={!!rest} onClick={() => act((l) => userTenDayRest(l, p.pid))}>
+        <button className="btn xs primary" disabled={!!rest} onClick={() => act('Signing him for the season', (l) => userTenDayRest(l, p.pid))}>
           Rest of season · {fmtM(min, 2)}
         </button>
-        <button className="btn xs" disabled={!!end} onClick={() => act((l) => userEndTenDay(l, p.pid))}>
+        <button className="btn xs" disabled={!!end} onClick={() => act('Ending his 10-day', (l) => userEndTenDay(l, p.pid))}>
           Let him go
         </button>
       </div>
@@ -135,7 +129,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
             <button className="btn grow" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn primary grow" disabled={!!blocked} onClick={() => act((l) => userTenDay(l, p.pid)) && onClose()}>
+            <button className="btn primary grow" disabled={!!blocked} onClick={() => act('The 10-day contract', (l) => userTenDay(l, p.pid)) && onClose()}>
               Sign to a 10-day
             </button>
           </div>
