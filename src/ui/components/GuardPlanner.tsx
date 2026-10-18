@@ -10,6 +10,7 @@ import { attrDisplay, composites } from '../../core/ratings';
 import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
+import { teamPlayers } from '../../core/league/helpers';
 import { Chips, Help, Section } from './ui';
 import '../games/games.css';
 
@@ -19,7 +20,8 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
   const pick = useLeagueMemo(() => huntPick(league, opp), [league, opp]);
-  const names = rosterNames(theirs);
+  // (told apart from every teammate, the injured too, not just the eight shown)
+  const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   const target = eff.offense.huntTarget ?? null;
   const per = (p: Player) => attrDisplay(composites(p.ratings).perDef);
   const set = (pid: number | null) =>
@@ -64,7 +66,8 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
-  const names = rosterNames(theirs);
+  // (told apart from every teammate, the injured too, not just the eight shown)
+  const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   const base = league.teams[league.userTid].tactics.defense.scheme;
   const scheme = eff.defense.scheme;
   const n = chasers(scheme);

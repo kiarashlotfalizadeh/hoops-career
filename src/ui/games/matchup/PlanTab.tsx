@@ -18,6 +18,7 @@ import { Chips, Help, Ovr, Section, Segmented, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { AttackCard, JunkCard } from '../../components/GuardPlanner';
 import { rosterNames } from '../../stats';
+import { teamPlayers } from '../../../core/league/helpers';
 import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
@@ -131,7 +132,8 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
   const data = useLeagueMemo(() => scoutData(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
   const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
-  const names = rosterNames(theirs);
+  // (told apart from every teammate, the injured too, not just the ones shown)
+  const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   const sp = eff.defense.starPlan;
   // the player the numbers say they run through, else the one the scouts call their top creator
   const suggested = data.star ?? scout.threats[0]?.pid ?? theirs[0]?.pid ?? null;
@@ -215,7 +217,8 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 10), [league, opp]);
-  const names = rosterNames(theirs);
+  // (told apart from every teammate, the injured too, not just the ones shown)
+  const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   // their poor shooters: under 70% from the line, three at least, six at most
   const sorted = [...theirs].sort((a, b) => a.ratings.ft - b.ratings.ft);
   const rows = sorted.slice(0, Math.max(3, Math.min(6, sorted.filter((p) => ftPct(p.ratings.ft) < 0.7).length)));

@@ -14,6 +14,7 @@ import { fmtHeight } from '../../core/ratings';
 import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
+import { teamPlayers } from '../../core/league/helpers';
 import { Avatar, Chips, Help, Ovr, Section, Sheet, Tag } from './ui';
 import { Term } from './Glossary';
 import './scouting.css';
@@ -49,9 +50,10 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
   const advice = useLeagueMemo(() => new Map(guardingPlan(league, opp).map((a) => [a.pid, a])), [league, opp]);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const [pick, setPick] = useState<number | null>(null);
-  const short = rosterNames([...pv.theirs, ...pv.mine]);
-  // (a planned defender from deep on the bench isn't among your top ten)
-  const names = (pid: number) => short(pid) || league.players[pid]?.lastName || '';
+  // each side's players told apart from their own teammates (the injured too), as the Preview's starting fives do
+  const theirNames = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
+  const myNames = useLeagueMemo(() => rosterNames(teamPlayers(league, league.userTid)), [league]);
+  const names = (pid: number) => (league.players[pid]?.tid === opp ? theirNames(pid) : myNames(pid)) || league.players[pid]?.lastName || '';
   const how = eff.defense.playerD ?? {};
   const planned = pv.rows.filter((r) => r.planned !== null).length + Object.keys(how).length;
   const setGuard = (theirs: number, mine: number | null) => edit((l) => setPlanMatchup(l, opp, theirs, mine));
