@@ -9,6 +9,7 @@ import { ACTION_META, TACTIC_LEVELS } from '../../core/sim/tactics';
 import { effectiveTactics } from '../../core/league/gamePlans';
 import { nextUserGame } from '../../core/analysis/preview';
 import { Help, Levels, Section, Toggle } from '../components/ui';
+import { Term } from '../components/Glossary';
 import { SetPackageCard } from './SetPackageCard';
 import { tweak } from './edit';
 import { PlaybookLine, offPresetOf } from './PlaybookLine';
@@ -134,7 +135,7 @@ function ShotProfile({ t }: { t: Tactics }) {
           onChange={(x) => tweak((tt) => void (tt.offense.crashBoards = x))}
         />
         <div className="tx-toggles">
-          <Toggle on={t.offense.huntMismatch} onChange={(x) => tweak((tt) => void (tt.offense.huntMismatch = x))} label="Hunt mismatches" />
+          <Toggle on={t.offense.huntMismatch} onChange={(x) => tweak((tt) => void (tt.offense.huntMismatch = x))} label={<Term id="hunt">Hunt mismatches</Term>} />
           {hunt && (
             <Link to={`/games/${hunt.opp}`} className="tx-hunt">
               <span className="grow">

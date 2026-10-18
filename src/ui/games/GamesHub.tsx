@@ -97,7 +97,7 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
         return w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
       })()
     : ss && ss.total > 0
-      ? `Meeting ${ss.won + ss.lost + 1} of ${ss.total} · you're ${ss.won}-${ss.lost}`
+      ? `Meeting ${ss.won + ss.lost + 1} of ${ss.total}${ss.won + ss.lost ? ` · you're ${ss.won}-${ss.lost}` : ''}`
       : '';
   return (
     <section className="slab gn" style={slabVars(t.colors) as CSSProperties} aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>

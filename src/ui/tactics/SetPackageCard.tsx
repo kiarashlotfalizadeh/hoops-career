@@ -1,5 +1,5 @@
 // Offense's set package: up to four named sets the half court mixes in now and then, each for the
-// player on the floor who fits it best (fit 60 or more). Each row shows who on the roster fits it best
+// player on the floor who fits it best (when one fits it well enough: SET_K.fit). Each row shows who on the roster fits it best
 // and how well; its look, what beats it and what it costs are in its sheet.
 import { useState } from 'react';
 import { Check, Info } from 'lucide-react';

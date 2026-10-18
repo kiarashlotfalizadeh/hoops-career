@@ -43,13 +43,13 @@ export function ManageTab({ t, players }: { t: Tactics; players: Player[] }) {
             <Toggle on={t.manage.foulUp3} onChange={(x) => tweak((tt) => void (tt.manage.foulUp3 = x))} label="Foul when up 3" />
           </div>
           <div className="tx-ctl">
-            <Toggle on={!!t.manage.foulToGive} onChange={(x) => tweak((tt) => void (tt.manage.foulToGive = x))} label="Foul to give" />
+            <Toggle on={!!t.manage.foulToGive} onChange={(x) => tweak((tt) => void (tt.manage.foulToGive = x))} label={<Term id="foultogive">Foul to give</Term>} />
           </div>
           <div className="tx-ctl">
             <Toggle on={t.manage.foulWhenTrailing} onChange={(x) => tweak((tt) => void (tt.manage.foulWhenTrailing = x))} label="Foul when trailing late" />
           </div>
           <div className="tx-ctl">
-            <Toggle on={t.manage.twoForOne} onChange={(x) => tweak((tt) => void (tt.manage.twoForOne = x))} label="Go for 2-for-1" />
+            <Toggle on={t.manage.twoForOne} onChange={(x) => tweak((tt) => void (tt.manage.twoForOne = x))} label={<Term id="twoforone">Go for 2-for-1</Term>} />
           </div>
           <div className="tx-ctl">
             <Toggle on={t.manage.garbageTime} onChange={(x) => tweak((tt) => void (tt.manage.garbageTime = x))} label="Rest starters in blowouts" />

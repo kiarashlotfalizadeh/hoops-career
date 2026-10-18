@@ -103,7 +103,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
                   <span className="gp-match-d">
                     <span className="sr-only">{d ? ', guarded by ' : ', guarded by nobody yet'}</span>
                     <span className="gp-match-dn ellipsis">{d ? names(d.pid) : <span aria-hidden="true">—</span>}</span>
-                    {h ? <Tag tone="info">{PLAYER_D_META[h].short}</Tag> : r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff</span>}
+                    {h ? <Tag tone="info">{PLAYER_D_META[h].short}</Tag> : r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff pick</span>}
                   </span>
                   <ChevronRight size={16} className="dim gp-chev" aria-hidden="true" />
                   {d && <Notes them={p} me={d} />}
