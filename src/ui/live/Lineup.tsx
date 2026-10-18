@@ -46,7 +46,7 @@ export function Lineup({
           <h3>Bench</h3>
           <div className="lu-head" aria-hidden="true">
             <span>Energy</span>
-            <span>F</span>
+            <span>PF</span>
             <span>Pts</span>
             <span>Min</span>
           </div>
@@ -145,7 +145,7 @@ export function MiniFive({
             </span>
             {p.fouls >= 3 && (
               <span className={`mf-f num ${p.fouls >= 5 ? 'bad' : 'warn'}`} aria-hidden="true">
-                {p.fouls}F
+                {p.fouls} PF
               </span>
             )}
           </button>

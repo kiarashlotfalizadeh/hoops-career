@@ -21,8 +21,9 @@ export interface SideInfo {
 }
 
 /**
- * Both fives on the floor, at the top of the Clipboard's Lineup (yours first): energy, fouls, points,
- * and who's hot or cold. Tap one of yours for his sheet (the sub, his orders, a play for him), one of
+ * Both fives on the floor, at the top of the Clipboard's Lineup (yours first): points, the energy bar
+ * (against the staff's sub-out mark), personal fouls (lit at the foul-trouble limit), and who's hot or
+ * cold. Tap one of yours for his sheet (the sub, his orders, a play for him), one of
  * theirs for the ways to stop him and a Hack-a. `fives` are [home, away] as the court draws them.
  */
 export const OnCourt = memo(function OnCourt({
@@ -96,13 +97,14 @@ export const OnCourt = memo(function OnCourt({
               <span className="oc-pts num" aria-hidden="true">
                 {p.pts}
               </span>
-              <span className="oc-meter" aria-hidden="true">
-                <span className={tone} style={{ width: `${e}%` }} />
+              <span className="oc-energy num" aria-hidden="true">
+                <span className="oc-meter">
+                  <span className={tone} style={{ width: `${e}%` }} />
+                </span>
+                {e}%
               </span>
-              <span className="oc-pips" aria-hidden="true">
-                {Array.from({ length: 6 }, (_, i) => (
-                  <span key={i} className={i < p.fouls ? (p.fouls >= 5 ? 'bad' : p.fouls >= limit ? 'warn' : 'on') : ''} />
-                ))}
+              <span className={`oc-pf num${p.fouls >= 5 ? ' bad' : p.fouls >= limit ? ' warn' : ''}`} aria-hidden="true">
+                {p.fouls} PF
               </span>
             </button>
           );

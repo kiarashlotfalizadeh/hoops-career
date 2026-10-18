@@ -98,15 +98,26 @@ export function MyPlayer({
             <ArrowLeftRight size={12} aria-hidden="true" /> {subs.on ? 'Sub him out' : 'Put him in for'}
           </div>
           {subs.options.length ? (
-            <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
-              {subs.options.map((o) => (
-                <button key={o.pid} className={`chip ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
-                  {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
-                  {nameOf(o.pid)} <span className="ps-sub-l num">{o.line}</span>
-                  {o.staff && <span className="sr-only"> (the staff&apos;s pick)</span>}
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
+                {subs.options.map((o) => (
+                  <button key={o.pid} className={`chip ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
+                    {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
+                    {nameOf(o.pid)} <span className="ps-sub-l num">{o.line}</span>
+                    {o.staff && <span className="sr-only"> (the staff&apos;s pick)</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="tiny dim" aria-hidden="true">
+                Energy{subs.on ? '' : ' and fouls'}
+                {subs.options.some((o) => o.staff) && (
+                  <>
+                    {' '}
+                    · <Lightbulb size={11} className="accent-text" /> the staff&apos;s pick
+                  </>
+                )}
+              </div>
+            </>
           ) : (
             <div className="small dim">Nobody can come in for him right now.</div>
           )}

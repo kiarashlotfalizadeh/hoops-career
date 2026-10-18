@@ -104,58 +104,52 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  flex: 0 1 84px;
-  min-width: 58px;
+  flex: 0 1 88px;
+  min-width: 62px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
-  padding: 5px 8px 7px 12px;
+  gap: 2px;
+  padding: 3px 8px 5px 12px;
   color: #fff;
   background: linear-gradient(160deg, color-mix(in srgb, var(--lb-c) 88%, #fff 12%), var(--lb-c) 70%);
   box-shadow: inset 0 -3px 0 var(--lb-t);
 }
 .lb-side.home .lb-id {
   align-items: flex-end;
-  padding: 5px 12px 7px 8px;
+  padding: 3px 12px 5px 8px;
 }
 .lb-ab {
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 22px;
+  font-size: 19px;
   line-height: 0.9;
   letter-spacing: 0.02em;
 }
 .lb-meta {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.04em;
+  flex-direction: column;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-stretch: 82%;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 11px;
   white-space: nowrap;
 }
 .lb-side.home .lb-meta {
-  flex-direction: row-reverse;
+  align-items: flex-end;
 }
-.lb-to {
-  display: flex;
-  gap: 2px;
+.lb-meta b {
+  font-weight: 850;
 }
-.lb-to i {
-  width: 3px;
-  height: 7px;
-  border-radius: 1px;
-  background: rgba(255, 255, 255, 0.26);
-}
-.lb-to i.on {
-  background: #fff;
+.lb-to,
+.lb-tf {
+  color: rgba(255, 255, 255, 0.84);
 }
 .lb-tf {
-  color: rgba(255, 255, 255, 0.82);
-  line-height: 14px;
+  margin: 0 -3px;
   padding: 0 3px;
   border-radius: 3px;
 }
@@ -213,10 +207,10 @@
 /* the win-probability sliver: away on the left, home on the right, as the scores sit */
 .lb-wp {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  height: 18px;
+  height: 16px;
   padding: 0 10px;
   border-top: 1px solid var(--line);
   font-size: 10.5px;
@@ -227,6 +221,13 @@
 .lb-wp b {
   color: var(--text);
   font-weight: 800;
+}
+.lb-wp-k {
+  font-size: 9.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .lb-wp-bar {
   display: flex;
@@ -246,8 +247,8 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 24px;
-  padding: 2px 10px 2px 6px;
+  min-height: 21px;
+  padding: 1px 10px 1px 6px;
   border-top: 1px solid var(--line);
   background: var(--bg);
   color: var(--text);
@@ -927,24 +928,6 @@
   display: grid;
   place-items: center;
 }
-/* the timeouts left, on the TO button's clock */
-.lq-n {
-  position: absolute;
-  top: -6px;
-  right: -13px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: var(--surface-3);
-  color: var(--text);
-  font-size: 10px;
-  font-weight: 800;
-  font-stretch: 80%;
-  letter-spacing: 0;
-}
 /* a call waiting, or the late game */
 .lq-dot {
   position: absolute;
@@ -1059,14 +1042,20 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 8px 0 14px;
+  padding: 3px 0;
 }
-/* docked under the court, the fives go without their heading row (each keeps its colour edge) to fit whole */
+/* docked under the court, a slimmer tab strip (the same 44px to a finger) and a slim heading row over
+   each five, so both fives fit whole under a phone's court */
+.clip.docked .clip-tabs .seg.tabs button {
+  height: 36px;
+}
+.clip.docked .clip-tabs .seg.tabs button::after {
+  inset: -4px -1px;
+}
 .clip.docked .oc-head {
-  display: none;
-}
-.clip.docked .oc-col {
-  box-shadow: inset 0 2px 0 var(--oc-edge, var(--line-3));
+  min-height: 18px;
+  padding-top: 2px;
+  font-size: 10px;
 }
 /* in its sheet: the tabs stay at the top while the tab scrolls */
 .sheet .clip-tabs {
@@ -1191,7 +1180,7 @@
   grid-template-columns: 22px minmax(0, 1fr) auto;
   grid-template-areas:
     'num name pts'
-    'num meter pips';
+    'num energy pf';
   column-gap: 8px;
   row-gap: 4px;
   align-items: center;
@@ -1254,8 +1243,21 @@
   line-height: 1;
   text-align: right;
 }
+/* the energy bar against the staff's sub-out mark (green, then amber near it, red under it), with its figure */
+.oc-energy {
+  grid-area: energy;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  color: var(--text-dim);
+}
 .oc-meter {
-  grid-area: meter;
+  flex: 1;
+  min-width: 0;
   height: 3px;
   border-radius: 2px;
   background: var(--surface-3);
@@ -1279,25 +1281,22 @@
 .lu-bar > .bad {
   background: var(--bad);
 }
-.oc-pips {
-  grid-area: pips;
-  display: flex;
-  gap: 2px;
+/* personal fouls: amber at the staff's foul-trouble limit for the period, red at five */
+.oc-pf {
+  grid-area: pf;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  text-align: right;
+  color: var(--text-dim);
 }
-.oc-pips > span {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--surface-3);
+.oc-pf.warn {
+  color: var(--warn);
+  font-weight: 800;
 }
-.oc-pips > span.on {
-  background: var(--text-dim);
-}
-.oc-pips > span.warn {
-  background: var(--warn);
-}
-.oc-pips > span.bad {
-  background: var(--bad);
+.oc-pf.bad {
+  color: var(--bad);
+  font-weight: 800;
 }
 .lu-head,
 .lu-row {
@@ -1572,16 +1571,11 @@
   flex-direction: column;
   gap: 8px;
 }
-.bk-headline {
-  font-size: 14px;
-  line-height: 1.35;
-  color: var(--text-2);
-}
 .bk-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 56px;
+  min-height: var(--row-min);
   padding: 8px 12px 8px 14px;
 }
 .bk-fix .ag-head {
@@ -1593,12 +1587,23 @@
 }
 .bk-fix-fig {
   flex: none;
-  min-width: 40px;
+  min-width: 46px;
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 19px;
   line-height: 1.1;
+}
+/* the figure's unit under it: points of the margin, or points per possession */
+.bk-fix-u {
+  display: block;
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 .bk-fix-fig.warn {
   color: var(--warn);
@@ -1660,7 +1665,8 @@
   grid-auto-columns: minmax(0, 1fr);
   gap: 8px;
 }
-.lv-simmed {
+.lv-simmed,
+.lv-final-next {
   color: rgba(255, 255, 255, 0.82);
 }
 

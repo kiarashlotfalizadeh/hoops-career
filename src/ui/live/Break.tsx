@@ -23,8 +23,9 @@ interface Fix {
   id: string;
   title: string;
   line?: string;
-  /** "+3.2" / "1.21": the figure the row leads with. */
+  /** "+3.2" / "1.21": the figure the row leads with, and its unit (points of the margin, points per possession). */
   fig?: string;
+  unit?: 'pts' | 'PPP';
   tone: 'good' | 'bad' | 'warn';
   label?: string;
   run?: () => void;
@@ -32,7 +33,8 @@ interface Fix {
 
 /**
  * The break, one screen for both stops: a period's end (`period`: the period report, then Start Q3)
- * and your timeout (`huddle`: the play out of it, then Resume). The score and your chance to win;
+ * and your timeout (`huddle`: the play out of it, then Resume). The score, your chance to win and
+ * your timeouts (at a break, the ones the next period allows);
  * who's tired or in foul trouble with the staff's sub one tap away; what's deciding the game, each
  * with the staff's fix; the keys to the game and the score by quarter; and the rest (the teams side
  * by side, the scorers, your sets, their plan) one tap down. Every move goes through the live
@@ -124,6 +126,7 @@ export function Break({
       title: f.title,
       line: fix ? undefined : f.advice,
       fig: signed(f.pts),
+      unit: 'pts',
       tone: f.pts >= 0 ? 'good' : 'bad',
       label: fix?.label,
       run: fix && (() => apply(fix.apply)),
@@ -142,6 +145,7 @@ export function Break({
       title: `Their ${FINISH_LABEL[k as FinishType]}`,
       line: `${(v.pts / v.poss).toFixed(2)} points a trip on ${v.poss} (league ${baselines[k].toFixed(2)}).${c?.note ? ` ${c.note}` : ''}`,
       fig: (v.pts / v.poss).toFixed(2),
+      unit: 'PPP',
       tone: 'warn',
       label: c?.label,
       run: c && (() => apply(c.apply)),
@@ -177,10 +181,9 @@ export function Break({
             { k: meTeam.abbrev, v: `${me.score}-${them.score}`, color: lead > 0 ? 'var(--good)' : lead < 0 ? 'var(--bad)' : undefined },
             ...(huddle ? [{ k: periodLabel(q), v: fmtClock(view.clock) }] : []),
             ...(win !== undefined ? [{ k: 'To win', v: wpText(win) }] : []),
-            { k: huddle ? 'TO left' : `TO ${next}`, v: timeouts },
+            { k: 'Timeouts', v: timeouts },
           ]}
         />
-        {!huddle && report && <div className="bk-headline">{report.headline}</div>}
       </div>
 
       {trouble.length > 0 && (
@@ -222,7 +225,10 @@ export function Break({
               <div key={f.id} className={`ag-row as-row tone-${f.tone === 'good' ? 'good' : f.tone === 'bad' ? 'bad' : 'warn'} bk-fix`}>
                 <div className="ag-head">
                   {f.fig ? (
-                    <span className={`bk-fix-fig num ${f.tone}`}>{f.fig}</span>
+                    <span className={`bk-fix-fig num ${f.tone}`}>
+                      {f.fig}
+                      <span className="bk-fix-u">{f.unit}</span>
+                    </span>
                   ) : f.tone === 'warn' ? (
                     <AlertTriangle size={15} className="warn" aria-hidden="true" />
                   ) : (
