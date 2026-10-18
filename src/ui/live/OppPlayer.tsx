@@ -43,10 +43,10 @@ export function OppPlayer({
       else delete t.defense.playerD;
     });
   return (
-    <div className="ps">
+    <div className="lv-ps">
       <PlayerLine p={p} />
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
           Stop him
           <Help title="Deny or double">
@@ -78,7 +78,7 @@ export function OppPlayer({
         </div>
       </div>
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">Guard him</div>
         <div className="chips" role="group" aria-label={`How to guard ${name}`}>
           {PLAYER_DEFENSES.map((d) => (
@@ -90,7 +90,7 @@ export function OppPlayer({
         <div className="tiny dim">{how ? PLAYER_D_META[how].help : 'Straight up. Tap one for his defender; again to take it off.'}</div>
       </div>
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
           Attack his man
           <Help title="Attacking a defender">
@@ -103,7 +103,7 @@ export function OppPlayer({
         </button>
       </div>
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
           <Term id="hack">Hack-a-player</Term>
         </div>

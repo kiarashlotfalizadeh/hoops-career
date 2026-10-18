@@ -224,41 +224,41 @@
 }
 
 /* ------------------------------------------------------------------ playback: tap the court, like a video player */
-.pb {
+.lv-pb {
   position: absolute;
   inset: 0;
   z-index: 2;
   -webkit-tap-highlight-color: transparent;
 }
-.pb-scrim {
+.lv-pb-scrim {
   position: absolute;
   inset: 0;
   background: radial-gradient(closest-side, rgba(6, 8, 12, 0.6), rgba(6, 8, 12, 0.28));
   opacity: 0;
   transition: opacity 0.2s ease;
 }
-.pb-top,
-.pb-mid {
+.lv-pb-top,
+.lv-pb-mid {
   opacity: 0;
   transition: opacity 0.2s ease;
 }
-.pb.up .pb-scrim,
-.pb.up .pb-top,
-.pb.up .pb-mid {
+.lv-pb.up .lv-pb-scrim,
+.lv-pb.up .lv-pb-top,
+.lv-pb.up .lv-pb-mid {
   opacity: 1;
 }
 /* hidden, a tap only brings them up: it never presses one */
-.pb:not(.up) button {
+.lv-pb:not(.up) button {
   pointer-events: none;
 }
-.pb-top {
+.lv-pb-top {
   position: absolute;
   top: 10px;
   right: 10px;
   display: flex;
   gap: 8px;
 }
-.pb-mid {
+.lv-pb-mid {
   position: absolute;
   inset: 0;
   display: flex;
@@ -267,10 +267,10 @@
   gap: 26px;
   pointer-events: none;
 }
-.pb.up .pb-mid button {
+.lv-pb.up .lv-pb-mid button {
   pointer-events: auto;
 }
-.pb-btn {
+.lv-pb-btn {
   position: relative;
   width: 52px;
   height: 52px;
@@ -281,21 +281,21 @@
   background: rgba(6, 8, 12, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
-.pb-btn.big {
+.lv-pb-btn.big {
   width: 70px;
   height: 70px;
   background: rgba(255, 255, 255, 0.94);
   border: none;
   color: #0b0f15;
 }
-.pb-btn:disabled {
+.lv-pb-btn:disabled {
   opacity: 0.32;
   cursor: default;
 }
-.pb-btn:active:not(:disabled) {
+.lv-pb-btn:active:not(:disabled) {
   transform: scale(0.94);
 }
-.pb-chip {
+.lv-pb-chip {
   position: relative;
   height: 34px;
   padding: 0 12px;
@@ -309,7 +309,7 @@
   font-size: 13px;
   font-weight: 750;
 }
-.pb-chip.num {
+.lv-pb-chip.num {
   min-width: 46px;
   justify-content: center;
   font-family: var(--display);
@@ -317,12 +317,12 @@
   font-weight: 800;
   font-size: 16px;
 }
-.pb-chip::after {
+.lv-pb-chip::after {
   content: '';
   position: absolute;
   inset: -5px -2px;
 }
-.pb-chip.on {
+.lv-pb-chip.on {
   background: var(--accent);
   border-color: transparent;
   color: var(--accent-ink);
@@ -342,12 +342,12 @@
   background: linear-gradient(180deg, rgba(6, 8, 12, 0.9), rgba(6, 8, 12, 0.78));
   overflow: hidden;
 }
-.li-head {
+.lv-li-head {
   text-align: center;
   min-width: 0;
   max-width: 100%;
 }
-.li-kicker {
+.lv-li-kicker {
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
@@ -356,26 +356,26 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
-.li-where {
+.lv-li-where {
   margin-top: 3px;
   font-size: 11.5px;
   color: #c9d1dc;
 }
-.li-grid {
+.lv-li-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   width: 100%;
   max-width: 520px;
 }
-.li-col {
+.lv-li-col {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
 }
 /* each five under its team's colour */
-.li-team {
+.lv-li-team {
   margin-bottom: 2px;
   padding: 3px 12px 4px 8px;
   background: var(--lb-c);
@@ -391,26 +391,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.li-row {
+.lv-li-row {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
   animation: intro-in 0.35s ease both;
 }
-.li-row:nth-child(3) {
+.lv-li-row:nth-child(3) {
   animation-delay: 0.08s;
 }
-.li-row:nth-child(4) {
+.lv-li-row:nth-child(4) {
   animation-delay: 0.16s;
 }
-.li-row:nth-child(5) {
+.lv-li-row:nth-child(5) {
   animation-delay: 0.24s;
 }
-.li-row:nth-child(6) {
+.lv-li-row:nth-child(6) {
   animation-delay: 0.32s;
 }
-.li-num {
+.lv-li-num {
   flex: none;
   width: 22px;
   height: 22px;
@@ -423,23 +423,23 @@
   font-weight: 800;
   font-size: 11px;
 }
-.li-who {
+.lv-li-who {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.li-name {
+.lv-li-name {
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
-.li-pos {
+.lv-li-pos {
   font-size: 10px;
   font-weight: 700;
   color: #9aa5b5;
 }
-.li-line {
+.lv-li-line {
   font-size: 10.5px;
   color: #b4bdca;
 }
@@ -464,23 +464,23 @@
     gap: 6px;
     padding: 8px 10px 12px;
   }
-  .li-kicker {
+  .lv-li-kicker {
     font-size: 20px;
   }
-  .li-col {
+  .lv-li-col {
     gap: 3px;
   }
-  .li-team {
+  .lv-li-team {
     font-size: 13.5px;
   }
-  .li-name {
+  .lv-li-name {
     font-size: 12px;
   }
-  .li-line {
+  .lv-li-line {
     font-size: 10px;
   }
 }
-.li-bar {
+.lv-li-bar {
   position: absolute;
   left: 0;
   right: 0;
@@ -488,7 +488,7 @@
   height: 3px;
   background: rgba(255, 255, 255, 0.08);
 }
-.li-bar > span {
+.lv-li-bar > span {
   display: block;
   height: 100%;
   background: var(--accent);
@@ -501,15 +501,15 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .li-row,
+  .lv-li-row,
   .live-l3,
   .lv-banner,
-  .lq-fix {
+  .lv-lq-fix {
     animation: none;
   }
-  .pb-scrim,
-  .pb-top,
-  .pb-mid {
+  .lv-pb-scrim,
+  .lv-pb-top,
+  .lv-pb-mid {
     transition: none;
   }
 }

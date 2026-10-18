@@ -45,7 +45,7 @@
   .lv-stage {
     width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
   }
-  .lv .lb {
+  .lv .lv-lb {
     border-radius: 12px 12px 0 0;
   }
   .lv-stage .court-cv,
@@ -54,11 +54,11 @@
     border-radius: 0 0 12px 12px;
   }
 }
-.lv-bug .lb {
+.lv-bug .lv-lb {
   margin: 0 auto;
 }
 @media (min-width: 600px) and (orientation: portrait) {
-  .lv-bug .lb {
+  .lv-bug .lv-lb {
     width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
   }
 }

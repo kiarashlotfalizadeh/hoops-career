@@ -25,7 +25,7 @@ export const Feed = memo(function Feed({
     only === 'all' ? true : only === 'score' ? e.kind === 'make' || e.kind === 'ft' || e.kind === 'period' || e.kind === 'timeout' : e.t === +only || e.kind === 'period',
   );
   return (
-    <div className="fd">
+    <div className="lv-fd">
       <Segmented
         value={only}
         onChange={setOnly}
@@ -37,16 +37,16 @@ export const Feed = memo(function Feed({
           { id: '0', label: homeAbbrev },
         ]}
       />
-      <div className="fd-list" role="log" aria-label="Play-by-play">
-        {shown.length === 0 && <div className="small dim fd-row">Nothing yet.</div>}
+      <div className="lv-fd-list" role="log" aria-label="Play-by-play">
+        {shown.length === 0 && <div className="small dim lv-fd-row">Nothing yet.</div>}
         {shown.map(({ i, e }) => (
-          <div key={i} className={`fd-row${e.kind === 'period' || e.kind === 'timeout' ? ' strong' : ''}`} style={{ opacity: pbpOpacity(e.kind) }}>
-            <span className="fd-when num">
+          <div key={i} className={`lv-fd-row${e.kind === 'period' || e.kind === 'timeout' ? ' strong' : ''}`} style={{ opacity: pbpOpacity(e.kind) }}>
+            <span className="lv-fd-when num">
               {periodLabel(e.q)} {fmtClock(e.clock)}
             </span>
-            <span className="fd-team" style={{ background: e.t === -1 ? 'transparent' : colors[e.t][0] }} />
+            <span className="lv-fd-team" style={{ background: e.t === -1 ? 'transparent' : colors[e.t][0] }} />
             <span className="grow">{e.text}</span>
-            <span className="fd-sc num">
+            <span className="lv-fd-sc num">
               {e.as}-{e.hs}
             </span>
           </div>

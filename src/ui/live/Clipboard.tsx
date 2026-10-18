@@ -26,11 +26,11 @@ export function Clipboard({ tab, onTab, docked, children }: { tab: ClipTab; onTa
     if (sc && sc.scrollTop > 0) sc.scrollTop = 0;
   }, [tab, docked]);
   return (
-    <div className={`clip${docked ? ' docked' : ''}`}>
-      <div className="clip-tabs">
+    <div className={`lv-clip${docked ? ' docked' : ''}`}>
+      <div className="lv-clip-tabs">
         <Segmented tabs value={tab} onChange={onTab} label="Clipboard" options={TABS} />
       </div>
-      <div className="clip-body" ref={body}>
+      <div className="lv-clip-body" ref={body}>
         {children}
       </div>
     </div>

@@ -74,7 +74,7 @@ export function Playback({
     };
   return (
     <div
-      className={`pb${shown ? ' up' : ''}`}
+      className={`lv-pb${shown ? ' up' : ''}`}
       onClick={() => {
         if (shown && (!paused || replaying)) {
           clearTimeout(timer.current);
@@ -83,23 +83,23 @@ export function Playback({
       }}
       onFocus={bump}
     >
-      <div className="pb-scrim" aria-hidden="true" />
-      <div className="pb-top" role="group" aria-label="Playback settings">
-        <button className={`pb-chip${keyPlays ? ' on' : ''}`} aria-pressed={keyPlays} onClick={act(onKeyPlays)}>
+      <div className="lv-pb-scrim" aria-hidden="true" />
+      <div className="lv-pb-top" role="group" aria-label="Playback settings">
+        <button className={`lv-pb-chip${keyPlays ? ' on' : ''}`} aria-pressed={keyPlays} onClick={act(onKeyPlays)}>
           <Zap size={14} aria-hidden="true" /> Key plays
         </button>
-        <button className="pb-chip num" onClick={act(() => onSpeed(nextSpeed.id))} aria-label={`Speed ${speed}×: tap for ${nextSpeed.label}`}>
+        <button className="lv-pb-chip num" onClick={act(() => onSpeed(nextSpeed.id))} aria-label={`Speed ${speed}×: tap for ${nextSpeed.label}`}>
           {speed}×
         </button>
       </div>
-      <div className="pb-mid" role="group" aria-label="Playback">
-        <button className="pb-btn" disabled={!canReplay} onClick={act(onReplay, false)} aria-label="Replay the last play">
+      <div className="lv-pb-mid" role="group" aria-label="Playback">
+        <button className="lv-pb-btn" disabled={!canReplay} onClick={act(onReplay, false)} aria-label="Replay the last play">
           <RotateCcw size={20} />
         </button>
-        <button className="pb-btn big" onClick={act(onPause)} aria-label={paused ? playLabel : 'Pause'}>
+        <button className="lv-pb-btn big" onClick={act(onPause)} aria-label={paused ? playLabel : 'Pause'}>
           {paused ? <Play size={28} fill="currentColor" /> : <Pause size={28} fill="currentColor" />}
         </button>
-        <button className="pb-btn" onClick={act(onSkip)} aria-label="Skip ahead" aria-haspopup="dialog">
+        <button className="lv-pb-btn" onClick={act(onSkip)} aria-label="Skip ahead" aria-haspopup="dialog">
           <FastForward size={20} />
         </button>
       </div>

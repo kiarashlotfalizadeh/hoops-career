@@ -46,52 +46,52 @@ export function QuickBar({
   onClip: () => void;
 }) {
   return (
-    <div className={`lq${fix ? ' has-fix' : ''}`} role="group" aria-label="Coaching">
-      <button className={`lq-btn${toPending ? ' on' : ''}`} disabled={!canTimeout} onClick={timeout}>
+    <div className={`lv-lq${fix ? ' has-fix' : ''}`} role="group" aria-label="Coaching">
+      <button className={`lv-lq-btn${toPending ? ' on' : ''}`} disabled={!canTimeout} onClick={timeout}>
         {/* named by what it shows, then the state: "Timeout, 7 left: call one" (the scorebug shows the 7) */}
-        <span className="lq-ic" aria-hidden="true">
+        <span className="lv-lq-ic" aria-hidden="true">
           <Timer size={20} />
         </span>
-        <span className="lq-l">Timeout</span>
+        <span className="lv-lq-l">Timeout</span>
         <span className="sr-only">
           , {timeouts}
           {toState}
         </span>
       </button>
-      <button className="lq-btn" onClick={onSubs}>
-        <span className="lq-ic" aria-hidden="true">
+      <button className="lv-lq-btn" onClick={onSubs}>
+        <span className="lv-lq-ic" aria-hidden="true">
           <Users size={20} />
         </span>
-        <span className="lq-l">Subs</span>
+        <span className="lv-lq-l">Subs</span>
       </button>
       <button
-        className={`lq-btn${late ? ' late' : ''}${called ? ' on' : ''}`}
+        className={`lv-lq-btn${late ? ' late' : ''}${called ? ' on' : ''}`}
         onClick={onCall}
         aria-label={`Call${late ? ': late game' : ''}${called ? ': a call is waiting' : ''}`}
       >
-        <span className="lq-ic" aria-hidden="true">
+        <span className="lv-lq-ic" aria-hidden="true">
           <Route size={20} />
-          {(called || late) && <span className="lq-dot" />}
+          {(called || late) && <span className="lv-lq-dot" />}
         </span>
-        <span className="lq-l">Call</span>
+        <span className="lv-lq-l">Call</span>
       </button>
       {fix && (
-        <div className="lq-fix" key={fix.label}>
-          <button className="lq-fix-go" onClick={fix.run}>
+        <div className="lv-lq-fix" key={fix.label}>
+          <button className="lv-lq-fix-go" onClick={fix.run}>
             <Lightbulb size={16} aria-hidden="true" />
-            <span className="lq-fix-l">{fix.label}</span>
+            <span className="lv-lq-fix-l">{fix.label}</span>
             <span className="sr-only">: your staff&apos;s fix for {fix.about}</span>
           </button>
-          <button className="lq-fix-x" onClick={fix.dismiss} aria-label={`Not now: ${fix.label}`}>
+          <button className="lv-lq-fix-x" onClick={fix.dismiss} aria-label={`Not now: ${fix.label}`}>
             <X size={15} />
           </button>
         </div>
       )}
-      <button className={`lq-btn${clipOpen ? ' on' : ''}`} onClick={onClip} aria-expanded={clipOpen} aria-haspopup="dialog">
-        <span className="lq-ic" aria-hidden="true">
+      <button className={`lv-lq-btn${clipOpen ? ' on' : ''}`} onClick={onClip} aria-expanded={clipOpen} aria-haspopup="dialog">
+        <span className="lv-lq-ic" aria-hidden="true">
           <ClipboardList size={20} />
         </span>
-        <span className="lq-l">Clipboard</span>
+        <span className="lv-lq-l">Clipboard</span>
       </button>
     </div>
   );

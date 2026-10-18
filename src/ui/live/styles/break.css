@@ -1,29 +1,29 @@
 /* The break screen for a period's end and your timeout, the skip sheet and the final card. */
-.bk {
+.lv-bk {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
-.bk-fig {
+.lv-bk-fig {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.bk-row {
+.lv-bk-row {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--row-min);
   padding: 8px 12px 8px 14px;
 }
-.bk-fix .ag-head {
+.lv-bk-fix .ag-head {
   align-items: flex-start;
 }
-.bk-fix .ag-head > .btn {
+.lv-bk-fix .ag-head > .btn {
   flex: none;
   margin-top: 1px;
 }
-.bk-fix-fig {
+.lv-bk-fix-fig {
   flex: none;
   min-width: 46px;
   font-family: var(--display);
@@ -33,7 +33,7 @@
   line-height: 1.1;
 }
 /* the figure's unit under it: points of the margin, or points per possession */
-.bk-fix-u {
+.lv-bk-fix-u {
   display: block;
   font-family: var(--font);
   font-stretch: 100%;
@@ -43,22 +43,22 @@
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.bk-fix-fig.warn {
+.lv-bk-fix-fig.warn {
   color: var(--warn);
 }
-.bk-more {
+.lv-bk-more {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding-top: 8px;
 }
-.bk-scorers {
+.lv-bk-scorers {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 /* the way on stays in thumb reach while the report scrolls */
-.bk-go {
+.lv-bk-go {
   position: sticky;
   bottom: calc(-22px - var(--safe-b));
   z-index: 2;
@@ -70,7 +70,7 @@
   background: linear-gradient(180deg, transparent, var(--bg-2) 18px);
 }
 @media (min-width: 768px) {
-  .bk-go {
+  .lv-bk-go {
     bottom: -20px;
     margin-bottom: -20px;
     padding-bottom: 16px;
@@ -78,15 +78,15 @@
 }
 /* a phone held sideways: a slimmer way on, so the report has room */
 @media (max-height: 520px) {
-  .bk-go {
+  .lv-bk-go {
     padding-top: 8px;
     padding-bottom: calc(10px + var(--safe-b));
   }
-  .bk-go .btn.big {
+  .lv-bk-go .btn.big {
     height: 46px;
     font-size: 18px;
   }
-  .bk-go .tiny {
+  .lv-bk-go .tiny {
     display: none;
   }
 }

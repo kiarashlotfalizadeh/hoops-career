@@ -84,24 +84,24 @@ export function Intro({
     const kit = kits[side];
     const look = looks[side];
     return (
-      <div className="li-col">
+      <div className="lv-li-col">
         {/* the name alone, as a broadcast has it: "Oklahoma City Thunder" doesn't fit half a phone's court */}
-        <div className="li-team" style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
+        <div className="lv-li-team" style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
           {t.name}
         </div>
         {fives[side].map((pid) => {
           const p = league.players[pid];
           return (
-            <div key={pid} className="li-row">
-              <span className="li-num" style={{ background: kit[0], color: inkOn(kit[0]), borderColor: kit[1] }}>
+            <div key={pid} className="lv-li-row">
+              <span className="lv-li-num" style={{ background: kit[0], color: inkOn(kit[0]), borderColor: kit[1] }}>
                 {p?.jersey || '0'}
               </span>
-              <span className="li-who">
+              <span className="lv-li-who">
                 {/* (a long name wraps, at its hyphen if it has one, rather than lose its end and the position) */}
-                <span className="li-name">
-                  {names(pid)} <span className="li-pos">{p?.pos}</span>
+                <span className="lv-li-name">
+                  {names(pid)} <span className="lv-li-pos">{p?.pos}</span>
                 </span>
-                <span className="li-line ellipsis">
+                <span className="lv-li-line ellipsis">
                   <span className="live-intro-dec">{lines.get(pid)?.text}</span>
                   <span className="live-intro-whole">{lines.get(pid)?.short}</span>
                   {!lastSeason && lines.get(pid)?.last ? ' · last season' : ''}
@@ -116,20 +116,20 @@ export function Intro({
   return (
     // (a region, not a dialog: it doesn't take the focus, and the playback buttons beside it stay in reach)
     <div className="live-intro fade-in" role="region" aria-label="Starting lineups">
-      <div className="li-head">
-        <div className="li-kicker">Starting lineups</div>
-        <div className="li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>
-        {context && <div className="li-where ellipsis live-intro-ctx">{context}</div>}
-        {withLines.length > 0 && <div className="li-where ellipsis">Per game, {lastSeason ? 'last' : 'this'} season</div>}
+      <div className="lv-li-head">
+        <div className="lv-li-kicker">Starting lineups</div>
+        <div className="lv-li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>
+        {context && <div className="lv-li-where ellipsis live-intro-ctx">{context}</div>}
+        {withLines.length > 0 && <div className="lv-li-where ellipsis">Per game, {lastSeason ? 'last' : 'this'} season</div>}
       </div>
-      <div className="li-grid">
+      <div className="lv-li-grid">
         {col(1)}
         {col(0)}
       </div>
-      <button className="btn primary sm li-tip" onClick={onTip}>
+      <button className="btn primary sm lv-li-tip" onClick={onTip}>
         <Play size={15} fill="currentColor" /> Tip off
       </button>
-      <span className="li-bar" aria-hidden="true">
+      <span className="lv-li-bar" aria-hidden="true">
         <span style={{ width: `${Math.max(0, Math.min(100, (left / INTRO_MS) * 100))}%` }} />
       </span>
       {/* (screen readers: who starts, before the court takes over) */}

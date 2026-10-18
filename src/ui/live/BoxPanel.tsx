@@ -92,12 +92,12 @@ export function BoxPanel({
             }
           >
             <div className="card flush list">
-              {pt.length === 0 && <div className="bx-pt small dim">None yet.</div>}
+              {pt.length === 0 && <div className="lv-bx-pt small dim">None yet.</div>}
               {pt.map(([k, v]) => (
-                <div key={k} className="bx-pt">
+                <div key={k} className="lv-bx-pt">
                   <span className="grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
                   <span className="dim num">{v.poss}</span>
-                  <span className="num bx-ppp">{(v.pts / Math.max(1, v.poss)).toFixed(2)}</span>
+                  <span className="num lv-bx-ppp">{(v.pts / Math.max(1, v.poss)).toFixed(2)}</span>
                 </div>
               ))}
             </div>
