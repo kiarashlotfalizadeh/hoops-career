@@ -24,5 +24,5 @@
 //   record.ts      impact tags, scoring, turnovers, the end of a possession, the result
 
 export { GameSim } from './engine/game';
-export { K, engineDiag, resetEngineDiag } from './engine/constants';
+export { K, engineDiag, ftChance, resetEngineDiag } from './engine/constants';
 export type { InGameInjury, SP, ST, SimOptions, SimTeamInput } from './engine/state';

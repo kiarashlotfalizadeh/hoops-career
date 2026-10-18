@@ -5,23 +5,8 @@ import { tacticsChanges, type TacticsChange } from '../../core/sim/playbooks';
 import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, levelName, type LeveledTactic } from '../../core/sim/tactics';
 import type { Tactics, TacticsPatch } from '../../core/types';
 
-/**
- * The controls core/sim/playbooks names differently from the screen (until it uses the screen's
- * names itself): the screen's name wins.
- */
-const SCREEN_LABEL: Record<string, string> = {
-  Scheme: 'Base scheme',
-  Coverage: 'Pick-and-roll coverage',
-  'Crash the glass': 'Crash the offensive glass',
-  'Hack-a-player': 'Hack-a-player threshold',
-  'Auto timeouts': 'Auto timeouts to stop runs',
-};
-
-/** Changes from core, each named as the Tactics screen names its control. */
-export const onScreen = (list: TacticsChange[]): TacticsChange[] => list.map((c) => ({ ...c, label: SCREEN_LABEL[c.label] ?? c.label }));
-
-/** Every setting that differs from `a` to `b`, named as the Tactics screen names it. */
-export const screenChanges = (a: Tactics, b: Tactics, nameOf?: (pid: number) => string) => onScreen(tacticsChanges(a, b, nameOf));
+/** Every setting that differs from `a` to `b` (core/sim/playbooks names each as the Tactics screen does). */
+export const screenChanges = (a: Tactics, b: Tactics, nameOf?: (pid: number) => string) => tacticsChanges(a, b, nameOf);
 
 /** "Help defense: Balanced → Pack the paint · Star plan: Play straight → Deny". */
 export const changesLine = (list: TacticsChange[]) => list.map((c) => (c.from || c.to ? `${c.label}: ${c.from} → ${c.to}` : `${c.label} changes`)).join(' · ');

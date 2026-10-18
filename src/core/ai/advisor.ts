@@ -1,20 +1,20 @@
 // The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
 // in a worker), and alerts about rotation/tactics issues on your own team.
 
-import type { ActionType, League, Player, PlayerDefense, PnrCoverage, SetId, Tactics } from '../types';
+import type { ActionType, League, Player, PlayerDefense, PnrCoverage, RatingKey, SetId, Tactics } from '../types';
 import { SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
-import { composites, ROLE_META } from '../ratings';
+import { attrDisplay, composites, ROLE_META } from '../ratings';
 import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch, type Candidate } from './lab';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
-import { playerName, rosterSorted, teamPlayers } from '../league/helpers';
+import { andList, playerName, rosterSorted, shortName, teamPlayers } from '../league/helpers';
 import { complaints } from '../league/morale';
 import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
-import { huntPick } from '../analysis/guarding';
+import { huntPick, ratingText } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
 import { SETS } from '../sim/sets';
 
@@ -58,7 +58,31 @@ const moodText = (p: Player, none: string) => {
   return gripes.length ? `${gripes.join('. ')}.` : none;
 };
 
-const pct = (x: number) => Math.round(x);
+/** What each starting-five hole is about, as a rating. */
+const HOLE_RATING: Record<string, RatingKey> = {
+  'Cramped spacing': 'tp',
+  'No real creator': 'hnd',
+  'No rim protection': 'blk',
+  'Very small': 'hgt',
+  'No secure ball handler': 'hnd',
+};
+
+/** "Best in the five: Wallace (three-point 68). Topić (three-point 79) is on the bench." */
+function lineupHole(league: League, note: string, five: Player[], bench: Player[]): string {
+  if (note === 'Too many bigs') {
+    const bigs = five.filter((p) => p.ratings.hgt >= 60);
+    return `${bigs.length} bigs start (${andList(bigs.map((p) => shortName(league, p)))}): a wing in for one opens the floor.`;
+  }
+  const key = HOLE_RATING[note];
+  if (!key) return 'Check the five on Rotation.';
+  const best = (ps: Player[]) => [...ps].sort((a, b) => b.ratings[key] - a.ratings[key])[0];
+  const top = best(five);
+  const sub = best(bench);
+  const head = `Best in the five: ${shortName(league, top)} (${ratingText(top, key)}).`;
+  return sub && sub.ratings[key] > top.ratings[key] + 3
+    ? `${head} ${shortName(league, sub)} (${ratingText(sub, key)}) is on the bench.`
+    : `${head} Nobody on the bench does it better.`;
+}
 
 export function scoutTeam(league: League, tid: number): ScoutReport {
   const team = league.teams[tid];
@@ -90,14 +114,19 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   if (t.defense.press !== 'none') defense.push('Uses a full-court press, so secure ball handlers matter.');
   if (t.defense.help >= 65) defense.push('Helps aggressively off shooters into the paint.');
   if (t.defense.pressure >= 65) defense.push('Pressures the ball, which invites backdoor cuts and blow-bys.');
-  if (spacing < CRAMPED_SPACING) weaknesses.push(`Poor spacing (${pct(spacing)}): pack the paint and dare them to shoot.`);
+  if (spacing < CRAMPED_SPACING) {
+    // the five's three-point rating, as their Ratings tabs show it
+    const five = cs.slice(0, 5);
+    const tp = Math.round(five.reduce((a, x) => a + attrDisplay(x.p.ratings.tp), 0) / Math.max(1, five.length));
+    weaknesses.push(`Few shooters in their five (three-point ${tp} on average): pack the paint and dare them to shoot.`);
+  }
   if (security < 52 && !weaknesses.some((w) => w.startsWith('Loose with the ball'))) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
   if (man && t.defense.pnr === 'drop') weaknesses.push('Drop coverage concedes pull-up jumpers and popping bigs.');
   // (a switch on a ball screen leaves him on a guard; switching off-ball screens doesn't)
   if (man && t.defense.pnr === 'switch') {
     const slow = cs.filter((x) => slowBig(x.p));
-    if (slow.length) weaknesses.push(`Switching with a slow big (${slow[0].p.lastName}): hunt that mismatch.`);
+    if (slow.length) weaknesses.push(`Switching with a slow big (${shortName(league, slow[0].p)}): hunt that mismatch.`);
   }
   if (man && t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
   const threats: Threat[] = [];
@@ -106,13 +135,17 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
     threats.push({
       pid: creators[0].p.pid,
       name: playerName(creators[0].p),
-      why: role === 'creator' ? `Primary creator, OVR ${creators[0].p.ovr}.` : `Best shot creator, used as their ${ROLE_META[role].label.toLowerCase()}, OVR ${creators[0].p.ovr}.`,
+      // (his OVR is on the badge beside the name)
+      why:
+        role === 'creator'
+          ? `Primary creator (${ratingText(creators[0].p, 'hnd')}).`
+          : `Best shot creator, used as their ${ROLE_META[role].label.toLowerCase()} (${ratingText(creators[0].p, 'hnd')}).`,
     });
   }
   if (shooters[0] && shooters[0].p !== creators[0]?.p)
-    threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter (3PT ${pct(shooters[0].p.ratings.tp)}). Don't leave him open.` });
+    threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter (${ratingText(shooters[0].p, 'tp')}). Don't leave him open.` });
   if (protector && !threats.some((x) => x.pid === protector.p.pid))
-    threats.push({ pid: protector.p.pid, name: playerName(protector.p), why: `Anchors the paint (rim protection ${pct(protector.c.rimProt)}).` });
+    threats.push({ pid: protector.p.pid, name: playerName(protector.p), why: `Anchors the paint (${ratingText(protector.p, 'blk')}).` });
   const summary = `${team.region} ${team.name}: ${offName} offense, ${defName} defense. Watch ${threats[0]?.name ?? 'their starters'}.`;
   return { tid, summary, offense, defense, threats, weaknesses };
 }
@@ -339,7 +372,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   if ((oppProfile.size < 48 || backed('crash')) && cur.offense.crashBoards < 70)
     add({
       id: 'crash',
-      label: 'Crash the glass',
+      label: 'Crash the offensive glass',
       why: oppProfile.size < 48 ? 'They are small; attack the offensive boards.' : "They don't finish defensive possessions with the rebound.",
       group: 'crash',
       patch: { offense: { crashBoards: 78 } },
@@ -420,7 +453,7 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'physicality:o': { label: 'Less physical', apply: (t) => void (t.defense.physicality = 35) },
   'clean_defense:o': { label: 'More physical', apply: (t) => void (t.defense.physicality = 60) },
   'transition:d': { label: 'Push in transition', apply: (t) => void (t.offense.transition = 75) },
-  'hack:o': { label: 'Stop the Hack-a', apply: (t) => stopHacking(t.manage) },
+  'hack:o': { label: 'Stop Hack-a-player', apply: (t) => stopHacking(t.manage) },
   'box_open:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
   'box_beat:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
   'box_chase:d': {
@@ -527,12 +560,14 @@ export function teamAlerts(league: League, tid: number): Alert[] {
     .slice(0, 5);
   if (starters.length === 5) {
     const ev = evaluateLineup(starters);
+    // each hole says who's best at it in the five, and who on the bench would fill it
+    const bench = teamPlayers(league, tid).filter((p) => !p.injury && !starters.includes(p));
     for (const n of ev.notes)
       alerts.push({
         id: `lineup-${n}`,
         tone: 'bad',
         title: `Starting five: ${n.toLowerCase()}`,
-        body: 'Lineup balance matters: spacing, a ball handler and a rim protector each swing efficiency.',
+        body: lineupHole(league, n, starters, bench),
         link: '/team/rotation',
       });
     // (coverages only apply in man-to-man)

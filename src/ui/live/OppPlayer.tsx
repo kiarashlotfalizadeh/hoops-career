@@ -113,7 +113,7 @@ export function OppPlayer({
         </div>
         {hacking ? (
           <button className="btn block" onClick={() => apply((t) => stopHacking(t.manage))}>
-            Stop the Hack-a
+            Stop Hack-a-player
           </button>
         ) : p.ftPct < HACK_BELOW ? (
           <>

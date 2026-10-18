@@ -13,7 +13,7 @@ import { buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
 import type { FinishType, PlayCall, PossLog } from '../log';
 import { cloneTactics } from '../tactics';
 import { isSetId, readAfter } from '../sets';
-import { K } from './constants';
+import { K, ftChance } from './constants';
 import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, newBox, ACTION_LIST, freedomMult, mix } from './state';
 import { coachMethods } from './coach';
 import { clockMethods } from './clock';
@@ -169,7 +169,7 @@ export class GameSim {
         on: false,
         out: 0,
         starter: false,
-        ftPct: clamp(0.42 + 0.0052 * p.ratings.ft, 0.3, 0.95),
+        ftPct: ftChance(p.ratings.ft),
         hot: 0,
         perf: input.perf?.[p.pid] ?? 1,
         ...planRoles(p.ratings, p.pos),

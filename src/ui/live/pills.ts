@@ -126,6 +126,6 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
       apply: (x) => (on ? stopHacking(x.manage) : startHacking(x.manage, hackThreshold(worst.ftPct), ctx.q)),
     });
   } else if (hacks(t.manage))
-    out.push({ id: 'hack', label: 'Stop the Hack-a', on: true, help: 'No more intentional fouls on poor free-throw shooters.', apply: (x) => stopHacking(x.manage) });
+    out.push({ id: 'hack', label: 'Stop Hack-a-player', on: true, help: 'No more intentional fouls on poor free-throw shooters.', apply: (x) => stopHacking(x.manage) });
   return out;
 }

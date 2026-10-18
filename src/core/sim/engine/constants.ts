@@ -298,6 +298,9 @@ export const K = {
 };
 
 /** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */
+/** The share of free throws a player makes, from his FT rating (the Plan tab's Hack-a-player reads it too). */
+export const ftChance = (ft: number) => Math.min(0.95, Math.max(0.3, 0.42 + 0.0052 * ft));
+
 export const lev = (x: number) => x * K.tacticEdge;
 /** A tactical multiplier (a weight or a rate factor) at the game's tactical leverage: 1.8 at 1x is 1.8² at 2x. */
 export const levW = (m: number) => m ** K.tacticEdge;

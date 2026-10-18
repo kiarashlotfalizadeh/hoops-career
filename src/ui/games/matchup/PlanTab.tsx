@@ -22,6 +22,7 @@ import { teamPlayers } from '../../../core/league/helpers';
 import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
+import { ftChance } from '../../../core/sim/engine';
 
 export function PlanTab({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
@@ -192,8 +193,8 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
   );
 }
 
-/** The free-throw percentage the engine shoots a player at (from his FT rating, as core/sim/engine.ts has it). */
-const ftPct = (ft: number) => Math.min(0.95, Math.max(0.3, 0.42 + 0.0052 * ft));
+/** The free-throw percentage the engine shoots a player at, from his FT rating. */
+const ftPct = ftChance;
 
 /** The league's points per possession this season (last season's before any games): what a hacked trip's two free throws have to beat. */
 function leaguePpp(league: League): number | null {

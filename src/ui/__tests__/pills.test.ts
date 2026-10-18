@@ -34,11 +34,11 @@ describe('live pills', () => {
     expect(off.manage.hackTargets).toBeUndefined();
     expect(off.manage.hackFromQ).toBeUndefined();
     expect(off.manage.hackThreshold).toBe(0);
-    // a plan hacking someone who isn't on the floor: Stop the Hack-a is offered
+    // a plan hacking someone who isn't on the floor: Stop Hack-a-player is offered
     const away = defaultTactics();
     away.manage.hackTargets = [99];
     const stop = livePills(away, away, ctx({ oppOn: [{ pid: 1, name: 'Shooter', ftPct: 0.88 }] })).find((p) => p.id === 'hack')!;
-    expect(stop.label).toBe('Stop the Hack-a');
+    expect(stop.label).toBe('Stop Hack-a-player');
     // hacking from now on starts a plan's later quarter now
     const later = defaultTactics();
     later.manage.hackFromQ = 4;
