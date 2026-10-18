@@ -247,9 +247,21 @@
   width: 36px;
 }
 
+/* "POT 89" under the badge: the label quiet, the figure in the display face */
 .fo-ovrstack .pot {
-  font-size: 10.5px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 11px;
   line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-ovrstack .pot-k {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
 }
 
 .fo-name {

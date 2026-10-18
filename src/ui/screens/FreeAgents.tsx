@@ -10,7 +10,7 @@ import { FaRow } from '../office/FaRow';
 import { TwoWaySheet, WaiverSheet } from '../office/FaSheets';
 import type { Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
+import { CAP } from '../../core/constants';
 import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { EXCEPTIONS, EXCEPTION_ORDER, askingContract, onWaivers, teamAppeal, twoWaySalary, valueScore, wantsOut, wantsTwoWay } from '../../core/league/contracts';
 import { bidHolds, capPayroll, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
@@ -18,15 +18,14 @@ import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, wantsTenDay } fro
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Chips, Empty, PageHeader, Statline } from '../components/ui';
-import { Callout, capRoomFig, capSeason, rosterFig } from '../office/common';
+import { Callout, capRoomFig, capSeason, rosterFig, shortSeason } from '../office/common';
 import { Term } from '../components/Glossary';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { ContractSheet } from '../office/ContractSheet';
 import { MyRfas } from '../office/RfaPanel';
 import { TenDaySheet } from '../office/TenDayPanel';
 import { FilterSelect } from '../trade/TradeFinder';
-import { pendingSheets } from '../../core/league/rfa';
-import { money } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
 
@@ -38,10 +37,8 @@ export default function FreeAgents() {
   const pay = payroll(league, tid, s);
   // until free agency opens, the user's own expiring players hold cap room (as on the Office cap sheet),
   // and in free agency so do the user's pending offers to top free agents
-  const bids = league.faBids ?? [];
   // (in free agency capPayroll counts the market's holds: your restricted free agents' and your offer sheets')
   const holds = capPayroll(league, tid, s) - pay + bidHolds(league);
-  const sheetsOut = pendingSheets(league, tid);
   const space = cap.salaryCap - pay - holds;
   // the exceptions open to a signing now, largest first (each net of the pending offers that lean on them)
   const exceptions = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, s) }))
@@ -127,7 +124,7 @@ export default function FreeAgents() {
     <main className="page fo-page">
       <PageHeader
         title="Free Agents"
-        sub={`${fa ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ` : ''}${all.length} available · ${seasonLabel(s)} deals`}
+        sub={`${fa ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ` : ''}${all.length} available · ${shortSeason(s)} deals`}
         back
         right={<FaHelp league={league} s={s} space={space} exceptions={exceptions} />}
       />
@@ -143,13 +140,14 @@ export default function FreeAgents() {
           items={[
             {
               ...capRoomFig(space),
-              s: bids.some((b) => b.route === 'space') || sheetsOut.length ? 'after pending offers' : holds > 0 ? 'after cap holds' : space > 0 ? 'to spend' : 'min or exception',
+              // (the holds said with their amount, as on the Office's cap sheet: pending offers and sheets hold room too)
+              s: holds > 0 ? `after ${money(holds)} in holds` : space > 0 ? 'to spend' : 'min or exception',
             },
             // (in the offseason up to 21 can sign: past 15, cut down by opening night)
-            rosterFig(league, n, { note: n >= max ? `full (${max} max)` : undefined }),
+            rosterFig(league),
             exceptions.length
               ? { k: 'Best exception', v: money(exceptions[0].room), color: 'var(--good)', s: exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') }
-              : { k: <Term id="exception">Exceptions</Term>, v: 'None', s: `minimum ${money(cap.vetMin, 2)}` },
+              : { k: <Term id="exception">Exceptions</Term>, v: 'None', s: `minimum ${moneyExact(cap.vetMin)}` },
           ]}
         />
       </div>
@@ -185,7 +183,7 @@ export default function FreeAgents() {
             value={sort}
             onChange={setSort}
             options={[
-              ['value', 'Sort: best'],
+              ['value', 'Sort: value'],
               ['ovr', 'Sort: OVR'],
               ['pot', 'Sort: POT'],
               ['ask', 'Sort: ask'],
@@ -218,7 +216,7 @@ export default function FreeAgents() {
                   : `Your roster is full (${max}). Release or trade someone to sign a free agent.`)}
           </div>
         )}
-        {twoWayMode && <div className="tiny dim">Three seasons or fewer, would sign for the minimum. Two-way pays {money(twoWaySalary(league, s), 2)}, off the cap.</div>}
+        {twoWayMode && <div className="tiny dim">Three seasons or fewer, would sign for the minimum. Two-way pays {moneyExact(twoWaySalary(league, s))}, off the cap.</div>}
         {tenDays && (
           <div className="tiny dim">
             Would sign for the minimum: prorated for {TEN_DAYS} days, ends by itself.{' '}

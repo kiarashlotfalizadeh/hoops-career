@@ -14,7 +14,7 @@ import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, forYears, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, forYears, salaryText, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { money } from '../../core/format';
@@ -59,7 +59,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
     <div className="col fo-sheet fo-contract">
       <PlayerHead league={league} p={p} right={<OvrPot p={p} />}>
         <div className="fo-meta fo-wrap">
-          Signed through {seasonLabel(exp)} at {money(salaryFor(p, exp), 2)} · extension from {shortSeason(season)}
+          {salaryText(league, salaryFor(p, exp))} in {shortSeason(exp)}, his last season · extension from {shortSeason(season)}
         </div>
       </PlayerHead>
 
@@ -101,7 +101,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         yearsMax={maxYears}
         wants={ask.years}
         firstSeason={season}
-        yearsNote={`${seasonLabel(season)} to ${seasonLabel(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.`}
+        yearsNote={`${shortSeason(season)} to ${shortSeason(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.`}
       />
 
       {blocked ? (
@@ -125,14 +125,14 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         />
       )}
 
-      <section className="fo-capimpact" aria-label={`${seasonLabel(season)} payroll`}>
+      <section className="fo-capimpact" aria-label={`${shortSeason(season)} payroll`}>
         <div className="fo-capimpact-h">
-          <span className="over">{seasonLabel(season)} payroll</span>
+          <span className="over">{shortSeason(season)} payroll</span>
           <span className="tag info">Extension</span>
         </div>
         <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This extension" />
         <div className="tiny dim">
-          Committed for {seasonLabel(season)} so far, plus his extension. Like a re-signing, it can go over the cap.
+          Committed for {shortSeason(season)} so far, plus his extension. Like a re-signing, it can go over the cap.
           {taxBill > 0 ? (
             <span className="bad">
               {' '}

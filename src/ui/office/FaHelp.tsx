@@ -70,6 +70,10 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
       <p>
         <b>Window.</b> Signings are open in the preseason, through the end of the regular season, and in free agency.
       </p>
+      <p>
+        <b>Sort: value.</b> OVR, with potential counting more the younger he is (under 26), less for each year past 29 and for games an injury will cost him. Sort by OVR for
+        today's ability alone.
+      </p>
     </HelpSheet>
   );
 }

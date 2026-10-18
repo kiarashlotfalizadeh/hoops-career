@@ -8,8 +8,7 @@ import { playerName, teamPlayers } from '../../core/league/helpers';
 import { extensionAsk, extensionBlockedReason, extensionRefusal } from '../../core/league/contracts';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { MoodTag, OvrPot, forYears, playerMeta, shortSeason } from './common';
-import { money } from '../../core/format';
+import { MoodTag, OvrPot, forYears, playerMeta, salaryText, shortSeason } from './common';
 
 /** His per-game line this season (or his latest): points, rebounds, assists, minutes, true shooting, games. */
 export function StatLine({ league, p }: { league: League; p: Player }) {
@@ -64,7 +63,7 @@ export const extendablePlayers = (league: League) =>
     .filter((p) => !extensionBlockedReason(league, p))
     .sort((a, b) => b.ovr - a.ovr);
 
-/** A player who can be extended now: his salary, what an extension would cost (or that he won't talk), and the button. */
+/** A player who can be extended now: his salary (the section says when it ends), what an extension would cost (or that he won't talk), and the button. */
 export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; onExtend: (pid: number) => void }) {
   const exp = contractExp(p.contract);
   const ask = extensionAsk(league, p);
@@ -75,8 +74,7 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
         p={p}
         right={
           <div className="fo-money">
-            <div className="a">{money(salaryFor(p, exp))}</div>
-            <div className="b">thru {shortSeason(exp)}</div>
+            <div className="a">{salaryText(league, salaryFor(p, exp))}</div>
           </div>
         }
       />
@@ -88,7 +86,7 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
               <span className="warn">Won't extend now</span>
             ) : (
               <>
-                Extension ask <b className="num">{money(ask.amount)}</b> {forYears(ask.years)} from {shortSeason(exp + 1)}
+                Extension ask <b className="num">{salaryText(league, ask.amount)}</b> {forYears(ask.years)} from {shortSeason(exp + 1)}
               </>
             )}
           </div>

@@ -5,16 +5,16 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { Player } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, payroll, playerName, standardRoster } from '../../core/league/helpers';
+import { CAP } from '../../core/constants';
+import { CAP_FOR, payroll, playerName, shortName } from '../../core/league/helpers';
 import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth, wantsOut } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Term } from '../components/Glossary';
 import { PageHeader, Section, Sheet, Statline } from '../components/ui';
-import { CapBar, HelpSheet, MoodTag, OvrPot, capRoomFig, forYears, rosterFig, shortSeason, taxFig } from './common';
+import { CapBar, HelpSheet, MoodTag, OvrPot, capRoomFig, contractEnd, forYears, rosterFig, salaryText, shortSeason, taxFig } from './common';
 import { ContractSheet } from './ContractSheet';
 import { QualifyRow } from './RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE } from '../../core/league/rfa';
@@ -45,15 +45,13 @@ export function ResignPeriod() {
   // in the final season of their deals next season (a rookie whose option was just exercised among them)
   const extendable = useLeagueMemo(() => extendablePlayers(league), [league]);
   const [ext, setExt] = useState<number | null>(null);
-  // standard roster spots only: two-way deals sit outside the 15
-  const rosterNext = standardRoster(league, tid).length - expiring.filter((p) => !p.contract.twoWay).length;
   // who leaves as a restricted free agent (qualified) and who unrestricted when the market opens
   const qualified = expiring.filter((p) => p.rfa).length;
   const unrestricted = expiring.length - qualified;
   const space = cap.salaryCap - committed - holds;
 
   const doRenounce = (p: Player) => {
-    settle(`Renouncing ${p.lastName}`, (l) => renouncePlayer(l, p.pid), 'neutral');
+    settle(`Renouncing ${shortName(league, p)}`, (l) => renouncePlayer(l, p.pid), 'neutral');
     setRenounce(null);
   };
 
@@ -71,7 +69,7 @@ export function ResignPeriod() {
     <main className="page fo-page">
       <PageHeader
         title="Re-sign"
-        sub={`Deals from ${seasonLabel(next)} · before free agency`}
+        sub={`Deals from ${shortSeason(next)} · before free agency`}
         back
         right={
           <HelpSheet title="Re-signing your players">
@@ -113,7 +111,7 @@ export function ResignPeriod() {
       />
 
       <Section
-        title={`${seasonLabel(next)} payroll`}
+        title={`${shortSeason(next)} payroll`}
         right={
           <span className="tag info">
             <Term id="bird">Bird rights</Term>
@@ -134,13 +132,7 @@ export function ResignPeriod() {
             </div>
           </div>
           <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} addLabel={<Term id="hold">Cap holds</Term>} legend="lines" />
-          <Statline
-            items={[
-              { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
-              taxFig(committed, cap.luxuryTax),
-              rosterFig(league, rosterNext, { label: `Roster ${shortSeason(next)}`, note: rosterNext <= CAP.rosterMax ? 'signed' : undefined }),
-            ]}
-          />
+          <Statline items={[{ ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined }, taxFig(committed, cap.luxuryTax), rosterFig(league)]} />
         </div>
       </Section>
 
@@ -156,7 +148,7 @@ export function ResignPeriod() {
                   <div className="fo-rs-act">
                     <div className="grow">
                       <div className="fo-rs-ask">
-                        <b className="num">{money(sal)}</b> <span className="dim">{shortSeason(next)} option</span>
+                        <b className="num">{salaryText(league, sal)}</b> <span className="dim">{shortSeason(next)} option</span>
                       </div>
                       <div className="tiny">
                         {rookieScaleDeal(p) ? (
@@ -203,9 +195,9 @@ export function ResignPeriod() {
                         <span className="small bad bold">{p.mood.tradeRequest ? "Wants a trade: won't re-sign" : "Asked for a trade: on hold, won't re-sign"}</span>
                       ) : (
                         <div className="fo-rs-ask">
-                          <b className="num">{money(ask.amount)}</b> <span className="dim">{forYears(ask.years)}</span>
+                          <b className="num">{salaryText(league, ask.amount)}</b> <span className="dim">{forYears(ask.years)}</span>
                           <div className="tiny dim">
-                            his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {money(salaryFor(p, league.season))}
+                            his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {salaryText(league, salaryFor(p, league.season))}
                           </div>
                         </div>
                       )}
@@ -238,8 +230,8 @@ export function ResignPeriod() {
                   </div>
                 </div>
                 <div className="fo-money">
-                  <div className="a">{money(salaryFor(p, next))}</div>
-                  <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
+                  <div className="a">{salaryText(league, salaryFor(p, next))}</div>
+                  <div className="b">{contractEnd(league, p)}</div>
                 </div>
               </div>
             ))}
@@ -267,7 +259,7 @@ export function ResignPeriod() {
       <ContractSheet pid={sel} mode="resign" onClose={() => setSel(null)} />
       <ContractSheet pid={ext} mode="extend" onClose={() => setExt(null)} />
 
-      <Sheet open={!!renounce} onClose={() => setRenounce(null)} title={renounce ? `Renounce ${renounce.lastName}?` : undefined}>
+      <Sheet open={!!renounce} onClose={() => setRenounce(null)} title={renounce ? `Renounce ${shortName(league, renounce)}?` : undefined}>
         {renounce && (
           <div className="col fo-sheet">
             <p className="fo-lede">
@@ -289,12 +281,12 @@ export function ResignPeriod() {
         )}
       </Sheet>
 
-      <Sheet open={!!decline} onClose={() => setDecline(null)} title={decline ? `Decline ${decline.lastName}'s option?` : undefined}>
+      <Sheet open={!!decline} onClose={() => setDecline(null)} title={decline ? `Decline ${shortName(league, decline)}'s option?` : undefined}>
         {decline && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              His {seasonLabel(next)} season ({money(salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency, at about{' '}
-              {money(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
+              His {shortSeason(next)} season ({salaryText(league, salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency,
+              at about {money(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setDecline(null)}>
@@ -326,7 +318,7 @@ export function ResignPeriod() {
           {options.length > 0 && (
             <p className="fo-lede">
               Open team option{options.length > 1 ? 's' : ''}: the staff will{' '}
-              {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${p.lastName}'s`).join(', ')}.
+              {options.map((p) => `${teamOptionWorth(league, p) ? 'exercise' : 'decline'} ${shortName(league, p)}'s`).join(', ')}.
             </p>
           )}
           {expiring.length > 0 && (
@@ -336,7 +328,7 @@ export function ResignPeriod() {
                   <OvrPot p={p} showPot={false} />
                   <span className="grow ellipsis bold">{playerName(p)}</span>
                   {p.rfa && <span className="tag good">RFA</span>}
-                  <span className="dim num">{money(asks.get(p.pid)!.amount)}</span>
+                  <span className="dim num">{salaryText(league, asks.get(p.pid)!.amount)}</span>
                 </div>
               ))}
             </div>

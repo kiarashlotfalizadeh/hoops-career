@@ -7,8 +7,8 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, ClipboardList, Crown, ListOrdered, PenLine, PiggyBank, Ticket, UserPlus } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, standardRoster, teamPlayers, twoWayRoster } from '../../core/league/helpers';
+import { CAP } from '../../core/constants';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers } from '../../core/league/helpers';
 import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason } from '../../core/league/contracts';
 import { bidOnException, capHolds, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT } from '../../core/league/tenDay';
@@ -19,18 +19,18 @@ import { openProposals } from '../../core/league/proposals';
 import { agenda, type AgendaKind } from '../../core/league/agenda';
 import { seasonsInCharge } from '../../core/league/owner';
 import { teamTxns } from '../../core/league/transactions';
-import { contractExp } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { useBusy } from '../../state/actions/office';
 import { Bar, PageHeader, Section, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capRoomFig, capSeason, isOffseason, rosterFig, shortSeason, taxFig } from '../office/common';
+import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, rosterFig, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
+import { picksText } from '../draft/common';
 import { useFlowRunner } from '../useFlow';
 import { seatOf } from '../office/seat';
-import { money, plural } from '../../core/format';
+import { money, moneyExact, plural } from '../../core/format';
 
 /** The decisions the desk settles (the owner's and the job market's show on their desks' lines; the pick on the phase card). */
 const OFFICE_AGENDA: AgendaKind[] = ['cuts', 'signings', 'twoWays', 'offerSheet', 'tenDay', 'tradeOffer'];
@@ -41,8 +41,8 @@ export default function Office() {
   return (
     <main className="page fo-page">
       <PageHeader title="Office" />
-      {/* a decision the league waits on comes first: the phase card's action steps down */}
-      <Quiet.Provider value={items.some((i) => i.required)}>
+      {/* a decision the league waits on comes first, and so do offers to settle: the phase card's action steps down */}
+      <Quiet.Provider value={items.some((i) => i.required || i.kind === 'tradeOffer')}>
         <PhaseCard league={league} />
       </Quiet.Provider>
       {items.length > 0 && (
@@ -122,8 +122,6 @@ function Now({
   );
 }
 
-const picksText = (league: League, picks: { round: number; pick?: number }[]) => picks.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ');
-
 function PhaseCard({ league }: { league: League }) {
   const run = useFlowRunner();
   const tid = league.userTid;
@@ -153,7 +151,7 @@ function PhaseCard({ league }: { league: League }) {
     }
     case 'playin':
     case 'playoffs': {
-      const exp = teamPlayers(league, tid).filter((p) => contractExp(p.contract) === league.season).length;
+      const exp = contractsUp(league).players.length;
       return (
         <Now
           over="Postseason"
@@ -168,8 +166,8 @@ function PhaseCard({ league }: { league: League }) {
       return (
         <Now
           over="Draft lottery"
-          title={mine.length ? `You pick ${picksText(league, mine.slice(0, 2))}` : 'No picks this year'}
-          sub={mine.length > 2 ? `And ${picksText(league, mine.slice(2))}. Draft night is next.` : 'Draft night is next.'}
+          title={mine.length ? `${plural(mine.length, 'pick')} this year` : 'No picks this year'}
+          sub={mine.length ? `${picksText(league, mine)}. Draft night is next.` : 'Draft night is next.'}
           action={{ label: 'Scout prospects', to: '/office/draft' }}
         />
       );
@@ -265,16 +263,11 @@ function CapSheet({ league }: { league: League }) {
   // between the season and free agency, own expiring players hold cap room until renounced
   const holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
   const space = cap.salaryCap - pay - holds;
-  const roster = standardRoster(league, tid);
-  const tw = twoWayRoster(league, tid).length;
-  // in the offseason, count the players actually under contract for next season
-  const signedN = isOffseason(league) ? roster.filter((p) => contractExp(p.contract) >= s0).length : roster.length;
-  const expiringN = roster.length - signedN;
   const status = pay > cap.luxuryTax ? 'tax' : pay + holds > cap.salaryCap ? 'cap' : 'under';
   const dead = team.deadMoney.filter((d) => d.season === s0).reduce((a, d) => a + d.amount, 0);
   return (
     <Section
-      title={`${seasonLabel(s0)} cap sheet`}
+      title={`${shortSeason(s0)} cap sheet`}
       right={
         <span className="row fo-sec-links">
           <Link to="/team?view=contracts" className="card-link">
@@ -300,11 +293,8 @@ function CapSheet({ league }: { league: League }) {
           items={[
             { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
             taxFig(pay, cap.luxuryTax),
-            rosterFig(league, signedN, {
-              label: isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster',
-              twoWay: tw,
-              note: expiringN ? `+${expiringN} expiring` : undefined,
-            }),
+            // on the season the money is about: signed for it, the expiring deals beside them
+            rosterFig(league),
           ]}
         />
         <Exceptions league={league} season={s0} />
@@ -405,7 +395,7 @@ function CapHelp({ league, season }: { league: League; season: number }) {
   return (
     <HelpSheet title="How the cap works">
       <p>
-        <b>Soft cap ({money(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {money(cap.vetMin, 2)}) over it. The cap sheet shows the season new
+        <b>Soft cap ({money(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {moneyExact(cap.vetMin)}) over it. The cap sheet shows the season new
         deals count against: next season's from the draft lottery on.
       </p>
       <p>
@@ -467,15 +457,6 @@ interface Desk {
   tone?: 'good' | 'warn' | 'bad';
 }
 
-/** This draft's picks of yours, in order: their slots once the order is set, their projections until then. */
-function draftSlots(league: League, proj: ReturnType<typeof pickProjection>): number[] {
-  return league.draftPicks
-    .filter((d) => d.tid === league.userTid && d.season === league.season)
-    .map((d) => (d.pick ? overallPick(league, d.round, d.pick) : proj(d)))
-    .filter((n): n is number => n !== undefined)
-    .sort((a, b) => a - b);
-}
-
 function Desks({ league }: { league: League }) {
   const tid = league.userTid;
   const team = league.teams[tid];
@@ -494,11 +475,12 @@ function Desks({ league }: { league: League }) {
   const after = league.phase === 'resign' || league.phase === 'freeAgency';
   const myPicks = league.draftPicks.filter((d) => d.tid === tid);
   const firsts = myPicks.filter((d) => d.round === 1).length;
-  const slots = draftSlots(league, proj);
-  // (before opening night nothing projects: the count stands in)
-  const thisDraft = myPicks.filter((d) => d.season === league.season).length;
+  // this draft's picks by their slots, or projections until the order is set (before opening night nothing projects: they're counted)
+  const thisDraft = myPicks.filter((d) => d.season === league.season);
   const drafted = after ? Object.values(league.players).filter((p) => p.draft.year === league.season && p.draft.tid === tid && p.draft.round > 0) : [];
-  const expiring = teamPlayers(league, tid).filter((p) => !p.contract.twoWay && contractExp(p.contract) === league.season).length;
+  // the contracts the Re-sign desk lists, two-ways included
+  const up = contractsUp(league);
+  const expiring = up.players.length;
   const ts = team.seasons.find((s) => s.season === league.season);
   const pr = ts && ts.won + ts.lost > 0 ? profit(league, tid) : null;
   const jobOffers = league.jobOffers?.season === league.season ? league.jobOffers.offers.length : 0;
@@ -509,8 +491,8 @@ function Desks({ league }: { league: League }) {
       to: '/office/trade',
       icon: ArrowLeftRight,
       title: 'Trade',
-      sub: inPost ? 'Frozen in the postseason' : pastDeadline ? 'Locked until the lottery' : offers ? `${plural(offers, 'offer')} waiting` : 'No offers waiting',
-      hot: offers > 0 && !inPost && !pastDeadline,
+      // the offers themselves are the decisions above: this line points at them
+      sub: inPost ? 'Frozen in the postseason' : pastDeadline ? 'Locked until the lottery' : offers ? `${plural(offers, 'offer')} above` : 'No offers waiting',
       muted: inPost || pastDeadline,
     },
     {
@@ -528,7 +510,7 @@ function Desks({ league }: { league: League }) {
       sub:
         league.phase === 'resign'
           ? `Open until free agency · ${signedThisSummer(league).length} re-signed`
-          : [league.phase !== 'freeAgency' && expiring ? `${expiring} expiring after ${shortSeason(league.season)}` : '', extendable > 0 ? `${extendable} can be extended now` : '']
+          : [league.phase !== 'freeAgency' && expiring ? `${expiring} expiring after ${shortSeason(up.season)}` : '', extendable > 0 ? `${extendable} can be extended now` : '']
               .filter(Boolean)
               .join(' · ') || (league.phase === 'freeAgency' ? 'Closed until next summer' : 'Opens after the draft'),
       hot: league.phase === 'resign',
@@ -540,15 +522,15 @@ function Desks({ league }: { league: League }) {
       title: 'Draft',
       sub: after
         ? drafted.length
-          ? `You drafted ${drafted.map((p) => p.lastName).join(', ')}`
+          ? `You drafted ${drafted.map((p) => shortName(league, p)).join(', ')}`
           : 'No picks this year'
         : [
             league.phase === 'draft' ? 'Draft night' : '',
-            slots.length
-              ? `${draftNight ? 'You pick' : 'Your picks project'} ${slots.map((n) => `#${n}`).join(', ')}`
-              : thisDraft
-                ? `${plural(thisDraft, 'pick')} this year`
-                : 'No picks this year',
+            !thisDraft.length
+              ? 'No picks this year'
+              : thisDraft.every((d) => !d.pick && proj(d) === undefined)
+                ? `${plural(thisDraft.length, 'pick')} this year`
+                : `${draftNight ? 'You pick' : thisDraft.some((d) => !d.pick) ? 'Your picks project' : 'Your picks:'} ${picksText(league, thisDraft, proj)}`,
             draftNight ? '' : `${prospectsN} prospects`,
           ]
             .filter(Boolean)
@@ -560,7 +542,7 @@ function Desks({ league }: { league: League }) {
       icon: Ticket,
       title: 'Picks & moves',
       sub: [
-        `${firsts} first- and ${myPicks.length - firsts} second-round picks`,
+        `${plural(myPicks.length, 'pick')} owned, ${firsts} in the 1st round`,
         lastMove ? `last move ${fmtDate(lastMove.season, lastMove.day, { month: 'short', day: 'numeric' })}` : '',
       ]
         .filter(Boolean)

@@ -9,7 +9,7 @@ import type { Player, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
-import { CAP_FOR, payroll, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster } from '../../core/league/helpers';
 import {
   EXCEPTIONS,
   EXCEPTION_ORDER,
@@ -44,7 +44,7 @@ import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears } from './common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
@@ -149,7 +149,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, Math.max(years, SHEET_MIN_YEARS)) : null))
       : ownRfa
         ? p.rfa?.sheet
-          ? `${p.lastName} has signed an offer sheet with the ${league.teams[p.rfa.sheet.tid].name}: match it or let him go.`
+          ? `${shortName(league, p)} has signed an offer sheet with the ${league.teams[p.rfa.sheet.tid].name}: match it or let him go.`
           : null
         : league.phase !== 'resign'
           ? 'Re-signing happens between the draft and free agency.'
@@ -211,7 +211,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         {/* a free agent weighed against your own player at his position */}
         {mode === 'fa' && (
           <Link to={compareHref(p.pid, mine?.pid)} className="btn xs fo-compare" onClick={onClose}>
-            <Scale size={13} /> <span className="ellipsis">{mine ? `Compare with ${mine.lastName}` : 'Compare'}</span>
+            <Scale size={13} /> <span className="ellipsis">{mine ? `Compare with ${shortName(league, mine)}` : 'Compare'}</span>
           </Link>
         )}
       </PlayerHead>
@@ -268,7 +268,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
         yearsNote={
           <>
-            Through {seasonLabel(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.
+            Through {shortSeason(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.
             {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-5 years, no options.` : ''}
           </>
         }
@@ -276,7 +276,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
       {optionsOk && (
         <div className="fo-years">
-          <div className="over">Option on {years >= 2 ? seasonLabel(season + years - 1) : 'the last season'}</div>
+          <div className="over">Option on {years >= 2 ? shortSeason(season + years - 1) : 'the last season'}</div>
           <Segmented
             label="Option on the final season"
             value={years >= 2 ? optChoice : 'none'}
@@ -371,7 +371,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       {mode === 'fa' ? (
         <section className="fo-capimpact" aria-label="Cap impact">
           <div className="fo-capimpact-h">
-            <span className="over">Cap impact · {seasonLabel(season)}</span>
+            <span className="over">Cap impact · {shortSeason(season)}</span>
             {route ? <span className={`tag ${ROUTE_TAG[route].tone}`}>{ROUTE_TAG[route].label}</span> : <span className="tag bad">Over the cap</span>}
           </div>
           {covering.length > 1 && (
@@ -396,7 +396,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             {route === 'min' && after > cap.salaryCap
               ? `Minimum deals (up to ${money(minAmt, 2)} for him) sign over the cap.`
               : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
-                ? `Signing with cap space trades your mid-level for the smaller room exception for ${seasonLabel(season)}.`
+                ? `Signing with cap space trades your mid-level for the smaller room exception for ${shortSeason(season)}.`
                 : route === 'mle'
                   ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years, keeps you under the tax line.`
                   : route === 'room'
@@ -410,9 +410,9 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           </div>
         </section>
       ) : (
-        <section className="fo-capimpact" aria-label={`${seasonLabel(season)} payroll`}>
+        <section className="fo-capimpact" aria-label={`${shortSeason(season)} payroll`}>
           <div className="fo-capimpact-h">
-            <span className="over">{seasonLabel(season)} payroll</span>
+            <span className="over">{shortSeason(season)} payroll</span>
             <span className="tag info">Bird rights</span>
           </div>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This deal" />

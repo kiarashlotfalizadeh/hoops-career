@@ -3,7 +3,7 @@ import { seasonOutcome, useQueryParam } from '../league/shared';
 import { Link } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert } from 'lucide-react';
 import type { Team } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
+import { CAP } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster } from '../../core/league/helpers';
 import { salaryFor } from '../../core/playerGen';
 import {
@@ -72,10 +72,13 @@ function Overview({ team }: { team: Team }) {
   const shortfall = Math.max(0, cap.minPayroll - pay);
   // two-way deals sit outside the cap and the tax, but they are still paid
   const twoWayPay = twoWayRoster(league, team.tid).reduce((a, p) => a + salaryFor(p, s), 0);
+  // the payroll every desk shows (the cap's: dead money in, two-ways out), then the two-way pay beside it
   const expenses = [
-    { k: twoWayPay > 0 ? 'Payroll (incl. two-way)' : 'Payroll', v: pay + twoWayPay, c: 'var(--accent)' },
-    { k: 'Staff & facilities budgets', v: budgets, c: 'var(--tier-star)' },
-    { k: 'Arena & operations', v: OPERATIONS_PER_SEASON * scale, c: 'var(--tier-low)' },
+    { k: 'Payroll', v: pay, c: 'var(--accent)' },
+    ...(twoWayPay > 0 ? [{ k: 'Two-way pay', v: twoWayPay, c: 'color-mix(in srgb, var(--accent) 55%, var(--surface-3))' }] : []),
+    // (not the OVR tiers' colours: these are kinds of cost, not grades)
+    { k: 'Staff & facilities budgets', v: budgets, c: 'var(--info)' },
+    { k: 'Arena & operations', v: OPERATIONS_PER_SEASON * scale, c: 'var(--text-dim)' },
     ...(tax > 0 ? [{ k: 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
     ...(shortfall > 0 ? [{ k: 'Salary floor shortfall', v: shortfall, c: 'var(--warn)' }] : []),
   ];
@@ -134,7 +137,7 @@ function Overview({ team }: { team: Team }) {
         </div>
       </Section>
 
-      <Section title={`${seasonLabel(s)} costs`} right={<span className="tiny dim">{s > league.season ? 'projected' : 'full season, projected'}</span>}>
+      <Section title={`${shortSeason(s)} costs`} right={<span className="tiny dim">{s > league.season ? 'projected' : 'full season, projected'}</span>}>
         <div className="card">
           <div className="fo-stack" role="img" aria-label={expenses.map((e) => `${e.k} ${money(e.v)}`).join(', ')}>
             {expenses.map((e) => (
@@ -414,7 +417,7 @@ function HistoryTab({ team }: { team: Team }) {
   const league = useLeague();
   const rows = [...team.seasons].filter((s) => s.season <= league.season).sort((a, b) => b.season - a.season);
   const cols: Col<(typeof rows)[number]>[] = [
-    { key: 'season', label: 'Season', left: true, sticky: true, get: (r) => r.season, fmt: (v) => <span className="bold">{seasonLabel(Number(v))}</span> },
+    { key: 'season', label: 'Season', left: true, sticky: true, get: (r) => r.season, fmt: (v) => <span className="bold">{shortSeason(Number(v))}</span> },
     { key: 'rec', label: 'W-L', get: (r) => r.won - r.lost, fmt: (_v, r) => `${r.won}-${r.lost}` },
     {
       key: 'po',
@@ -460,13 +463,13 @@ function HistoryTab({ team }: { team: Team }) {
             <div
               className={`fo-minichart ${anyLoss ? 'split' : ''}`}
               role="img"
-              aria-label={chart.map((r) => `${seasonLabel(r.season)} ${moneySigned(r.revenue - r.expenses)}`).join(', ')}
+              aria-label={chart.map((r) => `${shortSeason(r.season)} ${moneySigned(r.revenue - r.expenses)}`).join(', ')}
             >
               {chart.map((r) => {
                 const pr = r.revenue - r.expenses;
                 return (
                   <div key={r.season} className={`${pr >= 0 ? 'up' : 'down'} ${inProgress && r.season === league.season ? 'live' : ''}`}>
-                    <span className="v num">{moneySigned(pr, 0)}</span>
+                    <span className="v num">{moneySigned(pr)}</span>
                     <div className="pos">{pr >= 0 && <div className="b" style={{ height: h(pr) }} />}</div>
                     {anyLoss && <div className="neg">{pr < 0 && <div className="b" style={{ height: h(pr) }} />}</div>}
                     <span className="s num">{shortSeason(r.season)}</span>
