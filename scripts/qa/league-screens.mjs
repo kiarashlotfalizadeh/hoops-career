@@ -126,7 +126,7 @@ const visit = async (prefix) => {
   }
   // interactions
   await go('#/inbox');
-  const first = page.locator('.lg-msg').first();
+  const first = page.locator('.td-msg').first();
   if (await first.count()) {
     await first.click();
     await shot(`${prefix}-inbox-open`);

@@ -1,0 +1,419 @@
+/* Today and the inbox. Scoped with the `td-` prefix. */
+
+/* ------------------------------------------------------------ the slab: next game or the phase */
+.td-slab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+.td-over {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
+  padding-right: 14px;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+/* away on the left, home on the right, "@" or "vs" between */
+.td-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.td-side {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.td-side.home {
+  grid-column: 3;
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.td-side-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.td-ab {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+}
+.td-rec {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.1;
+  color: var(--text-2);
+}
+/* a narrow phone: smaller marks and letters, so the two sides keep apart */
+@media (max-width: 374px) {
+  .td-side {
+    gap: 6px;
+  }
+  .td-side svg {
+    width: 32px;
+    height: 32px;
+  }
+  .td-ab {
+    font-size: 28px;
+  }
+  .td-rec {
+    font-size: 16px;
+  }
+}
+.td-at {
+  grid-row: 1;
+  grid-column: 2;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.td-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.td-slab .tag.td-stake {
+  background: #fff;
+  color: #0b0f15;
+}
+.td-out {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.3;
+}
+.td-out-k {
+  flex: none;
+  width: 64px;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+/* the slab's link: in the overline's place on the right, as a section's is */
+.td-over .card-link {
+  flex: none;
+  letter-spacing: 0;
+  text-transform: none;
+  font-stretch: var(--text-w);
+}
+/* outside the season's games: the phase in display type */
+.td-phase-t {
+  font-size: 36px;
+  line-height: 0.95;
+  margin-top: -4px;
+}
+.td-phase-l {
+  margin: -4px 0 0;
+  font-size: 14px;
+  color: var(--text-2);
+  max-width: 36ch;
+}
+
+/* ------------------------------------------------------------ sections */
+.td-none {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.td-page .sec-h .card-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+.td-page .sec-h .card-link:disabled {
+  opacity: 0.42;
+}
+.td-odds {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line-2);
+  color: var(--text-2);
+}
+
+/* information lists sit flat on the page, hairlines between rows; decisions and advice keep their cards */
+.td-flat {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+}
+.td-flat > * {
+  padding-left: var(--gut-l) !important;
+  padding-right: var(--gut-r) !important;
+}
+
+/* ------------------------------------------------------------ job security */
+.td-seat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  color: inherit;
+  --heat: var(--warn);
+  box-shadow: inset 3px 0 0 var(--heat);
+}
+.td-seat.hot {
+  --heat: var(--bad);
+}
+.td-seat:active {
+  background: var(--surface);
+}
+.td-seat-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.td-seat-v {
+  flex: 1;
+  text-align: right;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--heat);
+}
+.td-meter {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+.td-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--heat);
+}
+/* the owner's firing line */
+.td-meter > i {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text-2);
+}
+.td-seat-l {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ standings */
+.td-st {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text-2);
+}
+.td-st:active,
+.td-game:active,
+.td-msg:active {
+  background: var(--surface);
+}
+.td-st.me {
+  color: var(--text);
+  font-weight: 750;
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.td-st-rank {
+  width: 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.td-st-rec {
+  font-weight: 700;
+}
+.td-st-gb {
+  width: 34px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ last games */
+.td-game {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 12px 0 14px;
+  color: var(--text-2);
+}
+.td-wl {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 14px;
+}
+.td-wl.w {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  color: var(--good);
+}
+.td-wl.l {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: color-mix(in srgb, var(--bad) 80%, white);
+}
+.td-score {
+  min-width: 64px;
+  white-space: nowrap;
+  font-weight: 750;
+  color: var(--text);
+}
+.td-ha {
+  width: 18px;
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------ messages */
+.td-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px 10px 12px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.td-msg-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 7px;
+  border-radius: 50%;
+}
+.td-msg.unread .td-msg-dot {
+  background: var(--accent);
+}
+.td-msg-subj {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text-2);
+  line-height: 1.3;
+}
+.td-msg.unread .td-msg-subj {
+  font-weight: 750;
+  color: var(--text);
+}
+.td-msg-subj .tag {
+  flex: none;
+}
+.td-msg-date {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.td-msg-prev {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.td-msg-from {
+  color: var(--text-2);
+}
+
+/* a message in full */
+.td-sheet {
+  gap: 12px;
+}
+.td-sheet-meta {
+  margin-top: -4px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.td-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.td-sheet-body p {
+  margin: 0;
+}
+/* the decision's row: the message above already says what its line would */
+.td-sheet .ag-line {
+  display: none;
+}
+.td-settled {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.td-sheet-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* the inbox screen */
+.td-ibar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.td-ibar .seg {
+  flex: none;
+}
+.td-more {
+  align-self: center;
+}
+
+/* ------------------------------------------------------------ footer */
+.td-foot {
+  display: flex;
+  justify-content: center;
+}
