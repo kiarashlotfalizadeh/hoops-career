@@ -96,7 +96,6 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       <div className="card flush list">
         {cands.length > 0 || shown ? (
           <div className="mu-run">
-            <span className="over">Games each</span>
             <Chips
               label="Games each counter plays"
               value={games}
@@ -113,9 +112,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
               className="btn sm primary"
               onClick={() => void run()}
               disabled={lab.busy || simming || !cands.length}
-              aria-label={`Run each counter over ${games} games against the ${them.name}`}
+              aria-label={`Run ${games} games each: every counter against the ${them.name}`}
             >
-              {lab.busy ? <Spinner /> : <Play size={14} fill="currentColor" />} Run
+              {lab.busy ? <Spinner /> : <Play size={14} fill="currentColor" />} Run {games} games each
             </button>
           </div>
         ) : null}

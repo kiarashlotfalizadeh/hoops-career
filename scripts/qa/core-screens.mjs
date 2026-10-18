@@ -52,7 +52,7 @@ await shot('15-lab', true);
 // counters are tested on the opponent's matchup page (Plan): the old link takes you there
 await page.goto(`${base}/#/lab?mode=counters`);
 await page.waitForTimeout(800);
-await page.getByRole('button', { name: /^Run each counter/ }).click();
+await page.getByRole('button', { name: /^Run \d+ games each/ }).click();
 await page.waitForSelector('.mu-runres', { timeout: 240000 });
 await shot('16-lab-counters', true);
 // start season
