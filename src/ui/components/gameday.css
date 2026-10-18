@@ -429,12 +429,25 @@
   flex-direction: column;
   gap: 6px;
 }
-.bx-table abbr {
+/* (a column's name is spelled out in its title, for a long press: not a link to tap) */
+.bx-table abbr,
+.gv-grades abbr {
   text-decoration: none;
 }
 /* a long name gives way to the numbers on a phone */
 .bx-table td.l {
   max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bx-who {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.bx-who > :first-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -447,9 +460,8 @@
   color: inherit;
 }
 .bx-pog {
+  flex: none;
   display: inline-flex;
-  margin-left: 4px;
-  vertical-align: -1px;
   color: var(--warn);
 }
 .bx-team td {
@@ -706,14 +718,6 @@
 }
 .gd-hl-court .court-cv {
   border-radius: 12px;
-}
-.gd-hl-start {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(6, 8, 12, 0.55);
 }
 .gd-hl-bar {
   display: flex;

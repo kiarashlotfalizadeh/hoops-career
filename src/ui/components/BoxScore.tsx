@@ -72,14 +72,14 @@ export function BoxScore({
           <tbody>
             {rows.map((p) => {
               const who = (
-                <>
+                <span className="bx-who">
                   <span className={p.gs ? 'bold' : ''}>{name(p.pid)}</span>
                   {p.pid === pog && (
                     <span className="bx-pog" role="img" aria-label="Player of the game">
                       <Star size={12} fill="currentColor" aria-hidden="true" />
                     </span>
                   )}
-                </>
+                </span>
               );
               return (
                 <tr key={p.pid}>

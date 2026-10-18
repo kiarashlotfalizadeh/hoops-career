@@ -465,7 +465,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   if (Math.abs(tovSwing) >= 3) {
     factors.push({
       title: `Turnover battle: ${ut.abbrev} ${u.t.tov}, ${ot.abbrev} ${o.t.tov}.`,
-      detail: `Each turnover costs about a point, more when it is a live-ball steal. Points off turnovers: ${ut.abbrev} ${u.extra.offTov}, ${ot.abbrev} ${o.extra.offTov}.`,
+      detail: `Points off turnovers: ${ut.abbrev} ${u.extra.offTov}, ${ot.abbrev} ${o.extra.offTov}.`,
       pts: tovSwing,
       category: 'turnovers',
       advice: tovSwing < 0 ? 'Shift creation to your most secure ball handlers (Tactics > Roles) or lower the pace.' : undefined,
@@ -489,7 +489,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   if (Math.abs(ftSwing) >= 3) {
     factors.push({
       title: `Free throws: ${ut.abbrev} ${u.t.ftm}/${u.t.fta}, ${ot.abbrev} ${o.t.ftm}/${o.t.fta}.`,
-      detail: 'Free-throw volume comes from rim pressure and foul-drawing ability, and from defensive Physicality.',
+      detail: `Fouls committed: ${ut.abbrev} ${u.t.pf}, ${ot.abbrev} ${o.t.pf}.`,
       pts: ftSwing,
       category: 'fouls',
     });
@@ -508,7 +508,10 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
           ? `${star.name} has ${star.pts} points so far (${star.fgm}/${star.fga} FG).`
           : `${star.name} erupted for ${star.pts} points (${star.fgm}/${star.fga} FG).`,
         // (no pace to be on once regulation is played)
-        detail: opts.partial && played < 1 ? `On pace for ${Math.round(star.pts / played)}.` : `The ${side.name} rode their star.`,
+        detail:
+          opts.partial && played < 1
+            ? `On pace for ${Math.round(star.pts / played)}.`
+            : `${Math.round(star.min)} min, ${star.orb + star.drb} reb, ${star.ast} ast for the ${side.name}.`,
         pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
         // (not named: a Star plan goes after their primary creator, who isn't always the scorer)

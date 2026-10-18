@@ -1,7 +1,8 @@
 // The night's highlights in a game report: the reel the save keeps for the user's latest live game
 // (League.reel), played on the court as the live game drew them, with the running call of each play.
+// Until it's played it is one line with its Play button: the court opens for the reel and closes after.
 import { useMemo, useState } from 'react';
-import { Clapperboard, SkipBack, SkipForward, Square } from 'lucide-react';
+import { Clapperboard, Play, SkipBack, SkipForward, Square } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
@@ -62,57 +63,54 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
         </h3>
       }
       right={
-        <span className="tiny dim">
-          {scripts.length} play{scripts.length === 1 ? '' : 's'}
-        </span>
+        sc === null ? (
+          <button className="btn sm" onClick={() => go(0)}>
+            <Play size={14} fill="currentColor" aria-hidden="true" /> Watch {scripts.length} play{scripts.length === 1 ? '' : 's'}
+          </button>
+        ) : (
+          <span className="tiny dim">
+            {scripts.length} play{scripts.length === 1 ? '' : 's'}
+          </span>
+        )
       }
     >
-      <div className="gd-hl">
-        <div className="gd-hl-court">
-          <Court
-            script={sc}
-            speed={league.settings.liveSpeed || 1}
-            paused={sc === null}
-            colors={colors}
-            jersey={(pid) => league.players[pid]?.jersey || '0'}
-            onDone={() => go(i !== null && i + 1 < scripts.length ? i + 1 : null)}
-            onBeat={setBeat}
-            names={nameOf}
-            abbrevs={[home.abbrev, away.abbrev]}
-            floor={floor}
-            label={sc ? `Highlight ${i! + 1} of ${scripts.length}: ${sc.label}.` : 'Highlights: press play.'}
-          />
-          {sc === null && (
-            <div className="gd-hl-start">
-              <button className="btn primary sm" onClick={() => go(0)}>
-                <Clapperboard size={15} /> Play the highlights
-              </button>
-            </div>
-          )}
+      {sc && i !== null && (
+        <div className="gd-hl">
+          <div className="gd-hl-court">
+            <Court
+              script={sc}
+              speed={league.settings.liveSpeed || 1}
+              paused={false}
+              colors={colors}
+              jersey={(pid) => league.players[pid]?.jersey || '0'}
+              onDone={() => go(i !== null && i + 1 < scripts.length ? i + 1 : null)}
+              onBeat={setBeat}
+              names={nameOf}
+              abbrevs={[home.abbrev, away.abbrev]}
+              floor={floor}
+              label={`Highlight ${i + 1} of ${scripts.length}: ${sc.label}.`}
+            />
+          </div>
+          <div className="gd-hl-bar small">
+            <span className="tag brand" style={{ flex: 'none' }}>
+              {i + 1}/{scripts.length}
+            </span>
+            <span className="grow">{captionAt(sc, beat)}</span>
+          </div>
+          <div className="gd-hl-bar">
+            <span className="tiny dim num grow">{at(i)}</span>
+            <button className="btn xs" aria-label="Previous play" disabled={i === 0} onClick={() => go(i - 1)}>
+              <SkipBack size={14} />
+            </button>
+            <button className="btn xs" aria-label="Stop the highlights" onClick={() => go(null)}>
+              <Square size={14} />
+            </button>
+            <button className="btn xs" aria-label="Next play" disabled={i + 1 >= scripts.length} onClick={() => go(i + 1)}>
+              <SkipForward size={14} />
+            </button>
+          </div>
         </div>
-        {sc && i !== null && (
-          <>
-            <div className="gd-hl-bar small">
-              <span className="tag brand" style={{ flex: 'none' }}>
-                {i + 1}/{scripts.length}
-              </span>
-              <span className="grow">{captionAt(sc, beat)}</span>
-            </div>
-            <div className="gd-hl-bar">
-              <span className="tiny dim num grow">{at(i)}</span>
-              <button className="btn xs" aria-label="Previous play" disabled={i === 0} onClick={() => go(i - 1)}>
-                <SkipBack size={14} />
-              </button>
-              <button className="btn xs" aria-label="Stop the highlights" onClick={() => go(null)}>
-                <Square size={14} />
-              </button>
-              <button className="btn xs" aria-label="Next play" disabled={i + 1 >= scripts.length} onClick={() => go(i + 1)}>
-                <SkipForward size={14} />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      )}
     </Section>
   );
 }

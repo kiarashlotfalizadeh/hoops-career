@@ -1135,7 +1135,7 @@
 .lu {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--gap-page);
 }
 .oc-grid {
   display: grid;
@@ -1314,15 +1314,15 @@
   text-transform: uppercase;
   color: var(--text-dim);
   text-align: right;
-  padding-right: 14px;
+  padding-right: var(--row-px);
 }
 .lu-head > :first-child {
   grid-column: 2;
 }
 .lu-row {
   width: 100%;
-  min-height: 46px;
-  padding: 6px 14px;
+  min-height: 44px;
+  padding: 4px var(--row-px);
   text-align: left;
   font-size: 14px;
 }
@@ -1363,7 +1363,7 @@
 .ps {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 .ps-fig {
   padding: 2px 0 0;
@@ -1371,7 +1371,7 @@
 .ps-blk {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sec);
 }
 .ps-blk > .over {
   display: flex;
@@ -1390,7 +1390,7 @@
 .cl {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--gap-page);
 }
 .cl-hint {
   font-size: 12.5px;
@@ -1424,8 +1424,8 @@
 .cl-set {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 14px 12px;
+  gap: 2px;
+  padding: var(--row-py) var(--row-px) calc(var(--row-py) + 2px);
 }
 .cl-set-h {
   display: flex;
@@ -1436,12 +1436,13 @@
 }
 .cl-set-name {
   font-weight: 750;
-  font-size: 15px;
+  font-size: 14.5px;
 }
 .cl-set .more > summary {
-  font-size: 13px;
+  min-height: 24px;
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--text-2);
 }
 /* a glossary word in an overline or a heading reads like the rest of it */
@@ -1454,7 +1455,7 @@
   letter-spacing: inherit;
 }
 .cl-set .chips {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .cl-ato {
   display: flex;
