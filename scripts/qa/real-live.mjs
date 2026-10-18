@@ -36,12 +36,12 @@ for (const [tag, viewport] of [
   await page.goto(`${base}/#/live`);
   await page.waitForTimeout(8000);
   await shot('live');
-  // exact: the top bar's "Inbox, 2 unread" button matches "Box" too
+  // the Clipboard: the lineup, tactics, calls, box and play-by-play
   await page
-    .getByRole('button', { name: 'Box', exact: true })
+    .getByRole('button', { name: 'Clipboard', exact: true })
     .click()
     .catch(() => {});
-  await shot('live-box', true);
+  await shot('live-clipboard', true);
   await ctx.close();
 }
 console.log('errors:', errors.length ? errors.slice(0, 10) : 'none');

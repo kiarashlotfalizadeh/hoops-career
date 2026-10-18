@@ -247,15 +247,24 @@ export function TacticsPanel({
             help="3 to 8 seconds left, their ball: foul at once when it's only a side out, for a worse inbounds look (4th and overtime: tied or up 3 or less)."
           />
           <Slider
-            label="Hack-a-player threshold"
+            label={
+              <span className="tp-label">
+                <Term id="hack">Hack-a</Term> threshold
+                <Help title="Hack-a threshold">
+                  <p>Foul their players who shoot below this from the line, away from the ball (never in a period&apos;s last 2 minutes).</p>
+                  <p>
+                    Off also stops tonight&apos;s game-plan targets
+                    {t.manage.hackTargets?.length ? ` (${t.manage.hackTargets.map(nameOf).join(', ')})` : ''}.
+                  </p>
+                </Help>
+              </span>
+            }
+            name="Hack-a threshold"
             value={t.manage.hackThreshold}
             min={0}
             max={65}
             onChange={(x) => set((tt) => (x === 0 ? stopHacking(tt.manage) : startHacking(tt.manage, x, q)))}
             format={(x) => (x === 0 ? 'Off' : `< ${x}% FT`)}
-            help={`Foul their players who shoot below this from the line (not in a period's last 2 minutes). Off also stops tonight's game-plan targets${
-              t.manage.hackTargets?.length ? ` (${t.manage.hackTargets.map(nameOf).join(', ')})` : ''
-            }.`}
           />
           <Toggle
             on={t.manage.autoTimeouts}

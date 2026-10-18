@@ -1,5 +1,5 @@
-// Play calls in a live game, shared by the Late game card, the Plays sheet, the timeout huddle and
-// the player sheet: what a call is called, whether the court has drawn the possession that ran it
+// Play calls in a live game, shared by the Clipboard's Calls tab, the timeout huddle and the player
+// sheet: what a call is called, whether the court has drawn the possession that ran it
 // yet, and how far the other defense has read each of your sets tonight.
 
 import { useState } from 'react';

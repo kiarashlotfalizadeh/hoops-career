@@ -111,7 +111,7 @@ export function ScoreBug({
     <div className="lb">
       {context && <div className="lb-ctx ellipsis">{context}</div>}
       <div
-        className="lb-main"
+        className="lb-main live-bug"
         role="group"
         aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. Win probability: ${away.abbrev} ${pct(1 - wp)}, ${home.abbrev} ${pct(wp)}` : ''}`}
       >

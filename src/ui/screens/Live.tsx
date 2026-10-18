@@ -528,6 +528,8 @@ export default function Live() {
     // its league went back to the last save: today's game there starts over
     if (now === 'gone') return start();
     if (now === null) {
+      // a sim running now finishes the game itself (from its journal): the screen catches up when it's done
+      if (useStore.getState().sim) return;
       // recording it plays out the day (the standings, the playoff series, the league's moves): if that
       // throws, the league goes back to before it rather than keep a game recorded on a day that never ended
       if (!act('Recording the game', (l) => void lg.commit(l))) return leave();

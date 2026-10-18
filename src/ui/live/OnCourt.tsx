@@ -21,10 +21,9 @@ export interface SideInfo {
 }
 
 /**
- * Both fives on the floor, right under the court (yours first): energy, fouls, points, and who's
- * hot or cold. Tap one of yours for his sheet (orders, a play for him, the sub), one of theirs for
- * his free throws and a Hack-a.
- * `fives` are [home, away] as the court draws them.
+ * Both fives on the floor, at the top of the Clipboard's Lineup (yours first): energy, fouls, points,
+ * and who's hot or cold. Tap one of yours for his sheet (the sub, his orders, a play for him), one of
+ * theirs for the ways to stop him and a Hack-a. `fives` are [home, away] as the court draws them.
  */
 export const OnCourt = memo(function OnCourt({
   view,
@@ -66,7 +65,7 @@ export const OnCourt = memo(function OnCourt({
           const cold = !hot && isCold(p);
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
           // named by what it shows, number and name first ("7 Holmgren"), then the rest for a screen reader
-          const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Orders and subs' : 'Free throws and Hack-a'}`;
+          const more = `: ${e}% energy, ${p.fouls} foul${p.fouls === 1 ? '' : 's'}, ${p.pts} point${p.pts === 1 ? '' : 's'}${what}. ${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a'}`;
           const tone = p.energy < fat ? 'bad' : p.energy < fat + 0.15 ? 'warn' : 'good';
           return (
             <button
