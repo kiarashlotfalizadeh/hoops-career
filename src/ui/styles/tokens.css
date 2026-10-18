@@ -81,6 +81,16 @@
   /* the page's side gutter */
   --gut-l: max(16px, var(--safe-l));
   --gut-r: max(16px, var(--safe-r));
+  /* density: built for players who want the whole sim on one screen. Rows stay at least 44px for a
+     finger; screens use these instead of their own paddings so they tighten (or loosen) together */
+  --gap-page: 12px; /* between a page's sections */
+  --gap-sec: 8px; /* between a section's heading and its content */
+  --pad-card: 12px; /* inside a card */
+  --row-min: 48px; /* a list row */
+  --row-py: 6px;
+  --row-px: 12px;
+  --cell-py: 7px; /* a stat table's cell */
+  --cell-px: 7px;
   color-scheme: dark;
 }
 

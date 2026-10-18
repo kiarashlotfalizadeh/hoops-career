@@ -50,6 +50,12 @@
   height: 100%;
   overflow: visible;
 }
+/* in a list row: smaller, so a roster fits on a phone */
+.listrow > .avatar,
+.listrow > a > .avatar {
+  width: 34px;
+  height: 34px;
+}
 .avatar.lg {
   width: 76px;
   height: 76px;

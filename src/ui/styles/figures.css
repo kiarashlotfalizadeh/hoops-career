@@ -70,7 +70,7 @@
   text-overflow: ellipsis;
 }
 .empty {
-  padding: 28px 16px;
+  padding: 20px 16px;
   text-align: center;
   color: var(--text-dim);
 }

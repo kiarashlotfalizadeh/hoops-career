@@ -37,7 +37,7 @@ table.stats th {
   font-stretch: 100%;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  padding: 9px 8px;
+  padding: var(--cell-py) var(--cell-px);
   text-align: right;
   white-space: nowrap;
   border-bottom: 1px solid var(--line-2);
@@ -55,7 +55,7 @@ table.stats td.l {
   font-variant-numeric: normal;
 }
 table.stats td {
-  padding: 9px 8px;
+  padding: var(--cell-py) var(--cell-px);
   text-align: right;
   white-space: nowrap;
   border-bottom: 1px solid var(--line);
