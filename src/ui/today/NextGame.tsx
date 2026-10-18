@@ -165,7 +165,7 @@ function phaseCard(league: League): { over: string; title: string; line: string;
           : league.phase === 'playin' && ts.playoffRound >= 1
             ? 'You are in. Your first-round opponent comes out of the play-in.'
             : 'Your next game is set once the round before it ends.',
-        link: { to: '/league?tab=playoffs', label: 'Bracket' },
+        link: { to: '/league/playoffs', label: 'Bracket' },
       };
     }
     case 'draftLottery':

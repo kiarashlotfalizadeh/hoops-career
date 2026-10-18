@@ -279,7 +279,7 @@ export default function PlayerView() {
           )}
           {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
           {inRaces.map((r) => (
-            <Link key={r} to="/league?tab=awards" className="tag warn">
+            <Link key={r} to="/league/awards" className="tag warn">
               {r}
             </Link>
           ))}
