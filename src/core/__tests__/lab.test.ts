@@ -81,7 +81,7 @@ describe('tactics lab & reports', () => {
     expect(rep.headline).toMatch(/^The .+ fell to the .+ 121-120 in OT\. Biggest factor: /);
     expect(rep.headline).not.toMatch(/pull-up|nail-biter/);
     expect(rep.headline.split(':')).toHaveLength(2);
-    expect(rep.factors.find((f) => f.title.includes('kick-out'))!.detail).toMatch(/over 1 play\.$/);
+    expect(rep.factors.find((f) => f.title.includes('kick-out'))!.detail).toMatch(/^Over 1 play\.$/);
     // an opposing star's big night suggests a Star plan only to a team without one
     const star: GameResult = { ...res, [oppSide]: { ...res[oppSide], players: res[oppSide].players.map((p, i) => (i === 0 ? { ...p, pts: 45 } : p)) } };
     const t = league.teams[0].tactics;
