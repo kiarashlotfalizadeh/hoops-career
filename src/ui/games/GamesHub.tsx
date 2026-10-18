@@ -16,6 +16,7 @@ import { ordinal } from '../stats';
 import { useQueryParam } from '../league/shared';
 import { TeamScheduleList, type ScheduleFilter } from './ScheduleList';
 import { gameTag, liveSeries, planStatus } from './data';
+import { seasonSeries, seriesText } from './series';
 import './games.css';
 
 const FILTERS: ScheduleFilter[] = ['all', 'upcoming', 'results', 'home', 'away', 'cup', 'post'];
@@ -58,22 +59,6 @@ export default function GamesHub() {
   );
 }
 
-/** Regular-season meetings this season: the user's wins and losses, and how many there are in all. */
-function seasonSeries(league: League, opp: number) {
-  const me = league.userTid;
-  const vs = (g: { home: number; away: number }) => (g.home === me && g.away === opp) || (g.home === opp && g.away === me);
-  let won = 0;
-  let lost = 0;
-  for (const g of league.games) {
-    if (g.season !== league.season || g.type !== 'regular' || !vs({ home: g.home.tid, away: g.away.tid })) continue;
-    const us = g.home.tid === me ? g.home : g.away;
-    if (us.pts > (us === g.home ? g.away : g.home).pts) won++;
-    else lost++;
-  }
-  const total = league.schedule.filter((g) => g.type === 'regular' && vs(g)).length;
-  return { won, lost, total };
-}
-
 /** The next game on a slab in the opponent's colours: when, who, how they stand, the series and the plan. */
 function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const me = league.userTid;
@@ -91,13 +76,13 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const series = g.type === 'playoffs' ? liveSeries(league, opp) : undefined;
   const ss = g.type === 'regular' ? seasonSeries(league, opp) : null;
   const plan = planStatus(league, opp, g);
-  const seriesText = series
+  const seriesLine = series
     ? (() => {
         const [w, l] = series.high === me ? [series.highWins, series.lowWins] : [series.lowWins, series.highWins];
         return w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
       })()
-    : ss && ss.total > 0
-      ? `Meeting ${ss.won + ss.lost + 1} of ${ss.total}${ss.won + ss.lost ? ` · you're ${ss.won}-${ss.lost}` : ''}`
+    : ss
+      ? seriesText(ss)
       : '';
   return (
     <section className="slab gn" style={slabVars(t.colors) as CSSProperties} aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
@@ -133,9 +118,9 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
       </div>
       <div className="gn-foot">
         <span className="grow">
-          {seriesText && <span className="num gn-series">{seriesText}</span>}
+          {seriesLine && <span className="num gn-series">{seriesLine}</span>}
           <Link to={`/games/${opp}?tab=plan`} className={`gn-plan${plan.set ? ' set' : ''}`}>
-            Plan: {plan.set ? plan.text : 'none yet'}
+            {plan.text}
           </Link>
         </span>
         <Link to={`/games/${opp}`} className="btn sm" aria-label={`Matchup: the ${t.name}`}>

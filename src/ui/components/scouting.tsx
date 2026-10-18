@@ -134,7 +134,7 @@ export function KeyPlayers({ d }: { d: ScoutData }) {
   return <StatTable rows={d.players} cols={cols} rowKey={(p) => p.pid} />;
 }
 
-/** The user's meetings with the team (this season and last), and the tactical effects that decided them. */
+/** The user's meetings with the team (this season and last), and the tactical effects that decided them (the season's record is on the matchup's slab). */
 export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
   const opp = league.teams[d.tid];
   const me = league.teams[league.userTid];
@@ -142,9 +142,6 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
   const effects = d.h2h.effects.filter((e) => e.perGame >= 0.8).slice(0, 4);
   return (
     <div className="col" style={{ gap: 10 }}>
-      <div className="bold">
-        You are {d.h2h.won}-{d.h2h.lost} against them
-      </div>
       <div className="col" style={{ gap: 6 }}>
         {[...d.h2h.games].reverse().map((g) => (
           <Link key={g.gid} to={`/game/${g.gid}`} className="row between small" style={{ gap: 8 }}>

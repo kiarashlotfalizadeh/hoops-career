@@ -19,7 +19,7 @@ import { Term } from '../../components/Glossary';
 import { AttackCard, JunkCard } from '../../components/GuardPlanner';
 import { rosterNames } from '../../stats';
 import { changesLine, screenChanges } from '../../tactics/changes';
-import { liveSeries } from '../data';
+import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
 
 export function PlanTab({ league, opp }: { league: League; opp: number }) {
@@ -61,10 +61,12 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
             {extras && <div className="mu-item mu-note">Plus {extras} (Matchups).</div>}
           </div>
         ) : (
-          <div className="mu-note">None yet: you play your playbook ({playbookLabel(base)}). Add a counter or set any card below.</div>
+          <div className="mu-note">
+            {NO_PLAN}: you play your playbook ({playbookLabel(base)}). Add a counter or set any card below.
+          </div>
         )}
         <div className="mu-scope">
-          <span className="over">Lasts</span>
+          <span className="over">Plan lasts</span>
           <Segmented
             label="How long the plan lasts"
             value={scope}

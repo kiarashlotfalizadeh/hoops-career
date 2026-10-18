@@ -50,14 +50,19 @@ export function planSize(plan: GamePlan | null): number {
 export const SCOPE_WORD: Record<PlanScope, string> = { next: 'next game', series: 'this series', season: 'all season' };
 
 /**
- * The plan that applies against `opp` (in `g`), in a few words: "3 changes · next game", or "None:
- * your playbook plays" when there isn't one.
+ * The plan that applies against `opp` (in `g`), as every screen says it: "Plan: 3 changes · next
+ * game" (`detail` without the "Plan: ", for a line already labelled Plan), or "No game plan yet".
  */
-export function planStatus(league: League, opp: number, g?: ScheduledGame): { set: boolean; text: string } {
+export function planStatus(league: League, opp: number, g?: ScheduledGame): { set: boolean; text: string; detail: string } {
   const plan = planFor(league, opp, g);
   const n = planSize(plan);
-  return n && plan ? { set: true, text: `${plural(n, 'change')} · ${SCOPE_WORD[plan.scope ?? 'next']}` } : { set: false, text: 'None: your playbook plays' };
+  if (!n || !plan) return { set: false, text: NO_PLAN, detail: NO_PLAN };
+  const detail = `${plural(n, 'change')} · ${SCOPE_WORD[plan.scope ?? 'next']}`;
+  return { set: true, text: `Plan: ${detail}`, detail };
 }
+
+/** A matchup with no plan, the same words everywhere (Today's next game too). */
+export const NO_PLAN = 'No game plan yet';
 
 /** The user's side in a game: home, away or (the Cup final) neither. */
 export const atWord = (league: League, g: ScheduledGame, neutral: boolean) => (g.home === league.userTid || neutral ? 'vs' : '@');

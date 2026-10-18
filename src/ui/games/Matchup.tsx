@@ -22,8 +22,8 @@ import { slabVars } from '../teamColors';
 import { ordinal } from '../stats';
 import { useBack } from '../nav';
 import { TabBar, useQueryParam } from '../league/shared';
-import { plural } from '../../core/format';
 import { liveSeries, meetings, planStatus } from './data';
+import { lastTenText, seasonSeries, seriesParts, streakText } from './series';
 import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
 import { PlanTab } from './matchup/PlanTab';
@@ -119,22 +119,14 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
   const rank = useLeagueMemo(() => confStandings(league, t.conf).find((r) => r.tid === opp)?.confRank ?? 0, [league, t.conf, opp]);
   const next = meetings(league, opp);
   const series = liveSeries(league, opp);
-  const h2h = useLeagueMemo(() => seasonMeetings(league, opp), [league, opp]);
-  const l10 = ts.lastTen ?? [];
-  const form = played
-    ? [
-        l10.length ? `${l10.filter((x) => x === 1).length}-${l10.filter((x) => x === 0).length} in last ${l10.length}` : '',
-        ts.streak ? (ts.streak > 0 ? `won ${ts.streak}` : `lost ${-ts.streak}`) : '',
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : '';
+  const h2h = useLeagueMemo(() => seasonSeries(league, opp), [league, opp]);
+  const form = played ? [lastTenText(ts.lastTen ?? []), streakText(ts.streak)].filter(Boolean).join(' · ') : '';
   const where = (g: (typeof next)[number]) => (neutralSite(g) ? 'neutral floor' : g.home === me ? 'home' : 'away');
   // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
   const pre = league.phase === 'preseason';
   const day = (d: number) =>
     !pre && d === league.day ? 'Today' : !pre && d === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, d, { weekday: 'short', month: 'short', day: 'numeric' });
-  const last = h2h.games[h2h.games.length - 1];
+  const sp = seriesParts(h2h);
   const plan = planStatus(league, opp, next[0]);
   return (
     <section className="slab mu-slab" style={slabVars(t.colors) as CSSProperties} aria-label={`Matchup: the ${t.region} ${t.name}`}>
@@ -189,23 +181,12 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
         )}
         {h2h.total > 0 && (
           <Fact k="Season">
-            {/* (no record before the first meeting: just how many there are) */}
-            {h2h.games.length ? (
-              <>
-                <span className="num">
-                  {h2h.won}-{h2h.lost}
-                </span>
-                {h2h.left > 0 ? ` · ${h2h.left} left` : ''}
-              </>
-            ) : (
-              plural(h2h.total, 'meeting')
-            )}
-            {last && (
+            <span className="num">{sp.record}</span>
+            {sp.left && ` · ${sp.left}`}
+            {h2h.last && (
               <>
                 {' · last '}
-                <Link to={`/game/${last.gid}`}>
-                  {last.won ? 'W' : 'L'} {last.us}-{last.them}
-                </Link>
+                <Link to={`/game/${h2h.last.gid}`}>{sp.last}</Link>
               </>
             )}
           </Fact>
@@ -214,27 +195,11 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
         {next.length > 0 && onPlan && (
           <Fact k="Plan">
             <button className={`mu-planlink${plan.set ? ' set' : ''}`} onClick={onPlan}>
-              {plan.set ? plan.text : 'None yet: set one'} <ChevronRight size={14} aria-hidden="true" />
+              {plan.detail} <ChevronRight size={14} aria-hidden="true" />
             </button>
           </Fact>
         )}
       </dl>
     </section>
   );
-}
-
-/** This season's regular-season meetings with them: played (oldest first), won, lost, left. */
-function seasonMeetings(league: League, opp: number) {
-  const me = league.userTid;
-  const games: { gid: number; us: number; them: number; won: boolean }[] = [];
-  for (const g of league.games) {
-    if (g.season !== league.season || g.type !== 'regular') continue;
-    if (!((g.home.tid === me && g.away.tid === opp) || (g.home.tid === opp && g.away.tid === me))) continue;
-    const us = g.home.tid === me ? g.home : g.away;
-    const them = us === g.home ? g.away : g.home;
-    games.push({ gid: g.gid, us: us.pts, them: them.pts, won: us.pts > them.pts });
-  }
-  const total = league.schedule.filter((g) => g.type === 'regular' && ((g.home === me && g.away === opp) || (g.home === opp && g.away === me))).length;
-  const won = games.filter((g) => g.won).length;
-  return { games, won, lost: games.length - won, left: Math.max(0, total - games.length), total };
 }
