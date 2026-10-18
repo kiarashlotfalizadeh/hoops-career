@@ -17,9 +17,9 @@ interface InjuryType {
  * many games, or anyone else in the rotation out RETURN_MAIL_GAMES. Shorter absences, and players
  * out of the rotation, still show on the roster, Today's next game and the rotation.
  */
-const MAIL_MIN_GAMES = 5;
+const MAIL_MIN_GAMES = 8;
 /** A return gets its own mail only after an absence this long; shorter ones end without a word. */
-const RETURN_MAIL_GAMES = 10;
+const RETURN_MAIL_GAMES = 15;
 
 // Weights and lengths tuned so a team loses about four to six players a season to 10+ game
 // absences and the league sees a handful of season-ending tears, as in recent NBA seasons.
