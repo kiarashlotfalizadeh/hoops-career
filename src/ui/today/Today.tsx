@@ -187,7 +187,11 @@ function StandingsNearby({ league }: { league: League }) {
             <span className="num td-st-rec">
               {r.won}-{r.lost}
             </span>
-            <span className="num td-st-gb">{r.gb === 0 ? '—' : r.gb.toFixed(1)}</span>
+            {/* games behind the conference leader, named once a row: the list has no header */}
+            <span className="num td-st-gb">
+              {r.gb === 0 ? '—' : r.gb.toFixed(1)}
+              <small> GB</small>
+            </span>
           </Link>
         ))}
       </div>

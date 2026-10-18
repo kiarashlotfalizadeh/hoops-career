@@ -1,6 +1,22 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
-import { AlertTriangle, Bell, Briefcase, CalendarDays, ChevronRight, ChevronUp, Play, Settings as SettingsIcon, Sun, Trophy, Users, Wand2, X, type LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bell,
+  Briefcase,
+  CalendarDays,
+  ChevronRight,
+  ChevronUp,
+  Play,
+  Search,
+  Settings as SettingsIcon,
+  Sun,
+  Trophy,
+  Users,
+  Wand2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
@@ -20,6 +36,7 @@ import { useFlowRunner } from './useFlow';
 import { lazyRetry } from './lazyRetry';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Moments } from './components/Moments';
+import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { haptic } from '../native';
 import { TABS, tabFor, type TabId } from './nav';
@@ -175,6 +192,19 @@ function TopBar() {
   const unread = league.inbox.filter((m) => !m.read).length;
   // the standings scan every game: worked out again when a game is played, not on every edit
   const status = gamesMemo(statusLines, league, () => statusLine(league));
+  const [searching, setSearching] = useState(false);
+  // Ctrl/⌘ K anywhere, or "/" when not typing, opens search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
+      if ((e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey)) {
+        e.preventDefault();
+        setSearching(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <header className="topbar" data-phase={PHASE_LABEL[league.phase]}>
       <div className="topbar-inner">
@@ -201,6 +231,9 @@ function TopBar() {
             <Wand2 size={20} />
           </button>
         )}
+        <button className="iconbtn" onClick={() => setSearching(true)} aria-label="Search" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K /">
+          <Search size={20} />
+        </button>
         {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
         <button className="iconbtn" onClick={() => nav('/inbox')}>
           <Bell size={20} aria-hidden="true" />
@@ -211,6 +244,7 @@ function TopBar() {
           <SettingsIcon size={20} />
         </button>
       </div>
+      <QuickSearch open={searching} onClose={() => setSearching(false)} />
     </header>
   );
 }

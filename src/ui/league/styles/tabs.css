@@ -1,0 +1,52 @@
+/* The League hub's sticky page tabs (TabBar), shared by Team and other teams' pages. */
+/* ------------------------------------------------------------------ sticky page tabs */
+.lg-tabs {
+  position: sticky;
+  top: calc(var(--top-h) + var(--safe-t));
+  z-index: 20;
+  /* edge to edge across the page's gutters, which grow past a landscape notch */
+  margin: -6px calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  /* solid fallback first: iOS before 16.2 has no color-mix */
+  background: rgba(7, 9, 12, 0.94);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--line);
+}
+.lg-tabs .seg.tabs {
+  border-bottom: none;
+  /* the first tab's label lines up with the page's gutter */
+  padding: 0 calc(var(--gut-r) - 12px) 0 calc(var(--gut-l) - 12px);
+  scroll-padding: 0 var(--gut-l);
+}
+.lg-tabs .seg.tabs button {
+  padding: 0 12px;
+}
+/* the scroller clips below its edge: the active tab's bar sits inside it */
+.lg-tabs .seg.tabs button.on::before {
+  bottom: 0;
+}
+.lg-tabs::before,
+.lg-tabs::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+.lg-tabs::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--bg) 20%, transparent);
+}
+.lg-tabs::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--bg) 20%, transparent);
+}
+.lg-tabs.fl::before,
+.lg-tabs.fr::after {
+  opacity: 1;
+}

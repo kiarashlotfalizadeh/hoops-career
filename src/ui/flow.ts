@@ -43,6 +43,11 @@ export function opponentText(league: League, g: ScheduledGame): string {
   return `${home ? 'vs' : '@'} ${league.teams[opp].abbrev} (${rec})`;
 }
 
+/** The user's games still to play from today up to (not including) `end`. */
+function yourGames(league: League, end: number): number {
+  return league.schedule.filter((g) => !g.played && g.type !== 'playoffs' && g.day >= league.day && g.day < end && (g.home === league.userTid || g.away === league.userTid)).length;
+}
+
 /** `onLive`: the Live screen is open, so a game in progress is all the menu offers. */
 export function flowActions(league: League, opts: { onLive?: boolean } = {}): FlowAction[] {
   const acts = phaseActions(league, opts);
@@ -116,10 +121,14 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       a.push({ id: 'day', label: 'Sim 1 day', sim: { kind: 'days', n: 1 } });
       if (league.phase === 'regular') {
         const left = regularGamesLeft(league);
-        a.push({ id: 'week', label: 'Sim 1 week', sim: { kind: 'week' } });
-        if (league.day < league.tradeDeadlineDay) a.push({ id: 'deadline', label: 'Sim to trade deadline', sim: { kind: 'deadline' } });
-        if (league.day < allStarStop(league)) a.push({ id: 'allstar', label: 'Sim to All-Star break', sim: { kind: 'allStar' } });
-        a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${left} game${left === 1 ? '' : 's'} left league-wide`, sim: { kind: 'endRegular' } });
+        // how far each sim goes, in your games: a sim of n days plays today and the n - 1 after it
+        const span = (end: number, lead?: string) => [lead, `${yourGames(league, end)} of your games`].filter(Boolean).join(' · ');
+        a.push({ id: 'week', label: 'Sim 1 week', sub: span(league.day + 7, `Through ${when(league.day + 6)}`), sim: { kind: 'week' } });
+        if (league.day < league.tradeDeadlineDay)
+          a.push({ id: 'deadline', label: 'Sim to trade deadline', sub: span(league.tradeDeadlineDay, when(league.tradeDeadlineDay)), sim: { kind: 'deadline' } });
+        if (league.day < allStarStop(league))
+          a.push({ id: 'allstar', label: 'Sim to All-Star break', sub: span(allStarStop(league), when(allStarStop(league))), sim: { kind: 'allStar' } });
+        a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${span(Infinity)} · ${left} league-wide`, sim: { kind: 'endRegular' } });
       } else if (!out) {
         a.push({ id: 'endpost', label: league.phase === 'playin' ? 'Sim through play-in' : 'Sim to end of playoffs', sim: { kind: 'endPostseason' } });
       }

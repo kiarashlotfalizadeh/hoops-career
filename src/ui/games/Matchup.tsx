@@ -1,10 +1,11 @@
 // The matchup page: everything about one opponent in one place. Their slab (record, form, rank, the
-// next meeting, the season series), then the sections: Preview (when the next game against them is
-// the user's next game), Scout, Plan, Matchups and Test (the Lab against them). On game day a dock
-// tips the game off; quick sim stays in the Continue bar's options.
+// next meeting, the season series, your plan against them), then the sections: Preview (when the
+// next game against them is the user's next game), Scout, Plan (with the staff's counters, tested in
+// place), Matchups and Lab (your plan against them, projected). On game day a dock tips the game off;
+// quick sim stays in the Continue bar's options.
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
 import { useFlowRunner } from '../useFlow';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import type { League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -20,22 +21,26 @@ import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
 import { ordinal } from '../stats';
 import { useBack } from '../nav';
-import { TabBar, useQueryParam, useSetParams } from '../league/shared';
-import { liveSeries, meetings } from './data';
+import { TabBar, useQueryParam } from '../league/shared';
+import { plural } from '../../core/format';
+import { liveSeries, meetings, planStatus } from './data';
 import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
 import { PlanTab } from './matchup/PlanTab';
 import { MatchupPlanner } from '../components/MatchupPlanner';
-import { LabPanel } from './Lab';
+import { LabPanel } from './lab/LabPanel';
 import './games.css';
 
-type Tab = 'preview' | 'scout' | 'plan' | 'matchups' | 'test';
-const LABEL: Record<Tab, string> = { preview: 'Preview', scout: 'Scout', plan: 'Plan', matchups: 'Matchups', test: 'Test' };
+type Tab = 'preview' | 'scout' | 'plan' | 'matchups' | 'lab';
+const LABEL: Record<Tab, string> = { preview: 'Preview', scout: 'Scout', plan: 'Plan', matchups: 'Matchups', lab: 'Lab' };
 
 export default function Matchup() {
   const league = useLeague();
   const { tid } = useParams();
+  const [params] = useSearchParams();
   const opp = Number(tid);
+  // (links from before the Lab's counters moved to the Plan: Test, and Test's counters)
+  if (params.get('tab') === 'test') return <Navigate to={`/games/${tid}?tab=${params.get('lab') === 'counters' ? 'plan' : 'lab'}`} replace />;
   const team = Number.isInteger(opp) ? league.teams[opp] : undefined;
   if (!team || opp === league.userTid)
     return (
@@ -54,20 +59,18 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   const upNext = useLeagueMemo(() => nextUserGame(league), [league]);
   // the preview is for the user's next game: when that's against them
   const preview = next && upNext?.gid === next.gid ? next : undefined;
-  const tabs: Tab[] = [...(preview ? (['preview'] as const) : []), 'scout', 'plan', 'matchups', 'test'];
+  const tabs: Tab[] = [...(preview ? (['preview'] as const) : []), 'scout', 'plan', 'matchups', 'lab'];
   const [tab, setTab] = useQueryParam<Tab>('tab', preview ? 'preview' : 'scout', tabs);
-  const setParams = useSetParams();
   const today = !!preview && preview.day === league.day;
   return (
     <main className="page">
-      <Slab league={league} opp={opp} />
+      <Slab league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
       {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} />}
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
-      {/* "Test them" opens the Lab on the staff's counters */}
-      {tab === 'plan' && <PlanTab league={league} opp={opp} onTest={() => setParams({ tab: 'test', lab: 'counters' })} />}
+      {tab === 'plan' && <PlanTab league={league} opp={opp} />}
       {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}
-      {tab === 'test' && <LabPanel league={league} fixedOpp={opp} modes={['project', 'counters']} />}
+      {tab === 'lab' && <LabPanel league={league} fixedOpp={opp} modes={['project']} />}
       {today && <TipOff league={league} gid={preview.gid} name={league.teams[opp].name} />}
     </main>
   );
@@ -106,8 +109,8 @@ function Fact({ k, children }: { k: string; children: ReactNode }) {
   );
 }
 
-/** Their slab: who they are, how they stand, the next meeting and how the season series stands. */
-function Slab({ league, opp }: { league: League; opp: number }) {
+/** Their slab: who they are, how they stand, the next meeting, how the season series stands and your plan for them (`onPlan`: a tap to it; none on the Plan tab). */
+function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: () => void }) {
   const goBack = useBack('/games');
   const me = league.userTid;
   const t = league.teams[opp];
@@ -132,6 +135,7 @@ function Slab({ league, opp }: { league: League; opp: number }) {
   const day = (d: number) =>
     !pre && d === league.day ? 'Today' : !pre && d === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, d, { weekday: 'short', month: 'short', day: 'numeric' });
   const last = h2h.games[h2h.games.length - 1];
+  const plan = planStatus(league, opp, next[0]);
   return (
     <section className="slab mu-slab" style={slabVars(t.colors) as CSSProperties} aria-label={`Matchup: the ${t.region} ${t.name}`}>
       <span className="slab-mark">
@@ -185,10 +189,17 @@ function Slab({ league, opp }: { league: League; opp: number }) {
         )}
         {h2h.total > 0 && (
           <Fact k="Season">
-            <span className="num">
-              {h2h.won}-{h2h.lost}
-            </span>
-            {h2h.left > 0 ? ` · ${h2h.left} left` : ''}
+            {/* (no record before the first meeting: just how many there are) */}
+            {h2h.games.length ? (
+              <>
+                <span className="num">
+                  {h2h.won}-{h2h.lost}
+                </span>
+                {h2h.left > 0 ? ` · ${h2h.left} left` : ''}
+              </>
+            ) : (
+              plural(h2h.total, 'meeting')
+            )}
             {last && (
               <>
                 {' · last '}
@@ -197,6 +208,14 @@ function Slab({ league, opp }: { league: League; opp: number }) {
                 </Link>
               </>
             )}
+          </Fact>
+        )}
+        {/* (the Plan tab shows the plan itself) */}
+        {next.length > 0 && onPlan && (
+          <Fact k="Plan">
+            <button className={`mu-planlink${plan.set ? ' set' : ''}`} onClick={onPlan}>
+              {plan.set ? plan.text : 'None yet: set one'} <ChevronRight size={14} aria-hidden="true" />
+            </button>
           </Fact>
         )}
       </dl>

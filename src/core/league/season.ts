@@ -98,13 +98,7 @@ export function startRegularSeason(league: League): string[] {
   league.day = 0;
   // a trade promised over the summer is due by opening night
   resolvePromises(league);
-  addInbox(league, {
-    from: 'Assistant Coach',
-    subject: 'Opening night',
-    body: 'The regular season tips off. I will flag rotation and tactical issues as they come up, and every opponent has a scouting report on its matchup page (Games).',
-    tone: 'neutral',
-    link: '/games',
-  });
+  // (no "the season tips off" mail: Today says it, and the staff's advice comes through its feed)
   // the owner sets the season's goals from the roster the team opens with (frozen for the season)
   setOwnerGoals(league);
   cleanProposals(league);

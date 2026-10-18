@@ -1,5 +1,5 @@
 // The main menu (/start): the league played last one tap away, a new league, a backup to import, and
-// every saved league. Saves from before the redesign can't be opened: they're listed to keep (as a
+// the other saved leagues. Saves from before the redesign can't be opened: they're listed to keep (as a
 // file) or delete.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -80,8 +80,9 @@ export default function Start() {
       console.error(e);
       useStore.getState().toast('Export failed.', 'bad');
     });
-  // the league played last that this version can open
+  // the league played last that this version can open, and the rest (its Delete is in Settings)
   const latest = leagues?.find(openable);
+  const others = leagues?.filter((m) => m !== latest) ?? [];
   const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
     <main className="page standalone st-page">
@@ -117,15 +118,15 @@ export default function Start() {
         </button>
         <ImportButton block ghost />
       </div>
-      {/* (nothing saved yet: New league above is all there is to say) */}
+      {/* (nothing else saved: the Continue card and New league are all there is to say) */}
       {error ? (
         <div className="empty small" role="alert">
           {error}
         </div>
-      ) : !leagues?.length ? null : (
-        <Section title="Saved leagues">
+      ) : !others.length ? null : (
+        <Section title={latest ? 'Other leagues' : 'Saved leagues'}>
           <div className="card flush list">
-            {leagues.map((m) => {
+            {others.map((m) => {
               const tid = tidOf(m);
               // (as the league has it: god mode can rename and recolour a team)
               const logo = <TeamLogo tid={tid >= 0 ? tid : 0} size={36} abbrev={m.teamAbbrev} colors={m.colors} decorative />;

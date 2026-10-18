@@ -1,6 +1,7 @@
 // What the Games screens read about the user's schedule: his meetings with one team, a playoff
 // series, a game's short tag ("Cup QF", "R1 G4") and how far his game plan against a team goes.
-import type { GamePlan, League, ScheduledGame } from '../../core/types';
+import type { GamePlan, League, PlanScope, ScheduledGame } from '../../core/types';
+import { plural } from '../../core/format';
 import { planFor } from '../../core/league/gamePlans';
 import { roundName } from '../league/shared';
 
@@ -45,10 +46,17 @@ export function planSize(plan: GamePlan | null): number {
   return plan.items.length + Object.keys(plan.matchups ?? {}).length + Object.keys(plan.playerD ?? {}).length;
 }
 
-/** "Plan set · 2 items" / "No plan", for the plan that applies against `opp` (in `g`). */
+/** How long a plan lasts, as its status line says it. */
+export const SCOPE_WORD: Record<PlanScope, string> = { next: 'next game', series: 'this series', season: 'all season' };
+
+/**
+ * The plan that applies against `opp` (in `g`), in a few words: "3 changes · next game", or "None:
+ * your playbook plays" when there isn't one.
+ */
 export function planStatus(league: League, opp: number, g?: ScheduledGame): { set: boolean; text: string } {
-  const n = planSize(planFor(league, opp, g));
-  return n ? { set: true, text: `Plan set · ${n} item${n === 1 ? '' : 's'}` } : { set: false, text: 'No plan' };
+  const plan = planFor(league, opp, g);
+  const n = planSize(plan);
+  return n && plan ? { set: true, text: `${plural(n, 'change')} · ${SCOPE_WORD[plan.scope ?? 'next']}` } : { set: false, text: 'None: your playbook plays' };
 }
 
 /** The user's side in a game: home, away or (the Cup final) neither. */

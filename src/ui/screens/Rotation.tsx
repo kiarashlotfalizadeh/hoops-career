@@ -3,7 +3,7 @@
 // targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
 import { Fragment, useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, BedDouble, Undo2 } from 'lucide-react';
+import { ArrowUp, BedDouble, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit, touch } from '../../state/actions';
 import { rosterSorted } from '../../core/league/helpers';
@@ -16,11 +16,12 @@ import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
 import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, ordinal, playerSeason, rosterNames, startingFive } from '../stats';
+import { plural } from '../../core/format';
 import { swapSpots } from '../../core/analysis/lineups';
 import { MoodMark } from '../team/MoodMark';
 import './team.css';
 
-/** The minute bar's full width: the most a target can be. */
+/** The most a target can be. */
 const MAX_MIN = 44;
 /** Season wear the staff flags (as the advisor does). */
 const WORN = 55;
@@ -92,13 +93,13 @@ export default function Rotation() {
   }, [JSON.stringify(rot), playoffs]);
   const planned = healthyOrder.filter((pid) => (plan.norm[pid] ?? 0) > 0);
 
-  const move = (pid: number, dir: -1 | 1) =>
+  // one arrow a row: he trades places with the player above (to move one down, move the next one up)
+  const moveUp = (pid: number) =>
     update((r) => {
       const o = order.slice();
       const i = o.indexOf(pid);
-      const j = i + dir;
-      if (j < 0 || j >= o.length) return;
-      [o[i], o[j]] = [o[j], o[i]];
+      if (i < 1) return;
+      [o[i - 1], o[i]] = [o[i], o[i - 1]];
       r.order = o;
     });
 
@@ -138,9 +139,9 @@ export default function Rotation() {
       <div className="tm-rsum">
         <Statline
           items={[
-            { k: 'Minutes', v: total, s: total === 240 ? 'of 240' : 'scaled to 240' },
-            { k: 'Starters', v: startMin, s: 'first five' },
-            { k: 'Bench', v: total - startMin, s: 'the rest' },
+            { k: 'Targets', v: total, s: total === 240 ? 'of 240 min' : 'min, scaled to 240' },
+            { k: 'Starters', v: startMin, s: 'min, first five' },
+            { k: 'Bench', v: total - startMin, s: 'min, the rest' },
           ]}
         />
         {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} injured minutes go to the healthy players.</div>}
@@ -158,7 +159,10 @@ export default function Rotation() {
               Closers finish the 4th quarter and overtime when healthy. Players who rest on back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury
               risk.
             </p>
-            <p>A row marks a worn-down player (wear {WORN}+) and one whose target is well short of the minutes he expects, which costs his mood.</p>
+            <p>
+              The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+) and one whose target is well short of the minutes he expects, which
+              costs his mood.
+            </p>
           </Help>
         }
       >
@@ -174,14 +178,14 @@ export default function Rotation() {
                   {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
                   {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
                   <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
-                    <div className="move-arrows">
-                      <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0 || simming}>
-                        <ArrowUp size={16} />
-                      </button>
-                      <button className="iconbtn" onClick={() => move(pid, 1)} aria-label={`Move ${p.firstName} ${p.lastName} down`} disabled={i === order.length - 1 || simming}>
-                        <ArrowDown size={16} />
-                      </button>
-                    </div>
+                    <button
+                      className="iconbtn tm-rup"
+                      onClick={() => moveUp(pid)}
+                      aria-label={i > 0 ? `Move ${p.firstName} ${p.lastName} up, above ${fullNameOf(order[i - 1])}` : `${p.firstName} ${p.lastName} is first`}
+                      disabled={i === 0 || simming}
+                    >
+                      <ArrowUp size={16} />
+                    </button>
                     <Avatar p={p} />
                     <div
                       className="tm-rrow-main"
@@ -202,14 +206,11 @@ export default function Rotation() {
                         </div>
                         {/* the risks first, so a narrow row cuts the stamina, not them */}
                         <div className="lr-meta ellipsis">
-                          {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg` : p.archetype}
+                          {p.pos} · {p.injury ? `${p.injury.type}, ${plural(p.injury.gamesRemaining, 'game')}` : pg ? `${f1(pg.min)} mpg` : p.archetype}
                           {p.wear >= WORN && <span className="warn"> · wear {Math.round(p.wear)}</span>}
-                          {short && <span className="warn"> · wants {p.mood.expectedMin}</span>}
-                          {` · sta ${attrDisplay(p.ratings.end)}`}
+                          {short && <span className="warn"> · wants {p.mood.expectedMin} min</span>}
+                          {` · stamina ${attrDisplay(p.ratings.end)}`}
                           {p.wear >= 30 && p.wear < WORN ? ` · wear ${Math.round(p.wear)}` : ''}
-                        </div>
-                        <div className="bar tm-mbar">
-                          <div style={{ width: `${(m / MAX_MIN) * 100}%` }} />
                         </div>
                       </div>
                       <span className="tm-rmin">

@@ -259,10 +259,15 @@
   font-weight: 700;
 }
 .td-st-gb {
-  width: 34px;
+  width: 58px;
   text-align: right;
   font-size: 13px;
   color: var(--text-dim);
+}
+.td-st-gb small {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
 }
 
 /* ------------------------------------------------------------ last games */
@@ -311,8 +316,8 @@
   align-items: flex-start;
   gap: 10px;
   width: 100%;
-  min-height: 56px;
-  padding: 10px 14px 10px 12px;
+  min-height: var(--row-min);
+  padding: 7px var(--row-px) 7px 12px;
   background: none;
   border: none;
   color: inherit;

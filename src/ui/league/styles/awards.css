@@ -1,0 +1,232 @@
+/* Awards: the titles, the races and All-Star Saturday. */
+/* ------------------------------------------------------------------ awards */
+.lg-award {
+  display: grid;
+  grid-template-columns: 34px 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 64px;
+}
+a.lg-award:active {
+  background: var(--surface);
+}
+.lg-award .ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--tier-elite) 14%, transparent);
+  color: var(--tier-elite);
+}
+.lg-award-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-award .lb {
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-award .nm {
+  font-weight: 750;
+  font-size: 15px;
+  margin-top: 1px;
+}
+.lg-award .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.lg-stack {
+  gap: 16px;
+}
+/* a five (an All-NBA team, the All-Stars): mark, name and position, the line */
+.lg-five {
+  display: flex;
+  flex-direction: column;
+}
+.lg-five-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 4px 14px;
+  font-size: 13.5px;
+}
+.lg-five-row + .lg-five-row {
+  border-top: 1px solid var(--line);
+}
+.lg-five-row:active {
+  background: var(--surface);
+}
+.lg-five-row.me {
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-mvp {
+  margin-left: 6px;
+}
+
+/* All-Star Saturday: the place, who, the first round and the final; under each dunker his dunks */
+.lg-sat {
+  padding: 6px 14px 8px;
+}
+.lg-sat-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 32px 38px;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  font-size: 13.5px;
+}
+.lg-sat-row > :nth-child(n + 3) {
+  text-align: right;
+}
+.lg-sat-row + .lg-sat-row,
+.lg-sat-dunker + .lg-sat-dunker {
+  border-top: 1px solid var(--line);
+}
+.lg-sat-row.head {
+  min-height: 22px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-sat-row.head + .lg-sat-dunker {
+  border-top: 1px solid var(--line);
+}
+.lg-sat-rk {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+.lg-sat-win,
+.lg-sat-rk.lg-sat-win {
+  color: var(--tier-elite);
+}
+/* a contestant's name: the link reaches up and down the row (its label keeps the ellipsis) */
+.lg-sat-who {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.lg-sat-who::after {
+  content: '';
+  position: absolute;
+  inset: -9px -4px;
+}
+.lg-sat-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lg-sat-dunks {
+  display: grid;
+  grid-template-columns: 34px 22px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 3px 8px;
+  padding: 0 0 9px 24px;
+  font-size: 12px;
+}
+.lg-sat-lb {
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-sat-miss {
+  color: var(--warn);
+}
+.lg-sat-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.lg-sat-note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* the award races: place, jersey, name and line with the voters' gap to the leader */
+.lg-race-row {
+  display: grid;
+  grid-template-columns: 18px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: var(--row-py) 14px var(--row-py) 12px;
+  min-height: var(--row-min);
+}
+.lg-race-row:active {
+  background: var(--surface);
+}
+.lg-race-row.me {
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-race-row .rank {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.lg-race-row.first .rank {
+  color: var(--tier-elite);
+}
+.lg-race-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lg-race-t .nm {
+  font-weight: 750;
+}
+.lg-race-t .sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+/* the voters' score with the leader at 100, and its key in the section's heading */
+.lg-race-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text-2);
+  min-width: 34px;
+  text-align: right;
+}
+.lg-race-row.first .lg-race-v {
+  color: var(--tier-elite);
+}
+.lg-race-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.lg-race-row > .avatar {
+  width: 34px;
+  height: 34px;
+}

@@ -1,34 +1,28 @@
-// The matchup page's Plan: how long the plan lasts, what's in it, the staff's counters with the
-// numbers behind them, a star plan, a junk defense and who it chases, a defender to attack, players
-// to hack, and a note. Every change is the user's tactics against this team only, on top of his
-// playbook (see core/league/gamePlans.ts).
+// The matchup page's Plan: your plan against this team first (each item with exactly what it
+// changes, and how long it lasts), then the staff's counters (tested in place), a star plan, a junk
+// defense and who it chases, a defender to attack, players to hack, and a note. Every change is the
+// user's tactics against this team only, on top of his playbook (see core/league/gamePlans.ts).
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
-import type { League, PlanScope, StarPlan } from '../../../core/types';
+import { Check, X } from 'lucide-react';
+import type { GamePlanItem, League, PlanScope, StarPlan } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { edit } from '../../../state/actions';
-import { counterCandidates, scoutTeam } from '../../../core/ai/advisor';
-import type { Candidate } from '../../../core/ai/lab';
+import { scoutTeam } from '../../../core/ai/advisor';
+import { applyPatch } from '../../../core/ai/lab';
 import { projectedRotation, scoutData } from '../../../core/analysis/scouting';
 import { clearPlan, defaultScope, effectiveTactics, ensurePlan, itemGroup, planFor, removePlanItem, setPlanItem, setPlanScope } from '../../../core/league/gamePlans';
 import { STAR_PLAN_META } from '../../../core/sim/tactics';
 import { playbookLabel } from '../../../core/sim/playbooks';
-import { Chips, Help, Ovr, Section, Segmented } from '../../components/ui';
+import { plural } from '../../../core/format';
+import { Chips, Help, Ovr, Section, Segmented, Tag } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { AttackCard, JunkCard } from '../../components/GuardPlanner';
 import { rosterNames } from '../../stats';
+import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries } from '../data';
+import { CountersCard } from './CountersCard';
 
-/** Counters shown before "more": the ones the numbers back come first. */
-const COUNTERS_SHOWN = 4;
-
-const SCOPE_NOTE: Record<PlanScope, string> = {
-  next: 'Used up when you play them next.',
-  series: 'Lasts until this series is decided.',
-  season: 'Every game against them this season.',
-};
-
-export function PlanTab({ league, opp, onTest }: { league: League; opp: number; onTest: () => void }) {
+export function PlanTab({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const stored = league.gamePlans?.[opp];
   const plan = planFor(league, opp);
@@ -36,117 +30,61 @@ export function PlanTab({ league, opp, onTest }: { league: League; opp: number; 
   // (a series plan from a series that's over starts again with the default)
   const kept = (plan ?? stored)?.scope;
   const scope: PlanScope = kept && (kept !== 'series' || series) ? kept : defaultScope(league, opp);
-  const cands = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
   const base = league.teams[league.userTid].tactics;
-  const extras = plan ? Object.keys(plan.matchups ?? {}).length + Object.keys(plan.playerD ?? {}).length : 0;
-  const [allCounters, setAllCounters] = useState(false);
-  const add = (c: Candidate) => edit((l) => setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) }));
+  const extras = plan ? plannedExtras(plan) : '';
   return (
     <>
       <Section
-        title="How long it lasts"
-        right={
-          <Help title="Plan scope">
-            A game plan changes your tactics against this team only, on top of your playbook. Next game: used up when you play them. This series: until the playoff series is
-            decided. All season: every meeting this season. Plans clear at the new season.
-          </Help>
-        }
-      >
-        <Segmented
-          label="Plan scope"
-          value={scope}
-          disabled={simming}
-          onChange={(s) =>
-            edit((l) => {
-              ensurePlan(l, opp);
-              setPlanScope(l, opp, s);
-            })
-          }
-          options={[
-            { id: 'next' as PlanScope, label: 'Next game' },
-            ...(series ? [{ id: 'series' as PlanScope, label: 'This series' }] : []),
-            { id: 'season', label: 'All season' },
-          ]}
-        />
-        <div className="mu-note">{SCOPE_NOTE[scope]}</div>
-      </Section>
-
-      <Section
         title="Your plan"
         right={
-          plan ? (
-            <button className="btn xs ghost" disabled={simming} onClick={() => edit((l) => clearPlan(l, opp))}>
-              Clear
-            </button>
-          ) : undefined
+          <span className="row" style={{ gap: 6 }}>
+            {plan && (
+              <button className="btn xs ghost" disabled={simming} onClick={() => edit((l) => clearPlan(l, opp))}>
+                Clear
+              </button>
+            )}
+            <Help title="Game plans">
+              <p>
+                A <Term id="gameplan">game plan</Term> changes your tactics against this team only, on top of your playbook: the counters you add, a star plan, a junk defense, a
+                defender to attack, players to hack, and who guards whom (Matchups). Your playbook itself never changes.
+              </p>
+              <p>Next game: used up when you play them. This series: until the playoff series is decided. All season: every meeting this season. Plans clear at the new season.</p>
+            </Help>
+          </span>
         }
       >
-        {plan && (plan.items.length > 0 || extras > 0) ? (
+        {plan && (plan.items.length > 0 || extras) ? (
           <div className="card flush list">
             {plan.items.map((it) => (
-              <div key={it.id} className="mu-item">
-                <span className="grow">
-                  <span className="lr-name">{it.label}</span>
-                  {it.evidence && <span className="lr-meta">{it.evidence}</span>}
-                </span>
-                <button className="iconbtn" disabled={simming} onClick={() => edit((l) => removePlanItem(l, opp, it.id))} aria-label={`Remove ${it.label}`}>
-                  <X size={18} />
-                </button>
-              </div>
+              <PlanItemRow key={it.id} league={league} opp={opp} it={it} />
             ))}
-            {extras > 0 && <div className="mu-item mu-note">Plus {plannedExtras(plan)} (Matchups).</div>}
+            {extras && <div className="mu-item mu-note">Plus {extras} (Matchups).</div>}
           </div>
         ) : (
-          <div className="mu-note">
-            No <Term id="gameplan">game plan</Term> yet: your playbook plays ({playbookLabel(base)}).
-          </div>
+          <div className="mu-note">None yet: you play your playbook ({playbookLabel(base)}). Add a counter or set any card below.</div>
         )}
-      </Section>
-
-      <Section
-        title="Counters"
-        right={
-          <Help title="Counters">
-            The staff drafts these from their roster, their playbook and, once they have played enough games, their numbers (the ones the numbers back come first). None has been
-            simulated: Test runs each against them. Adding one replaces any item of the same kind in your plan.
-          </Help>
-        }
-      >
-        <div className="card flush list">
-          {cands.length ? (
-            (allCounters ? cands : cands.slice(0, COUNTERS_SHOWN)).map((c) => (
-              <div key={c.id} className="mu-item">
-                <span className="grow">
-                  <span className="lr-name">{c.label}</span>
-                  <span className="lr-meta">{c.why}</span>
-                  {c.evidence && (
-                    <span className="mu-ev">
-                      <b>By the numbers:</b> {c.evidence}
-                    </span>
-                  )}
-                </span>
-                <button className="btn xs" disabled={simming} onClick={() => add(c)} aria-label={`Add ${c.label} to the plan`}>
-                  <Plus size={14} /> Add
-                </button>
-              </div>
-            ))
-          ) : (
-            <div className="mu-empty">Your plan already covers what the staff sees.</div>
-          )}
-          {!allCounters && cands.length > COUNTERS_SHOWN && (
-            <button className="gs-more" onClick={() => setAllCounters(true)}>
-              <ChevronDown size={15} aria-hidden="true" /> {cands.length - COUNTERS_SHOWN} more
-            </button>
-          )}
-          {cands.length > 0 && (
-            <button className="mu-linkrow" onClick={onTest}>
-              <span className="grow left">Test them against the {league.teams[opp].name}</span>
-              <ChevronRight size={16} />
-            </button>
-          )}
+        <div className="mu-scope">
+          <span className="over">Lasts</span>
+          <Segmented
+            label="How long the plan lasts"
+            value={scope}
+            disabled={simming}
+            onChange={(sc) =>
+              edit((l) => {
+                ensurePlan(l, opp);
+                setPlanScope(l, opp, sc);
+              })
+            }
+            options={[
+              { id: 'next' as PlanScope, label: 'Next game' },
+              ...(series ? [{ id: 'series' as PlanScope, label: 'This series' }] : []),
+              { id: 'season', label: 'All season' },
+            ]}
+          />
         </div>
       </Section>
 
+      <CountersCard league={league} opp={opp} />
       <StarPlanCard league={league} opp={opp} />
       <JunkCard league={league} opp={opp} />
       <AttackCard league={league} opp={opp} />
@@ -156,11 +94,32 @@ export function PlanTab({ league, opp, onTest }: { league: League; opp: number; 
   );
 }
 
-/** "2 planned matchups and 3 guarding instructions". */
+/** One item in the plan: its name, what it changes from your playbook, why, and Remove. */
+function PlanItemRow({ league, opp, it }: { league: League; opp: number; it: GamePlanItem }) {
+  const simming = useStore((s) => !!s.sim);
+  const line = useLeagueMemo(() => {
+    const base = league.teams[league.userTid].tactics;
+    return changesLine(screenChanges(base, applyPatch(base, it.patch)));
+  }, [league, it]);
+  return (
+    <div className="mu-item">
+      <span className="grow">
+        <span className="lr-name">{it.label}</span>
+        {line && <span className="mu-changes">{line}</span>}
+        {it.evidence && <span className="lr-meta">{it.evidence}</span>}
+      </span>
+      <button className="iconbtn" disabled={simming} onClick={() => edit((l) => removePlanItem(l, opp, it.id))} aria-label={`Remove ${it.label}`}>
+        <X size={18} />
+      </button>
+    </div>
+  );
+}
+
+/** "2 planned matchups and 3 guarding instructions", or '' when there are none. */
 function plannedExtras(plan: { matchups?: Record<number, number>; playerD?: Record<number, unknown> }) {
   const m = Object.keys(plan.matchups ?? {}).length;
   const d = Object.keys(plan.playerD ?? {}).length;
-  return [m ? `${m} planned matchup${m === 1 ? '' : 's'}` : '', d ? `${d} guarding instruction${d === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+  return [m ? plural(m, 'planned matchup') : '', d ? plural(d, 'guarding instruction') : ''].filter(Boolean).join(' and ');
 }
 
 /** A star plan for this opponent: none, deny or double, on one of their top eight. */
@@ -191,7 +150,11 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
     });
   return (
     <Section
-      title="Star plan"
+      title={
+        <h3>
+          <Term id="starplan">Star plan</Term>
+        </h3>
+      }
       right={
         <Help title="Star plan">
           Deny keeps the ball out of one player&apos;s hands; a double team sends a second defender when he attacks. Without a target it goes after their primary creator. ★ is the
@@ -225,8 +188,25 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
   );
 }
 
-/** The free-throw percentage the engine shoots a player at (from his FT rating). */
+/** The free-throw percentage the engine shoots a player at (from his FT rating, as core/sim/engine.ts has it). */
 const ftPct = (ft: number) => Math.min(0.95, Math.max(0.3, 0.42 + 0.0052 * ft));
+
+/** The league's points per possession this season (last season's before any games): what a hacked trip's two free throws have to beat. */
+function leaguePpp(league: League): number | null {
+  for (const season of [league.season, league.season - 1]) {
+    let pts = 0;
+    let poss = 0;
+    for (const t of league.teams) {
+      const ts = t.seasons.find((x) => x.season === season);
+      if (ts) {
+        pts += ts.ptsFor;
+        poss += ts.poss;
+      }
+    }
+    if (poss > 0) return pts / poss;
+  }
+  return null;
+}
 
 /** Hack-a-player: their poor free-throw shooters to foul on purpose, and the quarter it starts. */
 function HackCard({ league, opp }: { league: League; opp: number }) {
@@ -239,6 +219,9 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
   const rows = sorted.slice(0, Math.max(3, Math.min(6, sorted.filter((p) => ftPct(p.ratings.ft) < 0.7).length)));
   const targets = eff.manage.hackTargets ?? [];
   const fromQ = eff.manage.hackFromQ ?? 1;
+  // two free throws pay against a normal possession below half the league's points per possession
+  const ppp = useLeagueMemo(() => leaguePpp(league), [league]);
+  const breakEven = ppp !== null ? Math.round((ppp / 2) * 100) : null;
   const set = (pids: number[], q: number) =>
     edit((l) => {
       if (!pids.length) {
@@ -253,13 +236,27 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
       title="Hack-a-player"
       right={
         <Help title="Hack-a-player">
-          Foul a poor free-throw shooter on purpose whenever he&apos;s on the floor, from the quarter you pick: two free throws for him instead of a normal possession, worth about
-          1.12 points, so it pays below about 56% from the line. Never in the last two minutes of a period, where it costs a free throw and the ball. Their staff benches a player
-          hacked twice in a period when a reserve his size can come in.
+          <p>
+            Foul a poor free-throw shooter on purpose whenever he&apos;s on the floor, from the quarter you pick: two free throws for him instead of a normal possession
+            {ppp !== null ? (
+              <>
+                {' '}
+                (the league scores {ppp.toFixed(2)} points a possession), so it pays below about {breakEven}% from the line
+              </>
+            ) : null}
+            . Never in the last two minutes of a period, where it costs a free throw and the ball.
+          </p>
+          <p>Their staff benches a player hacked twice in a period when a reserve his size can come in.</p>
         </Help>
       }
     >
       <div className="card flush list">
+        {breakEven !== null && (
+          <div className="list-divider list-h" aria-hidden="true">
+            <span>Pays under {breakEven}% from the line</span>
+            <span>FT</span>
+          </div>
+        )}
         {rows.map((p) => {
           const on = targets.includes(p.pid);
           const pct = Math.round(ftPct(p.ratings.ft) * 100);
@@ -276,7 +273,8 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
               </span>
               <Ovr v={p.ovr} size="sm" />
               <span className="grow lr-name">{names(p.pid)}</span>
-              <span className={`num mu-ft ${pct < 60 ? 'bad' : pct < 70 ? 'warn' : 'dim'}`}>FT {pct}%</span>
+              {breakEven !== null && pct < breakEven && <Tag tone="good">Pays</Tag>}
+              <span className="num mu-ft">FT {pct}%</span>
             </button>
           );
         })}

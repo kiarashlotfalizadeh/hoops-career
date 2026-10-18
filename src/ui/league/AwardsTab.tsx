@@ -7,7 +7,7 @@ import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Bar, Help, Section, Segmented } from '../components/ui';
+import { Avatar, Help, Section, Segmented } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
 import { seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
@@ -370,6 +370,8 @@ function RaceCard({
 }) {
   const top = list[0]?.score ?? 1;
   const low = Math.min(0, ...list.map((x) => x.score));
+  // the voters' score on a scale where the leader is 100: how close the race is, in one figure
+  const rel = (score: number) => Math.round(((score - low) / Math.max(0.01, top - low)) * 100);
   return (
     <Section
       title={
@@ -377,7 +379,7 @@ function RaceCard({
           {icon} {title}
         </h3>
       }
-      right={right}
+      right={<span className="lg-race-key">Score, #1 = 100{right}</span>}
     >
       <div className="card flush list">
         {list.length === 0 ? (
@@ -398,7 +400,10 @@ function RaceCard({
                     {teamAbbrev(league, c.tid)}
                     {ts ? `\u00a0(${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
                   </span>
-                  <Bar value={score - low} max={Math.max(0.01, top - low)} height={3} color={i === 0 ? 'var(--tier-elite)' : 'var(--text-dim)'} />
+                </span>
+                <span className="lg-race-v num">
+                  {rel(score)}
+                  <span className="sr-only"> of 100</span>
                 </span>
               </Link>
             );

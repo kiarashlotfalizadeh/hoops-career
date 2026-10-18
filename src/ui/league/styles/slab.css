@@ -1,0 +1,56 @@
+/* A title slab: the Cup or a season's champion in its colours. */
+/* ------------------------------------------------------------------ title slab */
+.lg-title {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+}
+.lg-title-over {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding-right: 18px;
+}
+.lg-title-over svg {
+  color: var(--tier-elite);
+  flex: none;
+}
+.lg-title-team {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lg-title-region {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.lg-title-name {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+.lg-title-sub {
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+/* a link on a slab: white, underlined */
+.lg-slab-link {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-underline-offset: 3px;
+}

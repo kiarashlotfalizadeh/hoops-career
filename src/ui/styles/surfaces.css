@@ -150,16 +150,6 @@ button.card:disabled {
   padding: var(--row-py) var(--row-px);
   min-height: var(--row-min);
 }
-.move-arrows {
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  margin: calc(-1 * var(--row-py)) -6px calc(-1 * var(--row-py)) -10px;
-}
-.move-arrows .iconbtn {
-  width: 40px;
-  height: 40px;
-}
 .list-divider {
   padding: 7px var(--row-px) 5px;
   font-size: 11px;
@@ -169,6 +159,17 @@ button.card:disabled {
   text-transform: uppercase;
   color: var(--text-dim);
   background: var(--bg-2);
+}
+/* a divider as a column header: what the rows are ordered by on the left, the figure column's name
+   on the right (over the figures) */
+.list-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.list-h > :first-child {
+  flex: 1;
+  min-width: 0;
 }
 .listrow.clickable {
   cursor: pointer;

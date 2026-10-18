@@ -1,0 +1,183 @@
+/* A team's schedule list and the day's scoreboard. */
+/* ------------------------------------------------------------------ schedule list */
+
+.lg-g-row {
+  display: grid;
+  grid-template-columns: 44px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 10px;
+  padding: 8px 12px 8px 14px;
+  min-height: 58px;
+}
+.lg-g-row + .lg-g-row,
+.lg-g-row + .list-divider,
+.lg-more + .list-divider {
+  border-top: 1px solid var(--line);
+}
+.lg-g-row:active {
+  background: var(--surface);
+}
+/* the next game, today: a brand edge, as the Continue bar that plays it */
+.lg-g-row.today {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.lg-g-row.today .wd {
+  color: var(--accent-text);
+}
+/* games against your team on another club's page: your team's edge */
+.lg-g-row.h2h {
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+
+/* a result: W or L in a small square, in the display face */
+
+/* ------------------------------------------------------------------ scoreboard */
+.lg-day {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+}
+.lg-day .mid {
+  text-align: center;
+}
+.lg-day .iconbtn {
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+}
+.lg-day-d {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.lg-day-s {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-jump {
+  align-self: center;
+  margin: -6px 0;
+}
+/* the day's games in one panel, two to a row with hairlines between (three on a tablet) */
+.lg-sb-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.lg-sb-grid > :nth-child(n + 3) {
+  border-top: 1px solid var(--line);
+}
+.lg-sb-grid > :nth-child(2n) {
+  border-left: 1px solid var(--line);
+}
+@media (min-width: 760px) {
+  .lg-sb-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .lg-sb-grid > :nth-child(n) {
+    border-left: none;
+    border-top: none;
+  }
+  .lg-sb-grid > :nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+  .lg-sb-grid > :not(:nth-child(3n + 1)) {
+    border-left: 1px solid var(--line);
+  }
+}
+.lg-sb {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px 10px;
+  min-width: 0;
+}
+a.lg-sb:active {
+  background: var(--surface);
+}
+.lg-sb.me {
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-sb-st {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+/* one line: the status ("Final/2OT") stays whole, the round tag on the right gives way if it must */
+.lg-sb-st > span + span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* phones: tighter type, so "Final/OT · Conf. Finals G4" fits from 360px (and "Final/2OT" from 375px) */
+@media (max-width: 419px) {
+  .lg-sb-st {
+    font-size: 9.5px;
+    letter-spacing: 0.03em;
+  }
+}
+.lg-sb-st .live {
+  color: var(--accent-text);
+}
+.lg-sb-t {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  height: 27px;
+}
+.lg-sb-t .ab {
+  font-weight: 750;
+  font-size: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.lg-sb-t .rec {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* small phones: no room for a record beside the abbreviation and a three-digit score */
+@media (max-width: 359px) {
+  .lg-sb-t .rec {
+    display: none;
+  }
+}
+.lg-sb-t .sc {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.lg-sb-t.lose {
+  color: var(--text-dim);
+}
+.lg-sb-t.lose .sc {
+  font-weight: 600;
+}
+.lg-sb-t.lose svg {
+  opacity: 0.6;
+}

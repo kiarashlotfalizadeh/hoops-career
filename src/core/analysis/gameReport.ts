@@ -239,25 +239,25 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'pd_under:o': {
     text: (X, Y, w) => `${X} made ${Y} pay for going under screens with pull-up jumpers${w}.`,
-    advice: 'Stop going under on a handler who can shoot off the dribble (Game plan > How to guard them).',
+    advice: 'Stop going under on a handler who can shoot off the dribble (Matchups > How to guard him).',
     uses: (t) => instructs(t, 'under'),
   },
   'pd_under:d': { text: (X, _Y, w) => `${X} went under screens and kept the handler out of the paint${w}.` },
   'pd_tight:o': {
     text: (X, Y, w) => `${X} beat ${possessive(Y)} top-locks with drives and back-cuts${w}.`,
-    advice: 'Stop running a shooter off the line when he can put it on the floor (Game plan > How to guard them).',
+    advice: 'Stop running a shooter off the line when he can put it on the floor (Matchups > How to guard him).',
     uses: (t) => instructs(t, 'tight'),
   },
   'pd_tight:d': { text: (X, _Y, w) => `${X} ran shooters off the three-point line${w}.` },
   'pd_sag:o': {
     text: (X, Y, w) => `${X} made ${Y} pay for sagging off them with open kick-out shots${w}.`,
-    advice: 'Stop sagging off a player who makes open threes (Game plan > How to guard them).',
+    advice: 'Stop sagging off a player who makes open threes (Matchups > How to guard him).',
     uses: (t) => instructs(t, 'sag'),
   },
   'pd_sag:d': { text: (X) => `${X} sagged off non-shooters and walled off the rim.` },
   'pd_body:o': {
     text: (X, Y, w) => `${X} drew fouls against ${possessive(Y)} physical defense${w}.`,
-    advice: 'Stop getting physical with a player who draws fouls and makes his free throws (Game plan > How to guard them).',
+    advice: 'Stop getting physical with a player who draws fouls and makes his free throws (Matchups > How to guard him).',
     uses: (t) => instructs(t, 'body'),
     cat: 'fouls',
   },
@@ -268,7 +268,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'hunt:d': {
     text: (_X, Y) => `${possessive(Y)} hunt for one defender cost them ball movement and good looks.`,
-    advice: 'Hunting one defender costs ball movement: keep it for a real weak link, or stop the hunt (Game plan > Attack).',
+    advice: 'Hunting one defender costs ball movement: keep it for a real weak link, or stop the hunt (Plan > Attack a defender).',
     uses: (t) => t.offense.huntTarget != null,
   },
   'foul_give:d': { text: (X) => `${possessive(X)} fouls to give broke up last-shot plays.` },

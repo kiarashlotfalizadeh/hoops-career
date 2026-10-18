@@ -1,0 +1,236 @@
+/* Toolbars over a list: selects, chips, search, the Filters button and its sheet, notes under a table. */
+/* ------------------------------------------------------------------ toolbars, filters, notes */
+/* what a list shows on the left, its switches and Help on the right */
+.lg-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: -6px;
+}
+.lg-bar-l {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.lg-bar-r {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.lg-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* a row of chips that scrolls sideways, edge to edge */
+.lg-hscroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  /* sideways only: room above and below for the chips' tap areas, so a vertical swipe scrolls the page */
+  overflow-y: hidden;
+  scrollbar-width: none;
+  margin: -4px calc(-1 * var(--gut-r)) -4px calc(-1 * var(--gut-l));
+  padding: 4px var(--gut-r) 4px var(--gut-l);
+}
+.lg-hscroll::-webkit-scrollbar {
+  display: none;
+}
+.lg-hscroll > * {
+  flex: none;
+}
+.lg-vsep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--line-2);
+  flex: none;
+}
+.lg-select {
+  height: 34px;
+  max-width: 100%;
+  border-radius: 9px;
+  border: 1px solid var(--line-2);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a94a4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding: 0 30px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.lg-select:focus {
+  border-color: var(--accent-text);
+}
+.lg-sub .chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* compact chips that still give fingers a 40px target */
+
+/* sortable table headers: a 40px row, and the whole cell sorts */
+.lg-page .tablewrap table.stats th {
+  height: 40px;
+}
+.lg-search {
+  position: relative;
+  flex: 1;
+  min-width: 140px;
+}
+.lg-search input {
+  height: 34px;
+  width: 100%;
+  border-radius: 9px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  padding: 0 10px 0 32px;
+  font-size: 13px;
+}
+.lg-search input:focus {
+  border-color: var(--accent-text);
+  outline: none;
+}
+.lg-search svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+/* an overline over a block (the Section heading's look, for spots that aren't a Section) */
+.lg-section-label {
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+  margin-bottom: -6px;
+}
+.lg-section-label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* a section heading's figure on the right ("12 inducted") */
+.lg-sec-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.lg-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.lg-p {
+  margin: 0;
+}
+
+.lg-name-link {
+  font-weight: 700;
+}
+.lg-name-link:active {
+  color: var(--accent-text);
+}
+/* "Show more" at the foot of a list */
+.lg-more {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+}
+.lg-more:first-child {
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+}
+.lg-more:active {
+  background: var(--surface);
+}
+/* your rows on their team tint: dim text a step lighter, as theme.css does for its tinted surfaces */
+.lg-lead-row.me,
+.lg-lead-top.me,
+.lg-five-row.me,
+.lg-race-row.me,
+.lg-coach-row.me,
+.lg-sb.me {
+  --text-dim: var(--text-2);
+}
+/* figures in a card: a Statline with its card's padding */
+.lg-strip {
+  padding: 12px 14px;
+}
+.lg-strip .statline .v {
+  font-size: 26px;
+}
+/* figures stay on one line: a record never breaks at its hyphen */
+.lg-page .statline .v {
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ filters (FiltersButton) */
+/* a search and its Filters button share one line */
+.lg-sub.lg-nowrap {
+  flex-wrap: nowrap;
+}
+.lg-filters {
+  flex: none;
+  gap: 6px;
+}
+.lg-filters.on {
+  border-color: var(--accent-text);
+}
+.lg-filters .lg-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lg-filter-body {
+  gap: 16px;
+}
+.lg-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-filter-done {
+  margin-top: 18px;
+}
+/* the team a league-wide move is told from, ahead of its line */
+.lg-txn-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: -3px;
+}

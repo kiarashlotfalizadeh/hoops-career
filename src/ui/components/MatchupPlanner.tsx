@@ -15,6 +15,7 @@ import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
 import { Avatar, Chips, Help, Ovr, Section, Sheet, Tag } from './ui';
+import { Term } from './Glossary';
 import './scouting.css';
 
 function Notes({ them, me }: { them: Player; me: Player }) {
@@ -61,7 +62,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
   const cur = row ? (how[row.pid] ?? null) : null;
   return (
     <Section
-      title="At the tip"
+      title="Who guards whom"
       right={
         <Help title="Matchups">
           <p>
@@ -102,7 +103,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
                   <span className="gp-match-d">
                     <span className="sr-only">{d ? ', guarded by ' : ', guarded by nobody yet'}</span>
                     <span className="gp-match-dn ellipsis">{d ? names(d.pid) : <span aria-hidden="true">—</span>}</span>
-                    {h ? <Tag tone="info">{PLAYER_D_META[h].short}</Tag> : r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff</span>}
+                    {h ? <Tag tone="info">{PLAYER_D_META[h].short}</Tag> : r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff pick</span>}
                   </span>
                   <ChevronRight size={16} className="dim gp-chev" aria-hidden="true" />
                   {d && <Notes them={p} me={d} />}
@@ -117,7 +118,9 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
         {them && row && (
           <div className="col" style={{ gap: 16 }}>
             <div className="col" style={{ gap: 8 }}>
-              <div className="over">How to guard him</div>
+              <div className="over">
+                <Term id="guarding">How to guard him</Term>
+              </div>
               <Chips
                 label={`How to guard ${names(them.pid)}`}
                 value={cur ?? ('' as PlayerDefense)}

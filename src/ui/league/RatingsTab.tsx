@@ -7,7 +7,8 @@ import { FREE_AGENT, POSITIONS, type League, type Player, type Pos } from '../..
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { Chips, StatTable, type Col } from '../components/ui';
-import { ratingCols } from '../ratingCols';
+import { RatingKey, ratingCols } from '../ratingCols';
+import { OvrKey } from '../components/OvrKey';
 import { FilterField, FiltersButton, shortName, teamAbbrev, useQueryParam } from './shared';
 
 const PAGE = 100;
@@ -99,6 +100,10 @@ export function RatingsTab({ league }: { league: League }) {
           )}
           <div className="lg-note">
             {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · current ratings
+          </div>
+          <div className="lg-note row between wrap top">
+            <RatingKey />
+            <OvrKey />
           </div>
         </>
       )}
