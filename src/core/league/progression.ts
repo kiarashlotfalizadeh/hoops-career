@@ -86,8 +86,8 @@ export const FOCUS_META: Record<TrainingFocus, { label: string; help: string }> 
   shooting: { label: 'Shooting', help: 'Three-point, mid-range and free throws.' },
   finishing: { label: 'Finishing', help: 'Rim finishing, drawing fouls and post moves.' },
   playmaking: { label: 'Playmaking', help: 'Passing, handling and offensive feel.' },
-  perimeterD: { label: 'Perimeter D', help: 'On-ball defense, steals and rotations.' },
-  interiorD: { label: 'Interior D', help: 'Post defense, shot blocking and rotations.' },
+  perimeterD: { label: 'Perimeter defense', help: 'On-ball defense, steals and rotations.' },
+  interiorD: { label: 'Interior defense', help: 'Post defense, shot blocking and rotations.' },
   rebounding: { label: 'Rebounding', help: 'Both glass and functional strength.' },
   conditioning: { label: 'Conditioning', help: 'Stamina, strength and speed. Slows athletic decline for veterans.' },
 };
