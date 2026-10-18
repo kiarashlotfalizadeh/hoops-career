@@ -59,7 +59,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const kind = pv?.playoff ? pv.playoff.tag : g.type === 'playin' ? 'Play-In' : g.cup && g.cup !== 'group' ? cup : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`;
   const series = pv?.playoff;
   // on the team's colours every tag is the slab's glass; what's at stake is a solid one
-  const tags: { text: string; stake?: boolean }[] = [];
+  const tags: { text: string; stake?: boolean; to?: string }[] = [];
   if (live?.gid === g.gid) tags.push({ text: `Live · ${live.score[0]}-${live.score[1]}` });
   if (series && series.wins + series.losses > 0)
     tags.push({
@@ -71,7 +71,8 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   if (series?.elimination || pv?.playIn?.elimination) tags.push({ text: 'Elimination game', stake: true });
   else if (series?.clinch) tags.push({ text: 'A win takes the series', stake: true });
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
-  if (noPlan) tags.push({ text: 'No game plan yet' });
+  // (the missing plan is a link to the Plan tab: the one tag here with something to do)
+  if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
   return (
     <section className="slab td-slab" aria-label="Next game">
@@ -109,11 +110,17 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
         <div className="td-facts">
           {tags.length > 0 && (
             <div className="chips">
-              {tags.map((t) => (
-                <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
-                  {t.text}
-                </span>
-              ))}
+              {tags.map((t) =>
+                t.to ? (
+                  <Link key={t.text} to={t.to} className="tag td-tag-link">
+                    {t.text} <ChevronRight size={12} aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
+                    {t.text}
+                  </span>
+                ),
+              )}
             </div>
           )}
           {outs.map((o) => (

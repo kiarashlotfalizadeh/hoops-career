@@ -97,6 +97,19 @@
   background: #fff;
   color: #0b0f15;
 }
+/* a tag with something to do (no game plan yet): a link, with room for a finger around it */
+.td-slab .tag.td-tag-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+}
+.td-slab .tag.td-tag-link::after {
+  content: '';
+  position: absolute;
+  inset: -10px -4px;
+}
 .td-out {
   display: flex;
   align-items: baseline;
