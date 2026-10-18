@@ -1,0 +1,554 @@
+/* The Clipboard, docked under the court or in its sheet, and its tabs: the lineup (both fives, the
+   bench), a player's sheet, the calls, the tactics, the box score's play types, the play-by-play. */
+.lv-dock {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.clip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.clip.docked {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+.clip-tabs .seg.tabs {
+  gap: 0;
+}
+.clip-tabs .seg.tabs button {
+  flex: 1 0 auto;
+  padding: 0 7px;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+.clip-tabs .seg.tabs button.on::before {
+  left: 6px;
+  right: 6px;
+}
+.clip.docked .clip-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px 0;
+}
+/* docked under the court, a slimmer tab strip (the same 44px to a finger) and a slim heading row over
+   each five, so both fives fit whole under a phone's court */
+.clip.docked .clip-tabs .seg.tabs button {
+  height: 36px;
+}
+.clip.docked .clip-tabs .seg.tabs button::after {
+  inset: -4px -1px;
+}
+.clip.docked .oc-head {
+  min-height: 18px;
+  padding-top: 2px;
+  font-size: 10px;
+}
+/* in its sheet: the tabs stay at the top while the tab scrolls */
+.sheet .clip-tabs {
+  position: sticky;
+  top: -6px;
+  z-index: 2;
+  margin-top: -6px;
+  padding-top: 2px;
+  background: var(--bg-2);
+}
+
+/* a short phone: your five in a row under the court */
+.mf {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: auto 0;
+  padding: 8px 0;
+}
+.mf-p {
+  position: relative;
+  min-width: 0;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 7px 8px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  text-align: left;
+  color: var(--text);
+}
+.mf-p:active {
+  background: var(--surface);
+}
+.mf-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.mf-pts {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1;
+}
+.mf-name {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.mf-bar {
+  width: 100%;
+  height: 3px;
+}
+.mf-f {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  padding: 0 4px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent-ink);
+}
+.mf-f.warn {
+  background: var(--warn);
+}
+.mf-f.bad {
+  background: var(--bad);
+}
+
+/* the lineup: both fives, then the bench */
+.lu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-page);
+}
+.oc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.oc-col {
+  min-width: 0;
+}
+.oc-col + .oc-col {
+  border-left: 1px solid var(--line);
+}
+/* each five under a thin edge in its team's colour */
+.oc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 10px 0;
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 2px 0 var(--oc-edge, var(--line-3));
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.oc-you {
+  color: var(--text-dim);
+  font-weight: 750;
+}
+.oc-head-pts {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.oc-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'num name pts'
+    'num energy pf';
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 5px 10px;
+  text-align: left;
+  color: var(--text);
+}
+.oc-row + .oc-row {
+  border-top: 1px solid var(--line);
+}
+.oc-row:active {
+  background: var(--surface);
+}
+.oc-num {
+  grid-area: num;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+}
+.oc-name {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+.oc-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  font-size: 11px;
+  font-weight: 750;
+}
+.oc-mark.hot {
+  color: var(--warn);
+}
+.oc-mark.cold {
+  color: var(--info);
+}
+.oc-pts {
+  grid-area: pts;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+  text-align: right;
+}
+/* the energy bar against the staff's sub-out mark (green, then amber near it, red under it), with its figure */
+.oc-energy {
+  grid-area: energy;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  color: var(--text-dim);
+}
+.oc-meter {
+  flex: 1;
+  min-width: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.oc-meter > span,
+.lu-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+.oc-meter > .good,
+.lu-bar > .good {
+  background: var(--good);
+}
+.oc-meter > .warn,
+.lu-bar > .warn {
+  background: var(--warn);
+}
+.oc-meter > .bad,
+.lu-bar > .bad {
+  background: var(--bad);
+}
+/* personal fouls: amber at the staff's foul-trouble limit for the period, red at five */
+.oc-pf {
+  grid-area: pf;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  text-align: right;
+  color: var(--text-dim);
+}
+.oc-pf.warn {
+  color: var(--warn);
+  font-weight: 800;
+}
+.oc-pf.bad {
+  color: var(--bad);
+  font-weight: 800;
+}
+.lu-head,
+.lu-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 22px 26px 26px;
+  align-items: center;
+  column-gap: 8px;
+}
+.lu-head {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: right;
+  padding-right: var(--row-px);
+}
+.lu-head > :first-child {
+  grid-column: 2;
+}
+.lu-row {
+  width: 100%;
+  min-height: 44px;
+  padding: 4px var(--row-px);
+  text-align: left;
+  font-size: 14px;
+}
+.lu-row:active {
+  background: var(--surface);
+}
+.lu-row.out {
+  opacity: 0.55;
+}
+.lu-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lu-e {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.lu-bar {
+  width: 30px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.lu-n {
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* a player's sheet */
+.ps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ps-fig {
+  padding: 2px 0 0;
+}
+.ps-blk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sec);
+}
+.ps-blk > .over {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.ps-sub-l {
+  color: var(--text-dim);
+  font-weight: 700;
+}
+.ps-sub.staff {
+  border-color: var(--accent);
+}
+
+/* the calls */
+.cl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-page);
+}
+.cl-hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.cl-called {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.cl-called-k {
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.cl-called-v {
+  font-weight: 700;
+  min-width: 0;
+}
+.cl-late .sec-h h3 {
+  color: var(--accent-text);
+}
+.cl-set {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--row-py) var(--row-px) calc(var(--row-py) + 2px);
+}
+.cl-set-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cl-set-name {
+  font-weight: 750;
+  font-size: 14.5px;
+}
+.cl-set .more > summary {
+  min-height: 24px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+/* a glossary word in an overline or a heading reads like the rest of it */
+.cl .sec-h h3 .term,
+.clip .over .term,
+.tp .over .term,
+.tp .slider-label .term,
+.ps .over .term {
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+.cl-set .chips {
+  margin-top: 2px;
+}
+.cl-ato {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* the tactics */
+.tp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tp-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tp-plan,
+.tp-quick,
+.tp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.tp-quick > .over {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tp-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.tp-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* the box score's play types */
+.bx-pt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+.bx-ppp {
+  width: 42px;
+  text-align: right;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+}
+
+/* the play-by-play */
+.fd {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fd-list {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.fd-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.fd-row + .fd-row {
+  border-top: 1px solid var(--line);
+}
+.fd-row.strong {
+  color: var(--text);
+  font-weight: 700;
+  background: var(--bg-2);
+}
+.fd-when {
+  flex: none;
+  width: 56px;
+  padding-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.fd-team {
+  flex: none;
+  align-self: stretch;
+  width: 3px;
+  border-radius: 2px;
+}

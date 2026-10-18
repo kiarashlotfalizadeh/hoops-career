@@ -1,0 +1,515 @@
+/* Over the court: the play's call, the broadcast graphics, a replay's tag, the one banner and a
+   break's card; the playback controls a tap brings up; the starting lineups before the tip. */
+/* the play's call, the graphics, a replay's tag and the banner: over the backcourt, clear of the basket the play goes to */
+.lv-lower {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.lv-cap {
+  max-width: 100%;
+  padding: 6px 10px 6px 11px;
+  border-radius: 4px;
+  background: rgba(6, 8, 12, 0.86);
+  box-shadow: inset 3px 0 0 var(--cap-c, rgba(255, 255, 255, 0.4));
+}
+/* the running call of the play: two lines at most, so a long make-and-assist still reads whole */
+.lv-cap-t {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.lv-cap-t.ff {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d6dbe3;
+}
+/* a broadcast lower third: the team's colour holds the label, the line on a dark plate */
+.live-l3 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  animation: l3-in 0.3s ease;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+.live-l3-tag {
+  padding: 3px 14px 3px 9px;
+  background: var(--l3-c, var(--surface-3));
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.live-l3-text {
+  max-width: 100%;
+  padding: 6px 11px 7px;
+  background: rgba(6, 8, 12, 0.92);
+  box-shadow: inset 3px 0 0 var(--l3-c, var(--surface-3));
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+@keyframes l3-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+@keyframes lv-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* a replay: a tag over the play's call */
+.lv-show {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 3px 3px 9px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lv-show-x {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+  background: rgba(0, 0, 0, 0.14);
+}
+.lv-show-x::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+
+/* the one banner: the assistant's row look on a dark plate, its tone on the edge */
+.lv-banner {
+  --tone: var(--accent);
+  pointer-events: auto;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 4px 9px 12px;
+  border-radius: 6px;
+  background: rgba(8, 11, 16, 0.95);
+  box-shadow:
+    inset 3px 0 0 var(--tone),
+    0 10px 26px rgba(0, 0, 0, 0.45);
+  animation: lv-up 0.28s ease;
+}
+.lv-banner.tone-bad {
+  --tone: var(--bad);
+}
+.lv-banner.tone-warn {
+  --tone: var(--warn);
+}
+.lv-banner-ic {
+  flex: none;
+  margin-top: 2px;
+  color: var(--tone);
+}
+.lv-banner.tone-info .lv-banner-ic,
+.lv-banner.tone-info .lv-banner-k {
+  color: var(--accent-text);
+}
+.lv-banner-body {
+  min-width: 0;
+}
+.lv-banner-t {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.lv-banner-k {
+  margin-right: 3px;
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tone);
+}
+.lv-banner-l {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: #c9d1dc;
+}
+.lv-banner-x {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 30px;
+  margin: -5px 0;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: #c9d1dc;
+}
+.lv-banner-x::after {
+  content: '';
+  position: absolute;
+  inset: -7px -6px;
+}
+
+/* a break: the period's name big over the court, the next period one tap away */
+.lv-break {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(6, 8, 12, 0.74);
+}
+.lv-break-t {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.lv-break-s {
+  font-size: 13.5px;
+  color: #d6dbe3;
+}
+.lv-break-go {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.lv-break-rep {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+.lv-break-skip {
+  width: 46px;
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ playback: tap the court, like a video player */
+.pb {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+}
+.pb-scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(closest-side, rgba(6, 8, 12, 0.6), rgba(6, 8, 12, 0.28));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.pb-top,
+.pb-mid {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.pb.up .pb-scrim,
+.pb.up .pb-top,
+.pb.up .pb-mid {
+  opacity: 1;
+}
+/* hidden, a tap only brings them up: it never presses one */
+.pb:not(.up) button {
+  pointer-events: none;
+}
+.pb-top {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+}
+.pb-mid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  pointer-events: none;
+}
+.pb.up .pb-mid button {
+  pointer-events: auto;
+}
+.pb-btn {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(6, 8, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.pb-btn.big {
+  width: 70px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.94);
+  border: none;
+  color: #0b0f15;
+}
+.pb-btn:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+.pb-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.pb-chip {
+  position: relative;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 17px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  background: rgba(6, 8, 12, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  font-weight: 750;
+}
+.pb-chip.num {
+  min-width: 46px;
+  justify-content: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+}
+.pb-chip::after {
+  content: '';
+  position: absolute;
+  inset: -5px -2px;
+}
+.pb-chip.on {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
+/* ------------------------------------------------------------------ the starting lineups, before the tip */
+.live-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 12px 16px;
+  background: linear-gradient(180deg, rgba(6, 8, 12, 0.9), rgba(6, 8, 12, 0.78));
+  overflow: hidden;
+}
+.li-head {
+  text-align: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.li-kicker {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.li-where {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: #c9d1dc;
+}
+.li-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+}
+.li-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+/* each five under its team's colour */
+.li-team {
+  margin-bottom: 2px;
+  padding: 3px 12px 4px 8px;
+  background: var(--lb-c);
+  box-shadow: inset 0 -2px 0 var(--lb-t);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.li-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  animation: intro-in 0.35s ease both;
+}
+.li-row:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.li-row:nth-child(4) {
+  animation-delay: 0.16s;
+}
+.li-row:nth-child(5) {
+  animation-delay: 0.24s;
+}
+.li-row:nth-child(6) {
+  animation-delay: 0.32s;
+}
+.li-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 11px;
+}
+.li-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.li-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.li-pos {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9aa5b5;
+}
+.li-line {
+  font-size: 10.5px;
+  color: #b4bdca;
+}
+.live-intro-whole {
+  display: none;
+}
+/* a phone's half court: whole numbers on the lines (to the tenth, the assists were cut off), and no
+   series or Cup line, which the scorebug just above already shows, to leave height for a long name's wrap */
+@media (max-width: 759px), (max-height: 520px) {
+  .live-intro-dec,
+  .live-intro-ctx {
+    display: none;
+  }
+  .live-intro-whole {
+    display: inline;
+  }
+}
+/* a narrow phone's court is shorter (and a phone's held sideways): the lineups pack tighter to keep Tip
+   off clear of the last line */
+@media (max-width: 399px), (max-height: 520px) {
+  .live-intro {
+    gap: 6px;
+    padding: 8px 10px 12px;
+  }
+  .li-kicker {
+    font-size: 20px;
+  }
+  .li-col {
+    gap: 3px;
+  }
+  .li-team {
+    font-size: 13.5px;
+  }
+  .li-name {
+    font-size: 12px;
+  }
+  .li-line {
+    font-size: 10px;
+  }
+}
+.li-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.li-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+@keyframes intro-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .li-row,
+  .live-l3,
+  .lv-banner,
+  .lq-fix {
+    animation: none;
+  }
+  .pb-scrim,
+  .pb-top,
+  .pb-mid {
+    transition: none;
+  }
+}
