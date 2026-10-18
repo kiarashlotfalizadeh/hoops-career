@@ -273,8 +273,8 @@ function ContinueBar() {
     }
     const live = liveInProgress(league);
     const today = userGameOnDay(league, league.day);
-    if (fromBar && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/preview')) {
-      nav(`/preview/${today.gid}`);
+    if (fromBar && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/games/')) {
+      nav(`/games/${today.home === league.userTid ? today.away : today.home}?tab=preview`);
       return;
     }
     void run(a);

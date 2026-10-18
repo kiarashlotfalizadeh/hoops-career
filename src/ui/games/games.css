@@ -717,9 +717,12 @@
   min-width: 0;
 }
 
-/* the game-day dock: tip off */
+/* the game-day dock: tip off, or quick sim */
 .mu-dock .btn {
   flex: 1;
+}
+.mu-dock .btn.primary {
+  flex: 2;
 }
 
 /* ------------------------------------------------------------------ the Lab */

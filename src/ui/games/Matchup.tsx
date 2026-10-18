@@ -3,6 +3,7 @@
 // the user's next game), Scout, Plan, Matchups and Test (the Lab against them). On game day a dock
 // tips the game off; quick sim stays in the Continue bar's options.
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
+import { useFlowRunner } from '../useFlow';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -72,21 +73,25 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   );
 }
 
-/** Game day: tip off (or get back to the game under way). */
+/** Game day: tip off (or get back to the game under way), or sim it from here (this dock stands in for the Continue bar). */
 function TipOff({ league, gid, name }: { league: League; gid: number; name: string }) {
   const nav = useNavigate();
+  const run = useFlowRunner();
   const simming = useStore((s) => !!s.sim);
   const live = liveInProgress(league);
   const resume = live?.gid === gid;
   return (
     <div className="dockbar mu-dock" role="group" aria-label="Game day">
       <button
-        className="btn primary big"
+        className="btn primary big grow"
         disabled={simming}
         onClick={() => nav('/live')}
         aria-label={resume ? `Resume the game against the ${name}` : `Tip off against the ${name}`}
       >
         <Eye size={18} /> {resume ? 'Resume the game' : 'Tip off'}
+      </button>
+      <button className="btn" disabled={simming} onClick={() => void run({ id: 'quick', label: 'Quick sim this game', cmd: 'quickGame' })}>
+        {resume ? 'Finish it' : 'Quick sim'}
       </button>
     </div>
   );
