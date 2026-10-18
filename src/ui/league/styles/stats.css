@@ -57,10 +57,19 @@
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.lg-lead-h span {
+.lg-lead-h h3 {
+  margin-right: auto;
+}
+.lg-lead-h > span {
   font-size: 11px;
   color: var(--text-dim);
   text-align: right;
+}
+/* the board's way to every player, sorted by its figure */
+.lg-lead-all {
+  flex: none;
+  align-self: center;
+  font-size: 12.5px;
 }
 .lg-lead-none {
   padding: 4px 14px 8px;

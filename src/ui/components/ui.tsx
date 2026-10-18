@@ -677,8 +677,18 @@ export function StatTable<T>({
     if (!col) return rows;
     return [...rows].sort((a, b) => compareCells(col.get(a), col.get(b), sort.dir));
   }, [rows, cols, sort]);
+  // a table opened sorted by a column off the right edge (a leaderboard's "All") scrolls it into view, once
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = wrap.current;
+    const th = el?.querySelector<HTMLElement>('th.sorted');
+    if (!el || !th || th.offsetLeft + th.offsetWidth <= el.clientWidth) return;
+    const stuck = el.querySelector<HTMLElement>('th.sticky')?.offsetWidth ?? 0;
+    el.scrollLeft = th.offsetLeft - stuck - 8;
+    // (on mount only: a tap on a header sorts where the reader already is)
+  }, []);
   return (
-    <div className="tablewrap" style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
+    <div className="tablewrap" ref={wrap} style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
       <table className="stats">
         <thead>
           <tr>

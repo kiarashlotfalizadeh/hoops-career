@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ChevronDown, Search } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import type { League, Player, PlayerStats, Pos, TeamSeason } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
@@ -47,6 +47,18 @@ function teamGames(league: League, season: number, rows: StatRow[], playoffs: bo
     if (ts) mx = Math.max(mx, ts.won + ts.lost);
   }
   return mx || rows.reduce((m, r) => Math.max(m, r.s.gp), 0);
+}
+
+/**
+ * Who qualifies for the leaders, and for the players table's "Qualified only": half his team's
+ * games (30% in the playoffs) at 15 minutes a game (10). One rule, so a leaderboard and the table it
+ * opens rank the same players.
+ */
+function qualifier(league: League, season: number, rows: StatRow[], playoffs: boolean) {
+  const games = teamGames(league, season, rows, playoffs);
+  const minGp = Math.max(1, Math.ceil(games * (playoffs ? 0.3 : 0.5)));
+  const minMin = playoffs ? 10 : 15;
+  return { minGp, minMin, ok: (r: StatRow) => r.s.gp >= minGp && r.pg.min >= minMin, label: `${minGp}+ games, ${minMin}+ min` };
 }
 
 const pctCell = (v: number | string) => (typeof v === 'number' && v >= 0 ? (v * 100).toFixed(1) : '—');
@@ -168,10 +180,17 @@ const CATS: Cat[] = [
 ];
 
 function Leaders({ league, rows, season, playoffs }: { league: League; rows: StatRow[]; season: number; playoffs: boolean }) {
-  const games = teamGames(league, season, rows, playoffs);
-  const minGp = Math.max(1, Math.ceil(games * (playoffs ? 0.3 : 0.5)));
-  const qualified = rows.filter((r) => r.s.gp >= minGp && r.pg.min >= (playoffs ? 10 : 15));
+  const q = qualifier(league, season, rows, playoffs);
+  const qualified = rows.filter(q.ok);
+  const { search } = useLocation();
   if (!rows.length) return <div className="card empty">No games played {playoffs ? 'in the playoffs ' : ''}yet this season.</div>;
+  // a board's "All" opens the players table on the same season, sorted by its figure
+  const allHref = (key: string) => {
+    const sp = new URLSearchParams(search);
+    sp.set('sv', 'players');
+    sp.set('sort', key);
+    return `/league/stats?${sp}`;
+  };
   return (
     <>
       {/* every category in one panel: the leader, then the next four */}
@@ -181,23 +200,26 @@ function Leaders({ league, rows, season, playoffs }: { league: League; rows: Sta
             .filter((r) => (!c.min || c.min(r)) && Number.isFinite(c.get(r)))
             .sort((a, b) => c.get(b) - c.get(a))
             .slice(0, 5);
-          return <LeaderBlock key={c.key} league={league} cat={c} top={top} />;
+          return <LeaderBlock key={c.key} league={league} cat={c} top={top} all={allHref(c.key)} />;
         })}
       </div>
       <div className="lg-note">
-        Qualified: {minGp}+ games ({playoffs ? '30' : '50'}% of team games), {playoffs ? 10 : 15}+ minutes a game.
+        Qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game.
       </div>
     </>
   );
 }
 
-function LeaderBlock({ league, cat, top }: { league: League; cat: Cat; top: StatRow[] }) {
+function LeaderBlock({ league, cat, top, all }: { league: League; cat: Cat; top: StatRow[]; all: string }) {
   const [first, ...rest] = top;
   return (
     <section className="lg-lead">
       <div className="lg-lead-h">
         <h3>{cat.label}</h3>
         {cat.minNote && <span>{cat.minNote}</span>}
+        <Link to={all} className="card-link lg-lead-all" aria-label={`All players by ${cat.label.toLowerCase()}`}>
+          All <ChevronRight size={14} aria-hidden="true" />
+        </Link>
       </div>
       {!first ? (
         <div className="lg-lead-none">Nobody qualifies yet.</div>
@@ -248,8 +270,9 @@ function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows:
   // typing stays responsive: the table catches up with the search a beat later
   const query = useDeferredValue(q);
   const [limit, setLimit] = useState(PAGE);
-  const games = teamGames(league, season, rows, playoffs);
-  const minGp = Math.max(1, Math.ceil(games * 0.3));
+  // the column a leaderboard's "All" opened the table on
+  const [sortKey] = useQueryParam<string>('sort', 'pts');
+  const quali = useMemo(() => qualifier(league, season, rows, playoffs), [league, season, rows, playoffs]);
   // PER and win shares wherever a season has them (imported, or a regular season played here); BPM and EPM only come imported
   const hasAdv = rows.some((r) => r.adv);
   const hasBpm = real && rows.some((r) => r.s.adv);
@@ -258,12 +281,12 @@ function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows:
     const needle = query.trim().toLowerCase();
     return rows.filter(
       (r) =>
-        (qual === 'all' || r.s.gp >= minGp) &&
+        (qual === 'all' || quali.ok(r)) &&
         (pos === 'all' || r.p.pos === pos) &&
         (mine === '0' || r.tid === league.userTid) &&
         (!needle || `${r.p.firstName} ${r.p.lastName}`.toLowerCase().includes(needle)),
     );
-  }, [rows, qual, minGp, pos, mine, league.userTid, query]);
+  }, [rows, qual, quali, pos, mine, league.userTid, query]);
 
   const cols = useMemo(() => {
     // per-game averages to one decimal, or whole-season totals
@@ -349,6 +372,16 @@ function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows:
         fmt: fmtCount,
       },
       { key: 'fg', label: 'FG%', get: (r) => (r.s.fga ? r.pg.fgPct : -1), fmt: pctCell },
+      {
+        key: 'tpm',
+        label: '3PM',
+        get: count(
+          (r) => r.pg.tpm,
+          (r) => r.s.tpm,
+        ),
+        fmt: fmtCount,
+        help: 'Threes made',
+      },
       { key: 'tp', label: '3P%', get: (r) => (r.s.tpa ? r.pg.tpPct : -1), fmt: pctCell },
       { key: 'ft', label: 'FT%', get: (r) => (r.s.fta ? r.pg.ftPct : -1), fmt: pctCell },
       {
@@ -410,7 +443,7 @@ function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows:
       <StatTable
         rows={filtered}
         cols={cols}
-        initialSort="pts"
+        initialSort={cols.some((c) => c.key === sortKey) ? sortKey : 'pts'}
         rowKey={(r) => r.p.pid}
         onRow={(r) => nav(`/player/${r.p.pid}`)}
         highlight={(r) => r.tid === league.userTid}
@@ -418,7 +451,7 @@ function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows:
         limit={limit}
       />
     ),
-    [filtered, cols, nav, league.userTid, limit],
+    [filtered, cols, sortKey, nav, league.userTid, limit],
   );
 
   const changed = [season !== s.fallback, playoffs, tot, pos !== 'all', qual === 'all', mine === '1'].filter(Boolean).length;
@@ -450,7 +483,7 @@ function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows:
           <FilterField label="Position">
             <Chips label="Position" value={pos} onChange={setPos} options={(['all', ...POSITIONS] as const).map((x) => ({ id: x, label: x === 'all' ? 'All' : x }))} />
           </FilterField>
-          <Toggle on={qual === 'q'} onChange={(v) => setQual(v ? 'q' : 'all')} label={`Qualified only (${minGp}+ games)`} />
+          <Toggle on={qual === 'q'} onChange={(v) => setQual(v ? 'q' : 'all')} label={`Qualified only (${quali.label})`} />
           <Toggle on={mine === '1'} onChange={(v) => setMine(v ? '1' : '0')} label={`${league.teams[league.userTid].name} only`} />
         </FiltersButton>
       </div>
