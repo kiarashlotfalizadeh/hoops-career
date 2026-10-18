@@ -655,7 +655,7 @@ function read(league: League, d: ScoutData) {
       weight: 2 + (0.54 - volume.ts) * 40,
     });
   const brick = d.players.filter((p) => p.min >= 15 && p.fta >= 2 && p.ft < 0.6).sort((a, b) => a.ft - b.ft)[0];
-  if (brick) exploits.push({ text: `${brick.name} makes ${pct0(brick.ft)} of his free throws: a Hack-a candidate late in quarters.`, weight: 1.5 + (0.6 - brick.ft) * 10 });
+  if (brick) exploits.push({ text: `${brick.name} makes ${pct0(brick.ft)} of his free throws: a candidate for Hack-a-player (Plan).`, weight: 1.5 + (0.6 - brick.ft) * 10 });
 
   readHeadToHead(league, d, counters);
   d.tendencies = tendencies

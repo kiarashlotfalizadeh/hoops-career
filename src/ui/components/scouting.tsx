@@ -39,9 +39,9 @@ export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' })
   const n = d.teams;
   const all: Cell[] = [
     { k: 'Pace', r: d.pace, fmt: f1, style: true, help: 'Possessions a game (1st = fastest)' },
-    { k: 'Off Rtg', r: d.ortg, fmt: f1, help: 'Points per 100 possessions' },
-    { k: 'Def Rtg', r: d.drtg, fmt: f1, help: 'Points allowed per 100 possessions (1st = fewest)' },
-    { k: 'Net', r: d.net, fmt: (v) => signed(v), help: 'Net rating' },
+    { k: 'ORtg', r: d.ortg, fmt: f1, help: 'Offensive rating: points per 100 possessions' },
+    { k: 'DRtg', r: d.drtg, fmt: f1, help: 'Defensive rating: points allowed per 100 possessions (1st = fewest)' },
+    { k: 'Net', r: d.net, fmt: (v) => signed(v), help: 'Net rating: ORtg minus DRtg' },
   ];
   all.push(
     { k: 'eFG%', r: d.off.efg, fmt: p1, help: 'Effective field-goal percentage' },
@@ -71,10 +71,14 @@ export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' })
   );
 }
 
-/** Beyond this many standard errors from the league a play type's PPP is coloured. */
+/** Beyond this many standard errors from the league a play type's PPP is coloured: more than chance. */
 const PT_Z = 1.5;
 
-/** Play types at one end against the league's points per possession, with z-scores. */
+/**
+ * Play types at one end against the league's points per possession: how often (and where that ranks
+ * in the league), the points per possession and how far from the league's that is. Four columns, so
+ * a phone shows them all.
+ */
 export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense: boolean }) {
   const tone = (r: PlayTypeRow) => {
     // good for the team shown: scoring above the league on offense, allowing below it on defense
@@ -82,29 +86,34 @@ export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense:
     return Math.abs(z) < PT_Z ? undefined : z > 0 ? 'var(--good)' : 'var(--bad)';
   };
   const cols: Col<PlayTypeRow>[] = [
-    { key: 'type', label: 'Play type', get: (r) => FINISH_LABEL[r.key], left: true, sticky: true, width: 120, help: 'How the possession finished' },
-    { key: 'share', label: defense ? 'Faced' : 'Freq', get: (r) => r.share, fmt: (v) => p0(+v), help: defense ? 'Share of opponent possessions' : 'Share of their possessions' },
+    { key: 'type', label: 'Play type', get: (r) => FINISH_LABEL[r.key], left: true, sticky: true, width: 112, help: 'How the possession finished' },
     {
-      key: 'rank',
-      label: 'Rk',
-      get: (r) => r.shareRank,
-      fmt: (v) => ordinal(+v),
-      asc: true,
-      help: defense ? 'League rank by how often they face it (1st = most)' : 'League rank by how often they run it (1st = most)',
+      key: 'share',
+      label: defense ? 'Faced' : 'Freq',
+      get: (r) => r.share,
+      // the share, and where it ranks in the league (1st = most)
+      fmt: (v, r) => (
+        <>
+          {p0(+v)} <span className="dim">{ordinal(r.shareRank)}</span>
+        </>
+      ),
+      help: defense ? 'Share of opponent possessions, and its league rank (1st = faces it most)' : 'Share of their possessions, and its league rank (1st = runs it most)',
     },
     { key: 'ppp', label: 'PPP', get: (r) => r.ppp, fmt: (v, r) => <span style={{ color: tone(r) }}>{(+v).toFixed(2)}</span>, help: 'Points per possession' },
-    { key: 'diff', label: '+/-', get: (r) => r.ppp - r.base, fmt: (v) => signed(+v, 2), help: 'Points per possession against the league' },
+    {
+      key: 'diff',
+      label: 'vs lg',
+      get: (r) => r.ppp - r.base,
+      fmt: (v, r) => <span title={`League ${r.base.toFixed(2)}`}>{signed(+v, 2)}</span>,
+      help: 'Points per possession against the league’s',
+    },
   ];
-  cols.push(
-    { key: 'base', label: 'Lg', get: (r) => r.base, fmt: (v) => (+v).toFixed(2), help: 'League points per possession' },
-    { key: 'z', label: 'z', get: (r) => r.z, fmt: (v) => signed(+v), help: 'Standard errors from the league: beyond ±2 is more than noise' },
-  );
   return (
     <>
       <StatTable rows={rows.filter((r) => r.key !== 'misc')} cols={cols} rowKey={(r) => r.key} initialSort="share" />
       <div className="tiny dim">
-        PPP in <span className="good">green</span>: {defense ? 'allows less' : 'scores more'} than the league, in <span className="bad">red</span>: {defense ? 'more' : 'less'}{' '}
-        (beyond {PT_Z} z).
+        {defense ? 'Faced' : 'Freq'}: share of {defense ? 'opponent' : 'their'} possessions, then its rank in the league. PPP in <span className="good">green</span>:{' '}
+        {defense ? 'allows less' : 'scores more'} than the league, in <span className="bad">red</span>: {defense ? 'more' : 'less'}, where the gap is more than chance.
       </div>
     </>
   );
