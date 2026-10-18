@@ -22,9 +22,10 @@ export const transitionMethods = {
       this.cur.label = 'Full-court press';
       this.cur.steps.push({ k: 'press', pid: h.pid });
     }
-    // expected value accounting: TOs forced vs easy baskets given up
+    // expected value accounting: TOs forced vs easy baskets given up (a broken press is a run-out
+    // three times in four, with the runners a step ahead)
     this.impact('press_to', def.side, (pTO - 0.012) * K.toPts);
-    this.impact('press_break', off.side, pBroken * 0.28);
+    this.impact('press_break', off.side, pBroken * 0.75 * (K.runOutPts + 0.6 * K.transAdvPts));
     const r = this.rng.next();
     if (r < pTO) {
       this.turnover(off, def, h, this.stealer(def), 'press');
@@ -32,6 +33,11 @@ export const transitionMethods = {
     }
     if (r < pTO + pBroken) return 'broken';
     return 'neutral';
+  },
+
+  /** The runners' edge off a defensive board against a team that crashed the glass. */
+  crashRunOut(this: GameSim, def: ST, ctx: Ctx) {
+    return ctx === 'dreb' ? lev(K.crashRunOut * Math.max(0, (def.t.offense.crashBoards - 50) / 50)) : 0;
   },
 
   transition(this: GameSim, off: ST, def: ST, ctx: Ctx, pressBroken: boolean) {
@@ -47,7 +53,7 @@ export const transitionMethods = {
     let adv = (off.speed - def.speed) / 25 + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
     adv -= lev((def.t.defense.getBack - 50) / 100);
     // fewer defenders back when they crashed the glass
-    if (ctx === 'dreb') adv += lev(K.crashRunOut * Math.max(0, (def.t.offense.crashBoards - 50) / 50));
+    adv += this.crashRunOut(def, ctx);
     adv += this.rng.normal(0, 0.5);
     // turnover in the open floor
     const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv, 0.02, 0.18);

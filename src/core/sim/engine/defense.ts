@@ -8,7 +8,7 @@ import type { DefScheme, PlayerDefense } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
 import { solveMatchups } from '../matchups';
-import { K, lev, levExtra, levGift, levGiftW, levW, type ZoneK } from './constants';
+import { K, blowByTag, lev, levExtra, levGift, levGiftW, levW, type ZoneK } from './constants';
 import { type SP, type ST, NONE } from './state';
 import type { GameSim } from './game';
 
@@ -271,7 +271,7 @@ export const defenseMethods = {
   blowBy(this: GameSim, def: ST, h: SP, from: 'pnr' | 'handoff' | 'iso'): number {
     const pr = this.pressure(def);
     const edge = lev(K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2);
-    if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, edge * K.advPts[from], h.pid);
+    if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, blowByTag(edge, from), h.pid);
     return edge;
   },
 

@@ -54,8 +54,8 @@ export const K = {
   /** Run-outs against a team that crashed the glass: chance multiplier per unit of crash above 50, and the runners' edge. */
   crashLeak: 1.5,
   crashRunOut: 0.5,
-  /** Expected points of one unit of transition advantage, for impact tags. */
-  transAdvPts: 0.1,
+  /** Expected points of one unit of transition advantage, for impact tags (see runOutPts). */
+  transAdvPts: 0.05,
   /** Diminishing returns on crashing past 50: offensive-board rate given back at 100. */
   crashFade: 0.11,
   /** Share of offensive boards given up at full transition-D sprint back. */
@@ -90,15 +90,25 @@ export const K = {
   physContest: 0.01,
   /** Points per switched pick-and-roll the switch takes away (the screen's advantage). */
   switchScreen: 0.04,
-  /** Handler's blow-by edge per unit of ball pressure, and the extra edge at full pressure. */
+  /**
+   * Handler's blow-by edge per unit of ball pressure, and the extra edge at full pressure; and the
+   * edge at which its tag counts a unit of it at half of K.advPts (see blowByTag).
+   */
   blowBy: 0.15,
   blowByConvex: 0.8,
+  blowBySat: 2,
   /** Expected points of one unit of handler advantage per action, for impact tags. */
   advPts: { pnr: 0.04, handoff: 0.04, iso: 0.04, post: 0.04 },
-  /** Expected points swung by an offensive board, a turnover, and a run-out over a half-court trip, for impact tags. */
+  /**
+   * Expected points swung by an offensive board, a turnover, and a run-out over a half-court trip, for
+   * impact tags. A run-out is worth less than it looks: the extra run-outs crashing gives up cost
+   * about 0.15 points each in the final margin (paired runs with and without the leak, at 1x and
+   * 2x), where the boards, turnovers and open looks the tags count show about 0.6 of their tagged
+   * points in the margin (leads ease off), so a run-out tags 0.18 and the runners' edge 0.05 a unit.
+   */
   orbPts: 1.6,
   toPts: 1.45,
-  runOutPts: 0.35,
+  runOutPts: 0.18,
   /** Crunch time: how much more often the ball finds the go-to player, and how much more his best action is run. */
   goToPick: 2.5,
   goToAction: 1.6,
@@ -296,6 +306,13 @@ export const levExtra = (x: number) => x * (K.tacticEdge - 1);
 /** A guarding instruction's give-back at the game's tactical leverage (see K.giftExp); a multiplier with `w`. */
 export const levGift = (x: number) => x * K.tacticEdge ** K.giftExp;
 export const levGiftW = (m: number) => m ** (K.tacticEdge ** K.giftExp);
+/**
+ * The expected points of a blow-by edge of this size, for impact tags: the openness an advantage
+ * buys is capped (a beaten defender is only so far behind), so the bigger the edge the less each
+ * unit of it is worth (paired runs with and without it, at 1x and 2x: about 0.8 of K.advPts a unit
+ * at full pressure at 1x, about half at 2x, as the other tags show in the margin).
+ */
+export const blowByTag = (edge: number, from: keyof typeof K.advPts) => (edge * K.advPts[from]) / (1 + (edge / K.blowBySat) ** 2);
 
 export interface ZoneK {
   pnr: number;

@@ -6,7 +6,7 @@ import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType } from '../log';
 import { SPLIT_DOUBLE } from '../sets';
-import { K, lev, levExtra } from './constants';
+import { K, blowByTag, lev, levExtra } from './constants';
 import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -24,11 +24,13 @@ export const isolationMethods = {
     if (!fixed && def.byId.get(off.t.offense.huntTarget ?? -1) === D) this.huntEdge(def, D, 'iso', A.pid);
     const pr = this.pressure(def);
     // pressure: aggressive defenders get blown by, quick creators most of all
-    adv += this.blowBy(def, A, 'iso');
+    const edge = this.blowBy(def, A, 'iso');
+    adv += edge;
     if (pr > 0) {
       const blow = lev(pr * clamp((A.c.create - 55) / 50, 0, 0.5));
       adv += blow;
-      this.impact('pressure_blowby', off.side, blow * K.advPts.iso, A.pid);
+      // (the share of the whole edge's worth this part adds)
+      this.impact('pressure_blowby', off.side, blowByTag(edge + blow, 'iso') - blowByTag(edge, 'iso'), A.pid);
     }
     const zd = this.zone(def);
     if (zd) {
