@@ -11,11 +11,12 @@ import { activeCoach, coachCareer, coyWinners } from '../../../core/league/coach
 import { seasonLabel } from '../../../core/constants';
 import { money } from '../../../core/format';
 import { Statline } from '../../components/ui';
+import { Term } from '../../components/Glossary';
 import { f1, ordinal, signed, teamRatings } from '../../stats';
 import { STRATEGY_META, StrategyTag } from '../shared';
 import { RosterRows } from '../../team/RosterList';
 
-/** A league rank among the teams that have played ("4th"). */
+/** League ranks among the teams that have played ("4th"), and how many have (`of`). */
 function useRatingRanks(league: League, tid: number) {
   return useLeagueMemo(() => {
     const all = league.teams.map((t) => ({ tid: t.tid, ts: curTeamSeason(league, t.tid) })).filter((x) => x.ts.won + x.ts.lost > 0);
@@ -24,7 +25,7 @@ function useRatingRanks(league: League, tid: number) {
       const sorted = [...r].sort((a, b) => (low ? a.tr[key] - b.tr[key] : b.tr[key] - a.tr[key]));
       return sorted.findIndex((x) => x.tid === tid) + 1;
     };
-    return { ortg: rank('ortg'), drtg: rank('drtg', true), net: rank('net') };
+    return { ortg: rank('ortg'), drtg: rank('drtg', true), net: rank('net'), of: r.length };
   }, [league, tid]);
 }
 
@@ -77,9 +78,9 @@ export function TeamOverview({ league, tid, onContracts }: { league: League; tid
         <div className="card lg-strip">
           <Statline
             items={[
-              { k: 'Off', v: f1(tr.ortg), s: `${ordinal(ranks.ortg)}` },
-              { k: 'Def', v: f1(tr.drtg), s: `${ordinal(ranks.drtg)}` },
-              { k: 'Net', v: signed(tr.net), s: `${ordinal(ranks.net)}`, color: tr.net > 0 ? 'var(--good)' : tr.net < 0 ? 'var(--bad)' : undefined },
+              { k: <Term id="ortg">ORtg</Term>, v: f1(tr.ortg), s: `${ordinal(ranks.ortg)} of ${ranks.of}` },
+              { k: 'DRtg', v: f1(tr.drtg), s: `${ordinal(ranks.drtg)} of ${ranks.of}` },
+              { k: 'Net', v: signed(tr.net), s: `${ordinal(ranks.net)} of ${ranks.of}`, color: tr.net > 0 ? 'var(--good)' : tr.net < 0 ? 'var(--bad)' : undefined },
             ]}
           />
         </div>
