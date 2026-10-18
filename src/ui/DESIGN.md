@@ -2,8 +2,14 @@
 
 A dark, game-first broadcast look for a phone, built for players who want the whole sim: depth is
 always there, one tap down, never hidden behind a mode. Read this before changing a screen;
-`src/ui/theme.css` holds the tokens and shared classes, `src/ui/components/ui.tsx` the shared
-components.
+`src/ui/theme.css` indexes the design system's partials (`src/ui/styles/`: tokens, type, layout,
+the app's chrome, surfaces, controls, badges, forms, data, overlays, figures, and the rules that
+load last), `src/ui/components/ui.tsx` holds the shared components.
+
+**Who it's for: players who know sims.** Understandable means fast scanning, no decoding and no
+hunting: every figure says what it is and which way is good, the same thing has the same name
+everywhere, and nothing needs two taps when one would do. Plain words come first; the NBA term is
+one tap away (`Term`).
 
 The north star is **coherence: one obvious place for everything.** Before adding a figure, a control
 or a screen, find where it already lives. If it's there, link to it; don't show it again.
@@ -38,6 +44,11 @@ Rules that follow from it:
   10-days, his pick, a new job) is an agenda item (`core/league/agenda.ts`, drawn with
   `AgendaList`/`AgendaRow`), settled in place. Required items hold the Continue bar.
 - Routes from before the redesign redirect (`routes/legacy.tsx`); link to the new ones.
+- **Search finds everything.** The top bar's search (`components/QuickSearch.tsx`, ranking in
+  `search.ts`; Ctrl/⌘ K or "/") reaches any player, team, screen or glossary word. A new screen
+  gets an entry in `SCREENS` with the words players use for it.
+- **Teaching can be turned off.** The first-week guide, its welcome mail and Today's Glossary link
+  follow `settings.teaching` (Settings → Help, and New League). Every `?` and `Term` stays.
 
 ## How screens change the league
 
@@ -82,8 +93,16 @@ Rules that follow from it:
 | `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                       |
 | `--display-w` `--text-w`                        | the font's width axis for display (68%) and text (90%)            |
 | `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                 |
+| `--gap-page` `--gap-sec` `--pad-card`           | density: between sections (12), heading to content (8), in a card |
+| `--row-min` `--row-py` `--row-px`               | a list row: 48px tall at least, its padding                       |
+| `--cell-py` `--cell-px`                         | a stat table's cell padding                                       |
 
-Don't hard-code colours that exist as tokens. Team colours for another team come from
+Don't hard-code colours or spacing that exist as tokens: screens read the density tokens so they
+tighten (or loosen) together.
+
+Figures are written by `src/core/format.ts`, the same way on every screen and in every message:
+`money` ("$12.3M"), `moneySigned` ("+$1.2M"), `moneyExact` (to the $10K for minimums, two-ways and
+cash: "$1.27M") and `plural` ("1 game", "5 games"). Don't write a new inline formatter. Team colours for another team come from
 `teamColors.ts`: `slabVars(colors)` for a slab, `jerseyKit` (inside `Avatar`), `teamLook`,
 `identityColor`. Two teams side by side use `matchupLooks`, and `matchupColors`/`jerseyColors` for
 lines and jerseys.
