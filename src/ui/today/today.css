@@ -62,6 +62,22 @@
   line-height: 1.1;
   color: var(--text-2);
 }
+/* a narrow phone: smaller marks and letters, so the two sides keep apart */
+@media (max-width: 374px) {
+  .td-side {
+    gap: 6px;
+  }
+  .td-side svg {
+    width: 32px;
+    height: 32px;
+  }
+  .td-ab {
+    font-size: 28px;
+  }
+  .td-rec {
+    font-size: 16px;
+  }
+}
 .td-at {
   grid-row: 1;
   grid-column: 2;

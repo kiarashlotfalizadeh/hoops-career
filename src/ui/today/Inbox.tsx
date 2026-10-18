@@ -46,7 +46,8 @@ export default function Inbox() {
   let lastKey = '';
   return (
     <main className="page td-inbox">
-      <PageHeader title="Inbox" sub={unread ? `${unread} unread` : 'All caught up'} back />
+      {/* (the unread count is on its filter) */}
+      <PageHeader title="Inbox" sub={unread ? undefined : 'All caught up'} back />
       <div className="td-ibar">
         <Segmented<Filter>
           label="Show"

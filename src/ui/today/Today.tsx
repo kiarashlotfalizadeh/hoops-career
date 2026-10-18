@@ -10,7 +10,7 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { agenda, GUIDE_STEPS, guideDone, showGuide } from '../../core/league/agenda';
 import { assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
-import { jobSecurity } from '../../core/league/jobSecurity';
+import { jobSecurity, type JobSecurity } from '../../core/league/jobSecurity';
 import { confStandings } from '../../core/league/standings';
 import { leagueForecast, pct } from '../../core/analysis/odds';
 import { AgendaList } from '../components/Agenda';
@@ -49,6 +49,11 @@ export default function Today() {
   const opp = g ? (g.home === league.userTid ? g.away : g.home) : undefined;
   const noPlan = opp !== undefined && full.some((c) => c.id === `plan:${opp}`);
   const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}`);
+  const js = useLeagueMemo(() => jobSecurity(league, leagueForecast(league)), [league]);
+  const seat = !league.fired && !js.off && (js.heat === 'warm' || js.heat === 'hot') && !items.some((i) => i.kind === 'ultimatum');
+  // "All advice" when the feed says more than Today shows somewhere
+  const onToday = new Set([...feed.slice(0, 3).map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
+  const more = full.some((c) => !onToday.has(c.id));
   const hidden = guideHidden(league);
   const msg = openMsg !== null ? league.inbox.find((m) => m.id === openMsg) : undefined;
 
@@ -75,7 +80,7 @@ export default function Today() {
         <Section
           title="From your staff"
           right={
-            full.length > Math.min(3, feed.length) && (
+            more && (
               <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setAllAdvice(true)}>
                 All advice ({full.length}) <ChevronRight size={14} aria-hidden="true" />
               </button>
@@ -92,7 +97,7 @@ export default function Today() {
         </Section>
       )}
 
-      <JobSecurityLine league={league} onAgenda={items.some((i) => i.kind === 'ultimatum')} />
+      {seat && <JobSecurityLine js={js} />}
 
       {league.phase === 'regular' && <StandingsNearby league={league} />}
       {inSeason(league) && <LastResults league={league} />}
@@ -128,10 +133,8 @@ function AllAdvice({ feed }: { feed: AssistantCard[] }) {
   );
 }
 
-/** The owner's patience, only when the seat is warm or hot (and no ultimatum on the agenda says it already). */
-function JobSecurityLine({ league, onAgenda }: { league: League; onAgenda: boolean }) {
-  const js = useLeagueMemo(() => jobSecurity(league, leagueForecast(league)), [league]);
-  if (league.fired || js.off || onAgenda || (js.heat !== 'warm' && js.heat !== 'hot')) return null;
+/** The owner's patience, shown when the seat is warm or hot (and no ultimatum in To do says it already). */
+function JobSecurityLine({ js }: { js: JobSecurity }) {
   return (
     <Link to="/office/owner" className={`card td-seat ${js.heat}`} aria-label={`Job security: ${js.label}, ${js.score} of 100. ${js.line}`}>
       <span className="td-seat-top">

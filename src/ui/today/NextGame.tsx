@@ -60,7 +60,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
       text:
         series.wins === series.losses
           ? `Series tied ${series.wins}-${series.losses}`
-          : `${series.wins > series.losses ? 'Lead' : 'Trail'} ${Math.max(series.wins, series.losses)}-${Math.min(series.wins, series.losses)}`,
+          : `${league.teams[series.wins > series.losses ? me : opp].abbrev} leads ${Math.max(series.wins, series.losses)}-${Math.min(series.wins, series.losses)}`,
     });
   if (series?.elimination || pv?.playIn?.elimination) tags.push({ text: 'Elimination game', stake: true });
   else if (series?.clinch) tags.push({ text: 'A win takes the series', stake: true });
@@ -205,7 +205,9 @@ function phaseCard(league: League): { over: string; title: string; line: string;
 
 /** `linked`: screens Today already links to (the agenda's), which the card doesn't repeat. */
 export function PhaseCard({ league, linked = [] }: { league: League; linked?: (string | undefined)[] }) {
-  const c = phaseCard(league);
+  const card = phaseCard(league);
+  // a fired coach's old team isn't his to run: the phase, and To do says what's next
+  const c = league.fired ? { ...card, line: 'You are between jobs.', link: undefined } : card;
   // nor the screen the Continue bar opens
   const path = (to?: string) => to?.split('?')[0];
   const taken = new Set([...linked, flowActions(league).find((a) => a.primary)?.to].map(path));
