@@ -233,7 +233,7 @@ function GameRow({ r, league, tid, h2hTid, ranks, brief }: RowProps & { r: Row }
   // the keys to the game met, under the score of the user's results
   const keys = r.res && tid === user && r.res.keys?.length ? r.res.keys.filter((k) => k.met !== null) : [];
   const met = keys.filter((k) => k.met).length;
-  const under = [r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '', keys.length ? `keys ${met}/${keys.length}` : ''].filter(Boolean).join(' · ');
+  const under = [r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '', keys.length ? `keys ${met} of ${keys.length}` : ''].filter(Boolean).join(' · ');
   return (
     <Link to={to} className={`gs-row${today ? ' today' : ''}${h2hTid !== undefined && r.opp === h2hTid ? ' h2h' : ''}`}>
       <span className="gs-date">

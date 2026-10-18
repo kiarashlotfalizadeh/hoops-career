@@ -14,7 +14,8 @@ import { matchupPreview, type MatchupPreview, type SidePreview } from '../../../
 import { gameKeys } from '../../../core/analysis/keys';
 import { storylines, type StorylineKind } from '../../../core/analysis/storylines';
 import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
-import { GAME_TIME_PERF, injuryText, setGameTime } from '../../../core/league/injuries';
+import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
+import { injuryName, plural } from '../../../core/format';
 import { K } from '../../../core/sim/engine';
 import { Avatar, Empty, Help, Ovr, Section, Tag } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
@@ -187,7 +188,7 @@ function InjuryReport({ league, pv, game, locked }: { league: League; pv: Matchu
               <div className="mu-q-row">
                 <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Game-time'}</Tag>
                 <Link to={`/player/${p.pid}`} className="grow ellipsis">
-                  <b>{p.name}</b> <span className="dim">{injuryText(p.injury)}</span>
+                  <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
                 </Link>
                 <button
                   className={`btn xs ${p.cleared ? '' : 'primary'}`}
@@ -231,11 +232,9 @@ function SideInjuries({ league, s }: { league: League; s: SidePreview }) {
         <Link key={p.pid} to={`/player/${p.pid}`} className="mu-inj">
           <Tag tone="bad">Out</Tag>
           <span className="grow ellipsis">
-            <b>{p.name}</b> <span className="dim">{injuryText(p.injury)}</span>
+            <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
           </span>
-          <span className="tiny dim num nowrap">
-            {p.games} game{p.games === 1 ? '' : 's'}
-          </span>
+          <span className="tiny dim num nowrap">{plural(p.games, 'game')}</span>
         </Link>
       ))}
       {s.resting.map((p) => (
