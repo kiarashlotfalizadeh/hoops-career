@@ -86,72 +86,77 @@ export default function Tactics() {
         <Segmented value={tab} onChange={setTab} options={TABS} label="Tactics sections" />
       </div>
 
-      {tab === 'playbook' && (
-        <>
-          {/* the assistant's switch sits with the playbooks he picks (any edit on any tab turns it off) */}
-          <div className="tx-auto">
-            <Toggle
-              on={!t.manual}
-              onChange={(on) =>
-                edit((l) => {
-                  const tm = l.teams[l.userTid];
-                  if (on) {
-                    tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false);
-                    // his refits make it his playbook, not a saved one
-                    tm.tactics.playbook = null;
-                  } else tm.tactics.manual = true;
-                })
+      {/* while a sim plays on a copy of the league, nothing here can change it */}
+      <fieldset className="tx-fieldset" disabled={simming}>
+        {tab === 'playbook' && (
+          <>
+            {/* the assistant's switch sits with the playbooks he picks (any edit on any tab turns it off) */}
+            <div className="tx-auto">
+              <Toggle
+                on={!t.manual}
+                onChange={(on) =>
+                  edit((l) => {
+                    const tm = l.teams[l.userTid];
+                    if (on) {
+                      tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false);
+                      // his refits make it his playbook, not a saved one
+                      tm.tactics.playbook = null;
+                    } else tm.tactics.manual = true;
+                  })
+                }
+                label="Let the assistant manage"
+                help={!t.manual ? 'He refits the playbook as the roster changes. Your next edit takes over.' : 'You call it. Turn on to hand back the clipboard.'}
+              />
+            </div>
+            <Section
+              title="Offense"
+              right={
+                <Help title="Playbooks">
+                  <p>A playbook sets pace, shot profile and which actions you run. Tap one to run it; ⓘ tells you what it is and who it&apos;s for.</p>
+                  <p>
+                    <Term id="fit">Fit</Term> scores how well your current roster suits it: creators, shooters, passers, bigs and athleticism. Tap a fit score to see what it is
+                    made of. Fine-tune any playbook on the Offense tab.
+                  </p>
+                </Help>
               }
-              label="Let the assistant manage"
-              help={!t.manual ? 'He refits the playbook as the roster changes. Your next edit takes over.' : 'You call it. Turn on to hand back the clipboard.'}
-            />
-          </div>
-          <Section
-            title="Offense"
-            right={
-              <Help title="Playbooks">
-                <p>A playbook sets pace, shot profile and which actions you run. Tap one to run it; ⓘ tells you what it is and who it&apos;s for.</p>
-                <p>
-                  <Term id="fit">Fit</Term> scores how well your current roster suits it: creators, shooters, passers, bigs and athleticism. Tap a fit score to see what it is made
-                  of. Fine-tune any playbook on the Offense tab.
-                </p>
-              </Help>
-            }
-          >
-            <PresetPicker kind="off" />
-          </Section>
-          <Section
-            title="Defense"
-            right={
-              <Help title="Defensive identities">
-                <p>A defensive identity sets your scheme, ball-screen coverage, help, pressure and press. Fit scores how well your roster suits it; tap a fit score to see why.</p>
-                <p>Fine-tune any of them on the Defense tab.</p>
-              </Help>
-            }
-          >
-            <PresetPicker kind="def" />
-          </Section>
-          <MyPlaybooksCard />
-        </>
-      )}
+            >
+              <PresetPicker kind="off" />
+            </Section>
+            <Section
+              title="Defense"
+              right={
+                <Help title="Defensive identities">
+                  <p>
+                    A defensive identity sets your scheme, ball-screen coverage, help, pressure and press. Fit scores how well your roster suits it; tap a fit score to see why.
+                  </p>
+                  <p>Fine-tune any of them on the Defense tab.</p>
+                </Help>
+              }
+            >
+              <PresetPicker kind="def" />
+            </Section>
+            <MyPlaybooksCard />
+          </>
+        )}
 
-      {tab === 'offense' && (
-        <>
-          <OffenseTab t={t} />
-          <SetPackageCard t={t} edit={tweak} players={players} />
-          <ShotProfile t={t} />
-        </>
-      )}
-      {tab === 'defense' && <DefenseTab t={t} />}
-      {tab === 'roles' && <RolesTab />}
-      {tab === 'manage' && (
-        <>
-          <ManageTab t={t} />
-          <CrunchTimeCard t={t} edit={tweak} players={players} />
-          <SituationsCard t={t} edit={tweak} />
-        </>
-      )}
-      {tab === 'insights' && <InsightsTab />}
+        {tab === 'offense' && (
+          <>
+            <OffenseTab t={t} />
+            <SetPackageCard t={t} edit={tweak} players={players} />
+            <ShotProfile t={t} />
+          </>
+        )}
+        {tab === 'defense' && <DefenseTab t={t} />}
+        {tab === 'roles' && <RolesTab />}
+        {tab === 'manage' && (
+          <>
+            <ManageTab t={t} />
+            <CrunchTimeCard t={t} edit={tweak} players={players} />
+            <SituationsCard t={t} edit={tweak} />
+          </>
+        )}
+        {tab === 'insights' && <InsightsTab />}
+      </fieldset>
 
       <Link to="/lab" className="tx-lablink">
         <FlaskConical size={16} aria-hidden="true" />

@@ -163,7 +163,7 @@ function PlayerList({ league, roster, onOpen }: { league: League; roster: Player
                         </div>
                         <div className="tm-pline">
                           <span className="tm-pmeta">
-                            {p.pos} · {playerAge(p, league.season)} ·
+                            {p.pos} · {playerAge(p, league.season)}
                           </span>
                           {p.injury ? (
                             <Tag tone="bad">

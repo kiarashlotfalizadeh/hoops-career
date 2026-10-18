@@ -152,6 +152,10 @@
 .tx-dock .btn {
   flex: none;
 }
+/* the tabs' controls, all switched off together while a sim runs */
+.tx-fieldset {
+  display: contents;
+}
 /* the six sections as a three-by-two switch: every one in view, none cut off on a phone */
 .tx-tabs .seg {
   display: grid;

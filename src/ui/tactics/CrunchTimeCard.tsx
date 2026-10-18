@@ -25,7 +25,6 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
   const atoPid = t.manage.atoPid ?? -1;
   // a set, or an isolation, can be run for one player
   const forOne = isSetId(ato) || ato === 'iso';
-  const help = isSetId(ato) ? `${SETS[ato].what} For ${SETS[ato].forWho}: ${SETS[ato].look}.` : ato !== 'none' ? ACTION_META[ato].help : '';
   const playerSub = (p: Player) => `${p.pos} · OVR ${p.ovr}${p.injury ? ' · injured' : ''}`;
   return (
     <Section
@@ -67,11 +66,10 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
             })
           }
           help="Opens your next half-court trip after your timeouts."
-          note={help || undefined}
           options={[
             { id: 'none' as const, label: 'Any' },
-            ...ACTIONS.map((a) => ({ id: a, label: ACTION_META[a].label, group: 'Actions' })),
-            ...SET_IDS.map((id) => ({ id, label: SETS[id].name, sub: `For ${SETS[id].forWho}`, group: 'Sets' })),
+            ...ACTIONS.map((a) => ({ id: a, label: ACTION_META[a].label, sub: ACTION_META[a].help, group: 'Actions' })),
+            ...SET_IDS.map((id) => ({ id, label: SETS[id].name, sub: `${SETS[id].what} For ${SETS[id].forWho}.`, group: 'Sets' })),
           ]}
         />
         {forOne && (
