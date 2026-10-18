@@ -35,8 +35,15 @@ describe('keys to the game', () => {
     const l = testLeague('keys-season', 5);
     for (let i = 0; i < 30; i++) simDay(l);
     toGameDay(l);
-    const g = userGameOnDay(l, l.day)!;
-    const before = gameKeys(l, g);
+    let g = userGameOnDay(l, l.day)!;
+    let before = gameKeys(l, g);
+    // (a night against an opponent that stands out on three numbers, as most do a month in)
+    for (let next = 0; before.length < 3 && next < 5; next++) {
+      simDay(l);
+      toGameDay(l);
+      g = userGameOnDay(l, l.day)!;
+      before = gameKeys(l, g);
+    }
     expect(before.length).toBe(3);
     // the season's own numbers name a rank or a scorer's average
     expect(before.some((k) => /of 30|a game/.test(k.why))).toBe(true);

@@ -95,13 +95,17 @@ describe('the mock draft', () => {
 
   it('a swap right takes the other first when that one projects higher, as the lottery settles it', () => {
     const x = structuredClone(l);
-    const [hi, lo] = [0, 10].map((i) => mockDraft(x)!.slots[i]);
+    // (the top pick, and the first from the eleventh on that another team owns: a trade can put two firsts with one team)
+    const slots = mockDraft(x)!.slots;
+    const hi = slots[0];
+    const at = slots.findIndex((s, i) => i >= 10 && s.tid !== hi.tid);
+    const lo = slots[at];
     expect(hi.tid).not.toBe(lo.tid);
     const own = (tid: number) => x.draftPicks.find((d) => d.season === x.season && d.round === 1 && d.originalTid === tid)!;
     // the right rides on the lower pick: used
     own(lo.orig).swap = own(hi.orig).dpid;
     let m = mockDraft(x)!.slots;
-    expect([m[0], m[10]]).toMatchObject([
+    expect([m[0], m[at]]).toMatchObject([
       { tid: lo.tid, orig: hi.orig },
       { tid: hi.tid, orig: lo.orig },
     ]);
@@ -109,7 +113,7 @@ describe('the mock draft', () => {
     delete own(lo.orig).swap;
     own(hi.orig).swap = own(lo.orig).dpid;
     m = mockDraft(x)!.slots;
-    expect([m[0], m[10]]).toMatchObject([
+    expect([m[0], m[at]]).toMatchObject([
       { tid: hi.tid, orig: hi.orig },
       { tid: lo.tid, orig: lo.orig },
     ]);

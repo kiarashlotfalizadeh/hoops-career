@@ -216,6 +216,9 @@ describe('counters and opposing plans', () => {
     const brick = rot[2];
     Object.assign(brick.ratings, { tp: 5 });
     for (const s of brick.stats) if (s.season === l.season) s.tpa = s.tpm = 0;
+    // and a regular who plays every night, a weak defender too (if not as weak as the sieve): with the
+    // sieve resting, the coaches who hunt one go after him, so their plans still name someone
+    Object.assign(rot[3].ratings, { perD: 15, spd: 30, diq: 25 });
     l.teams[l.userTid].rotation.restB2B = [sieve.pid, brick.pid];
     // a night with no game the night before, then the same night as the second of a back-to-back
     const me = l.userTid;

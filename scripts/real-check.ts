@@ -2,7 +2,7 @@
 // and each regular's per-game line with his real 2025-26 numbers.
 // Usage: npx tsx scripts/real-check.ts [path/to/seed.json] [rngSeed]
 //   env HC_SEED=<path> (seed file), RNG=<n> (league rng seed, default 7), TEAM=<abbrev> (rotation detail),
-//   WATCH=<comma-separated names>
+//   WATCH=<comma-separated names>, EDGE=<x> (tactical leverage, see K.tacticEdge)
 import { readFileSync } from 'node:fs';
 import { createLeague, defaultSettings, type SeedData } from '../src/core/league/create';
 import { startRegularSeason, simDay } from '../src/core/league/season';
@@ -11,12 +11,14 @@ import { releasePlayer } from '../src/core/league/contracts';
 import { standings } from '../src/core/league/standings';
 import { CAP, TARGETS } from '../src/core/constants';
 import type { Player } from '../src/core/types';
-import { engineDiag, resetEngineDiag } from '../src/core/sim/engine';
+import { K, engineDiag, resetEngineDiag } from '../src/core/sim/engine';
 import { awardLadder } from '../src/core/league/awards';
 import { SEASON_WEIGHT } from './data/derive';
 
 const seedPath = process.argv[2] ?? process.env.HC_SEED ?? 'src/data/seed.json';
 const rngSeed = Number(process.argv[3] ?? process.env.RNG ?? 7);
+// (EDGE=<x> plays the season at tactical leverage x: at 1 as the engine played before tactics were made to matter more)
+if (process.env.EDGE) K.tacticEdge = Number(process.env.EDGE);
 const seed: SeedData = JSON.parse(readFileSync(seedPath, 'utf8'));
 console.log(`seed ${seedPath} · rng ${rngSeed}`);
 const league = createLeague({ name: 'Check', userTid: 0, coachName: 'Check', settings: defaultSettings(), seed, rngSeed });

@@ -477,7 +477,8 @@ describe('engine tactics', () => {
         glassTag: 0.12,
       });
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
-      // side-out fouls started restarting the shot clock at 14)
+      // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
+      // much: tacticLeverage.test.ts plays them at 1x leverage and gets the ones from before that)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -485,10 +486,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [127, 115, 96, 93, 44, 29, 11, 11],
-        [119, 133, 91, 90, 43, 27, 11, 11],
-        [102, 120, 90, 91, 43, 38, 11, 8],
-        [112, 123, 86, 80, 32, 22, 13, 11],
+        [116, 124, 81, 93, 36, 30, 10, 13],
+        [103, 111, 96, 79, 49, 32, 15, 11],
+        [109, 136, 98, 94, 44, 47, 16, 7],
+        [112, 118, 87, 86, 44, 25, 13, 18],
       ]);
     });
 
@@ -502,17 +503,19 @@ describe('engine tactics', () => {
       const shooters = [...tids].sort((a, b) => avg(b, (c) => c.c3) - avg(a, (c) => c.c3))[0];
       const bigs = tids.filter((t) => t !== shooters).sort((a, b) => avg(b, (c) => c.postScore + c.rim) - avg(a, (c) => c.postScore + c.rim))[0];
       const defenses = tids.filter((t) => t !== shooters && t !== bigs).slice(0, 3);
-      const offenses: [SimTeamInput, number][] = [
-        [side(shooters, { offense: { threePoint: 100, rimAttack: 40, crashBoards: 10, actions: { motion: 100, handoff: 90, pnr: 45, iso: 10, post: 0 } } }), 1],
-        [side(bigs, { offense: { threePoint: 0, rimAttack: 100, crashBoards: 85, actions: { post: 100, iso: 70, pnr: 45, motion: 25, handoff: 10 } } }), -1],
+      // (the post-up team's edge is the smaller one, about a point per 100 against the shooters' two and a
+      // half: it gets three times the games, to see it past twice its standard error)
+      const offenses: [SimTeamInput, number, number][] = [
+        [side(shooters, { offense: { threePoint: 100, rimAttack: 40, crashBoards: 10, actions: { motion: 100, handoff: 90, pnr: 45, iso: 10, post: 0 } } }), 1, 300],
+        [side(bigs, { offense: { threePoint: 0, rimAttack: 100, crashBoards: 85, actions: { post: 100, iso: 70, pnr: 45, motion: 25, handoff: 10 } } }), -1, 900],
       ];
       // paired over three defenses: the same games with each zone
       const pooled = (rs: LabSummary[]): LabSummary => ({ ...rs[0], margins: rs.flatMap((r) => r.margins), pace: rs.reduce((x, r) => x + r.pace, 0) / rs.length });
-      for (const [b, sign] of offenses) {
-        const run = (scheme: 'zone23' | 'zone32') => pooled(defenses.map((d) => runLab({ a: side(d), b, games: 300, seed: 77, patch: { defense: { scheme } } })));
+      for (const [b, sign, games] of offenses) {
+        const run = (scheme: 'zone23' | 'zone32') => pooled(defenses.map((d) => runLab({ a: side(d), b, games, seed: 77, patch: { defense: { scheme } } })));
         const d = pairedDelta(run('zone23'), run('zone32'));
         expect(sign * d.delta).toBeGreaterThan(2 * d.se);
       }
-    });
+    }, 150_000);
   });
 });
