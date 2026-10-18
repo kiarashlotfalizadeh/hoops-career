@@ -692,23 +692,6 @@
   color: var(--team-text);
 }
 
-/* keys to the game: the number before each */
-.gd-key-n {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
-  color: var(--accent-text);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 13px;
-}
-
 /* the highlights reel in a game report: the court and its controls */
 .gd-hl {
   display: flex;

@@ -8,7 +8,7 @@ import { buildSimInput } from '../../core/league/games';
 import { hashString } from '../../core/random';
 import type { LiveGame } from '../../state/live';
 import type { Script } from './choreo';
-import type { LiveEvent } from './alerts';
+import { eventLines, type LiveEvent } from './alerts';
 import type { BannerItem } from './Banner';
 import type { SubOptions } from './MyPlayer';
 import { drawnPlayer, subsLine, type Drawn } from './drawn';
@@ -63,14 +63,8 @@ export function userSetup(league: League, lg: LiveGame): { tactics: Tactics; see
 
 /** An injury, a foul-out or the other coach's adjustment, as its banner over the court. */
 export function eventBanner(e: LiveEvent): BannerItem {
-  const i = e.kind === 'adjust' ? e.text.indexOf(': ') : -1;
-  return {
-    id: e.id,
-    tone: e.kind === 'adjust' ? 'info' : 'bad',
-    kicker: EVENT_KICKER[e.kind],
-    title: i < 0 ? e.text.replace(/\.$/, '') : e.text.slice(0, i),
-    line: i < 0 ? undefined : e.text.slice(i + 2).replace(/^./, (c) => c.toUpperCase()),
-  };
+  const { title, text } = eventLines(e);
+  return { id: e.id, tone: e.kind === 'adjust' ? 'info' : 'bad', kicker: EVENT_KICKER[e.kind], title, line: text || undefined };
 }
 
 /**
