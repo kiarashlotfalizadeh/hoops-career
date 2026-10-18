@@ -111,7 +111,10 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
               );
             })}
           </div>
-          <div className="mu-note">Tap a player to set who guards him and how{planned ? ` · ${planned} planned` : ''}.</div>
+          <div className="mu-note">
+            Tap a player to set who guards him and how{planned ? ` · ${planned} planned` : ''}. Under a pairing: <span className="good">your edge</span>,{' '}
+            <span className="warn">worth watching</span>, <span className="bad">a mismatch to fix</span>.
+          </div>
         </>
       )}
       <Sheet open={!!them && !!row} onClose={() => setPick(null)} title={them ? names(them.pid) : ''}>

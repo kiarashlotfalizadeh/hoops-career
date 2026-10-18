@@ -110,19 +110,24 @@ export interface MatchupNote {
   tone: 'good' | 'warn' | 'bad';
 }
 
-/** What a pairing means: the size gap, and what he does with the ball against your defender's defense at his spot. */
+/**
+ * What a pairing means, from your defender's side: the size gap, and what he does with the ball
+ * against your defender's defense at his spot, named as the player page's skills name them (shot
+ * creation, finishing, post play; perimeter and interior defense). Green is your edge, yellow worth
+ * watching, red a mismatch to fix.
+ */
 export function matchupNotes(them: Player, me: Player): MatchupNote[] {
   const out: MatchupNote[] = [];
   const gap = Math.round(them.heightIn - me.heightIn);
-  if (gap >= 3) out.push({ text: `Gives up ${gap} in`, tone: gap >= 6 ? 'bad' : 'warn' });
-  else if (gap <= -4) out.push({ text: `${-gap} in taller`, tone: 'good' });
+  if (gap >= 3) out.push({ text: `Your defender is ${gap} in shorter`, tone: gap >= 6 ? 'bad' : 'warn' });
+  else if (gap <= -4) out.push({ text: `Your defender is ${-gap} in taller`, tone: 'good' });
   const tc = composites(them.ratings);
   const mc = composites(me.ratings);
   const big = isBig(them);
   const a = attrDisplay(big ? Math.max(tc.postScore, tc.rim) : (tc.pnrHandle + tc.create) / 2);
   const d = attrDisplay(big ? mc.intDef : mc.perDef);
-  const what = big ? 'scoring inside' : 'creation';
-  const where = big ? 'interior D' : 'perimeter D';
+  const what = big ? (tc.postScore > tc.rim ? 'post play' : 'finishing') : 'shot creation';
+  const where = big ? 'interior defense' : 'perimeter defense';
   if (a - d >= 6) out.push({ text: `His ${what} ${a} vs your ${where} ${d}`, tone: a - d >= 12 ? 'bad' : 'warn' });
   else if (d - a >= 6) out.push({ text: `Your ${where} ${d} vs his ${what} ${a}`, tone: 'good' });
   return out;
