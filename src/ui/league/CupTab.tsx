@@ -58,7 +58,7 @@ export function CupTab({ league }: { league: League }) {
   const koRound = final ? 'Championship' : cup.bracket.some((t) => t.round === 'sf') ? 'Semifinals' : 'Quarterfinals';
   const status =
     cup.champion !== undefined
-      ? `${seasonLabel(cup.season)} NBA Cup complete`
+      ? '' // (the winners' slab says it)
       : cup.seeds
         ? `Knockouts · ${koRound}`
         : projected

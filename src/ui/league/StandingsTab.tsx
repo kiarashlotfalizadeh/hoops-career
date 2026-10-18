@@ -108,7 +108,7 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
-    <TeamTable cols={[46, 36, 36, 32, 44, 44, 44, 44]} head={['W-L', 'GB', 'L10', 'Strk', 'Home', 'Away', 'Conf', 'Diff']}>
+    <TeamTable cols={[50, 38, 34, 32, 44, 44, 44, 44]} head={['W-L', 'GB', 'L10', 'Strk', 'Home', 'Away', 'Conf', 'Diff']}>
       {rows.map((r, i) => {
         const t = league.teams[r.tid];
         const played = r.won + r.lost > 0;
