@@ -8,6 +8,7 @@ import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { canMakeWork, capSalary, salaryMatchGap, tradeRoster, valueVerdict, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
+import { Term } from '../components/Glossary';
 import { TradeNotes } from './common';
 import { TermsList } from './Terms';
 import { type EditCheck } from '../../core/league/godMode';
@@ -114,7 +115,9 @@ export function Dock({
       <TermsList league={league} offer={offer} short />
       <div className="statline fo-dock-figs">
         <div>
-          <div className="k">Salary out · in</div>
+          <div className="k">
+            <Term id="matching">Salary out · in</Term>
+          </div>
           <div className="v num">
             {money(out)} · {money(inc)}
           </div>

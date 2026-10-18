@@ -168,8 +168,11 @@ if (stage === 'all') {
   await shot('s03-draft-lottery', true);
   await go('/office');
   await shot('s04-office-lottery');
+  // the draft starts from the Play menu, and runs to your first pick
+  await go('/');
+  await play(/Go to the draft/);
+  await waitSim();
   await go('/office/draft');
-  await tryClick(page.getByRole('button', { name: /Start the draft/ }), 'start draft');
   await page.waitForTimeout(600);
   await shot('s05-draft-live');
   await shot('s05b-draft-live-full', true);
@@ -180,12 +183,9 @@ if (stage === 'all') {
     await page.waitForTimeout(600);
     await shot('s07-draft-after-pick');
   }
-  await tryClick(page.getByRole('button', { name: /Sim to end/ }).first(), 'sim to end');
-  // asked only while you still hold a pick; the simmed draft then stays open until you move on
-  await tryClick(page.getByRole('button', { name: 'Sim the draft' }), 'confirm sim');
-  await page.waitForTimeout(600);
-  await tryClick(page.getByRole('button', { name: /Continue to re-signing/ }), 'continue to re-signing');
-  await waitSim();
+  // the staff make the rest of your picks (from the Play menu, on the clock or not), then re-signing opens
+  await go('/');
+  for (let i = 0; i < 3 && (await play(/Auto-draft the rest/)); i++) await waitSim();
   await page.waitForTimeout(800);
   await go('/office/resign');
   await shot('s08-resign', true);
@@ -202,7 +202,8 @@ if (stage === 'all') {
   await tryClick(page.locator('.sheet').getByRole('button', { name: 'Open free agency' }), 'confirm fa');
   await page.waitForTimeout(800);
   await shot('s12-fa-day1');
-  await tryClick(page.getByRole('button', { name: /Next day/ }), 'next day');
+  await tryClick(page.getByRole('button', { name: /Advance 1 day/ }), 'next day');
+  await waitSim();
   await page.waitForTimeout(500);
   await shot('s13-fa-day2', true);
   if (await tryClick(page.locator('.fo-prow').first(), 'fa row')) {

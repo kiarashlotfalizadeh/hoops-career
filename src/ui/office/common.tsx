@@ -14,6 +14,7 @@ import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
+import { Term } from '../components/Glossary';
 import './office.css';
 import { money } from '../../core/format';
 
@@ -78,19 +79,21 @@ export function tradeClosedNote(league: League): string | null {
 // Every desk says the cap the same way: a room is never a negative number, an existing contract
 // says when it ends ("thru 27-28"), a new deal how long it runs ("× 4 yrs").
 
-/** Cap room as a figure: "Cap space $12.0M" under the cap, "Over the cap $51.2M" over it. */
-export function capRoomFig(space: number): { k: string; v: string; color: string } {
-  return space >= 0 ? { k: 'Cap space', v: money(space), color: 'var(--good)' } : { k: 'Over the cap', v: money(-space), color: 'var(--warn)' };
+/** Cap room as a figure: "Cap space $12.0M" under the cap, "Over the cap $51.2M" over it (the label opens the cap's glossary entry). */
+export function capRoomFig(space: number): { k: ReactNode; v: string; color: string } {
+  return space >= 0
+    ? { k: <Term id="cap">Cap space</Term>, v: money(space), color: 'var(--good)' }
+    : { k: <Term id="cap">Over the cap</Term>, v: money(-space), color: 'var(--warn)' };
 }
 
 /** Cap room in a phrase: "$12.0M in cap space", "$51.2M over the cap". */
 export const capRoomText = (space: number) => (space >= 0 ? `${money(space)} in cap space` : `${money(-space)} over the cap`);
 
 /** Where a payroll stands against the tax line, as a figure: the tax bill over it, the room under it. */
-export function taxFig(pay: number, line: number): { k: string; v: string; s: string; color?: string } {
+export function taxFig(pay: number, line: number): { k: ReactNode; v: string; s: string; color?: string } {
   return pay > line
-    ? { k: 'Luxury tax', v: money(Math.round((pay - line) * CAP.taxRate)), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
-    : { k: 'Under the tax', v: money(line - pay), s: `line ${money(line)}` };
+    ? { k: <Term id="tax">Luxury tax</Term>, v: money(Math.round((pay - line) * CAP.taxRate)), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
+    : { k: <Term id="tax">Under the tax</Term>, v: money(line - pay), s: `line ${money(line)}` };
 }
 
 /**
@@ -151,8 +154,8 @@ export function CapBar({
   cap: number;
   tax: number;
   add?: number;
-  /** What the stripe is ("cap holds", "this offer"). */
-  addLabel?: string;
+  /** What the stripe is ("Cap holds", "This offer"). */
+  addLabel?: ReactNode;
   legend?: 'full' | 'lines' | false;
 }) {
   const total = pay + Math.max(0, add);

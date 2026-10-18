@@ -295,7 +295,7 @@ function CapSheet({ league }: { league: League }) {
             {status === 'tax' ? 'Taxpayer' : status === 'cap' ? 'Over the cap' : 'Under the cap'}
           </span>
         </div>
-        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} addLabel="Cap holds" legend="lines" />
+        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} addLabel={<Term id="hold">Cap holds</Term>} legend="lines" />
         <Statline
           items={[
             { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },

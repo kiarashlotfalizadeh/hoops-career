@@ -133,7 +133,7 @@ export function ResignPeriod() {
               {ifAll > cap.luxuryTax && <div className="tiny bad num">tax ≈ {money(Math.round((ifAll - cap.luxuryTax) * CAP.taxRate))}</div>}
             </div>
           </div>
-          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} addLabel="Cap holds" legend="lines" />
+          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} addLabel={<Term id="hold">Cap holds</Term>} legend="lines" />
           <Statline
             items={[
               { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
@@ -159,7 +159,11 @@ export function ResignPeriod() {
                         <b className="num">{money(sal)}</b> <span className="dim">{shortSeason(next)} option</span>
                       </div>
                       <div className="tiny">
-                        {rookieScaleDeal(p) ? <span className="dim">Rookie scale · </span> : null}
+                        {rookieScaleDeal(p) ? (
+                          <span className="dim">
+                            <Term id="rookie">Rookie scale</Term> ·{' '}
+                          </span>
+                        ) : null}
                         <span className={worth ? 'good' : 'warn'}>staff: {worth ? 'exercise' : 'decline'}</span>
                       </div>
                     </div>

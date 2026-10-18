@@ -201,7 +201,9 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                 </div>
                 <div className="fo-money">
                   <div className="a">{money(r.qo)}</div>
-                  <div className="b">QO · cap hold {money(r.hold ?? r.qo)}</div>
+                  <div className="b">
+                    <Term id="qo">QO</Term> · cap hold {money(r.hold ?? r.qo)}
+                  </div>
                 </div>
               </div>
               {r.sheet ? (
