@@ -3,6 +3,8 @@
 :root {
   /* the quick actions' row */
   --lq-h: 58px;
+  /* on a tablet, the room the court leaves under it: the Clipboard's tabs and both fives whole */
+  --lv-dock-min: 288px;
 }
 :root[data-gameday] .bottomnav {
   display: none;
@@ -41,7 +43,7 @@
     padding-top: 10px;
   }
   .lv-stage {
-    width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - 220px) * 532 / 494));
+    width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
   }
   .lv .lb {
     border-radius: 12px 12px 0 0;
@@ -57,6 +59,6 @@
 }
 @media (min-width: 600px) and (orientation: portrait) {
   .lv-bug .lb {
-    width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - 220px) * 532 / 494));
+    width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
   }
 }

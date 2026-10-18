@@ -440,6 +440,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+@media (min-width: 600px) {
+  .bx-table td.l {
+    max-width: 220px;
+  }
+}
 .bx-who {
   display: flex;
   align-items: center;
