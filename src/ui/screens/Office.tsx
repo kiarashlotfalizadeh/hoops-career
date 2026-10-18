@@ -495,6 +495,8 @@ function Desks({ league }: { league: League }) {
   const myPicks = league.draftPicks.filter((d) => d.tid === tid);
   const firsts = myPicks.filter((d) => d.round === 1).length;
   const slots = draftSlots(league, proj);
+  // (before opening night nothing projects: the count stands in)
+  const thisDraft = myPicks.filter((d) => d.season === league.season).length;
   const drafted = after ? Object.values(league.players).filter((p) => p.draft.year === league.season && p.draft.tid === tid && p.draft.round > 0) : [];
   const expiring = teamPlayers(league, tid).filter((p) => !p.contract.twoWay && contractExp(p.contract) === league.season).length;
   const ts = team.seasons.find((s) => s.season === league.season);
@@ -542,7 +544,11 @@ function Desks({ league }: { league: League }) {
           : 'No picks this year'
         : [
             league.phase === 'draft' ? 'Draft night' : '',
-            slots.length ? `${draftNight ? 'You pick' : 'Your picks project'} ${slots.map((n) => `#${n}`).join(', ')}` : 'No picks this year',
+            slots.length
+              ? `${draftNight ? 'You pick' : 'Your picks project'} ${slots.map((n) => `#${n}`).join(', ')}`
+              : thisDraft
+                ? `${plural(thisDraft, 'pick')} this year`
+                : 'No picks this year',
             draftNight ? '' : `${prospectsN} prospects`,
           ]
             .filter(Boolean)

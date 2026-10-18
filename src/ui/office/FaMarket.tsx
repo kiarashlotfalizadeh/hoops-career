@@ -13,6 +13,7 @@ import { settle, useBusy } from '../../state/actions/office';
 import { useFlowRunner } from '../useFlow';
 import { More, Section } from '../components/ui';
 import { MySheets } from './RfaPanel';
+import { forYears } from './common';
 import { money } from '../../core/format';
 
 /**
@@ -52,7 +53,7 @@ export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
               return (
                 <div key={b.pid} className="fo-pending-item">
                   <button className="fo-pending-row grow" aria-haspopup="dialog" onClick={() => onOpen(b.pid)}>
-                    <b>{playerName(bp)}</b> · {b.years} yr{b.years > 1 ? 's' : ''} · {money(b.amount)}
+                    <b>{playerName(bp)}</b> · {money(b.amount)} {forYears(b.years)}
                     <span className="dim"> · {b.decideDay > league.faDay ? `decides day ${b.decideDay + 1}` : 'decides at the close'}</span>
                   </button>
                   <button className="btn xs" disabled={busy} aria-label={`Withdraw your offer to ${playerName(bp)}`} onClick={() => withdraw(b.pid)}>
