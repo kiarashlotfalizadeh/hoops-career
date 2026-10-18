@@ -165,7 +165,8 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                       {p.injury && <span className="fo-flag bad">INJ</span>}
                     </div>
                     <div className="fo-meta">
-                      {league.teams[p.tid].abbrev} · {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
+                      <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
+                      {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
                     </div>
                   </div>
                   <div className="fo-money">

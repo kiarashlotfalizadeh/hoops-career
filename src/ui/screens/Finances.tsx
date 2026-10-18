@@ -122,7 +122,11 @@ function Overview({ team }: { team: Team }) {
         <div className="card fo-att">
           <Statline
             items={[
-              { k: homeGames ? 'Per home game' : 'Projected', v: Math.round(attShown).toLocaleString(), s: `${full}% of ${ARENA_CAPACITY.toLocaleString()}` },
+              {
+                k: homeGames ? 'Per home game' : 'Projected',
+                v: Math.round(attShown).toLocaleString(),
+                s: full >= 100 ? 'sold out' : `${full}% of ${ARENA_CAPACITY.toLocaleString()} seats`,
+              },
               { k: 'Hype', v: Math.round(team.hype * 100), s: 'of 100' },
             ]}
           />
