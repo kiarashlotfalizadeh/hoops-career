@@ -1,0 +1,131 @@
+/* News and moves: the league's feed and the transactions list. */
+/* ------------------------------------------------------------------ news & moves */
+.lg-news {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+}
+.lg-news + .lg-news,
+.lg-news + .list-divider {
+  border-top: 1px solid var(--line);
+}
+.lg-news-body {
+  min-width: 0;
+}
+/* a kind's icon in its colour (--k), on a faint wash of it */
+.lg-ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--k, var(--text-2));
+  background: color-mix(in srgb, var(--k, var(--text-2)) 15%, transparent);
+}
+.lg-kind {
+  color: var(--k);
+}
+.lg-news-text {
+  font-size: 14px;
+  line-height: 1.42;
+  color: var(--text);
+}
+.lg-news-date {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.lg-news-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.lg-news-more {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.lg-pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-2);
+  max-width: 100%;
+  position: relative;
+}
+.lg-pchip.team {
+  padding-left: 3px;
+}
+/* compact chips that still give fingers a 40px target */
+.lg-pchip::after {
+  content: '';
+  position: absolute;
+  inset: -8px -3px;
+}
+.lg-pchip:active {
+  background: var(--surface);
+}
+.lg-pchip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* a count in a chip ("Trades 4") */
+.lg-count {
+  color: var(--text-dim);
+  font-weight: 650;
+}
+.chip.on .lg-count {
+  color: var(--text-2);
+}
+
+/* chips that scroll beside a Help: the scroller gives up the bar's right side */
+.lg-bar-chips {
+  margin-bottom: 0;
+}
+.lg-bar-scroll {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0;
+  padding-right: 4px;
+}
+/* a player's moves (his page) and your last deals with a team (Trade) */
+.lg-pmoves {
+  gap: 10px;
+}
+.lg-pmove {
+  gap: 10px;
+}
+.lg-pmoves-all {
+  margin-top: 10px;
+}
+.lg-lh {
+  min-width: 0;
+  line-height: 1.4;
+}
+.lg-deals {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.lg-deals-h {
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-deals-list {
+  gap: 6px;
+}

@@ -1,0 +1,302 @@
+/* Another team's page (/teams/:tid): its slab, actions, overview, roster rows, payroll and contracts. */
+/* ------------------------------------------------------------------ team page */
+/* the slab: back and the conference over the mark, the name in display caps, record and figures */
+.lg-team {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 16px 16px;
+}
+.lg-team-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 42px;
+  padding-right: 14px;
+}
+.lg-team-back {
+  margin-left: -10px;
+  color: #fff;
+}
+.lg-team-back:active {
+  background: rgba(0, 0, 0, 0.2);
+}
+.lg-team-over {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lg-team-id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: -4px;
+}
+.lg-team-region {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.lg-team-name {
+  font-size: 38px;
+  line-height: 0.92;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.lg-team-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lg-team-tags:empty {
+  display: none;
+}
+.lg-team-rec {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.lg-team-wl {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 0.9;
+}
+.lg-team-rank {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.lg-team-rec > :first-child {
+  flex: none;
+}
+
+/* tags on the team's colours: white on a dark wash, whatever their tone */
+.lg-team-tags .tag {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.lg-team-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: -6px;
+}
+.lg-team-actions .btn {
+  padding: 0 10px;
+  min-width: 0;
+}
+/* the roster's rows: jersey, name and details, the line, OVR */
+.lg-prow {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 14px;
+  min-height: 60px;
+}
+.lg-prow + .lg-prow {
+  border-top: 1px solid var(--line);
+}
+.lg-prow:active {
+  background: var(--surface);
+}
+.lg-prow-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-prow .lr-meta b {
+  font-weight: 700;
+}
+.lg-pstats {
+  display: grid;
+  grid-template-columns: repeat(3, 32px);
+  gap: 2px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lg-pstats > span {
+  display: flex;
+  flex-direction: column;
+}
+.lg-pstats .v {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.lg-pstats .k {
+  font-size: 9.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+@media (max-width: 374px) {
+  .lg-pstats {
+    grid-template-columns: repeat(3, 29px);
+  }
+}
+/* payroll against the cap and the tax */
+.lg-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-pay-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.lg-pay-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+}
+.lg-pay-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* your record against them, over their schedule (where your games carry your team's edge) */
+.lg-h2h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.lg-h2h .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lg-h2h-v {
+  font-weight: 750;
+}
+.lg-h2h-key {
+  flex: none;
+  padding-left: 8px;
+  border-left: 3px solid var(--team-text);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+/* draft picks */
+.lg-pick {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  min-height: 56px;
+}
+a.lg-pick:active {
+  background: var(--surface);
+}
+.lg-pick-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ team page: record line, actions, overview */
+.lg-team .lg-team-rec {
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.lg-team .lg-team-rec .lg-team-rank {
+  margin-top: 0;
+}
+.lg-team-actions {
+  margin-top: 0;
+}
+.lg-team-actions .btn {
+  gap: 8px;
+}
+/* "Matchup" with the next meeting's date under it */
+.lg-act-t {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+.lg-act-t small {
+  font-size: 11.5px;
+  font-weight: 650;
+  opacity: 0.85;
+}
+/* a labelled line: what (left), its value with a short line under it, where it goes */
+.lg-kvl {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px 8px 14px;
+  text-align: left;
+  font-size: 14px;
+}
+a.lg-kvl:active,
+button.lg-kvl:active {
+  background: var(--surface);
+}
+.lg-kvl .k {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.lg-kvl .v {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 650;
+}
+.lg-kvl .v .sub {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+/* the last ten results as dots, oldest first */
+.lg-form {
+  display: inline-flex;
+  gap: 3px;
+}
+.lg-form i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+}
+.lg-form i.w {
+  background: var(--good);
+}
+a.lg-h2h:active {
+  background: var(--surface);
+}

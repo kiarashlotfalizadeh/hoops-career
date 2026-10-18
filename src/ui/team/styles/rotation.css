@@ -1,0 +1,197 @@
+/* Team → Rotation: the assistant's switch, the depth chart, the stint plan and a player's sheet. */
+/* ------------------------------------------------------------ rotation */
+/* the assistant's switch, flat on the page, and Undo once he has replaced yours */
+.tm-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tm-undo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.tm-rsum {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tm-rsum .statline .v {
+  font-size: 26px;
+}
+.tm-rsum-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.tm-rrow {
+  gap: 10px;
+  padding-block: 8px;
+}
+/* the name, the line under it and the minute bar open his sheet; the arrows stay their own */
+.tm-rrow-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  align-self: stretch;
+}
+.tm-rname {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+/* a long name wraps (at its hyphen) on a narrow phone rather than lose its end */
+.tm-rname > .ellipsis {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tm-rrow.out .tm-rname > .ellipsis {
+  color: var(--text-2);
+}
+.tm-mbar.bar {
+  height: 4px;
+  margin-top: 6px;
+}
+.tm-rrow.out .tm-mbar > div {
+  background: var(--text-dim);
+}
+.tm-rmin {
+  flex: none;
+  width: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.tm-rmin-v {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 24px;
+}
+.tm-rmin-k {
+  margin-top: 2px;
+  font-size: 9.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tm-rrow.out .tm-rmin-v {
+  color: var(--text-dim);
+}
+
+/* stint plan: a row a player, four quarter blocks of twelve minutes, on the floor lit */
+.tm-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px 12px 14px;
+}
+.tm-plan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 92px) minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 8px;
+}
+.tm-plan-row.gap {
+  margin-top: 6px;
+}
+.tm-plan-head {
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-align: center;
+}
+.tm-plan-head > :last-child {
+  text-align: right;
+}
+.tm-plan-qs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.tm-plan-q {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.tm-plan-q i {
+  display: block;
+  height: 100%;
+}
+.tm-plan-q i.on {
+  background: var(--accent);
+}
+/* a minute on after a minute on: one bar, with a hairline marking the minute */
+.tm-plan-q i.on + i.on {
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.16);
+}
+.tm-plan-n {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.tm-plan-m {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+/* the edit sheet */
+.tm-ed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tm-ed-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: -6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tm-ed-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tm-swap {
+  padding-left: 6px;
+}
+.tm-swap-n {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+.tm-swap-n.s {
+  color: var(--accent-ink);
+  background: var(--text-2);
+}

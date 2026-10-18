@@ -1,0 +1,90 @@
+/* Team → Roster's player rows, and the page tabs and switches the Team screens use. */
+/* ------------------------------------------------------------ roster rows */
+.tm-prow {
+  align-items: center;
+  padding-block: 9px;
+}
+.tm-pname {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.tm-pmeta {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.tm-pline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+/* a row's season line: figures first, units in small capitals */
+.tm-figs {
+  display: inline-flex;
+  white-space: nowrap;
+  gap: 0 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tm-figs b {
+  font-size: 13px;
+  font-weight: 700;
+  font-stretch: var(--text-w);
+  letter-spacing: 0;
+  color: var(--text-2);
+  margin-right: 1px;
+}
+/* a phone: the figures condense to stay on the line with his position and age */
+@media (max-width: 440px) {
+  .tm-figs {
+    gap: 0 7px;
+    font-size: 10px;
+    font-stretch: 82%;
+    letter-spacing: 0.04em;
+  }
+  .tm-figs b {
+    font-stretch: 82%;
+  }
+}
+.tm-figs.dim {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* page tabs that share the width, so the last one isn't cut off on a narrow phone */
+.tm-tabs .seg.tabs {
+  gap: 0;
+}
+.tm-tabs .seg.tabs button {
+  flex: 1 1 auto;
+  padding: 0 6px;
+}
+.tm-tabs .seg.tabs button.on::before {
+  left: 4px;
+  right: 4px;
+}
+/* the player page's five tabs: a little tighter on a narrow phone */
+@media (max-width: 400px) {
+  .tm-tabs.five .seg.tabs button {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 0 4px;
+  }
+}
+/* a boxed switch that sizes to its options instead of filling the row */
+.tm-seg-l .seg {
+  display: inline-flex;
+  max-width: 100%;
+}

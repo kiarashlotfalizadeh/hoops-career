@@ -1,0 +1,48 @@
+/* Team's header: the team, its spots and payroll, who runs it, over the page tabs. */
+/* ------------------------------------------------------------ the hub's header */
+/* the team, its spots and payroll, who runs it: one compact block over the tabs */
+.tm-hh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: -2px;
+}
+.tm-hh-id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tm-hh-region {
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  line-height: 1.2;
+}
+.tm-hh-name {
+  font-size: 30px;
+  line-height: 1;
+  margin: 1px 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-hh-meta {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.tm-hh-staff {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-hh-staff svg {
+  flex: none;
+}
