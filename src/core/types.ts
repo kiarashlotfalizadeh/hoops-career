@@ -1206,6 +1206,8 @@ export interface Settings {
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */
   liveScores?: boolean;
+  /** Teaching for new coaches: the first-week guide on Today, its welcome mail and Today's glossary link (default on; every "?" and glossary word stays). */
+  teaching?: boolean;
   /** God mode: the in-game editor for players and teams, created players and forced trades (default off; see godMode.ts). */
   godMode?: boolean;
 }

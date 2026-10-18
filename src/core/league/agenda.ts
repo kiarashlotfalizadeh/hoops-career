@@ -112,7 +112,7 @@ export function guideDone(league: League): Set<GuideStep> {
 /** The guide shows in the user's first season, from the preseason through its first weeks, until each step is done or he puts it away. */
 export function guideOpen(league: League): boolean {
   const o = league.onboarding;
-  if (!o || o.hidden) return false;
+  if (!o || o.hidden || league.settings.teaching === false) return false;
   if (league.season !== league.startSeason) return false;
   if (league.phase !== 'preseason' && !(league.phase === 'regular' && league.day < 21)) return false;
   return guideDone(league).size < GUIDE_STEPS.length;
@@ -426,9 +426,10 @@ export function guideVisit(league: League, step: GuideStep) {
   return true;
 }
 
-/** Start a new league's guide (createLeague), with a welcome from the staff. */
+/** Start a new league's guide (createLeague), with a welcome from the staff (none with teaching off). */
 export function startGuide(league: League) {
   league.onboarding = { done: [] };
+  if (league.settings.teaching === false) return;
   addInbox(league, {
     from: 'Assistant Coach',
     subject: 'Your first week',

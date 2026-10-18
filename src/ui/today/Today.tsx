@@ -29,7 +29,7 @@ const inSeason = (l: League) => l.phase === 'regular' || l.phase === 'playin' ||
 
 /** The guide was put away, but its weeks aren't over (Today offers it back). */
 function guideHidden(league: League): boolean {
-  if (!league.onboarding?.hidden || league.season !== league.startSeason) return false;
+  if (!league.onboarding?.hidden || league.settings.teaching === false || league.season !== league.startSeason) return false;
   if (league.phase !== 'preseason' && !(league.phase === 'regular' && league.day < 21)) return false;
   return guideDone(league).size < GUIDE_STEPS.length;
 }
@@ -104,11 +104,13 @@ export default function Today() {
 
       <UnreadMail league={league} agendaIds={items.map((i) => i.id)} onOpen={setOpenMsg} />
 
-      <div className="td-foot">
-        <button type="button" className="btn sm ghost" aria-haspopup="dialog" onClick={() => setGlossary(true)}>
-          Glossary
-        </button>
-      </div>
+      {league.settings.teaching !== false && (
+        <div className="td-foot">
+          <button type="button" className="btn sm ghost" aria-haspopup="dialog" onClick={() => setGlossary(true)}>
+            Glossary
+          </button>
+        </div>
+      )}
 
       <Sheet open={allAdvice} onClose={() => setAllAdvice(false)} title="From your staff">
         <AllAdvice feed={full} />

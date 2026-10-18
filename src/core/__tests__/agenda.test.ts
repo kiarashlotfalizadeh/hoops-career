@@ -79,6 +79,16 @@ describe('the guided first week', () => {
     l.day = 30;
     expect(guideOpen(l)).toBe(false);
   });
+
+  it('stays out of the way with teaching off: no guide, no welcome mail, and turning it back on brings the guide', () => {
+    const l = camp(5, { teaching: false });
+    expect(guideOpen(l)).toBe(false);
+    expect(agenda(l).some((i) => i.kind === 'guide')).toBe(false);
+    expect(l.inbox.some((m) => m.subject === 'Your first week')).toBe(false);
+    expect(camp(5).inbox.some((m) => m.subject === 'Your first week')).toBe(true);
+    l.settings.teaching = true;
+    expect(guideOpen(l)).toBe(true);
+  });
 });
 
 describe('job security', () => {

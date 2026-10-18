@@ -18,7 +18,7 @@ import { GlossarySheet } from '../components/Glossary';
 import { DifficultyPicker } from '../components/DifficultyPicker';
 import { BrandMark } from '../components/BrandMark';
 import { GLOSSARY } from '../glossary';
-import { LIVE_BREAKS, LIVE_SPEEDS } from '../settingsOptions';
+import { LIVE_BREAKS, LIVE_SPEEDS, TEACHING_HELP, rememberTeaching } from '../settingsOptions';
 import './settings.css';
 
 const SPEEDS = LIVE_SPEEDS.map((s) => ({ id: String(s.id), label: s.label }));
@@ -92,6 +92,10 @@ export default function Settings() {
       console.error(e);
       useStore.getState().toast(`"${nm}" could not be deleted. Try again from the main menu.`, 'bad');
     }
+  };
+
+  const setTeaching = (on: boolean) => {
+    if (edit((l) => void (l.settings.teaching = on))) rememberTeaching(on);
   };
 
   const bringGuideBack = () => {
@@ -231,6 +235,7 @@ export default function Settings() {
 
       <Section title="Help">
         <div className="card flush set-list">
+          <Toggle on={st.teaching !== false} onChange={setTeaching} disabled={simming} label="Teaching" help={TEACHING_HELP} />
           <button type="button" className="set-link" aria-haspopup="dialog" onClick={() => setSheet('glossary')}>
             <BookOpen size={18} className="dim" aria-hidden="true" />
             <span className="grow">

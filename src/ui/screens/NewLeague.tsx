@@ -5,6 +5,7 @@ import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
 import { DifficultyPicker } from '../components/DifficultyPicker';
+import { TEACHING_HELP, rememberTeaching, teachingDefault } from '../settingsOptions';
 import { slabVars } from '../teamColors';
 import './start.css';
 import { loadSeed } from '../../data/seedLoader';
@@ -58,7 +59,7 @@ export default function NewLeague() {
   const [conf, setConf] = useState<'E' | 'W'>(() => (tid !== null ? FRANCHISES[tid].conf : 'E'));
   const [name, setName] = useState('My League');
   const [coach, setCoach] = useState('');
-  const [settings, setSettings] = useState<Settings>(defaultSettings());
+  const [settings, setSettings] = useState<Settings>(() => ({ ...defaultSettings(), teaching: teachingDefault() }));
   const [busy, setBusy] = useState(false);
   // the league still open behind the main menu couldn't be saved: the user decides before it's replaced
   const [unsaved, setUnsaved] = useState(false);
@@ -297,6 +298,15 @@ export default function NewLeague() {
                 onChange={(v) => setSettings({ ...settings, jobSecurity: v })}
                 label="Job security"
                 help="After his grace period (Difficulty sets how long), the owner can fire you for a season short of his goals."
+              />
+              <Toggle
+                on={settings.teaching !== false}
+                onChange={(v) => {
+                  setSettings({ ...settings, teaching: v });
+                  rememberTeaching(v);
+                }}
+                label="Teaching"
+                help={TEACHING_HELP}
               />
             </div>
           </Section>
