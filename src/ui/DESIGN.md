@@ -110,7 +110,42 @@ tighten (or loosen) together.
 
 Figures are written by `src/core/format.ts`, the same way on every screen and in every message:
 `money` ("$12.3M"), `moneySigned` ("+$1.2M"), `moneyExact` (to the $10K for minimums, two-ways and
-cash: "$1.27M") and `plural` ("1 game", "5 games"). Don't write a new inline formatter. Team colours for another team come from
+cash: "$1.27M"), `plural` ("1 game", "5 games"), `rankOf` ("7th of 30"), `madeAtt` ("34-90", in
+tables and sentences alike), `injuryName` and `outFor` ("Torn meniscus · out 8 games"). Don't
+write a new inline formatter.
+
+**One word for one thing** (the vocabulary every screen uses):
+
+| Concept          | Write it                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Threes           | 3P / 3PA / 3P% / 3PM in figures; "three-point", "threes" in words. Never 3PT                                 |
+| Team ratings     | ORtg / DRtg / Net, as is even inside caps (`.as-is`, `Col.asIs`)                                             |
+| Per game         | PTS REB AST STL BLK MIN, one decimal; "per game" said once (a header, a foot, the slab's caption)            |
+| Potential        | a POT column beside OVR; "POT 89" inline and under a badge (`OvrPot`). No ▲                                  |
+| A player rating  | its `RATING_META` name (sentence case); in prose lower case with its value (`ratingText`)                    |
+| A contract's end | `contractEnd` ("thru 28-29 PO", "expiring"); a new deal `forYears` ("$12.0M × 4 yrs")                        |
+| A roster         | `rosterLine`/`rosterFig` (`office/basis.ts`): signed for the season the money is about, of 15                |
+| Picks            | one row (`PickRow`), one order (`pickOrder`); "Owned by", "1st round", neutral "proj. #17"; `picksText`      |
+| A plan, a series | `planStatus` ("No game plan yet" / "Plan: 3 changes · next game"); `seriesText`, `streakText`, `lastTenText` |
+| Before a game    | one chance to win: `gameProjection` (the matchup preview's). A screen never computes its own                 |
+| An AI offer      | one headline (`offerSubject`) in the inbox and on the agenda; the other GM quoted in his name                |
+| A teammate       | told apart when another shares his last name: `rosterNames` in lists, `shortName` in text                    |
+| Dates            | `fmtDate`: "Feb 11", "Wed, Feb 11"; a year only outside this season; never an all-caps long weekday          |
+| Owner numbers    | job security out of 100 (50 = goals met exactly); grades −100..+100 (0 = met exactly)                        |
+
+**Colour that means "how good" has one order everywhere**: gold > purple > blue > green > light
+grey > grey (the OVR tiers). Ratings: 85+ gold, 75+ blue, 64+ green, under 64 grey (`ratingTone`,
+in a table and a bar alike); percentiles 85th+/65th+/35th+/below likewise (`skillColor`). Red is for
+losses and warnings, never a low rating; trade value tiers are plain text. One game's screens put
+the away team on the left and the home team on the right, as the final does; shot charts draw each
+team's makes in its `matchupColors` colour and misses in grey, under one `ShotKey`.
+
+**Prefix class names by area** (`lg-`, `tm-`, `td-`, `fo-`, `lv-`, `gs-`, `mu-`): lazy chunks load
+their CSS late, so a bare name from one screen restyles another once it has loaded (the live
+game's `.bk` once broke the playoff bracket). A wide `StatTable` keeps its first column sticky and
+fades at the right edge while columns wait (built in; `.tablewrap-o` elsewhere).
+
+Team colours for another team come from
 `teamColors.ts`: `slabVars(colors)` for a slab, `jerseyKit` (inside `Avatar`), `teamLook`,
 `identityColor`. Two teams side by side use `matchupLooks`, and `matchupColors`/`jerseyColors` for
 lines and jerseys.
@@ -158,7 +193,7 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
 - `.dockbar`: a screen's own fixed action bar over the tab bar; the Continue bar steps aside for it.
 - The Continue bar (App.tsx) names the next step and runs it. A required agenda item takes its place
   and opens in a sheet to be settled. On the screen the next step names, it shrinks to its options.
-- `.empty` for empty states: one line, what to do next.
+- `.empty` for empty states: one line, what to do next; no icon or display headline.
 
 ## Screen anatomy (phone)
 
@@ -217,6 +252,11 @@ Broadcast first: the court is always the biggest thing on screen.
   a striped amount included.
 - **Never quote an engine effect size or spread in copy** ("worth about +1.1 per 100"): show the
   Lab's or the league's numbers at runtime, or none. The engine is re-tuned; copy isn't.
+- **A tactical effect is phrased against what would otherwise have happened** ("turned it over
+  less than pressure would have made them"), never as a count the box score's factors could
+  contradict.
+- One verb per action: the Lab and the counters "Run 40 games" (the button names the count); the
+  press conference says whose mood moves ("Holmgren's mood ↑").
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
 - Names of controls in advice must match the controls on screen (Team → Tactics tabs: Playbook,
   Offense, Defense, Roles, Game Mgmt).
