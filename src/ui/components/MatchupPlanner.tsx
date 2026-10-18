@@ -62,7 +62,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
   const cur = row ? (how[row.pid] ?? null) : null;
   return (
     <Section
-      title="At the tip"
+      title="Who guards whom"
       right={
         <Help title="Matchups">
           <p>
