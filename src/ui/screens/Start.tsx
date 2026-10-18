@@ -1,12 +1,16 @@
+// The main menu (/start): the league played last one tap away, a new league, a backup to import, and
+// every saved league. Saves from before the redesign can't be opened: they're listed to keep (as a
+// file) or delete.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { deleteLeague, listLeagues, loadLeague, type LeagueMeta } from '../../state/persistence';
+import { ChevronRight, Download, Plus, Trash2 } from 'lucide-react';
+import { deleteLeague, listLeagues, loadLeague, openable, type LeagueMeta } from '../../state/persistence';
+import { exportRawSave } from '../../state/backup';
 import { useStore } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
-import { Empty, Section, Sheet } from '../components/ui';
+import { Section, Sheet } from '../components/ui';
 import { BrandMark } from '../components/BrandMark';
 import { slabVars } from '../teamColors';
 import './start.css';
@@ -70,14 +74,21 @@ export default function Start() {
     }
     void refresh();
   };
-  const latest = leagues?.[0];
+  // an older save, kept as a file before it goes (a cancelled share sheet is no failure)
+  const keep = (m: LeagueMeta) =>
+    void exportRawSave(m.id).catch((e) => {
+      console.error(e);
+      useStore.getState().toast('Export failed.', 'bad');
+    });
+  // the league played last that this version can open
+  const latest = leagues?.find(openable);
   const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
     <main className="page standalone st-page">
       <header className="st-hero">
-        <BrandMark size={112} />
+        <BrandMark size={104} />
         <h1 className="st-word">Hoops Career</h1>
-        <p className="st-tag">GM and head coach of a real 2026-27 roster, with tactics that explain every result.</p>
+        <p className="st-tag">GM and head coach of a real 2026-27 roster.</p>
       </header>
       {latest && (
         // the league played last, one tap from where you left it
@@ -106,21 +117,41 @@ export default function Start() {
         </button>
         <ImportButton block ghost />
       </div>
-      <Section title="Saved leagues">
-        {leagues === null ? (
-          <Empty>Loading…</Empty>
-        ) : leagues.length === 0 ? (
-          <div className="card small dim center">{error ?? 'No saved leagues yet. Start one above.'}</div>
-        ) : (
+      {/* (nothing saved yet: New league above is all there is to say) */}
+      {error ? (
+        <div className="empty small" role="alert">
+          {error}
+        </div>
+      ) : !leagues?.length ? null : (
+        <Section title="Saved leagues">
           <div className="card flush list">
             {leagues.map((m) => {
               const tid = tidOf(m);
+              // (as the league has it: god mode can rename and recolour a team)
+              const logo = <TeamLogo tid={tid >= 0 ? tid : 0} size={36} abbrev={m.teamAbbrev} colors={m.colors} decorative />;
+              if (!openable(m))
+                return (
+                  <div key={m.id} className="st-row old">
+                    <div className="st-open">
+                      <span className="st-logo">{logo}</span>
+                      <span className="grow">
+                        <span className="lr-name ellipsis">{m.name}</span>
+                        <span className="lr-meta ellipsis">Older version: can't be opened</span>
+                      </span>
+                    </div>
+                    <button className="iconbtn" aria-label={`Export the save file of ${m.name}`} onClick={() => keep(m)}>
+                      <Download size={18} />
+                    </button>
+                    <button className="iconbtn" aria-label={`Delete ${m.name}`} onClick={() => setConfirm(m)}>
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                );
               return (
                 <div key={m.id} className="st-row">
                   {/* open and Delete are sibling buttons; this one reaches the row's edges */}
                   <button type="button" className="st-open" onClick={() => void open(m.id)}>
-                    {/* as the league has it (god mode can rename and recolour a team) */}
-                    <TeamLogo tid={tid >= 0 ? tid : 0} size={36} abbrev={m.teamAbbrev} colors={m.colors} decorative />
+                    {logo}
                     <span className="grow">
                       <span className="lr-name ellipsis">{m.name}</span>
                       {/* two lines, so the record isn't the part a phone cuts off */}
@@ -139,8 +170,8 @@ export default function Start() {
               );
             })}
           </div>
-        )}
-      </Section>
+        </Section>
+      )}
       <UnsavedSheet
         open={!!unsaved}
         title="Switch without saving?"
@@ -155,6 +186,7 @@ export default function Start() {
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title="Delete league?">
         <p className="dim2" style={{ marginTop: 0 }}>
           “{confirm?.name}” will be removed from this device for good.
+          {confirm && !openable(confirm) ? ' Export its save file first to keep a copy.' : ''}
         </p>
         <div className="row" style={{ marginTop: 16 }}>
           <button className="btn grow" onClick={() => setConfirm(null)}>
