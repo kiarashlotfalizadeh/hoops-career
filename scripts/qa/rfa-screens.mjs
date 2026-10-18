@@ -170,10 +170,10 @@ await page.waitForTimeout(400);
 await shot('d11-play-menu-blocked');
 await closeSheet();
 await go('/inbox');
-await page.locator('.lg-msg-top').first().click();
+await page.locator('.td-msg').first().click();
 await page.waitForTimeout(300);
 await shot('d12-inbox-sheet');
-await page.locator('.lg-msg-body').getByRole('button', { name: /Match/ }).click();
+await page.locator('.td-sheet').getByRole('button', { name: /Match/ }).click();
 await page.waitForTimeout(500);
 await shot('d13-inbox-matched');
 

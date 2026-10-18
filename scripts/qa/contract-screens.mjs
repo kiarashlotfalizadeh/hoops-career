@@ -262,11 +262,11 @@ await mutate(
   { pid: hard.ten.pid },
 );
 await go('/inbox');
-await page.locator('.lg-msg-top').first().click();
+await page.locator('.td-msg').first().click();
 await page.waitForTimeout(300);
 await shot('e22-inbox-ten-day');
 await page
-  .locator('.lg-msg-body')
+  .locator('.td-sheet')
   .getByRole('button', { name: /Second 10-day/ })
   .click();
 await page.waitForTimeout(500);
