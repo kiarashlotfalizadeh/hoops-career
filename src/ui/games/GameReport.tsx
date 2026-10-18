@@ -3,9 +3,9 @@
 // play-by-play).
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Lightbulb } from 'lucide-react';
+import { ChevronDown, Lightbulb } from 'lucide-react';
 import { useLeague } from '../../state/store';
-import { buildGameReport, setLineText } from '../../core/analysis/gameReport';
+import { buildGameReport, setLineText, type GameReport as Report } from '../../core/analysis/gameReport';
 import { Chips, Empty, Help, More, PageHeader, Section, Statline, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart, WinProbChart } from '../components/charts';
@@ -25,6 +25,9 @@ import '../components/gameday.css';
 import './games.css';
 
 type Tab = 'recap' | 'report' | 'box' | 'shots' | 'flow' | 'pbp';
+
+/** Factors shown before "more". */
+const FACTORS_SHOWN = 4;
 
 export default function GameReport() {
   const league = useLeague();
@@ -85,27 +88,7 @@ export default function GameReport() {
               </Help>
             }
           >
-            {report.factors.length === 0 ? (
-              <div className="mu-note">No single factor stood out: this one came down to execution.</div>
-            ) : (
-              <div className="card flush list">
-                {report.factors.map((f, i) => (
-                  <div key={i} className="gv-factor">
-                    <span className={`gv-pts num ${f.pts >= 0 ? 'good' : 'bad'}`}>{signed(f.pts)}</span>
-                    <div className="grow" style={{ minWidth: 0 }}>
-                      <div className="gv-factor-t">{f.title}</div>
-                      <div className="gv-factor-d">{f.detail}</div>
-                      {f.advice && (
-                        <div className="gv-advice">
-                          <Lightbulb size={13} aria-hidden="true" /> {f.advice}
-                        </div>
-                      )}
-                    </div>
-                    <Tag>{f.category}</Tag>
-                  </div>
-                ))}
-              </div>
-            )}
+            {report.factors.length === 0 ? <div className="mu-note">No single factor stood out: this one came down to execution.</div> : <Factors factors={report.factors} />}
           </Section>
           <AdjustmentsCard g={g} league={league} />
           <Section title="Player grades">
@@ -292,6 +275,36 @@ export default function GameReport() {
       )}
       {tab === 'flow' && g.pbp && g.pbp.length > 0 && (g.flow ? <More label="Play-by-play">{<PlayByPlay pbp={g.pbp} />}</More> : <PlayByPlay pbp={g.pbp} />)}
     </main>
+  );
+}
+
+/** What decided it, biggest first: the first few, the rest a tap away. */
+function Factors({ factors }: { factors: Report['factors'] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? factors : factors.slice(0, FACTORS_SHOWN);
+  return (
+    <div className="card flush list">
+      {shown.map((f, i) => (
+        <div key={i} className="gv-factor">
+          <span className={`gv-pts num ${f.pts >= 0 ? 'good' : 'bad'}`}>{signed(f.pts)}</span>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="gv-factor-t">{f.title}</div>
+            <div className="gv-factor-d">{f.detail}</div>
+            {f.advice && (
+              <div className="gv-advice">
+                <Lightbulb size={13} aria-hidden="true" /> {f.advice}
+              </div>
+            )}
+          </div>
+          <Tag>{f.category}</Tag>
+        </div>
+      ))}
+      {shown.length < factors.length && (
+        <button className="gs-more" onClick={() => setAll(true)}>
+          <ChevronDown size={15} aria-hidden="true" /> {factors.length - shown.length} more
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -57,7 +57,7 @@ export function UpcomingOpponents() {
                   </span>
                 </span>
                 <span className="lr-meta">
-                  {g.day === league.day ? 'Today' : fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {g.day === league.day && league.phase !== 'preseason' ? 'Today' : fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}
                   {n ? ` · ${n} item${n === 1 ? '' : 's'}` : ''}
                 </span>
               </span>

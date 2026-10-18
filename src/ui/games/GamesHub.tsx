@@ -81,8 +81,10 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const t = league.teams[opp];
   const ts = curTeamSeason(league, opp);
   const rank = useLeagueMemo(() => confStandings(league, t.conf).find((r) => r.tid === opp)?.confRank ?? 0, [league, t.conf, opp]);
-  const days = g.day - league.day;
-  const when = days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' });
+  // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
+  const pre = league.phase === 'preseason';
+  const days = pre ? Infinity : g.day - league.day;
+  const when = pre ? 'Opening night' : days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' });
   const neutral = neutralSite(g);
   const where = neutral ? 'Neutral floor' : g.home === me ? 'Home' : 'Away';
   const tag = gameTag(league, g);

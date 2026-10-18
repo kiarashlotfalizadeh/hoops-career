@@ -19,7 +19,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
 import { ordinal } from '../stats';
 import { useBack } from '../nav';
-import { TabBar, useQueryParam } from '../league/shared';
+import { TabBar, useQueryParam, useSetParams } from '../league/shared';
 import { liveSeries, meetings } from './data';
 import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
@@ -55,6 +55,7 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   const preview = next && upNext?.gid === next.gid ? next : undefined;
   const tabs: Tab[] = [...(preview ? (['preview'] as const) : []), 'scout', 'plan', 'matchups', 'test'];
   const [tab, setTab] = useQueryParam<Tab>('tab', preview ? 'preview' : 'scout', tabs);
+  const setParams = useSetParams();
   const today = !!preview && preview.day === league.day;
   return (
     <main className="page">
@@ -62,7 +63,8 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
       {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} />}
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
-      {tab === 'plan' && <PlanTab league={league} opp={opp} onTest={() => setTab('test')} />}
+      {/* "Test them" opens the Lab on the staff's counters */}
+      {tab === 'plan' && <PlanTab league={league} opp={opp} onTest={() => setParams({ tab: 'test', lab: 'counters' })} />}
       {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}
       {tab === 'test' && <LabPanel league={league} fixedOpp={opp} modes={['project', 'counters']} />}
       {today && <TipOff league={league} gid={preview.gid} name={league.teams[opp].name} />}
@@ -120,7 +122,10 @@ function Slab({ league, opp }: { league: League; opp: number }) {
         .join(' · ')
     : '';
   const where = (g: (typeof next)[number]) => (neutralSite(g) ? 'neutral floor' : g.home === me ? 'home' : 'away');
-  const day = (d: number) => (d === league.day ? 'Today' : d === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, d, { weekday: 'short', month: 'short', day: 'numeric' }));
+  // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
+  const pre = league.phase === 'preseason';
+  const day = (d: number) =>
+    !pre && d === league.day ? 'Today' : !pre && d === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, d, { weekday: 'short', month: 'short', day: 'numeric' });
   const last = h2h.games[h2h.games.length - 1];
   return (
     <section className="slab mu-slab" style={slabVars(t.colors) as CSSProperties} aria-label={`Matchup: the ${t.region} ${t.name}`}>
