@@ -74,8 +74,11 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
   const taken = Math.round(line.tpa * line.gp);
   // (last season's numbers say so, as the guard planner's line does)
   const when = line.source === 'last' ? ' last season' : '';
+  // his skills named and valued as his player page shows them (three-point shooting, shot creation, finishing)
+  const threeSkill = attrDisplay((c.c3 + c.pu3) / 2);
+  const creation = attrDisplay((c.create + c.pnrHandle) / 2);
   const shoots = !games
-    ? `three-point shooting ${attrDisplay(c.c3)}`
+    ? `three-point shooting ${threeSkill}`
     : !few
       ? `${pct1(line.tpPct)} from three on ${per(line.tpa)} a game${when}`
       : `${taken ? `${taken} three${taken === 1 ? '' : 's'}` : 'no threes'} in his ${line.gp} games${when}`;
@@ -85,12 +88,12 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     return {
       pid: p.pid,
       suggest: 'under',
-      why: `Runs ball screens (handle ${attrDisplay(c.pnrHandle)}) but is no threat to pull up (pull-up ${attrDisplay(c.pu3)}; ${shoots}).`,
+      why: `Runs ball screens (shot creation ${creation}) but is no threat to pull up (${shoots}).`,
       line,
     };
   // a volume shooter who rarely beats his man off the dribble (the bottom quarter in creation)
   if (c.c3 >= 66 && c.create < 47 && (!games || (line.tpa >= 4 && line.tpPct >= 0.36)))
-    return { pid: p.pid, suggest: 'tight', why: `A shooter (${shoots}) who rarely beats his man off the dribble (creation ${attrDisplay(c.create)}).`, line };
+    return { pid: p.pid, suggest: 'tight', why: `A shooter (${shoots}) who rarely beats his man off the dribble (shot creation ${creation}).`, line };
   // a post scorer or driver who misses free throws (before sagging off him: his scoring is the threat)
   const ftShown =
     games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? `${pct1(line.ftPct)} from the line on ${per(line.fta)} a game${when}` : `free throws ${attrDisplay(p.ratings.ft)}`;
@@ -99,7 +102,7 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     return {
       pid: p.pid,
       suggest: 'body',
-      why: `Scores inside (${c.postScore >= 62 ? `post ${attrDisplay(c.postScore)}` : `finishing ${attrDisplay(c.rim)}`}) but misses free throws (${ftShown}).`,
+      why: `Scores inside (${c.postScore >= 62 ? `post play ${attrDisplay(c.postScore)}` : `finishing ${attrDisplay(c.rim)}`}) but misses free throws (${ftShown}).`,
       line,
     };
   // a rotation player who doesn't shoot threes (by his games; by his ratings, about the bottom sixth)
@@ -107,11 +110,7 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     return {
       pid: p.pid,
       suggest: 'sag',
-      why: !games
-        ? `Can't shoot from three (three-point shooting ${attrDisplay(c.c3)}).`
-        : few && taken
-          ? `Rarely shoots threes (${shoots}).`
-          : `Doesn't shoot threes (${shoots}).`,
+      why: !games ? `Can't shoot from three (three-point shooting ${threeSkill}).` : few && taken ? `Rarely shoots threes (${shoots}).` : `Doesn't shoot threes (${shoots}).`,
       line,
     };
   return { pid: p.pid, line };
