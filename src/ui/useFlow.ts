@@ -54,13 +54,13 @@ export function useFlowRunner() {
         return;
       }
       case 'startDraft':
-        if (await task('Draft night', { kind: 'startDraft' })) nav('/draft');
+        if (await task('Draft night', { kind: 'startDraft' })) nav('/office/draft');
         return;
       case 'finishDraft':
-        if (await task('Finishing the draft', { kind: 'finishDraft' })) nav('/resign');
+        if (await task('Finishing the draft', { kind: 'finishDraft' })) nav('/office/resign');
         return;
       case 'startFA':
-        if (await task('Opening free agency', { kind: 'startFA' })) nav('/free-agents');
+        if (await task('Opening free agency', { kind: 'startFA' })) nav('/office/free-agents');
         return;
       case 'faDay':
         await task('Free agency', { kind: 'faAdvance', days: 1 });
@@ -76,7 +76,7 @@ export function useFlowRunner() {
         const blocked = !done && newSeasonBlockedReason(useStore.getState().league!);
         if (blocked) {
           st.toast(`Free agency stopped: ${blocked}`, 'bad');
-          nav('/free-agents');
+          nav('/office/free-agents');
           return;
         }
         if (done) st.toast(`Welcome to the ${seasonLabel(useStore.getState().league!.season)} season. Check the training camp report in your inbox.`, 'good');

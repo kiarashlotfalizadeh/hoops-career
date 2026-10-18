@@ -78,7 +78,7 @@ function deadlineBriefing(league: League) {
     subject: 'Deadline day',
     body: lines.filter(Boolean).join('\n'),
     tone: 'alert',
-    link: offers ? '/trade?tab=offers' : '/trade',
+    link: offers ? '/office/trade?tab=offers' : '/office/trade',
   });
 }
 

@@ -978,7 +978,8 @@ export default function Live() {
     if (!mounted.current) return;
     // with the pre-game screen on, game night starts with the matchup preview
     const l = useStore.getState().league!;
-    if (l.settings.pregame !== false && userGameOnDay(l, l.day)) nav('/preview', { replace: true });
+    const today = userGameOnDay(l, l.day);
+    if (l.settings.pregame !== false && today) nav(`/games/${today.home === l.userTid ? today.away : today.home}?tab=preview`, { replace: true });
     else start();
   };
 

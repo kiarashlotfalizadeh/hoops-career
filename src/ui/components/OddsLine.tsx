@@ -33,7 +33,7 @@ export function OddsLine({ league, tid }: { league: League; tid: number }) {
   }
   const title = !t.out && t.reach[4] >= 0.01 ? ` · Title ${pct(t.reach[4])}` : '';
   return (
-    <Link to={`/league?tab=standings&view=odds&oconf=${league.teams[tid].conf}`} className="small dim2" style={{ display: 'block', marginTop: 8 }}>
+    <Link to="/league/standings?view=odds" className="small dim2" style={{ display: 'block', marginTop: 8 }}>
       {main}
       {title}
       {f.preseason ? ' (preseason forecast)' : ''}

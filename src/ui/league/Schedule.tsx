@@ -147,10 +147,11 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
     );
   }
   if (mine) {
-    // the user's next game opens its preview; a later one, Home
+    // the user's next game opens its matchup preview; a later one, his schedule
     const next = !g.played && nextUserGame(league)?.gid === g.gid;
+    const opp = g.home === league.userTid ? g.away : g.home;
     return (
-      <Link to={next ? `/preview/${g.gid}` : '/'} className="lg-sb me">
+      <Link to={next ? `/games/${opp}?tab=preview` : '/games'} className="lg-sb me">
         {body}
       </Link>
     );
