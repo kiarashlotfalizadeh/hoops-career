@@ -10,9 +10,10 @@ export function CombineView({ league, list, onOpen }: { league: League; list: Pl
   const fmt = (show: (v: number) => string) => (v: number | string) => (Number.isFinite(v) ? show(Number(v)) : '—');
   const cols: Col<Player>[] = [
     { key: 'name', label: 'Prospect', left: true, sticky: true, get: (p) => p.lastName, fmt: (_v, p) => <span className="bold">{`${p.firstName[0]}. ${p.lastName}`}</span> },
-    { key: 'rk', label: 'Rk', asc: true, get: (p) => p.prospect?.rank ?? 99 },
+    { key: 'rk', label: 'Rank', help: "The scouts' board, as on the Board tab", asc: true, get: (p) => p.prospect?.rank ?? 99 },
     { key: 'pos', label: 'Pos', get: (p) => p.pos },
     { key: 'ovr', label: 'OVR', get: (p) => p.ovr, fmt: (v) => <Ovr v={Number(v)} size="sm" /> },
+    { key: 'pot', label: 'POT', help: 'The ceiling scouts see', get: (p) => p.pot },
     { key: 'hgt', label: 'Height', help: 'Height without shoes', get: (p) => num(c(p).heightNoShoes), fmt: (_v, p) => fmtIn(c(p).heightNoShoes) },
     { key: 'wing', label: 'Wingspan', get: (p) => num(c(p).wingspan), fmt: (_v, p) => fmtIn(c(p).wingspan) },
     { key: 'reach', label: 'Reach', help: 'Standing reach', get: (p) => num(c(p).standingReach), fmt: (_v, p) => fmtIn(c(p).standingReach) },

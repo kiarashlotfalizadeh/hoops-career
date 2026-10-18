@@ -10,6 +10,7 @@ import { playerAge } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty } from '../components/ui';
 import { OvrPot } from '../office/common';
+import { projText } from './common';
 import { overallPick } from '../league/shared';
 import { OvrKey } from '../components/OvrKey';
 
@@ -50,17 +51,17 @@ export function BoardList({
   const projection = (p: Player) => {
     const r = mock?.range.get(p.pid);
     if (!mock || !r) return null;
-    const where = r.med > 2 * league.teams.length ? 'Undrafted in most mocks' : r.lo === r.hi ? `Proj. #${r.med}` : `Proj. #${r.lo}-${r.hi > 2 * league.teams.length ? '' : r.hi}`;
+    const where = r.med > 2 * league.teams.length ? 'Undrafted in most mocks' : r.lo === r.hi ? projText(r.med) : projText(r.lo) + `-${r.hi > 2 * league.teams.length ? '' : r.hi}`;
     const gone = mine ? mock.goneBefore(p.pid, mine.overall) : null;
     return { where: where.replace(/-$/, '+'), gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `${Math.round(gone * 100)}% gone by your #${mine!.overall}` : null };
   };
   return (
     <div className="card flush">
-      {/* what each column is: the consensus rank, the prospect with the mocks' range for him, his rating now and the ceiling scouts see */}
+      {/* what each column is: the scouts' rank (the help says how it differs from the mocks' projection), the prospect, his rating now over the ceiling scouts see */}
       <div className="fo-board-h" aria-hidden="true">
-        <span className="fo-rank">#</span>
-        <span className="grow">Prospect · mock range</span>
-        <span>OVR ▲POT</span>
+        <span className="fo-rank">Rank</span>
+        <span className="grow">Prospect</span>
+        <span>OVR · POT</span>
       </div>
       <div className="list wide2">
         {list.slice(0, limit).map((p) => {
@@ -70,7 +71,7 @@ export function BoardList({
             <div key={p.pid} className={`fo-board-row ${onDraft ? 'can' : ''}`}>
               <button className="fo-prow grow" onClick={() => onOpen(p.pid)}>
                 <span className="fo-rank">
-                  <span className="sr-only">Board rank </span>
+                  <span className="sr-only">Rank </span>
                   {p.prospect?.rank ?? '—'}
                 </span>
                 <div className="grow">

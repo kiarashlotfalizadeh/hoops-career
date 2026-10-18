@@ -8,7 +8,7 @@ import { useLeague } from '../../state/store';
 import { Avatar, Ovr, Section, Sheet } from '../components/ui';
 import { overallPick } from '../league/shared';
 import { boardNeighbors, compareHref } from '../compare';
-import { fmtIn } from './common';
+import { boardRank, fmtIn } from './common';
 
 export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null; onClose: () => void; canDraft: boolean; onDraft: (pid: number) => void }) {
   const league = useLeague();
@@ -27,7 +27,7 @@ export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number
           <div className="fo-prospect-h">
             <Avatar p={p} size="lg" />
             <div className="grow">
-              <div className="over">Big board #{p.prospect?.rank ?? '—'}</div>
+              <div className="over">{boardRank(league, p) ? `Rank ${boardRank(league, p)}` : 'Unranked'}</div>
               <div className="fo-prospect-first">{p.firstName}</div>
               <h2 className="fo-prospect-last">{p.lastName}</h2>
             </div>
