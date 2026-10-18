@@ -9,21 +9,10 @@ import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
 import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
-import {
-  WAIVER_DAYS,
-  buyoutTerms,
-  nonGuaranteed,
-  releaseDeadMoney,
-  releasePlayer,
-  releaseSchedule,
-  stretchDeadMoney,
-  stretchPhrase,
-  stretchedSeasons,
-  userBuyout,
-} from '../../core/league/contracts';
+import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releaseSchedule, stretchDeadMoney, stretchPhrase, stretchedSeasons } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
-import { useStore } from '../../state/store';
+import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
 import './office.css';
 
@@ -317,31 +306,21 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
   // in the regular season, a release that leaves dead money goes through waivers first (see releasePlayer)
   const waive = league.phase === 'regular' && owed > 0;
   const buyout = buyoutTerms(league, p);
+  const busy = useBusy();
   // the stretch provision: the same money over twice the seasons left plus one (null: nothing to stretch)
   const stretch = stretchDeadMoney(league, remaining);
   const spread = stretch ? stretchedSeasons(stretch) : 0;
   const buyoutStretch = buyout ? stretchedSeasons(releaseSchedule(league, p, { giveback: buyout.giveback, stretch: true })) : 0;
   const release = (stretchIt: boolean) => {
     const name = playerName(p);
-    useStore.getState().mutate((l) => releasePlayer(l, l.players[p.pid], { stretch: stretchIt }));
     const how = stretchIt && spread ? `, ${stretchPhrase(league, spread)}` : '';
-    useStore
-      .getState()
-      .toast(
-        waive
-          ? `${name} waived. ${fmtM(owed)} stays on your books${how} unless a team claims him.`
-          : `${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books${how}.` : ''}`,
-        'neutral',
-      );
-    onDone();
+    const after = waive
+      ? `${name} waived. ${fmtM(owed)} stays on your books${how} unless a team claims him.`
+      : `${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books${how}.` : ''}`;
+    if (releaseAction(league, p.pid, { stretch: stretchIt }, after)) onDone();
   };
   const buyOut = (stretchIt: boolean) => {
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = userBuyout(l, p.pid, stretchIt);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
-    if (res.ok) onDone();
+    if (releaseAction(league, p.pid, { stretch: stretchIt, buyout: true }, '')) onDone();
   };
   // every season either schedule touches, in order
   const seasons = [...new Set([...remaining, ...(stretch ?? [])].map((d) => d.season))].sort((a, b) => a - b);
@@ -411,11 +390,11 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
               <div className="v warn">{fmtM(buyout.dead)}</div>
             </div>
           </div>
-          <button className="btn block" onClick={() => buyOut(false)}>
+          <button className="btn block" disabled={busy} onClick={() => buyOut(false)}>
             Buy out · save {fmtM(buyout.saved)}
           </button>
           {buyoutStretch > 0 && (
-            <button className="btn block" onClick={() => buyOut(true)}>
+            <button className="btn block" disabled={busy} onClick={() => buyOut(true)}>
               Buy out and stretch it over {buyoutStretch} seasons
             </button>
           )}
@@ -430,12 +409,12 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
         <button className="btn grow" onClick={onKeep}>
           Keep him
         </button>
-        <button className="btn danger grow" onClick={() => release(false)}>
+        <button className="btn danger grow" disabled={busy} onClick={() => release(false)}>
           Release
         </button>
       </div>
       {stretch && (
-        <button className="btn danger block" onClick={() => release(true)}>
+        <button className="btn danger block" disabled={busy} onClick={() => release(true)}>
           Release and stretch over {spread} seasons
         </button>
       )}

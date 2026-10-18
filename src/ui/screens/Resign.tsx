@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CircleCheck, DoorOpen, PenLine, ShieldCheck } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import { CAP_FOR, OFFSEASON_ROSTER_MAX, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName, standardRoster, teamPlayers } from '../../core/league/helpers';
 import {
   askingContract,
   decideTeamOption,
@@ -18,6 +18,8 @@ import {
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { settle, useBusy } from '../../state/actions/office';
+import { Term } from '../components/Glossary';
 import { Avatar, PageHeader, Section, Sheet, Statline } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
 import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
@@ -108,28 +110,18 @@ function ResignPhase() {
   const space = cap.salaryCap - committed - holds;
 
   const doRenounce = (p: Player) => {
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = renouncePlayer(l, p.pid);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'neutral' : 'bad');
+    settle(`Renouncing ${p.lastName}`, (l) => renouncePlayer(l, p.pid), 'neutral');
     setRenounce(null);
   };
 
-  const decide = (p: Player, exercise: boolean) => {
-    let res = { ok: false, reason: '' };
-    useStore.getState().mutate((l) => {
-      res = decideTeamOption(l, p.pid, exercise);
-    });
-    useStore.getState().toast(res.reason, res.ok ? 'good' : 'bad');
-  };
+  const decide = (p: Player, exercise: boolean) => settle(exercise ? 'Exercising the option' : 'Declining the option', (l) => decideTeamOption(l, p.pid, exercise));
 
-  const busy = useStore((s) => !!s.sim);
+  const busy = useBusy();
   const openFA = async () => {
     // runs behind the progress bar; a second tap (or a stale screen) is a no-op
     if (!(await useStore.getState().task('Opening free agency', { kind: 'startFA' }))) return;
     useStore.getState().toast('Free agency is open!', 'good');
-    nav('/free-agents');
+    nav('/office/free-agents');
   };
 
   return (
@@ -190,39 +182,18 @@ function ResignPhase() {
             </div>
           </div>
           <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} legend={false} />
-          <div className="fo-cap-ends num">
-            Cap {fmtM(cap.salaryCap)} · tax line {fmtM(cap.luxuryTax)}
-            {holders.length > 0 ? ` · striped: ${holders.length} cap hold${holders.length === 1 ? '' : 's'} at their asks` : ''}
-          </div>
-          <div className="fo-figs">
-            <Statline
-              items={[
-                { k: 'Cap space', v: fmtM(space), color: space > 0 ? 'var(--good)' : 'var(--warn)', s: holds > 0 ? 'after cap holds' : 'for free agency' },
-                { k: 'Cap holds', v: fmtM(holds), s: holds > 0 ? 'renounce to clear' : 'none' },
-              ]}
-            />
-            <Statline
-              items={[
-                { k: 'Under tax', v: fmtM(cap.luxuryTax - committed), color: cap.luxuryTax - committed < 0 ? 'var(--bad)' : undefined, s: 'committed only' },
-                {
-                  k: 'Roster',
-                  v: `${rosterNext}/${CAP.rosterMax}`,
-                  s: rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut by opening night` : 'under contract',
-                  color: rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined,
-                },
-              ]}
-            />
-          </div>
-          {rosterNext > CAP.rosterMax && (
-            <div className="small warn">
-              Up to {OFFSEASON_ROSTER_MAX} in the offseason, {CAP.rosterMax} on opening night: trade or release before then.
-            </div>
-          )}
-          {holders.length > 0 && (
-            <div className="tiny dim">
-              Holds stay until free agency opens unless you renounce (a qualified player's through free agency). What's left after re-signing is yours to spend.
-            </div>
-          )}
+          <Statline
+            items={[
+              { k: 'Cap space', v: fmtM(space), color: space > 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${fmtM(cap.salaryCap)}` },
+              { k: <Term id="hold">Cap holds</Term>, v: fmtM(holds), s: holds > 0 ? 'striped' : 'none' },
+              {
+                k: 'Roster',
+                v: `${rosterNext}/${CAP.rosterMax}`,
+                s: rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut` : 'signed',
+                color: rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined,
+              },
+            ]}
+          />
         </div>
       </Section>
 
@@ -248,7 +219,7 @@ function ResignPhase() {
                     <button className="btn sm" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
                       Decline
                     </button>
-                    <button className="btn sm primary" aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
+                    <button className="btn sm primary" disabled={busy} aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
                       Exercise
                     </button>
                   </div>
@@ -282,15 +253,11 @@ function ResignPhase() {
                       ) : (
                         <>
                           <div className="fo-rs-ask">
-                            <span className="dim">Asks </span>
                             <b className="num">{fmtM(ask.amount)}</b>
-                            <span className="dim">
-                              {' '}
-                              × {ask.years} yr{ask.years > 1 ? 's' : ''}
-                            </span>
                           </div>
                           <div className="tiny dim">
-                            {playerAge(p, next)} next season{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null}
+                            asks · {ask.years} yr{ask.years > 1 ? 's' : ''}
+                            {talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null}
                           </div>
                         </>
                       )}
@@ -345,7 +312,7 @@ function ResignPhase() {
 
       <div className="fo-dock fo-dock-go">
         <button className="btn primary block big" disabled={busy} onClick={() => (expiring.length || options.length ? setConfirm(true) : void openFA())}>
-          <DoorOpen size={20} /> Done — open free agency
+          <DoorOpen size={20} /> Open free agency
         </button>
       </div>
 
@@ -366,7 +333,7 @@ function ResignPhase() {
               <button className="btn grow" onClick={() => setRenounce(null)}>
                 Keep his rights
               </button>
-              <button className="btn danger grow" onClick={() => doRenounce(renounce)}>
+              <button className="btn danger grow" disabled={busy} onClick={() => doRenounce(renounce)}>
                 Renounce
               </button>
             </div>
@@ -385,7 +352,7 @@ function ResignPhase() {
               <button className="btn grow" onClick={() => setDecline(null)}>
                 Keep the option
               </button>
-              <button className="btn danger grow" onClick={() => (decide(decline, false), setDecline(null))}>
+              <button className="btn danger grow" disabled={busy} onClick={() => (decide(decline, false), setDecline(null))}>
                 Decline
               </button>
             </div>
@@ -547,7 +514,7 @@ function OffPhase({ league }: { league: League }) {
         <Callout icon={<ShieldCheck size={16} className="dim" />}>
           Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => p.lastName).join(', ')}) can still re-sign with Bird rights until{' '}
           {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet, and you can match any sheet.{' '}
-          <Link to="/free-agents" className="bold accent-text">
+          <Link to="/office/free-agents" className="bold accent-text">
             Free agents
           </Link>
         </Callout>

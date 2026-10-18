@@ -9,6 +9,8 @@ import { MEET_DAYS, PATIENCE_GAMES, ROLE_GAMES, complaints, meetBlockedReason, m
 import { archetype } from '../../core/ratings';
 import { liveInProgress } from '../../state/live';
 import { useStore } from '../../state/store';
+import { act } from '../../state/actions';
+import { useBusy } from '../../state/actions/office';
 import { More } from '../components/ui';
 import { Callout } from './common';
 
@@ -56,9 +58,10 @@ export function MeetingPanel({ league, p, onDone }: { league: League; p: Player;
   const live = liveInProgress(league) ? 'Finish your live game first.' : null;
   const blocked = live ?? meetBlockedReason(league, p);
   const gripes = complaints(p);
+  const busy = useBusy();
   const meet = (choice: MeetChoice) => {
     let r: ReturnType<typeof meetPlayer> = { ok: false, text: '' };
-    useStore.getState().mutate((l) => void (r = meetPlayer(l, p.pid, choice)));
+    if (!act('The meeting', (l) => void (r = meetPlayer(l, p.pid, choice)))) return;
     useStore.getState().toast(r.text, r.ok && r.agreed !== false ? 'good' : r.ok ? 'neutral' : 'bad');
     if (r.ok) onDone?.();
   };
@@ -94,7 +97,7 @@ export function MeetingPanel({ league, p, onDone }: { league: League; p: Player;
                     {o.choice === 'role' && (
                       <>
                         {' '}
-                        <Link to="/rotation" className="bold accent-text">
+                        <Link to="/team/rotation" className="bold accent-text">
                           Rotation
                         </Link>
                       </>
@@ -104,7 +107,7 @@ export function MeetingPanel({ league, p, onDone }: { league: League; p: Player;
                 <More label="What it means">
                   <p className="small dim2">{o.body}</p>
                 </More>
-                <button className="btn sm block" onClick={() => meet(o.choice)}>
+                <button className="btn sm block" disabled={busy} onClick={() => meet(o.choice)}>
                   {o.button}
                 </button>
               </section>

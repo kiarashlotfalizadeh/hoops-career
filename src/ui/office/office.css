@@ -2366,3 +2366,189 @@ button.listrow {
 .fo-meet .more p {
   margin: 0;
 }
+
+/* ------------------------------------------------------------ the redesign: hub, owner, career */
+.fo-sec-links {
+  gap: 14px;
+}
+.fo-dept-s.good {
+  color: var(--good);
+}
+.fo-dept-s.warn {
+  color: var(--warn);
+}
+.fo-dept-s.bad {
+  color: var(--bad);
+}
+.fo-next {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.fo-next-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 6px 0;
+}
+.fo-next-row + .fo-next-row {
+  border-top: 1px solid var(--line);
+}
+/* an AI team's offer: its agenda row over the two sides */
+.fo-offer.flush {
+  gap: 0;
+}
+.fo-offer.focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+.fo-offer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+.fo-offer-foot {
+  gap: 10px;
+}
+/* the owner's meter: the score, the heat, a track from the hot seat to secure with the firing line */
+.fo-seat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  --seat: var(--info);
+}
+.fo-seat.tone-good {
+  --seat: var(--good);
+}
+.fo-seat.tone-warn {
+  --seat: var(--warn);
+}
+.fo-seat.tone-bad {
+  --seat: var(--bad);
+}
+.fo-seat-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.fo-seat-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 0.9;
+  color: var(--seat);
+}
+.fo-seat-l {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.fo-seat-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.fo-meterbar {
+  position: relative;
+  padding: 16px 0 4px;
+}
+.fo-meterbar-track {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+.fo-meterbar-track .z {
+  display: block;
+  height: 100%;
+  opacity: 0.55;
+}
+.fo-meterbar-track .hot {
+  background: var(--bad);
+}
+.fo-meterbar-track .warm {
+  background: var(--warn);
+}
+.fo-meterbar-track .steady {
+  background: var(--info);
+}
+.fo-meterbar-track .secure {
+  background: var(--good);
+}
+.fo-meterbar-line {
+  position: absolute;
+  top: 12px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  background: var(--text);
+}
+.fo-meterbar-line span {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.fo-meterbar-pin {
+  position: absolute;
+  top: 10px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: var(--seat);
+  border: 3px solid var(--raised);
+  box-shadow: 0 0 0 1px var(--line-3);
+}
+.fo-ultimatum {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+}
+/* an agenda row inside a list row (an offer sheet on your restricted free agent): edge to edge */
+.fo-sheet-item {
+  margin: 0 -14px -12px;
+  border-top: 1px solid var(--line);
+}
+.fo-dock-why {
+  text-align: center;
+}
+/* three figures across a phone: a size that fits "-$51.2M" */
+.fo-capsheet .statline .v {
+  font-size: 24px;
+}
+.fo-career-slab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fo-now-acts {
+  gap: 8px;
+}
+/* a glossary word as a figure's label keeps the label's caps */
+.statline .k .term {
+  text-transform: inherit;
+  letter-spacing: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+.fo-dock.fo-dock-days {
+  padding: 10px;
+}
+.fo-career-slab .statline .v {
+  font-size: 24px;
+  white-space: nowrap;
+}

@@ -4,7 +4,7 @@
 import { LockKeyhole } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { isUntouchable, setUntouchable } from '../../core/league/proposals';
-import { useStore } from '../../state/store';
+import { edit } from '../../state/actions';
 import { Toggle } from '../components/ui';
 
 export function UntouchableToggle({ league, p }: { league: League; p: Player }) {
@@ -14,7 +14,7 @@ export function UntouchableToggle({ league, p }: { league: League; p: Player }) 
   return (
     <Toggle
       on={on}
-      onChange={(v) => useStore.getState().mutate((l) => setUntouchable(l, p.pid, v))}
+      onChange={(v) => edit((l) => setUntouchable(l, p.pid, v))}
       label={
         <span className="fo-untouch">
           <LockKeyhole size={15} className={on ? 'accent-text' : 'dim'} />

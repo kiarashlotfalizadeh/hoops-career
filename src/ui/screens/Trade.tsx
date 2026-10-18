@@ -13,7 +13,6 @@ import {
   cashRoom,
   counterOffers,
   evaluateTrade,
-  executeTrade,
   fmtCash,
   makeItWork,
   pickLabel,
@@ -31,6 +30,8 @@ import {
 } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { act } from '../../state/actions';
+import { makeTrade } from '../../state/actions/office';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Empty, Ovr, PageHeader, Section, Segmented, scrollBehavior } from '../components/ui';
 import { slabVars } from '../teamColors';
@@ -45,8 +46,8 @@ import { CounterSheet } from '../trade/CounterSheet';
 import { CashControl, ProtectSelect, SwapChips, TermsList, protectable } from '../trade/Terms';
 import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
 import { RecentDeals } from '../league/MovesTab';
-import { continueDraft } from '../../core/league/season';
 import { checkForceTrade, forceTrade, type EditCheck } from '../../core/league/godMode';
+import { continueDraft } from '../../core/league/season';
 
 interface Sel {
   pids: number[];
@@ -72,8 +73,10 @@ const toggle = (arr: number[], id: number) => (arr.includes(id) ? arr.filter((x)
 
 type Tab = 'build' | 'find' | 'block' | 'offers';
 
-function readParams(league: League, params: URLSearchParams): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab } {
+function readParams(league: League, params: URLSearchParams): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null } {
   const user = league.userTid;
+  // an offer from the agenda (?offer=id): the Offers tab, that offer first
+  const focus = params.get('offer') !== null ? Number(params.get('offer')) : null;
   // an AI team's offer (Review in the inbox) opens in the builder; once it's gone, the other offers show
   const pr = params.get('proposal');
   const offer = pr !== null ? openProposals(league).find((p) => p.id === Number(pr)) : undefined;
@@ -84,6 +87,7 @@ function readParams(league: League, params: URLSearchParams): { partner: number;
       get: { pids: [...offer.offer.b.pids], dpids: [...offer.offer.b.dpids] },
       shop: null,
       tab: 'build',
+      focus: null,
     };
   const w = params.get('with');
   const wt = w !== null ? Number(w) : NaN;
@@ -93,7 +97,7 @@ function readParams(league: League, params: URLSearchParams): { partner: number;
   const get: Sel = { pids: ids(params.get('get')), dpids: ids(params.get('getdp')) };
   // "Trade him" from the contracts list opens the trading block for that player
   const shop = w === null && give.pids.length === 1 && !give.dpids.length && !get.pids.length && !get.dpids.length ? give.pids[0] : null;
-  return { partner, give, get, shop, tab: pr !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : 'build' };
+  return { partner, give, get, shop, focus, tab: pr !== null || focus !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : 'build' };
 }
 
 export default function Trade() {
@@ -106,6 +110,7 @@ export default function Trade() {
   const [get, setGet] = useState<Sel>(init.get);
   const [tab, setTab] = useState<Tab>(init.tab);
   const [shop, setShop] = useState<number | null>(init.shop);
+  const [focus, setFocus] = useState<number | null>(init.focus);
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
   // a turned-down deal and what they'd do instead; the finder's filters and the ask it last loaded
   const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[] } | null>(null);
@@ -125,6 +130,7 @@ export default function Trade() {
     setGive(r.give);
     setGet(r.get);
     setShop(r.shop);
+    setFocus(r.focus);
     setTab(r.tab);
     setAsk(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,22 +192,7 @@ export default function Trade() {
 
   /** Make a deal if they still take it (judging one changes nothing: only an accepted one is saved). */
   const execute = (o: TradeOffer): boolean => {
-    const abbrev = league.teams[o.b.tid].abbrev;
-    const r = evaluateTrade(league, o);
-    if (!r.accept) {
-      useStore.getState().toast(`${abbrev}: ${r.message}`, 'bad');
-      return false;
-    }
-    useStore.getState().mutate((l) => {
-      executeTrade(l, o);
-      // a pick traded on draft night: the draft moves on to the next team that picks (or yours)
-      if (l.phase === 'draft') continueDraft(l);
-    });
-    const names = o.b.pids.map((pid) => league.players[pid].lastName);
-    const picks = o.b.dpids.length;
-    const arrive = names.length ? ` Welcome ${names.join(', ')}: ${names.length === 1 ? 'he joins' : 'they join'} the end of your rotation.` : '';
-    const got = picks ? ` You${names.length ? ' also' : ''} get ${picks === 1 ? 'a draft pick' : `${picks} draft picks`}.` : '';
-    useStore.getState().toast(`Trade done with ${abbrev}!${arrive}${got}`, 'good');
+    if (!makeTrade(league, o)) return false;
     reset();
     setAsk(null);
     return true;
@@ -210,9 +201,9 @@ export default function Trade() {
   /** God mode: the deal goes through whatever their GM and the rules say. */
   const forceIt = () => {
     const abbrev = league.teams[offer.b.tid].abbrev;
-    if (useStore.getState().sim || checkForceTrade(league, offer).errors.length) return;
+    if (checkForceTrade(league, offer).errors.length) return;
     // all of it or none of it, as every god-mode edit
-    const ok = useStore.getState().attempt('The forced trade', (l) => {
+    const ok = act('The forced trade', (l) => {
       forceTrade(l, offer);
       if (l.phase === 'draft') continueDraft(l);
     });
@@ -289,14 +280,14 @@ export default function Trade() {
     <main className="page fo-page">
       <PageHeader
         title="Trade"
-        sub={!closed && deadlineLabel(league) ? `${deadlineLabel(league)} · ${seasonLabel(s)} salaries` : `${seasonLabel(s)} salaries`}
+        sub={[closed ? 'Closed' : deadlineLabel(league), s > league.season ? `${seasonLabel(s)} salaries` : ''].filter(Boolean).join(' · ') || undefined}
         back
         right={<TradeHelp league={league} season={s} />}
       />
 
       {closed && (
         <Callout tone="warn" icon={<Ban size={18} className="warn" />}>
-          <b>Trading is closed.</b> {phaseErrs[0]} Plan deals for later.
+          {phaseErrs[0]}
         </Callout>
       )}
 
@@ -322,20 +313,7 @@ export default function Trade() {
         ]}
       />
 
-      {tab === 'offers' && (
-        <OffersTab
-          league={league}
-          closed={closed}
-          onCounter={(o) => {
-            setPartner(o.b.tid);
-            setGive(selOf(o.a));
-            setGet(selOf(o.b));
-            setSide('theirs');
-            setTab('build');
-            window.scrollTo({ top: 0, behavior: scrollBehavior() });
-          }}
-        />
-      )}
+      {tab === 'offers' && <OffersTab league={league} closed={closed} focus={focus} onReview={loadDeal} />}
 
       {tab === 'offers' ? null : tab === 'build' ? (
         <>
@@ -521,15 +499,12 @@ function PartnerSlab({ league, tid, season }: { league: League; tid: number; sea
         <span>·</span>
         <span className="num">{n} players</span>
         <span>·</span>
-        <span className="num">payroll {fmtM(pay)}</span>
+        {/* (cap holds count: in free agency a team's restricted free agents' and offer sheets', see capHolds) */}
+        <span className="num">
+          payroll {fmtM(pay)}
+          {holds > 0 ? ' with holds' : ''}
+        </span>
       </div>
-      <p className="fo-partner-s">
-        {st.help}
-        {/* (in free agency a team's holds are its restricted free agents' and its offer sheets', see capHolds) */}
-        {holds > 0
-          ? ` Payroll counts ${fmtM(holds)} in cap holds (${league.phase === 'freeAgency' ? 'restricted free agents, offer sheets' : 'players they plan to re-sign'}).`
-          : ''}
-      </p>
       <RecentDeals league={league} tid={tid} />
     </section>
   );
@@ -842,7 +817,7 @@ function Dock({
     return (
       <div className="fo-dock idle">
         <Handshake size={18} className="dim" />
-        <span className="small dim2">Tap players or picks on either side. Their GM reacts live.</span>
+        <span className="small dim2">Tap players or picks. Their GM reacts live.</span>
       </div>
     );
   }
@@ -868,12 +843,6 @@ function Dock({
       </div>
       <div className="fo-meter" aria-hidden="true">
         <i style={{ width: `${r.pct}%` }} />
-      </div>
-      <div className="fo-meter-ticks" aria-hidden="true">
-        <span>Not close</span>
-        <span>Add value</span>
-        <span>Close</span>
-        <span>Deal!</span>
       </div>
       {/* their two main reasons (one when a rule problem already needs the room) */}
       {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}

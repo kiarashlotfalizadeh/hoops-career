@@ -4,18 +4,21 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Play, Scale, Skip
 import type { CombineResults, DraftPick, League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
-import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
+import { draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
 import { pickLabel, pickTermsNote, tradingClosedReason } from '../../core/league/trades';
-import { draftNextPick, userDraftPick } from '../../core/league/season';
+import { draftNextPick } from '../../core/league/season';
 import { draftProposals } from '../../core/league/proposals';
 import { leagueMock, mockAvailable, userNextSlot, type MockDraft, type MockSlot } from '../../core/league/mockDraft';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { act, edit } from '../../state/actions';
+import { draftPick, useBusy } from '../../state/actions/office';
+import { runAgenda } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Empty, Ovr, PageHeader, Section, Segmented, Sheet, StatTable, Toggle, type Col } from '../components/ui';
 import { slabVars } from '../teamColors';
-import { HelpSheet, OvrPot, ordinal } from '../office/common';
+import { HelpSheet, OvrPot } from '../office/common';
 import { PickTradeSheet } from '../office/PickTradeSheet';
 import { blockOffers } from '../office/tradeBlock';
 import { PROJECTION_NOTE, overallPick, pickProjection } from '../league/shared';
@@ -75,76 +78,45 @@ export default function Draft() {
   const mock = useLeagueMemo(() => (after ? null : leagueMock(league)), [league, after]);
 
   const draft = (pid: number) => {
-    const name = playerName(league.players[pid]);
-    const n = np ? overallPick(league, np.round, np.pick!) : 0;
-    let err: string | null = null;
-    useStore.getState().mutate((l) => {
-      err = userDraftPick(l, pid);
-    });
-    if (err) useStore.getState().toast(err, 'bad');
-    else useStore.getState().toast(`With the ${ordinal(n)} pick, you select ${name}!`, 'good');
+    if (np) draftPick(league, pid, overallPick(league, np.round, np.pick!));
     setConfirmPick(null);
     setDetail(null);
   };
 
-  const autoPick = () => {
-    let name = '';
-    let err: string | null = null;
-    useStore.getState().mutate((l) => {
-      const dp = nextPick(l);
-      if (!dp || dp.tid !== l.userTid) return;
-      // pick the way the AI would, then let the AI run to our next pick
-      const choice = withRng(l, (rng) => aiChoose(l, l.userTid, rng));
-      if (!choice) return;
-      name = playerName(choice);
-      err = userDraftPick(l, choice.pid);
-    });
-    if (err) useStore.getState().toast(err, 'bad');
-    else if (name) useStore.getState().toast(`Auto-pick: you select ${name}.`, 'good');
-  };
+  // the staff's pick: the agenda's suggestion when you're on the clock
+  const autoPick = () => runAgenda("You're on the clock", { kind: 'autoPick' });
 
-  const simToMine = () => {
-    useStore.getState().mutate((l) => {
+  const simToMine = () =>
+    act('Sim to your pick', (l) => {
       withRng(l, (rng) => draftUntilUser(l, rng));
       // teams that want the pick call
       draftProposals(l);
     });
-  };
 
   // the team on the clock makes its pick, and the draft stops again
   const nextOne = () => {
     let name = '';
-    useStore.getState().mutate((l) => {
+    const ok = act('The next pick', (l) => {
       const dp = nextPick(l);
       if (!dp || !draftNextPick(l)) return;
       const p = Object.values(l.players).find((x) => x.draft.year === l.season && x.draft.round === dp.round && x.draft.pick === dp.pick && x.tid >= 0);
       if (p) name = `#${overallPick(l, dp.round, dp.pick!)}: ${l.teams[p.tid].abbrev} select ${playerName(p)}.`;
     });
-    if (name) useStore.getState().toast(name, 'neutral');
+    if (ok && name) useStore.getState().toast(name, 'neutral');
   };
 
-  const setPause = (on: boolean) => useStore.getState().mutate((l) => void (l.settings.draftPause = on));
+  const setPause = (on: boolean) => edit((l) => void (l.settings.draftPause = on));
   // draft-day trades: before the draft and on the night (not once it's over)
   const canTrade = (league.phase === 'draftLottery' || league.phase === 'draft') && !tradingClosedReason(league) && !league.fired;
 
-  // the rest of the picks (the scouts make yours): the draft stays open until "Continue to re-signing"
-  const simToEnd = () => {
-    setConfirmSim(false);
-    useStore.getState().mutate((l) => {
-      withRng(l, (rng) => draftUntilUser(l, rng, true));
-    });
-  };
-
   // phase changes run behind the progress bar, as from the Play menu: a second tap is a no-op and an error changes nothing
-  const busy = useStore((s) => !!s.sim);
+  const busy = useBusy();
+  // the rest of the picks (the scouts make yours), then re-signing: the Play menu's "Auto-draft the rest"
   const finish = async () => {
+    setConfirmSim(false);
     if (!(await useStore.getState().task('Finishing the draft', { kind: 'finishDraft' }))?.done) return;
     useStore.getState().toast('The draft is complete. Time to re-sign your players.', 'good');
-    nav('/resign');
-  };
-
-  const begin = async () => {
-    if ((await useStore.getState().task('Draft night', { kind: 'startDraft' }))?.done) setView('live');
+    nav('/office/resign');
   };
 
   const myRemaining = league.phase === 'draft' ? draftOrder(league).filter((d) => d.tid === user) : [];
@@ -153,7 +125,15 @@ export default function Draft() {
     <main className="page fo-page">
       <PageHeader
         title="Draft"
-        sub={`${league.season} NBA Draft · ${after ? 'complete' : league.phase === 'draft' ? 'live' : league.phase === 'draftLottery' ? 'lottery done' : `${cls.length} prospects`}`}
+        sub={
+          after || (league.phase === 'draft' && !np)
+            ? 'Complete'
+            : league.phase === 'draft'
+              ? 'Live'
+              : league.phase === 'draftLottery'
+                ? 'The lottery is in'
+                : `${cls.length} prospects`
+        }
         back
         right={
           <HelpSheet title="How the draft works">
@@ -183,20 +163,9 @@ export default function Draft() {
           onNext={nextOne}
           onTrade={setTradePick}
           onSimToMine={simToMine}
-          onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : simToEnd())}
+          onSimToEnd={() => (myRemaining.length ? setConfirmSim(true) : void finish())}
           onFinish={() => void finish()}
         />
-      )}
-
-      {league.phase === 'draftLottery' && (
-        <section className="card accent fo-now" aria-label="The draft">
-          <div className="fo-now-over">Lottery results are in</div>
-          <h2 className="fo-now-t">Draft night is next</h2>
-          <p className="fo-now-s">Study the board, then start the draft.</p>
-          <button className="btn primary block" disabled={busy} onClick={() => void begin()}>
-            <Play size={16} fill="currentColor" /> Start the draft
-          </button>
-        </section>
       )}
 
       {(league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
@@ -253,18 +222,18 @@ export default function Draft() {
         )}
       </Sheet>
 
-      <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Sim to the end?">
+      <Sheet open={confirmSim} onClose={() => setConfirmSim(false)} title="Auto-draft the rest?">
         <div className="col fo-sheet">
           <p className="fo-lede">
-            You still hold {myRemaining.length} pick{myRemaining.length > 1 ? 's' : ''} ({myRemaining.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}). Your
-            scouts make {myRemaining.length > 1 ? 'those selections' : 'that selection'}.
+            Your staff make your {myRemaining.length > 1 ? `${myRemaining.length} picks` : 'pick'} ({myRemaining.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ')}
+            ), then re-signing opens.
           </p>
           <div className="row">
             <button className="btn grow" onClick={() => setConfirmSim(false)}>
               Cancel
             </button>
-            <button className="btn primary grow" onClick={simToEnd}>
-              Sim the draft
+            <button className="btn primary grow" disabled={busy} onClick={() => void finish()}>
+              Auto-draft the rest
             </button>
           </div>
         </div>
@@ -312,7 +281,7 @@ function OnTheClock({
       <section className="card accent fo-now" aria-label="Draft complete">
         <div className="fo-now-over">Draft complete</div>
         <h2 className="fo-now-t">All picks are in</h2>
-        <p className="fo-now-s">Undrafted prospects become free agents. Next: re-sign your own players.</p>
+        <p className="fo-now-s">Next: re-sign your own players.</p>
         <button className="btn primary block" disabled={busy} onClick={onFinish}>
           Continue to re-signing
         </button>
@@ -347,38 +316,35 @@ function OnTheClock({
       </div>
       {mine ? (
         <>
-          <p className="fo-clock-s">Tap Draft on a prospect, or let your scouts choose.</p>
+          <p className="fo-clock-s">Draft from the board below, or take the staff's pick.</p>
           <div className="fo-clock-btns">
-            <button className="btn sm" onClick={onAuto}>
-              <Bot size={16} /> Auto-pick for me
+            <button className="btn sm primary" disabled={busy} onClick={onAuto}>
+              <Bot size={16} /> Take the staff's pick
             </button>
-            <button className="btn sm" onClick={onSimToEnd}>
-              <FastForward size={16} /> Sim to end
-            </button>
+            {canTrade && (
+              <button className="btn sm" disabled={!offers || busy} onClick={() => onTrade(np.dpid)}>
+                <ArrowLeftRight size={15} /> Offers ({offers})
+              </button>
+            )}
           </div>
-          {canTrade && (
-            <button className="btn sm block" disabled={!offers} onClick={() => onTrade(np.dpid)}>
-              <ArrowLeftRight size={15} /> Offers for this pick ({offers})
-            </button>
-          )}
         </>
       ) : (
         <div className="fo-clock-btns">
-          <button className="btn sm primary" onClick={onNext}>
+          <button className="btn sm primary" disabled={busy} onClick={onNext}>
             <SkipForward size={15} /> Next pick
           </button>
           {hasPicks && (
-            <button className="btn sm" onClick={onSimToMine}>
+            <button className="btn sm" disabled={busy} onClick={onSimToMine}>
               <Play size={15} fill="currentColor" /> Sim to my pick
             </button>
           )}
           {canTrade && (
-            <button className="btn sm" onClick={() => onTrade(np.dpid)}>
+            <button className="btn sm" disabled={busy} onClick={() => onTrade(np.dpid)}>
               <ArrowLeftRight size={15} /> Trade for #{n}
             </button>
           )}
-          <button className="btn sm" onClick={onSimToEnd}>
-            <FastForward size={16} /> Sim to end of draft
+          <button className="btn sm" disabled={busy} onClick={onSimToEnd}>
+            <FastForward size={16} /> Auto-draft the rest
           </button>
         </div>
       )}
