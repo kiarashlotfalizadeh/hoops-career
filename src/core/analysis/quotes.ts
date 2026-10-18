@@ -8,7 +8,7 @@ import type { BoxLine, GameResult, League, Player, PressChoice, TeamBox } from '
 import { hashString, clamp } from '../random';
 import { playerName, seasonTotals, shortName } from '../league/helpers';
 import { playerAge } from '../playerGen';
-import type { Factor, GameReport } from './gameReport';
+import { possessive, type Factor, type GameReport } from './gameReport';
 import { COMEBACK_WP, wpStory } from './winProb';
 
 export interface Quote {
@@ -374,7 +374,7 @@ export function postGameQuotes(league: League, res: GameResult, report?: GameRep
 export interface PressOption {
   id: PressChoice;
   label: string;
-  /** What the answer would do, in a few words ("+ Reaves · − Russell"), from its effects. */
+  /** What the answer would do, in a few words ("Holmgren's mood ↑ · Mitchell's mood ↓"), from its effects. */
   hint: string;
 }
 
@@ -512,20 +512,22 @@ export function holdPress(league: League, res: GameResult, choice: PressChoice):
   return effects;
 }
 
-/** Who an effect list names: one or two by name, more as a count. */
-const who = (list: PressEffect[]) => (list.length <= 2 ? list.map((e) => e.name).join(', ') : `${list.length} players`);
+/** Whose mood an effect list moves: one or two by name, more as a count ("Holmgren's", "Wallace and Mitchell's", "12 players'"). */
+const whose = (list: PressEffect[]) => (list.length > 2 ? `${list.length} players'` : possessive(list.map((e) => e.name).join(' and ')));
 
-/** An answer's effect in a few words, for its button: "+ Reaves · − Russell", "+ 9 players", "Reads soft · no change". */
-export function pressHint(effects: PressEffect[], soft = false): string {
+/** Whose mood goes which way, in plain words: "Holmgren's mood ↑ · Mitchell's mood ↓" ('' when nobody's moves). */
+function moodWords(effects: PressEffect[]): string {
   const up = effects.filter((e) => e.delta > 0);
   const down = effects.filter((e) => e.delta < 0);
-  const parts = [up.length ? `+ ${who(up)}` : '', down.length ? `− ${who(down)}` : ''].filter(Boolean);
-  return parts.join(' · ') || (soft ? 'Reads soft · no change' : 'No change');
+  return [up.length ? `${whose(up)} mood ↑` : '', down.length ? `${whose(down)} mood ↓` : ''].filter(Boolean).join(' · ');
 }
 
-/** The answer's effect once given: "Reaves ▲ mood · Russell ▼ mood". */
+/** An answer's effect in a few words, for its button: "Holmgren's mood ↑ · Mitchell's mood ↓", "9 players' mood ↑", "Reads soft · no change". */
+export function pressHint(effects: PressEffect[], soft = false): string {
+  return moodWords(effects) || (soft ? 'Reads soft · no change' : 'No change');
+}
+
+/** The answer's effect once given, in the same words as its button: "Holmgren's mood ↑ · Mitchell's mood ↓". */
 export function pressSummary(effects: PressEffect[]): string {
-  const up = effects.filter((e) => e.delta > 0);
-  const down = effects.filter((e) => e.delta < 0);
-  return [up.length ? `${who(up)} ▲ mood` : '', down.length ? `${who(down)} ▼ mood` : ''].filter(Boolean).join(' · ') || 'No change in the room';
+  return moodWords(effects) || 'No change in the room';
 }

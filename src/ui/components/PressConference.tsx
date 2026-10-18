@@ -77,12 +77,11 @@ export function PressConference({ league, res, quotes }: { league: League; res: 
               <button key={o.id} className="gd-press-opt" disabled={simming} onClick={() => answer(o.id)} aria-label={`${o.label}: ${o.hint}`}>
                 <span className="gd-press-l">{o.label}</span>
                 <span className="gd-press-h">
-                  {/* (+ and − are whose mood it lifts or cools) */}
-                  {/^[+−]/.test(o.hint) && <span className="dim">Mood </span>}
+                  {/* (whose mood it lifts, ↑, or cools, ↓) */}
                   {o.hint.split(' · ').map((part, i) => (
                     <span key={part}>
                       {i > 0 && ' · '}
-                      <span className={part.startsWith('+') ? 'good' : part.startsWith('−') ? 'bad' : undefined}>{part}</span>
+                      <span className={part.endsWith('↑') ? 'good' : part.endsWith('↓') ? 'bad' : undefined}>{part}</span>
                     </span>
                   ))}
                 </span>

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { testLeague, userGames } from '../../state/__tests__/fixtures';
 import { loadLeague, saveLeague } from '../../state/persistence';
 import { simDay } from '../league/season';
-import { buildGameReport, IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
+import { buildGameReport, IMPACT_TEXT, impactSentence, possessive } from '../analysis/gameReport';
 import { calloutTarget, holdPress, isLatestUserGame, postGameQuotes, PRESS, pressEffects, pressOpen, pressOptions, recapFacts, streakAfter } from '../analysis/quotes';
 import { curTeamSeason } from '../league/helpers';
 import { migrate } from '../../state/persistence';
@@ -229,8 +229,8 @@ describe('post-game quotes and the press conference', () => {
       const after = pressEffects(l, g, 'pog');
       expect(after.filter((e) => e.delta === PRESS.flop).map((e) => e.pid)).toContain(flop.pid);
       const opt = pressOptions(l, g).find((o) => o.id === 'pog')!;
-      expect(opt.hint).toContain(`+ ${star.name}`);
-      expect(opt.hint).toContain('− ');
+      expect(opt.hint.startsWith(`${possessive(star.name)} mood ↑`)).toBe(true);
+      expect(opt.hint).toContain('mood ↓');
     });
 
     it('crediting the group lifts everyone after a win and reads as soft after a loss', () => {
@@ -263,7 +263,7 @@ describe('post-game quotes and the press conference', () => {
       expect(delta(fx, sulker.pid)).toBe(PRESS.sulk);
       expect(delta(fx, furious.pid)).toBe(PRESS.sulkFurious);
       expect(delta(fx, calm.pid)).toBe(0);
-      expect(pressOptions(l, g).find((o) => o.id === 'challenge')!.hint).toMatch(/^\+ .* · − /);
+      expect(pressOptions(l, g).find((o) => o.id === 'challenge')!.hint).toMatch(/^.+ mood ↑ · .+ mood ↓$/);
     });
 
     it('a call-out names the one who clearly struggled: a veteran in a good mood takes it, anyone else is hurt by it', () => {
@@ -279,13 +279,13 @@ describe('post-game quotes and the press conference', () => {
       p.bornYear = l.season - 33;
       p.mood.score = 4;
       expect(pressEffects(l, g, 'callout')).toEqual([{ pid: bad.pid, name: p.lastName, delta: PRESS.calloutUp }]);
-      expect(pressOptions(l, g).find((o) => o.id === 'callout')).toMatchObject({ label: `Call out ${p.lastName}`, hint: `+ ${p.lastName}` });
+      expect(pressOptions(l, g).find((o) => o.id === 'callout')).toMatchObject({ label: `Call out ${p.lastName}`, hint: `${possessive(p.lastName)} mood ↑` });
       p.bornYear = l.season - 23;
       expect(pressEffects(l, g, 'callout')[0].delta).toBe(PRESS.calloutDown);
       p.bornYear = l.season - 33;
       p.mood.score = 0;
       expect(pressEffects(l, g, 'callout')[0].delta).toBe(PRESS.calloutDown);
-      expect(pressOptions(l, g).find((o) => o.id === 'callout')!.hint).toBe(`− ${p.lastName}`);
+      expect(pressOptions(l, g).find((o) => o.id === 'callout')!.hint).toBe(`${possessive(p.lastName)} mood ↓`);
       // after a win nobody is called out
       const win = game(true);
       expect(calloutTarget(win.l, win.g)).toBeUndefined();
@@ -298,10 +298,10 @@ describe('post-game quotes and the press conference', () => {
           const fx = pressEffects(l, g, o.id);
           const up = fx.filter((e) => e.delta > 0);
           const down = fx.filter((e) => e.delta < 0);
-          expect(o.hint.includes('+ '), `${o.id} up`).toBe(up.length > 0);
-          expect(o.hint.includes('− '), `${o.id} down`).toBe(down.length > 0);
+          expect(o.hint.includes('mood ↑'), `${o.id} up`).toBe(up.length > 0);
+          expect(o.hint.includes('mood ↓'), `${o.id} down`).toBe(down.length > 0);
           if (up.length && up.length <= 2) for (const e of up) expect(o.hint).toContain(e.name);
-          if (up.length > 2) expect(o.hint).toContain(`+ ${up.length} players`);
+          if (up.length > 2) expect(o.hint).toContain(`${up.length} players' mood ↑`);
         }
       }
     });
