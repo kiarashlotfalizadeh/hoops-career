@@ -18,6 +18,7 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { flowActions, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
+import { picksText } from '../draft/common';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -140,14 +141,8 @@ function phaseCard(league: League): { over: string; title: string; line: string;
   const me = league.userTid;
   const off = `${league.season} offseason`;
   const picks = draftOrder(league).filter((d) => d.tid === me);
-  // "Your picks: #2, #23 and 1 in round 2."
-  const firsts = picks.filter((d) => d.round === 1).map((d) => `#${d.pick}`);
-  const seconds = picks.length - firsts.length;
-  const pickText = !picks.length
-    ? 'No pick this year.'
-    : firsts.length
-      ? `Your pick${picks.length > 1 ? 's' : ''}: ${firsts.join(', ')}${seconds ? ` and ${seconds} in round 2` : ''}.`
-      : `Your pick${seconds > 1 ? 's' : ''}: ${seconds} in round 2.`;
+  // "Your picks: #4, #24, #27 and #44.", written as the Office's draft desk writes them
+  const pickText = !picks.length ? 'No pick this year.' : `Your pick${picks.length > 1 ? 's' : ''}: ${picksText(league, picks)}.`;
   switch (league.phase) {
     case 'preseason': {
       const g = league.schedule.filter((x) => !x.played && x.type === 'regular' && (x.home === me || x.away === me)).sort((a, b) => a.day - b.day)[0];

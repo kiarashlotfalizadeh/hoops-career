@@ -92,8 +92,12 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
       <div className="tm-meta">
         {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb · {p.country}
         {p.college ? ` · ${p.college}` : ''}
-        {/* (the draft slot held together: "2018 R1" then "#11" alone on the next line read oddly) */}
-        {p.draft.round > 0 ? ` · ${p.draft.year}\u00a0R${p.draft.round}\u00a0#${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? ' · Undrafted' : ''}
+        {/* (the draft slot held together, in the picks' words: "2018 1st round #11") */}
+        {p.draft.round > 0
+          ? ` · ${p.draft.year}\u00a0${p.draft.round === 1 ? '1st' : '2nd'}\u00a0round\u00a0#${p.draft.pick}`
+          : p.draft.year && p.tid !== DRAFT_PROSPECT
+            ? ' · Undrafted'
+            : ''}
       </div>
       <div className="tm-tags">
         <Tag>{p.archetype}</Tag>

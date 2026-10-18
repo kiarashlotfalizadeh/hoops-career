@@ -6,13 +6,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Bot, UserRound } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { CAP } from '../../core/constants';
-import { payroll, rosterSorted } from '../../core/league/helpers';
-import { contractExp } from '../../core/playerGen';
+import { payroll } from '../../core/league/helpers';
 import type { League } from '../../core/types';
 import { lazyRetry } from '../lazyRetry';
 import { TabBar } from '../league/shared';
 import { TeamLogo } from '../components/TeamLogo';
-import { capSeason, isOffseason, shortSeason } from '../office/common';
+import { capSeason, isOffseason, rosterLine, rosterSpots, shortSeason } from '../office/basis';
 import '../screens/team.css';
 import { money } from '../../core/format';
 
@@ -43,12 +42,11 @@ function staffLine(league: League): { text: string; assistant: boolean } {
 /** Two lines over the tabs: the team and who runs it, then its roster spots and payroll (the record is in the top bar). */
 function TeamHeader({ league }: { league: League }) {
   const t = league.teams[league.userTid];
-  const roster = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
-  // between seasons, next season's contracts count (as on the cap sheet)
+  // between seasons, next season's contracts count, as on every Office desk (rosterSpots)
   const s0 = capSeason(league);
-  const standard = roster.filter((p) => !p.contract.twoWay && contractExp(p.contract) >= s0).length;
+  const r = useLeagueMemo(() => ({ spots: rosterSpots(league), line: rosterLine(league, league.userTid, false) }), [league]);
   const pay = payroll(league, league.userTid, s0);
-  const off = standard > CAP.rosterMax || (league.phase === 'preseason' && standard < CAP.rosterMin);
+  const off = r.spots.signed > CAP.rosterMax || (league.phase === 'preseason' && r.spots.signed < CAP.rosterMin);
   const staff = staffLine(league);
   const Icon = staff.assistant ? Bot : UserRound;
   return (
@@ -63,10 +61,7 @@ function TeamHeader({ league }: { league: League }) {
           </span>
         </div>
         <div className="tm-hh-meta">
-          Roster{' '}
-          <b className={`num ${off ? 'bad' : ''}`}>
-            {standard}/{CAP.rosterMax}
-          </b>
+          Roster{isOffseason(league) ? ` ${shortSeason(s0)}` : ''} <b className={`num ${off ? 'bad' : ''}`}>{r.line}</b>
           {' · '}Payroll <b className="num">{money(pay)}</b>
           {isOffseason(league) ? ` in ${shortSeason(s0)}` : ''}
         </div>
