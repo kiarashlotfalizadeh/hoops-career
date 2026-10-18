@@ -1,0 +1,151 @@
+// Free agency's market, on the Free Agents screen while it runs: the day, your offer sheets and
+// pending offers, the latest signings, and the dock that moves the market on a day or a week (and,
+// on its last day, starts the new season).
+import { FastForward, Gavel, Play, SkipForward } from 'lucide-react';
+import { seasonLabel } from '../../core/constants';
+import { freeAgents, playerName } from '../../core/league/helpers';
+import { withdrawBid } from '../../core/league/freeAgency';
+import { FA_DAYS, faDayNumber, faOver, newSeasonBlockedReason } from '../../core/league/season';
+import { pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
+import { agendaBlocker } from '../../core/league/agenda';
+import { useLeague, useStore } from '../../state/store';
+import { settle, useBusy } from '../../state/actions/office';
+import { useFlowRunner } from '../useFlow';
+import { Bar, More, Section } from '../components/ui';
+import { MySheets } from './RfaPanel';
+import { money } from '../../core/format';
+
+/** The market's day, your offer sheets and pending offers (each opens its sheet), and the latest signings. */
+export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
+  const league = useLeague();
+  const bids = league.faBids ?? [];
+  const busy = useBusy();
+  const over = faOver(league);
+  const withdraw = (pid: number) => settle('Withdrawing your offer', (l) => withdrawBid(l, pid), 'neutral');
+  const recent = league.news
+    .filter((x) => x.kind === 'signing' && x.season === league.season)
+    .slice(-4)
+    .reverse();
+  const sheetWaiting = restrictedFreeAgents(league, league.userTid).some((p) => p.rfa!.sheet);
+  return (
+    <Section
+      title="Free agency"
+      right={
+        <span className="fo-faday num">
+          Day {faDayNumber(league)}/{FA_DAYS}
+        </span>
+      }
+    >
+      <div className="card fo-market">
+        <Bar value={faDayNumber(league)} max={FA_DAYS} />
+        <div className="small dim2">
+          {over ? 'The market is winding down.' : sheetWaiting ? <span className="warn">An offer sheet waits for your call.</span> : 'Players who wait lower their price.'}
+        </div>
+        <MySheets onOpen={onOpen} />
+        {bids.length > 0 && (
+          <div className="fo-pending">
+            <div className="over">
+              <Gavel size={12} /> Your pending offers
+            </div>
+            {bids.map((b) => {
+              const bp = league.players[b.pid];
+              return (
+                <div key={b.pid} className="fo-pending-item">
+                  <button className="fo-pending-row grow" aria-haspopup="dialog" onClick={() => onOpen(b.pid)}>
+                    <b>{playerName(bp)}</b> · {b.years} yr{b.years > 1 ? 's' : ''} · {money(b.amount)}
+                    <span className="dim"> · {b.decideDay > league.faDay ? `decides day ${b.decideDay + 1}` : 'decides at the close'}</span>
+                  </button>
+                  <button className="btn xs" disabled={busy} aria-label={`Withdraw your offer to ${playerName(bp)}`} onClick={() => withdraw(b.pid)}>
+                    Withdraw
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {recent.length > 0 && (
+          <More label="Latest signings">
+            <ul className="fo-notes">
+              {recent.map((x) => (
+                <li key={x.id}>{x.text}</li>
+              ))}
+            </ul>
+          </More>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/** Advance the market a day or a week (a toast says what happened); on its last day, start the new season. */
+export function FaDock() {
+  const league = useLeague();
+  const bids = league.faBids ?? [];
+  const sheetsOut = pendingSheets(league, league.userTid);
+  const busy = useBusy();
+  const over = faOver(league);
+  // the market's last day: the new season is next (the Continue bar's words)
+  const runFlow = useFlowRunner();
+  const newSeasonLabel = `Start ${seasonLabel(league.season + 1)} season`;
+  const seasonBlocked = over ? newSeasonBlockedReason(league) : null;
+  // a decision the league waits on (an offer sheet on your restricted free agent) holds the calendar, as it holds the Continue bar
+  const held = agendaBlocker(league);
+  const advance = async (days: number) => {
+    const before = freeAgents(league).map((p) => p.pid);
+    const offered = bids.map((b) => b.pid);
+    const sheeted = sheetsOut.map((p) => p.pid);
+    const from = faDayNumber(league) + 1;
+    // behind the progress bar, like the Play menu's: a second tap while it runs is a no-op
+    if (!(await useStore.getState().task('Free agency', { kind: 'faAdvance', days }))) return;
+    const l = useStore.getState().league!;
+    const signed = before
+      .map((pid) => l.players[pid])
+      .filter((p) => p && p.tid >= 0 && p.tid !== l.userTid)
+      .sort((a, b) => b.ovr - a.ovr);
+    const day = faDayNumber(l);
+    const when = day > from ? `Days ${from}-${day}` : `Day ${day}`;
+    // the players who decided on your offers lead (the details are in the inbox)
+    const decided = offered.filter((pid) => !l.faBids?.some((b) => b.pid === pid)).map((pid) => l.players[pid]);
+    // your offer sheets that were decided, and sheets on your restricted free agents that came in (the market stops for those)
+    const settled = sheeted.map((pid) => l.players[pid]).filter((p) => p && !p.rfa?.sheet);
+    const incoming = restrictedFreeAgents(l, l.userTid).filter((p) => p.rfa!.sheet?.day === l.faDay);
+    const won = decided.some((p) => p?.tid === l.userTid) || settled.some((p) => p.tid === l.userTid);
+    const verdicts = [
+      ...decided
+        .filter(Boolean)
+        .map((p) => (p.tid === l.userTid ? `${p.lastName} chose you!` : p.tid >= 0 ? `${p.lastName} chose ${l.teams[p.tid].abbrev}.` : `${p.lastName} passed on your offer.`)),
+      ...settled.map((p) => (p.tid === l.userTid ? `${p.lastName}'s offer sheet wasn't matched: he's yours!` : `${l.teams[p.tid].abbrev} matched ${p.lastName}'s offer sheet.`)),
+      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${p.lastName} to an offer sheet: match it or let him go.`),
+    ].join(' ');
+    useStore.getState().toast(
+      `${verdicts ? `${verdicts} ` : ''}${
+        signed.length
+          ? `${when}: ${signed.length} signing${signed.length > 1 ? 's' : ''}. ${signed
+              .slice(0, 2)
+              .map((p) => `${p.lastName} (${p.ovr}) → ${l.teams[p.tid].abbrev}`)
+              .join(', ')}${signed.length > 2 ? '…' : ''}`
+          : `${when}: ${day > from ? (day - from >= 6 ? 'a quiet week' : 'a few quiet days') : 'a quiet day'} on the market.`
+      }`,
+      won ? 'good' : incoming.length ? 'bad' : 'neutral',
+    );
+  };
+  return (
+    <div className={`fo-dock ${over ? 'fo-dock-go' : 'fo-dock-days'}`}>
+      {over ? (
+        <button className="btn primary block big" disabled={busy || !!seasonBlocked} onClick={() => void runFlow({ id: 'new', label: newSeasonLabel, cmd: 'newSeason' })}>
+          <Play size={18} fill="currentColor" /> {newSeasonLabel}
+        </button>
+      ) : (
+        <div className="grid2">
+          <button className="btn primary" disabled={busy || !!held} onClick={() => void advance(1)}>
+            <SkipForward size={17} /> Advance 1 day
+          </button>
+          <button className="btn" disabled={busy || !!held} onClick={() => void advance(7)}>
+            <FastForward size={17} /> Advance 1 week
+          </button>
+        </div>
+      )}
+      {(held || (over && seasonBlocked)) && <div className="tiny warn fo-dock-why">{held ? `${held.title.replace(/\?$/, '')} first.` : seasonBlocked}</div>}
+    </div>
+  );
+}
