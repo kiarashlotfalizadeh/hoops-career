@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
-import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
-import { AlertTriangle, Bell, Briefcase, ChevronRight, ChevronUp, Home as HomeIcon, Play, Settings as SettingsIcon, Trophy, Users, Wand2, Workflow, X } from 'lucide-react';
+import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
+import { AlertTriangle, Bell, Briefcase, CalendarDays, ChevronRight, ChevronUp, Play, Settings as SettingsIcon, Sun, Trophy, Users, Wand2, X, type LucideIcon } from 'lucide-react';
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
@@ -22,34 +22,17 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Moments } from './components/Moments';
 import { applyAccent } from './teamColors';
 import { haptic } from '../native';
+import { TABS, tabFor, type TabId } from './nav';
+import { AgendaList } from './components/Agenda';
+import { todayRoutes } from './routes/today';
+import { teamRoutes } from './routes/team';
+import { gamesRoutes } from './routes/games';
+import { leagueRoutes } from './routes/league';
+import { officeRoutes } from './routes/office';
+import { legacyRoutes } from './routes/legacy';
 
 const Start = lazyRetry(() => import('./screens/Start'));
 const NewLeague = lazyRetry(() => import('./screens/NewLeague'));
-const Home = lazyRetry(() => import('./screens/Home'));
-const Roster = lazyRetry(() => import('./screens/Roster'));
-const PlayerView = lazyRetry(() => import('./screens/PlayerView'));
-const Compare = lazyRetry(() => import('./screens/Compare'));
-const Rotation = lazyRetry(() => import('./screens/Rotation'));
-const Lineups = lazyRetry(() => import('./screens/Lineups'));
-const Tactics = lazyRetry(() => import('./screens/Tactics'));
-const TacticsLab = lazyRetry(() => import('./screens/TacticsLab'));
-const GamePlan = lazyRetry(() => import('./screens/GamePlan'));
-const Live = lazyRetry(() => import('./screens/Live'));
-const GameView = lazyRetry(() => import('./screens/GameView'));
-const Preview = lazyRetry(() => import('./screens/Preview'));
-const LeagueHub = lazyRetry(() => import('./screens/LeagueHub'));
-const TeamView = lazyRetry(() => import('./screens/TeamView'));
-const Office = lazyRetry(() => import('./screens/Office'));
-const Trade = lazyRetry(() => import('./screens/Trade'));
-const FreeAgents = lazyRetry(() => import('./screens/FreeAgents'));
-const Resign = lazyRetry(() => import('./screens/Resign'));
-const Draft = lazyRetry(() => import('./screens/Draft'));
-const Finances = lazyRetry(() => import('./screens/Finances'));
-const Inbox = lazyRetry(() => import('./screens/Inbox'));
-const Settings = lazyRetry(() => import('./screens/Settings'));
-const History = lazyRetry(() => import('./screens/History'));
-const GodMode = lazyRetry(() => import('./screens/GodMode'));
-
 const BLOCKED = 'Close other Hoops Career tabs or windows to finish updating your saves.';
 
 /** Hand the user a file from a button; a cancelled share sheet is no failure. */
@@ -232,28 +215,22 @@ function TopBar() {
   );
 }
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: HomeIcon, also: ['/inbox', '/settings', '/god', '/live', '/game', '/preview'] },
-  { to: '/roster', label: 'Team', icon: Users, also: ['/rotation', '/lineups', '/player', '/compare'] },
-  { to: '/tactics', label: 'Tactics', icon: Workflow, also: ['/lab', '/gameplan'] },
-  { to: '/league', label: 'League', icon: Trophy, also: ['/team', '/history'] },
-  { to: '/office', label: 'Office', icon: Briefcase, also: ['/trade', '/free-agents', '/resign', '/draft', '/finances', '/owner'] },
-];
+const TAB_ICON: Record<TabId, LucideIcon> = { today: Sun, team: Users, games: CalendarDays, league: Trophy, office: Briefcase };
 
-/** Bottom tabs; sub-screens light up the section they belong to (and are its current page for screen readers). */
+/** Bottom tabs; every screen lights up the section it belongs to (and is its current page for screen readers). */
 function BottomNav() {
   const { pathname } = useLocation();
-  // whole path segments: /gameplan/3 is Tactics', not a /game report's
-  const under = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
-  const section = NAV_ITEMS.find((it) => (it.to === '/' ? pathname === '/' : under(it.to))) ?? NAV_ITEMS.find((it) => it.also.some(under));
+  const league = useLeague();
+  const section = tabFor(pathname, (pid) => league.players[pid]?.tid === league.userTid);
   return (
     <nav className="bottomnav" aria-label="Main">
       <div className="bottomnav-inner">
-        {NAV_ITEMS.map((it) => {
-          const active = section === it;
+        {TABS.map((it) => {
+          const active = section === it.id;
+          const Icon = TAB_ICON[it.id];
           return (
-            <Link key={it.to} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
-              <it.icon size={21} />
+            <Link key={it.id} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
+              <Icon size={21} />
               <span className="nav-label">{it.label}</span>
             </Link>
           );
@@ -286,8 +263,14 @@ function ContinueBar() {
   const steps = !!sim && sim.total > 1;
   // game day: the bar's Watch & coach opens the pre-game screen first (Settings), as Home's does; the
   // menu's "Watch & coach live" goes straight to the court
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const go = (a: FlowAction, fromBar = false) => {
     haptic();
+    // a decision the league waits on: settle it right here (its row links to the whole screen)
+    if (a.agenda) {
+      setAgendaOpen(true);
+      return;
+    }
     const live = liveInProgress(league);
     const today = userGameOnDay(league, league.day);
     if (fromBar && a.cmd === 'watchLive' && !live && today && league.settings.pregame !== false && !pathname.startsWith('/preview')) {
@@ -344,6 +327,10 @@ function ContinueBar() {
           </div>
         )
       )}
+      <Sheet open={agendaOpen} onClose={() => setAgendaOpen(false)} title="Needs you first">
+        <AgendaList league={league} only="required" />
+        {!flowActions(league).some((a) => a.agenda) && <div className="empty">All set. The season can move on.</div>}
+      </Sheet>
       <Sheet open={open} onClose={() => setOpen(false)} title="What next?">
         <div className="col" style={{ gap: 8 }}>
           {actions.map((a) => (
@@ -457,39 +444,6 @@ function ScrollTop() {
   return null;
 }
 
-/**
- * The front-office screens wait while they aren't the coach's to use: a fired coach's old team until he
- * takes another job, and any roster move while a live game is in progress (a player moved mid-game
- * would have his line recorded for the wrong team).
- */
-function OfficeGate({ children }: { children: ReactNode }) {
-  const fired = useStore((s) => !!s.league?.fired);
-  const live = useStore((s) => !!s.league && !!liveInProgress(s.league));
-  const nav = useNavigate();
-  if (!fired && !live) return <>{children}</>;
-  return (
-    <main className="page">
-      <div className="card col" role="alert" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <AlertTriangle className={fired ? 'bad' : 'warn'} size={24} />
-        <h2>{fired ? 'You were fired' : 'Finish your live game first'}</h2>
-        <div className="small dim2">
-          {fired
-            ? "The front office isn't yours to run anymore. Take over another team to trade, sign and draft again."
-            : 'Trades, signings and releases wait until the game in progress is over, so every player is counted for the team he played for.'}
-        </div>
-        <button className="btn primary" onClick={() => nav(fired ? '/settings?sheet=switch' : '/live')}>
-          {fired ? 'Find a new job' : 'Back to the game'}
-        </button>
-      </div>
-    </main>
-  );
-}
-
-function LeagueTabRedirect() {
-  const { tab } = useParams();
-  return <Navigate to={`/league?tab=${tab ?? 'standings'}`} replace />;
-}
-
 function GameShell() {
   const league = useStore((s) => s.league);
   const loc = useLocation();
@@ -501,68 +455,12 @@ function GameShell() {
       <ErrorBoundary scope="screen" key={loc.pathname} resetKey={loc.key}>
         <Suspense fallback={<div className="empty">Loading…</div>}>
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/roster" element={<Roster />} />
-            <Route path="/player/:pid" element={<PlayerView key={loc.pathname} />} />
-            <Route path="/compare" element={<Compare />} />
-            <Route path="/rotation" element={<Rotation />} />
-            <Route path="/lineups" element={<Lineups />} />
-            <Route path="/tactics" element={<Tactics />} />
-            <Route path="/lab" element={<TacticsLab />} />
-            <Route path="/gameplan/:tid" element={<GamePlan key={loc.pathname} />} />
-            {/* each visit sets up its own game: "Watch & coach live" from a finished game's card mounts a fresh one */}
-            <Route path="/live" element={<Live key={loc.key} />} />
-            <Route path="/game/:gid" element={<GameView />} />
-            <Route path="/preview/:gid?" element={<Preview />} />
-            <Route path="/league" element={<LeagueHub />} />
-            <Route path="/league/:tab" element={<LeagueTabRedirect />} />
-            <Route path="/team/:tid" element={<TeamView />} />
-            <Route
-              path="/office"
-              element={
-                <OfficeGate>
-                  <Office />
-                </OfficeGate>
-              }
-            />
-            <Route
-              path="/trade"
-              element={
-                <OfficeGate>
-                  <Trade />
-                </OfficeGate>
-              }
-            />
-            <Route
-              path="/free-agents"
-              element={
-                <OfficeGate>
-                  <FreeAgents />
-                </OfficeGate>
-              }
-            />
-            <Route
-              path="/resign"
-              element={
-                <OfficeGate>
-                  <Resign />
-                </OfficeGate>
-              }
-            />
-            <Route
-              path="/draft"
-              element={
-                <OfficeGate>
-                  <Draft />
-                </OfficeGate>
-              }
-            />
-            <Route path="/finances" element={<Finances />} />
-            <Route path="/owner" element={<Finances />} />
-            <Route path="/inbox" element={<Inbox />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/god" element={<GodMode />} />
+            {todayRoutes}
+            {teamRoutes}
+            {gamesRoutes}
+            {leagueRoutes}
+            {officeRoutes}
+            {legacyRoutes}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

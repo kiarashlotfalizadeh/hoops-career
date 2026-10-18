@@ -43,7 +43,7 @@ type BudgetKey = 'coaching' | 'health' | 'facilities';
 export default function Finances() {
   const league = useLeague();
   const loc = useLocation();
-  const [tab, setTab] = useQueryParam<Tab>('tab', loc.pathname === '/owner' ? 'owner' : 'overview', ['overview', 'budget', 'owner', 'history']);
+  const [tab, setTab] = useQueryParam<Tab>('tab', loc.pathname === '/office/owner' ? 'owner' : 'overview', ['overview', 'budget', 'owner', 'history']);
   const team = league.teams[league.userTid];
   return (
     <main className="page fo-page">

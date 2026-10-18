@@ -218,7 +218,7 @@ describe('who is a legend', () => {
     const inbox = l.inbox.length;
     retireNumbers(l, mine);
     expect(l.inbox.length).toBe(inbox + 1);
-    expect(l.inbox[0]).toMatchObject({ from: 'Owner', subject: 'No. 9 to the rafters', tone: 'good', link: `/history?tid=${U}` });
+    expect(l.inbox[0]).toMatchObject({ from: 'Owner', subject: 'No. 9 to the rafters', tone: 'good', link: `/league/history?tid=${U}` });
     expect(l.inbox[0].body).toBe(`${playerName(mine)}'s No. 9 goes up to the rafters at the home opener, and nobody wears it for the ${l.teams[U].name} again.`);
     const theirs = career(l, [[A, 5]], { jerseys: { [A]: '9' } });
     theirs.hof = true;

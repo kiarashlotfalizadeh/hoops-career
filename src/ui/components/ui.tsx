@@ -191,18 +191,25 @@ export function Chips<T extends string | number>({
 }
 
 /** The switch is named by `label` alone; `help` is its description (screen readers read it after the state). */
+/**
+ * A labelled switch. Its help is one tap away behind a "?" (and read out with the switch), never a
+ * paragraph under every toggle.
+ */
 export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode }) {
   const id = useId();
   return (
     <label className="row between" style={{ gap: 12, cursor: 'pointer' }}>
-      <div className="grow">
+      <div className="grow row" style={{ gap: 6 }}>
         <div id={`${id}l`} style={{ fontWeight: 650 }}>
           {label}
         </div>
         {help && (
-          <div id={`${id}h`} className="small dim">
-            {help}
-          </div>
+          <>
+            <Help title={typeof label === 'string' ? label : 'About this setting'}>{help}</Help>
+            <span id={`${id}h`} className="sr-only">
+              {help}
+            </span>
+          </>
         )}
       </div>
       <button

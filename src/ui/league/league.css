@@ -1281,7 +1281,7 @@ a.bk-s:active {
 @media (min-width: 760px) {
   .bk-panel-wrap {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
   }
   .bk-only-narrow {
@@ -2144,7 +2144,7 @@ a.lg-rec-row:active {
 }
 .lg-team-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin-top: -6px;
 }

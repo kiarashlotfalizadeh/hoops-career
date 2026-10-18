@@ -324,7 +324,7 @@ h3 {
 }
 .grid2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
 .grid2 > .btn {
@@ -342,17 +342,17 @@ h3 {
 }
 .grid3 {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .grid4 {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 @media (max-width: 359px) {
   .grid4 {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .md-grid2 {
@@ -362,7 +362,7 @@ h3 {
 }
 @media (min-width: 760px) {
   .md-grid2 {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
   }
 }
@@ -508,7 +508,7 @@ h3 {
   margin: 0 auto;
   height: var(--nav-h);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .navitem {
   display: flex;
@@ -1854,7 +1854,7 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
 @media (min-width: 760px) {
   .list.wide2 {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .list.wide2 > * + * {
     border-top: none;
@@ -1871,7 +1871,7 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   }
   .grid-md2 {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
   }
 }
@@ -1921,4 +1921,19 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   .help-btn::after {
     inset: -11px;
   }
+}
+
+/* a word with a glossary entry: tap for what it means */
+.term {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline dotted var(--text-dim);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.term:active {
+  color: var(--accent-text);
 }

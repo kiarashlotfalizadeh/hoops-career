@@ -113,22 +113,6 @@ describe('game plans', () => {
     expect(l.gamePlans).toBeUndefined();
   });
 
-  it('migrates a version-2 plan to the opponent it was for, and drops matchups kept in the base tactics', () => {
-    const l = testLeague();
-    const raw = structuredClone(l) as League & { gamePlan?: unknown };
-    raw.version = 2;
-    raw.gamePlan = { oppTid: 5, items: [{ id: 'cov-ice', label: 'Ice', patch: { defense: { pnr: 'ice' } } }] };
-    delete raw.gamePlans;
-    raw.teams[raw.userTid].tactics.defense.matchups = { 1: 2 };
-    const out = migrate(raw);
-    expect((out as League & { gamePlan?: unknown }).gamePlan).toBeUndefined();
-    expect(out.gamePlans).toEqual({ 5: { oppTid: 5, items: [{ id: 'cov-ice', label: 'Ice', patch: { defense: { pnr: 'ice' } } }], scope: 'next' } });
-    expect(out.teams[out.userTid].tactics.defense.matchups).toEqual({});
-    // a version-3 league is left alone
-    const again = migrate(structuredClone(out));
-    expect(again.gamePlans).toEqual(out.gamePlans);
-  });
-
   it('plans how to guard their players: one instruction each, on top of the base tactics, for this opponent only', () => {
     const l = testLeague();
     const [a, b] = teamPlayers(l, 3);

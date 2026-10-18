@@ -1,26 +1,71 @@
 # Courtside: the Hoops Career design system
 
-A dark, game-first broadcast look for a phone. Read this before changing a screen; `src/ui/theme.css`
-holds the tokens and shared classes, `src/ui/components/ui.tsx` the shared components, and
-`src/ui/screens/Home.tsx` + `home.css` are the reference screen.
+A dark, game-first broadcast look for a phone, built for players who want the whole sim: depth is
+always there, one tap down, never hidden behind a mode. Read this before changing a screen;
+`src/ui/theme.css` holds the tokens and shared classes, `src/ui/components/ui.tsx` the shared
+components.
+
+The north star is **coherence: one obvious place for everything.** Before adding a figure, a control
+or a screen, find where it already lives. If it's there, link to it; don't show it again.
+
+## Information architecture
+
+Five tabs, one per role. Every screen belongs to exactly one (`tabFor` in `nav.ts` lights it).
+
+| Tab        | What it's for         | Lives here (and nowhere else)                                                                                                                                                                                                                                                       |
+| ---------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Today**  | What needs you now    | The agenda (decisions waiting), the staff's top advice, the next game at a glance, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                                                                    |
+| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics (playbook, offense, defense, roles, game management, saved playbooks) `/team/tactics`; lineups `/team/lineups`; your players' pages; compare                         |
+| **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`: scouting, the game plan, matchups, the Lab against them, and on game day the preview); the live game (`/live`); game reports (`/game/:gid`); the Lab (`/lab`, for comparing your own edits) |
+| **League** | Everyone else         | Standings and odds, the schedule around the league, stats, ratings, playoffs, the Cup, awards, news, other teams' pages (`/teams/:tid`), other players' pages, history (`/league/history`: seasons, records, Hall of Fame, coaches)                                                 |
+| **Office** | The GM's desk         | The cap sheet and exceptions, trade (`/office/trade`), free agents, re-signing, the draft, picks, finances, the owner and job security (`/office/owner`), your career and job offers (`/office/career`)                                                                             |
+
+Rules that follow from it:
+
+- **Your team has one home: Team.** Other screens show a one-line summary and link there (Office's
+  cap sheet links to Team → Roster → Contracts; it doesn't repeat the table).
+- **Anything about one opponent lives on its Matchup page.** Home, the schedule, a team's page, the
+  live game and the report link to `/games/:tid`; they don't host their own scouting, plans or
+  matchup editors.
+- **Money lives in Office.** Payroll appears once as a figure on Team → Roster's header line, and in
+  full only in Office.
+- **The owner lives in Office → Owner**, as one job-security meter (`jobSecurity`); Today shows the
+  meter only when the seat is warm.
+- **Advice has one voice.** Everything the staff says comes through the assistant feed
+  (`core/ai/assistant.ts`, drawn with `AssistantCards`): a screen shows the cards for its own area.
+  Don't build a new tips box.
+- **Decisions have one list.** Anything the user must or may decide (cuts, offer sheets, offers,
+  10-days, his pick, a new job) is an agenda item (`core/league/agenda.ts`, drawn with
+  `AgendaList`/`AgendaRow`), settled in place. Required items hold the Continue bar.
+- Routes from before the redesign redirect (`routes/legacy.tsx`); link to the new ones.
+
+## How screens change the league
+
+- Every change goes through `act(label, fn)` (all or nothing: a league action) or `edit(fn)` (a light
+  change: a setting, a tactics level, a read mark), from `state/actions.ts`. Never call the store's
+  `mutate` from a screen. Steps that belong together go in one `act`.
+- While a sim or a phase change runs, the league can't change (the worker is playing on a copy):
+  `act`/`edit` say so. Buttons that change the league are disabled while `useStore((s) => !!s.sim)`.
+- Phase changes are named operations (`store.task(label, { kind: ... })`), run in the sim worker.
+- Read the league with `useLeague()` / `useLeagueMemo()`. A sim hands back a new league object:
+  never hold on to one across a sim.
 
 ## Principles
 
-1. **One brand, team identity where a team is the subject.** Controls (primary buttons, the active tab,
-   chips, sliders, focus, links) use the brand orange `--accent` whatever team you run. Team colours
-   appear only on identity surfaces: slabs (a team's or player's hero), jersey badges, team marks, the
-   live court's floor, and a thin edge on your own rows (`--team-text`). Never tint a whole screen.
+1. **One brand, team identity where a team is the subject.** Controls (primary buttons, the active
+   tab, chips, focus, links) use the brand orange `--accent` whatever team you run. Team colours
+   appear only on identity surfaces: slabs, jersey badges, team marks, the live court's floor, and a
+   thin edge on your own rows. Never tint a whole screen.
 2. **Flat, not boxed.** Hierarchy comes from type, space and hairlines. A screen is a stack of
-   sections with overline headings (`Section`), not a stack of identical cards. Use a card (`.card`)
-   for a list or a group of controls that needs a ground; use `.card.flush` + `.list` for rows. One
-   slab per screen at most, at the top.
-3. **Scoreboard figures.** Numbers people look at (records, ratings, stats, money) are set in the
-   condensed display face (`.display`, `.kpi .v`, `.statline .v`, `.ovr`), tabular.
-4. **Short copy.** Every visible line earns its place. A card says what it is in a headline and at
-   most one short line; explanations live behind `Help` (sheet) or `More` (expander). Write like a
-   broadcast graphic, not a manual. Keep facts accurate to the engine.
-5. **Thumb first.** Primary actions sit low (the Continue bar, a screen's own `.dockbar`), targets are
-   44px, nothing important hides behind hover.
+   sections with overline headings, not a stack of identical cards. One slab per screen at most, at
+   the top.
+3. **Scoreboard figures.** Numbers people look at are set in the condensed display face, tabular.
+4. **Short copy.** See Copy.
+5. **Thumb first.** Primary actions sit low (the Continue bar, a screen's own `.dockbar`), targets
+   are 44px, nothing important hides behind hover.
+6. **Density with a ceiling.** A hub page opens on what it's for and shows at most about six
+   sections; the rest is a tab or a link away. No figure appears twice on one screen (the record is
+   in the top bar: a screen doesn't repeat it unless it's the subject).
 
 ## Tokens (theme.css `:root`)
 
@@ -40,9 +85,8 @@ holds the tokens and shared classes, `src/ui/components/ui.tsx` the shared compo
 
 Don't hard-code colours that exist as tokens. Team colours for another team come from
 `teamColors.ts`: `slabVars(colors)` for a slab, `jerseyKit` (inside `Avatar`), `teamLook`,
-`identityColor`. Two teams side by side (a scorebug, a final, a pre-game slab) use `matchupLooks`
-(slabs that never read as one colour: on a clash the away side wears its second colour), and
-`matchupColors`/`jerseyColors` for lines and jerseys.
+`identityColor`. Two teams side by side use `matchupLooks`, and `matchupColors`/`jerseyColors` for
+lines and jerseys.
 
 ## Type
 
@@ -51,74 +95,69 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
 
 - `h1` 30-32px display caps: the page title (`PageHeader`).
 - `h2` 22px display caps: a sheet's title, a slab's headline.
-- `.over` / a section's or card's `h3`: 11.5px, 750, wide-spaced caps, `--text-dim`. This is the
-  workhorse label for sections, figures and table heads.
+- `.over` / a section's or card's `h3`: 11.5px, 750, wide-spaced caps, `--text-dim`.
 - Body 15px; `.small` 13px; `.tiny` 11.5px. Meta lines 12.5px `--text-dim`.
 - Figures: display face, tabular (`.num`).
 
 ## Components and classes
 
-- `PageHeader` (`.ph`): back button, title, one short sub line, a control on the right.
-- `Section` (`.sec`, `.sec-h`): overline title + right-side link (`.card-link`: brand text with a
-  chevron) + content. Prefer it to `Card title=...` for anything that isn't a single grouped panel.
-- `Card` (`.card`): flat `--raised` panel, 12px radius. `.flush` for edge-to-edge lists, `.tight`.
-  `accent` = a highlighted card (thin brand edge); use sparingly (onboarding, a decision waiting).
-- `.slab` (+ `.slab-mark` for a big faded team mark): the identity hero. Your team by default; another
-  team with `style={slabVars(colors)}`. White text tokens are set inside it. It has a cut top-right
-  corner and a trim line along the bottom. `.slab.plain` drops the cut.
-- Lists: `.card.flush` > `.list` > rows. `.listrow` (58px, 14px sides), `.lr-name`, `.lr-meta`.
-  `.list-divider` for group labels. Your own rows: a `--team-text` inset edge + 9% tint.
-- Figures: `Statline` (`.statline`: label/value/sub, hairlines between, no boxes) for 2-4 figures in a
-  row; `Kpi` (`.kpi`) when figures must be tiles (a grid of many).
-- `Segmented`: a boxed switch for filters and options; `tabs` prop for a screen's own sections
-  (underlined page tabs, `.seg.tabs`). Keep `role=radiogroup`. Hubs with many sections (League,
-  a team, History) use `TabBar` (`league/shared.tsx`): the same tabs, sticky under the top bar,
-  edge to edge, fading where they scroll.
-- `Chips` / `.chip`: toggles and quick filters. `.tag` (+ `good` `bad` `warn` `info` `brand`):
-  small caps labels; never a whole sentence.
-- `Ovr` (tier badge), `Avatar` (the jersey badge: team colours and number; neutral kit for free
-  agents and prospects).
-- Buttons: `.btn` (44px), `.primary` (brand), `.ghost`, `.danger`, `.good`, `.sm` (34px), `.xs` (28px,
-  padded hit area), `.block`, `.big` (display caps with the number-plate cut: the screen's one big
-  call to action).
-- `Help` (a "?" that opens a sheet) and `More` (a "More ⌄" expander) for explanations.
+- `PageHeader` (`.ph`): back button, title, one short sub line, a control on the right. A hub's
+  sections use `TabBar` (`league/shared.tsx`, sticky page tabs) under it, never a second header.
+- `Section` (`.sec`, `.sec-h`): overline title + right-side link (`.card-link`) + content.
+- `Card` (`.card`): flat `--raised` panel. `.flush` + `.list` for rows. `accent` sparingly.
+- `.slab` (+ `.slab-mark`): the identity hero. Your team by default; another with `slabVars(colors)`.
+- Lists: `.card.flush` > `.list` > rows. `.listrow` (58px), `.lr-name`, `.lr-meta`. Your own rows:
+  a `--team-text` inset edge + 9% tint.
+- Figures: `Statline` for 2-4 figures in a row; `Kpi` tiles only for a grid of many.
+- `Segmented` (`tabs` for page tabs), `Chips`, `.tag`, `Ovr`, `Avatar`, buttons (`.btn`, `.primary`,
+  `.ghost`, `.danger`, `.good`, `.sm`, `.xs`, `.block`, `.big`).
+- `Help` ("?" opening a sheet) and `More` (an expander) carry every explanation. `Toggle`'s `help`
+  goes behind its "?" automatically.
+- `Term` (`components/Glossary.tsx`): a word with a glossary entry (drop, MLE, eFG...): tap for what
+  it means. `GlossarySheet` is the whole list. Use `Term` the first time a screen shows jargon.
+- `AgendaList` / `AgendaRow` (`components/Agenda.tsx`): decisions with their actions in reach.
+- `AssistantCards` (`components/Assistant.tsx`): the staff's advice for an area, with one-tap fixes.
 - `Sheet`: bottom sheet (dialog on tablets). Title in `h2`.
-- `.dockbar`: a screen's own fixed action bar over the tab bar; the Continue bar steps aside for it
-  (and for `.fo-dock` and `.gd-dock`), except a running sim's progress, which the docks ride above.
-- The Continue bar (App.tsx) names the next step and runs it; on the screen that step names (the
-  draft board, free agents, re-signing) it shrinks to its round options button.
+- `.dockbar`: a screen's own fixed action bar over the tab bar; the Continue bar steps aside for it.
+- The Continue bar (App.tsx) names the next step and runs it. A required agenda item takes its place
+  and opens in a sheet to be settled. On the screen the next step names, it shrinks to its options.
 - `.empty` for empty states: one line, what to do next.
 
 ## Screen anatomy (phone)
 
-1. `PageHeader` (or a slab for identity screens: Home, a team, a player).
-2. `Segmented tabs` for the screen's own sections, if any.
+1. `PageHeader` (or a slab for identity screens: a team, a player, a matchup).
+2. `TabBar` for a hub's sections, if any.
 3. The thing the screen is for, first. Then sections in order of use.
 4. Nothing important below a long list; filters above it.
 
-Spacing: the page stacks sections 16px apart; inside a section 10px; inside a card 10-12px.
+Spacing: the page stacks sections 16px apart; inside a section 10px; inside a card 10-12px. Phone
+first: wide screens get the same single column, centred, at most 788px. Grid columns are
+`minmax(0, 1fr)`, never a bare `1fr` (a long line would push the page sideways).
 
 ## Copy
 
-- Headline + one line. Cut "you can", "this shows", restating the label, and hedges.
+- **Headline + figure.** A card says what it is in a headline and at most one short line. Anything
+  longer goes behind `Help` or `More`. No paragraph of more than two lines is visible by default.
+- Cut "you can", "this shows", restating the label, and hedges.
 - Sentence case for text and buttons; capitals only through the overline/display styles.
 - Numbers over words where a number says it: "3-7 in last 10", "+3.4 pts/100".
-- Keep explanations that teach the game (what a coverage does, why fit is 72), but behind `Help`/`More`.
-- Names of controls in advice must match the controls on screen.
+- Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
+- Names of controls in advice must match the controls on screen (Team → Tactics tabs: Playbook,
+  Offense, Defense, Roles, Game Mgmt).
+- Inbox mail: a subject that says what happened and a one-line summary; detail below it.
 
 ## Motion
 
 - Screens fade in (opacity only: a transform would trap fixed docks). Sheets and the Continue bar
   slide up; toasts drop in. Press states scale to 0.97.
-- Figures in a `Statline` count up when a screen opens (`CountUp`), once; later changes just show.
-- Big moments (a clinch, a series, a title, the Cup, your draft pick, a big signing, an award) get a
-  full-screen card in your colours (`moments.ts`, `components/Moments.tsx`), once, after a sim and
-  outside the live game; Settings → Big moments turns them off.
+- Figures in a `Statline` count up when a screen opens (`CountUp`), once.
+- Big moments get a full-screen card in your colours (`moments.ts`, `components/Moments.tsx`), once,
+  after a sim and outside the live game.
 - Everything respects `prefers-reduced-motion` (theme.css zeroes animations).
 
 ## Accessibility (unchanged bar)
 
-- 4.5:1 text contrast on every ground (the tokens hold it; tinted surfaces lighten `--text-dim`).
+- 4.5:1 text contrast on every ground.
 - 44px touch targets (compact controls extend their hit area with `::after`).
 - Radio groups for switches, `aria-pressed` on toggles, names on icon buttons, `sr-only` text where
   a badge alone carries meaning, focus rings in `--accent-text`.
