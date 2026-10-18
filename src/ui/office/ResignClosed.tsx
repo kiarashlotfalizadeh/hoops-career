@@ -56,9 +56,9 @@ export function ResignClosed({ league }: { league: League }) {
         </div>
         <Statline
           items={[
-            // (the season is in the page's line; the same cap figure as the Office's cap sheet, holds said)
+            // (the same cap figure as the Office's cap sheet, holds said; the season they're about once)
             { ...capRoomFig(cap.salaryCap - after - holds), s: holds > 0 ? `after ${money(holds)} in holds` : shortSeason(s + 1) },
-            { k: 'Committed', v: money(after), s: shortSeason(s + 1) },
+            { k: 'Committed', v: money(after), s: holds > 0 ? shortSeason(s + 1) : undefined },
             { k: 'Expiring', v: String(list.length), s: `frees ${money(freed)}` },
           ]}
         />
