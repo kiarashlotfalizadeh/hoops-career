@@ -7,6 +7,7 @@ import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
 import { REVIEWS_KEPT, currentGoals, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
+import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
 export function seasonsInCharge(league: League): number {
@@ -109,18 +110,20 @@ export function ownerEvaluation(league: League) {
     grade = parts.wins * 0.4 + parts.playoffs * 0.4 + parts.money * 0.2;
   }
   const prev = league.ownerMood;
-  const seasonsIn = seasonsInCharge(league);
-  const w = seasonsIn <= 1 ? 1 : 0.4;
+  // how far one season moves his standing, and how long he waits to fire: see jobSecurity.ts
+  const w = seasonWeight(league);
+  const verdict = ultimatumVerdict(league, og);
   const r2 = (x: number) => Math.round(x * 100) / 100;
   const blend = (k: 'wins' | 'playoffs' | 'money' | 'youth') => {
     const now = parts[k];
     return now === undefined ? prev[k] : r2(now * w + (prev[k] ?? 0) * (1 - w));
   };
-  const total = clamp(grade * w + prev.total * (1 - w), -1, 1);
+  // an ultimatum met buys back some standing; missed, nothing else counts
+  const total = clamp(grade * w + prev.total * (1 - w) + (verdict === 'met' ? ULTIMATUM_MET : 0), -1, 1);
   const youth = blend('youth');
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
-  const grace = seasonsIn < 3;
-  const fired = league.settings.jobSecurity && !grace && total < FIRING_LINE;
+  const fireable = canBeFired(league);
+  const fired = fireable && (total < FIRING_LINE || verdict === 'missed');
   const review: OwnerReview = { season: league.season, tid, goals, grade: r2(grade), total: league.ownerMood.total, ...(fired ? { fired: true as const } : {}) };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
@@ -131,25 +134,28 @@ export function ownerEvaluation(league: League) {
       from: 'Owner',
       subject: "You're fired",
       body: [
-        'The results have not been good enough. We are going in a different direction.',
+        verdict === 'missed'
+          ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
+          : 'The results have not been good enough. We are going in a different direction.',
         ...lines,
         '(Take over another team to keep your career going: the league waits until you do.)',
       ].join('\n'),
       tone: 'bad',
-      link: '/settings?sheet=switch',
+      link: '/office/career',
     });
     return;
   }
-  const verdict = total > 0.4 ? 'thrilled' : total > 0.1 ? 'pleased' : total > -0.2 ? 'patient, for now' : 'concerned';
-  const warning = total < -0.2 && !grace ? 'Another season like this and we will have a serious conversation.' : '';
+  const feeling = total > 0.4 ? 'thrilled' : total > 0.1 ? 'pleased' : total > -0.2 ? 'patient, for now' : 'concerned';
+  const answered = verdict === 'met' ? 'You answered my ultimatum. That counts for something.' : '';
+  const warning = total < -0.2 && fireable ? 'Another season like this and we will have a serious conversation.' : '';
   addInbox(league, {
     from: 'Owner',
     subject: 'Season review',
     body: og
-      ? [`I'm ${verdict}. This season ${fmt(grade)}, overall standing ${fmt(total)}.`, ...lines, warning].filter(Boolean).join('\n')
-      : `I'm ${verdict}. Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,
+      ? [`I'm ${feeling}. This season ${fmt(grade)}, overall standing ${fmt(total)}.`, ...lines, answered, warning].filter(Boolean).join('\n')
+      : `I'm ${feeling}. Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,
     tone: total > 0.1 ? 'good' : total < -0.2 ? 'bad' : 'neutral',
-    link: '/owner',
+    link: '/office/owner',
   });
 }
 

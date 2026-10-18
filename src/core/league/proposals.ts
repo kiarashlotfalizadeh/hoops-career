@@ -155,7 +155,7 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
     subject: pitch.subject,
     body: `${p.note}\n${sentence(`We'd send ${assetText(league, p.offer.b)} ${ask}`)} ${until}`,
     tone: 'neutral',
-    link: '/trade?tab=offers',
+    link: '/office/trade?tab=offers',
     proposal: p.id,
   });
   return p;

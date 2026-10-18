@@ -1,4 +1,6 @@
-// Phase-aware "what can I do next" actions shared by the top-bar play button and Home.
+// Phase-aware "what can I do next" actions: the Continue bar's primary and its Play options. A
+// required agenda item (see core/league/agenda.ts) comes first and holds every sim and phase change
+// until it's settled; letting the staff make the user's draft pick stays open, as it settles it.
 import type { League, ScheduledGame } from '../core/types';
 import { allStarStop, type SimTarget } from '../state/store';
 import { liveInProgress } from '../state/live';
@@ -6,6 +8,7 @@ import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, newSeasonBlockedRe
 import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { seasonLabel } from '../core/constants';
+import { agendaBlocker } from '../core/league/agenda';
 import { periodLabel } from './stats';
 
 export interface FlowAction {
@@ -13,6 +16,8 @@ export interface FlowAction {
   label: string;
   sub?: string;
   primary?: boolean;
+  /** The agenda item this settles (the Continue bar opens it in place). */
+  agenda?: string;
   /** Either a sim target, a route, or a named command. */
   sim?: SimTarget;
   to?: string;
@@ -39,14 +44,16 @@ export function opponentText(league: League, g: ScheduledGame): string {
 
 /** `onLive`: the Live screen is open, so a game in progress is all the menu offers. */
 export function flowActions(league: League, opts: { onLive?: boolean } = {}): FlowAction[] {
-  if (!league.fired) return phaseActions(league, opts);
-  // fired: the old team isn't yours to run, so nothing moves on until you take over another one
-  const why = 'You were fired: take over another team first.';
+  const acts = phaseActions(league, opts);
+  const block = agendaBlocker(league);
+  if (!block) return acts;
+  // (a fired coach's old team isn't his to run: nothing moves on until he takes over another one)
+  const why = `${block.title} first.`;
   return [
-    { id: 'job', label: 'Find a new job', sub: 'Take over another team to keep your career going.', primary: true, to: '/settings?sheet=switch' },
-    ...phaseActions(league, opts)
-      .filter((x) => x.cmd || x.sim)
-      .map((x) => ({ ...x, primary: false, disabled: why })),
+    { id: 'agenda', label: block.title, sub: block.line, primary: true, to: block.to ?? '/', agenda: block.id },
+    ...acts
+      .filter((x) => x.cmd || x.sim || (block.kind === 'draftPick' && x.to))
+      .map((x) => ({ ...x, primary: false, disabled: block.kind === 'draftPick' && (x.cmd === 'finishDraft' || x.to) ? undefined : why })),
   ];
 }
 
@@ -63,8 +70,8 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         cmd: 'startRegular',
         disabled: errs[0],
       });
-      a.push({ id: 'tactics', label: 'Review tactics', to: '/tactics' });
-      a.push({ id: 'fa', label: 'Sign free agents', to: '/free-agents' });
+      a.push({ id: 'tactics', label: 'Review tactics', to: '/team/tactics' });
+      a.push({ id: 'fa', label: 'Sign free agents', to: '/office/free-agents' });
       break;
     }
     case 'regular':
@@ -119,14 +126,14 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
     }
     case 'draftLottery':
       a.push({ id: 'draft', label: 'Go to the draft', sub: 'Lottery results are in.', primary: true, cmd: 'startDraft' });
-      a.push({ id: 'board', label: 'Scout prospects', to: '/draft' });
+      a.push({ id: 'board', label: 'Scout prospects', to: '/office/draft' });
       break;
     case 'draft':
-      a.push({ id: 'board', label: 'Draft board', sub: 'You are on the clock when it is your pick.', primary: true, to: '/draft' });
+      a.push({ id: 'board', label: 'Draft board', sub: 'You are on the clock when it is your pick.', primary: true, to: '/office/draft' });
       a.push({ id: 'finish', label: 'Auto-draft the rest', cmd: 'finishDraft' });
       break;
     case 'resign':
-      a.push({ id: 'resign', label: 'Re-sign players', primary: true, to: '/resign' });
+      a.push({ id: 'resign', label: 'Re-sign players', primary: true, to: '/office/resign' });
       a.push({ id: 'fa', label: 'Open free agency', sub: 'Unsigned players will hit the market.', cmd: 'startFA' });
       break;
     case 'freeAgency': {
@@ -137,7 +144,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         label: 'Free agents',
         sub: over ? `Day ${FA_DAYS} of ${FA_DAYS}: the market is winding down.` : `Day ${faDayNumber(league)} of ${FA_DAYS}`,
         primary: !over,
-        to: '/free-agents',
+        to: '/office/free-agents',
       });
       if (!over) {
         a.push({ id: 'faday', label: 'Advance 1 day', cmd: 'faDay' });

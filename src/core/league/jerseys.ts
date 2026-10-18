@@ -186,7 +186,7 @@ export function retireNumbers(league: League, p: Player): number[] {
         subject: `No. ${jersey} to the rafters`,
         body: `${name}'s No. ${jersey} goes up to the rafters at the home opener, and nobody wears it for the ${team.name} again.`,
         tone: 'good',
-        link: `/history?tid=${tid}`,
+        link: `/league/history?tid=${tid}`,
       });
   }
   // the numbers he wore by team were kept for this

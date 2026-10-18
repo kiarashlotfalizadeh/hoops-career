@@ -1079,7 +1079,7 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
       subject: `${playerName(p)} opts out`,
       body: `${playerName(p)} declined his player option to test the market. We hold his Bird rights: re-sign him now, or he becomes a free agent.`,
       tone: 'alert',
-      link: '/resign',
+      link: '/office/resign',
     });
   }
   if (staffCalls.length) {

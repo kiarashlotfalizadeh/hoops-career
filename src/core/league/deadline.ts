@@ -97,6 +97,6 @@ function deadlineRecap(league: League) {
     subject: 'Deadline recap',
     body: `The deadline has passed with ${count} around the league${mine ? ` (${trades.length === 1 ? 'ours' : `${mine} of them ours`})` : ''}.${biggest ? `\n${trades.length > 1 ? 'The biggest' : 'The deal'}: ${biggest.text.replace(/^Trade: /, '')}` : ''}\nFrom here, only free agents can be added.`,
     tone: 'neutral',
-    link: '/league?tab=news&kind=trade',
+    link: '/league/news?kind=trade',
   });
 }

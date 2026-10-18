@@ -464,6 +464,6 @@ export function allStarSaturday(league: League) {
   });
   if (lines.length) {
     const won = [three[0], dunk[0]].some((e) => e && league.players[e.pid]?.tid === league.userTid);
-    addInbox(league, { from: 'League Office', subject: 'All-Star Saturday', body: lines.join(' '), tone: won ? 'good' : 'neutral', link: '/league?tab=awards' });
+    addInbox(league, { from: 'League Office', subject: 'All-Star Saturday', body: lines.join(' '), tone: won ? 'good' : 'neutral', link: '/league/awards' });
   }
 }

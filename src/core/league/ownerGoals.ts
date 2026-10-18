@@ -13,6 +13,7 @@
 // Nothing here draws from the league's random stream.
 
 import type { League, Player, Team, TeamSeason } from '../types';
+import { maybeUltimatum } from './jobSecurity';
 import { clamp, hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
 import { playerAge, salaryFor } from '../playerGen';
@@ -59,6 +60,17 @@ export interface OwnerGoals {
   goals: OwnerGoal[];
   /** The owner's check-ins sent this season (at the All-Star break, and when the team fell off pace): once each. */
   sent?: ('allStar' | 'pace')[];
+  /** His ultimatum at the All-Star break to a coach on the hot seat (see jobSecurity.ts): miss it and he's fired. */
+  ultimatum?: Ultimatum;
+}
+
+/** "Make the playoffs or you're done": a wins total or a postseason level, graded at the season's review. */
+export interface Ultimatum {
+  kind: 'wins' | 'postseason';
+  /** Wins (since the goals were set), or a postseason level (see POSTSEASON). */
+  target: number;
+  /** "Win 40 games", "Make the playoffs". */
+  text: string;
 }
 
 /** A season's review by the owner (League.ownerReviews): each goal with its result and grade, the season's grade and the standing after it. */
@@ -437,7 +449,7 @@ export function setOwnerGoals(league: League, quiet = false) {
       `${who === 'win-now' ? 'I want results.' : who === 'frugal' ? 'Every dollar counts.' : "I'm patient, but I'm watching."} I'll check in at the All-Star break.`,
     ].join('\n'),
     tone: 'neutral',
-    link: '/owner',
+    link: '/office/owner',
   });
 }
 
@@ -682,11 +694,13 @@ export function ownerCheckIn(league: League) {
       subject: "We're off pace",
       body: `We're ${wins.now}-${since - wins.now}${og.from ? ' since you took over' : ''}, on course for about ${wins.projected} wins. I expected ${wins.goal.target} from this roster. That gap has to close.`,
       tone: 'bad',
-      link: '/owner',
+      link: '/office/owner',
     });
   }
   if (allStar) {
     sent.push('allStar');
+    // a coach on the hot seat gets his ultimatum with it (its own mail, important)
+    maybeUltimatum(league, leagueForecast(league));
     const good = prog.filter((p) => ON_TRACK.has(p.status)).length;
     const lines = prog.map((p) => `${p.goal.title} — ${p.text} (${p.status})`);
     const mood =
@@ -700,7 +714,7 @@ export function ownerCheckIn(league: League) {
       subject: 'All-Star break check-in',
       body: [`At the break, ${good} of my ${prog.length} goals ${good === 1 ? 'is' : 'are'} on track.`, ...lines, mood].join('\n'),
       tone: good === prog.length ? 'good' : good * 2 >= prog.length ? 'neutral' : 'bad',
-      link: '/owner',
+      link: '/office/owner',
     });
   }
 }

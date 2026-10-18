@@ -41,7 +41,7 @@ describe('the job market', () => {
     const wanted = moves.hired.filter((h) => scoreOf(x, h.tid, true) - scoreOf(x, h.tid, false) >= -0.25).map((h) => h.tid);
     if (wanted.length) expect(offers.map((o) => o.tid).sort()).toEqual(wanted.sort());
     // the agent says so, and long sims stop for it
-    expect(x.inbox.some((m) => m.from === 'Your agent' && m.important && m.link === '/settings?sheet=switch')).toBe(true);
+    expect(x.inbox.some((m) => m.from === 'Your agent' && m.important && m.link === '/office/career')).toBe(true);
   });
 
   it('with no openings, the two teams closest to a change call instead', () => {

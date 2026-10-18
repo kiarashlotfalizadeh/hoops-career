@@ -312,7 +312,7 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
         subject: shown.some((n) => n.scope === 'league') ? 'A league record' : 'A franchise record',
         body: `${text} The record book has it now.`,
         tone: 'good',
-        link: '/history?view=records',
+        link: '/league/history?view=records',
       });
   }
 }

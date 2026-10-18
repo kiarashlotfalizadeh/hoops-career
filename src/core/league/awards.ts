@@ -203,7 +203,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
       subject: 'Season awards',
       body: `Your team collected hardware: ${andList(mine)}.`,
       tone: 'good',
-      link: '/league?tab=awards',
+      link: '/league/awards',
     });
   }
   return awards;
@@ -276,7 +276,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
       subject: 'All-Star selections',
       body: `${andList(mine.map((pid) => playerName(league.players[pid])))} made the All-Star team.`,
       tone: 'good',
-      link: '/league?tab=awards',
+      link: '/league/awards',
     });
   }
   return out;

@@ -282,7 +282,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
       body: `${name} signed an offer sheet with the ${t.region} ${t.name}: ${yrs(years)} / ${money(total)}, ${money(sheetContract(league, p, sheet).salaries[0])} in ${seasonLabel(contractSeason(league))} with 5% raises.\nMatch it by the end of ${deadlineLabel(sheet.until)} and he stays with us on exactly those terms. Let it go, or leave it unanswered until then, and he joins ${t.abbrev}. Matching needs a roster spot, not cap room.`,
       tone: 'alert',
       important: true,
-      link: '/free-agents',
+      link: '/office/free-agents',
       sheet: p.pid,
     });
 }

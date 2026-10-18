@@ -128,8 +128,6 @@ export default function Home() {
         </div>
       )}
 
-      {!league.settings.onboarded && <Onboarding />}
-
       {next && oppTid !== undefined ? (
         <section className="slab hm-hero" aria-label="Next game">
           <span className="slab-mark">
@@ -615,40 +613,5 @@ function SeasonOutlook({ league }: { league: League }) {
         <div className="small dim2 hm-outlook">{outlook}</div>
       </div>
     </Section>
-  );
-}
-
-function Onboarding() {
-  const steps = [
-    { to: '/tactics', title: 'Pick a game plan', body: 'A playbook and a defense that fit your roster.' },
-    { to: '/rotation', title: 'Set the rotation', body: 'Depth chart and minutes, with the stint plan.' },
-    { to: '/lab', title: 'Test it in the Lab', body: 'Sim games against anyone before you commit.' },
-    { title: 'Coach games live', body: 'Timeouts, subs and coverages, then "Why" after.' },
-  ];
-  return (
-    <section className="card accent hm-onb" aria-label="Welcome, coach">
-      <div className="row between">
-        <h2>Welcome, coach</h2>
-        <button className="btn xs ghost" onClick={() => useStore.getState().mutate((l) => void (l.settings.onboarded = true))}>
-          Got it
-        </button>
-      </div>
-      <ol className="hm-steps">
-        {steps.map((s, i) => {
-          const body = (
-            <>
-              <span className="hm-step-n">{i + 1}</span>
-              <span className="grow">
-                <span className="hm-step-t">{s.title}</span>
-                <span className="hm-step-b">{s.body}</span>
-              </span>
-              {s.to && <ChevronRight size={16} className="dim" />}
-            </>
-          );
-          // games are coached from here (the Continue bar on game day): no link to the page you're on
-          return <li key={s.title}>{s.to ? <Link to={s.to}>{body}</Link> : <div>{body}</div>}</li>;
-        })}
-      </ol>
-    </section>
   );
 }

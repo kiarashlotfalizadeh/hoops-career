@@ -1,4 +1,5 @@
 import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
+import { cutOrder, startGuide } from './agenda';
 import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
@@ -381,19 +382,20 @@ export function createLeague(opts: CreateOpts): League {
   addInbox(league, {
     from: 'Owner',
     subject: `Welcome to the ${user.region} ${user.name}`,
-    body: `Coach ${opts.coachName}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Start with Tactics: your assistant has drafted a game plan that fits this roster, and every choice explains what it does. When you're ready, start the regular season from Home.`,
+    body: `Coach ${opts.coachName}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it. Today lists what needs you before opening night.`,
     tone: 'good',
-    link: '/tactics',
+    link: '/',
   });
+  startGuide(league);
   const over = standard.length - CAP.rosterMax;
   if (over > 0) {
-    const cuts = [...standard].sort((a, b) => valueScore(league, a) - valueScore(league, b)).slice(0, over);
+    const cuts = cutOrder(league, standard).slice(0, over);
     addInbox(league, {
       from: 'Assistant GM',
       subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
-      body: `We carry ${standard.length} players on standard contracts into camp, including camp invites${twoWays ? ` (plus ${twoWays === 1 ? "one on a two-way deal, who doesn't count" : `${twoWays} on two-way deals, who don't count`})` : ''}. The league allows ${CAP.rosterMax} on opening night, so ${over} ${over === 1 ? 'has' : 'have'} to go before the season starts. Camp and minimum deals signed for this season aren't guaranteed until opening night, so cutting those costs nothing; anyone else's remaining salary stays on our books.\n\nMy suggestion, by least value to the team: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Release players from the Office or their player page.`,
+      body: `We carry ${standard.length} players on standard contracts into camp${twoWays ? ` (two-way deals don't count)` : ''}; the league allows ${CAP.rosterMax} on opening night. Camp and minimum deals aren't guaranteed until then, so cutting those costs nothing.\n\nMy suggestion, least value first: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. One tap on Today.`,
       tone: 'alert',
-      link: '/office',
+      link: '/',
     });
   }
   return league;

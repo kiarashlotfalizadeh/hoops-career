@@ -201,7 +201,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
       subject: 'Draft lottery results',
       body: `You hold ${andList(mine.map((k) => `#${k}`))}. Check the Draft board for the order, the combine results and the scouting blurbs.`,
       tone: 'neutral',
-      link: '/draft',
+      link: '/office/draft',
     });
   }
   return result;
@@ -248,7 +248,7 @@ export function resolveSwaps(league: League, season: number) {
           ? `${them}'s pick landed #${theirs}, behind ours at #${ours}: the swap right lapses and we keep ours.`
           : `Our pick landed #${theirs}, behind ${them}'s at #${ours}: their swap right lapses and we keep ours.`,
       tone: used ? (userUp ? 'good' : 'bad') : 'neutral',
-      link: '/draft',
+      link: '/office/draft',
     });
   }
 }

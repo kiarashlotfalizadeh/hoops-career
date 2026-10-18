@@ -52,7 +52,7 @@ export default function Tactics() {
   const changed = snapshot.sig !== JSON.stringify(t);
   // a Play-menu sim's progress bar takes the same spot as the changes bar
   const simming = useStore((s) => !!s.sim);
-  const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/tactics'), [league]);
+  const alerts = useLeagueMemo(() => teamAlerts(league, league.userTid).filter((a) => a.link === '/team/tactics'), [league]);
   // the go-to player is picked from the roster
   const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
 

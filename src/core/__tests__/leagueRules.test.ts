@@ -112,20 +112,17 @@ describe('league creation', () => {
 
 describe('simulation targets (bug 4)', () => {
   it('stops on deadline day (trades still open) and the day before the All-Star Game', async () => {
-    const { vi } = await import('vitest');
-    vi.doMock('../../state/persistence', () => ({ saveLeague: async () => {}, setLastLeagueId: () => {} }));
-    const { useStore } = await import('../../state/store');
+    const { runSim } = await import('../../state/simCore');
     const { flowActions } = await import('../../ui/flow');
     const l = league();
     expect(startRegularSeason(l)).toEqual([]);
-    useStore.setState({ league: l });
     l.day = l.tradeDeadlineDay - 3;
-    await useStore.getState().simulate({ kind: 'deadline' });
+    await runSim(l, { kind: 'deadline' });
     expect(l.day).toBe(l.tradeDeadlineDay);
     expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: aiTeam(l), pids: [], dpids: [] } }).some((e) => e.includes('deadline'))).toBe(false);
     expect(flowActions(l).some((a) => a.id === 'deadline')).toBe(false);
     l.day = l.allStarDay - 4;
-    await useStore.getState().simulate({ kind: 'allStar' });
+    await runSim(l, { kind: 'allStar' });
     expect(l.day).toBe(l.allStarDay - 1);
     expect(l.awards.find((a) => a.season === l.season)?.allStarMvp).toBeUndefined();
     expect(flowActions(l).some((a) => a.id === 'allstar')).toBe(false);

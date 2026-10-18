@@ -109,10 +109,10 @@ describe('Play menu', () => {
     l.phase = 'draftLottery';
     l.fired = true;
     const acts = flowActions(l);
-    expect(acts[0]).toMatchObject({ id: 'job', primary: true, to: '/settings?sheet=switch' });
+    expect(acts[0]).toMatchObject({ id: 'agenda', label: 'Find a new job', primary: true, to: '/office/career' });
     expect(acts.filter((a) => a.primary)).toHaveLength(1);
     // the draft (and every other step forward) waits, saying why
-    expect(acts.find((a) => a.cmd === 'startDraft')?.disabled).toMatch(/fired/);
+    expect(acts.find((a) => a.cmd === 'startDraft')?.disabled).toMatch(/new job/);
     const other = (l.userTid + 1) % 30;
     const offer = { a: { tid: l.userTid, pids: [], dpids: [] }, b: { tid: other, pids: [], dpids: [] } };
     expect(validateTrade(l, offer).some((e) => /fired/.test(e))).toBe(true);

@@ -464,12 +464,20 @@ export function impactCounter(key: string, t: Tactics): LiveCounter | undefined 
   return JSON.stringify(after) !== JSON.stringify(t) ? { label: c.label, apply: c.apply } : undefined;
 }
 
+/** A change the assistant can make in one tap (see applyFix in assistant.ts). */
+export type AlertFix =
+  | { kind: 'offPreset'; id: string; label: string }
+  | { kind: 'defPreset'; id: string; label: string }
+  | { kind: 'coverage'; pnr: PnrCoverage; label: string }
+  | { kind: 'restB2B'; pid: number; label: string };
+
 export interface Alert {
   id: string;
   tone: 'good' | 'bad' | 'alert' | 'neutral';
   title: string;
   body: string;
   link?: string;
+  fix?: AlertFix;
 }
 
 export function teamAlerts(league: League, tid: number): Alert[] {
@@ -493,7 +501,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       tone: 'alert',
       title: `Offense may not fit: try ${nm}`,
       body: `Your roster profile fits ${nm} better (fit ${offShown(bestOff[0])} vs ${offShown(curOff)}).`,
-      link: '/tactics',
+      link: '/team/tactics',
+      fix: { kind: 'offPreset', id: bestOff[0], label: `Run ${nm}` },
     });
   }
   if (team.tactics.manual && defFit[curDef] !== undefined && bestDef[1] - defFit[curDef] > 12) {
@@ -503,7 +512,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       tone: 'alert',
       title: `Defense may not fit: try ${nm}`,
       body: `Your personnel fits ${nm} better (fit ${defShown(bestDef[0])} vs ${defShown(curDef)}).`,
-      link: '/tactics',
+      link: '/team/tactics',
+      fix: { kind: 'defPreset', id: bestDef[0], label: `Play ${nm}` },
     });
   }
   const rot = team.rotation;
@@ -520,7 +530,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'bad',
         title: `Starting five: ${n.toLowerCase()}`,
         body: 'Lineup balance matters: spacing, a ball handler and a rim protector each swing efficiency.',
-        link: '/rotation',
+        link: '/team/rotation',
       });
     // (coverages only apply in man-to-man)
     const man = team.tactics.defense.scheme === 'man';
@@ -530,7 +540,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'alert',
         title: 'Drop coverage without a rim protector',
         body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
-        link: '/tactics',
+        link: '/team/tactics',
+        fix: { kind: 'coverage', pnr: 'hedge', label: 'Hedge instead' },
       });
     // only a switch on a ball screen leaves him on a guard (off-ball switches don't), so Drop or Ice fixes it
     const slow = starters.find(slowBig);
@@ -540,7 +551,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'alert',
         title: 'Switching with a slow big',
         body: `Opponents will hunt ${slow.lastName} on switched ball screens. Drop or Ice coverage keeps him near the rim.`,
-        link: '/tactics',
+        link: '/team/tactics',
+        fix: { kind: 'coverage', pnr: 'drop', label: 'Drop instead' },
       });
     }
   }
@@ -552,7 +564,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       tone: 'alert',
       title: `Minutes add up to ${Math.round(total)}`,
       body: `Minute targets${healthy.length < players.length ? ", injured players' included," : ''} are scaled to 240 automatically, so the actual split may differ from what you set.`,
-      link: '/rotation',
+      link: '/team/rotation',
     });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
   // (an assistant-run rotation plans a newcomer at the next game: in the offseason, or the day of a trade, it hasn't yet)
@@ -566,7 +578,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'alert',
         title: m ? `${best.lastName} is only playing ${m} minute${m === 1 ? '' : 's'}` : `${best.lastName} isn't getting any minutes`,
         body: sustain < 32 ? `His stamina supports about ${sustain} minutes. Give him most of them.` : 'Your best player should usually play 32-36 minutes.',
-        link: '/rotation',
+        link: '/team/rotation',
       });
   }
   // wear builds over the season and the postseason (the next season starts it again): only a team
@@ -591,7 +603,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'alert',
         title: `${p.lastName} is worn down`,
         body: `Season wear ${Math.round(p.wear)}. Worn players shoot worse and get hurt more. ${ease}`,
-        link: '/rotation',
+        link: '/team/rotation',
+        ...(b2b && !rot.restB2B.includes(p.pid) ? { fix: { kind: 'restB2B' as const, pid: p.pid, label: 'Rest him on back-to-backs' } } : {}),
       });
     }
     if (p.mood.tradeRequest)

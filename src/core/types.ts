@@ -3,6 +3,7 @@
 import type { OppPlan } from './ai/opponentPlan';
 import type { CoachRecord } from './league/coaches';
 import type { JobOffer } from './league/jobs';
+import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PlayCall, PossLog } from './sim/log';
@@ -1189,8 +1190,6 @@ export interface Settings {
   liveBreaks?: 'quarters' | 'half' | 'off';
   /** Live games only draw the key plays, fast-forwarding the rest (default off). */
   liveKeyPlays?: boolean;
-  /** First-run guide dismissed. */
-  onboarded?: boolean;
   /** Pause long sims for big news (default on). */
   stopOnNews?: boolean;
   /** Watch & coach (the Continue bar on game day) opens the pre-game screen first (default on). */
@@ -1311,6 +1310,8 @@ export interface League {
   oddsTrail?: { season: number; tid: number; pts: [number, number, number][] };
   /** Teams that want the user as head coach this summer (see jobs.ts): from the carousel's openings after the playoffs until the draft. */
   jobOffers?: { season: number; offers: JobOffer[] };
+  /** The guided first week (see agenda.ts): the steps done, or the guide put away. */
+  onboarding?: { done: GuideStep[]; hidden?: boolean };
   /** Changes made in god mode (see godMode.ts), counted so the league says it has been edited. */
   godEdits?: number;
 }

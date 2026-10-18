@@ -860,7 +860,7 @@ function decideBid(league: League, b: FaBid) {
       ? `No other team bid for ${name}, so he's holding out for his asking price (${yrs(ask.years)} at ${money(ask.amount)}) rather than take ours. ${ours} He's still on the market.`
       : `Our offer to ${name} fell through: ${why}. He's still on the market.`,
     tone: 'neutral',
-    link: '/free-agents',
+    link: '/office/free-agents',
   });
 }
 

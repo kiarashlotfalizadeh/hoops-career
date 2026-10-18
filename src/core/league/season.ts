@@ -128,7 +128,7 @@ function periodic(league: League, rng: Rng) {
         subject: 'Development check-in',
         body: changes.map((c) => `${playerName(league.players[c.pid])}: ${c.delta > 0 ? '+' : ''}${c.delta} OVR`).join('\n'),
         tone: changes.reduce((a, c) => a + c.delta, 0) >= 0 ? 'good' : 'bad',
-        link: '/roster',
+        link: '/team',
       });
     }
   }
@@ -138,7 +138,7 @@ function periodic(league: League, rng: Rng) {
       subject: 'Trade deadline in 3 days',
       body: 'Any deals need to be done before the deadline. After that, only free agents can be added.',
       tone: 'alert',
-      link: '/trade',
+      link: '/office/trade',
     });
   }
   if (d % 7 === 3) {
@@ -286,7 +286,7 @@ function endRegularSeason(league: League) {
           ? `Our local revenue (gate, merchandise, local TV) came in below the league average, so revenue sharing pays us $${(shared / 1000).toFixed(1)}M.`
           : `Our local revenue (gate, merchandise, local TV) beat the league average, so we pay $${(-shared / 1000).toFixed(1)}M into revenue sharing.`,
       tone: 'neutral',
-      link: '/finances',
+      link: '/office/finances',
     });
   const bills = assessLuxuryTax(league);
   const mine = bills.find((b) => b.tid === league.userTid);
@@ -304,7 +304,7 @@ function endRegularSeason(league: League) {
             ? `${bill}, and we still have to get through the play-in. Make it count.`
             : `${bill} for a team that missed the postseason. That can't happen again.`,
       tone: 'bad',
-      link: '/finances',
+      link: '/office/finances',
     });
   }
   if (mine?.shortfall)
@@ -313,7 +313,7 @@ function endRegularSeason(league: League) {
       subject: 'Under the salary floor',
       body: `Our payroll finished $${(mine.shortfall / 1000).toFixed(1)}M under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`,
       tone: 'bad',
-      link: '/finances',
+      link: '/office/finances',
     });
   startPlayIn(league);
 }
@@ -411,7 +411,7 @@ function endPlayoffs(league: League) {
       subject: 'CHAMPIONS!',
       body: "You did it. The city is going to be partying for a week. Enjoy it, then let's do it again.",
       tone: 'good',
-      link: '/history',
+      link: '/league/history',
     });
   }
   // a promise that can't run its games before his deal is up ends with the season
@@ -517,7 +517,7 @@ export function finishDraftPhase(league: League): boolean {
       ? `You have ${exp.length} expiring contract${exp.length > 1 ? 's' : ''}: ${exp.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. Negotiate in Re-sign Players before free agency opens, or ${exp.length > 1 ? 'they hit' : 'he hits'} the market.`
       : 'No expiring contracts this summer. Free agency opens next.',
     tone: 'neutral',
-    link: '/resign',
+    link: '/office/resign',
   });
   return true;
 }
@@ -548,7 +548,7 @@ export function startFreeAgency(league: League): boolean {
         : ''
     }`,
     tone: 'neutral',
-    link: '/free-agents',
+    link: '/office/free-agents',
   });
   cleanProposals(league);
   // with room under the cap, taxpayers call to dump salary (with picks attached)
@@ -663,7 +663,7 @@ export function newSeason(league: League): boolean {
         subject: 'Training camp report',
         body: [line('Biggest riser', up), line('Biggest drop', down)].filter(Boolean).join('\n'),
         tone: 'neutral',
-        link: '/roster',
+        link: '/team',
       });
     }
     ensureFuturePicks(league, league.season + 4);
@@ -710,7 +710,7 @@ function extensionCandidatesMail(league: League) {
       .map(line)
       .join('\n')}${list.length > 6 ? `\nand ${list.length - 6} more.` : ''}`,
     tone: 'neutral',
-    link: '/resign',
+    link: '/office/resign',
   });
 }
 
