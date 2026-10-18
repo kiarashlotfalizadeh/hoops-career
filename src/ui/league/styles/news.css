@@ -2,9 +2,9 @@
 /* ------------------------------------------------------------------ news & moves */
 .lg-news {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px 14px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px var(--row-px) 8px;
 }
 .lg-news + .lg-news,
 .lg-news + .list-divider {
@@ -15,9 +15,9 @@
 }
 /* a kind's icon in its colour (--k), on a faint wash of it */
 .lg-ic {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   flex: none;
@@ -29,7 +29,7 @@
 }
 .lg-news-text {
   font-size: 14px;
-  line-height: 1.42;
+  line-height: 1.35;
   color: var(--text);
 }
 .lg-news-date {
@@ -42,7 +42,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .lg-news-more {
   font-size: 11.5px;

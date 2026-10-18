@@ -166,10 +166,11 @@ a.lg-award:active {
 /* the award races: place, jersey, name and line with the voters' gap to the leader */
 .lg-race-row {
   display: grid;
-  grid-template-columns: 18px 40px minmax(0, 1fr);
+  grid-template-columns: 18px 34px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 9px 14px 10px 12px;
+  padding: var(--row-py) 14px var(--row-py) 12px;
+  min-height: var(--row-min);
 }
 .lg-race-row:active {
   background: var(--surface);
@@ -202,6 +203,30 @@ a.lg-award:active {
   font-size: 12px;
   color: var(--text-dim);
 }
-.lg-race-t .bar {
-  margin-top: 4px;
+/* the voters' score with the leader at 100, and its key in the section's heading */
+.lg-race-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text-2);
+  min-width: 34px;
+  text-align: right;
+}
+.lg-race-row.first .lg-race-v {
+  color: var(--tier-elite);
+}
+.lg-race-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.lg-race-row > .avatar {
+  width: 34px;
+  height: 34px;
 }
