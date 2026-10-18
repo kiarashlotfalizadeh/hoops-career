@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import { Hand } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
 import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, chasers, ALL_SCHEMES, startHacking, stopHacking } from '../../core/sim/tactics';
-import { Chips, Levels, Segmented, Slider, Tag, Toggle } from '../components/ui';
+import { Chips, Help, Levels, Segmented, Slider, Tag, Toggle } from '../components/ui';
+import { Term } from '../components/Glossary';
+import type { Pill } from './pills';
 
 /** A setting picked from chips: its name over them. */
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="tp-field">
       <div className="slider-label">{label}</div>
@@ -15,9 +17,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * The in-game adjustments sheet, as deep as the coaching depth: Simple gets the big levers,
- * Advanced the junk defenses, the press, star plan and the rest of the settings, Expert the matchups
- * and late-game rules. Defense, offense and (Expert) the late game each have a tab.
+ * The Clipboard's Tactics tab: tonight's game plan and the way back to it, a short row of quick
+ * changes, then every team-wide lever (defense, offense, the late game), and whether tonight's
+ * changes stay after the game. Player-by-player orders (matchups, a defender's instructions, a
+ * Hack-a on one man) live on each player's sheet. Every change goes through the live game.
  */
 export function TacticsPanel({
   tactics: t,
@@ -25,9 +28,10 @@ export function TacticsPanel({
   persist,
   setPersist,
   plan,
+  pills,
+  offPlan,
+  reset,
   oppOn,
-  myOn,
-  guardOf,
   nameOf,
   q,
 }: {
@@ -38,55 +42,78 @@ export function TacticsPanel({
   setPersist: (on: boolean) => void;
   /** Tonight's game plan items. */
   plan: { id: string; label: string }[];
+  pills: Pill[];
+  /** Tonight's tactics differ from what the game tipped off with. */
+  offPlan: boolean;
+  reset: () => void;
   oppOn: number[];
-  myOn: number[];
-  /** Who guards one of their players now. */
-  guardOf: (pid: number) => number | undefined;
   nameOf: (pid: number) => string;
   /** The period: a threshold set now starts a game plan's later Hack-a quarter now. */
   q: number;
 }) {
-  const adv = true;
-  const expert = true;
   const [tab, setTab] = useState<'def' | 'off' | 'late'>('def');
-  // the junk defenses from Advanced (one already in play stays on offer)
-  const schemes = ALL_SCHEMES;
   const n = chasers(t.defense.scheme);
   const chase = (t.defense.chase ?? []).slice(0, n);
   const set = apply;
   return (
     <div className="tp">
-      <Toggle
-        on={persist}
-        onChange={setPersist}
-        label="Keep changes after this game"
-        help={
-          persist
-            ? "Tonight's changes, before and from now on, are your saved tactics (not tonight's matchups or star target). Off puts them back."
-            : 'Off: changes last this game only.'
-        }
-      />
-      {plan.length > 0 && (
-        <div className="tp-plan">
-          <span className="over">Tonight&apos;s game plan</span>
-          <div className="chips">
-            {plan.map((it) => (
-              <Tag key={it.id} tone="info">
-                {it.label}
-              </Tag>
+      {(plan.length > 0 || offPlan) && (
+        <div className="tp-top">
+          {plan.length > 0 && (
+            <div className="tp-plan">
+              <span className="over">
+                <Term id="gameplan">Tonight&apos;s game plan</Term>
+              </span>
+              <div className="chips">
+                {plan.map((it) => (
+                  <Tag key={it.id} tone="info">
+                    {it.label}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
+          {offPlan && (
+            <button className="btn sm" onClick={reset}>
+              <RotateCcw size={15} aria-hidden="true" /> Reset to game plan
+            </button>
+          )}
+        </div>
+      )}
+
+      {pills.length > 0 && (
+        <div className="tp-quick">
+          <span className="over">
+            Quick changes
+            <Help title="Quick changes">
+              <p>One tap for the changes coaches make most during a game. Pressed again, each goes back to the game plan&apos;s setting.</p>
+              <p>Every change counts from the next possession.</p>
+            </Help>
+          </span>
+          <div className="chips" role="group" aria-label="Quick changes">
+            {pills.map((p) => (
+              <button key={p.id} className={`chip ${p.on ? 'on' : ''}`} aria-pressed={p.on} title={p.help} onClick={() => apply(p.apply)}>
+                {p.label}
+              </button>
             ))}
           </div>
         </div>
       )}
+
       <Segmented
+        tabs
         value={tab}
         onChange={setTab}
-        label="Adjustments"
-        options={[{ id: 'def', label: 'Defense' }, { id: 'off', label: 'Offense' }, ...(expert ? [{ id: 'late' as const, label: 'Late game' }] : [])]}
+        label="Levers"
+        options={[
+          { id: 'def', label: 'Defense' },
+          { id: 'off', label: 'Offense' },
+          { id: 'late', label: 'Late game' },
+        ]}
       />
       {tab === 'def' && (
         <div className="tp-tab">
-          <Field label="Pick-and-roll coverage">
+          <Field label={<Term id="pnr">Pick-and-roll coverage</Term>}>
             <Chips
               label="Pick-and-roll coverage"
               value={t.defense.pnr}
@@ -94,12 +121,12 @@ export function TacticsPanel({
               options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
             />
           </Field>
-          <Field label="Scheme">
+          <Field label={<Term id="zone">Scheme</Term>}>
             <Chips
               label="Scheme"
               value={t.defense.scheme}
               onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
-              options={schemes.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
+              options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
             />
             {n > 0 && (
               <>
@@ -132,99 +159,54 @@ export function TacticsPanel({
                 </div>
                 <div className="tiny dim">
                   {chase.length
-                    ? `Chasing ${chase.map(nameOf).join(' and ')}${chase.length < n ? ' and their next creator on the floor' : ''}; while ${chase.length === 2 ? 'neither is' : "he isn't"} on the floor you play man-to-man.`
-                    : `Auto: the chaser${n === 2 ? 's take their two main creators' : ' takes their main creator'} on the floor.`}
+                    ? `Chasing ${chase.map(nameOf).join(' and ')}${chase.length < n ? ' and their next creator' : ''}; man-to-man while ${chase.length === 2 ? 'neither is' : "he isn't"} on.`
+                    : `Auto: ${n === 2 ? 'their two main creators' : 'their main creator'} on the floor.`}
                 </div>
               </>
             )}
           </Field>
           <Levels label="Help defense" value={t.defense.help} names={TACTIC_LEVELS.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} />
-          {adv && (
-            <>
-              <Levels label="Ball pressure" value={t.defense.pressure} names={TACTIC_LEVELS.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} />
-              <Levels label="Physicality" value={t.defense.physicality} names={TACTIC_LEVELS.physicality} onChange={(x) => set((tt) => void (tt.defense.physicality = x))} />
-              <Levels label="Transition defense" value={t.defense.getBack} names={TACTIC_LEVELS.getBack} onChange={(x) => set((tt) => void (tt.defense.getBack = x))} />
-              <Toggle on={t.defense.switchOffBall} onChange={(x) => set((tt) => void (tt.defense.switchOffBall = x))} label="Switch off-ball screens" />
-              <Field label="Full-court press">
-                <Chips
-                  label="Full-court press"
-                  value={t.defense.press}
-                  onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
-                  options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
-                />
-              </Field>
-              <Field label="Star plan">
-                <Chips
-                  label="Star plan"
-                  value={t.defense.starPlan}
-                  onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))}
-                  options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
-                />
-                {t.defense.starPlan !== 'none' && (
-                  <div className="chips" role="group" aria-label="Star plan target">
-                    <button
-                      className={`chip ${t.defense.starTarget === null ? 'on' : ''}`}
-                      aria-pressed={t.defense.starTarget === null}
-                      onClick={() => set((tt) => void (tt.defense.starTarget = null))}
-                    >
-                      Auto
-                    </button>
-                    {oppOn.map((pid) => (
-                      <button
-                        key={pid}
-                        className={`chip ${t.defense.starTarget === pid ? 'on' : ''}`}
-                        aria-pressed={t.defense.starTarget === pid}
-                        onClick={() => set((tt) => void (tt.defense.starTarget = pid))}
-                      >
-                        {nameOf(pid)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </Field>
-            </>
-          )}
-          {expert && (
-            <Field label="Matchups">
-              <div className="tp-matchups">
-                {oppOn.map((o) => {
-                  const cur = guardOf(o);
-                  return (
-                    <div key={o} className="tp-mu">
-                      <div className="small">
-                        <b>{nameOf(o)}</b>{' '}
-                        <span className="dim">
-                          guarded by {cur !== undefined ? nameOf(cur) : '—'}
-                          {t.defense.matchups[o] !== undefined ? ' (assigned)' : ''}
-                        </span>
-                      </div>
-                      <div className="chips" role="group" aria-label={`Who guards ${nameOf(o)}`}>
-                        {myOn.map((d) => (
-                          <button
-                            key={d}
-                            className={`chip ${t.defense.matchups[o] === d ? 'on' : ''}`}
-                            aria-pressed={t.defense.matchups[o] === d}
-                            onClick={() =>
-                              set((tt) => {
-                                if (tt.defense.matchups[o] === d) delete tt.defense.matchups[o];
-                                else {
-                                  for (const k of Object.keys(tt.defense.matchups)) if (tt.defense.matchups[+k] === d) delete tt.defense.matchups[+k];
-                                  tt.defense.matchups[o] = d;
-                                }
-                              })
-                            }
-                          >
-                            {nameOf(d)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="tiny dim">Assignments hold while both players are on the floor; otherwise the staff matches by size and threat.</div>
+          <Levels label="Ball pressure" value={t.defense.pressure} names={TACTIC_LEVELS.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} />
+          <Levels label="Physicality" value={t.defense.physicality} names={TACTIC_LEVELS.physicality} onChange={(x) => set((tt) => void (tt.defense.physicality = x))} />
+          <Levels label="Transition defense" value={t.defense.getBack} names={TACTIC_LEVELS.getBack} onChange={(x) => set((tt) => void (tt.defense.getBack = x))} />
+          <Toggle on={t.defense.switchOffBall} onChange={(x) => set((tt) => void (tt.defense.switchOffBall = x))} label="Switch off-ball screens" />
+          <Field label={<Term id="press">Full-court press</Term>}>
+            <Chips
+              label="Full-court press"
+              value={t.defense.press}
+              onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
+              options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
+            />
+          </Field>
+          <Field label="Star plan">
+            <Chips
+              label="Star plan"
+              value={t.defense.starPlan}
+              onChange={(x: StarPlan) => set((tt) => void (tt.defense.starPlan = x))}
+              options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
+            />
+            {t.defense.starPlan !== 'none' && (
+              <div className="chips" role="group" aria-label="Star plan target">
+                <button
+                  className={`chip ${t.defense.starTarget === null ? 'on' : ''}`}
+                  aria-pressed={t.defense.starTarget === null}
+                  onClick={() => set((tt) => void (tt.defense.starTarget = null))}
+                >
+                  Auto
+                </button>
+                {oppOn.map((pid) => (
+                  <button
+                    key={pid}
+                    className={`chip ${t.defense.starTarget === pid ? 'on' : ''}`}
+                    aria-pressed={t.defense.starTarget === pid}
+                    onClick={() => set((tt) => void (tt.defense.starTarget = pid))}
+                  >
+                    {nameOf(pid)}
+                  </button>
+                ))}
               </div>
-            </Field>
-          )}
+            )}
+          </Field>
         </div>
       )}
       {tab === 'off' && (
@@ -237,17 +219,13 @@ export function TacticsPanel({
             names={TACTIC_LEVELS.crashBoards}
             onChange={(x) => set((tt) => void (tt.offense.crashBoards = x))}
           />
-          {adv && (
-            <>
-              <Levels label="Attack the rim" value={t.offense.rimAttack} names={TACTIC_LEVELS.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} />
-              <Levels label="Push in transition" value={t.offense.transition} names={TACTIC_LEVELS.transition} onChange={(x) => set((tt) => void (tt.offense.transition = x))} />
-              <Toggle on={t.offense.huntMismatch} onChange={(x) => set((tt) => void (tt.offense.huntMismatch = x))} label="Hunt mismatches" />
-              <Toggle on={t.offense.hotHand} onChange={(x) => set((tt) => void (tt.offense.hotHand = x))} label="Feed the hot hand" />
-            </>
-          )}
+          <Levels label="Attack the rim" value={t.offense.rimAttack} names={TACTIC_LEVELS.rimAttack} onChange={(x) => set((tt) => void (tt.offense.rimAttack = x))} />
+          <Levels label="Push in transition" value={t.offense.transition} names={TACTIC_LEVELS.transition} onChange={(x) => set((tt) => void (tt.offense.transition = x))} />
+          <Toggle on={t.offense.huntMismatch} onChange={(x) => set((tt) => void (tt.offense.huntMismatch = x))} label="Hunt mismatches" />
+          <Toggle on={t.offense.hotHand} onChange={(x) => set((tt) => void (tt.offense.hotHand = x))} label="Feed the hot hand" />
         </div>
       )}
-      {tab === 'late' && expert && (
+      {tab === 'late' && (
         <div className="tp-tab">
           <Toggle
             on={t.manage.foulWhenTrailing}
@@ -296,9 +274,16 @@ export function TacticsPanel({
           />
         </div>
       )}
-      <div className="tiny dim">
-        <Hand size={12} style={{ verticalAlign: -2 }} /> Changes take effect on the next possession.
-      </div>
+      <Toggle
+        on={persist}
+        onChange={setPersist}
+        label="Keep changes after this game"
+        help={
+          persist
+            ? "Tonight's changes, before and from now on, are your saved tactics (not tonight's matchups or star target). Off puts them back."
+            : 'Off: changes last this game only.'
+        }
+      />
     </div>
   );
 }

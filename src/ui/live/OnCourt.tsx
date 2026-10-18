@@ -11,7 +11,7 @@ export const HOT_STREAK = 3;
 /** Cold: six shots or more, a quarter of them or fewer in. */
 export const isCold = (p: Pick<DrawnPlayer, 'fgm' | 'fga'>) => p.fga >= 6 && p.fgm / p.fga <= 0.25;
 
-interface SideInfo {
+export interface SideInfo {
   abbrev: string;
   /** Jersey [fill, trim]. */
   kit: [string, string];

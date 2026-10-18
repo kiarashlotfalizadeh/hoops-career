@@ -97,8 +97,8 @@ describe('live alerts', () => {
       late.clock = clock;
       const a = liveAlerts(input(g, late)).filter((x) => x.id.startsWith('fouls-'));
       expect(a).toHaveLength(1);
-      expect(a[0].text).toContain('5 fouls');
-      expect(a[0].action).toMatchObject({ kind: 'sub', out: pid, label: 'Sit him' });
+      expect(a[0].title).toContain('5 fouls');
+      expect(a[0].action).toMatchObject({ kind: 'sub', out: pid, label: `Sit P${pid}` });
     }
   });
 
@@ -109,7 +109,7 @@ describe('live alerts', () => {
     expect(view.q).toBe(1);
     expect(liveAlerts(input(g, view)).some((x) => x.id.startsWith('fouls-'))).toBe(false);
     const a = liveAlerts(input(g, view, { manualSubs: true })).find((x) => x.id.startsWith('fouls-'));
-    expect(a?.action?.label).toBe('Sit him');
+    expect(a?.action?.label).toBe(`Sit P${view.sides[0].on[2]}`);
     expect(foulLimit(2, 'strict')).toBe(2);
     expect(foulLimit(4, 'loose')).toBe(6);
     expect(foulLimit(6, 'standard')).toBe(5);
@@ -126,6 +126,7 @@ describe('live alerts', () => {
     expect(liveAlerts(input(g, view)).some((x) => x.id.startsWith('run-'))).toBe(false);
     const run = liveAlerts(input(g, view, { manualSubs: true })).find((x) => x.id.startsWith('run-'))!;
     expect(run.action?.kind).toBe('timeout');
+    expect(run.title).toBe(`${g.league.teams[1].abbrev} on a 9-0 run`);
     expect(run.text).toMatch(/rests legs.*resets the run.*their coach a chance to adjust/);
     expect(run.text).not.toMatch(/momentum/i);
     // already called, or at a break: nothing to offer
@@ -157,6 +158,9 @@ describe('live alerts', () => {
     const a = liveAlerts(input(g, next, { events: ev }));
     // yours and the other coach's change; their injury is a banner only
     expect(a.map((x) => x.id).filter((id) => /^(inj|fo|adj)-/.test(id))).toEqual([`fo-${mine}`, ev[2].id]);
+    // as a headline and its line
+    expect(a.find((x) => x.id === ev[2].id)).toMatchObject({ title: `${g.league.teams[1].abbrev} adjusts`, text: 'Hedges ball screens instead of dropping.' });
+    expect(a.find((x) => x.id === `fo-${mine}`)).toMatchObject({ title: `P${mine} has fouled out`, text: '' });
     const later = structuredClone(next);
     later.elapsed += 200;
     expect(liveAlerts(input(g, later, { events: ev })).some((x) => /^(inj|fo|adj)-/.test(x.id))).toBe(false);
@@ -177,6 +181,27 @@ describe('live alerts', () => {
     expect(t.defense.pnr).not.toBe('drop');
     // fixed: the edge no longer applies, so nothing more to say about it
     expect(liveAlerts(input(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
+  });
+
+  it('say once a period when the late-game calls open: the last two minutes of a close fourth or overtime', () => {
+    const g = game();
+    for (let i = 0; i < 30; i++) g.sim.step();
+    const view = structuredClone(snapshot(g.sim));
+    view.q = 4;
+    view.clock = 100;
+    view.sides[0].score = 90;
+    view.sides[1].score = 94;
+    const late = (v: Drawn, over: Partial<AlertInput> = {}) => liveAlerts(input(g, v, over)).find((x) => x.id === 'late-4');
+    expect(late(view)).toMatchObject({ title: 'Crunch time', tone: 'info' });
+    expect(late(view)?.action).toBeUndefined();
+    // not a blowout, not before the last two minutes, not at the break
+    const blowout = structuredClone(view);
+    blowout.sides[1].score = 110;
+    expect(late(blowout)).toBeUndefined();
+    const early = structuredClone(view);
+    early.clock = 200;
+    expect(late(early)).toBeUndefined();
+    expect(late(view, { atBreak: true })).toBeUndefined();
   });
 
   it('count straight makes and misses from the shot log', () => {
