@@ -1,12 +1,12 @@
 // Shared helpers for the league hub, team pages, history and inbox screens.
-import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Trophy } from 'lucide-react';
+import { SlidersHorizontal, Trophy } from 'lucide-react';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
 import { draftStandings } from '../../core/league/draft';
-import { Segmented } from '../components/ui';
+import { Segmented, Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
 import './league.css';
@@ -209,12 +209,22 @@ export function pickProjection(league: League): (d: DraftPick) => number | undef
   return (d) => (!played || d.pick || d.season !== league.season ? undefined : overallPick(league, d.round, order[d.round].findIndex((r) => r.tid === d.originalTid) + 1));
 }
 
-/** Map legacy deep links (e.g. /league/awards) to routes that exist. */
+/**
+ * A saved link in today's form: the League hub's sections have paths (/league/awards), so a link
+ * from before (/league?tab=awards&aseason=2027) moves its section into the path.
+ */
 export function normalizeLink(link: string): string {
-  const m = /^\/league\/([a-z]+)\/?$/i.exec(link);
-  if (m) return `/league?tab=${m[1].toLowerCase()}`;
-  return link;
+  const m = /^\/league\/?\?(.*)$/.exec(link);
+  const sp = m ? new URLSearchParams(m[1]) : null;
+  const tab = sp?.get('tab');
+  if (!sp || !tab) return link;
+  sp.delete('tab');
+  const qs = sp.toString();
+  return `/league/${tab.toLowerCase()}${qs ? `?${qs}` : ''}`;
 }
+
+/** Another team's page (the user's own redirects to the Team tab). */
+export const teamPath = (tid: number) => `/teams/${tid}`;
 
 export function streakLabel(n: number) {
   if (!n) return '—';
@@ -340,6 +350,38 @@ export function TitleSlab({ league, tid, over, children }: { league: League; tid
       </div>
       {children && <div className="lg-title-sub">{children}</div>}
     </section>
+  );
+}
+
+/**
+ * A list's filters behind one button ("Filters 2": how many differ from the defaults), in a sheet:
+ * the list keeps its room, and the controls are a tap away.
+ */
+export function FiltersButton({ count, title = 'Filters', children }: { count: number; title?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className={`btn sm lg-filters ${count ? 'on' : ''}`} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        <SlidersHorizontal size={15} aria-hidden="true" /> {title}
+        {count > 0 && <span className="lg-count num">{count}</span>}
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={title}>
+        <div className="col lg-filter-body">{children}</div>
+        <button className="btn primary block lg-filter-done" onClick={() => setOpen(false)}>
+          Done
+        </button>
+      </Sheet>
+    </>
+  );
+}
+
+/** A filter in the sheet: its name over its control. */
+export function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="lg-filter">
+      <span className="over">{label}</span>
+      {children}
+    </div>
   );
 }
 

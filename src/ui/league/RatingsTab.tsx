@@ -1,4 +1,4 @@
-// Every player's ratings across the league in one sortable table, the roster's Ratings view for all
+// Stats → Ratings: every player's ratings across the league in one sortable table, the roster's Ratings view for all
 // thirty teams and the free agents: filter by team, position or a name, sorted best OVR first.
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -6,10 +6,9 @@ import { ChevronDown, Search } from 'lucide-react';
 import { FREE_AGENT, POSITIONS, type League, type Player, type Pos } from '../../core/types';
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
-import { TeamLogo } from '../components/TeamLogo';
-import { StatTable, type Col } from '../components/ui';
+import { Chips, StatTable, type Col } from '../components/ui';
 import { ratingCols } from '../ratingCols';
-import { shortName, teamAbbrev, useQueryParam } from './shared';
+import { FilterField, FiltersButton, shortName, teamAbbrev, useQueryParam } from './shared';
 
 const PAGE = 100;
 
@@ -53,39 +52,32 @@ export function RatingsTab({ league }: { league: League }) {
     ],
     [league],
   );
-  const teams = [...league.teams].sort((a, b) => a.abbrev.localeCompare(b.abbrev));
+  const teams = [...league.teams].filter((t) => t.tid !== league.userTid).sort((a, b) => a.region.localeCompare(b.region));
 
   return (
     <>
-      <div className="lg-sub">
+      <div className="lg-sub lg-nowrap">
         <div className="lg-search">
           <Search size={15} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" aria-label="Search players" />
         </div>
-        <select className="lg-select" value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Team">
-          <option value="all">All teams</option>
-          <option value="fa">Free agents</option>
-          {teams.map((t) => (
-            <option key={t.tid} value={String(t.tid)}>
-              {t.abbrev}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="lg-hscroll" role="group" aria-label="Filter players">
-        <button
-          className={`chip ${team === String(league.userTid) ? 'on' : ''}`}
-          aria-pressed={team === String(league.userTid)}
-          onClick={() => setTeam(team === String(league.userTid) ? 'all' : String(league.userTid))}
-        >
-          <TeamLogo tid={league.userTid} size={16} /> My team
-        </button>
-        <span className="lg-vsep" />
-        {(['all', ...POSITIONS] as const).map((x) => (
-          <button key={x} className={`chip ${pos === x ? 'on' : ''}`} aria-pressed={pos === x} onClick={() => setPos(x)}>
-            {x === 'all' ? 'All' : x}
-          </button>
-        ))}
+        <FiltersButton count={(team !== 'all' ? 1 : 0) + (pos !== 'all' ? 1 : 0)}>
+          <FilterField label="Players">
+            <select className="lg-select" value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Team">
+              <option value="all">Every team</option>
+              <option value={String(league.userTid)}>{league.teams[league.userTid].name} (yours)</option>
+              <option value="fa">Free agents</option>
+              {teams.map((t) => (
+                <option key={t.tid} value={String(t.tid)}>
+                  {t.region} {t.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Position">
+            <Chips label="Position" value={pos} onChange={setPos} options={(['all', ...POSITIONS] as const).map((x) => ({ id: x, label: x === 'all' ? 'All' : x }))} />
+          </FilterField>
+        </FiltersButton>
       </div>
       {filtered.length === 0 ? (
         <div className="card empty">No players match these filters.</div>
@@ -106,8 +98,7 @@ export function RatingsTab({ league }: { league: League }) {
             </button>
           )}
           <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · as on the player page · tap
-            a column to sort
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · current ratings
           </div>
         </>
       )}

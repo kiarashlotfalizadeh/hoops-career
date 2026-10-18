@@ -1,25 +1,24 @@
 import { Fragment } from 'react';
-import { Link } from 'react-router-dom';
 import type { League } from '../../core/types';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { curTeamSeason, teamPlayers } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
-import { TeamLogo } from '../components/TeamLogo';
 import { Help, Segmented } from '../components/ui';
+import { Term } from '../components/Glossary';
 import { f0, f1, signed, teamRatings } from '../stats';
-import { Toolbar, confName, ordinal, streakLabel, useQueryParam } from './shared';
-import { OddsView } from './OddsView';
+import { Toolbar, confName, ordinal, streakLabel, teamPath, useQueryParam } from './shared';
+import { OddsView, LotteryView } from './OddsView';
+import { TableCut, TeamRow, TeamTable } from './Table';
 
-type View = 'E' | 'W' | 'league' | 'power' | 'odds';
-type Cols = 'basic' | 'splits';
+type View = 'E' | 'W' | 'league' | 'power' | 'odds' | 'lottery';
 
+/** Standings: either conference, the whole league, power rankings, and the season forecast (playoff and lottery odds), one switch apart. */
 export function StandingsTab({ league }: { league: League }) {
   const userConf = league.teams[league.userTid].conf;
-  const [view, setView] = useQueryParam<View>('view', userConf, ['E', 'W', 'league', 'power', 'odds']);
-  const [cols, setCols] = useQueryParam<Cols>('cols', 'basic', ['basic', 'splits']);
-  const rows = useLeagueMemo(() => standings(league), [league]);
-  const started = rows.some((r) => r.won + r.lost > 0);
-
+  const [raw, setView] = useQueryParam<View>('view', userConf, ['E', 'W', 'league', 'power', 'odds', 'lottery']);
+  // (a link from before the lottery had its own view)
+  const [omode] = useQueryParam<string>('omode', '');
+  const view: View = raw === 'odds' && omode === 'lottery' ? 'lottery' : raw;
   return (
     <>
       <Segmented
@@ -32,51 +31,31 @@ export function StandingsTab({ league }: { league: League }) {
           { id: 'league', label: 'League' },
           { id: 'power', label: 'Power' },
           { id: 'odds', label: 'Odds' },
+          { id: 'lottery', label: 'Lottery' },
         ]}
       />
-      {view === 'odds' ? (
-        <OddsView league={league} />
-      ) : view === 'power' ? (
-        <PowerRankings league={league} />
-      ) : (
-        <>
-          <Toolbar
-            right={
-              <>
-                <div className="chips lg-only-narrow" role="group" aria-label="Columns">
-                  <button className={`chip lg-chip-xs ${cols === 'basic' ? 'on' : ''}`} aria-pressed={cols === 'basic'} onClick={() => setCols('basic')}>
-                    Standings
-                  </button>
-                  <button className={`chip lg-chip-xs ${cols === 'splits' ? 'on' : ''}`} aria-pressed={cols === 'splits'} onClick={() => setCols('splits')}>
-                    Splits
-                  </button>
-                </div>
-                <StandingsHelp />
-              </>
-            }
-          >
-            {!started ? 'Season not started' : view === 'league' ? 'All 30 teams by win %' : `${view === 'E' ? 'Eastern' : 'Western'} Conference`}
-          </Toolbar>
-          <StandingsTable league={league} rows={view === 'league' ? leagueRows(rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} cols={cols} />
-          {view === 'league' ? (
-            <div className="lg-note">Ties break on point differential. Seeds come from the conference standings.</div>
-          ) : (
-            <div className="lg-legend">
-              <span>1-6 playoffs</span>
-              <span>7-10 play-in</span>
-              <span>
-                <b className="lg-clinch x">x</b> clinched
-              </span>
-              <span>
-                <b className="lg-clinch p">p</b> play-in
-              </span>
-              <span>
-                <b className="lg-clinch e">e</b> out
-              </span>
-            </div>
-          )}
-        </>
-      )}
+      {view === 'odds' && <OddsView league={league} />}
+      {view === 'lottery' && <LotteryView league={league} />}
+      {view === 'power' && <PowerRankings league={league} />}
+      {(view === 'E' || view === 'W' || view === 'league') && <Standings league={league} view={view} />}
+    </>
+  );
+}
+
+function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league' }) {
+  const rows = useLeagueMemo(() => standings(league), [league]);
+  const started = rows.some((r) => r.won + r.lost > 0);
+  return (
+    <>
+      <Toolbar right={<StandingsHelp />}>
+        {!started ? 'Season not started' : view === 'league' ? 'By win %' : `${confName(view)}ern Conference`}
+        {view !== 'league' && started && (
+          <span className="lg-keys" aria-hidden="true">
+            <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> play-in <b className="lg-clinch e">e</b> out
+          </span>
+        )}
+      </Toolbar>
+      <StandingsTable league={league} rows={view === 'league' ? leagueRows(rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} />
     </>
   );
 }
@@ -87,13 +66,13 @@ function StandingsHelp() {
     <Help title="Seeds and tiebreakers">
       <p className="lg-p">
         Seeds 1-6 in each conference make the playoffs; 7-10 go to the play-in. <b className="lg-clinch x">x</b> clinched a playoff spot, <b className="lg-clinch p">p</b> clinched
-        at least the play-in, <b className="lg-clinch e">e</b> eliminated.
+        at least the play-in, <b className="lg-clinch e">e</b> eliminated. Swipe the table for home, away and conference records and point differential.
       </p>
       <p className="lg-p">
         Two-team ties break on head-to-head, division leader, division record (same division only), conference record, record against playoff teams in the conference, then in the
         other conference, then point differential. In ties of three or more, division leaders go first.
       </p>
-      <p className="lg-p">The League view ranks all 30 teams by win %, then point differential; seeding uses the conference standings and their tiebreakers.</p>
+      <p className="lg-p">The League view ranks all 30 teams by win %, then point differential, with games behind the leader; seeds come from the conference standings.</p>
     </Help>
   );
 }
@@ -107,10 +86,7 @@ function leagueRows(rows: StandingRow[]): StandingRow[] {
 
 const CLINCH_TEXT: Partial<Record<NonNullable<StandingRow['clinched']>, string>> = { x: 'clinched a playoff spot', p: 'clinched a play-in spot', e: 'eliminated' };
 
-/**
- * A row read aloud after its rank and team as shown ("2 Spurs"): every column spelled out, whichever
- * ones the screen shows (the columns themselves are hidden from screen readers).
- */
+/** A row read aloud after its rank and team as shown ("2 Spurs"): every column spelled out (the columns themselves are hidden from screen readers). */
 function rowDetails(r: StandingRow, conf: boolean) {
   if (r.won + r.lost === 0) return ', 0-0';
   const cols = [
@@ -128,89 +104,59 @@ function rowDetails(r: StandingRow, conf: boolean) {
   return `, ${cols.filter(Boolean).join(', ')}`;
 }
 
-function StandingsTable({ league, rows, conf, cols }: { league: League; rows: StandingRow[]; conf: boolean; cols: Cols }) {
+function StandingsTable({ league, rows, conf }: { league: League; rows: StandingRow[]; conf: boolean }) {
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
-    <div className={`card flush lg-st mode-${cols}`}>
-      <div className="lg-st-row lg-st-head" aria-hidden="true">
-        <span>#</span>
-        <span />
-        <span>Team</span>
-        <span>W-L</span>
-        <span className="c-basic">GB</span>
-        <span className="c-basic">L10</span>
-        <span className="c-basic">Strk</span>
-        <span className="c-split">Home</span>
-        <span className="c-split">Away</span>
-        <span className="c-split">Conf</span>
-        <span className="c-split">Diff</span>
-      </div>
+    <TeamTable cols={[50, 38, 34, 32, 44, 44, 44, 44]} head={['W-L', 'GB', 'L10', 'Strk', 'Home', 'Away', 'Conf', 'Diff']}>
       {rows.map((r, i) => {
         const t = league.teams[r.tid];
-        const me = r.tid === league.userTid;
+        const played = r.won + r.lost > 0;
         return (
           <Fragment key={r.tid}>
-            <Link to={`/team/${r.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
-              <span className="rk">{r.won + r.lost === 0 ? <span aria-hidden="true">—</span> : conf ? r.confRank : r.leagueRank}</span>
-              <TeamLogo tid={r.tid} size={24} decorative />
-              <span className="nm">
-                <span>
-                  {/* "Spurs" here, "SAS" where the split columns need the room: whichever shows names the row */}
-                  <span className="nm-full">{t.name}</span>
-                  <span className="nm-ab">{t.abbrev}</span>
-                </span>
-                {r.clinched && (
-                  <span className={`lg-clinch ${r.clinched}`} aria-hidden="true">
-                    {r.clinched}
-                  </span>
-                )}
-                {!conf && (
-                  <span className="lg-conf" aria-hidden="true">
-                    {r.conf}
-                  </span>
-                )}
-                <span className="sr-only">{rowDetails(r, conf)}</span>
-              </span>
+            <TeamRow
+              to={teamPath(r.tid)}
+              me={r.tid === league.userTid}
+              rank={played ? conf ? r.confRank : r.leagueRank : <span aria-hidden="true">—</span>}
+              tid={r.tid}
+              name={t.name}
+              after={
+                <>
+                  {r.clinched && (
+                    <span className={`lg-clinch ${r.clinched}`} aria-hidden="true">
+                      {r.clinched}
+                    </span>
+                  )}
+                  {!conf && (
+                    <span className="lg-conf" aria-hidden="true">
+                      {r.conf}
+                    </span>
+                  )}
+                </>
+              }
+              spoken={rowDetails(r, conf)}
+            >
               <span className="wl" aria-hidden="true">
                 {r.won}-{r.lost}
               </span>
-              <span className="c-basic" aria-hidden="true">
-                {r.gb === 0 ? '—' : r.gb.toFixed(1)}
-              </span>
-              <span className="c-basic" aria-hidden="true">
-                {r.lastTen}
-              </span>
-              <span className={`c-basic strk ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : ''}`} aria-hidden="true">
+              <span aria-hidden="true">{r.gb === 0 ? '—' : r.gb.toFixed(1)}</span>
+              <span aria-hidden="true">{r.lastTen}</span>
+              <span className={`strk ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : ''}`} aria-hidden="true">
                 {streakLabel(r.streak)}
               </span>
-              <span className="c-split" aria-hidden="true">
-                {r.home}
+              <span aria-hidden="true">{r.home}</span>
+              <span aria-hidden="true">{r.away}</span>
+              <span aria-hidden="true">{r.confRec}</span>
+              <span className={r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : ''} aria-hidden="true">
+                {played ? signed(r.diff) : '—'}
               </span>
-              <span className="c-split" aria-hidden="true">
-                {r.away}
-              </span>
-              <span className="c-split" aria-hidden="true">
-                {r.confRec}
-              </span>
-              <span className={`c-split ${r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : ''}`} aria-hidden="true">
-                {r.won + r.lost ? signed(r.diff) : '—'}
-              </span>
-            </Link>
-            {cuts && i === 5 && rows.length > 6 && (
-              <div className="lg-cut">
-                <span>Play-in</span>
-              </div>
-            )}
-            {cuts && i === 9 && rows.length > 10 && (
-              <div className="lg-cut">
-                <span>Lottery</span>
-              </div>
-            )}
+            </TeamRow>
+            {cuts && i === 5 && rows.length > 6 && <TableCut label="Play-in" />}
+            {cuts && i === 9 && rows.length > 10 && <TableCut label="Lottery" />}
           </Fragment>
         );
       })}
-    </div>
+    </TeamTable>
   );
 }
 
@@ -250,42 +196,38 @@ function PowerRankings({ league }: { league: League }) {
           </Help>
         }
       >
-        {list.every((x) => x.gp === 0)
-          ? 'By roster strength (TAL) until games are played'
-          : list.some((x) => x.gp < 10)
-            ? 'Net rating, with roster strength early on'
-            : 'By net rating per 100 possessions'}
+        {list.every((x) => x.gp === 0) ? (
+          'By roster strength until games are played'
+        ) : (
+          <>
+            By <Term id="ortg">net rating</Term>
+            {list.some((x) => x.gp < 10) ? ', with roster strength early on' : ''}
+          </>
+        )}
       </Toolbar>
-      <div className="card flush lg-st mode-power">
-        <div className="lg-st-row lg-st-head">
-          <span>#</span>
-          <span />
-          <span>Team</span>
-          <span className="c-power">Net</span>
-          <span className="c-power">ORtg</span>
-          <span className="c-power">DRtg</span>
-          <span className="c-power">Tal</span>
-        </div>
-        {list.map((x, i) => {
-          const t = league.teams[x.tid];
-          return (
-            <Link key={x.tid} to={`/team/${x.tid}`} className={`lg-st-row ${x.tid === league.userTid ? 'me' : ''}`}>
-              <span className="rk">{i + 1}</span>
-              <TeamLogo tid={x.tid} size={24} decorative />
-              <span className="nm two">
-                <span>{t.name}</span>
-                <span className="lg-st-rec">
-                  {x.ts.won}-{x.ts.lost}
-                </span>
-              </span>
-              <span className={`c-power wl ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`}>{x.gp ? signed(x.tr.net) : '—'}</span>
-              <span className="c-power">{x.gp ? f1(x.tr.ortg) : '—'}</span>
-              <span className="c-power">{x.gp ? f1(x.tr.drtg) : '—'}</span>
-              <span className="c-power">{f0(x.talent)}</span>
-            </Link>
-          );
-        })}
-      </div>
+      <TeamTable cols={[48, 46, 48, 48, 36]} head={['Net', 'W-L', 'ORtg', 'DRtg', 'Tal']}>
+        {list.map((x, i) => (
+          <TeamRow
+            key={x.tid}
+            to={teamPath(x.tid)}
+            me={x.tid === league.userTid}
+            rank={i + 1}
+            tid={x.tid}
+            name={league.teams[x.tid].name}
+            spoken={`, ${x.ts.won}-${x.ts.lost}${x.gp ? `, net rating ${signed(x.tr.net)}` : ''}, roster strength ${f0(x.talent)}`}
+          >
+            <span className={`wl ${x.gp ? (x.tr.net >= 0 ? 'good' : 'bad') : 'dim'}`} aria-hidden="true">
+              {x.gp ? signed(x.tr.net) : '—'}
+            </span>
+            <span aria-hidden="true">
+              {x.ts.won}-{x.ts.lost}
+            </span>
+            <span aria-hidden="true">{x.gp ? f1(x.tr.ortg) : '—'}</span>
+            <span aria-hidden="true">{x.gp ? f1(x.tr.drtg) : '—'}</span>
+            <span aria-hidden="true">{f0(x.talent)}</span>
+          </TeamRow>
+        ))}
+      </TeamTable>
     </>
   );
 }

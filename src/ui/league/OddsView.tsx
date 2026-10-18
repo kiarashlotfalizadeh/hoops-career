@@ -1,91 +1,60 @@
-import { Link } from 'react-router-dom';
 import type { League } from '../../core/types';
-import { FORECAST_SIMS, leagueForecast, pct, type TeamOdds } from '../../core/analysis/odds';
+import { FORECAST_SIMS, leagueForecast, pct, type Forecast, type TeamOdds } from '../../core/analysis/odds';
 import { fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
-import { TeamLogo } from '../components/TeamLogo';
 import { LineChart } from '../components/charts';
 import { Help, Section } from '../components/ui';
-import { Toolbar, confName, useQueryParam } from './shared';
-
-type Mode = 'playoffs' | 'lottery';
+import { Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
+import { TeamRow, TeamTable } from './Table';
 
 /**
- * The season forecast (src/core/analysis/odds.ts) for one conference: projected records and the
- * chances to make the playoffs, go deep and win it all, or, for the teams headed for the lottery,
- * at the top picks. The user's own odds through the season sit on top.
+ * The season forecast (src/core/analysis/odds.ts): both conferences by projected record with the
+ * chances to make the playoffs, go deep and win it all; the user's odds through the season on top.
  */
 export function OddsView({ league }: { league: League }) {
   const userConf = league.teams[league.userTid].conf;
-  const [conf, setConf] = useQueryParam<'E' | 'W'>('oconf', userConf, ['E', 'W']);
-  const [mode, setMode] = useQueryParam<Mode>('omode', 'playoffs', ['playoffs', 'lottery']);
+  // a link names the conference to read first (a team page's odds line)
+  const [first] = useQueryParam<'E' | 'W'>('oconf', userConf, ['E', 'W']);
   const f = useLeagueMemo(() => leagueForecast(league), [league]);
-  if (!f) return <div className="card empty">The season is over: the forecast starts again in next season&apos;s preseason.</div>;
-  // the playoff race best first; the lottery worst first
-  const rows = f.teams
-    .filter((t) => league.teams[t.tid].conf === conf)
-    .sort((a, b) => (mode === 'lottery' ? a.w - b.w || b.pick1 - a.pick1 : b.w - a.w || b.reach[0] - a.reach[0]));
+  if (!f) return <NoForecast />;
   return (
     <>
       <Trail league={league} />
-      <Toolbar
-        right={
-          <>
-            <div className="chips" role="group" aria-label="Forecast">
-              {(['playoffs', 'lottery'] as const).map((m) => (
-                <button key={m} className={`chip lg-chip-xs ${mode === m ? 'on' : ''}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
-                  {m === 'playoffs' ? 'Playoffs' : 'Lottery'}
-                </button>
+      {confOrder(first).map((c, i) => (
+        <Section key={c} title={`${confName(c)}${f.preseason ? ' · preseason forecast' : ''}`} right={i === 0 ? <OddsHelp /> : undefined}>
+          <TeamTable cols={[54, 58, 44, 48, 54, 50, 50]} head={['Proj', 'Playoffs', 'Title', 'Top 6', 'Play-in', 'Conf F', 'Finals']}>
+            {f.teams
+              .filter((t) => league.teams[t.tid].conf === c)
+              .sort((a, b) => b.w - a.w || b.reach[0] - a.reach[0])
+              .map((t, i) => (
+                <OddsRow key={t.tid} league={league} t={t} rank={i + 1} />
               ))}
-            </div>
-            <OddsHelp />
-          </>
-        }
-      >
-        <span className="chips" role="group" aria-label="Conference">
-          {(['E', 'W'] as const).map((c) => (
-            <button key={c} className={`chip lg-chip-xs ${conf === c ? 'on' : ''}`} aria-pressed={conf === c} onClick={() => setConf(c)}>
-              {c === 'E' ? 'East' : 'West'}
-            </button>
-          ))}
-        </span>
-      </Toolbar>
-      <div className={`card flush lg-st mode-odds odds-${mode}`}>
-        <div className="lg-st-row lg-st-head" aria-hidden="true">
-          <span>#</span>
-          <span />
-          <span>Team</span>
-          <span>Proj</span>
-          {mode === 'playoffs' ? (
-            <>
-              <span className="c-wide">Top 6</span>
-              <span className="c-wide">Play-in</span>
-              <span>Playoffs</span>
-              <span className="c-wide">Conf F</span>
-              <span className="c-wide">Finals</span>
-              <span>Title</span>
-            </>
-          ) : (
-            <>
-              <span className="c-wide">Lottery</span>
-              <span>No. 1</span>
-              <span>Top 4</span>
-              <span className="c-wide">Avg pick</span>
-            </>
-          )}
-        </div>
-        {rows.map((t, i) => (
-          <OddsRow key={t.tid} league={league} t={t} rank={i + 1} mode={mode} />
-        ))}
-      </div>
-      <div className="lg-note">
-        {f.preseason ? 'Preseason forecast, from rosters only. ' : ''}
-        {mode === 'playoffs'
-          ? `The ${confName(conf)} by projected record, its 10th-90th percentile of wins under it.`
-          : 'Each team’s own first-round pick, wherever it went (→ its owner now).'}
-      </div>
+          </TeamTable>
+        </Section>
+      ))}
     </>
   );
+}
+
+/** The lottery as it stands: every team not sure of the playoffs, worst projected first, with the chances for its own first-round pick. */
+export function LotteryView({ league }: { league: League }) {
+  const f = useLeagueMemo(() => leagueForecast(league), [league]);
+  if (!f) return <NoForecast />;
+  const rows = f.teams.filter((t) => !t.clinched).sort((a, b) => a.w - b.w || b.pick1 - a.pick1);
+  return (
+    <>
+      <Toolbar right={<OddsHelp />}>Each team&apos;s own first-round pick</Toolbar>
+      <TeamTable cols={[54, 46, 46, 44, 56]} head={['Proj', 'No. 1', 'Top 4', 'Avg', 'Lottery']}>
+        {rows.map((t, i) => (
+          <LotteryRow key={t.tid} league={league} f={f} t={t} rank={i + 1} />
+        ))}
+      </TeamTable>
+    </>
+  );
+}
+
+function NoForecast() {
+  return <div className="card empty">The season is over: the forecast returns in the preseason.</div>;
 }
 
 function OddsHelp() {
@@ -97,8 +66,11 @@ function OddsHelp() {
         in, and it&apos;s uncertain, more so early on.
       </p>
       <p className="lg-p">
-        Playoffs counts the play-in&apos;s winners. The lottery is everyone not in the playoffs: the chances are for each team&apos;s own first-round pick, wherever it went in a
-        trade: first, in the top four, and where it lands on average when it&apos;s in the lottery.
+        Proj is the projected record, its 10th-90th percentile of wins under it. Playoffs counts the play-in&apos;s winners. Swipe the table for the rest of the rounds.
+      </p>
+      <p className="lg-p">
+        The lottery is everyone not in the playoffs: the chances are for each team&apos;s own first-round pick, wherever it went in a trade (→ its owner now): first, in the top
+        four, and where it lands on average when it&apos;s in the lottery.
       </p>
       <p className="lg-p">
         It knows nothing about how the games will actually go. 100% and — mean a place clinched or a team that&apos;s out; anything else rounds to &gt;99% or &lt;1%.
@@ -107,80 +79,78 @@ function OddsHelp() {
   );
 }
 
-function OddsRow({ league, t, rank, mode }: { league: League; t: TeamOdds; rank: number; mode: Mode }) {
-  const team = league.teams[t.tid];
-  const me = t.tid === league.userTid;
+const projOf = (t: TeamOdds) => {
   const w = Math.round(t.w);
-  const proj = `${w}-${Math.round(t.w + t.l) - w}`;
-  // the pick's owner, when it isn't the team's own any more
-  const dp = league.draftPicks.find((d) => d.season === league.season && d.round === 1 && d.originalTid === t.tid);
-  const owner = dp && dp.tid !== t.tid ? league.teams[dp.tid].abbrev : null;
-  const spoken =
-    mode === 'playoffs'
-      ? `, projected ${proj}, ${t.lo} to ${t.hi} wins, playoffs ${pct(t.reach[0], t.clinched || t.out)}, title ${pct(t.reach[4], t.out)}`
-      : `, projected ${proj}, lottery ${pct(t.lottery, t.clinched || t.out)}, number 1 pick ${pct(t.pick1, t.clinched)}, top 4 ${pct(t.top4, t.clinched)}${t.pick !== null && t.lottery >= 0.05 ? `, average pick ${t.pick.toFixed(1)}` : ''}${owner ? `, pick owned by ${owner}` : ''}`;
+  return `${w}-${Math.round(t.w + t.l) - w}`;
+};
+
+function OddsRow({ league, t, rank }: { league: League; t: TeamOdds; rank: number }) {
+  const proj = projOf(t);
   return (
-    <Link to={`/team/${t.tid}`} className={`lg-st-row ${me ? 'me' : ''}`}>
-      <span className="rk">{rank}</span>
-      <TeamLogo tid={t.tid} size={24} decorative />
-      <span className={`nm${mode === 'lottery' && owner ? ' owed' : ''}`}>
-        <span>
-          <span className="nm-full">{team.name}</span>
-          <span className="nm-ab">{team.abbrev}</span>
-        </span>
-        {mode === 'lottery' && owner && (
-          <span className="lg-conf" aria-hidden="true">
-            → {owner}
-          </span>
-        )}
-        <span className="sr-only">{spoken}</span>
-      </span>
-      <span className="wl" aria-hidden="true">
+    <TeamRow
+      to={teamPath(t.tid)}
+      me={t.tid === league.userTid}
+      rank={rank}
+      tid={t.tid}
+      name={league.teams[t.tid].name}
+      spoken={`, projected ${proj}, ${t.lo} to ${t.hi} wins, playoffs ${pct(t.reach[0], t.clinched || t.out)}, title ${pct(t.reach[4], t.out)}`}
+    >
+      <span className="wl lg-proj" aria-hidden="true">
         {proj}
-        {mode === 'playoffs' && t.lo !== t.hi && (
+        {t.lo !== t.hi && (
           <span className="odds-range">
             {t.lo}-{t.hi}
           </span>
         )}
       </span>
-      {mode === 'playoffs' ? (
-        <>
-          <span className="c-wide" aria-hidden="true">
-            {pct(t.top6)}
+      <span className={`hi ${t.reach[0] >= 0.5 ? 'good' : ''}`} aria-hidden="true">
+        {pct(t.reach[0], t.clinched || t.out)}
+      </span>
+      <span className="hi" aria-hidden="true">
+        {pct(t.reach[4], t.out)}
+      </span>
+      <span aria-hidden="true">{pct(t.top6)}</span>
+      <span aria-hidden="true">{pct(t.playIn)}</span>
+      <span aria-hidden="true">{pct(t.reach[2], t.out)}</span>
+      <span aria-hidden="true">{pct(t.reach[3], t.out)}</span>
+    </TeamRow>
+  );
+}
+
+function LotteryRow({ league, f, t, rank }: { league: League; f: Forecast; t: TeamOdds; rank: number }) {
+  // the pick's owner, when it isn't the team's own any more
+  const dp = league.draftPicks.find((d) => d.season === f.season && d.round === 1 && d.originalTid === t.tid);
+  const owner = dp && dp.tid !== t.tid ? league.teams[dp.tid].abbrev : null;
+  const proj = projOf(t);
+  const avg = t.pick !== null && t.lottery >= 0.05 ? t.pick.toFixed(1) : '—';
+  return (
+    <TeamRow
+      to={teamPath(t.tid)}
+      me={t.tid === league.userTid}
+      rank={rank}
+      tid={t.tid}
+      name={league.teams[t.tid].name}
+      after={
+        owner ? (
+          <span className="lg-conf" aria-hidden="true">
+            → {owner}
           </span>
-          <span className="c-wide" aria-hidden="true">
-            {pct(t.playIn)}
-          </span>
-          <span className={`hi ${t.reach[0] >= 0.5 ? 'good' : ''}`} aria-hidden="true">
-            {pct(t.reach[0], t.clinched || t.out)}
-          </span>
-          <span className="c-wide" aria-hidden="true">
-            {pct(t.reach[2], t.out)}
-          </span>
-          <span className="c-wide" aria-hidden="true">
-            {pct(t.reach[3], t.out)}
-          </span>
-          <span className="hi" aria-hidden="true">
-            {pct(t.reach[4], t.out)}
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="c-wide" aria-hidden="true">
-            {pct(t.lottery, t.clinched || t.out)}
-          </span>
-          <span className="hi" aria-hidden="true">
-            {pct(t.pick1, t.clinched)}
-          </span>
-          <span className="hi" aria-hidden="true">
-            {pct(t.top4, t.clinched)}
-          </span>
-          <span className="c-wide" aria-hidden="true">
-            {t.pick !== null && t.lottery >= 0.05 ? t.pick.toFixed(1) : '—'}
-          </span>
-        </>
-      )}
-    </Link>
+        ) : undefined
+      }
+      spoken={`, projected ${proj}, number 1 pick ${pct(t.pick1, t.clinched)}, top 4 ${pct(t.top4, t.clinched)}${avg !== '—' ? `, average pick ${avg}` : ''}, lottery ${pct(t.lottery, t.clinched || t.out)}${owner ? `, pick owned by ${owner}` : ''}`}
+    >
+      <span className="wl" aria-hidden="true">
+        {proj}
+      </span>
+      <span className="hi" aria-hidden="true">
+        {pct(t.pick1, t.clinched)}
+      </span>
+      <span className="hi" aria-hidden="true">
+        {pct(t.top4, t.clinched)}
+      </span>
+      <span aria-hidden="true">{avg}</span>
+      <span aria-hidden="true">{pct(t.lottery, t.clinched || t.out)}</span>
+    </TeamRow>
   );
 }
 
@@ -188,6 +158,8 @@ function OddsRow({ league, t, rank, mode }: { league: League; t: TeamOdds; rank:
 function Trail({ league }: { league: League }) {
   const tr = league.oddsTrail;
   if (!tr || tr.season !== league.season || tr.tid !== league.userTid || tr.pts.length < 2) return null;
+  // a flat line at the top (or the bottom) all season says nothing the table doesn't
+  if (tr.pts.every((p) => p[1] >= 990) || tr.pts.every((p) => p[1] <= 10)) return null;
   const last = tr.pts[tr.pts.length - 1];
   return (
     <Section
@@ -195,7 +167,7 @@ function Trail({ league }: { league: League }) {
       right={<span className="lg-sec-meta">{`${pct(last[1] / 1000)} on ${fmtDate(league.season, last[0])}`}</span>}
     >
       <div className="card lg-trail">
-        <LineChart points={tr.pts.map((p) => p[1] / 10)} labels={tr.pts.map((p) => fmtDate(league.season, p[0]))} yMin={0} yMax={100} refLine={50} height={110} values={false} />
+        <LineChart points={tr.pts.map((p) => p[1] / 10)} labels={tr.pts.map((p) => fmtDate(league.season, p[0]))} yMin={0} yMax={100} refLine={50} height={96} values={false} />
       </div>
     </Section>
   );

@@ -6,11 +6,12 @@ import { POSITIONS } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Segmented, StatTable, type Col } from '../components/ui';
+import { Avatar, Chips, Segmented, StatTable, Toggle, type Col } from '../components/ui';
 import { advancedView, f1, perGame, seasonLine, signed, teamRatings, type AdvView, type PerGame } from '../stats';
-import { shortName, statSeasons, statTid, teamAbbrev, useQueryParam } from './shared';
+import { FilterField, FiltersButton, shortName, statSeasons, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
+import { RatingsTab } from './RatingsTab';
 
-type View = 'leaders' | 'players' | 'teams';
+type View = 'leaders' | 'players' | 'teams' | 'ratings';
 
 export interface StatRow {
   p: Player;
@@ -50,21 +51,9 @@ function teamGames(league: League, season: number, rows: StatRow[], playoffs: bo
 
 const pctCell = (v: number | string) => (typeof v === 'number' && v >= 0 ? (v * 100).toFixed(1) : '—');
 
+/** Stats: the leaders, every player's line, every team's, and every player's ratings, one switch apart. */
 export function StatsTab({ league }: { league: League }) {
-  const [view, setView] = useQueryParam<View>('sv', 'leaders', ['leaders', 'players', 'teams']);
-  const seasons = useLeagueMemo(() => statSeasons(league), [league]);
-  // before the first game of a season, open on the last completed one
-  const started = league.games.some((g) => g.season === league.season);
-  const fallback = started ? league.season : ([...seasons].filter((s) => s.season < league.season).sort((a, b) => b.season - a.season)[0]?.season ?? league.season);
-  const [seasonStr, setSeasonStr] = useQueryParam<string>('season', String(fallback));
-  // a season the league doesn't have (an old or garbled link) opens the default one
-  const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : fallback;
-  const [po, setPo] = useQueryParam<'reg' | 'po'>('po', 'reg', ['reg', 'po']);
-  // team stats are kept for the regular season only
-  const playoffs = po === 'po' && view !== 'teams';
-  const rows = useSeasonRows(league, season, playoffs);
-  const real = seasons.find((s) => s.season === season)?.real ?? false;
-
+  const [view, setView] = useQueryParam<View>('sv', 'leaders', ['leaders', 'players', 'teams', 'ratings']);
   return (
     <>
       <Segmented
@@ -75,37 +64,69 @@ export function StatsTab({ league }: { league: League }) {
           { id: 'leaders', label: 'Leaders' },
           { id: 'players', label: 'Players' },
           { id: 'teams', label: 'Teams' },
+          { id: 'ratings', label: 'Ratings' },
         ]}
       />
-      <div className="lg-sub">
-        <select className="lg-select" value={season} onChange={(e) => setSeasonStr(e.target.value)} aria-label="Season">
-          {seasons.map((s) => (
-            <option key={s.season} value={s.season}>
-              {seasonLabel(s.season)}
-              {s.real ? ' (real)' : ''}
-            </option>
-          ))}
-        </select>
-        <div className="chips" role="group" aria-label="Season type">
-          <button className={`chip lg-chip-xs ${!playoffs ? 'on' : ''}`} aria-pressed={!playoffs} onClick={() => setPo('reg')}>
-            Regular season
-          </button>
-          <button className={`chip lg-chip-xs ${playoffs ? 'on' : ''}`} aria-pressed={playoffs} disabled={(real || view === 'teams') && !playoffs} onClick={() => setPo('po')}>
-            Playoffs
-          </button>
+      {view === 'ratings' ? <RatingsTab league={league} /> : <SeasonStats league={league} view={view} />}
+    </>
+  );
+}
+
+/** The season a stats view reads (the current one once it has games, else the last) and whether it's the playoffs'. */
+function useStatSeason(league: League) {
+  const seasons = useLeagueMemo(() => statSeasons(league), [league]);
+  // before the first game of a season, open on the last completed one
+  const started = league.games.some((g) => g.season === league.season);
+  const fallback = started ? league.season : ([...seasons].filter((s) => s.season < league.season).sort((a, b) => b.season - a.season)[0]?.season ?? league.season);
+  const [seasonStr, setSeasonStr] = useQueryParam<string>('season', String(fallback));
+  // a season the league doesn't have (an old or garbled link) opens the default one
+  const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : fallback;
+  const [po, setPo] = useQueryParam<'reg' | 'po'>('po', 'reg', ['reg', 'po']);
+  const real = seasons.find((s) => s.season === season)?.real ?? false;
+  return { seasons, season, setSeason: (s: number) => setSeasonStr(String(s)), fallback, po, setPo, real };
+}
+
+type StatSeason = ReturnType<typeof useStatSeason>;
+
+function SeasonSelect({ s }: { s: StatSeason }) {
+  return (
+    <select className="lg-select" value={s.season} onChange={(e) => s.setSeason(Number(e.target.value))} aria-label="Season">
+      {s.seasons.map((x) => (
+        <option key={x.season} value={x.season}>
+          {seasonLabel(x.season)}
+          {x.real ? ' (real)' : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Regular season or playoffs; an imported real-life season has no playoff stats. */
+function TypeSelect({ s }: { s: StatSeason }) {
+  return (
+    <select className="lg-select" value={s.real ? 'reg' : s.po} onChange={(e) => s.setPo(e.target.value as 'reg' | 'po')} aria-label="Season type" disabled={s.real}>
+      <option value="reg">Regular season</option>
+      <option value="po">Playoffs</option>
+    </select>
+  );
+}
+
+function SeasonStats({ league, view }: { league: League; view: Exclude<View, 'ratings'> }) {
+  const s = useStatSeason(league);
+  // team stats are kept for the regular season only; imported seasons have no playoff lines
+  const playoffs = s.po === 'po' && view !== 'teams' && !s.real;
+  const rows = useSeasonRows(league, s.season, playoffs);
+  return (
+    <>
+      {view !== 'players' && (
+        <div className="lg-sub">
+          <SeasonSelect s={s} />
+          {view === 'leaders' && <TypeSelect s={s} />}
         </div>
-      </div>
-      {/* why Playoffs is greyed out (the team table says so itself) */}
-      {real && !playoffs && view !== 'teams' && <div className="lg-note">No playoff stats for imported real-life seasons.</div>}
-      {real && playoffs ? (
-        <div className="card empty">No playoff stats for imported real-life seasons. Switch to the regular season, or pick a season played in this league.</div>
-      ) : (
-        <>
-          {view === 'leaders' && <Leaders league={league} rows={rows} season={season} playoffs={playoffs} />}
-          {view === 'players' && <PlayerStatsTable league={league} rows={rows} season={season} playoffs={playoffs} real={real} />}
-          {view === 'teams' && <TeamStatsTable league={league} season={season} />}
-        </>
       )}
+      {view === 'leaders' && <Leaders league={league} rows={rows} season={s.season} playoffs={playoffs} />}
+      {view === 'players' && <PlayerStatsTable league={league} rows={rows} s={s} playoffs={playoffs} />}
+      {view === 'teams' && <TeamStatsTable league={league} season={s.season} />}
     </>
   );
 }
@@ -216,7 +237,8 @@ function LeaderBlock({ league, cat, top }: { league: League; cat: Cat; top: Stat
 
 const PAGE = 100;
 
-function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: League; rows: StatRow[]; season: number; playoffs: boolean; real: boolean }) {
+function PlayerStatsTable({ league, rows, s, playoffs }: { league: League; rows: StatRow[]; s: StatSeason; playoffs: boolean }) {
+  const { season, real } = s;
   const nav = useNavigate();
   const [qual, setQual] = useQueryParam<'q' | 'all'>('q', 'q', ['q', 'all']);
   const [pos, setPos] = useQueryParam<'all' | Pos>('pos', 'all', ['all', ...POSITIONS]);
@@ -399,31 +421,38 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
     [filtered, cols, nav, league.userTid, limit],
   );
 
+  const changed = [season !== s.fallback, playoffs, tot, pos !== 'all', qual === 'all', mine === '1'].filter(Boolean).length;
   return (
     <>
-      <div className="lg-sub">
+      <div className="lg-sub lg-nowrap">
         <div className="lg-search">
           <Search size={15} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" aria-label="Search players" />
         </div>
-        <select className="lg-select" value={mode} onChange={(e) => setMode(e.target.value as 'pg' | 'tot')} aria-label="Per game or season totals">
-          <option value="pg">Per game</option>
-          <option value="tot">Totals</option>
-        </select>
-      </div>
-      <div className="lg-hscroll" role="group" aria-label="Filter players">
-        <button className={`chip ${qual === 'q' ? 'on' : ''}`} aria-pressed={qual === 'q'} onClick={() => setQual(qual === 'q' ? 'all' : 'q')}>
-          Qualified ({minGp}+ GP)
-        </button>
-        <button className={`chip ${mine === '1' ? 'on' : ''}`} aria-pressed={mine === '1'} onClick={() => setMine(mine === '1' ? '0' : '1')}>
-          <TeamLogo tid={league.userTid} size={16} /> My team
-        </button>
-        <span className="lg-vsep" />
-        {(['all', ...POSITIONS] as const).map((x) => (
-          <button key={x} className={`chip ${pos === x ? 'on' : ''}`} aria-pressed={pos === x} onClick={() => setPos(x)}>
-            {x === 'all' ? 'All' : x}
-          </button>
-        ))}
+        <FiltersButton count={changed}>
+          <FilterField label="Season">
+            <div className="lg-sub">
+              <SeasonSelect s={s} />
+              <TypeSelect s={s} />
+            </div>
+          </FilterField>
+          <FilterField label="Numbers">
+            <Segmented
+              label="Per game or season totals"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { id: 'pg', label: 'Per game' },
+                { id: 'tot', label: 'Totals' },
+              ]}
+            />
+          </FilterField>
+          <FilterField label="Position">
+            <Chips label="Position" value={pos} onChange={setPos} options={(['all', ...POSITIONS] as const).map((x) => ({ id: x, label: x === 'all' ? 'All' : x }))} />
+          </FilterField>
+          <Toggle on={qual === 'q'} onChange={(v) => setQual(v ? 'q' : 'all')} label={`Qualified only (${minGp}+ games)`} />
+          <Toggle on={mine === '1'} onChange={(v) => setMine(v ? '1' : '0')} label={`${league.teams[league.userTid].name} only`} />
+        </FiltersButton>
       </div>
       {filtered.length === 0 ? (
         <div className="card empty">{rows.length ? 'No players match these filters.' : playoffs ? 'No playoff games played yet.' : 'No games played yet.'}</div>
@@ -436,9 +465,8 @@ function PlayerStatsTable({ league, rows, season, playoffs, real }: { league: Le
             </button>
           )}
           <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} ·{' '}
-            {tot ? 'season totals' : 'per game'} · tap a column to sort
-            {real ? ' · imported real-life season' : ''}
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · {seasonLabel(season)}
+            {playoffs ? ' playoffs' : real ? ' (real)' : ''} · {tot ? 'totals' : 'per game'}
           </div>
         </>
       )}
@@ -500,7 +528,7 @@ function TeamStatsTable({ league, season }: { league: League; season: number }) 
   if (!rows.length) return <div className="card empty">{season === league.season ? 'No games played yet this season.' : 'Team stats are only tracked for simulated seasons.'}</div>;
   return (
     <>
-      <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(`/team/${r.tid}`)} highlight={(r) => r.tid === league.userTid} />
+      <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(teamPath(r.tid))} highlight={(r) => r.tid === league.userTid} />
       <div className="lg-note">Regular season · ratings per 100 possessions · DRtg, TOV% and Opp eFG% sort lowest (best) first.</div>
     </>
   );

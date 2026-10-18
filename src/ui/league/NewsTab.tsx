@@ -8,6 +8,7 @@ import {
   Flame,
   HeartPulse,
   Hourglass,
+  ListChecks,
   ListOrdered,
   Megaphone,
   Newspaper,
@@ -21,7 +22,8 @@ import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { shortName, useQueryParam } from './shared';
+import { shortName, teamPath, useQueryParam } from './shared';
+import { LeagueMoves } from './MovesTab';
 
 type Kind = NewsItem['kind'];
 
@@ -43,8 +45,9 @@ export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: s
 const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'award', 'draft', 'milestone', 'record', 'coach', 'release', 'retire', 'general'];
 const PAGE = 50;
 
+/** The league's news, by kind; Transactions is the whole league's moves log. */
 export function NewsTab({ league }: { league: League }) {
-  const [kind, setKind] = useQueryParam<'all' | Kind>('kind', 'all', ['all', ...ORDER]);
+  const [kind, setKind] = useQueryParam<'all' | 'moves' | Kind>('kind', 'all', ['all', 'moves', ...ORDER]);
   const [mine, setMine] = useQueryParam<'0' | '1'>('mynews', '0', ['0', '1']);
   const [limit, setLimit] = useState(PAGE);
   const sorted = useLeagueMemo(() => [...league.news].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
@@ -69,6 +72,10 @@ export function NewsTab({ league }: { league: League }) {
         <button className={`chip ${kind === 'all' ? 'on' : ''}`} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
           All
         </button>
+        <button className={`chip ${kind === 'moves' ? 'on' : ''}`} aria-pressed={kind === 'moves'} onClick={() => setKind('moves')}>
+          <ListChecks size={14} className="lg-kind" style={{ ['--k' as string]: 'var(--text-2)' }} />
+          Transactions
+        </button>
         {ORDER.filter((k) => counts[k]).map((k) => {
           const M = NEWS_KIND[k];
           return (
@@ -79,7 +86,9 @@ export function NewsTab({ league }: { league: League }) {
           );
         })}
       </div>
-      {shown.length === 0 ? (
+      {kind === 'moves' ? (
+        <LeagueMoves league={league} mine={mine === '1'} />
+      ) : shown.length === 0 ? (
         <div className="card empty">{sorted.length ? 'No stories match this filter.' : 'No news yet: trades, signings, injuries and big games land here.'}</div>
       ) : (
         <div className="card flush">
@@ -125,7 +134,7 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
         {(tids.length > 0 || showP.length > 0) && (
           <div className="lg-news-meta">
             {tids.map((t) => (
-              <Link key={`t${t}`} to={`/team/${t}`} className="lg-pchip team">
+              <Link key={`t${t}`} to={teamPath(t)} className="lg-pchip team">
                 <TeamLogo tid={t} size={18} decorative />
                 <span>{league.teams[t].abbrev}</span>
               </Link>
