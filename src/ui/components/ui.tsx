@@ -195,7 +195,7 @@ export function Chips<T extends string | number>({
  * A labelled switch. Its help is one tap away behind a "?" (and read out with the switch), never a
  * paragraph under every toggle.
  */
-export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode }) {
+export function Toggle({ on, onChange, label, help, disabled }: { on: boolean; onChange: (v: boolean) => void; label: ReactNode; help?: ReactNode; disabled?: boolean }) {
   const id = useId();
   return (
     <label className="row between" style={{ gap: 12, cursor: 'pointer' }}>
@@ -216,6 +216,7 @@ export function Toggle({ on, onChange, label, help }: { on: boolean; onChange: (
         className={`toggle ${on ? 'on' : ''}`}
         role="switch"
         aria-checked={on}
+        disabled={disabled}
         aria-labelledby={`${id}l`}
         aria-describedby={help ? `${id}h` : undefined}
         onClick={() => onChange(!on)}

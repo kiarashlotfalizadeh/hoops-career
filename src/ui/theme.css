@@ -1945,3 +1945,9 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
 .term:active {
   color: var(--accent-text);
 }
+
+/* a switch that can't be changed right now (a sim is running) */
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

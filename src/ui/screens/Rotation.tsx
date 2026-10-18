@@ -109,6 +109,7 @@ export default function Rotation() {
       <div className="tm-auto">
         <Toggle
           on={!rot.manual}
+          disabled={simming}
           onChange={setAssistant}
           label="Let the assistant manage"
           help={
@@ -380,6 +381,7 @@ function EditPlayer({
         <div className="tm-ed-group">
           <Toggle
             on={rot.closers.includes(p.pid)}
+            disabled={busy}
             onChange={(on) =>
               update((r) => {
                 r.closers = on ? [...r.closers.filter((x) => x !== p.pid), p.pid].slice(-5) : r.closers.filter((x) => x !== p.pid);
@@ -394,6 +396,7 @@ function EditPlayer({
           />
           <Toggle
             on={rot.restB2B.includes(p.pid)}
+            disabled={busy}
             onChange={(on) => update((r) => void (r.restB2B = on ? [...r.restB2B, p.pid] : r.restB2B.filter((x) => x !== p.pid)))}
             label="Rest on back-to-backs"
             help={`Wear ${Math.round(p.wear)}. Sits the second night: less wear and injury risk, a weaker lineup.`}
