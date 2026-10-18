@@ -1,4 +1,5 @@
-// The next three teams on the user's schedule, each with its game plan's status and a way into it.
+// The next three teams on the user's schedule, each with its game plan's status and its matchup page
+// a tap away (Team → Tactics shows it under the playbook).
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
@@ -6,9 +7,10 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { planFor } from '../../core/league/gamePlans';
 import { neutralSite } from '../../core/league/games';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
+import { planSize } from '../games/data';
 import { Help, Section, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
-import '../screens/tactics.css';
+import '../games/games.css';
 
 /** The next `n` different opponents, each at his first meeting. */
 function nextOpponents(league: League, n: number): { opp: number; g: ScheduledGame }[] {
@@ -34,7 +36,7 @@ export function UpcomingOpponents() {
       title="Upcoming opponents"
       right={
         <Help title="Game plans">
-          A game plan changes your tactics against one team only, on top of this playbook: counters, a star plan, matchups. Open one to scout them and build it.
+          A game plan changes your tactics against one team only, on top of this playbook: counters, a star plan, matchups. Open a matchup page to scout them and build one.
         </Help>
       }
     >
@@ -43,36 +45,25 @@ export function UpcomingOpponents() {
           const t = league.teams[opp];
           const ts = curTeamSeason(league, opp);
           const plan = planFor(league, opp, g);
-          const n = plan ? plan.items.length : 0;
-          const matchups = plan?.matchups ? Object.keys(plan.matchups).length : 0;
-          const guards = plan?.playerD ? Object.keys(plan.playerD).length : 0;
-          const status = plan
-            ? [
-                n ? `${n} change${n === 1 ? '' : 's'}` : '',
-                matchups ? `${matchups} matchup${matchups === 1 ? '' : 's'}` : '',
-                guards ? `${guards} instruction${guards === 1 ? '' : 's'}` : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')
-            : '';
+          const n = planSize(plan);
           return (
-            <Link key={opp} to={`/gameplan/${opp}`} className="tx-opp">
+            <Link key={opp} to={`/games/${opp}`} className="uo-row">
               <TeamLogo tid={opp} size={30} decorative />
               <span className="grow">
-                <span className="tx-opp-t">
+                <span className="uo-t">
                   {g.home === league.userTid || neutralSite(g) ? 'vs' : '@'} {t.abbrev}{' '}
-                  <span className="tx-opp-rec num">
+                  <span className="uo-rec num">
                     {ts.won}-{ts.lost}
                   </span>
                 </span>
                 <span className="lr-meta">
                   {g.day === league.day ? 'Today' : fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-                  {plan && status ? ` · ${status}` : ''}
+                  {n ? ` · ${n} item${n === 1 ? '' : 's'}` : ''}
                 </span>
               </span>
-              {plan ? <Tag tone="info">Plan · {SCOPE[plan.scope ?? 'next']}</Tag> : <span className="tiny dim">No plan</span>}
-              <span className="sr-only">. Open the game plan</span>
-              <ChevronRight size={16} className="dim tx-chev" />
+              {plan && n ? <Tag tone="info">Plan · {SCOPE[plan.scope ?? 'next']}</Tag> : <span className="tiny dim">No plan</span>}
+              <span className="sr-only">. Open the matchup</span>
+              <ChevronRight size={16} className="dim" aria-hidden="true" />
             </Link>
           );
         })}

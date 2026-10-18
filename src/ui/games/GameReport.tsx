@@ -1,10 +1,12 @@
-import { useQueryParam } from '../league/shared';
+// A game's report: the final, then Recap (your games: the stars, the keys, the turning point, the
+// press conference), Why (what decided it), Box, Shots and Flow (win probability, the margin and the
+// play-by-play).
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Lightbulb } from 'lucide-react';
 import { useLeague } from '../../state/store';
 import { buildGameReport, setLineText } from '../../core/analysis/gameReport';
-import { Chips, Empty, Help, PageHeader, Section, Segmented, Statline, Tag } from '../components/ui';
+import { Chips, Empty, Help, More, PageHeader, Section, Statline, Tag } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { CompareBar, FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { TeamComparison } from '../components/gameBlocks';
@@ -17,23 +19,26 @@ import { HighlightsCard } from '../components/HighlightsCard';
 import { AdjustmentsCard } from '../components/AdjustmentsCard';
 import { biggestSwings, marginWords, playAt, swingWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { threeStars } from '../../core/analysis/quotes';
+import { TabBar, useQueryParam } from '../league/shared';
+import { Term } from '../components/Glossary';
 import '../components/gameday.css';
+import './games.css';
 
 type Tab = 'recap' | 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 
-export default function GameView() {
+export default function GameReport() {
   const league = useLeague();
   const { gid } = useParams();
   const g = league.games.find((x) => x.gid === Number(gid));
   const userGame = !!g && (g.home.tid === league.userTid || g.away.tid === league.userTid);
   const report = useMemo(() => (g && userGame && g.impacts ? buildGameReport(league, g) : null), [g, userGame, league]);
   const userNames = useMemo(() => (g && userGame ? boxNames(league, g.home.tid === league.userTid ? g.home : g.away) : null), [g, userGame, league]);
-  // your games open on their recap (the result, the stars, the quotes); the Why is a tab away
+  // your games open on their recap (the result, the stars, the keys); the Why is a tab away
   const [picked, setTab] = useQueryParam<Tab>('tab', userGame ? 'recap' : 'box', ['recap', 'report', 'box', 'shots', 'flow', 'pbp']);
   if (!g) {
     return (
       <main className="page">
-        <PageHeader title="Game" back backTo="/" />
+        <PageHeader title="Game" back backTo="/games" />
         <Empty>This game is no longer stored. Detailed results are kept for the current season.</Empty>
       </main>
     );
@@ -45,13 +50,13 @@ export default function GameView() {
     ...(report ? [{ id: 'report' as Tab, label: 'Why' }] : []),
     { id: 'box', label: 'Box' },
     ...(g.shots?.length ? [{ id: 'shots' as Tab, label: 'Shots' }] : []),
-    ...(g.flow?.length ? [{ id: 'flow' as Tab, label: 'Flow' }] : []),
-    ...(g.pbp?.length ? [{ id: 'pbp' as Tab, label: 'PBP' }] : []),
+    ...(g.flow?.length || g.pbp?.length ? [{ id: 'flow' as Tab, label: 'Flow' }] : []),
   ];
-  // a tab this game doesn't have (a link from another game's report) opens the first it has
-  const tab = tabs.some((t) => t.id === picked) ? picked : tabs[0].id;
+  // the play-by-play is under Flow; a tab this game doesn't have (a link from another game's report) opens the first it has
+  const want = picked === 'pbp' ? 'flow' : picked;
+  const tab = tabs.some((t) => t.id === want) ? want : tabs[0].id;
   // the user's team carries the accent in two-team comparisons, wherever it played (side 0 = home);
-  // between two other teams neither side does (the away side wore it, as if it were yours)
+  // between two other teams neither side does
   const accentSide = userGame && g.home.tid === league.userTid ? 0 : 1;
   const [awayColor, homeColor] = !userGame
     ? ['var(--text-dim)', 'var(--text-dim)']
@@ -61,9 +66,9 @@ export default function GameView() {
   const flowColors = matchupColors(home.colors, away.colors);
   return (
     <main className="page gv">
-      <PageHeader title="Game report" back backTo="/" />
+      <PageHeader title="Game report" back backTo="/games" />
       <FinalSlab res={g} league={league} />
-      {tabs.length > 1 && <Segmented tabs value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
+      {tabs.length > 1 && <TabBar value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
 
       {tab === 'recap' && userGame && (
         <GameRecap res={g} league={league} report={report} highlights={league.reel?.gid === g.gid ? <HighlightsCard league={league} res={g} /> : undefined} />
@@ -73,18 +78,15 @@ export default function GameView() {
         <>
           <p className="gv-headline">{report.headline}</p>
           <Section
-            title={
-              <h3>
-                What decided it
-                <Help title="What decided it">
-                  <p>Expected-point swings from the engine&apos;s tactical tracking and the four factors.</p>
-                  <p>Positive numbers favored your team.</p>
-                </Help>
-              </h3>
+            title="What decided it"
+            right={
+              <Help title="What decided it">
+                <p>Expected-point swings from the engine&apos;s tactical tracking and the four factors. Positive numbers favored your team.</p>
+              </Help>
             }
           >
             {report.factors.length === 0 ? (
-              <div className="card small dim">No single factor stood out; this one came down to execution.</div>
+              <div className="mu-note">No single factor stood out: this one came down to execution.</div>
             ) : (
               <div className="card flush list">
                 {report.factors.map((f, i) => (
@@ -106,6 +108,20 @@ export default function GameView() {
             )}
           </Section>
           <AdjustmentsCard g={g} league={league} />
+          <Section title="Player grades">
+            <div className="card flush list">
+              {report.grades.map((gr) => (
+                <Link key={gr.pid} to={`/player/${gr.pid}`} className="gv-grade">
+                  <span className={`gv-g ${gr.grade[0]}`}>{gr.grade}</span>
+                  {/* name over the line: long names and the minutes no longer get cut off on a phone */}
+                  <span className="grow" style={{ minWidth: 0 }}>
+                    <span className="gv-grade-n">{userNames?.(gr.pid) || league.players[gr.pid]?.lastName}</span>
+                    <span className="gv-grade-l">{gr.note}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Section>
           <Section title="Four factors" right={<span className="tiny dim">You · Them</span>}>
             <div className="card gv-bars">
               <CompareBar label="eFG%" a={report.fourFactors.user.efg * 100} b={report.fourFactors.opp.efg * 100} />
@@ -114,95 +130,80 @@ export default function GameView() {
               <CompareBar label="FT / FGA" a={report.fourFactors.user.ftr * 100} b={report.fourFactors.opp.ftr * 100} />
             </div>
           </Section>
-          <Section title="Play types" right={<span className="tiny dim">poss · per poss</span>}>
-            <div className="card flush list">
-              <div className="gv-pt gv-pt-h" aria-hidden="true">
-                <span className="grow" />
-                <span>You</span>
-                <span>Them</span>
-              </div>
-              {report.playTypes.map((p) => (
-                <div key={p.key} className="gv-pt">
-                  <span className="grow">{p.label}</span>
-                  <span className="num">
-                    <span className="dim">{p.userPoss}</span> <b style={{ color: pppColor(p.userPpp, p.userPoss) }}>{p.userPoss ? p.userPpp.toFixed(2) : '—'}</b>
-                  </span>
-                  <span className="num">
-                    <span className="dim">{p.oppPoss}</span> <b style={{ color: pppColor(p.oppPpp, p.oppPoss) }}>{p.oppPoss ? p.oppPpp.toFixed(2) : '—'}</b>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Section>
-          {report.sets.length > 0 && (
-            <Section
-              title={
-                <h3>
-                  Sets
-                  <Help title="Sets">
-                    <p>The possessions each set opened, second chances included.</p>
-                    <p>Read by: the run by which their defense had taken a good part of its look away.</p>
-                  </Help>
-                </h3>
-              }
-              right={<span className="tiny dim">runs · per poss</span>}
-            >
-              <div className="card flush list">
-                {report.sets.map((s) => (
-                  <div key={s.id} className="gv-row">
-                    <span className="grow">{s.name}</span>
-                    <span className="num dim2">{setLineText(s)}</span>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          )}
-          <div className="md-grid2">
-            <Section title="Player grades">
-              <div className="card flush list">
-                {report.grades.map((gr) => (
-                  <Link key={gr.pid} to={`/player/${gr.pid}`} className="gv-grade">
-                    <span className={`gv-g ${gr.grade[0]}`}>{gr.grade}</span>
-                    {/* name over the line: long names and the minutes no longer get cut off on a phone */}
-                    <span className="grow" style={{ minWidth: 0 }}>
-                      <span className="gv-grade-n">{userNames?.(gr.pid) || league.players[gr.pid]?.lastName}</span>
-                      <span className="gv-grade-l">{gr.note}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </Section>
-            <Section title="Lineups">
-              {report.lineups.length === 0 ? (
-                <div className="card small dim">No lineup played 3+ minutes together.</div>
-              ) : (
+          <More label="Play types, sets, lineups and runs">
+            <div className="col" style={{ gap: 16, marginTop: 6 }}>
+              <Section title="Play types" right={<span className="tiny dim">poss · per poss</span>}>
                 <div className="card flush list">
-                  {report.lineups.map((l, i) => (
-                    <div key={i} className="gv-row top">
-                      <span className={`gv-pm num ${l.pm >= 0 ? 'good' : 'bad'}`}>{signed(l.pm, 0)}</span>
-                      <span className="grow dim2">{l.pids.map((pid) => userNames?.(pid) || '?').join(', ')}</span>
-                      <span className="dim tiny num">{l.min.toFixed(0)}m</span>
+                  <div className="gv-pt gv-pt-h" aria-hidden="true">
+                    <span className="grow" />
+                    <span>You</span>
+                    <span>Them</span>
+                  </div>
+                  {report.playTypes.map((p) => (
+                    <div key={p.key} className="gv-pt">
+                      <span className="grow">{p.label}</span>
+                      <span className="num">
+                        <span className="dim">{p.userPoss}</span> <b style={{ color: pppColor(p.userPpp, p.userPoss) }}>{p.userPoss ? p.userPpp.toFixed(2) : '—'}</b>
+                      </span>
+                      <span className="num">
+                        <span className="dim">{p.oppPoss}</span> <b style={{ color: pppColor(p.oppPpp, p.oppPoss) }}>{p.oppPoss ? p.oppPpp.toFixed(2) : '—'}</b>
+                      </span>
                     </div>
                   ))}
                 </div>
-              )}
-            </Section>
-          </div>
-          {report.runs.length > 0 && (
-            <Section title="Momentum swings">
-              <div className="card flush list">
-                {report.runs.map((r, i) => (
-                  <div key={i} className="gv-row top">
-                    <span className={`gv-run ${r.side === 'user' ? 'good' : 'bad'}`} aria-hidden="true" />
-                    <span className="grow">
-                      <span className={r.side === 'user' ? 'good' : 'bad'}>{r.text}</span>
-                      <span className="dim"> · {runContext(g, accentSide, r.startIdx, r.endIdx)}</span>
-                    </span>
+              </Section>
+              {report.sets.length > 0 && (
+                <Section
+                  title="Sets"
+                  right={
+                    <Help title="Sets">
+                      <p>The possessions each set opened, second chances included.</p>
+                      <p>Read by: the run by which their defense had taken a good part of its look away.</p>
+                    </Help>
+                  }
+                >
+                  <div className="card flush list">
+                    {report.sets.map((s) => (
+                      <div key={s.id} className="gv-row">
+                        <span className="grow">{s.name}</span>
+                        <span className="num dim2">{setLineText(s)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </Section>
-          )}
+                </Section>
+              )}
+              <Section title="Lineups">
+                {report.lineups.length === 0 ? (
+                  <div className="mu-note">No lineup played 3+ minutes together.</div>
+                ) : (
+                  <div className="card flush list">
+                    {report.lineups.map((l, i) => (
+                      <div key={i} className="gv-row top">
+                        <span className={`gv-pm num ${l.pm >= 0 ? 'good' : 'bad'}`}>{signed(l.pm, 0)}</span>
+                        <span className="grow dim2">{l.pids.map((pid) => userNames?.(pid) || '?').join(', ')}</span>
+                        <span className="dim tiny num">{l.min.toFixed(0)}m</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+              {report.runs.length > 0 && (
+                <Section title="Momentum swings">
+                  <div className="card flush list">
+                    {report.runs.map((r, i) => (
+                      <div key={i} className="gv-row top">
+                        <span className={`gv-run ${r.side === 'user' ? 'good' : 'bad'}`} aria-hidden="true" />
+                        <span className="grow">
+                          <span className={r.side === 'user' ? 'good' : 'bad'}>{r.text}</span>
+                          <span className="dim"> · {runContext(g, accentSide, r.startIdx, r.endIdx)}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+            </div>
+          </More>
         </>
       )}
 
@@ -289,8 +290,7 @@ export default function GameView() {
           </div>
         </Section>
       )}
-
-      {tab === 'pbp' && g.pbp && <PlayByPlay pbp={g.pbp} />}
+      {tab === 'flow' && g.pbp && g.pbp.length > 0 && (g.flow ? <More label="Play-by-play">{<PlayByPlay pbp={g.pbp} />}</More> : <PlayByPlay pbp={g.pbp} />)}
     </main>
   );
 }
@@ -345,7 +345,12 @@ function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League;
     <Section
       title={
         <h3>
-          Win probability
+          <Term id="winprob">Win probability</Term>
+        </h3>
+      }
+      right={
+        <span className="row" style={{ gap: 6 }}>
+          <span className="tiny dim">{me} above 50%</span>
           <Help title="Win probability">
             <p>
               {me} {pct(mine(series[0].wp))} to win at tip-off{g.edge === undefined ? ' (home court alone: this game kept no projection)' : ', from the pre-game projection'}.
@@ -353,9 +358,8 @@ function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League;
             <p>After each possession: the score, the time left{g.flowPoss ? ', who has the ball' : ''} and that projection.</p>
             {!g.flowT && <p>Possession times weren&apos;t kept for this game, so they are spread evenly over each period.</p>}
           </Help>
-        </h3>
+        </span>
       }
-      right={<span className="tiny dim">{me} above 50%</span>}
     >
       <div className="card">
         <WinProbChart
@@ -407,7 +411,7 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
   const periods = Math.max(4, ...pbp.map((e) => e.q));
   const rows = q ? pbp.filter((e) => e.q === q) : pbp;
   return (
-    <>
+    <div className="col" style={{ gap: 10, marginTop: 6 }}>
       <Chips
         label="Period"
         value={q}
@@ -427,7 +431,7 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 

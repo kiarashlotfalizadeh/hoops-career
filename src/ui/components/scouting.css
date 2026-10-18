@@ -1,18 +1,21 @@
 /* Scouting numbers (Scouting tab, game plan screen) */
+/* figures four to a row, hairlines between them (as a Statline), no box per figure */
 .scout-ranks {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 0;
 }
 .scout-ranks > div {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-  padding: 8px 9px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  padding: 0 10px;
+  border-left: 1px solid var(--line);
+}
+.scout-ranks > div:nth-child(4n + 1) {
+  padding-left: 0;
+  border-left: none;
 }
 .scout-ranks .k {
   font-size: 10px;
@@ -96,44 +99,45 @@
 .gp-note.bad {
   color: var(--bad);
 }
-.gp-note-input {
+.gp-chev {
+  flex: none;
+}
+/* the matchup sheet's choices: one row per defender, the picked one with a brand edge */
+.gp-opt {
   width: 100%;
-  min-height: 72px;
-  resize: vertical;
-  border-radius: 12px;
-  border: 1px solid var(--line-2);
-  background: var(--raised);
-  padding: 10px 12px;
-  font-size: 16px;
-}
-.gp-note-input:focus {
-  border-color: var(--accent-text);
-  outline: none;
-}
-/* how to guard them: the player, then the four instructions in one row on a phone */
-.gp-guard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-}
-.gp-guard-h {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  min-height: 50px;
+  padding: 8px 14px;
+  text-align: left;
 }
-.gp-guard-h .lr-name,
-.gp-guard-h .lr-meta {
+.gp-opt:active {
+  background: var(--surface);
+}
+.gp-opt.on {
+  background: color-mix(in srgb, var(--accent) 12%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.gp-opt-l {
   display: block;
+  font-weight: 700;
+  font-size: 14.5px;
 }
-.gp-guard .chips {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.gp-opt-s {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--text-dim);
 }
-.gp-guard .chip {
-  justify-content: center;
-  padding: 0 4px;
-  font-size: 12px;
-  white-space: nowrap;
+.gp-opt-s.inline {
+  display: inline;
+  font-weight: 500;
+}
+.gp-opt.on .gp-opt-s {
+  color: var(--text-2);
+}
+.gp-opt-c {
+  flex: none;
+  color: var(--accent-text);
 }

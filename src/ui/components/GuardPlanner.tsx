@@ -1,99 +1,21 @@
-// The game plan's player-by-player defense and attack: how to guard each of their top eight (a
-// scouting-report instruction, with the staff's suggestion and the numbers behind it), which of their
-// defenders to attack, and a junk defense on the players their offense runs through.
-import type { DefScheme, League, Player, PlayerDefense } from '../../core/types';
-import { PLAYER_DEFENSES } from '../../core/types';
-import { effectiveTactics, removePlanItem, setPlanItem, setPlanPlayerD } from '../../core/league/gamePlans';
-import { guardingPlan, huntPick, type GuardAdvice } from '../../core/analysis/guarding';
+// The game plan's defender to attack and its junk defense on the players their offense runs through
+// (the matchup page's Plan). How to guard each of their players is set with who guards him, on
+// Matchups (see MatchupPlanner).
+import type { DefScheme, League, Player } from '../../core/types';
+import { effectiveTactics, removePlanItem, setPlanItem } from '../../core/league/gamePlans';
+import { huntPick } from '../../core/analysis/guarding';
 import { projectedRotation } from '../../core/analysis/scouting';
-import { PLAYER_D_META, SCHEME_META, chasers } from '../../core/sim/tactics';
-import { attrDisplay, composites, fmtHeight } from '../../core/ratings';
+import { SCHEME_META, chasers } from '../../core/sim/tactics';
+import { attrDisplay, composites } from '../../core/ratings';
+import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
-import { Chips, Help, Ovr, Section, Tag } from './ui';
-import './scouting.css';
-import '../screens/tactics.css';
+import { Chips, Help, Section } from './ui';
+import '../games/games.css';
 
-const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
-
-/** His shooting as a short line: "34.1% 3P on 5.2 a game · 71.0% FT" from his games, else nothing. */
-function shootingLine(a: GuardAdvice): string {
-  const l = a.line;
-  if (l.source === 'ratings') return '';
-  const parts = [Number.isFinite(l.tpPct) && l.tpa >= 0.5 ? `${pct1(l.tpPct)} 3P on ${l.tpa.toFixed(1)}` : `${l.tpa.toFixed(1)} 3PA`];
-  if (Number.isFinite(l.ftPct) && l.fta >= 1) parts.push(`${pct1(l.ftPct)} FT`);
-  return `${parts.join(' · ')} a game${l.source === 'last' ? ' (last season)' : ''}`;
-}
-
-/** How to guard them: an instruction for each of their projected top eight, the staff's suggestion starred (Advanced). */
-export function GuardCard({ league, opp }: { league: League; opp: number }) {
-  const mutate = useStore.getState().mutate;
-  const advice = useLeagueMemo(() => guardingPlan(league, opp), [league, opp]);
-  const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
-  const names = rosterNames(advice.map((a) => league.players[a.pid]));
-  const set = (pid: number, d: PlayerDefense | null) => mutate((l) => setPlanPlayerD(l, opp, pid, d));
-  const planned = eff.defense.playerD ?? {};
-  return (
-    <Section
-      title="How to guard them"
-      right={
-        <Help title="How to guard them">
-          {PLAYER_DEFENSES.map((d) => (
-            <p key={d}>
-              <b>{PLAYER_D_META[d].label}:</b> {PLAYER_D_META[d].help}
-            </p>
-          ))}
-          <p>
-            Each instruction is for this opponent only and plays whenever he&apos;s on the floor. ★ is the staff&apos;s suggestion, from his games when there are enough, his
-            ratings otherwise. Tap an instruction again to take it off.
-          </p>
-        </Help>
-      }
-    >
-      {!advice.length ? (
-        <div className="card tx-empty">Their rotation isn&apos;t set yet.</div>
-      ) : (
-        <div className="card flush list">
-          {advice.map((a) => {
-            const p = league.players[a.pid];
-            const cur = planned[a.pid] ?? null;
-            const line = shootingLine(a);
-            return (
-              <div key={a.pid} className="gp-guard">
-                <div className="gp-guard-h">
-                  <Ovr v={p.ovr} size="sm" />
-                  <span className="grow">
-                    <span className="lr-name ellipsis">{names(a.pid)}</span>
-                    <span className="lr-meta">
-                      {p.pos} · {fmtHeight(p.heightIn)}
-                      {line ? ` · ${line}` : ''}
-                    </span>
-                  </span>
-                  {cur ? <Tag tone="info">{PLAYER_D_META[cur].short}</Tag> : <span className="tiny dim">Straight up</span>}
-                </div>
-                <Chips
-                  label={`How to guard ${names(a.pid)}`}
-                  value={cur ?? ('' as PlayerDefense)}
-                  onChange={(d: PlayerDefense) => set(a.pid, d === cur ? null : d)}
-                  options={PLAYER_DEFENSES.map((d) => ({ id: d, label: `${PLAYER_D_META[d].short}${d === a.suggest ? ' ★' : ''}` }))}
-                />
-                {a.suggest && a.why && (
-                  <div className="tx-note">
-                    ★ {PLAYER_D_META[a.suggest].label}: {a.why}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Section>
-  );
-}
-
-/** Attack one of their defenders: the staff suggests their weakest perimeter defender (Advanced). */
+/** Attack one of their defenders: the staff suggests their weakest perimeter defender. */
 export function AttackCard({ league, opp }: { league: League; opp: number }) {
-  const mutate = useStore.getState().mutate;
+  const simming = useStore((s) => !!s.sim);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
   const pick = useLeagueMemo(() => huntPick(league, opp), [league, opp]);
@@ -101,49 +23,45 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
   const target = eff.offense.huntTarget ?? null;
   const per = (p: Player) => attrDisplay(composites(p.ratings).perDef);
   const set = (pid: number | null) =>
-    mutate((l) => {
+    edit((l) => {
       if (pid === null) removePlanItem(l, opp, 'hunt');
       else setPlanItem(l, opp, { id: 'hunt', label: `Attack ${l.players[pid]?.lastName ?? ''}`, group: 'hunt', patch: { offense: { huntTarget: pid } } });
     });
   const sorted = [...theirs].sort((a, b) => per(a) - per(b) || a.pid - b.pid);
+  if (!theirs.length) return null;
   return (
     <Section
-      title="Attack"
+      title="Attack a defender"
       right={
         <Help title="Attack a defender">
           While he&apos;s on the floor your offense runs its isolations, post-ups and ball screens at the player he guards, and that player sets most of the ball screens, so a
           switch leaves him on your ball handler and a weak screen defender can&apos;t hold up the coverage. It costs some ball movement: motion and handoffs lose a little. Against
           a real weak link it&apos;s a small edge; against a good defender it costs points. It replaces Hunt mismatches while he plays. The numbers are perimeter defense on the
-          40-99 scale.
+          40-99 scale; ★ is the staff&apos;s pick.
         </Help>
       }
     >
-      {!theirs.length ? (
-        <div className="card tx-empty">Their rotation isn&apos;t set yet.</div>
-      ) : (
-        <div className="card col tx-group tight">
-          <Chips
-            label="Defender to attack"
-            value={target ?? -1}
-            onChange={(pid: number) => set(pid < 0 || pid === target ? null : pid)}
-            options={[{ id: -1, label: 'Nobody' }, ...sorted.map((p) => ({ id: p.pid, label: `${names(p.pid)} ${per(p)}${p.pid === pick?.pid && pick.worth ? ' ★' : ''}` }))]}
-          />
-          <div className="tx-note">
-            {pick
-              ? pick.worth
-                ? `★ ${names(pick.pid)} is their weakest perimeter defender (${pick.perDef}, their rotation ${pick.teamPerDef}).`
-                : `Their weakest perimeter defender, ${names(pick.pid)} (${pick.perDef}), is close to their rotation (${pick.teamPerDef}): hunting him may not pay.`
-              : 'Perimeter defense on the 40-99 scale.'}
+      <div className="mu-group">
+        <Chips
+          label="Defender to attack"
+          value={target ?? -1}
+          disabled={simming}
+          onChange={(pid: number) => set(pid < 0 || pid === target ? null : pid)}
+          options={[{ id: -1, label: 'Nobody' }, ...sorted.map((p) => ({ id: p.pid, label: `${names(p.pid)} ${per(p)}${p.pid === pick?.pid && pick.worth ? ' ★' : ''}` }))]}
+        />
+        {pick && !pick.worth && (
+          <div className="mu-note">
+            Their weakest, {names(pick.pid)} ({pick.perDef}), is close to their rotation ({pick.teamPerDef}): it may not pay.
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </Section>
   );
 }
 
-/** A box-and-one or triangle-and-two on the players their offense runs through (Advanced). */
+/** A box-and-one or triangle-and-two on the players their offense runs through. */
 export function JunkCard({ league, opp }: { league: League; opp: number }) {
-  const mutate = useStore.getState().mutate;
+  const simming = useStore((s) => !!s.sim);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
   const names = rosterNames(theirs);
@@ -154,7 +72,7 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
   // their main creators, as the engine picks them when nobody is named: most usage first
   const creators = [...theirs].sort((a, b) => creatorScore(b) - creatorScore(a) || a.pid - b.pid);
   const set = (s: DefScheme, pids: number[]) =>
-    mutate((l) => {
+    edit((l) => {
       const items = l.gamePlans?.[opp]?.items ?? [];
       for (const it of items.filter((x) => x.id === 'junk' || x.id === 'box-1' || x.id === 'tri-2')) removePlanItem(l, opp, it.id);
       // (a playbook that plays a junk defense itself needs an item to play man-to-man against them)
@@ -189,14 +107,18 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
           <p>
             <b>{SCHEME_META.tri2.label}:</b> {SCHEME_META.tri2.help}
           </p>
-          <p>Planned on named players, it plays only while one of them is on the floor: the rest of the game you play your usual defense. Test it in the Lab first.</p>
+          <p>
+            Planned on named players, it plays only while one of them is on the floor: the rest of the game you play your usual defense. The staff sends your best perimeter
+            defenders (or whoever you plan on Matchups) to chase; the rest play a zone behind them. Test it first.
+          </p>
         </Help>
       }
     >
-      <div className="card col tx-group tight">
+      <div className="mu-group">
         <Chips
           label="Junk defense"
           value={n ? scheme : 'man'}
+          disabled={simming}
           onChange={pickScheme}
           options={[
             { id: 'man' as DefScheme, label: 'None' },
@@ -205,20 +127,16 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
           ]}
         />
         {n > 0 && theirs.length > 0 && (
-          <div className="tx-ctl-chips col">
+          <div className="mu-sub">
             <div className="over">Chase {n === 2 ? 'two' : 'one'}</div>
             <div className="chips" role="group" aria-label="Players to chase">
               {creators.map((p) => (
-                <button key={p.pid} className={`chip ${chase.includes(p.pid) ? 'on' : ''}`} aria-pressed={chase.includes(p.pid)} onClick={() => toggle(p.pid)}>
+                <button key={p.pid} className={`chip ${chase.includes(p.pid) ? 'on' : ''}`} aria-pressed={chase.includes(p.pid)} disabled={simming} onClick={() => toggle(p.pid)}>
                   {names(p.pid)}
                 </button>
               ))}
             </div>
-            <div className="tx-note">
-              {chase.length
-                ? `The staff sends ${n === 2 ? 'two of your best perimeter defenders' : 'one of your best perimeter defenders'} (or whoever you plan in Matchups) to chase ${chase.map(names).join(' and ')}; the rest play a ${n === 2 ? 'triangle' : '2-2 box'}. While ${chase.length === 2 ? 'neither is' : "he isn't"} on the floor you play man-to-man.`
-                : `Nobody named: the chaser${n === 2 ? 's take their two main creators' : ' takes their main creator'} on the floor, all game.`}
-            </div>
+            {!chase.length && <div className="mu-note">Nobody named: the chasers take their main creators on the floor, all game.</div>}
           </div>
         )}
       </div>

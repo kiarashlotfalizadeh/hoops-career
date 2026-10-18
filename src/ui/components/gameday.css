@@ -366,15 +366,39 @@
   font-size: 11.5px;
   color: var(--text-dim);
 }
-.gd-press {
+/* the press conference: each answer with what it does to the room */
+.gd-press-opt {
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.gd-press-opts {
-  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
   flex-wrap: wrap;
-  gap: 8px;
+  min-height: 52px;
+  padding: 8px 14px;
+  text-align: left;
+}
+.gd-press-opt:active {
+  background: var(--surface);
+}
+.gd-press-opt:disabled {
+  opacity: 0.55;
+}
+.gd-press-l {
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--accent-text);
+}
+.gd-press-h {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.gd-press-done {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--line);
 }
 /* the night's other results */
 .gd-other {

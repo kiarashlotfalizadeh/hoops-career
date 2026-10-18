@@ -30,16 +30,19 @@ interface Cell {
 /** Where the numbers come from, for a heading: "12 games", "Last season, 82 games". */
 export const scoutSource = (d: ScoutData) => `${d.lastSeason ? `${seasonLabel(d.season)} season, ` : ''}${d.gp} game${d.gp === 1 ? '' : 's'}`;
 
-/** League ranks: the ratings, the four factors at both ends and the shot mix. */
-export function RankStrip({ d }: { d: ScoutData }) {
+/**
+ * League ranks: the ratings, the four factors at both ends and the shot mix. `part`: the ratings
+ * alone ('main'), or the rest ('rest'), for a summary with the detail a tap down.
+ */
+export function RankStrip({ d, part }: { d: ScoutData; part?: 'main' | 'rest' }) {
   const n = d.teams;
-  const cells: Cell[] = [
+  const all: Cell[] = [
     { k: 'Pace', r: d.pace, fmt: f1, style: true, help: 'Possessions a game (1st = fastest)' },
     { k: 'Off Rtg', r: d.ortg, fmt: f1, help: 'Points per 100 possessions' },
     { k: 'Def Rtg', r: d.drtg, fmt: f1, help: 'Points allowed per 100 possessions (1st = fewest)' },
     { k: 'Net', r: d.net, fmt: (v) => signed(v), help: 'Net rating' },
   ];
-  cells.push(
+  all.push(
     { k: 'eFG%', r: d.off.efg, fmt: p1, help: 'Effective field-goal percentage' },
     { k: 'TOV%', r: d.off.tov, fmt: p1, help: 'Turnovers per possession (1st = fewest)' },
     { k: 'ORB%', r: d.off.orb, fmt: p1, help: 'Share of their misses they rebound' },
@@ -51,6 +54,7 @@ export function RankStrip({ d }: { d: ScoutData }) {
     { k: '3PA rate', r: d.threeRate, fmt: p0, style: true, help: 'Share of their shots from three (1st = most)' },
     { k: 'Rim rate', r: d.rimRate, fmt: p0, style: true, help: 'Share of their shots at the rim (1st = most)' },
   );
+  const cells = part === 'main' ? all.slice(0, 4) : part === 'rest' ? all.slice(4) : all;
   return (
     <div className="scout-ranks" role="list" aria-label="League ranks">
       {cells.map((c) => (
