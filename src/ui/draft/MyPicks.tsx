@@ -1,7 +1,7 @@
 // Your picks in this draft (and yours that other teams hold), and after the draft its results.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Ticket } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
 import { teamName } from '../../core/league/helpers';
 import { pickLabel, pickTermsNote } from '../../core/league/trades';
@@ -45,25 +45,15 @@ export function MyPicks({ league }: { league: League }) {
           <Empty>No picks left in this draft.</Empty>
         ) : (
           <div className="card flush list">
+            {/* the name says the round, the slot once it's set and whose pick it was ("2027 1st #4 (LAC)"): the line under it only its terms */}
             {owned.map((d) => (
               <div key={d.dpid} className="listrow">
-                <TeamLogo tid={d.originalTid} size={30} decorative />
+                <TeamLogo tid={d.originalTid} size={26} decorative />
                 <div className="grow fo-min0">
                   <div className="fo-name">{pickLabel(league, d)}</div>
-                  <div className="fo-meta fo-wrap">
-                    {d.originalTid === user ? 'Own pick' : `From the ${teamName(league.teams[d.originalTid])}`}
-                    {/* its protection and any swap on it, in words */}
-                    {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
-                  </div>
+                  {pickTermsNote(league, d) && <div className="fo-meta fo-wrap">{pickTermsNote(league, d)}</div>}
                 </div>
-                {/* the label carries the overall number once the order is set */}
-                {proj(d) !== undefined ? (
-                  <span className="tag">Proj. #{proj(d)}</span>
-                ) : (
-                  <span className={`tag ${d.pick ? 'info' : ''}`}>
-                    <Ticket size={11} /> R{d.round}
-                  </span>
-                )}
+                {proj(d) !== undefined && <span className="tag">Proj. #{proj(d)}</span>}
               </div>
             ))}
           </div>
@@ -75,15 +65,14 @@ export function MyPicks({ league }: { league: League }) {
           <div className="card flush list">
             {owed.map((d) => (
               <div key={d.dpid} className="listrow">
-                <TeamLogo tid={d.tid} size={30} decorative />
+                <TeamLogo tid={d.tid} size={26} decorative />
                 <div className="grow fo-min0">
                   <div className="fo-name">{pickLabel(league, d)}</div>
                   <div className="fo-meta fo-wrap">
-                    Owned by the {teamName(league.teams[d.tid])}
+                    Held by the {teamName(league.teams[d.tid])}
                     {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
                   </div>
                 </div>
-                <span className={`tag ${d.round === 1 ? 'info' : ''}`}>R{d.round}</span>
               </div>
             ))}
           </div>

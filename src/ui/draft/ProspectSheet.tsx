@@ -40,7 +40,8 @@ export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number
             {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.weightLb} lb · {p.college ? `${p.college} · ${p.country}` : p.country}
           </div>
           <div className="chips">
-            <span className="tag info">{p.archetype}</span>
+            {/* (his scouting blurb usually opens with it: then once is enough) */}
+            {!p.prospect?.blurb?.startsWith(p.archetype) && <span className="tag info">{p.archetype}</span>}
             {p.tid >= 0 && (
               <span className="tag good">
                 Drafted #{overallPick(league, p.draft.round, p.draft.pick)} by {league.teams[p.tid].abbrev}

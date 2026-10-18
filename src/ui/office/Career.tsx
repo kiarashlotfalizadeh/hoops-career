@@ -198,7 +198,7 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
                 style={on ? slabVars(x.colors) : me ? { opacity: 0.45 } : undefined}
                 onClick={() => setPick(x.tid)}
               >
-                <TeamLogo tid={x.tid} size={38} decorative />
+                <TeamLogo tid={x.tid} size={28} decorative />
                 <span className="nl-team-name">{x.name}</span>
                 <span className="nl-team-sub num">{me ? (league.fired ? 'Fired' : 'Yours') : `${ts.won}-${ts.lost}`}</span>
               </button>

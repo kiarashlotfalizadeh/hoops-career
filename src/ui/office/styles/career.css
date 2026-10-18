@@ -1,4 +1,4 @@
-/* Career: the record slab. */
+/* Career: the record slab, and the conference's teams to take over, four to a row. */
 
 .fo-career-slab {
   display: flex;
@@ -9,4 +9,23 @@
 .fo-career-slab .statline .v {
   font-size: 24px;
   white-space: nowrap;
+}
+
+/* New League's team tiles (start.css), smaller: a conference fits a phone's screen */
+.fo-career .nl-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.fo-career .nl-team {
+  gap: 3px;
+  padding: 8px 4px 7px;
+}
+
+.fo-career .nl-team-name {
+  font-size: 12.5px;
+}
+
+.fo-career .nl-team-sub {
+  font-size: 11px;
 }

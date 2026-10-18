@@ -23,7 +23,7 @@
 
 /* the Front Office's own page tabs sit a little tighter, so Trade's and Finances' fit a phone's row */
 .fo-page > .seg.tabs button {
-  padding: 0 10px;
+  padding: 0 8px;
 }
 
 /* a pulsing dot before an overline: something is happening now (the draft clock) */

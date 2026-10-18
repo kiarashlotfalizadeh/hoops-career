@@ -8,7 +8,7 @@ import { userNextSlot, type MockDraft } from '../../core/league/mockDraft';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Empty } from '../components/ui';
+import { Empty } from '../components/ui';
 import { OvrPot } from '../office/common';
 import { overallPick } from '../league/shared';
 
@@ -51,10 +51,16 @@ export function BoardList({
     if (!mock || !r) return null;
     const where = r.med > 2 * league.teams.length ? 'Undrafted in most mocks' : r.lo === r.hi ? `Proj. #${r.med}` : `Proj. #${r.lo}-${r.hi > 2 * league.teams.length ? '' : r.hi}`;
     const gone = mine ? mock.goneBefore(p.pid, mine.overall) : null;
-    return { where: where.replace(/-$/, '+'), gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `gone before your #${mine!.overall}: ${Math.round(gone * 100)}%` : null };
+    return { where: where.replace(/-$/, '+'), gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `${Math.round(gone * 100)}% gone by your #${mine!.overall}` : null };
   };
   return (
     <div className="card flush">
+      {/* what each column is: the consensus rank, the prospect with the mocks' range for him, his rating now and the ceiling scouts see */}
+      <div className="fo-board-h" aria-hidden="true">
+        <span className="fo-rank">#</span>
+        <span className="grow">Prospect · mock range</span>
+        <span>OVR ▲POT</span>
+      </div>
       <div className="list wide2">
         {list.slice(0, limit).map((p) => {
           const pr = projection(p);
@@ -62,8 +68,10 @@ export function BoardList({
             // the scouting report and the Draft button sit side by side: a button inside a button is announced as one
             <div key={p.pid} className={`fo-board-row ${onDraft ? 'can' : ''}`}>
               <button className="fo-prow grow" onClick={() => onOpen(p.pid)}>
-                <span className="fo-rank">{p.prospect?.rank ?? '—'}</span>
-                <Avatar p={p} />
+                <span className="fo-rank">
+                  <span className="sr-only">Board rank </span>
+                  {p.prospect?.rank ?? '—'}
+                </span>
                 <div className="grow">
                   <div className="fo-name">{playerName(p)}</div>
                   <div className="fo-meta">

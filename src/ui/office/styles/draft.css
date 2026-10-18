@@ -156,9 +156,25 @@
   gap: 9px;
 }
 
-.fo-board-row .avatar {
-  width: 34px;
-  height: 34px;
+/* the board's column heads: rank, prospect, rating and ceiling */
+.fo-board-h {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px var(--row-px) 5px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fo-board-h .fo-rank {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
 .fo-board-proj {

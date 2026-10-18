@@ -2,7 +2,7 @@
 // the lottery; the lottery's result; draft night (the clock, the board, the selections); after it,
 // the results. This module holds the views' switch and the confirm sheets; each view lives in
 // src/ui/draft/.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { League } from '../../core/types';
 import { playerName, prospects, withRng } from '../../core/league/helpers';
@@ -60,13 +60,20 @@ export default function Draft() {
   const onClock = !!np && np.tid === user;
   const after = league.phase === 'resign' || league.phase === 'freeAgency';
 
-  const views: { id: View; label: string }[] = [];
+  // a short word fits five tabs in a phone's row; the tab's name stays the full one
+  const short = (word: string, name: string) => (
+    <>
+      <span aria-hidden="true">{word}</span>
+      <span className="sr-only">{name}</span>
+    </>
+  );
+  const views: { id: View; label: ReactNode }[] = [];
   if (league.phase === 'draft') views.push({ id: 'live', label: 'Live' });
   if (league.phase === 'draftLottery') views.push({ id: 'lottery', label: 'Lottery' });
   if (after) views.push({ id: 'results', label: 'Results' });
-  if (!after) views.push({ id: 'board', label: 'Big board' }, { id: 'combine', label: 'Combine' });
+  if (!after) views.push({ id: 'board', label: short('Board', 'Big board') }, { id: 'combine', label: 'Combine' });
   if (!after && mockAvailable(league)) views.push({ id: 'mock', label: 'Mock' });
-  views.push({ id: 'mine', label: 'Your picks' });
+  views.push({ id: 'mine', label: short('Picks', 'Your picks') });
   // the mock draft (src/core/league/mockDraft.ts): its projections show on the board too
   const mock = useLeagueMemo(() => (after ? null : leagueMock(league)), [league, after]);
 

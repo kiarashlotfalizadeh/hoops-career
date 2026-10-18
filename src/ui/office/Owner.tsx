@@ -84,7 +84,7 @@ export default function Owner() {
                     </div>
                     <CenterBar value={g.grade} />
                     <div className="tiny dim">
-                      {capitalize(resultText(g, g.result))} · counts {Math.round(g.weight * 100)}%
+                      {capitalize(resultText(g, g.result))} · weight {Math.round(g.weight * 100)}%
                     </div>
                   </div>
                 ))
@@ -101,7 +101,7 @@ export default function Owner() {
                       </div>
                     )}
                     <div className="tiny dim">
-                      {p.text} · counts {Math.round(p.goal.weight * 100)}%
+                      {p.text} · weight {Math.round(p.goal.weight * 100)}%
                     </div>
                   </div>
                 ))}
