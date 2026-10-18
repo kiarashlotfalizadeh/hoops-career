@@ -136,8 +136,8 @@ export default function Lineups() {
                 </p>
               ) : (
                 <p>
-                  Points scored (ORtg) and allowed (DRtg) per 100 of the unit&apos;s own possessions while those players shared the floor; net is the difference.{' '}
-                  {view !== '5' && 'Trios and pairs count every five-man stint they were part of.'}
+                  Points scored (<Term id="ortg">ORtg</Term>) and allowed (DRtg) per 100 of the unit&apos;s own possessions while those players shared the floor; net is the
+                  difference. {view !== '5' && 'Trios and pairs count every five-man stint they were part of.'}
                 </p>
               )}
               <p>
@@ -150,7 +150,7 @@ export default function Lineups() {
         }
         right={
           (any || hasLast) && (
-            <button className="card-link tm-filter-btn" aria-haspopup="dialog" onClick={() => setFiltering(true)}>
+            <button className="card-link tm-filter-btn" aria-haspopup="dialog" aria-label={`Sort and filter: by ${SORT_LABEL[sort]}`} onClick={() => setFiltering(true)}>
               <SlidersHorizontal size={14} aria-hidden="true" /> {SORT_LABEL[sort]}
             </button>
           )
@@ -353,7 +353,7 @@ function UnitSheet({
       <Statline
         items={[
           { k: 'Net', v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-          { k: <Term id="ortg">ORtg</Term>, v: f1(u.ortg) },
+          { k: 'ORtg', v: f1(u.ortg) },
           { k: 'DRtg', v: f1(u.drtg) },
           { k: 'Minutes', v: Math.round(u.min), s: `${u.poss} poss` },
         ]}
