@@ -1,7 +1,7 @@
 // The Office hub: the GM's desk. What the desk is doing now (the phase card and its one action),
 // the decisions waiting on it, the cap sheet in one block, and the desks, each with a line of live
 // status. The contracts table lives on Team → Roster → Contracts; the owner on his own desk.
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, ClipboardList, Crown, ListOrdered, PenLine, PiggyBank, Ticket, UserPlus } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -50,7 +50,10 @@ export default function Office() {
   return (
     <main className="page fo-page">
       <PageHeader title="Office" />
-      <PhaseCard league={league} />
+      {/* a decision the league waits on comes first: the phase card's action steps down */}
+      <Quiet.Provider value={items.some((i) => i.required)}>
+        <PhaseCard league={league} />
+      </Quiet.Provider>
       {items.length > 0 && (
         <div className="card flush ag-list" role="list" aria-label="Decisions">
           {items.map((i) => (
@@ -68,6 +71,9 @@ export default function Office() {
 }
 
 // ------------------------------------------------------------------ the phase card
+
+/** A decision waits on the user: the phase card doesn't compete with it. */
+const Quiet = createContext(false);
 
 interface Action {
   label: string;
@@ -94,13 +100,14 @@ function Now({
 }) {
   const nav = useNavigate();
   const busy = useBusy();
+  const quiet = useContext(Quiet);
   const button = (a: Action, primary: boolean) => (
     <button className={`btn block ${primary ? 'primary' : ''}`} disabled={!!a.run && busy} onClick={() => (a.run ? a.run() : nav(a.to!))}>
       {a.label}
     </button>
   );
   return (
-    <section className={`card fo-now ${action ? 'accent' : ''}`} aria-label="Now">
+    <section className={`card fo-now ${action && !quiet ? 'accent' : ''}`} aria-label="Now">
       <div className="fo-now-over">
         <span className={live ? 'fo-live' : ''}>{over}</span>
       </div>
@@ -109,7 +116,7 @@ function Now({
       {children}
       {(action || second) && (
         <div className="col fo-now-acts">
-          {action && button(action, true)}
+          {action && button(action, !quiet)}
           {second && button(second, false)}
         </div>
       )}
@@ -211,7 +218,15 @@ function PhaseCard({ league }: { league: League }) {
         <Now
           over="Re-signing"
           title={exp ? `${plural(exp, 'contract')} expiring` : 'Nothing expiring'}
-          sub={exp ? 'Bird rights: keep them, even over the cap.' : 'Open free agency when you are ready.'}
+          sub={
+            exp ? (
+              <>
+                <Term id="bird">Bird rights</Term>: keep them, even over the cap.
+              </>
+            ) : (
+              'Open free agency when you are ready.'
+            )
+          }
           action={{ label: 'Re-sign players', to: '/office/resign' }}
         />
       );

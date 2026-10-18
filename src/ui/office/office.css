@@ -2348,3 +2348,8 @@ button.listrow {
   font-size: 24px;
   white-space: nowrap;
 }
+/* a glossary word in an overline or a list divider keeps its caps */
+.fo-page .term {
+  text-transform: inherit;
+  letter-spacing: inherit;
+}

@@ -24,6 +24,7 @@ import {
 import { useLeague } from '../../state/store';
 import { agenda } from '../../core/league/agenda';
 import { AgendaRow } from '../components/Agenda';
+import { Term } from '../components/Glossary';
 import { settle } from '../../state/actions/office';
 import { Section, Sheet } from '../components/ui';
 import { Callout, OvrPot, fmtM, playerMeta, shortSeason } from './common';
@@ -172,7 +173,13 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
   if (league.phase !== 'freeAgency' || !mine.length) return null;
   const full = summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX;
   return (
-    <Section title={`Your restricted free agents · ${mine.length}`}>
+    <Section
+      title={
+        <h3>
+          Your <Term id="rfa">restricted free agents</Term> · {mine.length}
+        </h3>
+      }
+    >
       <div className="tiny dim">
         Re-sign with Bird rights, or match an offer sheet within {MATCH_DAYS} days. Unsigned at the close, he plays {seasonLabel(league.season + 1)} on his qualifying offer
         {full ? ` (with a roster spot: full at ${OFFSEASON_ROSTER_MAX})` : ''}.

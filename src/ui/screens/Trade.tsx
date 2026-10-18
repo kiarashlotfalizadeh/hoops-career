@@ -35,6 +35,7 @@ import { makeTrade } from '../../state/actions/office';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Empty, Ovr, PageHeader, Section, Segmented, scrollBehavior } from '../components/ui';
 import { slabVars } from '../teamColors';
+import { Term } from '../components/Glossary';
 import { STRATEGY_META, Callout, HelpSheet, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { isUntouchable, openProposals } from '../../core/league/proposals';
@@ -684,7 +685,9 @@ function AssetList({
           ))}
         </div>
       )}
-      <div className="list-divider">Swap rights</div>
+      <div className="list-divider">
+        <Term id="swap">Swap rights</Term>
+      </div>
       <SwapChips league={league} giver={tid} taker={other.tid} value={sel.swaps ?? []} taken={taken} onChange={(swaps) => onChange({ ...sel, swaps })} />
       <div className="list-divider">Cash</div>
       <CashControl league={league} from={tid} to={other.tid} value={sel.cash ?? 0} blocked={(other.cash ?? 0) > 0} onChange={(cash) => onChange({ ...sel, cash })} />
