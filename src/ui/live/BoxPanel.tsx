@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameType, League } from '../../core/types';
 import { GAME } from '../../core/constants';
+import { madeAtt } from '../../core/format';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { Card, Chips, Section, Segmented } from '../components/ui';
@@ -38,7 +39,7 @@ export function BoxPanel({
   nameOf: (pid: number) => string;
   /** Away, home bar colours. */
   colors: [string, string];
-  /** Home, away flow colours. */
+  /** Home, away colours (the flow's and the shot charts'). */
   flowColors: [string, string];
   /** Win probability's starting point (the projected home margin) and the game's type; absent when it's switched off. */
   wp?: { edge: number; type: GameType };
@@ -134,7 +135,7 @@ export function BoxPanel({
           setShooter={setShooter}
           abbrevs={[home.abbrev, away.abbrev]}
           nameOf={nameOf}
-          color={team === side ? 'var(--accent)' : '#7dd3fc'}
+          color={flowColors[team]}
         />
       )}
       {tab === 'flow' && wp && (
@@ -163,7 +164,7 @@ export function BoxPanel({
             />
           )}
           <div className="small dim" style={{ marginTop: 8 }}>
-            Largest leads: {home.abbrev} {res.home.extra.biggestLead}, {away.abbrev} {res.away.extra.biggestLead}.
+            Largest leads: {away.abbrev} {res.away.extra.biggestLead}, {home.abbrev} {res.home.extra.biggestLead}.
           </div>
         </Card>
       )}
@@ -219,7 +220,7 @@ function ShotsTab({
         ]}
       />
       <Chips label="Period" value={period} onChange={setPeriod} options={[{ id: 0, label: 'All' }, ...periods]} />
-      <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${made}/${shots.length} FG${period ? ` in ${periodLabel(period)}` : ''}`}>
+      <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${madeAtt(made, shots.length)} FG${period ? ` in ${periodLabel(period)}` : ''}`}>
         {all.length === 0 ? (
           <div className="small dim">No shots yet{period ? ` in ${periodLabel(period)}` : ''}.</div>
         ) : (
@@ -241,10 +242,10 @@ function ShotsTab({
                 >
                   <span className="grow ellipsis">{nameOf(r.pid)}</span>
                   <span className="num" style={{ width: 52, textAlign: 'right' }}>
-                    {r.fgm}-{r.fga}
+                    {madeAtt(r.fgm, r.fga)}
                   </span>
                   <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>
-                    {r.tpm}-{r.tpa}
+                    {madeAtt(r.tpm, r.tpa)}
                   </span>
                 </button>
               ))}

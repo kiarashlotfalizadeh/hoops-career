@@ -34,7 +34,7 @@ export function FlowTab({ g, league, side, kits }: { g: GameResult; league: Leag
               height={150}
             />
             <div className="small dim" style={{ marginTop: 8 }}>
-              Largest leads: {home.abbrev} {g.home.extra.biggestLead}, {away.abbrev} {g.away.extra.biggestLead}.
+              Largest leads: {away.abbrev} {g.away.extra.biggestLead}, {home.abbrev} {g.home.extra.biggestLead}.
             </div>
           </div>
         </Section>
