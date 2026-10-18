@@ -45,7 +45,7 @@ export function CupTab({ league }: { league: League }) {
         <div className="card lg-blank">
           <Trophy size={26} aria-hidden="true" />
           <h3>No NBA Cup this season</h3>
-          <p>It&apos;s drawn with each new schedule: six groups of five play on Cup nights in November, the best eight meet in December knockouts.</p>
+          <p>Drawn with each new schedule: groups in November, knockouts in December.</p>
         </div>
       </>
     );
@@ -173,7 +173,7 @@ function GroupTables({ league, tables, seeds, decided }: { league: League; table
               const seed = seedOf(r.tid);
               const out = decided && seed === undefined;
               return (
-                <Link key={r.tid} to={`/team/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
+                <Link key={r.tid} to={`/teams/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
                   <span className="rk">{r.won + r.lost ? r.rank : '—'}</span>
                   <TeamLogo tid={r.tid} size={22} decorative />
                   <span className="nm">

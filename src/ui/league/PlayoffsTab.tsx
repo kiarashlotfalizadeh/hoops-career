@@ -94,8 +94,8 @@ export function PlayoffsTab({ league }: { league: League }) {
         {lastAw?.champion !== undefined && <ChampionSlab league={league} season={lastAw.season} tid={lastAw.champion} runnerUp={lastAw.runnerUp} fmvp={lastAw.finalsMvp} />}
         <div className="card lg-blank">
           <Trophy size={26} aria-hidden="true" />
-          <h3>After the regular season</h3>
-          <p>The top six in each conference go straight in; seeds 7-10 play in. A projected bracket shows once games are played.</p>
+          <h3>The bracket comes after the regular season</h3>
+          <p>Seeds 1-6 go straight in, 7-10 play in. The projected bracket shows once games are played.</p>
         </div>
       </>
     );
@@ -121,7 +121,7 @@ export function PlayoffsTab({ league }: { league: League }) {
           fmvp={league.awards.find((a) => a.season === league.season)?.finalsMvp}
         />
       )}
-      <Toolbar right={phase === 'projected' ? <span className="tag info">Projected</span> : undefined}>{status}</Toolbar>
+      {phase !== 'done' && <Toolbar right={phase === 'projected' ? <span className="tag info">Projected</span> : undefined}>{status}</Toolbar>}
       <div className="bk-only-narrow">
         <Segmented
           label="Conference"

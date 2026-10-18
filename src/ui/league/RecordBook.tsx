@@ -1,9 +1,10 @@
-// History → Records: the league's and each franchise's record book. Single games come from the book
-// kept as games are played (League.records); single seasons and careers from the stats every
-// player and team keeps for good. Only seasons played in this league count.
-import type { ReactNode } from 'react';
+// History → Records: the league's and each franchise's record book, one line per record (who holds
+// it and the mark), its whole list a tap away. Single games come from the book kept as games are
+// played (League.records); single seasons and careers from the stats every player and team keeps
+// for good. Only seasons played in this league count.
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
@@ -24,107 +25,34 @@ import {
   teamSeasonRecords,
   type CareerStat,
   type GameMark,
-  type RecStat,
   type SeasonStat,
   type TeamMark,
-  type TeamRecStat,
   type TeamSeasonStat,
 } from '../../core/league/records';
 import { TeamLogo } from '../components/TeamLogo';
-import { Chips, Section, Segmented } from '../components/ui';
+import { Help, Section, Sheet } from '../components/ui';
 import { f1, p1, rosterNames } from '../stats';
-import { useQueryParam } from './shared';
-
-type Part = 'game' | 'season' | 'career';
-type GameKey = RecStat | `team-${TeamRecStat}`;
+import { teamPath, useQueryParam } from './shared';
 
 const SEASON_STATS: SeasonStat[] = ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'pts', 'tpm', 'fg', 'tp', 'ft'];
-const SEASON_SHORT: Record<SeasonStat, string> = { ppg: 'PPG', rpg: 'RPG', apg: 'APG', spg: 'SPG', bpg: 'BPG', pts: 'Points', tpm: '3PM', fg: 'FG%', tp: '3P%', ft: 'FT%' };
 const TEAM_SEASON_STATS: TeamSeasonStat[] = ['wins', 'losses', 'net', 'ortg', 'drtg', 'ppg'];
 const CAREER_STATS: CareerStat[] = ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm', 'gp'];
-const GAME_SHORT: Record<GameKey, string> = {
-  pts: 'Points',
-  reb: 'Rebounds',
-  ast: 'Assists',
-  stl: 'Steals',
-  blk: 'Blocks',
-  tpm: 'Threes',
-  'team-pts': 'Team points',
-  'team-margin': 'Biggest win',
-  'team-tpm': 'Team threes',
-};
-const GAME_KEYS: GameKey[] = [...REC_STATS, ...TEAM_REC_STATS.map((s) => `team-${s}` as const)];
 
-export function RecordBook({ league }: { league: League }) {
-  const [scope, setScope] = useQueryParam<string>('rec', 'league');
-  const [part, setPart] = useQueryParam<Part>('part', 'game', ['game', 'season', 'career']);
-  const [post, setPost] = useQueryParam<'reg' | 'post'>('book', 'reg', ['reg', 'post']);
-  const [gameKey, setGameKey] = useQueryParam<GameKey>('stat', 'pts', GAME_KEYS);
-  const [seasonStat, setSeasonStat] = useQueryParam<SeasonStat>('sstat', 'ppg', SEASON_STATS);
-  const [teamStat, setTeamStat] = useQueryParam<TeamSeasonStat>('tstat', 'wins', TEAM_SEASON_STATS);
-  const [careerStat, setCareerStat] = useQueryParam<CareerStat>('cstat', 'pts', CAREER_STATS);
-  const tid = scope !== 'league' && league.teams[Number(scope)] ? Number(scope) : undefined;
-  const team = tid !== undefined ? league.teams[tid] : undefined;
-  const book = league.records;
-  const since = book?.since ?? league.startSeason;
-  const playoffs = post === 'post';
-
-  return (
-    <>
-      <div className="lg-book-h">
-        {team ? <TeamLogo tid={team.tid} size={32} decorative /> : <BookOpen size={22} className="dim" aria-hidden="true" />}
-        <div className="grow">
-          <div className="lg-book-t ellipsis">{team ? `${team.region} ${team.name}` : 'League records'}</div>
-          <div className="lg-book-s ellipsis">Since {seasonLabel(since)} · this league&apos;s seasons only</div>
-        </div>
-        <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">
-          <option value="league">League</option>
-          {[...league.teams]
-            .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
-            .map((t) => (
-              <option key={t.tid} value={t.tid}>
-                {t.abbrev}
-              </option>
-            ))}
-        </select>
-      </div>
-      <Segmented
-        label="Records"
-        value={part}
-        onChange={setPart}
-        options={[
-          { id: 'game', label: 'Single game' },
-          { id: 'season', label: 'Season' },
-          { id: 'career', label: 'Career' },
-        ]}
-      />
-      <Chips
-        label="Season type"
-        value={post}
-        onChange={setPost}
-        options={[
-          { id: 'reg', label: 'Regular season' },
-          { id: 'post', label: 'Playoffs' },
-        ]}
-      />
-      {part === 'game' && <GameRecords league={league} tid={tid} kind={post} stat={gameKey} setStat={setGameKey} />}
-      {part === 'season' && <SeasonRecords league={league} tid={tid} playoffs={playoffs} stat={seasonStat} setStat={setSeasonStat} teamStat={teamStat} setTeamStat={setTeamStat} />}
-      {part === 'career' && <CareerRecords league={league} tid={tid} playoffs={playoffs} stat={careerStat} setStat={setCareerStat} />}
-    </>
-  );
+/** One line of a record's list: its place, who set it (with when), the mark. */
+interface Line {
+  key: string;
+  to?: string;
+  who: ReactNode;
+  sub: ReactNode;
+  v: string;
 }
 
-/** A record's stat picker: one line of chips that scrolls sideways. */
-function StatChips<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: { id: T; label: string }[] }) {
-  return (
-    <div className="lg-hscroll" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button key={o.id} className={`chip ${value === o.id ? 'on' : ''}`} aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
+/** A record: its name, and its list best first (the record is the first line). */
+interface Rec {
+  id: string;
+  label: string;
+  title: string;
+  lines: Line[];
 }
 
 /**
@@ -140,189 +68,230 @@ function listNames(league: League, pids: number[]): (pid: number, frozen?: strin
   return (pid, frozen) => (league.players[pid] ? name(pid) : (frozen ?? 'Unknown'));
 }
 
-function When({ league, m }: { league: League; m: { season: number; day: number; opp: number } }) {
+const when = (league: League, m: { season: number; day: number; opp: number }) =>
+  `vs ${league.teams[m.opp]?.abbrev ?? '?'} · ${fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+const fmtSeason = (stat: SeasonStat, v: number) => (stat === 'fg' || stat === 'tp' || stat === 'ft' ? p1(v) : stat === 'pts' || stat === 'tpm' ? String(Math.round(v)) : f1(v));
+const fmtTeam = (stat: TeamSeasonStat, v: number) => (stat === 'wins' || stat === 'losses' ? '' : stat === 'net' ? `${v > 0 ? '+' : ''}${f1(v)}` : f1(v));
+
+function Who({ tid, name, decorative }: { tid?: number; name: ReactNode; decorative?: boolean }) {
   return (
-    <span className="sub ellipsis">
-      vs {league.teams[m.opp]?.abbrev ?? '?'} · {fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}
+    <span className="nm">
+      {tid !== undefined && <TeamLogo tid={tid} size={16} decorative={decorative} />}
+      <span className="ellipsis">{name}</span>
     </span>
   );
 }
 
-/** One line of the book; the whole line is the link (to the player, or the team for a team's mark). */
-function Row({ i, to, children, value }: { i: number; to?: string; children: ReactNode; value: ReactNode }) {
-  const cells = (
-    <>
-      <span className="rk">{i + 1}</span>
-      <span className="who">{children}</span>
-      <span className="v num">{value}</span>
-    </>
-  );
-  return to ? (
-    <Link to={to} className="lg-book-row">
-      {cells}
-    </Link>
-  ) : (
-    <div className="lg-book-row">{cells}</div>
-  );
+/** Every record of the book for the league or one franchise, the regular season's or the postseason's. */
+function useBook(league: League, tid: number | undefined, post: boolean) {
+  return useLeagueMemo(() => {
+    const kind = post ? 'post' : 'reg';
+    const shelf = league.records ? (tid !== undefined ? league.records.teams[tid]?.[kind] : league.records.league[kind]) : undefined;
+    const game: Rec[] = [
+      ...REC_STATS.map((stat): Rec => {
+        const marks: GameMark[] = (shelf?.players[stat] ?? []).map((r) => gameMark(league, r));
+        const name = listNames(
+          league,
+          marks.map((m) => m.pid),
+        );
+        return {
+          id: `g-${stat}`,
+          label: REC_LABEL[stat][0],
+          title: `${REC_LABEL[stat][0]} in a game`,
+          lines: marks.map((m) => ({
+            key: `${m.gid}-${m.pid}`,
+            to: league.players[m.pid] ? `/player/${m.pid}` : undefined,
+            who: <Who tid={m.tid} name={name(m.pid, m.name)} />,
+            sub: when(league, m),
+            v: String(m.v),
+          })),
+        };
+      }),
+      ...TEAM_REC_STATS.map((stat): Rec => {
+        const marks: TeamMark[] = (shelf?.teams[stat] ?? []).map(teamMark);
+        const label = stat === 'pts' ? 'Team points' : stat === 'margin' ? 'Biggest win' : 'Team threes';
+        return {
+          id: `t-${stat}`,
+          label,
+          title: `${TEAM_REC_LABEL[stat]} in a game`,
+          lines: marks.map((m) => ({
+            key: `${m.gid}-${m.tid}`,
+            to: league.teams[m.tid] ? teamPath(m.tid) : undefined,
+            who: <Who tid={m.tid} decorative name={`${league.teams[m.tid]?.abbrev ?? '?'} ${m.score[0]}-${m.score[1]}`} />,
+            sub: when(league, m),
+            v: stat === 'margin' ? `+${m.v}` : String(m.v),
+          })),
+        };
+      }),
+    ];
+    const season: Rec[] = SEASON_STATS.map((stat) => {
+      const rows = seasonRecords(league, stat, { tid, playoffs: post });
+      const name = listNames(
+        league,
+        rows.map((r) => r.pid),
+      );
+      return {
+        id: `s-${stat}`,
+        label: SEASON_STAT_LABEL[stat].replace(' per game', ''),
+        title: `${SEASON_STAT_LABEL[stat]}, ${post ? 'a playoff run' : 'a season'}`,
+        lines: rows.map((r) => ({
+          key: `${r.pid}-${r.season}`,
+          to: league.players[r.pid] ? `/player/${r.pid}` : undefined,
+          who: <Who tid={r.tid} name={name(r.pid)} />,
+          sub: `${seasonLabel(r.season)} · ${r.gp} game${r.gp === 1 ? '' : 's'}${r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}`,
+          v: fmtSeason(stat, r.v),
+        })),
+      };
+    });
+    // per game: "Points" alone would read like a total beside the totals
+    for (const r of season) if (['s-ppg', 's-rpg', 's-apg', 's-spg', 's-bpg'].includes(r.id)) r.label = `${r.label} a game`;
+    const team: Rec[] = post
+      ? []
+      : TEAM_SEASON_STATS.map((stat) => {
+          const rows = teamSeasonRecords(league, stat, { tid });
+          return {
+            id: `ts-${stat}`,
+            label: TEAM_SEASON_LABEL[stat],
+            title: `Team seasons: ${TEAM_SEASON_LABEL[stat].toLowerCase()}`,
+            lines: rows.map((r) => ({
+              key: `${r.tid}-${r.season}`,
+              to: teamPath(r.tid),
+              who: <Who tid={r.tid} decorative name={`${league.teams[r.tid].region} ${league.teams[r.tid].name}`} />,
+              sub: `${seasonLabel(r.season)}${fmtTeam(stat, r.v) ? ` · ${r.won}-${r.lost}` : ''}`,
+              v: fmtTeam(stat, r.v) || `${r.won}-${r.lost}`,
+            })),
+          };
+        });
+    const career: Rec[] = CAREER_STATS.map((stat) => {
+      const rows = careerLeaders(league, stat, { tid, playoffs: post });
+      const name = listNames(
+        league,
+        rows.map((r) => r.pid),
+      );
+      return {
+        id: `c-${stat}`,
+        label: CAREER_LABEL[stat],
+        title: `${tid !== undefined ? 'Franchise' : 'Career'} ${CAREER_LABEL[stat].toLowerCase()}`,
+        lines: rows.map((r) => ({
+          key: String(r.pid),
+          to: league.players[r.pid] ? `/player/${r.pid}` : undefined,
+          who: <Who name={name(r.pid)} />,
+          sub: `${r.seasons} season${r.seasons === 1 ? '' : 's'}${r.active ? '' : ' · retired'}`,
+          v: Math.round(r.v).toLocaleString('en-US'),
+        })),
+      };
+    });
+    return { game, season, team, career, keep: tid !== undefined ? KEEP.team[kind] : KEEP.league[kind] };
+  }, [league, tid, post]);
 }
 
-/** A list of the book's lines, or what it takes to get into it. */
-function Book({ title, right, empty, children }: { title: ReactNode; right?: ReactNode; empty: ReactNode | false; children: ReactNode }) {
-  return (
-    <Section title={title} right={right}>
-      {empty ? <div className="card empty">{empty}</div> : <div className="card flush list">{children}</div>}
-    </Section>
-  );
-}
-
-function GameRecords({ league, tid, kind, stat, setStat }: { league: League; tid?: number; kind: 'reg' | 'post'; stat: GameKey; setStat: (s: GameKey) => void }) {
-  const book = league.records;
-  const shelf = book ? (tid !== undefined ? book.teams[tid]?.[kind] : book.league[kind]) : undefined;
-  const isTeam = stat.startsWith('team-');
-  const list: (GameMark | TeamMark)[] = isTeam
-    ? (shelf?.teams[stat.slice(5) as TeamRecStat] ?? []).map(teamMark)
-    : (shelf?.players[stat as RecStat] ?? []).map((r) => gameMark(league, r));
-  const keep = tid !== undefined ? KEEP.team[kind] : KEEP.league[kind];
-  const name = listNames(
-    league,
-    list.flatMap((m) => ('pid' in m ? [m.pid] : [])),
-  );
+export function RecordBook({ league }: { league: League }) {
+  const [scope, setScope] = useQueryParam<string>('rec', 'league');
+  const [post, setPost] = useQueryParam<'reg' | 'post'>('book', 'reg', ['reg', 'post']);
+  const [open, setOpen] = useState<Rec | null>(null);
+  const tid = scope !== 'league' && league.teams[Number(scope)] ? Number(scope) : undefined;
+  const book = useBook(league, tid, post === 'post');
+  const since = league.records?.since ?? league.startSeason;
+  const sections: [string, Rec[], string][] = [
+    ['Single game', book.game, 'No games in the book yet.'],
+    [post === 'post' ? 'Playoff run' : 'Season', book.season, 'No qualifying seasons yet.'],
+    ['Team season', book.team, 'Starts when a regular season is over.'],
+    [tid !== undefined ? 'With the franchise' : 'Career', book.career, 'No games yet.'],
+  ];
   return (
     <>
-      <StatChips label="Record" value={stat} onChange={setStat} options={GAME_KEYS.map((k) => ({ id: k, label: GAME_SHORT[k] }))} />
-      <Book
-        title={`${isTeam ? TEAM_REC_LABEL[stat.slice(5) as TeamRecStat] : REC_LABEL[stat as RecStat][0]} in a game`}
-        right={<span className="lg-sec-meta">Top {keep}</span>}
-        empty={list.length === 0 && 'No games in the book yet: records are set as games are played.'}
-      >
-        {list.map((m, i) =>
-          'pid' in m ? (
-            <Row key={`${m.gid}-${m.pid}`} i={i} to={league.players[m.pid] ? `/player/${m.pid}` : undefined} value={m.v}>
-              <span className="nm">
-                <TeamLogo tid={m.tid} size={16} />
-                <span className="ellipsis">{name(m.pid, m.name)}</span>
-              </span>
-              <When league={league} m={m} />
-            </Row>
-          ) : (
-            <Row key={`${m.gid}-${m.tid}`} i={i} to={league.teams[m.tid] ? `/team/${m.tid}` : undefined} value={stat === 'team-margin' ? `+${m.v}` : m.v}>
-              <span className="nm">
-                <TeamLogo tid={m.tid} size={16} decorative />
-                <span className="ellipsis">
-                  {league.teams[m.tid]?.abbrev ?? '?'} {m.score[0]}-{m.score[1]}
-                </span>
-              </span>
-              <When league={league} m={m} />
-            </Row>
-          ),
-        )}
-      </Book>
-    </>
-  );
-}
-
-const fmtSeason = (stat: SeasonStat, v: number) => (stat === 'fg' || stat === 'tp' || stat === 'ft' ? p1(v) : stat === 'pts' || stat === 'tpm' ? String(Math.round(v)) : f1(v));
-const fmtTeam = (stat: TeamSeasonStat, v: number) => (stat === 'wins' || stat === 'losses' ? '' : stat === 'net' ? `${v > 0 ? '+' : ''}${f1(v)}` : f1(v));
-
-function SeasonRecords({
-  league,
-  tid,
-  playoffs,
-  stat,
-  setStat,
-  teamStat,
-  setTeamStat,
-}: {
-  league: League;
-  tid?: number;
-  playoffs: boolean;
-  stat: SeasonStat;
-  setStat: (s: SeasonStat) => void;
-  teamStat: TeamSeasonStat;
-  setTeamStat: (s: TeamSeasonStat) => void;
-}) {
-  const rows = useLeagueMemo(() => seasonRecords(league, stat, { tid, playoffs }), [league, stat, tid, playoffs]);
-  const teamRows = useLeagueMemo(() => (playoffs ? [] : teamSeasonRecords(league, teamStat, { tid })), [league, teamStat, tid, playoffs]);
-  const name = listNames(
-    league,
-    rows.map((r) => r.pid),
-  );
-  return (
-    <>
-      <StatChips label="Player record" value={stat} onChange={setStat} options={SEASON_STATS.map((k) => ({ id: k, label: SEASON_SHORT[k] }))} />
-      <Book
-        title={SEASON_STAT_LABEL[stat]}
-        empty={
-          rows.length === 0 &&
-          // the qualifying lines of records.ts's qualifies()
-          (playoffs
-            ? "No qualifying playoff runs yet. Per-game and percentage records need half the team's playoff games, four at least (and 30 field goals, 9 threes or 13 free throws made)."
-            : "No qualifying seasons yet. Per-game and percentage records need 70% of the team's games (and 300 field goals, 82 threes or 125 free throws made).")
-        }
-      >
-        {rows.map((r, i) => (
-          <Row key={`${r.pid}-${r.season}`} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={fmtSeason(stat, r.v)}>
-            <span className="nm">
-              <TeamLogo tid={r.tid} size={16} />
-              <span className="ellipsis">{name(r.pid)}</span>
-            </span>
-            <span className="sub ellipsis">
-              {seasonLabel(r.season)} · {r.gp} game{r.gp === 1 ? '' : 's'}
-              {r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}
-            </span>
-          </Row>
-        ))}
-      </Book>
-      {!playoffs && (
-        <>
-          <StatChips label="Team record" value={teamStat} onChange={setTeamStat} options={TEAM_SEASON_STATS.map((k) => ({ id: k, label: TEAM_SEASON_LABEL[k] }))} />
-          <Book
-            title={`Team seasons · ${TEAM_SEASON_LABEL[teamStat].toLowerCase()}`}
-            empty={teamRows.length === 0 && 'Team season records start when the first regular season is over.'}
-          >
-            {teamRows.map((r, i) => (
-              <Row key={`${r.tid}-${r.season}`} i={i} to={`/team/${r.tid}`} value={fmtTeam(teamStat, r.v) || `${r.won}-${r.lost}`}>
-                <span className="nm">
-                  <TeamLogo tid={r.tid} size={16} decorative />
-                  <span className="ellipsis">
-                    {league.teams[r.tid].region} {league.teams[r.tid].name}
-                  </span>
-                </span>
-                <span className="sub ellipsis">
-                  {seasonLabel(r.season)}
-                  {fmtTeam(teamStat, r.v) ? ` · ${r.won}-${r.lost}` : ''}
-                </span>
-              </Row>
+      <div className="lg-sub">
+        <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">
+          <option value="league">League records</option>
+          {[...league.teams]
+            .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
+            .map((t) => (
+              <option key={t.tid} value={t.tid}>
+                {t.region} {t.name}
+              </option>
             ))}
-          </Book>
-        </>
+        </select>
+        <select className="lg-select" value={post} onChange={(e) => setPost(e.target.value as 'reg' | 'post')} aria-label="Season type">
+          <option value="reg">Regular season</option>
+          <option value="post">Playoffs</option>
+        </select>
+      </div>
+      {sections.map(([title, recs, empty], i) =>
+        recs.length ? (
+          <Section
+            key={title}
+            title={title}
+            right={
+              i === 0 ? (
+                <Help title="The record book">
+                  <p className="lg-p">
+                    Since {seasonLabel(since)}, this league&apos;s seasons only. Single games keep the top {KEEP.league.reg} (playoffs {KEEP.league.post}) for the league and the
+                    top {KEEP.team.reg} ({KEEP.team.post}) for each franchise.
+                  </p>
+                  <p className="lg-p">
+                    Per-game and percentage season records need 70% of the team&apos;s games (and 300 field goals, 82 threes or 125 free throws made); a playoff run, half the
+                    team&apos;s playoff games. Team seasons count once the regular season is over.
+                  </p>
+                </Help>
+              ) : undefined
+            }
+          >
+            <div className="card flush list">
+              {recs.every((r) => !r.lines.length) ? <div className="empty">{empty}</div> : recs.map((r) => <RecordRow key={r.id} r={r} onOpen={() => setOpen(r)} />)}
+            </div>
+          </Section>
+        ) : null,
       )}
+      <Sheet open={!!open} onClose={() => setOpen(null)} title={open?.title ?? ''}>
+        {open && (
+          <div className="card flush list">
+            {open.lines.map((l, i) => {
+              const cells = (
+                <>
+                  <span className="rk">{i + 1}</span>
+                  <span className="who">
+                    {l.who}
+                    <span className="sub ellipsis">{l.sub}</span>
+                  </span>
+                  <span className="v num">{l.v}</span>
+                </>
+              );
+              return l.to ? (
+                <Link key={l.key} to={l.to} className="lg-book-row" onClick={() => setOpen(null)}>
+                  {cells}
+                </Link>
+              ) : (
+                <div key={l.key} className="lg-book-row">
+                  {cells}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Sheet>
     </>
   );
 }
 
-function CareerRecords({ league, tid, playoffs, stat, setStat }: { league: League; tid?: number; playoffs: boolean; stat: CareerStat; setStat: (s: CareerStat) => void }) {
-  const rows = useLeagueMemo(() => careerLeaders(league, stat, { tid, playoffs }), [league, stat, tid, playoffs]);
-  const name = listNames(
-    league,
-    rows.map((r) => r.pid),
-  );
+/** A record on one line: what, who holds it, the mark. It opens the whole list. */
+function RecordRow({ r, onOpen }: { r: Rec; onOpen: () => void }) {
+  const top = r.lines[0];
+  if (!top)
+    return (
+      <div className="lg-rec">
+        <span className="k">{r.label}</span>
+        <span className="who dim">—</span>
+      </div>
+    );
   return (
-    <>
-      <StatChips label="Career stat" value={stat} onChange={setStat} options={CAREER_STATS.map((k) => ({ id: k, label: CAREER_LABEL[k] }))} />
-      <Book title={`${tid !== undefined ? 'Franchise' : 'Career'} leaders · ${CAREER_LABEL[stat].toLowerCase()}`} empty={rows.length === 0 && 'No games recorded yet.'}>
-        {rows.map((r, i) => (
-          <Row key={r.pid} i={i} to={league.players[r.pid] ? `/player/${r.pid}` : undefined} value={Math.round(r.v).toLocaleString('en-US')}>
-            <span className="nm">
-              <span className="ellipsis">{name(r.pid)}</span>
-            </span>
-            <span className="sub ellipsis">
-              {r.seasons} season{r.seasons === 1 ? '' : 's'}
-              {r.active ? '' : ' · retired'}
-            </span>
-          </Row>
-        ))}
-      </Book>
-    </>
+    <button className="lg-rec" onClick={onOpen} aria-haspopup="dialog">
+      <span className="k">{r.label}</span>
+      <span className="who">
+        {top.who}
+        <span className="sub ellipsis">{top.sub}</span>
+      </span>
+      <span className="v num">{top.v}</span>
+      <ChevronRight size={15} className="dim" aria-hidden="true" />
+    </button>
   );
 }

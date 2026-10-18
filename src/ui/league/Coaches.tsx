@@ -39,15 +39,18 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** A career's figures in a row: seasons, record (with its win %), playoff runs and titles. */
 function CareerLine({ k }: { k: CoachCareer }) {
+  // (the record gets the room a long career's needs, as a franchise's does)
   return (
-    <Statline
-      items={[
-        { k: 'Seasons', v: k.seasons },
-        { k: 'Record', v: `${k.won}-${k.lost}`, s: winPctLabel(k.won, k.lost) },
-        { k: 'Playoffs', v: k.playoffs },
-        { k: 'Titles', v: k.titles, color: k.titles ? 'var(--tier-elite)' : undefined },
-      ]}
-    />
+    <div className="lg-frfig">
+      <Statline
+        items={[
+          { k: 'Seasons', v: k.seasons },
+          { k: 'Record', v: `${k.won}-${k.lost}`, s: winPctLabel(k.won, k.lost) },
+          { k: 'Playoffs', v: k.playoffs },
+          { k: 'Titles', v: k.titles, color: k.titles ? 'var(--tier-elite)' : undefined },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -93,7 +96,7 @@ export function CoachesView({ league }: { league: League }) {
       </Section>
       <Section title="Former coaches" right={<span className="lg-sec-meta">{former.length}</span>}>
         {former.length === 0 ? (
-          <div className="card empty">Coaches let go after the playoffs land here, out of work until someone hires them (retired after five seasons without a job).</div>
+          <div className="card empty">Coaches who lose their jobs land here.</div>
         ) : (
           <>
             <div className="card flush list">
@@ -158,7 +161,7 @@ function JobRow({ league, j }: { league: League; j: CoachTotals & { stint: Coach
     <div className="lg-job">
       <TeamLogo tid={team.tid} size={24} decorative />
       <span className="lg-coach-t">
-        <Link to={`/team/${team.tid}`} className="nm ellipsis">
+        <Link to={`/teams/${team.tid}`} className="nm ellipsis">
           {team.region} {team.name}
         </Link>
         <span className="sub ellipsis">

@@ -7,7 +7,7 @@ import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Bar, Help, Section } from '../components/ui';
+import { Avatar, Bar, Help, Section, Segmented } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
 import { seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
@@ -31,8 +31,16 @@ export function AwardsTab({ league }: { league: League }) {
   const decided = aw?.mvp !== undefined;
   const isCurrent = season === league.season;
   let status = '';
-  if (decided) status = isCurrent && (league.phase === 'playin' || league.phase === 'playoffs') ? 'Finals MVP to come' : 'Final results';
-  else if (isCurrent) status = started ? 'Season in progress' : 'Season not started';
+  if (decided) status = isCurrent && (league.phase === 'playin' || league.phase === 'playoffs') ? 'Finals MVP to come' : 'Final';
+  else if (isCurrent) status = started ? 'The races' : 'Season not started';
+  // the season's awards, its All-NBA (and Defense, Rookie) teams once named, its All-Star weekend once picked
+  const views: { id: AwardsView; label: string }[] = [
+    { id: 'awards', label: 'Awards' },
+    ...(decided && aw ? [{ id: 'teams' as const, label: 'All-NBA' }] : []),
+    ...(aw && (aw.allStars.E.length > 0 || aw.saturday) ? [{ id: 'allstar' as const, label: 'All-Star' }] : []),
+  ];
+  const [raw, setView] = useQueryParam<AwardsView>('av', 'awards', ['awards', 'teams', 'allstar']);
+  const view = views.some((v) => v.id === raw) ? raw : 'awards';
 
   return (
     <>
@@ -46,19 +54,28 @@ export function AwardsTab({ league }: { league: League }) {
         </select>
         <span className="lg-bar-l">{status}</span>
       </div>
+      {views.length > 1 && <Segmented label="Awards view" value={view} onChange={setView} options={views} />}
 
-      {aw && (aw.champion !== undefined || aw.cupWinner !== undefined) && <Champions league={league} aw={aw} />}
-
-      {!decided && isCurrent && <AwardRace league={league} />}
-      {!decided && !isCurrent && !aw?.allStars.E.length && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
-
-      {decided && aw && <MajorAwards league={league} aw={aw} />}
-      {decided && aw && <Teams league={league} aw={aw} />}
-      {aw && aw.allStars.E.length > 0 && <AllStars league={league} aw={aw} />}
-      {aw?.saturday && <AllStarSaturday league={league} aw={aw} />}
+      {view === 'awards' && (
+        <>
+          {aw && (aw.champion !== undefined || aw.cupWinner !== undefined) && <Champions league={league} aw={aw} />}
+          {!decided && isCurrent && <AwardRace league={league} />}
+          {!decided && !isCurrent && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
+          {decided && aw && <MajorAwards league={league} aw={aw} />}
+        </>
+      )}
+      {view === 'teams' && aw && <Teams league={league} aw={aw} />}
+      {view === 'allstar' && aw && (
+        <>
+          {aw.allStars.E.length > 0 && <AllStars league={league} aw={aw} />}
+          {aw.saturday && <AllStarSaturday league={league} aw={aw} />}
+        </>
+      )}
     </>
   );
 }
+
+type AwardsView = 'awards' | 'teams' | 'allstar';
 
 // ---------------------------------------------------------------- winners
 
@@ -71,7 +88,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
     <Section title="Titles">
       <div className="card flush list">
         {aw.champion !== undefined && (
-          <Link to={`/team/${aw.champion}`} className="lg-award">
+          <Link to={`/teams/${aw.champion}`} className="lg-award">
             <span className="ic">
               <Trophy size={18} />
             </span>
@@ -98,7 +115,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
             <TeamLogo tid={aw.cupWinner} size={40} decorative />
             <span className="lg-award-t">
               <span className="lb">NBA Cup</span>
-              <Link to={`/team/${aw.cupWinner}`} className="nm ellipsis">
+              <Link to={`/teams/${aw.cupWinner}`} className="nm ellipsis">
                 {league.teams[aw.cupWinner].region} {league.teams[aw.cupWinner].name}
               </Link>
               <span className="sub">
@@ -194,7 +211,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
         <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
         <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
         {coyTeam && (
-          <AwardRow icon={<Award size={18} />} to={`/team/${coyTeam.tid}`}>
+          <AwardRow icon={<Award size={18} />} to={`/teams/${coyTeam.tid}`}>
             <TeamLogo tid={coyTeam.tid} size={40} decorative />
             <span className="lg-award-t">
               <span className="lb">Coach of the Year</span>
@@ -314,29 +331,43 @@ function AwardRace({ league }: { league: League }) {
 
   if (race.played === 0) return <div className="card empty">The award races start once games are played.</div>;
   return (
-    <>
-      <div className="lg-bar">
-        <span className="lg-bar-l">Updated daily · winners at season&apos;s end</span>
-        <span className="lg-bar-r">
+    <div className="md-grid2">
+      <RaceCard
+        league={league}
+        title="MVP ladder"
+        icon={<Crown size={13} />}
+        list={race.mvp}
+        right={
           <Help title="Award races">
             <p className="lg-p">
               The ladders update daily and use the same formulas as the voters: production, availability and team success, with the same eligibility rules. Winners are announced at
               the end of the regular season.
             </p>
           </Help>
-        </span>
-      </div>
-      <div className="md-grid2">
-        <RaceCard league={league} title="MVP ladder" icon={<Crown size={13} />} list={race.mvp} />
-        <RaceCard league={league} title="Defensive Player of the Year" icon={<Shield size={13} />} list={race.dpoy} kind="def" />
-        <RaceCard league={league} title="Rookie of the Year" icon={<Sparkles size={13} />} list={race.roy} />
-        <RaceCard league={league} title="Sixth Man of the Year" icon={<Users size={13} />} list={race.smoy} />
-      </div>
-    </>
+        }
+      />
+      <RaceCard league={league} title="Defensive Player of the Year" icon={<Shield size={13} />} list={race.dpoy} kind="def" />
+      <RaceCard league={league} title="Rookie of the Year" icon={<Sparkles size={13} />} list={race.roy} />
+      <RaceCard league={league} title="Sixth Man of the Year" icon={<Users size={13} />} list={race.smoy} />
+    </div>
   );
 }
 
-function RaceCard({ league, title, icon, list, kind = 'off' }: { league: League; title: string; icon: ReactNode; list: { c: Cand; score: number }[]; kind?: 'off' | 'def' }) {
+function RaceCard({
+  league,
+  title,
+  icon,
+  list,
+  kind = 'off',
+  right,
+}: {
+  league: League;
+  title: string;
+  icon: ReactNode;
+  list: { c: Cand; score: number }[];
+  kind?: 'off' | 'def';
+  right?: ReactNode;
+}) {
   const top = list[0]?.score ?? 1;
   const low = Math.min(0, ...list.map((x) => x.score));
   return (
@@ -346,6 +377,7 @@ function RaceCard({ league, title, icon, list, kind = 'off' }: { league: League;
           {icon} {title}
         </h3>
       }
+      right={right}
     >
       <div className="card flush list">
         {list.length === 0 ? (

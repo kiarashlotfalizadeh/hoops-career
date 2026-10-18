@@ -1,95 +1,69 @@
-import { useEffect, useRef } from 'react';
-import { History as HistoryIcon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+// The League hub: everyone else, one section per path (/league/standings ... /league/history).
+// /league opens on what the phase is about: the standings, or the bracket in the postseason.
+import { Suspense } from 'react';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import type { League } from '../../core/types';
 import { useLeague } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
-import { fmtDate } from '../../core/league/helpers';
-import { PageHeader, Segmented } from '../components/ui';
-import { TabBar, useQueryParam, useSetParams } from '../league/shared';
+import { lazyRetry } from '../lazyRetry';
+import { PageHeader } from '../components/ui';
+import { TabBar } from '../league/shared';
 import { StandingsTab } from '../league/StandingsTab';
 import { StatsTab } from '../league/StatsTab';
-import { RatingsTab } from '../league/RatingsTab';
 import { PlayoffsTab } from '../league/PlayoffsTab';
 import { AwardsTab } from '../league/AwardsTab';
 import { CupTab } from '../league/CupTab';
 import { NewsTab } from '../league/NewsTab';
-import { DayScoreboard, TeamScheduleList } from '../league/Schedule';
+import { DayScoreboard } from '../league/Schedule';
 
-const TABS = ['standings', 'schedule', 'stats', 'ratings', 'cup', 'playoffs', 'awards', 'news'] as const;
+const History = lazyRetry(() => import('./History'));
+
+const TABS = ['standings', 'playoffs', 'cup', 'stats', 'schedule', 'awards', 'news', 'history'] as const;
 type Tab = (typeof TABS)[number];
 const LABEL: Record<Tab, string> = {
   standings: 'Standings',
-  schedule: 'Schedule',
-  stats: 'Stats',
-  ratings: 'Ratings',
-  cup: 'NBA Cup',
   playoffs: 'Playoffs',
+  cup: 'Cup',
+  stats: 'Stats',
+  schedule: 'Scores',
   awards: 'Awards',
   news: 'News',
+  history: 'History',
 };
+
+/** The section /league opens on: the bracket during the play-in and the playoffs, the standings otherwise. */
+const defaultLeagueTab = (league: League): Tab => (league.phase === 'playin' || league.phase === 'playoffs' ? 'playoffs' : 'standings');
+
+/** The NBA Cup has a tab while this season's Cup is still to come or was played this regular season. */
+const cupShown = (league: League) => !!league.cup && league.cup.season === league.season && (league.phase === 'preseason' || league.phase === 'regular');
 
 export default function LeagueHub() {
   const league = useLeague();
-  const inPost = league.phase === 'playin' || league.phase === 'playoffs';
-  const [tab, setTab] = useQueryParam<Tab>('tab', inPost ? 'playoffs' : 'standings', TABS, true);
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (window.scrollY > 120) window.scrollTo({ top: 0 });
-  }, [tab]);
-  const inSeason = league.phase === 'regular' || inPost;
-
+  const nav = useNavigate();
+  const { search } = useLocation();
+  const params = useParams();
+  const raw = params.tab?.toLowerCase();
+  // Ratings is a view of Stats now; anything else unknown opens the hub
+  if (raw === 'ratings') return <Navigate to={`/league/stats?${new URLSearchParams([...new URLSearchParams(search), ['sv', 'ratings']])}`} replace />;
+  if (raw !== undefined && !(TABS as readonly string[]).includes(raw)) return <Navigate to="/league" replace />;
+  const tab = (raw as Tab | undefined) ?? defaultLeagueTab(league);
+  const tabs = TABS.filter((t) => t !== 'cup' || tab === 'cup' || cupShown(league));
   return (
     <main className="page lg-page">
-      <PageHeader
-        title="League"
-        sub={`${seasonLabel(league.season)} · ${PHASE_LABEL[league.phase]}${inSeason ? ` · ${fmtDate(league.season, league.day)}` : ''}`}
-        right={
-          <Link to="/history" className="btn sm ghost" aria-label="History of the league">
-            <HistoryIcon size={16} /> History
-          </Link>
-        }
-      />
-      <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} label="League sections" />
+      <PageHeader title="League" sub={`${seasonLabel(league.season)} · ${PHASE_LABEL[league.phase]}`} />
+      <TabBar value={tab} onChange={(t) => nav(`/league/${t}`, { replace: true })} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="League sections" />
       {tab === 'standings' && <StandingsTab league={league} />}
-      {tab === 'schedule' && <ScheduleTab />}
-      {tab === 'stats' && <StatsTab league={league} />}
-      {tab === 'ratings' && <RatingsTab league={league} />}
-      {tab === 'cup' && <CupTab league={league} />}
       {tab === 'playoffs' && <PlayoffsTab league={league} />}
+      {tab === 'cup' && <CupTab league={league} />}
+      {tab === 'stats' && <StatsTab league={league} />}
+      {tab === 'schedule' && <DayScoreboard league={league} />}
       {tab === 'awards' && <AwardsTab league={league} />}
       {tab === 'news' && <NewsTab league={league} />}
+      {tab === 'history' && (
+        <Suspense fallback={<div className="empty">Loading…</div>}>
+          <History />
+        </Suspense>
+      )}
     </main>
-  );
-}
-
-/** Your schedule (all of it, or its NBA Cup games) or every game of a day: one switch over the list. */
-function ScheduleTab() {
-  const league = useLeague();
-  const [mode] = useQueryParam<'mine' | 'day'>('sched', 'mine', ['mine', 'day']);
-  const [games] = useQueryParam<'all' | 'cup'>('games', 'all', ['all', 'cup']);
-  const setParams = useSetParams();
-  const t = league.teams[league.userTid];
-  const cup = league.schedule.some((g) => g.cup && (g.home === t.tid || g.away === t.tid));
-  const value = mode === 'day' ? 'day' : cup && games === 'cup' ? 'cup' : 'mine';
-  // both query values change in one step
-  const pick = (v: 'mine' | 'cup' | 'day') => setParams(v === 'day' ? { sched: 'day' } : { sched: null, games: v === 'cup' ? 'cup' : null });
-  return (
-    <>
-      <Segmented
-        label="Schedule view"
-        value={value}
-        onChange={pick}
-        options={[
-          { id: 'mine' as const, label: `${t.abbrev} schedule` },
-          ...(cup ? [{ id: 'cup' as const, label: 'Cup games' }] : []),
-          { id: 'day' as const, label: 'Scores by day' },
-        ]}
-      />
-      {mode === 'mine' ? <TeamScheduleList league={league} tid={league.userTid} cupOnly={value === 'cup'} /> : <DayScoreboard league={league} />}
-    </>
   );
 }

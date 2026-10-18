@@ -12,7 +12,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Help } from '../components/ui';
 import { NEWS_KIND } from './NewsTab';
-import { useQueryParam } from './shared';
+import { teamPath, useQueryParam } from './shared';
 
 type Group = 'trade' | 'signing' | 'release' | 'other';
 type Filter = 'all' | Group;
@@ -62,7 +62,7 @@ export function TxnText({ league, parts }: { league: League; parts: TxnPart[] })
         typeof x === 'string' ? (
           <Fragment key={i}>{x}</Fragment>
         ) : 'tid' in x ? (
-          <Link key={i} to={`/team/${x.tid}`} className="lg-name-link">
+          <Link key={i} to={teamPath(x.tid)} className="lg-name-link">
             {league.teams[x.tid]?.abbrev ?? '?'}
           </Link>
         ) : league.players[x.pid] ? (
@@ -143,6 +143,60 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * The whole league's transaction log, newest first (News → Transactions): each move from its first
+ * team's side, that team named first. `mine` keeps the user's team's moves.
+ */
+export function LeagueMoves({ league, mine }: { league: League; mine: boolean }) {
+  const [limit, setLimit] = useState(PAGE);
+  const all = useLeagueMemo(() => [...(league.transactions ?? [])].sort((a, b) => b.id - a.id), [league]);
+  const shown = mine ? all.filter((t) => t.tids.includes(league.userTid)) : all;
+  if (!shown.length) return <div className="card empty">No moves yet.</div>;
+  let lastKey = '';
+  return (
+    <div className="card flush">
+      {shown.slice(0, limit).map((t) => {
+        const key = `${t.season}:${t.day}`;
+        const header = key !== lastKey;
+        lastKey = key;
+        const M = kindMeta(t);
+        const tid = t.tids[0];
+        return (
+          <Fragment key={t.id}>
+            {header && (
+              <div className="list-divider">
+                {fmtDate(t.season, t.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+                {t.season !== league.season ? ` · ${seasonLabel(t.season)}` : ''}
+              </div>
+            )}
+            <div className="lg-news">
+              <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
+                <M.icon size={15} />
+              </span>
+              <div className="lg-news-body">
+                <div className="lg-news-text">
+                  {league.teams[tid] && (
+                    <Link to={teamPath(tid)} className="lg-name-link lg-txn-team">
+                      <TeamLogo tid={tid} size={16} decorative />
+                      {league.teams[tid].abbrev}
+                    </Link>
+                  )}{' '}
+                  <TxnText league={league} parts={txnLine(t, { tid })} />
+                </div>
+              </div>
+            </div>
+          </Fragment>
+        );
+      })}
+      {shown.length > limit && (
+        <button className="lg-more" onClick={() => setLimit(limit + PAGE)}>
+          <ChevronDown size={15} /> Show more ({shown.length - limit})
+        </button>
+      )}
+    </div>
   );
 }
 
