@@ -30,6 +30,7 @@ import {
 } from './helpers';
 import { numberTeam } from './jerseys';
 import { logMove } from './transactions';
+import { money } from '../format';
 
 export type Strategy = Team['strategy'];
 
@@ -252,7 +253,7 @@ export function willSign(league: League, p: Player, tid: number, amount: number,
   const gap = ask.amount * (1 + yearPenalty) - amount;
   return {
     ok: false,
-    reason: `Asking for about $${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're $${(gap / 1000).toFixed(1)}M short).`,
+    reason: `Asking for about ${money(ask.amount)}/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're ${money(gap)} short).`,
   };
 }
 
@@ -547,7 +548,7 @@ export function signPlayer(
     addNews(league, {
       kind: 'signing',
       // the total includes the yearly raises, as on the offer sheet
-      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr${years === 1 ? '' : 's'} / $${(p.contract.salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M.`,
+      text: `${playerName(p)} ${verb} the ${team.region} ${team.name}: ${years} yr${years === 1 ? '' : 's'} / ${money(p.contract.salaries.reduce((a, x) => a + x, 0))}.`,
       tids: [tid],
       pids: [p.pid],
     });
@@ -743,7 +744,7 @@ export function claimBlockedReason(league: League, tid: number, p: Player): stri
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const room = cap.salaryCap - payroll(league, tid, league.season);
   if (salary > min + 10 && salary > room)
-    return `His ${seasonLabel(league.season)} salary is $${(salary / 1000).toFixed(1)}M: claiming him needs that much cap space (${room > 0 ? `$${(room / 1000).toFixed(1)}M` : 'none'} now).`;
+    return `His ${seasonLabel(league.season)} salary is ${money(salary)}: claiming him needs that much cap space (${room > 0 ? `${money(room)}` : 'none'} now).`;
   return null;
 }
 
@@ -806,7 +807,7 @@ export function resolveWaivers(league: League) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${name} claimed off waivers`,
-          body: `The ${teamNameOf(league, claimer.tid)} claimed ${name} and took over his contract, so the $${(dead / 1000).toFixed(1)}M in dead money he left comes off our books.`,
+          body: `The ${teamNameOf(league, claimer.tid)} claimed ${name} and took over his contract, so the ${money(dead)} in dead money he left comes off our books.`,
           tone: 'good',
           link: '/office',
         });
@@ -814,7 +815,7 @@ export function resolveWaivers(league: League) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${name} claimed`,
-          body: `Our waiver claim on ${name} went through: his contract ($${(salaryFor(p, league.season) / 1000).toFixed(1)}M this season, through ${seasonLabel(contractExp(p.contract))}) is ours, and the ${league.teams[w.from].name} are off the hook for it.`,
+          body: `Our waiver claim on ${name} went through: his contract (${money(salaryFor(p, league.season))} this season, through ${seasonLabel(contractExp(p.contract))}) is ours, and the ${league.teams[w.from].name} are off the hook for it.`,
           tone: 'good',
           link: `/player/${p.pid}`,
         });
@@ -837,7 +838,7 @@ export function resolveWaivers(league: League) {
         subject: `${name} cleared waivers`,
         body:
           w.from === user
-            ? `Nobody claimed ${name}, so he is a free agent and his $${(dead / 1000).toFixed(1)}M stays on our books as dead money.`
+            ? `Nobody claimed ${name}, so he is a free agent and his ${money(dead)} stays on our books as dead money.`
             : `Our claim on ${name} fell through. ${claimBlockedReason(league, user, { ...p, waivers: w }) ?? 'The claim no longer fit.'} He is a free agent now.`,
         tone: 'neutral',
         link: w.from === user ? '/office' : `/player/${p.pid}`,
@@ -902,14 +903,14 @@ export function userBuyout(league: League, pid: number, stretch = false): { ok: 
   releasePlayer(league, p, { news: false, giveback: terms.giveback, stretch });
   addNews(league, {
     kind: 'release',
-    text: `The ${team.name} bought out ${playerName(p)}, who gave back $${(terms.saved / 1000).toFixed(1)}M.`,
+    text: `The ${team.name} bought out ${playerName(p)}, who gave back ${money(terms.saved)}.`,
     tids: [team.tid],
     pids: [p.pid],
   });
   logMove(league, 'buyout', team.tid, p, { amount: terms.saved, ...(spread ? { note: 'stretched', years: spread } : {}) });
   return {
     ok: true,
-    reason: `${playerName(p)} takes the buyout: he gives back $${(terms.saved / 1000).toFixed(1)}M, and $${(terms.dead / 1000).toFixed(1)}M stays on your books${spread ? `, ${stretchPhrase(league, spread)}` : ''}.`,
+    reason: `${playerName(p)} takes the buyout: he gives back ${money(terms.saved)}, and ${money(terms.dead)} stays on your books${spread ? `, ${stretchPhrase(league, spread)}` : ''}.`,
   };
 }
 
@@ -931,7 +932,7 @@ export function aiBuyouts(league: League) {
     if (!vet || !new Rng(hashString(`${league.id}:${league.season}:${league.day}:buyout:${t.tid}`)).chance(0.5)) continue;
     const terms = buyoutTerms(league, vet)!;
     releasePlayer(league, vet, { news: false, giveback: terms.giveback });
-    addNews(league, { kind: 'release', text: `The ${t.name} bought out ${playerName(vet)}, who gave back $${(terms.saved / 1000).toFixed(1)}M.`, tids: [t.tid], pids: [vet.pid] });
+    addNews(league, { kind: 'release', text: `The ${t.name} bought out ${playerName(vet)}, who gave back ${money(terms.saved)}.`, tids: [t.tid], pids: [vet.pid] });
     logMove(league, 'buyout', t.tid, vet, { amount: terms.saved });
   }
 }
@@ -1057,7 +1058,7 @@ export function resolveOptions(league: League, rng: Rng, includeUser = false) {
     if (keep) exerciseOption(p);
     else dropOptionYear(p);
     if (user) {
-      staffCalls.push(`${playerName(p)}: ${keep ? 'exercised' : 'declined'} ($${(sal / 1000).toFixed(1)}M)`);
+      staffCalls.push(`${playerName(p)}: ${keep ? 'exercised' : 'declined'} (${money(sal)})`);
       logMove(league, 'option', p.tid, p, { amount: sal, note: keep ? 'exercised' : 'declined' });
     }
   }
@@ -1187,7 +1188,7 @@ export function willExtend(league: League, p: Player, amount: number, years: num
   if (amount >= need - 1) return { ok: true, reason: 'Deal!' };
   return {
     ok: false,
-    reason: `Asking for about $${(ask.amount / 1000).toFixed(1)}M/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're $${((need - amount) / 1000).toFixed(1)}M short).`,
+    reason: `Asking for about ${money(ask.amount)}/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're ${money(need - amount)} short).`,
   };
 }
 
@@ -1204,7 +1205,7 @@ export function extendContract(league: League, p: Player, amount: number, years:
   const team = league.teams[p.tid];
   addNews(league, {
     kind: 'signing',
-    text: `${playerName(p)} signed a ${years}-year, $${(p.contract.next.salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M extension with the ${team.region} ${team.name}.`,
+    text: `${playerName(p)} signed a ${years}-year, ${money(p.contract.next.salaries.reduce((a, x) => a + x, 0))} extension with the ${team.region} ${team.name}.`,
     tids: [p.tid],
     pids: [p.pid],
   });

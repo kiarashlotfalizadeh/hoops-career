@@ -14,9 +14,10 @@ import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, fmtM, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
+import { money } from '../../core/format';
 
 export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const league = useLeague();
@@ -58,14 +59,14 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
     <div className="col fo-sheet fo-contract">
       <PlayerHead league={league} p={p} right={<OvrPot p={p} />}>
         <div className="fo-meta fo-wrap">
-          Signed through {seasonLabel(exp)} at {fmtM(salaryFor(p, exp), 2)} · extension from {shortSeason(season)}
+          Signed through {seasonLabel(exp)} at {money(salaryFor(p, exp), 2)} · extension from {shortSeason(season)}
         </div>
       </PlayerHead>
 
       <div className="fo-ask">
         <Statline
           items={[
-            { k: "He's asking", v: fmtM(ask.amount, 2), s: `${ask.years} yr${ask.years > 1 ? 's' : ''} from ${shortSeason(season)}` },
+            { k: "He's asking", v: money(ask.amount, 2), s: `${ask.years} yr${ask.years > 1 ? 's' : ''} from ${shortSeason(season)}` },
             { k: 'Mood', v: <MoodTag p={p} />, s: p.mood.notes[0] ?? 'No complaints' },
           ]}
         />
@@ -131,12 +132,12 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           {taxBill > 0 ? (
             <span className="bad">
               {' '}
-              {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in tax as things stand.
+              {money(after - cap.luxuryTax)} over the tax line: about {money(taxBill)} in tax as things stand.
             </span>
           ) : after > cap.salaryCap ? (
             ' Over the cap that season: free agents on minimum deals or an exception only.'
           ) : (
-            ` Leaves ${fmtM(cap.salaryCap - after)} of cap space for now.`
+            ` Leaves ${money(cap.salaryCap - after)} of cap space for now.`
           )}
         </div>
       </section>
@@ -146,7 +147,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           Profile
         </Link>
         <button className={`btn grow ${!blocked && !refusal && !off ? 'primary' : ''}`} disabled={!!blocked || !!refusal || off || busy} onClick={() => submit()}>
-          Make offer · {years} yr{years > 1 ? 's' : ''} · {fmtM(total)}
+          Make offer · {years} yr{years > 1 ? 's' : ''} · {money(total)}
         </button>
       </div>
     </div>

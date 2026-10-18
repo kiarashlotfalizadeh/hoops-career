@@ -16,6 +16,7 @@ import { tenDayBlockedReason, tenDayEndBlockedReason, tenDayRestBlockedReason, u
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { userGameOnDay } from './games';
+import { money } from '../format';
 
 export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'tradeRequest' | 'jobOffers' | 'ultimatum' | 'guide';
 
@@ -71,7 +72,7 @@ function releaseChoice(league: League, p: Player): AgendaChoice {
   return {
     label: `Release ${playerName(p)}`,
     action: { kind: 'release', pid: p.pid },
-    ...(dead > 0 ? { confirm: `$${(dead / 1000).toFixed(1)}M stays on your books as dead money.` } : {}),
+    ...(dead > 0 ? { confirm: `${money(dead)} stays on your books as dead money.` } : {}),
   };
 }
 

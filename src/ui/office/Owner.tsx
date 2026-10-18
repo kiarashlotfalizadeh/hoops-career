@@ -28,8 +28,9 @@ import {
 import { forecastFor, seatOf } from './seat';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Bar, More, PageHeader, Section, Tag } from '../components/ui';
-import { CenterBar, HelpSheet, fmtGrade, fmtM } from './common';
+import { CenterBar, HelpSheet, fmtGrade } from './common';
 import './office.css';
+import { money } from '../../core/format';
 
 export default function Owner() {
   const league = useLeague();
@@ -281,11 +282,11 @@ function GradingHelp({ league }: { league: League }) {
     { k: 'Postseason', how: 'Reaching his goal is +30 and each round beyond it 30 more; each round short costs 35 (the play-in counts as one).' },
     {
       k: 'Profit',
-      how: `Every ${fmtM((PROFIT_SCALE * scale) / 10)} above or below his target counts 10 (±100 at ${fmtM(PROFIT_SCALE * scale)}).`,
+      how: `Every ${money((PROFIT_SCALE * scale) / 10)} above or below his target counts 10 (±100 at ${money(PROFIT_SCALE * scale)}).`,
     },
     {
       k: 'Payroll',
-      how: `Under his line is +15 (up to +30 with room to spare); over it costs 25, down to −100 at ${fmtM(PAYROLL_SCALE * cap.luxuryTax)} over.`,
+      how: `Under his line is +15 (up to +30 with room to spare); over it costs 25, down to −100 at ${money(PAYROLL_SCALE * cap.luxuryTax)} over.`,
     },
     { k: 'Development', how: `Minutes for players ${YOUNG_AGE} or under against his target: ±100 at half of it either way.` },
   ];

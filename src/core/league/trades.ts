@@ -32,6 +32,7 @@ import { type Strategy, leaveTeam, marketSalary, pendingOption, rookieContract, 
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
+import { money, moneyExact } from '../format';
 
 export interface TradeSide {
   tid: number;
@@ -390,11 +391,11 @@ export function dealTerms(league: League, offer: TradeOffer): DealTerm[] {
       out.push({
         key: 'cash',
         short: yours
-          ? `${fmtCash(c)} cash: not salary, off your profit; ${room > 0 ? `${fmtCash(room)} more allowed` : 'no more allowed'} for ${seasonLabel(contractSeason(league))}`
-          : `${fmtCash(c)} cash from ${ab(side.tid)}: not salary, onto your profit`,
+          ? `${moneyExact(c)} cash: not salary, off your profit; ${room > 0 ? `${moneyExact(room)} more allowed` : 'no more allowed'} for ${seasonLabel(contractSeason(league))}`
+          : `${moneyExact(c)} cash from ${ab(side.tid)}: not salary, onto your profit`,
         text: yours
-          ? `${fmtCash(c)} in cash to ${ab(other.tid)}: not salary (no matching, no cap), and it comes out of your profit. ${room > 0 ? `You can send ${fmtCash(room)} more` : "That's all you can send"} for ${seasonLabel(contractSeason(league))}.`
-          : `${fmtCash(c)} in cash from ${ab(side.tid)}: not salary (no matching, no cap), and it adds to your profit.`,
+          ? `${moneyExact(c)} in cash to ${ab(other.tid)}: not salary (no matching, no cap), and it comes out of your profit. ${room > 0 ? `You can send ${moneyExact(room)} more` : "That's all you can send"} for ${seasonLabel(contractSeason(league))}.`
+          : `${moneyExact(c)} in cash from ${ab(side.tid)}: not salary (no matching, no cap), and it adds to your profit.`,
       });
     }
   }
@@ -756,16 +757,15 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     const outSal = sideSalary(league, mine);
     if (salaryMatchGap(league, offer, key) > 0) {
       const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
-      const m = (v: number) => `$${(v / 1000).toFixed(1)}M`;
       // (sending nothing, the limit is the $0.1M buffer alone: "125% of $0.0M plus $0.1M ($0.1M)" read garbled)
-      const sends = outSal > 0 ? `125% of the ${m(outSal)} it sends, plus $0.1M` : 'it sends no salary out, and the 125% rule adds only $0.1M';
-      errors.push(`${abbrev} would be over the cap after the trade, so it can take back at most ${m(maxIn)} (${sends}) — incoming is ${m(inSal)}.`);
+      const sends = outSal > 0 ? `125% of the ${money(outSal)} it sends, plus $0.1M` : 'it sends no salary out, and the 125% rule adds only $0.1M';
+      errors.push(`${abbrev} would be over the cap after the trade, so it can take back at most ${money(maxIn)} (${sends}) — incoming is ${money(inSal)}.`);
     }
     // the mid-level and the bi-annual are for teams under the tax, so using one caps the team at the tax line for that season
     const tax = CAP_FOR(league, s).luxuryTax;
     if (taxCapped(league.teams[mine.tid], s) && inSal > outSal && capPayroll(league, mine.tid, s) - outSal + inSal > tax)
       errors.push(
-        `${abbrev} used the ${league.teams[mine.tid].mleSeason === s ? 'mid-level' : 'bi-annual'} exception this season, so a trade can't take its payroll past the tax line ($${(tax / 1000).toFixed(1)}M).`,
+        `${abbrev} used the ${league.teams[mine.tid].mleSeason === s ? 'mid-level' : 'bi-annual'} exception this season, so a trade can't take its payroll past the tax line (${money(tax)}).`,
       );
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
@@ -821,10 +821,10 @@ function termErrors(league: League, offer: TradeOffer, mine: TradeSide, other: T
       const out = cashRoom(league, mine.tid);
       const into = cashRoom(league, other.tid);
       if (c > out.send)
-        errors.push(`${abbrev} can send ${out.send > 0 ? `at most ${fmtCash(out.send)} more` : 'no more'} in cash in trades for ${s} (${fmtCash(out.limit)} a season).`);
+        errors.push(`${abbrev} can send ${out.send > 0 ? `at most ${moneyExact(out.send)} more` : 'no more'} in cash in trades for ${s} (${moneyExact(out.limit)} a season).`);
       if (c > into.receive)
         errors.push(
-          `${league.teams[other.tid].abbrev} can take ${into.receive > 0 ? `at most ${fmtCash(into.receive)} more` : 'no more'} in cash in trades for ${s} (${fmtCash(into.limit)} a season).`,
+          `${league.teams[other.tid].abbrev} can take ${into.receive > 0 ? `at most ${moneyExact(into.receive)} more` : 'no more'} in cash in trades for ${s} (${moneyExact(into.limit)} a season).`,
         );
     }
   }
@@ -863,10 +863,6 @@ function evaluate(league: League, offer: TradeOffer): TradeEval {
 // ---------------------------------------------------------------- why: notes on a verdict
 
 const STRATEGY_NOUN: Record<Strategy, string> = { contend: 'contender', retool: 'retooling team', rebuild: 'rebuilder' };
-
-const fmtK = (k: number) => `$${(Math.abs(k) / 1000).toFixed(1)}M`;
-/** Cash: "$2.5M" (to the $10K, "$2.25M", if it isn't a round $0.1M). */
-export const fmtCash = (k: number) => `$${(k / 1000).toFixed(k % 100 ? 2 : 1)}M`;
 
 /**
  * League-neutral value of what side A gives and gets, weighed the way an AI team weighs a deal:
@@ -913,7 +909,7 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
         ? `the ${pickLabel(league, findPick(league, a.id)!)}`
         : a.kind === 'swap'
           ? `the ${a.id} swap right`
-          : `${fmtCash(a.id)} in cash`;
+          : `${moneyExact(a.id)} in cash`;
 
   if (offer.a.tid === league.userTid) {
     const { give, get } = neutralSplit(x, offer);
@@ -953,7 +949,7 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
     if (cash && matters(cash.value - cash.neutral))
       add(
         cash.value > cash.neutral ? 'good' : 'bad',
-        `${fmtCash(cash.id)} in cash counts ${cash.value > cash.neutral ? 'extra' : 'for less'} to a ${noun}`,
+        `${moneyExact(cash.id)} in cash counts ${cash.value > cash.neutral ? 'extra' : 'for less'} to a ${noun}`,
         Math.abs(cash.value - cash.neutral),
       );
   }
@@ -980,11 +976,16 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
       add(
         'bad',
         x.taxCost > 0
-          ? `Taking on ${fmtK(net)} ${x.payBefore <= tax ? `puts them ${fmtK(x.payAfter - tax)} into the tax` : `takes them to ${fmtK(x.payAfter - tax)} over the tax line`}`
-          : `Taking on ${fmtK(net)} uses cap room they'd rather keep`,
+          ? `Taking on ${money(Math.abs(net))} ${x.payBefore <= tax ? `puts them ${money(Math.abs(x.payAfter - tax))} into the tax` : `takes them to ${money(Math.abs(x.payAfter - tax))} over the tax line`}`
+          : `Taking on ${money(Math.abs(net))} uses cap room they'd rather keep`,
         x.money,
       );
-    else add('good', x.taxCost < 0 ? `Shedding ${fmtK(net)} saves them ${fmtK(x.taxCost)} in luxury tax` : `Shedding ${fmtK(net)} frees up cap room for them`, -x.money);
+    else
+      add(
+        'good',
+        x.taxCost < 0 ? `Shedding ${money(Math.abs(net))} saves them ${money(Math.abs(x.taxCost))} in luxury tax` : `Shedding ${money(Math.abs(net))} frees up cap room for them`,
+        -x.money,
+      );
   }
 
   // the difficulty decides a close call
@@ -1054,7 +1055,7 @@ export function executeTrade(league: League, offer: TradeOffer) {
       ...side.pids.map((pid) => playerName(league.players[pid])),
       ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!)),
       ...(side.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
-      ...((side.cash ?? 0) > 0 ? [`${fmtCash(side.cash!)} in cash`] : []),
+      ...((side.cash ?? 0) > 0 ? [`${moneyExact(side.cash!)} in cash`] : []),
     ].join(', ') || 'nothing';
   addNews(league, {
     kind: 'trade',
@@ -1298,7 +1299,7 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
   const work = findWork(league, offer);
   if (work.offer) consider(work.offer, 'add', `Add ${added(offer, work.offer).join(' + ')}`);
   const cash = cashToClose(league, offer, -base.delta);
-  if (cash !== null) consider({ a: { ...offer.a, cash }, b: offer.b }, 'add', `Add ${fmtCash(cash - (offer.a.cash ?? 0))} in cash`);
+  if (cash !== null) consider({ a: { ...offer.a, cash }, b: offer.b }, 'add', `Add ${moneyExact(cash - (offer.a.cash ?? 0))} in cash`);
 
   // A's own pick without the protection A put on it
   for (const [k, n] of Object.entries(offer.a.protect ?? {})) {
@@ -1336,7 +1337,7 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
       without(offer.b.pids, offer.b.dpids, { swaps: offer.b.swaps!.filter((x) => x !== y) }),
       `the right to swap ${y} firsts`,
     ]),
-    ...((offer.b.cash ?? 0) > 0 ? [[without(offer.b.pids, offer.b.dpids, { cash: 0 }), `the ${fmtCash(offer.b.cash!)} in cash`] as [TradeOffer, string]] : []),
+    ...((offer.b.cash ?? 0) > 0 ? [[without(offer.b.pids, offer.b.dpids, { cash: 0 }), `the ${moneyExact(offer.b.cash!)} in cash`] as [TradeOffer, string]] : []),
   ];
   for (const [o, name] of drops)
     if (o.b.pids.length + o.b.dpids.length + (o.b.swaps?.length ?? 0) + (o.b.cash ? 1 : 0) > 0 || aValue <= 0) consider(o, 'remove', `Without ${name}`);
@@ -1348,7 +1349,7 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
     .map((p) => ({ p, v: playerValueFor(league, p, offer.b.tid, false) }))
     .filter((x) => x.v < 0)
     .sort((x, y) => y.v - x.v);
-  const take = (p: Player) => `Take ${playerName(p)}'s contract (${fmtK(salaryFor(p, s))} thru ${seasonLabel(contractExp(p.contract))})`;
+  const take = (p: Player) => `Take ${playerName(p)}'s contract (${money(Math.abs(salaryFor(p, s)))} thru ${seasonLabel(contractExp(p.contract))})`;
   const withB = (p: Player): TradeOffer => ({ a: offer.a, b: { ...offer.b, pids: [...offer.b.pids, p.pid] } });
   const n = found.length;
   for (const { p } of bad) {

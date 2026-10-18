@@ -17,9 +17,10 @@ import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { More, PageHeader, Section, Segmented, Statline } from '../components/ui';
 import { slabVars } from '../teamColors';
-import { STRATEGY_META, capSeason, fmtM, shortSeason } from './common';
+import { STRATEGY_META, capSeason, shortSeason } from './common';
 import '../screens/start.css';
 import './office.css';
+import { money } from '../../core/format';
 
 const pct = (w: number, l: number) => (w + l ? (w / (w + l)).toFixed(3).replace(/^0/, '') : '—');
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
@@ -135,7 +136,7 @@ function OfferRow({ league, o, onTake, onTurnDown }: { league: League; o: JobOff
           <div className="ag-line">
             <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>{' '}
             <span className="num">
-              {ts.won}-{ts.lost} · {fmtM(payroll(league, t.tid, books))} payroll{books > league.season ? ` ${shortSeason(books)}` : ''}
+              {ts.won}-{ts.lost} · {money(payroll(league, t.tid, books))} payroll{books > league.season ? ` ${shortSeason(books)}` : ''}
             </span>
           </div>
         </div>
@@ -215,7 +216,7 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
               <span className={`tag ${STRATEGY_META[t.strategy].tone}`}>{STRATEGY_META[t.strategy].label}</span>{' '}
               {/* the books he'd inherit: next season's after this one ends, as on the Office cap sheet */}
               <span className="num">
-                {fmtM(payroll(league, t.tid, books))}
+                {money(payroll(league, t.tid, books))}
                 {books > league.season ? ` in ${shortSeason(books)}` : ''}
               </span>
             </div>

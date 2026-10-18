@@ -2,7 +2,8 @@
 // total, a slider with steppers, the quick amounts (the minimum, his ask, the max), then the years.
 import type { ReactNode } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import { Range, fmtM, shortSeason } from './common';
+import { Range, shortSeason } from './common';
+import { money } from '../../core/format';
 
 /** The salary steps the controls move in ($50K). */
 export const STEP = 50;
@@ -43,11 +44,11 @@ export function OfferControls({
         <div className="fo-offer-top">
           <div>
             <div className="over">Your offer · a season</div>
-            <div className="fo-offer-v num">{fmtM(amount, 2)}</div>
+            <div className="fo-offer-v num">{money(amount, 2)}</div>
           </div>
           <div className="right">
             <div className="over">Total</div>
-            <div className="fo-offer-t num">{fmtM(total)}</div>
+            <div className="fo-offer-t num">{money(total)}</div>
           </div>
         </div>
         <div className="fo-offer-slide">
@@ -63,13 +64,13 @@ export function OfferControls({
         </div>
         <div className="fo-quick">
           <button className={`chip ${amount === minAmt ? 'on' : ''}`} onClick={() => set(minAmt)}>
-            Min {fmtM(minAmt, 2)}
+            Min {money(minAmt, 2)}
           </button>
           <button className={`chip ${amount === askAt ? 'on' : ''}`} onClick={() => set(askAt)}>
-            His ask {fmtM(askAt, 2)}
+            His ask {money(askAt, 2)}
           </button>
           <button className={`chip ${amount === maxAmt ? 'on' : ''}`} onClick={() => set(maxAmt)}>
-            Max {fmtM(maxAmt, 2)}
+            Max {money(maxAmt, 2)}
           </button>
         </div>
       </div>

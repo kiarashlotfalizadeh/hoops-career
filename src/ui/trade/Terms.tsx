@@ -3,10 +3,11 @@
 // core/league/trades.ts), plus the dock's plain-words account of what each one does.
 import type { DraftPick, League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { PROTECTIONS, cashRoom, dealTerms, fmtCash, inSwap, swapSeasons, type TradeOffer } from '../../core/league/trades';
+import { PROTECTIONS, cashRoom, dealTerms, inSwap, swapSeasons, type TradeOffer } from '../../core/league/trades';
 import { contractSeason } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { Range } from '../office/common';
+import { moneyExact } from '../../core/format';
 
 /** Can the team sending this pick put a protection on it: its own first, its draft order still open, no swap on it? */
 export const protectable = (league: League, dp: DraftPick, tid: number) => dp.round === 1 && dp.originalTid === tid && dp.pick === undefined && !inSwap(league, dp);
@@ -106,20 +107,20 @@ export function CashControl({
     <div className="fo-term">
       <div className="fo-term-row">
         <span className="dim2">{mine ? 'You send' : `${f} send`}</span>
-        <b className="num">{value > 0 ? fmtCash(value) : 'No cash'}</b>
+        <b className="num">{value > 0 ? moneyExact(value) : 'No cash'}</b>
       </div>
       {blocked ? (
         <div className="tiny dim">Cash goes one way in a deal: take the other side's out first.</div>
       ) : max <= 0 ? (
         <div className="tiny dim">
-          {send.send < 100 ? `${mine ? 'You have' : `${f} has`} sent all the cash allowed` : `${league.teams[to].abbrev} can't take more cash`} for {s} ({fmtCash(send.limit)} a
+          {send.send < 100 ? `${mine ? 'You have' : `${f} has`} sent all the cash allowed` : `${league.teams[to].abbrev} can't take more cash`} for {s} ({moneyExact(send.limit)} a
           season each way).
         </div>
       ) : (
         <>
           <Range value={Math.min(value, max)} min={0} max={max} step={100} onChange={onChange} label={mine ? 'Cash you send' : `Cash ${f} send`} />
           <div className="tiny dim">
-            Up to {fmtCash(max)} ({fmtCash(send.limit)} a season each way, {s}). Not salary: it doesn't match or count on the cap.
+            Up to {moneyExact(max)} ({moneyExact(send.limit)} a season each way, {s}). Not salary: it doesn't match or count on the cap.
           </div>
         </>
       )}

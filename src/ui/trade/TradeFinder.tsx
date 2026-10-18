@@ -11,8 +11,9 @@ import { filterTargets, maxTakeBack, pickLabel, tradeTargets, type TradeOffer, t
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Chips, Empty, Section } from '../components/ui';
-import { Callout, HelpSheet, OvrPot, capSeason, contractYearsLabel, fmtM, isOffseason } from '../office/common';
+import { Callout, HelpSheet, OvrPot, capSeason, contractYearsLabel, isOffseason } from '../office/common';
 import { TierLine } from './common';
+import { money } from '../../core/format';
 
 export interface FinderState {
   pos: 'all' | Pos;
@@ -123,7 +124,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               value={state.salary === 'match' ? MATCH : state.salary}
               onChange={(v) => set({ salary: v === MATCH ? 'match' : v })}
               options={[
-                [MATCH, `≤ ${fmtM(data.match)} (you can match)`],
+                [MATCH, `≤ ${money(data.match)} (you can match)`],
                 [25_000, 'Salary ≤ $25M'],
                 [10_000, 'Salary ≤ $10M'],
                 [ANY, 'Any salary'],
@@ -169,7 +170,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                     <TierLine tier={tier} avail={avail} />
                   </div>
                   <div className="fo-money">
-                    <div className="a">{p.contract.twoWay ? 'Two-way' : fmtM(salary)}</div>
+                    <div className="a">{p.contract.twoWay ? 'Two-way' : money(salary)}</div>
                     <div className="b">{contractYearsLabel(league, p, s)}</div>
                   </div>
                 </button>

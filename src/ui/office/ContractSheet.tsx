@@ -44,12 +44,13 @@ import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capSeason, fmtM } from './common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { compareHref, counterpart } from '../compare';
+import { money } from '../../core/format';
 
 export type OfferMode = 'fa' | 'resign' | 'extend';
 
@@ -216,7 +217,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       <div className="fo-ask">
         <Statline
           items={[
-            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: fmtM(ask.amount, 2), s: `${yrs(ask.years)} · market ${fmtM(market, 1)}` },
+            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: money(ask.amount, 2), s: `${yrs(ask.years)} · market ${money(market, 1)}` },
             mode === 'fa'
               ? {
                   k: 'Interest',
@@ -313,23 +314,23 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             <b>Not enough cap space.</b>
             <HelpSheet title="Why can't I sign him?">
               <p>
-                The <b>soft cap</b> is {fmtM(cap.salaryCap)}. A free agent signs to any contract that fits under it: you have <b>{fmtM(Math.max(0, space))}</b> of room for{' '}
+                The <b>soft cap</b> is {money(cap.salaryCap)}. A free agent signs to any contract that fits under it: you have <b>{money(Math.max(0, space))}</b> of room for{' '}
                 {seasonLabel(season)}.
               </p>
               <p>
-                Over the cap you can still add players on <b>minimum contracts</b> (his is {fmtM(minAmt, 2)} a season) with a roster spot.
+                Over the cap you can still add players on <b>minimum contracts</b> (his is {money(minAmt, 2)} a season) with a roster spot.
               </p>
               <p>
-                Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {fmtM(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
-                once a season, staying under the tax line), the <b>bi-annual</b> (up to {fmtM(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the tax,
-                not two seasons running), and for a team that used its cap space the <b>room exception</b> in place of the mid-level (up to{' '}
-                {fmtM(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). After the mid-level or the bi-annual, trades can't take you past the tax line that
+                Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {money(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
+                once a season, staying under the tax line), the <b>bi-annual</b> (up to {money(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the
+                tax, not two seasons running), and for a team that used its cap space the <b>room exception</b> in place of the mid-level (up to{' '}
+                {money(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). After the mid-level or the bi-annual, trades can't take you past the tax line that
                 season.
               </p>
               <p>To make space: trade salary away, let contracts expire, or release players (what they're owed still counts as dead money).</p>
             </HelpSheet>
           </div>
-          <div className="small">{offerBlockedReason(league, p, amount, years, via) ?? `This offer puts you ${fmtM(after - cap.salaryCap)} over the cap.`}</div>
+          <div className="small">{offerBlockedReason(league, p, amount, years, via) ?? `This offer puts you ${money(after - cap.salaryCap)} over the cap.`}</div>
           <div className="chips fo-callout-btns">
             {exceptionsOpen.map(({ k, room }) => (
               <button
@@ -341,14 +342,14 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                   setVia(k)
                 )}
               >
-                Use the {EXCEPTIONS[k].name} ({fmtM(room, 2)})
+                Use the {EXCEPTIONS[k].name} ({money(room, 2)})
               </button>
             ))}
             <button className="btn xs" onClick={() => set(minAmt)}>
               Offer the minimum instead
             </button>
           </div>
-          {ask.amount > minAmt && <div className="tiny dim">He asks {fmtM(ask.amount, 2)}: a minimum deal is unlikely.</div>}
+          {ask.amount > minAmt && <div className="tiny dim">He asks {money(ask.amount, 2)}: a minimum deal is unlikely.</div>}
         </Callout>
       )}
 
@@ -379,10 +380,10 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           )}
           <Statline
             items={[
-              { k: 'Space now', v: fmtM(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)' },
+              { k: 'Space now', v: money(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)' },
               {
                 k: bidding ? 'If he signs' : 'After signing',
-                v: fmtM(cap.salaryCap - after),
+                v: money(cap.salaryCap - after),
                 // over the cap is only a problem when no exception covers the signing
                 color: cap.salaryCap - after >= 0 ? 'var(--good)' : route === 'min' || isException(route) ? 'var(--warn)' : 'var(--bad)',
               },
@@ -391,7 +392,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           <div className="tiny dim">
             {route === 'min' && after > cap.salaryCap
-              ? `Minimum deals (up to ${fmtM(minAmt, 2)} for him) sign over the cap.`
+              ? `Minimum deals (up to ${money(minAmt, 2)} for him) sign over the cap.`
               : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
                 ? `Signing with cap space trades your mid-level for the smaller room exception for ${seasonLabel(season)}.`
                 : route === 'mle'
@@ -402,7 +403,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                       ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, under the tax line, not again next season.`
                       : ''}
             {held > 0
-              ? ` Counts ${fmtM(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`
+              ? ` Counts ${money(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`
               : ''}
           </div>
         </section>
@@ -414,16 +415,16 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           </div>
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
           <div className="tiny dim">
-            Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${fmtM(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
+            Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${money(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
             {taxBill > 0 ? (
               <span className="bad">
                 {' '}
-                {fmtM(after - cap.luxuryTax)} over the tax line: about {fmtM(taxBill)} in tax.
+                {money(after - cap.luxuryTax)} over the tax line: about {money(taxBill)} in tax.
               </span>
             ) : after + otherHolds > cap.salaryCap ? (
               ` Over the cap${otherHolds > 0 ? ' with your other holds' : ''}: in free agency, minimum deals or an exception only.`
             ) : (
-              ` Leaves ${fmtM(cap.salaryCap - after - otherHolds)} of cap space${otherHolds > 0 ? ` after ${fmtM(otherHolds)} in other holds` : ''}.`
+              ` Leaves ${money(cap.salaryCap - after - otherHolds)} of cap space${otherHolds > 0 ? ` after ${money(otherHolds)} in other holds` : ''}.`
             )}
           </div>
         </section>
@@ -434,7 +435,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           Profile
         </Link>
         <button className={`btn grow ${!blocked ? 'primary' : ''}`} disabled={blocked || busy} onClick={() => submit()}>
-          {bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Offer sheet' : 'Make offer'} · {yrs(years)} · {fmtM(total)}
+          {bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Offer sheet' : 'Make offer'} · {yrs(years)} · {money(total)}
         </button>
       </div>
     </div>

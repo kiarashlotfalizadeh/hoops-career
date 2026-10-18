@@ -36,10 +36,11 @@ import { Bar, More, PageHeader, Section, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capSeason, fmtM, fmtMs, isOffseason, shortSeason } from '../office/common';
+import { CapBar, HelpSheet, capSeason, isOffseason, shortSeason } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
 import { useFlowRunner } from '../useFlow';
 import { seatOf } from '../office/seat';
+import { money, moneySigned } from '../../core/format';
 
 /** The decisions the desk settles (the owner's and the job market's show on their desks' lines; the pick on the phase card). */
 const OFFICE_AGENDA: AgendaKind[] = ['cuts', 'signings', 'twoWays', 'offerSheet', 'tenDay', 'tradeOffer'];
@@ -294,7 +295,7 @@ function CapSheet({ league }: { league: League }) {
         <div className="fo-pay">
           <div className="grow">
             <div className="over">Payroll</div>
-            <div className="fo-pay-v num">{fmtM(pay)}</div>
+            <div className="fo-pay-v num">{money(pay)}</div>
           </div>
           {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
           <span className={`tag ${status === 'tax' ? 'bad' : status === 'cap' ? 'warn' : 'good'}`}>
@@ -304,10 +305,10 @@ function CapSheet({ league }: { league: League }) {
         <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
         <Statline
           items={[
-            { k: 'Cap space', v: fmtM(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${fmtM(cap.salaryCap)}` },
+            { k: 'Cap space', v: money(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${money(cap.salaryCap)}` },
             tax > 0
-              ? { k: 'Tax bill', v: fmtM(tax), color: 'var(--bad)', s: `line ${fmtM(cap.luxuryTax)}` }
-              : { k: 'Under tax', v: fmtM(cap.luxuryTax - pay), s: `line ${fmtM(cap.luxuryTax)}` },
+              ? { k: 'Tax bill', v: money(tax), color: 'var(--bad)', s: `line ${money(cap.luxuryTax)}` }
+              : { k: 'Under tax', v: money(cap.luxuryTax - pay), s: `line ${money(cap.luxuryTax)}` },
             {
               k: isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster',
               v: `${signedN}/${CAP.rosterMax}`,
@@ -318,7 +319,7 @@ function CapSheet({ league }: { league: League }) {
         />
         <Exceptions league={league} season={s0} />
         {(holds > 0 || dead > 0) && (
-          <div className="tiny dim num">{[holds > 0 ? `${fmtM(holds)} in cap holds (striped)` : '', dead > 0 ? `${fmtM(dead)} dead money` : ''].filter(Boolean).join(' · ')}</div>
+          <div className="tiny dim num">{[holds > 0 ? `${money(holds)} in cap holds (striped)` : '', dead > 0 ? `${money(dead)} dead money` : ''].filter(Boolean).join(' · ')}</div>
         )}
         <More label="Next seasons">
           <NextSeasons league={league} from={s0 + 1} />
@@ -339,8 +340,8 @@ function NextSeasons({ league, from }: { league: League; from: number }) {
         return (
           <div key={s} className="fo-next-row num">
             <span className="dim2">{shortSeason(s)}</span>
-            <span>{fmtM(pay)} committed</span>
-            <span className={cap.salaryCap - pay >= 0 ? 'good' : 'warn'}>{fmtMs(cap.salaryCap - pay)} vs cap</span>
+            <span>{money(pay)} committed</span>
+            <span className={cap.salaryCap - pay >= 0 ? 'good' : 'warn'}>{moneySigned(cap.salaryCap - pay)} vs cap</span>
           </div>
         );
       })}
@@ -375,7 +376,7 @@ function Exceptions({ league, season }: { league: League; season: number }) {
             {open.map((r, i) => (
               <span key={r.k}>
                 {i > 0 && ' · '}
-                <Term id={r.k}>{EXCEPTIONS[r.k].short}</Term> {fmtM(r.room)}
+                <Term id={r.k}>{EXCEPTIONS[r.k].short}</Term> {money(r.room)}
               </span>
             ))}
           </span>
@@ -405,18 +406,18 @@ function CapHelp({ league, season }: { league: League; season: number }) {
   return (
     <HelpSheet title="How the cap works">
       <p>
-        <b>Soft cap ({fmtM(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {fmtM(cap.vetMin, 2)}) over it.
+        <b>Soft cap ({money(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {money(cap.vetMin, 2)}) over it.
       </p>
       <p>
-        <b>Mid-level.</b> Once a season, for a team that stays under the tax line: one free agent up to {fmtM(exceptionAmount(league, 'mle', season))} ({pct('mle')}% of the cap,{' '}
+        <b>Mid-level.</b> Once a season, for a team that stays under the tax line: one free agent up to {money(exceptionAmount(league, 'mle', season))} ({pct('mle')}% of the cap,{' '}
         {EXCEPTIONS.mle.years} years), even over the cap. For the rest of that season, trades can't take its payroll past the tax line.
       </p>
       <p>
         <b>Room exception.</b> Sign a free agent with cap space and the mid-level is gone for the season; this replaces it: one signing up to{' '}
-        {fmtM(exceptionAmount(league, 'room', season))} ({pct('room')}%), {EXCEPTIONS.room.years} years.
+        {money(exceptionAmount(league, 'room', season))} ({pct('room')}%), {EXCEPTIONS.room.years} years.
       </p>
       <p>
-        <b>Bi-annual.</b> One signing up to {fmtM(exceptionAmount(league, 'bae', season))} ({pct('bae')}%), {EXCEPTIONS.bae.years} years, for a team under the tax line after it:
+        <b>Bi-annual.</b> One signing up to {money(exceptionAmount(league, 'bae', season))} ({pct('bae')}%), {EXCEPTIONS.bae.years} years, for a team under the tax line after it:
         not two seasons running, nor with the room exception. Like the mid-level, it keeps trades from taking the payroll past the tax line that season.
       </p>
       <p>
@@ -436,8 +437,8 @@ function CapHelp({ league, season }: { league: League; season: number }) {
         offer and his ask) stays until he signs or you withdraw the offer; an offer sheet you sign holds its room until his team decides.
       </p>
       <p>
-        <b>Luxury tax ({fmtM(cap.luxuryTax)}).</b> Every dollar over the line costs {CAP.taxRate}× at the end of the regular season; {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}%
-        of the pot goes to the teams under it.
+        <b>Luxury tax ({money(cap.luxuryTax)}).</b> Every dollar over the line costs {CAP.taxRate}× at the end of the regular season; {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}
+        % of the pot goes to the teams under it.
       </p>
       <p>
         <b>Trades.</b> A team over the cap after a trade takes back at most 125% of the salary it sends, plus $0.1M.
@@ -554,7 +555,7 @@ function Desks({ league }: { league: League }) {
       to: '/office/finances',
       icon: PiggyBank,
       title: 'Finances',
-      sub: `Cash ${fmtM(team.cash)}${pr !== null ? ` · ${fmtMs(pr)} this season` : ''}`,
+      sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${moneySigned(pr)} this season` : ''}`,
     },
     {
       to: '/office/owner',

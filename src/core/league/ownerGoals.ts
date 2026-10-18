@@ -22,6 +22,7 @@ import { leagueForecast, type Forecast } from '../analysis/odds';
 import { CAP_FOR, addInbox, payroll, revenueScale, standardRoster } from './helpers';
 import { LOCAL_TV_PER_GAME, MERCH_PER_GAME, NATIONAL_REVENUE, OPERATIONS_PER_SEASON, REVENUE_SHARING, attendanceFor, budgetCostPerSeason, profit } from './finances';
 import { confStandings } from './standings';
+import { money } from '../format';
 
 export type OwnerPersonality = 'builder' | 'win-now' | 'frugal';
 export type OwnerGoalKind = 'wins' | 'postseason' | 'profit' | 'payroll' | 'youth';
@@ -132,7 +133,6 @@ export function ownerPersonality(league: League, tid: number): OwnerPersonality 
   return (['builder', 'win-now', 'frugal'] as const)[hashString(`${league.id}:${tid}:owner`) % 3];
 }
 
-const money = (k: number) => `${k < 0 ? '−' : ''}$${(Math.abs(k) / 1000).toFixed(1)}M`;
 const thisSeason = (league: League, tid: number): TeamSeason | undefined => league.teams[tid]?.seasons.find((s) => s.season === league.season);
 const age = (league: League, p: Player) => playerAge(p, league.season);
 

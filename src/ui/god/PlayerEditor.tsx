@@ -15,8 +15,9 @@ import { checkPlayerEdit, editPlayer, movable, yearsLeft, type ContractEdit, typ
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { Chips, Ovr, Segmented, Sheet, Slider, Toggle } from '../components/ui';
-import { fmtM } from '../office/common';
+
 import { Field, Foot, HEIGHTS, Select, applyEdit, teamOptions, useEditBlock, whole } from './common';
+import { money } from '../../core/format';
 
 type Tab = 'ratings' | 'bio' | 'status' | 'contract';
 const GROUPS = ['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const;
@@ -347,7 +348,7 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
     <div className="col" style={{ gap: 14 }}>
       <div className="small dim2">
         {hasDeal
-          ? `Now ${fmtM(salaryFor(p, cs))} in ${seasonLabel(cs)}, signed through ${seasonLabel(contractExp(p.contract))}${p.contract.option ? ` (${p.contract.option} option)` : ''}.`
+          ? `Now ${money(salaryFor(p, cs))} in ${seasonLabel(cs)}, signed through ${seasonLabel(contractExp(p.contract))}${p.contract.option ? ` (${p.contract.option} option)` : ''}.`
           : ask
             ? 'He signs his asking deal unless you set one here.'
             : `His deal is up: set one here to sign him from ${seasonLabel(cs)}.`}

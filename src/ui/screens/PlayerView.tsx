@@ -12,7 +12,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { RoleEditor } from '../components/RoleEditor';
 import { LineChart } from '../components/charts';
 import { advancedView, f1, ordinal, ordinalSuffix, perGame, playerSeason, seasonLine, signed } from '../stats';
-import { ReleaseConfirm, capSeason, contractUpNote, fmtM, openOption, shortSeason, tradeClosedNote } from '../office/common';
+import { ReleaseConfirm, capSeason, contractUpNote, openOption, shortSeason, tradeClosedNote } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { meetBlockedReason, promiseStatus, wantsMeeting } from '../../core/league/morale';
@@ -41,6 +41,7 @@ import { LazyPlayerEditor } from '../god/lazy';
 import { useBack } from '../nav';
 import { slabVars } from '../teamColors';
 import './team.css';
+import { money } from '../../core/format';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
 
@@ -380,19 +381,19 @@ export default function PlayerView() {
                   <>
                     <Statline
                       items={[
-                        { k: 'Salary', v: fmtM(sal), s: seasonLabel(salSeason) },
+                        { k: 'Salary', v: money(sal), s: seasonLabel(salSeason) },
                         {
                           k: extStart !== null ? 'Deal ends' : 'Expires',
                           v: shortSeason(extStart !== null ? extStart - 1 : contractExp(p.contract)),
                           s: openOption(league, p) ? `${openOption(league, p)} option` : rookieScaleDeal(p) ? 'rookie scale' : undefined,
                         },
-                        { k: 'Market', v: fmtM(marketSalary(league, p)), s: 'value' },
+                        { k: 'Market', v: money(marketSalary(league, p)), s: 'value' },
                       ]}
                     />
                     {openOption(league, p) && rookieScaleDeal(p) && <div className="tm-deal-note">Rookie scale deal.</div>}
                     {extStart !== null && (
                       <div className="tm-deal-note">
-                        <span className="good bold">Extended through {seasonLabel(contractExp(p.contract))}</span> · {fmtM(salaryFor(p, extStart))} from {shortSeason(extStart)}
+                        <span className="good bold">Extended through {seasonLabel(contractExp(p.contract))}</span> · {money(salaryFor(p, extStart))} from {shortSeason(extStart)}
                       </div>
                     )}
                     {p.contract.twoWay && (
@@ -403,7 +404,7 @@ export default function PlayerView() {
                     {p.contract.tenDay && <div className="tm-deal-note">{tenDayLine(league, p)}</div>}
                     {p.rfa && (
                       <div className="tm-deal-note">
-                        <Term id="qo">Qualifying offer</Term> out ({fmtM(p.rfa.qo)} for {seasonLabel(league.season + 1)}): restricted when free agency opens.
+                        <Term id="qo">Qualifying offer</Term> out ({money(p.rfa.qo)} for {seasonLabel(league.season + 1)}): restricted when free agency opens.
                       </div>
                     )}
                   </>
@@ -415,10 +416,10 @@ export default function PlayerView() {
                         : p.rfa?.sheet
                           ? `Signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
                           : p.rfa?.tid === league.userTid
-                            ? `Your restricted free agent: asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}. Unsigned at the close, he takes his ${fmtM(p.rfa.qo)} qualifying offer.`
+                            ? `Your restricted free agent: asking ${money(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}. Unsigned at the close, he takes his ${money(p.rfa.qo)} qualifying offer.`
                             : p.rfa
-                              ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
-                              : `Asking ${fmtM(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
+                              ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${money(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
+                              : `Asking ${money(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
                     </div>
                     {/* straight to his offer (or claim) sheet on the Free Agents screen */}
                     {!p.rfa?.sheet && (

@@ -5,6 +5,7 @@
 import type { League, Player } from '../core/types';
 import { confStandings } from '../core/league/standings';
 import { seasonLabel } from '../core/constants';
+import { money } from '../core/format';
 
 export type MomentKind = 'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award';
 
@@ -121,13 +122,13 @@ export function currentMoments(league: League): Moment[] {
       });
     }
     if (t.kind === 'sign' && p && p.ovr >= BIG_SIGNING_OVR) {
-      const money = t.amount ? `$${(t.amount / 1000).toFixed(1)}M a year` : '';
+      const perYear = t.amount ? `${money(t.amount)} a year` : '';
       out.push({
         key: `txn-${t.id}`,
         kind: 'signing',
         over: `${seasonLabel(season)} · Free agency`,
         title: 'Signed',
-        sub: [name(p, t.name), t.years ? `${t.years} year${t.years > 1 ? 's' : ''}` : '', money].filter(Boolean).join(' · '),
+        sub: [name(p, t.name), t.years ? `${t.years} year${t.years > 1 ? 's' : ''}` : '', perYear].filter(Boolean).join(' · '),
         pid: t.pid,
       });
     }

@@ -16,12 +16,13 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { Avatar, Bar, Empty, Help, Ovr, PageHeader, Section, Segmented } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
-import { capSeason, fmtM, openOption, shortSeason } from '../office/common';
+import { capSeason, openOption, shortSeason } from '../office/common';
 import { shortName } from '../league/shared';
 import { skillColor, useSkillPercentiles } from '../playerSkills';
 import { identityColor } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
+import { money } from '../../core/format';
 
 type View = 'profile' | 'ratings' | 'stats';
 /** The view each section is in: who they are first, then the ratings, then the numbers. */
@@ -35,16 +36,16 @@ function contractOf(league: League, p: Player): { main: string; sub?: string } {
     const s = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
     const exp = contractExp(p.contract);
     const opt = openOption(league, p);
-    if (p.contract.tenDay) return { main: `${fmtM(salaryFor(p, s), 2)}`, sub: '10-day contract' };
+    if (p.contract.tenDay) return { main: `${money(salaryFor(p, s), 2)}`, sub: '10-day contract' };
     return {
-      main: `${fmtM(salaryFor(p, s))} · ${yrs(exp - s + 1)}`,
+      main: `${money(salaryFor(p, s))} · ${yrs(exp - s + 1)}`,
       sub: p.contract.twoWay ? 'Two-way deal' : `through ${shortSeason(exp)}${opt ? ` · ${opt} option` : ''}`,
     };
   }
   if (p.tid === FREE_AGENT) {
-    if (p.waivers) return { main: fmtM(waiverSalary(league, p)), sub: 'On waivers' };
+    if (p.waivers) return { main: money(waiverSalary(league, p)), sub: 'On waivers' };
     const ask = askingContract(league, p, league.userTid);
-    return { main: `${fmtM(ask.amount)} · ${yrs(ask.years)}`, sub: p.rfa ? `asking · ${league.teams[p.rfa.tid]?.abbrev ?? ''} can match` : 'asking' };
+    return { main: `${money(ask.amount)} · ${yrs(ask.years)}`, sub: p.rfa ? `asking · ${league.teams[p.rfa.tid]?.abbrev ?? ''} can match` : 'asking' };
   }
   if (p.tid === DRAFT_PROSPECT) return { main: `#${p.prospect?.rank ?? '—'} on the board`, sub: `${p.draft.year} draft` };
   return { main: '—' };

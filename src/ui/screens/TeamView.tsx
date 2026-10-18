@@ -17,7 +17,7 @@ import { FRANCHISES } from '../../core/teams';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Help, Ovr, PageHeader, Section, Segmented, StatTable, Statline, type Col } from '../components/ui';
 import { f1, latestLine, ordinal, playerSeason, rosterNames, signed, startingFive, teamRatings, type PerGame } from '../stats';
-import { fmtM, shortSeason, openOption } from '../office/common';
+import { shortSeason, openOption } from '../office/common';
 import { OutcomeTag, STRATEGY_META, StrategyTag, TabBar, seasonOutcome, useQueryParam } from '../league/shared';
 import { TeamScheduleList } from '../league/Schedule';
 import { capPayroll } from '../../core/league/freeAgency';
@@ -28,6 +28,7 @@ import { activeCoach, coachCareer, coyWinners } from '../../core/league/coaches'
 import { LazyTeamEditor } from '../god/lazy';
 import { useBack } from '../nav';
 import { slabVars } from '../teamColors';
+import { money } from '../../core/format';
 
 const TABS = ['overview', 'roster', 'schedule', 'picks', 'moves', 'history'] as const;
 type Tab = (typeof TABS)[number];
@@ -250,13 +251,13 @@ function Overview({ league, tid, onRoster }: { league: League; tid: number; onRo
           </span>
           <span />
         </div>
-        <button className="lg-kvl" onClick={onRoster} aria-label={`Payroll ${fmtM(pay)}: contracts`}>
+        <button className="lg-kvl" onClick={onRoster} aria-label={`Payroll ${money(pay)}: contracts`}>
           <span className="k">Payroll</span>
           <span className="v">
-            <span className="bold num">{fmtM(pay)}</span>
+            <span className="bold num">{money(pay)}</span>
             <span className="sub">
               {cs !== league.season ? `${seasonLabel(cs)} · ` : ''}
-              {pay > cap.luxuryTax ? 'Over the tax' : pay > cap.salaryCap ? 'Over the cap' : `${fmtM(cap.salaryCap - pay)} under the cap`}
+              {pay > cap.luxuryTax ? 'Over the tax' : pay > cap.salaryCap ? 'Over the cap' : `${money(cap.salaryCap - pay)} under the cap`}
             </span>
           </span>
           <ChevronRight size={15} className="dim" aria-hidden="true" />
@@ -455,14 +456,14 @@ function PayrollBar({ league, tid }: { league: League; tid: number }) {
       <div className="lg-pay-top">
         <span className="over">Payroll {seasonLabel(cs)}</span>
         <span className="lg-pay-v num" style={{ color }}>
-          {fmtM(pay)}
+          {money(pay)}
         </span>
       </div>
       <Bar value={(pay / (cap.luxuryTax * 1.1)) * 100} color={color} />
       <div className="lg-pay-foot">
-        <span>Cap {fmtM(cap.salaryCap)}</span>
-        <span>{room > cap.salaryCap ? `${fmtM(room - cap.salaryCap)} over cap${holds}` : `${fmtM(cap.salaryCap - room)} cap space${holds}`}</span>
-        <span>Tax {fmtM(cap.luxuryTax)}</span>
+        <span>Cap {money(cap.salaryCap)}</span>
+        <span>{room > cap.salaryCap ? `${money(room - cap.salaryCap)} over cap${holds}` : `${money(cap.salaryCap - room)} cap space${holds}`}</span>
+        <span>Tax {money(cap.luxuryTax)}</span>
       </div>
     </div>
   );
@@ -528,7 +529,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
           const ext = r.p && extensionStart(r.p.contract) === cs + i;
           return (
             <span className={!r.p || r.p.contract.twoWay ? 'dim' : i === 0 ? 'bold' : 'dim2'}>
-              {fmtM(amt)}
+              {money(amt)}
               {opt && <span className="tiny warn">{opt}</span>}
               {ext && <span className="tiny good"> EXT</span>}
             </span>
@@ -546,7 +547,7 @@ function Contracts({ league, tid }: { league: League; tid: number }) {
       <PayrollBar league={league} tid={tid} />
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} onRow={(r) => nav(`/player/${r.pid}`)} />
       <div className="lg-legend">
-        <span>{[0, 1, 2, 3].map((i) => `${shortSeason(cs + i)} ${fmtM(payroll(league, tid, cs + i), 0)}`).join(' · ')}</span>
+        <span>{[0, 1, 2, 3].map((i) => `${shortSeason(cs + i)} ${money(payroll(league, tid, cs + i), 0)}`).join(' · ')}</span>
         <span>PO/TO player/team option</span>
         <span>EXT extension starts</span>
         {twoWay && <span>2W two-way, off the cap</span>}

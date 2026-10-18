@@ -64,6 +64,7 @@ import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
 import { retireNumbers } from './jerseys';
 import { recordTrail } from '../analysis/odds';
+import { money } from '../format';
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -283,8 +284,8 @@ function endRegularSeason(league: League) {
       subject: 'Revenue sharing',
       body:
         shared > 0
-          ? `Our local revenue (gate, merchandise, local TV) came in below the league average, so revenue sharing pays us $${(shared / 1000).toFixed(1)}M.`
-          : `Our local revenue (gate, merchandise, local TV) beat the league average, so we pay $${(-shared / 1000).toFixed(1)}M into revenue sharing.`,
+          ? `Our local revenue (gate, merchandise, local TV) came in below the league average, so revenue sharing pays us ${money(shared)}.`
+          : `Our local revenue (gate, merchandise, local TV) beat the league average, so we pay ${money(-shared)} into revenue sharing.`,
       tone: 'neutral',
       link: '/office/finances',
     });
@@ -293,7 +294,7 @@ function endRegularSeason(league: League) {
   if (mine?.tax) {
     // the seeds are final: in the top six, in the play-in or out
     const rank = confStandings(league, league.teams[league.userTid].conf).findIndex((r) => r.tid === league.userTid) + 1;
-    const bill = `We paid $${(mine.tax / 1000).toFixed(1)}M in luxury tax this season`;
+    const bill = `We paid ${money(mine.tax)} in luxury tax this season`;
     addInbox(league, {
       from: 'Owner',
       subject: 'Luxury tax bill',
@@ -311,7 +312,7 @@ function endRegularSeason(league: League) {
     addInbox(league, {
       from: 'Owner',
       subject: 'Under the salary floor',
-      body: `Our payroll finished $${(mine.shortfall / 1000).toFixed(1)}M under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`,
+      body: `Our payroll finished ${money(mine.shortfall)} under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -542,7 +543,7 @@ export function startFreeAgency(league: League): boolean {
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Free agency is open',
-    body: `You have ${space > 0 ? `$${(space / 1000).toFixed(1)}M in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}. You get the first look: AI teams start signing tomorrow. Top free agents weigh competing offers for a day or two; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
+    body: `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}. You get the first look: AI teams start signing tomorrow. Top free agents weigh competing offers for a day or two; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
       rfas.length
         ? `\nYour restricted free agent${rfas.length > 1 ? 's' : ''}: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights any time before an offer sheet comes in, or match one; unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`
         : ''
@@ -700,7 +701,7 @@ function extensionCandidatesMail(league: League) {
   if (!list.length) return;
   const line = (p: Player) => {
     const ask = extensionAsk(league, p);
-    return extensionRefusal(league, p) ?? `${playerName(p)} (${p.ovr}) asks about $${(ask.amount / 1000).toFixed(1)}M × ${ask.years} year${ask.years === 1 ? '' : 's'}.`;
+    return extensionRefusal(league, p) ?? `${playerName(p)} (${p.ovr}) asks about ${money(ask.amount)} × ${ask.years} year${ask.years === 1 ? '' : 's'}.`;
   };
   addInbox(league, {
     from: 'Assistant GM',

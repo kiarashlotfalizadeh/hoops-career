@@ -51,6 +51,7 @@ import { contractExp } from '../playerGen';
 import { Rng } from '../random';
 import type { League, Player } from '../types';
 import { DRAFT_PROSPECT, FREE_AGENT } from '../types';
+import { moneyExact } from '../format';
 
 const U = 0;
 const AI = 1;
@@ -696,7 +697,7 @@ describe('free agency', () => {
     young.asking = undefined;
     const no = userOffer(l, young.pid, cap.vetMin, 1);
     expect(no.ok).toBe(false);
-    expect(no.reason).toBe(`No cap space. Over the cap you can offer his minimum ($${(cap.minContract / 1000).toFixed(2)}M).`);
+    expect(no.reason).toBe(`No cap space. Over the cap you can offer his minimum (${moneyExact(cap.minContract)}).`);
   });
 
   it("a fired coach can't sign, re-sign, release, convert or decide options for his old team (T7)", () => {

@@ -21,7 +21,8 @@ import {
 import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
-import { Callout, HelpSheet, Line, PRACTICE, capSeason, fmtM, fmtMs, isOffseason, ordinal, shortSeason } from '../office/common';
+import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
+import { money, moneySigned } from '../../core/format';
 
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -87,7 +88,7 @@ function Overview({ team }: { team: Team }) {
           <div className="grow">
             <div className="over">Cash</div>
             <div className="fo-pay-v num" style={team.cash < 0 ? { color: 'var(--bad)' } : undefined}>
-              {fmtM(team.cash)}
+              {money(team.cash)}
             </div>
           </div>
         </div>
@@ -96,12 +97,12 @@ function Overview({ team }: { team: Team }) {
             items={[
               {
                 k: `Profit ${shortSeason(league.season)}`,
-                v: games || pr ? fmtMs(pr) : '—',
+                v: games || pr ? moneySigned(pr) : '—',
                 color: games || pr ? (pr >= 0 ? 'var(--good)' : 'var(--bad)') : undefined,
                 s: games ? `${games} games` : 'not started',
               },
-              { k: 'Revenue', v: games || ts.revenue ? fmtM(ts.revenue) : '—' },
-              { k: 'Expenses', v: games || ts.expenses ? fmtM(ts.expenses) : '—' },
+              { k: 'Revenue', v: games || ts.revenue ? money(ts.revenue) : '—' },
+              { k: 'Expenses', v: games || ts.expenses ? money(ts.expenses) : '—' },
             ]}
           />
         )}
@@ -131,7 +132,7 @@ function Overview({ team }: { team: Team }) {
 
       <Section title="Season costs" right={<span className="tiny dim">{s > league.season ? `${seasonLabel(s)} projected` : 'full season'}</span>}>
         <div className="card">
-          <div className="fo-stack" role="img" aria-label={expenses.map((e) => `${e.k} ${fmtM(e.v)}`).join(', ')}>
+          <div className="fo-stack" role="img" aria-label={expenses.map((e) => `${e.k} ${money(e.v)}`).join(', ')}>
             {expenses.map((e) => (
               <div key={e.k} style={{ width: `${(e.v / totalExp) * 100}%`, background: e.c }} />
             ))}
@@ -147,16 +148,16 @@ function Overview({ team }: { team: Team }) {
                   </>
                 }
               >
-                {fmtM(e.v)}
+                {money(e.v)}
               </Line>
             ))}
-            <Line k={<b>Total</b>}>{fmtM(totalExp)}</Line>
+            <Line k={<b>Total</b>}>{money(totalExp)}</Line>
           </div>
           <More label="League money">
             <p className="small dim2">
-              National TV and league revenue pays every team about {fmtM(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay{' '}
+              National TV and league revenue pays every team about {money(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay{' '}
               {CAP.taxRate}× on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to teams under the line), and teams under the{' '}
-              {fmtM(cap.minPayroll)} salary floor pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives{' '}
+              {money(cap.minPayroll)} salary floor pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives{' '}
               {Math.round(REVENUE_SHARING * 100)}% of the gap between its local revenue (gate, merchandise, local TV) and the league average.
             </p>
           </More>
@@ -195,8 +196,8 @@ function DeadMoney({ team, from }: { team: Team; from: number }) {
             <div key={s} className="fo-dead-row">
               <span className="fo-dead-s num">{shortSeason(s)}</span>
               <span className="grow fo-meta">{[...r.who].join(', ')}</span>
-              {r.stretched > 0 && <span className="tag warn">{r.stretched === r.total ? 'stretched' : `${fmtM(r.stretched)} stretched`}</span>}
-              <span className="fo-money-a num">{fmtM(r.total)}</span>
+              {r.stretched > 0 && <span className="tag warn">{r.stretched === r.total ? 'stretched' : `${money(r.stretched)} stretched`}</span>}
+              <span className="fo-money-a num">{money(r.total)}</span>
             </div>
           );
         })}
@@ -284,7 +285,7 @@ function BudgetTab({ team }: { team: Team }) {
           </Link>
         </Callout>
       )}
-      <Section title="Staff & facilities" right={<span className="fo-faday num">{fmtM(totalBudget)}/season</span>}>
+      <Section title="Staff & facilities" right={<span className="fo-faday num">{money(totalBudget)}/season</span>}>
         <div className="tiny dim">Out of profit, charged per game{profitGoal ? `: profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review` : ''}.</div>
         <div className="card flush list">
           {items.map((it) => {
@@ -301,7 +302,7 @@ function BudgetTab({ team }: { team: Team }) {
                   <HelpSheet title={it.label}>
                     <p>{it.help}</p>
                     <p>
-                      Cost: {fmtM(cost(1))} a season at level 1, up to {fmtM(cost(100))} at 100. League average level: {Math.round(a)}.
+                      Cost: {money(cost(1))} a season at level 1, up to {money(cost(100))} at 100. League average level: {Math.round(a)}.
                     </p>
                   </HelpSheet>
                   {Math.abs(lvl - a) < 1 && tied > 1 ? (
@@ -320,7 +321,7 @@ function BudgetTab({ team }: { team: Team }) {
                   min={1}
                   max={100}
                   onChange={(x) => set((t) => (t.budget[it.k] = x))}
-                  format={(x) => `${fmtM(cost(x))}/season`}
+                  format={(x) => `${money(cost(x))}/season`}
                   disabled={fired}
                 />
                 <div className={`small ${lvl > 50 ? 'good' : lvl < 50 ? 'warn' : 'dim2'}`}>{it.effect(lvl)}</div>
@@ -358,12 +359,12 @@ function BudgetTab({ team }: { team: Team }) {
                 s: `${Math.round((att / ARENA_CAPACITY) * 100)}% full`,
                 color: att >= ARENA_CAPACITY ? 'var(--good)' : undefined,
               },
-              { k: 'Gate / game', v: fmtM(gate, 2), s: 'ticket revenue' },
-              { k: 'Season gate', v: fmtM(gate * 41), s: '41 home games' },
+              { k: 'Gate / game', v: money(gate, 2), s: 'ticket revenue' },
+              { k: 'Season gate', v: money(gate * 41), s: '41 home games' },
             ]}
           />
           <div className="small dim2">
-            Gate revenue peaks near <b className="num">${sweet.p}</b> ({fmtM(sweet.g * 41)} a season) at today's demand.
+            Gate revenue peaks near <b className="num">${sweet.p}</b> ({money(sweet.g * 41)} a season) at today's demand.
           </div>
           <More>
             <p className="small dim2">
@@ -422,13 +423,13 @@ function HistoryTab({ team }: { team: Team }) {
         return o.short === 'Ongoing' ? '—' : o.short;
       },
     },
-    { key: 'rev', label: 'Revenue', get: (r) => r.revenue, fmt: (v) => fmtM(Number(v)) },
-    { key: 'exp', label: 'Expenses', get: (r) => r.expenses, fmt: (v) => fmtM(Number(v)) },
+    { key: 'rev', label: 'Revenue', get: (r) => r.revenue, fmt: (v) => money(Number(v)) },
+    { key: 'exp', label: 'Expenses', get: (r) => r.expenses, fmt: (v) => money(Number(v)) },
     {
       key: 'pro',
       label: 'Profit',
       get: (r) => r.revenue - r.expenses,
-      fmt: (v) => <span className={Number(v) >= 0 ? 'good' : 'bad'}>{fmtMs(Number(v))}</span>,
+      fmt: (v) => <span className={Number(v) >= 0 ? 'good' : 'bad'}>{moneySigned(Number(v))}</span>,
     },
     {
       key: 'att',
@@ -436,7 +437,7 @@ function HistoryTab({ team }: { team: Team }) {
       get: (r) => (r.homeWon + r.homeLost ? r.attendance / (r.homeWon + r.homeLost) : 0),
       fmt: (v) => (Number(v) ? Math.round(Number(v)).toLocaleString() : '—'),
     },
-    { key: 'pay', label: 'Payroll', get: (r) => r.payroll, fmt: (v) => (Number(v) ? fmtM(Number(v)) : '—') },
+    { key: 'pay', label: 'Payroll', get: (r) => r.payroll, fmt: (v) => (Number(v) ? money(Number(v)) : '—') },
   ];
   // after the playoffs this season's books are closed
   const inProgress = !isOffseason(league);
@@ -455,13 +456,13 @@ function HistoryTab({ team }: { team: Team }) {
             <div
               className={`fo-minichart ${anyLoss ? 'split' : ''}`}
               role="img"
-              aria-label={chart.map((r) => `${seasonLabel(r.season)} ${fmtMs(r.revenue - r.expenses)}`).join(', ')}
+              aria-label={chart.map((r) => `${seasonLabel(r.season)} ${moneySigned(r.revenue - r.expenses)}`).join(', ')}
             >
               {chart.map((r) => {
                 const pr = r.revenue - r.expenses;
                 return (
                   <div key={r.season} className={`${pr >= 0 ? 'up' : 'down'} ${inProgress && r.season === league.season ? 'live' : ''}`}>
-                    <span className="v num">{fmtMs(pr, 0)}</span>
+                    <span className="v num">{moneySigned(pr, 0)}</span>
                     <div className="pos">{pr >= 0 && <div className="b" style={{ height: h(pr) }} />}</div>
                     {anyLoss && <div className="neg">{pr < 0 && <div className="b" style={{ height: h(pr) }} />}</div>}
                     <span className="s num">{shortSeason(r.season)}</span>

@@ -10,6 +10,7 @@
 import type { League, Player, Txn, TxnKind, TxnSide } from '../types';
 import { seasonLabel } from '../constants';
 import { playerName } from './helpers';
+import { money } from '../format';
 
 /** Seasons other teams' moves stay in the log, besides the current one (trades and the user's moves stay for good). */
 export const TXN_KEEP_SEASONS = 2;
@@ -92,7 +93,6 @@ export function tradesBetween(league: League, a: number, b: number): Txn[] {
 /** A piece of a move's line: text, a player (his name then, linked when he is still in the league) or a team. */
 export type TxnPart = string | { pid: number; name: string } | { tid: number };
 
-const money = (k: number) => `$${(k / 1000).toFixed(1)}M`;
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
 
 /** A deal's total over its years, with the 5% raises new contracts carry (see makeContract), as the news quotes it. */

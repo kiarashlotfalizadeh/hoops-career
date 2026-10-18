@@ -5,7 +5,7 @@
 import { Fragment, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import { capSeason, fmtM, openOption, shortSeason } from '../office/common';
+import { capSeason, openOption, shortSeason } from '../office/common';
 import { useQueryParam } from '../league/shared';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
@@ -20,6 +20,7 @@ import { f1, latestLine, playerSeason, rosterNames, signed, startingFive, type P
 import type { League, Player } from '../../core/types';
 import { tenDayLabel } from '../office/TenDayPanel';
 import './team.css';
+import { money } from '../../core/format';
 
 type View = 'players' | 'ratings' | 'stats' | 'contracts';
 
@@ -72,7 +73,7 @@ export default function Roster() {
         const opt = contractExp(p.contract) === s ? openOption(league, p) : undefined;
         return (
           <span className={opt ? 'warn' : undefined}>
-            {fmtM(v as number)}
+            {money(v as number)}
             {opt && <span className="tiny"> {opt === 'team' ? 'TO' : 'PO'}</span>}
           </span>
         );

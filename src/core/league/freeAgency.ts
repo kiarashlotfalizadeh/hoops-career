@@ -78,6 +78,7 @@ import {
   signOfferSheet,
 } from './rfa';
 import { logMove } from './transactions';
+import { money, moneyExact } from '../format';
 
 export { FA_DAYS };
 
@@ -522,9 +523,9 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const rooms = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, season, p.pid) }))
     .filter((r) => r.room > 0)
-    .map((r) => `up to $${(r.room / 1000).toFixed(1)}M with your ${EXCEPTIONS[r.k].name}`);
+    .map((r) => `up to ${money(r.room)} with your ${EXCEPTIONS[r.k].name}`);
   const after = [offers > 0 ? 'your pending offers' : '', market.rfa > 0 ? `your restricted free agents' cap holds` : ''].filter(Boolean).join(' and ');
-  return `${space >= 50 ? `Not enough cap space ($${(space / 1000).toFixed(1)}M)` : 'No cap space'}${after ? ` after ${after}` : ''}. Over the cap you can offer his minimum ($${(min / 1000).toFixed(2)}M)${rooms.length ? `, or ${andList(rooms).replace(/ and up to/, ' or up to')}` : ''}.`;
+  return `${space >= 50 ? `Not enough cap space (${money(space)})` : 'No cap space'}${after ? ` after ${after}` : ''}. Over the cap you can offer his minimum (${moneyExact(min)})${rooms.length ? `, or ${andList(rooms).replace(/ and up to/, ' or up to')}` : ''}.`;
 }
 
 /** The user's market holds (see marketHolds): his restricted free agents' cap holds, which count against his cap space, and his pending offer sheets, which count against the tax line too. */
@@ -751,7 +752,7 @@ export function userBid(league: League, pid: number, amount: number, years: numb
   if (amount < floor)
     return {
       ok: false,
-      reason: `${playerName(p)} won't consider less than $${(floor / 1000).toFixed(1)}M a season over ${years} year${years > 1 ? 's' : ''} (he's asking $${(askingContract(league, p, league.userTid).amount / 1000).toFixed(1)}M).`,
+      reason: `${playerName(p)} won't consider less than ${money(floor)} a season over ${years} year${years > 1 ? 's' : ''} (he's asking ${money(askingContract(league, p, league.userTid).amount)}).`,
     };
   const route = offerRoute(league, p, amount, contractSeason(league), years)!;
   const old = pendingBid(league, pid);
@@ -798,12 +799,11 @@ function bidRouteNow(league: League, b: FaBid, p: Player): { route: SigningRoute
   const best = order.map((k) => ({ k, room: room(k) })).sort((x, y) => y.room - x.room)[0];
   return {
     route: null,
-    why: `we no longer have the cap space for it ($${(space / 1000).toFixed(1)}M left)${best.room > 0 ? ` and our ${EXCEPTIONS[best.k].name} only reaches $${(best.room / 1000).toFixed(1)}M${b.years > EXCEPTIONS[best.k].years ? ` for ${EXCEPTIONS[best.k].years} years` : ''}` : ''}`,
+    why: `we no longer have the cap space for it (${money(space)} left)${best.room > 0 ? ` and our ${EXCEPTIONS[best.k].name} only reaches ${money(best.room)}${b.years > EXCEPTIONS[best.k].years ? ` for ${EXCEPTIONS[best.k].years} years` : ''}` : ''}`,
   };
 }
 
 const yrs = (n: number) => `${n} yr${n > 1 ? 's' : ''}`;
-const money = (k: number) => `$${(k / 1000).toFixed(1)}M`;
 const PREF_LABEL: Record<keyof PlayerPrefs, string> = { winning: 'winning', money: 'money', role: 'playing time', market: 'market size' };
 
 /** He decides on the user's offer: the user's (if it still fits) against the AI teams' bids, best utility wins. */
@@ -915,7 +915,7 @@ export function userOffer(league: League, pid: number, amount: number, years: nu
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signed`,
-    body: `${playerName(p)} agreed to ${years} year${years > 1 ? 's' : ''} at $${(amount / 1000).toFixed(1)}M per season${extras.option ? `, with a ${extras.option} option on the last` : ''}${isException(route) ? `, using our ${EXCEPTIONS[route].name} for the season` : ''}. He has been added to the end of your rotation.`,
+    body: `${playerName(p)} agreed to ${years} year${years > 1 ? 's' : ''} at ${money(amount)} per season${extras.option ? `, with a ${extras.option} option on the last` : ''}${isException(route) ? `, using our ${EXCEPTIONS[route].name} for the season` : ''}. He has been added to the end of your rotation.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });
@@ -967,15 +967,14 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
   if (!twoWayEligible(p)) return { ok: false, reason: `${playerName(p)} has too much experience for a two-way deal (3 seasons max).` };
   if (twoWayRoster(league, tid).length >= TWO_WAY_MAX) return { ok: false, reason: `All ${TWO_WAY_MAX} two-way slots are taken.` };
   const season = contractSeason(league);
-  if (!wantsTwoWay(league, p, tid))
-    return { ok: false, reason: `${playerName(p)} wants a standard contract (asking $${(askingContract(league, p, tid).amount / 1000).toFixed(1)}M).` };
+  if (!wantsTwoWay(league, p, tid)) return { ok: false, reason: `${playerName(p)} wants a standard contract (asking ${money(askingContract(league, p, tid).amount)}).` };
   const amount = twoWaySalary(league, season);
   const years = twoWayYears(p);
   signPlayer(league, p, tid, amount, years, { start: season, twoWay: true });
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signed (two-way)`,
-    body: `${playerName(p)} signed a ${years}-year two-way deal at $${(amount / 1000).toFixed(2)}M. He doesn't take a roster spot or count against the cap, and sits at the end of the bench unless we run short. If he earns it, he can be converted to a standard contract when a roster spot is open.`,
+    body: `${playerName(p)} signed a ${years}-year two-way deal at ${moneyExact(amount)}. He doesn't take a roster spot or count against the cap, and sits at the end of the bench unless we run short. If he earns it, he can be converted to a standard contract when a roster spot is open.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });

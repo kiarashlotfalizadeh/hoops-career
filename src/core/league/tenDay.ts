@@ -20,6 +20,7 @@ import { CAP } from '../constants';
 import { CAP_FOR, addInbox, curTeamSeason, dateToDay, fmtDate, freeAgents, playerName, standardRoster } from './helpers';
 import { FIRED_REASON, askingContract, releasePlayer, signPlayer, valueScore } from './contracts';
 import { logMove } from './transactions';
+import { moneyExact } from '../format';
 
 /** Days a 10-day contract runs. */
 export const TEN_DAYS = 10;
@@ -28,8 +29,6 @@ export const TEN_DAY_MAX = 2;
 /** Players out (each with HARDSHIP_GAMES or more games to go) from which the hardship exception opens spots beyond 15: one for each past three. */
 export const HARDSHIP_OUT = 4;
 export const HARDSHIP_GAMES = 3;
-
-const money = (k: number) => `$${(k / 1000).toFixed(2)}M`;
 
 /** Season day of January 5, when 10-day contracts open. */
 export const tenDayOpenDay = (league: League) => dateToDay(league.season, 0, 5);
@@ -94,7 +93,7 @@ export function tenDayBlockedReason(league: League, tid: number, p: Player): str
   if (!cur) {
     if (p.tid >= 0) return p.tid === tid ? `${name} is on a standard contract.` : `${name} isn't a free agent.`;
     if (p.waivers) return `${name} is on waivers: put in a claim instead.`;
-    if (p.rfa || !wantsTenDay(league, p, tid)) return `${name} wants a standard contract (asking $${(askingContract(league, p, tid).amount / 1000).toFixed(1)}M).`;
+    if (p.rfa || !wantsTenDay(league, p, tid)) return `${name} wants a standard contract (asking ${moneyExact(askingContract(league, p, tid).amount)}).`;
   }
   if (tenDaysWith(league, p, tid) >= TEN_DAY_MAX)
     return `${name} has had his two 10-day contracts with ${tid === league.userTid ? 'you' : 'them'} this season: a deal for the rest of the season, or he leaves.`;
@@ -228,7 +227,7 @@ function fillAfterTenDay(league: League, tid: number, left: string) {
       addInbox(league, {
         from: 'Assistant GM',
         subject: `${playerName(p)} signed to fill the roster`,
-        body: `${left}'s 10-day contract ended and left us under the league's ${CAP.rosterMin}-man minimum, so we signed ${playerName(p)} (${p.ovr}) for the rest of the season at the minimum (${money(p.contract.salaries[0])}).`,
+        body: `${left}'s 10-day contract ended and left us under the league's ${CAP.rosterMin}-man minimum, so we signed ${playerName(p)} (${p.ovr}) for the rest of the season at the minimum (${moneyExact(p.contract.salaries[0])}).`,
         tone: 'neutral',
         link: `/player/${p.pid}`,
       });
@@ -289,8 +288,8 @@ function tenDayNotice(league: League, p: Player) {
   const lines = [
     `${name}'s ${n >= 2 ? 'second' : 'first'} 10-day contract with us ends after today's games.`,
     n >= 2
-      ? `That's his second 10-day with us: sign him for the rest of the season at his minimum (${money(minFor(league, p))}), or he becomes a free agent tomorrow.`
-      : `Sign him to a second 10-day${again ? ` (${money(tenDayPay(league, p, tenDayUntil(league, p.contract.tenDay!.until) - p.contract.tenDay!.until))}, through ${tenDayEnds(league, tenDayUntil(league, p.contract.tenDay!.until))})` : ''}, for the rest of the season at his minimum (${money(minFor(league, p))}), or let him go: doing nothing lets him go tomorrow, with no dead money.`,
+      ? `That's his second 10-day with us: sign him for the rest of the season at his minimum (${moneyExact(minFor(league, p))}), or he becomes a free agent tomorrow.`
+      : `Sign him to a second 10-day${again ? ` (${moneyExact(tenDayPay(league, p, tenDayUntil(league, p.contract.tenDay!.until) - p.contract.tenDay!.until))}, through ${tenDayEnds(league, tenDayUntil(league, p.contract.tenDay!.until))})` : ''}, for the rest of the season at his minimum (${moneyExact(minFor(league, p))}), or let him go: doing nothing lets him go tomorrow, with no dead money.`,
     p.contract.tenDay?.hardship && !again && n < 2 ? 'The hardship exception no longer covers him: a second 10-day would need a regular roster spot.' : '',
     rest ?? '',
     left ? `Letting him go leaves us under ${CAP.rosterMin}: the staff would sign the best free agent left for the rest of the season.` : '',

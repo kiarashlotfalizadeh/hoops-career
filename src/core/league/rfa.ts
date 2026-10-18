@@ -39,6 +39,7 @@ import {
   valueScore,
 } from './contracts';
 import { logMove } from './transactions';
+import { money } from '../format';
 
 /** Free-agency days a team has to match an offer sheet: the day it is signed and the next (until the market closes, if that comes first). */
 export const MATCH_DAYS = 2;
@@ -56,7 +57,6 @@ export const AI_SHEET_PENALTY = 0.5;
 /** Least trade value (to his team, under its strategy) of the contract an offer sheet would give him for an AI team to match it. */
 const MATCH_VALUE = 2;
 
-const money = (k: number) => `$${(k / 1000).toFixed(1)}M`;
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
 const teamName = (league: League, tid: number) => `${league.teams[tid].region} ${league.teams[tid].name}`;
 

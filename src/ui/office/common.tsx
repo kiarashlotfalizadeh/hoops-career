@@ -15,6 +15,7 @@ import { tradingClosedReason } from '../../core/league/trades';
 import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
 import './office.css';
+import { money } from '../../core/format';
 
 export const OFFSEASON_PHASES: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
 
@@ -22,18 +23,6 @@ export const isOffseason = (l: League) => OFFSEASON_PHASES.includes(l.phase);
 
 /** The season new contracts/trades count against: next season during the offseason. */
 export const capSeason = (l: League) => (isOffseason(l) ? l.season + 1 : l.season);
-
-/** Money in $K → "$X.XM" (negative values get a leading minus; one that rounds to zero doesn't). */
-export function fmtM(k: number, d = 1): string {
-  const m = (Math.abs(k) / 1000).toFixed(d);
-  return `${k < 0 && Number(m) !== 0 ? '-' : ''}$${m}M`;
-}
-
-/** Signed money "+$1.2M" / "-$3.4M" (a value that rounds to zero reads "+$0.0M"). */
-export const fmtMs = (k: number, d = 1) => {
-  const m = (Math.abs(k) / 1000).toFixed(d);
-  return `${k < 0 && Number(m) !== 0 ? '-' : '+'}$${m}M`;
-};
 
 /** "26-27" style short season label. */
 export const shortSeason = (season: number) => `${String((season - 1) % 100).padStart(2, '0')}-${String(season % 100).padStart(2, '0')}`;
@@ -148,13 +137,13 @@ export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number;
         <div className="fo-legend">
           <span>
             <i style={{ background: tone(total) }} />
-            Payroll <b>{fmtM(total)}</b>
+            Payroll <b>{money(total)}</b>
           </span>
           <span>
-            Cap <b>{fmtM(cap)}</b>
+            Cap <b>{money(cap)}</b>
           </span>
           <span>
-            Tax <b>{fmtM(tax)}</b>
+            Tax <b>{money(tax)}</b>
           </span>
         </div>
       )}
@@ -243,7 +232,7 @@ export function Range({ value, min, max, step = 1, onChange, label }: { value: n
       step={step}
       value={clamp(value, min, max)}
       aria-label={label}
-      aria-valuetext={fmtM(value, 2)}
+      aria-valuetext={money(value, 2)}
       onChange={(e) => onChange(Number(e.target.value))}
       style={{ ['--fill' as string]: `${fill}%` }}
     />
@@ -315,8 +304,8 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
     const name = playerName(p);
     const how = stretchIt && spread ? `, ${stretchPhrase(league, spread)}` : '';
     const after = waive
-      ? `${name} waived. ${fmtM(owed)} stays on your books${how} unless a team claims him.`
-      : `${name} released.${owed > 0 ? ` ${fmtM(owed)} stays on your books${how}.` : ''}`;
+      ? `${name} waived. ${money(owed)} stays on your books${how} unless a team claims him.`
+      : `${name} released.${owed > 0 ? ` ${money(owed)} stays on your books${how}.` : ''}`;
     if (releaseAction(league, p.pid, { stretch: stretchIt }, after)) onDone();
   };
   const buyOut = (stretchIt: boolean) => {
@@ -355,13 +344,13 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
           {seasons.map((s) => (
             <Fragment key={s}>
               <span className="dim2">{seasonLabel(s)}</span>
-              <span className="num r">{amountIn(remaining, s) ? fmtM(amountIn(remaining, s)!) : '—'}</span>
-              {stretch && <span className="num r">{amountIn(stretch, s) ? fmtM(amountIn(stretch, s)!) : '—'}</span>}
+              <span className="num r">{amountIn(remaining, s) ? money(amountIn(remaining, s)!) : '—'}</span>
+              {stretch && <span className="num r">{amountIn(stretch, s) ? money(amountIn(stretch, s)!) : '—'}</span>}
             </Fragment>
           ))}
           <span className="fo-dead-t">Total</span>
-          <span className="fo-dead-t num r bad">{fmtM(owed)}</span>
-          {stretch && <span className="fo-dead-t num r bad">{fmtM(owed)}</span>}
+          <span className="fo-dead-t num r bad">{money(owed)}</span>
+          {stretch && <span className="fo-dead-t num r bad">{money(owed)}</span>}
         </div>
       )}
       {stretch && (
@@ -377,21 +366,21 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
             <span className="tag good">Gives back {Math.round(buyout.giveback * 100)}%</span>
           </div>
           <div className="small dim2">
-            He gives back {fmtM(buyout.saved)} of {fmtM(buyout.owed)}
+            He gives back {money(buyout.saved)} of {money(buyout.owed)}
             {why.length ? ` (${why.join(', ')})` : ''} and skips waivers.
           </div>
           <div className="statline">
             <div>
               <div className="k">Release</div>
-              <div className="v bad">{fmtM(buyout.owed)}</div>
+              <div className="v bad">{money(buyout.owed)}</div>
             </div>
             <div>
               <div className="k">Buyout</div>
-              <div className="v warn">{fmtM(buyout.dead)}</div>
+              <div className="v warn">{money(buyout.dead)}</div>
             </div>
           </div>
           <button className="btn block" disabled={busy} onClick={() => buyOut(false)}>
-            Buy out · save {fmtM(buyout.saved)}
+            Buy out · save {money(buyout.saved)}
           </button>
           {buyoutStretch > 0 && (
             <button className="btn block" disabled={busy} onClick={() => buyOut(true)}>

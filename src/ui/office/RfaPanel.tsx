@@ -27,7 +27,8 @@ import { AgendaRow } from '../components/Agenda';
 import { Term } from '../components/Glossary';
 import { settle } from '../../state/actions/office';
 import { Section, Sheet } from '../components/ui';
-import { Callout, OvrPot, fmtM, playerMeta, shortSeason } from './common';
+import { Callout, OvrPot, playerMeta, shortSeason } from './common';
+import { money } from '../../core/format';
 
 /** Run a core move as one league action and toast its answer. */
 const act = (label: string, fn: (l: League) => { ok: boolean; reason: string }, good: 'good' | 'neutral' = 'good') => !!settle(label, fn, good)?.ok;
@@ -37,7 +38,7 @@ export function sheetTerms(league: League, p: Player): string {
   const s = p.rfa?.sheet;
   if (!s) return '';
   const c = makeContract(league, s.amount, s.years, contractSeason(league), p.experience);
-  return `${s.years} yr${s.years > 1 ? 's' : ''} · ${fmtM(c.salaries.reduce((a, x) => a + x, 0))} · ${fmtM(c.salaries[0])} in ${shortSeason(c.start)}`;
+  return `${s.years} yr${s.years > 1 ? 's' : ''} · ${money(c.salaries.reduce((a, x) => a + x, 0))} · ${money(c.salaries[0])} in ${shortSeason(c.start)}`;
 }
 
 /** What a list says about a restricted free agent: the user's own, another team's he could sign to an offer sheet, or one who has signed one. */
@@ -64,11 +65,11 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
       <div className="grow small dim2">
         {qualified ? (
           <>
-            <b className="good">Qualified</b> · {fmtM(qo)} for 1 yr: you can match any offer sheet.
+            <b className="good">Qualified</b> · {money(qo)} for 1 yr: you can match any offer sheet.
           </>
         ) : (
           <>
-            Qualifying offer <b className="num">{fmtM(qo)}</b> (1 yr) makes him restricted.
+            Qualifying offer <b className="num">{money(qo)}</b> (1 yr) makes him restricted.
           </>
         )}
       </div>
@@ -199,8 +200,8 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                   <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
                 </div>
                 <div className="fo-money">
-                  <div className="a">{fmtM(r.qo)}</div>
-                  <div className="b">QO · hold {fmtM(r.hold ?? r.qo)}</div>
+                  <div className="a">{money(r.qo)}</div>
+                  <div className="b">QO · hold {money(r.hold ?? r.qo)}</div>
                 </div>
               </div>
               {r.sheet ? (
@@ -213,7 +214,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                       <span className="warn">wants out: won't re-sign, but you can match a sheet</span>
                     ) : (
                       <>
-                        asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''} to re-sign
+                        asks <b className="num">{money(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''} to re-sign
                       </>
                     )}
                   </div>
@@ -235,7 +236,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
         {withdraw && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              {playerName(withdraw)} becomes an unrestricted free agent now: his {fmtM(withdraw.rfa?.hold ?? 0)} cap hold comes off your books and any team can sign him outright.
+              {playerName(withdraw)} becomes an unrestricted free agent now: his {money(withdraw.rfa?.hold ?? 0)} cap hold comes off your books and any team can sign him outright.
               To bring him back you'd need cap space like anyone else. This can't be undone.
             </p>
             <div className="row">

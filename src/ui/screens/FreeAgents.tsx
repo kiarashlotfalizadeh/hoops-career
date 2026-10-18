@@ -32,13 +32,14 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { useFlowRunner } from '../useFlow';
 import { Bar, Chips, Empty, More, PageHeader, Section, Sheet, Statline } from '../components/ui';
-import { Callout, HelpSheet, Line, OvrPot, PlayerHead, appealInfo, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
+import { Callout, HelpSheet, Line, OvrPot, PlayerHead, appealInfo, capSeason, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { MyRfas, MySheets, rfaTag } from '../office/RfaPanel';
 import { TenDaySheet } from '../office/TenDayPanel';
 import { FilterSelect } from '../trade/TradeFinder';
 import { MATCH_DAYS, SHEET_MIN_YEARS, pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
 import { agendaBlocker } from '../../core/league/agenda';
+import { money } from '../../core/format';
 
 type SortKey = 'value' | 'ovr' | 'pot' | 'ask' | 'age';
 
@@ -201,19 +202,19 @@ export default function FreeAgents() {
         right={
           <HelpSheet title="How free agency works">
             <p>
-              <b>Cap space.</b> Sign anyone whose deal fits under the {fmtM(cap.salaryCap)} cap. You have <b>{fmtM(Math.max(0, space))}</b> of room for {seasonLabel(s)}.
+              <b>Cap space.</b> Sign anyone whose deal fits under the {money(cap.salaryCap)} cap. You have <b>{money(Math.max(0, space))}</b> of room for {seasonLabel(s)}.
             </p>
             <p>
-              <b>Minimum deals.</b> Over the cap, players still sign for their minimum: {fmtM(cap.minContract, 2)} in a player's first three seasons, {fmtM(cap.vetMin, 2)} after. A
-              minimum deal for the coming season isn't guaranteed until opening night.
+              <b>Minimum deals.</b> Over the cap, players still sign for their minimum: {money(cap.minContract, 2)} in a player's first three seasons, {money(cap.vetMin, 2)} after.
+              A minimum deal for the coming season isn't guaranteed until opening night.
             </p>
             <p>
-              <b>Exceptions.</b> Over the cap, each pays for one signing a season. The <b>mid-level</b>: up to {fmtM(exceptionAmount(league, 'mle', s))} for up to{' '}
-              {EXCEPTIONS.mle.years} years, if the signing keeps you under the tax line ({fmtM(cap.luxuryTax)}). The <b>bi-annual</b>: up to{' '}
-              {fmtM(exceptionAmount(league, 'bae', s))} for up to {EXCEPTIONS.bae.years} years, under the tax line too, and not two seasons running. After either, trades can't take
-              you past the tax line that season. Sign anyone with <b>cap space</b> and the mid-level is gone for the season: the <b>room exception</b> replaces it, up to{' '}
-              {fmtM(exceptionAmount(league, 'room', s))} for up to {EXCEPTIONS.room.years} years (a team uses the room exception or the bi-annual in a season, not both).{' '}
-              {exceptions.length ? `Open to you now: ${exceptions.map((x) => `${EXCEPTIONS[x.k].name} up to ${fmtM(x.room)}`).join(', ')}.` : 'None is open to you now.'}
+              <b>Exceptions.</b> Over the cap, each pays for one signing a season. The <b>mid-level</b>: up to {money(exceptionAmount(league, 'mle', s))} for up to{' '}
+              {EXCEPTIONS.mle.years} years, if the signing keeps you under the tax line ({money(cap.luxuryTax)}). The <b>bi-annual</b>: up to{' '}
+              {money(exceptionAmount(league, 'bae', s))} for up to {EXCEPTIONS.bae.years} years, under the tax line too, and not two seasons running. After either, trades can't
+              take you past the tax line that season. Sign anyone with <b>cap space</b> and the mid-level is gone for the season: the <b>room exception</b> replaces it, up to{' '}
+              {money(exceptionAmount(league, 'room', s))} for up to {EXCEPTIONS.room.years} years (a team uses the room exception or the bi-annual in a season, not both).{' '}
+              {exceptions.length ? `Open to you now: ${exceptions.map((x) => `${EXCEPTIONS[x.k].name} up to ${money(x.room)}`).join(', ')}.` : 'None is open to you now.'}
             </p>
             <p>
               <b>Negotiating.</b> His ask is open: offer it on his terms (the years he wants, no option) and he signs on the spot. He'd take a little less, how much he keeps to
@@ -245,7 +246,7 @@ export default function FreeAgents() {
               <b>Roster.</b> Up to {OFFSEASON_ROSTER_MAX} players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
             </p>
             <p>
-              <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {fmtM(twoWaySalary(league, s), 2)}. They don't use a
+              <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {money(twoWaySalary(league, s), 2)}. They don't use a
               roster spot or count on the cap, and sit at the end of the bench unless you run short.
             </p>
             <p>
@@ -272,7 +273,7 @@ export default function FreeAgents() {
           items={[
             {
               k: 'Cap space',
-              v: fmtM(space),
+              v: money(space),
               color: space > 0 ? 'var(--good)' : 'var(--warn)',
               s:
                 bids.some((b) => b.route === 'space') || sheetsOut.length
@@ -293,9 +294,9 @@ export default function FreeAgents() {
             },
             {
               k: 'Exception',
-              v: exceptions.length ? fmtM(exceptions[0].room) : '—',
+              v: exceptions.length ? money(exceptions[0].room) : '—',
               color: exceptions.length ? 'var(--good)' : undefined,
-              s: exceptions.length ? exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') : `min ${fmtM(cap.vetMin, 2)}`,
+              s: exceptions.length ? exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') : `min ${money(cap.vetMin, 2)}`,
             },
           ]}
         />
@@ -326,7 +327,7 @@ export default function FreeAgents() {
                   return (
                     <div key={b.pid} className="fo-pending-item">
                       <button className="fo-pending-row grow" aria-haspopup="dialog" onClick={() => setSel(b.pid)}>
-                        <b>{playerName(bp)}</b> · {b.years} yr{b.years > 1 ? 's' : ''} · {fmtM(b.amount)}
+                        <b>{playerName(bp)}</b> · {b.years} yr{b.years > 1 ? 's' : ''} · {money(b.amount)}
                         <span className="dim"> · {b.decideDay > league.faDay ? `decides day ${b.decideDay + 1}` : 'decides at the close'}</span>
                       </button>
                       <button className="btn xs" disabled={busy} aria-label={`Withdraw your offer to ${playerName(bp)}`} onClick={() => withdraw(b.pid)}>
@@ -412,7 +413,7 @@ export default function FreeAgents() {
                   : `Your roster is full (${max}). Release or trade someone to sign a free agent.`)}
           </div>
         )}
-        {twoWayMode && <div className="tiny dim">Three seasons or fewer, would sign for the minimum. Two-way pays {fmtM(twoWaySalary(league, s), 2)}, off the cap.</div>}
+        {twoWayMode && <div className="tiny dim">Three seasons or fewer, would sign for the minimum. Two-way pays {money(twoWaySalary(league, s), 2)}, off the cap.</div>}
         {tenDays && (
           <div className="tiny dim">
             Would sign for the minimum: prorated for {TEN_DAYS} days, ends by itself.{' '}
@@ -489,26 +490,26 @@ export default function FreeAgents() {
                   </div>
                   {w ? (
                     <div className="fo-money">
-                      <div className="a">{fmtM(waiverSalary(league, p))}</div>
+                      <div className="a">{money(waiverSalary(league, p))}</div>
                       <div className="b">thru {shortSeason(contractExp(w.contract))}</div>
                     </div>
                   ) : twoWayMode ? (
                     <div className="fo-money">
-                      <div className="a">{fmtM(twoWaySalary(league, s), 2)}</div>
+                      <div className="a">{money(twoWaySalary(league, s), 2)}</div>
                       <div className="b">
                         two-way · {twoWayYears(p)} yr{twoWayYears(p) > 1 ? 's' : ''}
                       </div>
                     </div>
                   ) : tenDays ? (
                     <div className="fo-money">
-                      <div className="a">{fmtM(tenDayPay(league, p, tenDayUntil(league) - league.day), 2)}</div>
+                      <div className="a">{money(tenDayPay(league, p, tenDayUntil(league) - league.day), 2)}</div>
                       <div className="b">
                         {tenDayUntil(league) - league.day} day{tenDayUntil(league) - league.day === 1 ? '' : 's'}
                       </div>
                     </div>
                   ) : (
                     <div className="fo-money">
-                      <div className="a">{fmtM(ask.amount)}</div>
+                      <div className="a">{money(ask.amount)}</div>
                       <div className="b">
                         {ask.years} yr{ask.years > 1 ? 's' : ''}
                       </div>
@@ -574,7 +575,7 @@ function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
         <div className="col fo-sheet">
           <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
           <div className="fo-lines">
-            <Line k="Pay a season">{fmtM(twoWaySalary(league, s), 2)}</Line>
+            <Line k="Pay a season">{money(twoWaySalary(league, s), 2)}</Line>
             <Line k="Seasons">
               {twoWayYears(p)} from {seasonLabel(s)}
             </Line>
@@ -626,7 +627,7 @@ function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: () => voi
               const season = w.contract.start + i;
               return season < league.season ? null : (
                 <Line key={season} k={seasonLabel(season)}>
-                  {fmtM(amt, 2)}
+                  {money(amt, 2)}
                 </Line>
               );
             })}

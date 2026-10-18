@@ -13,7 +13,6 @@ import {
   cashRoom,
   counterOffers,
   evaluateTrade,
-  fmtCash,
   makeItWork,
   pickLabel,
   swapSeasons,
@@ -36,7 +35,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Empty, Ovr, PageHeader, Section, Segmented, scrollBehavior } from '../components/ui';
 import { slabVars } from '../teamColors';
 import { Term } from '../components/Glossary';
-import { STRATEGY_META, Callout, HelpSheet, capSeason, contractYearsLabel, deadlineLabel, fmtM, fmtMs } from '../office/common';
+import { STRATEGY_META, Callout, HelpSheet, capSeason, contractYearsLabel, deadlineLabel } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { isUntouchable, openProposals } from '../../core/league/proposals';
 import { OffersTab } from '../office/OffersTab';
@@ -49,6 +48,7 @@ import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } f
 import { RecentDeals } from '../league/MovesTab';
 import { checkForceTrade, forceTrade, type EditCheck } from '../../core/league/godMode';
 import { continueDraft } from '../../core/league/season';
+import { money, moneySigned, moneyExact } from '../../core/format';
 
 interface Sel {
   pids: number[];
@@ -254,7 +254,7 @@ export default function Trade() {
         .getState()
         .toast(
           why === 'salary'
-            ? `You need to send at least ${fmtM(out + gap)} in salary, and no player (or pair) of yours makes that work.`
+            ? `You need to send at least ${money(out + gap)} in salary, and no player (or pair) of yours makes that work.`
             : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
           'bad',
         );
@@ -271,7 +271,7 @@ export default function Trade() {
           league.draftPicks.find((x) => x.dpid === d)!,
         ),
       ),
-      ...(addC > 0 ? [`${fmtCash(addC)} in cash`] : []),
+      ...(addC > 0 ? [`${moneyExact(addC)} in cash`] : []),
     ];
     setGive(selOf(r.a));
     useStore.getState().toast(names.length ? `${pt.abbrev} would do it if you add ${names.join(' + ')}.` : `${pt.abbrev} would accept this as is.`, 'good');
@@ -397,8 +397,8 @@ function TradeHelp({ league, season }: { league: League; season: number }) {
   return (
     <HelpSheet title="Trade rules">
       <p>
-        <b>Salary matching.</b> A team over the cap ({fmtM(cap.salaryCap)}) after the trade takes back at most 125% of the salary it sends, plus $0.1M. Teams under it absorb salary
-        freely. A team that used its mid-level or bi-annual this season can't take its payroll past the tax line ({fmtM(cap.luxuryTax)}).
+        <b>Salary matching.</b> A team over the cap ({money(cap.salaryCap)}) after the trade takes back at most 125% of the salary it sends, plus $0.1M. Teams under it absorb
+        salary freely. A team that used its mid-level or bi-annual this season can't take its payroll past the tax line ({money(cap.luxuryTax)}).
       </p>
       <p>
         <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} in season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season no team drops
@@ -424,7 +424,7 @@ function TradeHelp({ league, season }: { league: League; season: number }) {
         and what it would gain.
       </p>
       <p>
-        <b>Cash.</b> Each team can send, and receive, up to {fmtCash(cashRoom(league, league.userTid).limit)} in trades a season (about 5% of the cap). Cash isn't salary: it
+        <b>Cash.</b> Each team can send, and receive, up to {moneyExact(cashRoom(league, league.userTid).limit)} in trades a season (about 5% of the cap). Cash isn't salary: it
         doesn't match or count against the cap. It comes out of the sender's profit. AI GMs value $2-3M about like a typical second-round pick, rebuilders a little more and
         contenders less.
       </p>
@@ -490,7 +490,7 @@ function PartnerSlab({ league, tid, season }: { league: League; tid: number; sea
           <div className="fo-partner-name">{t.name}</div>
         </div>
         <div className="fo-partner-cap">
-          <div className="v num">{pay > cap.salaryCap ? fmtM(pay - cap.salaryCap) : fmtM(cap.salaryCap - pay)}</div>
+          <div className="v num">{pay > cap.salaryCap ? money(pay - cap.salaryCap) : money(cap.salaryCap - pay)}</div>
           <div className="k">{pay > cap.luxuryTax ? 'over · taxpayer' : pay > cap.salaryCap ? 'over the cap' : 'cap space'}</div>
         </div>
       </div>
@@ -502,7 +502,7 @@ function PartnerSlab({ league, tid, season }: { league: League; tid: number; sea
         <span>·</span>
         {/* (cap holds count: in free agency a team's restricted free agents' and offer sheets', see capHolds) */}
         <span className="num">
-          payroll {fmtM(pay)}
+          payroll {money(pay)}
           {holds > 0 ? ' with holds' : ''}
         </span>
       </div>
@@ -590,7 +590,7 @@ function DealCard({
       {(sel.cash ?? 0) > 0 && (
         <span className="fo-pill">
           <Banknote size={15} className="fo-pill-ic" />
-          <span className="ellipsis grow">{fmtCash(sel.cash!)} cash</span>
+          <span className="ellipsis grow">{moneyExact(sel.cash!)} cash</span>
           <button className="x" aria-label="Remove the cash" onClick={() => set({ ...sel, cash: 0 })}>
             <X size={14} />
           </button>
@@ -725,7 +725,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       </div>
       <Ovr v={p.ovr} size="sm" />
       <div className="fo-money">
-        <div className="a">{fmtM(salaryFor(p, season))}</div>
+        <div className="a">{money(salaryFor(p, season))}</div>
         <div className="b">{contractYearsLabel(league, p, season)}</div>
       </div>
     </button>
@@ -793,7 +793,7 @@ function Dock({
   const cap = CAP_FOR(league, season);
   const key = JSON.stringify(offer);
   // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
-  const money = useLeagueMemo(
+  const capView = useLeagueMemo(
     () =>
       withHoldsMemo(() => ({
         capPay: capPayroll(league, user, season),
@@ -808,8 +808,8 @@ function Dock({
   const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
   const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, season), 0);
   // between the season and free agency your payroll counts the cap holds of the players you'd re-sign
-  const holds = money.capPay - payroll(league, user, season);
-  const after = money.capPay - out + inc;
+  const holds = capView.capPay - payroll(league, user, season);
+  const after = capView.capPay - out + inc;
   // standard roster spots (two-way players don't count)
   const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
   // after the season, only next season's contracts count (expiring deals are leaving)
@@ -827,8 +827,8 @@ function Dock({
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
   // the helper can fix our side's salary matching, a full roster and the value, nothing else
-  const theyreOver = money.theyreOver;
-  const fixable = !ev.accept && money.workable;
+  const theyreOver = capView.theyreOver;
+  const fixable = !ev.accept && capView.workable;
   // god mode's line under Force folds with the details when it only explains (an error or a wait stays)
   const forcePlain = !!force && !force.errors.length && !force.warnings.length && !simming;
   return (
@@ -856,17 +856,17 @@ function Dock({
           <div>
             <div className="k">Salary out / in</div>
             <div className="v num">
-              {fmtM(out)} / {fmtM(inc)}
+              {money(out)} / {money(inc)}
             </div>
           </div>
           <div>
             <div className="k">Payroll after</div>
             <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-              {fmtM(after)}
+              {money(after)}
             </div>
             <div className="s num">
-              {after > cap.salaryCap ? `${fmtMs(after - cap.salaryCap)} vs cap` : `${fmtM(cap.salaryCap - after)} under`}
-              {holds > 0 ? ` · incl. ${fmtM(holds)} holds` : ''}
+              {after > cap.salaryCap ? `${moneySigned(after - cap.salaryCap)} vs cap` : `${money(cap.salaryCap - after)} under`}
+              {holds > 0 ? ` · incl. ${money(holds)} holds` : ''}
             </div>
           </div>
           <div>
@@ -881,7 +881,7 @@ function Dock({
       {/* folded on a phone, a payroll over the tax still says so */}
       {!more && after > cap.luxuryTax && (
         <div className="fo-only-sm tiny warn bold num">
-          Payroll after {fmtM(after)}: {fmtM(after - cap.luxuryTax)} over the tax
+          Payroll after {money(after)}: {money(after - cap.luxuryTax)} over the tax
         </div>
       )}
       {ruleErrors.length > 0 && (
@@ -1003,7 +1003,7 @@ function TradingBlock({
                         {t.region} {t.name}
                       </div>
                       <div className="fo-meta">
-                        {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${fmtM(inSal)} back` : 'no salary back'}
+                        {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${money(inSal)} back` : 'no salary back'}
                       </div>
                     </div>
                     <div className="right">
@@ -1023,7 +1023,7 @@ function TradingBlock({
                           <span className="dim">
                             {p.pos} · {playerAge(p, league.season)}
                           </span>
-                          <span className="num">{fmtM(salaryFor(p, capSeason(league)))}</span>
+                          <span className="num">{money(salaryFor(p, capSeason(league)))}</span>
                         </div>
                       );
                     })}

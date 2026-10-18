@@ -22,11 +22,12 @@ import { settle, useBusy } from '../../state/actions/office';
 import { Term } from '../components/Glossary';
 import { Avatar, PageHeader, Section, Sheet, Statline } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, capSeason, fmtM, playerMeta, shortSeason } from '../office/common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, capSeason, playerMeta, shortSeason } from '../office/common';
 import { ContractSheet } from '../office/ContractSheet';
 import { QualifyRow } from '../office/RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE, restrictedFreeAgents } from '../../core/league/rfa';
 import { FIRM_BUMP, talkAsk, talkState } from '../../core/league/negotiation';
+import { money } from '../../core/format';
 
 export default function Resign() {
   const league = useLeague();
@@ -146,7 +147,7 @@ function ResignPhase() {
               (yours) adds about 6%.
             </p>
             <p>
-              <b>Luxury tax.</b> Payroll above {fmtM(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
+              <b>Luxury tax.</b> Payroll above {money(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
             </p>
             <p>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens, and other teams may sign him.</p>
             <p>
@@ -174,18 +175,18 @@ function ResignPhase() {
           <div className="fo-pay">
             <div className="grow">
               <div className="over">Committed</div>
-              <div className="fo-pay-v num">{fmtM(committed)}</div>
+              <div className="fo-pay-v num">{money(committed)}</div>
             </div>
             <div className="right">
               <div className="over">Keep everyone</div>
-              <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>{fmtM(ifAll)}</div>
+              <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>{money(ifAll)}</div>
             </div>
           </div>
           <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} legend={false} />
           <Statline
             items={[
-              { k: 'Cap space', v: fmtM(space), color: space > 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${fmtM(cap.salaryCap)}` },
-              { k: <Term id="hold">Cap holds</Term>, v: fmtM(holds), s: holds > 0 ? 'striped' : 'none' },
+              { k: 'Cap space', v: money(space), color: space > 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${money(cap.salaryCap)}` },
+              { k: <Term id="hold">Cap holds</Term>, v: money(holds), s: holds > 0 ? 'striped' : 'none' },
               {
                 k: 'Roster',
                 v: `${rosterNext}/${CAP.rosterMax}`,
@@ -209,7 +210,7 @@ function ResignPhase() {
                   <div className="fo-rs-act">
                     <div className="grow">
                       <div className="fo-rs-ask">
-                        <b className="num">{fmtM(sal)}</b> <span className="dim">{shortSeason(next)} option</span>
+                        <b className="num">{money(sal)}</b> <span className="dim">{shortSeason(next)} option</span>
                       </div>
                       <div className="tiny">
                         {rookieScaleDeal(p) ? <span className="dim">Rookie scale · </span> : null}
@@ -253,7 +254,7 @@ function ResignPhase() {
                       ) : (
                         <>
                           <div className="fo-rs-ask">
-                            <b className="num">{fmtM(ask.amount)}</b>
+                            <b className="num">{money(ask.amount)}</b>
                           </div>
                           <div className="tiny dim">
                             asks · {ask.years} yr{ask.years > 1 ? 's' : ''}
@@ -290,7 +291,7 @@ function ResignPhase() {
                   </div>
                 </div>
                 <div className="fo-money">
-                  <div className="a">{fmtM(salaryFor(p, next))}</div>
+                  <div className="a">{money(salaryFor(p, next))}</div>
                   <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
                 </div>
               </div>
@@ -326,7 +327,7 @@ function ResignPhase() {
               You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he's an unrestricted free agent when the market opens
               {renounce.contract.twoWay || (wantsOut(renounce) && !renounce.rfa)
                 ? ''
-                : `, and his ${fmtM(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}
+                : `, and his ${money(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}
               . To bring him back you'd have to outbid other teams with cap space.
             </p>
             <div className="row">
@@ -345,8 +346,8 @@ function ResignPhase() {
         {decline && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              His {seasonLabel(next)} season ({fmtM(salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency, at about{' '}
-              {fmtM(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
+              His {seasonLabel(next)} season ({money(salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency, at about{' '}
+              {money(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setDecline(null)}>
@@ -388,7 +389,7 @@ function ResignPhase() {
                   <OvrPot p={p} showPot={false} />
                   <span className="grow ellipsis bold">{playerName(p)}</span>
                   {p.rfa && <span className="tag good">RFA</span>}
-                  <span className="dim num">{fmtM(asks.get(p.pid)!.amount)}</span>
+                  <span className="dim num">{money(asks.get(p.pid)!.amount)}</span>
                 </div>
               ))}
             </div>
@@ -428,7 +429,7 @@ function ExtendRow({ league, p, onExtend }: { league: League; p: Player; onExten
           <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
         </div>
         <div className="fo-money">
-          <div className="a">{fmtM(salaryFor(p, exp))}</div>
+          <div className="a">{money(salaryFor(p, exp))}</div>
           <div className="b">thru {shortSeason(exp)}</div>
         </div>
       </div>
@@ -440,7 +441,7 @@ function ExtendRow({ league, p, onExtend }: { league: League; p: Player; onExten
               <span className="warn">Won't extend now</span>
             ) : (
               <>
-                Extension: asks <b className="num">{fmtM(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''}
+                Extension: asks <b className="num">{money(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''}
               </>
             )}
           </div>
@@ -498,11 +499,11 @@ function OffPhase({ league }: { league: League }) {
         <div className="fo-figs">
           <Statline
             items={[
-              { k: `Expiring ${shortSeason(s)}`, v: String(list.length), s: `${fmtM(freed)} off the books` },
+              { k: `Expiring ${shortSeason(s)}`, v: String(list.length), s: `${money(freed)} off the books` },
               {
                 k: `${shortSeason(s + 1)} committed`,
-                v: fmtM(after),
-                s: after <= cap.salaryCap ? `${fmtM(cap.salaryCap - after)} under projected cap` : `${fmtM(after - cap.salaryCap)} over projected cap`,
+                v: money(after),
+                s: after <= cap.salaryCap ? `${money(cap.salaryCap - after)} under projected cap` : `${money(after - cap.salaryCap)} over projected cap`,
                 color: after < cap.salaryCap ? 'var(--good)' : 'var(--warn)',
               },
             ]}
@@ -539,8 +540,8 @@ function OffPhase({ league }: { league: League }) {
                     </div>
                   </div>
                   <div className="fo-money">
-                    <div className="a">{fmtM(salaryFor(p, s))}</div>
-                    <div className="b">would ask ~{fmtM(ask.amount)}</div>
+                    <div className="a">{money(salaryFor(p, s))}</div>
+                    <div className="b">would ask ~{money(ask.amount)}</div>
                   </div>
                 </Link>
               );
@@ -565,7 +566,7 @@ function OffPhase({ league }: { league: League }) {
                   </div>
                 </div>
                 <div className="fo-money">
-                  <div className="a">{fmtM(salaryFor(p, s + 1))}</div>
+                  <div className="a">{money(salaryFor(p, s + 1))}</div>
                   <div className="b">thru {shortSeason(contractExp(p.contract))}</div>
                 </div>
               </Link>

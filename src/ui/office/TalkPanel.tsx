@@ -9,7 +9,8 @@ import { makeContract } from '../../core/league/contracts';
 import { playerName } from '../../core/league/helpers';
 import { useLeague } from '../../state/store';
 import { More } from '../components/ui';
-import { Callout, fmtM } from './common';
+import { Callout } from './common';
+import { money } from '../../core/format';
 
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
 
@@ -74,20 +75,20 @@ export function TalkPanel({
       </div>
       {st.firm ? (
         <div className="small warn">
-          He's had enough: only his ask now, {fmtM(askAt, 2)} for {yrs(years)}
+          He's had enough: only his ask now, {money(askAt, 2)} for {yrs(years)}
           {option ? ` with a ${option} option` : ''}, for the rest of the re-sign period.
         </div>
       ) : (
         <div className="small dim2">
-          Offer his ask (<b className="num">{fmtM(askAt, 2)}</b> on these terms) and he signs. A little less may do; below that he counters.
+          Offer his ask (<b className="num">{money(askAt, 2)}</b> on these terms) and he signs. A little less may do; below that he counters.
         </div>
       )}
       {c && (
         <div className="fo-counter-row">
           <Handshake size={16} className="good" />
           <div className="grow">
-            <b>His counter:</b> <span className="num">{fmtM(c.amount, 2)}</span> × {yrs(c.years)}
-            <span className="dim"> · {fmtM(cTotal)} total</span>
+            <b>His counter:</b> <span className="num">{money(c.amount, 2)}</span> × {yrs(c.years)}
+            <span className="dim"> · {money(cTotal)} total</span>
             {cWhy && <div className="tiny warn">{cWhy}</div>}
           </div>
           <button className="btn xs primary" disabled={!!cWhy} onClick={() => onAcceptCounter(c)}>

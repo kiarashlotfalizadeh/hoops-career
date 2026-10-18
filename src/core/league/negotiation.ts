@@ -29,6 +29,7 @@ import {
   teamAppeal,
   valueScore,
 } from './contracts';
+import { money, moneyExact } from '../format';
 
 export type TalkKind = Talks['kind'];
 
@@ -61,7 +62,6 @@ export const COOL_EXTEND = 30;
 export const FIRM_BUMP = 1.05;
 
 /** Money in talks: offers and counters move in $50K steps. */
-const money2 = (k: number) => `$${(k / 1000).toFixed(2)}M`;
 const yrs = (n: number) => `${n} year${n === 1 ? '' : 's'}`;
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five'];
 
@@ -207,7 +207,7 @@ function breakDown(league: League, p: Player, t: Talks, kind: TalkKind): string 
     case 'resign': {
       t.firm = FIRM_BUMP;
       const ask = talkAsk(league, p, kind);
-      return `Talks broke down: ${name} has had enough. His ask is now ${money2(ask.amount)} over ${yrs(ask.years)}, and he'll take nothing less for the rest of the re-sign period.`;
+      return `Talks broke down: ${name} has had enough. His ask is now ${moneyExact(ask.amount)} over ${yrs(ask.years)}, and he'll take nothing less for the rest of the re-sign period.`;
     }
     case 'fa':
       t.closed = (t.lowballs ?? 0) >= 2 ? { season: league.season + 1, day: 0 } : { season: league.season, day: league.day + COOL_FA };
@@ -245,7 +245,7 @@ export function hearOffer(
   if (offer.amount >= walkAwayFor(league, p, kind, offer.years, option) - 1) return { accept: true, text: 'Deal!' };
   const askAt = askFor(league, p, kind, offer.years, option);
   if (st.firm)
-    return { accept: false, text: `${name} will only sign at his ask now: ${money2(askAt)} a season for ${yrs(offer.years)}${option ? ` with a ${option} option` : ''}.` };
+    return { accept: false, text: `${name} will only sign at his ask now: ${moneyExact(askAt)} a season for ${yrs(offer.years)}${option ? ` with a ${option} option` : ''}.` };
   const t = openTalks(league, p, kind);
   const lowball = offer.amount < askAt * LOWBALL;
   t.patience -= lowball ? 2 : 1;
@@ -267,7 +267,7 @@ export function hearOffer(
   t.counter = { amount, years: cy };
   const hurt = lowball ? ` That was a lowball: he's less keen on your team now.` : '';
   // (his patience is on the sheet, next to the counter: see patienceText)
-  return { accept: false, counter: t.counter, text: `${name} counters at ${money2(amount)} a season over ${yrs(cy)}.${hurt}` };
+  return { accept: false, counter: t.counter, text: `${name} counters at ${moneyExact(amount)} a season over ${yrs(cy)}.${hurt}` };
 }
 
 /**
@@ -288,8 +288,8 @@ export function userExtend(league: League, pid: number, amount: number, years: n
   const start = extensionStart(p.contract)!;
   addInbox(league, {
     from: 'Assistant GM',
-    subject: `${playerName(p)} signs a ${years}-year, $${(salaries.reduce((a, x) => a + x, 0) / 1000).toFixed(1)}M extension`,
-    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at $${(salaries[0] / 1000).toFixed(1)}M${years > 1 ? ' with 5% annual raises' : ''}, and counts against that season's cap; his current salary doesn't change.`,
+    subject: `${playerName(p)} signs a ${years}-year, ${money(salaries.reduce((a, x) => a + x, 0))} extension`,
+    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 5% annual raises' : ''}, and counts against that season's cap; his current salary doesn't change.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });

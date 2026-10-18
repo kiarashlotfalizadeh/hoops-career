@@ -12,8 +12,9 @@ import type { League } from '../../core/types';
 import { lazyRetry } from '../lazyRetry';
 import { TabBar } from '../league/shared';
 import { TeamLogo } from '../components/TeamLogo';
-import { capSeason, fmtM, isOffseason, shortSeason } from '../office/common';
+import { capSeason, isOffseason, shortSeason } from '../office/common';
 import '../screens/team.css';
+import { money } from '../../core/format';
 
 const Roster = lazyRetry(() => import('../screens/Roster'));
 const Rotation = lazyRetry(() => import('../screens/Rotation'));
@@ -60,7 +61,7 @@ function TeamHeader({ league }: { league: League }) {
             {standard}/{CAP.rosterMax}
           </span>
           {' · '}
-          {fmtM(pay)} payroll{isOffseason(league) ? ` in ${shortSeason(s0)}` : ''}
+          {money(pay)} payroll{isOffseason(league) ? ` in ${shortSeason(s0)}` : ''}
         </div>
         <div className="tm-hh-staff">
           <Icon size={13} aria-hidden="true" />

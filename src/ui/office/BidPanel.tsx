@@ -7,7 +7,8 @@ import { PREF_KEYS, type PlayerPrefs, appealTerms, playerPrefs, willSign } from 
 import { bidDecideDay, bidStanding, faInterest, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
-import { Callout, Line, fmtM } from './common';
+import { Callout, Line } from './common';
+import { money } from '../../core/format';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
 
@@ -52,7 +53,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
         {bid && (
           <div className="fo-bid-mine">
             <span className="small dim2">
-              Your offer: {bid.years} yr{bid.years > 1 ? 's' : ''} · {fmtM(bid.amount, 2)}
+              Your offer: {bid.years} yr{bid.years > 1 ? 's' : ''} · {money(bid.amount, 2)}
             </span>
             <button className="btn xs" disabled={busy} onClick={withdraw}>
               Withdraw
@@ -63,7 +64,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
 
       {amount < floor ? (
         <Callout tone="bad" icon={<X size={18} className="bad" />}>
-          <b>Too low to consider.</b> Not under {fmtM(floor, 2)} a season for {years} year{years > 1 ? 's' : ''}.
+          <b>Too low to consider.</b> Not under {money(floor, 2)} a season for {years} year{years > 1 ? 's' : ''}.
         </Callout>
       ) : standing.leads ? (
         <Callout tone="good" icon={<Check size={18} className="good" />}>
@@ -74,7 +75,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
           <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead.` : "No rival bids, so he'll hold out for his ask."}</b>{' '}
           {standing.toLead !== null ? (
             <button className="btn xs fo-lead" onClick={() => onAmount(standing.toLead!)}>
-              {best ? 'Lead with' : 'Offer'} {fmtM(standing.toLead, 2)}
+              {best ? 'Lead with' : 'Offer'} {money(standing.toLead, 2)}
             </button>
           ) : (
             'Even a max offer would not top theirs now.'
