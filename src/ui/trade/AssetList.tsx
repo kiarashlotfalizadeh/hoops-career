@@ -8,7 +8,7 @@ import { playerAge, salaryFor } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Ovr } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { contractYearsLabel } from '../office/common';
+import { contractEnd } from '../office/common';
 import { rosterNames } from '../stats';
 import { TierLine } from './common';
 import { CashControl, SwapChips } from './Terms';
@@ -116,7 +116,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       <Ovr v={p.ovr} size="sm" />
       <div className="fo-money">
         <div className="a">{money(salaryFor(p, season))}</div>
-        <div className="b">{contractYearsLabel(league, p, season)}</div>
+        <div className="b">{contractEnd(league, p, season)}</div>
       </div>
     </button>
   );

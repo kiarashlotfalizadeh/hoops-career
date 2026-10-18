@@ -329,23 +329,38 @@ export const exceptionAmount = (league: League, kind: Exception, season = contra
  * a season.
  */
 export function exceptionUsedReason(league: League, tid: number, kind: Exception, season = contractSeason(league)): string | null {
+  return exceptionClosed(league, tid, kind, season)?.why ?? null;
+}
+
+/** The same reason in a few words for a cap sheet's line ("used", "used last season"), or null. */
+export function exceptionUsedShort(league: League, tid: number, kind: Exception, season = contractSeason(league)): string | null {
+  return exceptionClosed(league, tid, kind, season)?.short ?? null;
+}
+
+function exceptionClosed(league: League, tid: number, kind: Exception, season: number): { why: string; short: string } | null {
   const t = league.teams[tid];
+  const r = (why: string, short: string) => ({ why, short });
   switch (kind) {
     case 'mle':
-      if (t.mleSeason === season) return 'Used this season.';
-      if (t.spaceSeason === season || t.roomSeason === season) return 'Gone this season: a free agent was signed with cap space, so the room exception replaces it.';
-      if (spaceSheetPending(league, tid, season)) return 'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.';
+      if (t.mleSeason === season) return r('Used this season.', 'used');
+      if (t.spaceSeason === season || t.roomSeason === season)
+        return r('Gone this season: a free agent was signed with cap space, so the room exception replaces it.', 'gone: cap space was used');
+      if (spaceSheetPending(league, tid, season))
+        return r(
+          'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.',
+          'gone while an offer sheet holds your space',
+        );
       return null;
     case 'room':
-      if (t.roomSeason === season) return 'Used this season.';
-      if (t.mleSeason === season) return 'Not after the mid-level: a team gets one or the other.';
-      if (t.baeSeason === season) return 'Not after the bi-annual this season.';
-      if (t.spaceSeason !== season) return 'Only after signing a free agent with cap space this season (it replaces the mid-level).';
+      if (t.roomSeason === season) return r('Used this season.', 'used');
+      if (t.mleSeason === season) return r('Not after the mid-level: a team gets one or the other.', 'not after the mid-level');
+      if (t.baeSeason === season) return r('Not after the bi-annual this season.', 'not after the bi-annual');
+      if (t.spaceSeason !== season) return r('Only after signing a free agent with cap space this season (it replaces the mid-level).', 'only after a cap-space signing');
       return null;
     case 'bae':
-      if (t.baeSeason === season) return 'Used this season.';
-      if (t.baeSeason === season - 1) return 'Used last season: not two seasons running.';
-      if (t.roomSeason === season) return 'Not after the room exception this season.';
+      if (t.baeSeason === season) return r('Used this season.', 'used');
+      if (t.baeSeason === season - 1) return r('Used last season: not two seasons running.', 'used last season');
+      if (t.roomSeason === season) return r('Not after the room exception this season.', 'not after the room exception');
       return null;
   }
 }

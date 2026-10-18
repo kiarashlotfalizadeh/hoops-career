@@ -118,6 +118,12 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   { id: 'tax', term: 'Luxury tax', group: 'Contracts', text: 'A payroll over the tax line pays a tax on each dollar over it. Half of it goes to the teams that didn’t pay.' },
   {
+    id: 'exception',
+    term: 'Exceptions',
+    group: 'Contracts',
+    text: 'Ways to sign a free agent over the cap, one signing each a season: the mid-level and the bi-annual for a team that stays under the tax line, and the room exception for one that used its cap space.',
+  },
+  {
     id: 'mle',
     term: 'Mid-level exception (MLE)',
     group: 'Contracts',

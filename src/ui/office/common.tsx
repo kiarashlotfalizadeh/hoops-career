@@ -1,6 +1,6 @@
-// Shared Front Office helpers: money formatting, cap bar, owner mood visuals and
-// small player-row building blocks used by Office, Trade, Free Agents, Re-sign,
-// Draft, Finances and Settings.
+// Shared Front Office helpers: the cap sheet's words (cap room, the tax, roster spots, when a
+// contract ends), the cap bar, and the small building blocks of the desks' rows and sheets (Office,
+// Trade, Free agents, Re-sign, Draft, Finances, Owner, and the player page's contract).
 import { Fragment, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import type { League, Phase, Player, Team } from '../../core/types';
@@ -8,7 +8,7 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
-import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
+import { contractSeason, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releaseSchedule, stretchDeadMoney, stretchPhrase, stretchedSeasons } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
@@ -74,18 +74,57 @@ export function tradeClosedNote(league: League): string | null {
   return why && `${why} Trading reopens after the playoffs, with the draft lottery.`;
 }
 
-export function contractYearsLabel(league: League, p: Player, fromSeason: number): string {
-  const exp = contractExp(p.contract);
-  const yrs = exp - fromSeason + 1;
-  if (yrs <= 0) return 'Expiring';
-  const opt = openOption(league, p);
-  return `${yrs} yr${yrs > 1 ? 's' : ''}${opt ? (opt === 'player' ? ' · PO' : ' · TO') : ''}`;
+// ------------------------------------------------------------------ the cap sheet's words
+// Every desk says the cap the same way: a room is never a negative number, an existing contract
+// says when it ends ("thru 27-28"), a new deal how long it runs ("× 4 yrs").
+
+/** Cap room as a figure: "Cap space $12.0M" under the cap, "Over the cap $51.2M" over it. */
+export function capRoomFig(space: number): { k: string; v: string; color: string } {
+  return space >= 0 ? { k: 'Cap space', v: money(space), color: 'var(--good)' } : { k: 'Over the cap', v: money(-space), color: 'var(--warn)' };
 }
+
+/** Cap room in a phrase: "$12.0M in cap space", "$51.2M over the cap". */
+export const capRoomText = (space: number) => (space >= 0 ? `${money(space)} in cap space` : `${money(-space)} over the cap`);
+
+/** Where a payroll stands against the tax line, as a figure: the tax bill over it, the room under it. */
+export function taxFig(pay: number, line: number): { k: string; v: string; s: string; color?: string } {
+  return pay > line
+    ? { k: 'Luxury tax', v: money(Math.round((pay - line) * CAP.taxRate)), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
+    : { k: 'Under the tax', v: money(line - pay), s: `line ${money(line)}` };
+}
+
+/**
+ * Standard roster spots as every desk counts them, against the 15 of opening night: what's open,
+ * full, or how many to cut (in the offseason up to 21 can sign, but 15 play). Two-way deals ride
+ * outside the 15.
+ */
+export function rosterFig(league: League, n: number, opts: { label?: string; twoWay?: number; note?: string } = {}): { k: string; v: string; s: string; color?: string } {
+  const max = rosterMaxNow(league);
+  const over = n - CAP.rosterMax;
+  const tw = opts.twoWay ? ` · +${opts.twoWay} two-way` : '';
+  return {
+    k: opts.label ?? 'Roster',
+    v: `${n}/${CAP.rosterMax}`,
+    color: n > max ? 'var(--bad)' : over > 0 || n < CAP.rosterMin ? 'var(--warn)' : undefined,
+    s: opts.note ?? (over > 0 ? `${over} to cut` : over === 0 ? `full${tw}` : `${-over} open${tw}`),
+  };
+}
+
+/** When a contract ends, as a cap sheet says it: "expiring" this season, else "thru 27-28" (with an option still to come: "thru 28-29 PO"). */
+export function contractEnd(league: League, p: Player, season = capSeason(league)): string {
+  const exp = contractExp(p.contract);
+  if (exp <= season) return 'expiring';
+  const opt = openOption(league, p);
+  return `thru ${shortSeason(exp)}${opt ? (opt === 'player' ? ' PO' : ' TO') : ''}`;
+}
+
+/** A new deal's length after its yearly amount: "× 4 yrs". */
+export const forYears = (years: number) => `× ${years} yr${years === 1 ? '' : 's'}`;
 
 export function appealInfo(a: number): { label: string; color: string; tone: 'good' | 'info' | 'warn' | 'bad' } {
   if (a >= 1.12) return { label: 'Very interested', color: 'var(--good)', tone: 'good' };
   if (a >= 1.02) return { label: 'Interested', color: 'var(--good)', tone: 'good' };
-  if (a >= 0.94) return { label: 'Open', color: 'var(--info)', tone: 'info' };
+  if (a >= 0.94) return { label: 'Neutral', color: 'var(--info)', tone: 'info' };
   if (a >= 0.86) return { label: 'Lukewarm', color: 'var(--warn)', tone: 'warn' };
   return { label: 'Not keen', color: 'var(--bad)', tone: 'bad' };
 }
@@ -95,8 +134,27 @@ export const fmtGrade = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100
 
 // ------------------------------------------------------------------ components
 
-/** Payroll vs cap vs tax, with an optional pending amount (striped). */
-export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number; cap: number; tax: number; add?: number; legend?: boolean }) {
+/**
+ * Payroll against the cap and the tax line, with an amount on top of it striped (cap holds, an
+ * offer). The legend names each part: the payroll and the stripe with their swatches (`full`), or
+ * only the two lines when the payroll is the figure above it (`lines`).
+ */
+export function CapBar({
+  pay,
+  cap,
+  tax,
+  add = 0,
+  addLabel,
+  legend = 'full',
+}: {
+  pay: number;
+  cap: number;
+  tax: number;
+  add?: number;
+  /** What the stripe is ("cap holds", "this offer"). */
+  addLabel?: string;
+  legend?: 'full' | 'lines' | false;
+}) {
   const total = pay + Math.max(0, add);
   const max = Math.max(tax * 1.14, total * 1.03);
   const pct = (x: number) => clamp((x / max) * 100, 0, 100);
@@ -117,15 +175,23 @@ export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number;
       </div>
       {legend && (
         <div className="fo-legend">
-          <span>
-            <i style={{ background: tone(total) }} />
-            Payroll <b>{money(total)}</b>
-          </span>
+          {legend === 'full' && (
+            <span>
+              <i style={{ background: tone(pay) }} />
+              Payroll <b>{money(pay)}</b>
+            </span>
+          )}
+          {add > 0 && addLabel && (
+            <span>
+              <i className="fo-legend-add" />
+              {addLabel} <b>{money(add)}</b>
+            </span>
+          )}
           <span>
             Cap <b>{money(cap)}</b>
           </span>
           <span>
-            Tax <b>{money(tax)}</b>
+            Tax line <b>{money(tax)}</b>
           </span>
         </div>
       )}

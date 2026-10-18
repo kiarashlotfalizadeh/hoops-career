@@ -11,7 +11,7 @@ import { filterTargets, maxTakeBack, pickLabel, tradeTargets, type TradeOffer, t
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Chips, Empty, Section } from '../components/ui';
-import { Callout, HelpSheet, OvrPot, capSeason, contractYearsLabel, isOffseason } from '../office/common';
+import { Callout, HelpSheet, OvrPot, capSeason, contractEnd, isOffseason } from '../office/common';
 import { TierLine } from './common';
 import { money } from '../../core/format';
 
@@ -171,7 +171,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                   </div>
                   <div className="fo-money">
                     <div className="a">{p.contract.twoWay ? 'Two-way' : money(salary)}</div>
-                    <div className="b">{contractYearsLabel(league, p, s)}</div>
+                    <div className="b">{contractEnd(league, p, s)}</div>
                   </div>
                 </button>
               ))}

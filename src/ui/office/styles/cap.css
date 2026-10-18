@@ -5,7 +5,7 @@
 .fo-capsheet {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .fo-pay {
@@ -23,7 +23,7 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 44px;
+  font-size: 38px;
   line-height: 0.95;
   margin-top: 2px;
   letter-spacing: 0.005em;
@@ -114,6 +114,11 @@
   border-radius: 2px;
   margin-right: 5px;
   vertical-align: 0;
+}
+
+/* the stripe's swatch: the cap bar's striped part (holds, an offer) */
+.fo-legend i.fo-legend-add {
+  background: repeating-linear-gradient(135deg, var(--accent) 0 2px, color-mix(in srgb, var(--accent) 50%, transparent) 2px 4px);
 }
 
 /* the four figures, two by two with hairlines */
