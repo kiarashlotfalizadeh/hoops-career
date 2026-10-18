@@ -12,15 +12,11 @@ import {
   CASH_PCT,
   PROTECTIONS,
   bookTradedCash,
-  canMakeWork,
   cashRoom,
   cashValueFor,
-  counterOffers,
   dealTerms,
   evaluateTrade,
   executeTrade,
-  makeItWork,
-  neutralBalance,
   neutralSplit,
   pickLabel,
   pickTermsNote,
@@ -36,6 +32,8 @@ import {
   type TradeOffer,
   type TradeSide,
 } from '../league/trades';
+import { canMakeWork, counterOffers, makeItWork } from '../league/tradeHelp';
+import { neutralBalance } from '../league/tradePackages';
 import { signOfferSheet } from '../league/rfa';
 import { Rng } from '../random';
 import type { DraftPick, League } from '../types';

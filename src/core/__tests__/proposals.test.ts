@@ -21,19 +21,10 @@ import {
   setUntouchable,
 } from '../league/proposals';
 import { deadlineDay, seasonTrades } from '../league/deadline';
-import {
-  MAX_FIRSTS_OUT,
-  MAX_PICKS_OUT,
-  aiToAiTrade,
-  aiTradeChance,
-  evaluateTrade,
-  executeTrade,
-  makeItWork,
-  neutralBalance,
-  onTheBlock,
-  packageFor,
-  validateTrade,
-} from '../league/trades';
+import { MAX_FIRSTS_OUT, evaluateTrade, executeTrade, validateTrade } from '../league/trades';
+import { MAX_PICKS_OUT, neutralBalance, packageFor } from '../league/tradePackages';
+import { aiToAiTrade, aiTradeChance, onTheBlock } from '../league/aiTrades';
+import { makeItWork } from '../league/tradeHelp';
 import { nextPick, runLottery } from '../league/draft';
 import { Rng } from '../random';
 import type { League, Player, Proposal } from '../types';

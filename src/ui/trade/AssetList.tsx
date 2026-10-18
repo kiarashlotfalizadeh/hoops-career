@@ -3,7 +3,8 @@
 import { Check } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { teamPlayers } from '../../core/league/helpers';
-import { availability, pickLabel, untradeable, valueTier, type TradeOffer } from '../../core/league/trades';
+import { pickLabel, untradeable, type TradeOffer } from '../../core/league/trades';
+import { availability, valueTier } from '../../core/league/tradeFinder';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Ovr } from '../components/ui';

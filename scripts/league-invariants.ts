@@ -17,6 +17,7 @@ import { cupTables } from '../src/core/league/cup';
 import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
 import * as TR from '../src/core/league/trades';
+import { makeItWork } from '../src/core/league/tradeHelp';
 import * as MO from '../src/core/league/morale';
 import * as P from '../src/core/league/proposals';
 import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
@@ -540,7 +541,7 @@ function tradeWithTerms() {
   for (const t of [...L.teams].reverse()) {
     const second = L.draftPicks.find((d) => d.originalTid === t.tid && d.tid === t.tid && d.round === 2 && d.season === s + 2);
     if (t.tid === u || !second) continue;
-    const r = TR.makeItWork(L, { a: { tid: u, pids: [], dpids: [] }, b: { tid: t.tid, pids: [], dpids: [second.dpid] } }, [], { cash: true });
+    const r = makeItWork(L, { a: { tid: u, pids: [], dpids: [] }, b: { tid: t.tid, pids: [], dpids: [second.dpid] } }, [], { cash: true });
     if (!r.offer?.a.cash || r.offer.a.pids.length || r.offer.a.dpids.length) continue;
     if (!TR.evaluateTrade(L, r.offer).accept) bad('a cash offer that would make it work is turned down', JSON.stringify(r.offer));
     TR.executeTrade(L, r.offer);

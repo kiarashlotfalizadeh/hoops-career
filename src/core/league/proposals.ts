@@ -13,23 +13,9 @@ import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, senten
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
-import {
-  MAX_FIRSTS_OUT,
-  MAX_PICKS_OUT,
-  capSalary,
-  evaluateTrade,
-  executeTrade,
-  makeItWork,
-  neutralBalance,
-  packageFor,
-  pickLabel,
-  pickValue,
-  stepienError,
-  tradedAwayBy,
-  untradeable,
-  validateTrade,
-  type TradeOffer,
-} from './trades';
+import { MAX_FIRSTS_OUT, capSalary, evaluateTrade, executeTrade, pickLabel, pickValue, stepienError, tradedAwayBy, untradeable, validateTrade, type TradeOffer } from './trades';
+import { MAX_PICKS_OUT, neutralBalance, packageFor } from './tradePackages';
+import { makeItWork } from './tradeHelp';
 
 /** Offers open at once, at most (one per team). */
 export const MAX_OPEN = 4;

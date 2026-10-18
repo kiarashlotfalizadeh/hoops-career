@@ -8,18 +8,8 @@ import { Ban } from 'lucide-react';
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { playerName } from '../../core/league/helpers';
-import {
-  capSalary,
-  counterOffers,
-  evaluateTrade,
-  makeItWork,
-  pickLabel,
-  swapSeasons,
-  salaryMatchGap,
-  validateTrade,
-  type CounterOffer,
-  type TradeOffer,
-} from '../../core/league/trades';
+import { capSalary, evaluateTrade, pickLabel, swapSeasons, salaryMatchGap, validateTrade, type TradeOffer } from '../../core/league/trades';
+import { counterOffers, makeItWork, type CounterOffer } from '../../core/league/tradeHelp';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { act } from '../../state/actions';
 import { makeTrade } from '../../state/actions/office';

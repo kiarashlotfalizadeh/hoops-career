@@ -1,6 +1,7 @@
 // Shared pieces of the Trade screen's negotiation tools: a player's value tier and availability,
 // and the AI's reasons for its verdict.
-import type { Availability, TradeNote, ValueTier } from '../../core/league/trades';
+import type { TradeNote } from '../../core/league/trades';
+import type { Availability, ValueTier } from '../../core/league/tradeFinder';
 import '../office/office.css';
 
 /** The theme's tier palette, best to worst; a contract worth less than nothing in the bad color. */

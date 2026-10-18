@@ -6,7 +6,7 @@
 import type { League, NewsItem } from '../types';
 import { Rng, hashString } from '../random';
 import { addInbox, addNews, andList, playerName, teamPlayers } from './helpers';
-import { onTheBlock } from './trades';
+import { onTheBlock } from './aiTrades';
 import { openProposals } from './proposals';
 
 /** Days before the deadline a rumor goes out. */

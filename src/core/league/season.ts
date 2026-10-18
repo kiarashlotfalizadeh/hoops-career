@@ -52,7 +52,8 @@ import {
   resolveWaivers,
 } from './contracts';
 import { healOneGame } from './injuries';
-import { aiToAiTrade, bookTradedCash, teamStrategyUpdate } from './trades';
+import { bookTradedCash } from './trades';
+import { aiToAiTrade, teamStrategyUpdate } from './aiTrades';
 import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';

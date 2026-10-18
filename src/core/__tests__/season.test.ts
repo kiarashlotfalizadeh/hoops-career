@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { curTeamSeason, teamPlayers } from '../league/helpers';
-import { evaluateTrade, makeItWork, validateTrade } from '../league/trades';
+import { evaluateTrade, validateTrade } from '../league/trades';
+import { makeItWork } from '../league/tradeHelp';
 import { CAP } from '../constants';
 
 describe('full season', () => {

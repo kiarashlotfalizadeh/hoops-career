@@ -2,7 +2,8 @@
 // team would actually accept (packageFor in core/league/trades.ts), most valuable to the user first.
 import type { League } from '../../core/types';
 import { withHoldsMemo } from '../../core/league/freeAgency';
-import { packageFor, type TradeOffer } from '../../core/league/trades';
+import { type TradeOffer } from '../../core/league/trades';
+import { packageFor } from '../../core/league/tradePackages';
 
 export interface BlockOffer {
   tid: number;

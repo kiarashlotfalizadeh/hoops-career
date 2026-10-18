@@ -31,12 +31,9 @@ import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, use
 import { aiProposals } from '../league/proposals';
 import {
   MAX_FIRSTS_OUT,
-  aiToAiTrade,
-  canMakeWork,
   capSalary,
   evaluateTrade,
   executeTrade,
-  makeItWork,
   pickValue,
   playerValueFor,
   salaryMatchGap,
@@ -45,6 +42,8 @@ import {
   validateTrade,
   type TradeOffer,
 } from '../league/trades';
+import { aiToAiTrade } from '../league/aiTrades';
+import { canMakeWork, makeItWork } from '../league/tradeHelp';
 import { draftPlayer, draftStandings, ensureFuturePicks, runLottery } from '../league/draft';
 import { CAP } from '../constants';
 import { contractExp } from '../playerGen';

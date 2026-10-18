@@ -5,7 +5,8 @@
 import { Check, Ticket } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
 import { playerName, sentence } from '../../core/league/helpers';
-import { makeItWork, pickLabel, type TradeOffer } from '../../core/league/trades';
+import { pickLabel, type TradeOffer } from '../../core/league/trades';
+import { makeItWork } from '../../core/league/tradeHelp';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { makeTrade, useBusy } from '../../state/actions/office';
 import { TeamLogo } from '../components/TeamLogo';

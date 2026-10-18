@@ -16,7 +16,7 @@ import { JERSEYS } from './jerseys';
 import { updateMorale } from './morale';
 import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
-import { teamStrategyUpdate } from './trades';
+import { teamStrategyUpdate } from './aiTrades';
 import { fillRosters, trimRosters } from './freeAgency';
 import { ratingMeans, ratingSpreads } from './progression';
 
