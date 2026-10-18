@@ -1,8 +1,19 @@
 /* Team → Lineups: the units list, its sort and filters. */
 /* ------------------------------------------------------------ lineups */
-/* what the list shows, in a line under its heading; the sort and filters in a sheet */
-.tm-scope {
+/* what the list shows and its sort, in a line under its heading; the filters in a sheet */
+.tm-lu-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
   margin-top: -4px;
+}
+.tm-lu-bar .chips {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.tm-scope {
   font-size: 12.5px;
   color: var(--text-dim);
 }
@@ -51,8 +62,22 @@
   font-weight: 800;
   font-size: 22px;
   line-height: 1;
-  min-width: 48px;
+  min-width: 56px; /* "+35.7" and "-8.2" alike, so the names line up */
   text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+/* the figure's name under it: net rating, or on-off */
+.tm-net small {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 .tm-lu-chev {
   flex: none;
