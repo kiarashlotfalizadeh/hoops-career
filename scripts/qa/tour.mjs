@@ -97,22 +97,22 @@ async function tour(stage) {
   const ids = await league();
   const routes = [
     ['home', '/'],
-    ['roster', '/roster'],
+    ['roster', '/team'],
     ['player', `/player/${ids.star}`],
-    ['rotation', '/rotation'],
-    ['tactics', '/tactics'],
+    ['rotation', '/team/rotation'],
+    ['tactics', '/team/tactics'],
     ['lab', '/lab'],
     ['league', '/league'],
-    ['team', `/team/${ids.other}`],
+    ['team', `/teams/${ids.other}`],
     ['office', '/office'],
-    ['trade', '/trade'],
-    ['fa', '/free-agents'],
-    ['resign', '/resign'],
-    ['draft', '/draft'],
-    ['finances', '/finances'],
+    ['trade', '/office/trade'],
+    ['fa', '/office/free-agents'],
+    ['resign', '/office/resign'],
+    ['draft', '/office/draft'],
+    ['finances', '/office/finances'],
     ['inbox', '/inbox'],
     ['settings', '/settings'],
-    ['history', '/history'],
+    ['history', '/league/history'],
   ];
   if (ids.gid) routes.push(['game', `/game/${ids.gid}`]);
   if (ids.rookie) routes.push(['rookie', `/player/${ids.rookie}`]);

@@ -90,7 +90,7 @@ await page.waitForTimeout(600);
 await shot('o09-trade-block');
 await shot('o09b-trade-block-full', true);
 
-await go('/free-agents');
+await go('/office/free-agents');
 await shot('o10-fa');
 await shot('o10b-fa-full', true);
 if (await tryClick(page.locator('.fo-prow').first(), 'fa row')) {
@@ -100,7 +100,7 @@ if (await tryClick(page.locator('.fo-prow').first(), 'fa row')) {
   await closeSheet();
 }
 
-await go('/draft');
+await go('/office/draft');
 await shot('o13-draft-board');
 await tryClick(page.getByRole('radio', { name: 'Combine' }), 'combine');
 await shot('o14-draft-combine');
@@ -112,7 +112,7 @@ if (await tryClick(page.locator('.fo-prow').first(), 'prospect')) {
   await closeSheet();
 }
 
-await go('/finances');
+await go('/office/finances');
 await shot('o17-finances');
 await tryClick(page.getByRole('radio', { name: 'Budget' }), 'budget');
 await shot('o18-finances-budget', true);
@@ -129,7 +129,7 @@ if (await tryClick(page.getByRole('button', { name: 'Switch team' }), 'switch'))
   await closeSheet();
 }
 
-await go('/resign');
+await go('/office/resign');
 await shot('o23-resign-off', true);
 
 // ------------------------------------------------------------------ season → offseason
@@ -164,11 +164,11 @@ if (stage === 'all') {
   await go('/');
   await simWhile(/Sim to end of regular season/);
   await simWhile(/Sim through play-in|Sim to end of playoffs/);
-  await go('/draft');
+  await go('/office/draft');
   await shot('s03-draft-lottery', true);
   await go('/office');
   await shot('s04-office-lottery');
-  await go('/draft');
+  await go('/office/draft');
   await tryClick(page.getByRole('button', { name: /Start the draft/ }), 'start draft');
   await page.waitForTimeout(600);
   await shot('s05-draft-live');
@@ -187,7 +187,7 @@ if (stage === 'all') {
   await tryClick(page.getByRole('button', { name: /Continue to re-signing/ }), 'continue to re-signing');
   await waitSim();
   await page.waitForTimeout(800);
-  await go('/resign');
+  await go('/office/resign');
   await shot('s08-resign', true);
   if (await tryClick(page.getByRole('button', { name: /Negotiate/ }).first(), 'negotiate')) {
     await shot('s09-resign-sheet');
@@ -197,7 +197,7 @@ if (stage === 'all') {
   }
   await go('/office');
   await shot('s11-office-resign');
-  await go('/resign');
+  await go('/office/resign');
   await tryClick(page.getByRole('button', { name: /Done — open free agency/ }), 'done');
   await tryClick(page.locator('.sheet').getByRole('button', { name: 'Open free agency' }), 'confirm fa');
   await page.waitForTimeout(800);
@@ -211,9 +211,9 @@ if (stage === 'all') {
   }
   await go('/office');
   await shot('s15-office-fa', true);
-  await go('/draft');
+  await go('/office/draft');
   await shot('s16-draft-results');
-  await go('/finances');
+  await go('/office/finances');
   await tryClick(page.getByRole('radio', { name: 'History' }), 'history');
   await shot('s17-fin-history');
   await tryClick(page.getByRole('radio', { name: 'Owner' }), 'owner');

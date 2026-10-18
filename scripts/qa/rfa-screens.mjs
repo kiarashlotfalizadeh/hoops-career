@@ -95,7 +95,7 @@ const names = await mutate((l) => {
 });
 console.log('expiring', names.map((x) => x.name).join(', '));
 
-await go('/resign');
+await go('/office/resign');
 await shot('d01-resign', true);
 await page.getByRole('button', { name: `Extend ${names[0].name} a qualifying offer` }).click();
 await page.waitForTimeout(400);
@@ -108,7 +108,7 @@ await go('/office');
 await shot('d03-office-resign');
 await go(`/player/${names[0].pid}`);
 await shot('d04-player-qualified', true);
-await go('/resign');
+await go('/office/resign');
 await page.getByRole('button', { name: /Done — open free agency/ }).click();
 await page.waitForTimeout(400);
 await shot('d05-open-fa-confirm');
@@ -117,7 +117,7 @@ await waitSim();
 await page.waitForTimeout(1200);
 
 // ------------------------------------------------------------------ free agency: your restricted free agents
-await go('/free-agents');
+await go('/office/free-agents');
 await shot('d06-fa-top');
 await shot('d06b-fa-full', true);
 await page.getByRole('button', { name: 'Withdraw offer' }).first().click();
@@ -151,7 +151,7 @@ const sheetTeam = await mutate(
       body: 'Match it by the end of day 2 and he stays with us on exactly those terms. Let it go, or leave it unanswered until then, and he joins them. Matching needs a roster spot, not cap room.',
       tone: 'alert',
       important: true,
-      link: '/free-agents',
+      link: '/office/free-agents',
       sheet: p.pid,
     });
     return l.teams[tid].abbrev;
@@ -159,7 +159,7 @@ const sheetTeam = await mutate(
   { pid: names[0].pid },
 );
 console.log('sheet from', sheetTeam);
-await go('/free-agents');
+await go('/office/free-agents');
 await shot('d09-fa-sheet-decision');
 await go('/office');
 await shot('d10-office-fa-sheet');
@@ -193,7 +193,7 @@ const target = await mutate((l) => {
   fa.experience = 2;
   return { pid: fa.pid, name: `${fa.firstName} ${fa.lastName}`.trim(), team: l.teams[tid].abbrev };
 });
-await go('/free-agents');
+await go('/office/free-agents');
 await shot('d14-fa-list-rfa');
 const row = page.locator('.fo-prow', { hasText: target.name }).first();
 await row.scrollIntoViewIfNeeded();
@@ -214,11 +214,11 @@ if (await sign.isEnabled()) {
   await sign.click();
   await page.waitForTimeout(500);
 } else console.log('offer sheet button disabled');
-await go('/free-agents');
+await go('/office/free-agents');
 await shot('d16-fa-your-sheets');
 await go(`/player/${target.pid}`);
 await shot('d17-player-rfa-sheet', true);
-await go(`/team/${await page.evaluate(() => window.__hc.store.getState().league.userTid)}?tab=moves`);
+await go('/office/assets?tab=moves');
 await page.waitForTimeout(500);
 await shot('d18-moves', true);
 await browser.close();

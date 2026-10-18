@@ -84,7 +84,7 @@ const resign = await mutate((l) => {
   delete p.promise;
   return { pid: p.pid, name: `${p.firstName} ${p.lastName}`.trim() };
 });
-await go('/resign');
+await go('/office/resign');
 await shot('e01-resign');
 await page.getByRole('button', { name: `Negotiate with ${resign.name}` }).click();
 await page.waitForTimeout(500);
@@ -166,7 +166,7 @@ await page.waitForTimeout(600);
 await go('/office');
 await page.locator('.fo-contracts').scrollIntoViewIfNeeded();
 await shot('e12-office-dead-stretched');
-await go('/finances');
+await go('/office/finances');
 await shot('e13-finances-dead', true);
 
 // free agents over the cap: the exceptions
@@ -188,7 +188,7 @@ const fa = await mutate((l) => {
   old.amount = Math.max(10, 174900 - pay - dead);
   return { pid: p.pid, name: `${p.firstName} ${p.lastName}`.trim() };
 });
-await go('/free-agents');
+await go('/office/free-agents');
 await shot('e14-fa-top');
 await page.locator('.fo-prow', { hasText: fa.name }).first().click();
 await page.waitForTimeout(500);
@@ -210,7 +210,7 @@ await mutate((l) => {
   l.day = 77;
   for (const p of Object.values(l.players)) if (p.tid === -1 && !p.waivers && !p.rfa) p.asking = { amount: 2400, years: 1 };
 });
-await go('/free-agents');
+await go('/office/free-agents');
 await page.getByRole('button', { name: '10-day contracts' }).click();
 await page.waitForTimeout(300);
 await shot('e17-fa-ten-day-list');
@@ -227,7 +227,7 @@ const hard = await mutate((l) => {
   return { n: mine.length, ten: ten && { pid: ten.pid, name: `${ten.firstName} ${ten.lastName}`.trim() } };
 });
 console.log('roster', hard.n, 'ten-day', hard.ten?.name);
-await go('/free-agents');
+await go('/office/free-agents');
 // (the screen keeps its mode between visits)
 const chip = page.getByRole('button', { name: '10-day contracts' });
 if ((await chip.getAttribute('aria-pressed')) !== 'true') await chip.click();
@@ -236,7 +236,7 @@ await page.locator('.fo-prow').first().click();
 await page.waitForTimeout(400);
 await shot('e19-ten-day-hardship');
 await closeSheet();
-await go('/roster');
+await go('/team');
 await shot('e20-roster-ten-day', true);
 await go(`/player/${hard.ten.pid}`);
 await page.getByText('Contract', { exact: true }).scrollIntoViewIfNeeded();
