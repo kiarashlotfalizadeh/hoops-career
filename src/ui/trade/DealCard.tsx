@@ -3,6 +3,8 @@
 import { ArrowLeftRight, Banknote, Repeat, RotateCcw, Ticket, X } from 'lucide-react';
 import type { League } from '../../core/types';
 import { pickLabel, type TradeOffer } from '../../core/league/trades';
+import { teamPlayers } from '../../core/league/helpers';
+import { rosterNames } from '../stats';
 import { TeamLogo } from '../components/TeamLogo';
 import { Ovr, Section } from '../components/ui';
 import { ProtectSelect, TermsList, protectable } from './Terms';
@@ -36,6 +38,8 @@ export function DealCard({
     else delete next[d];
     set({ ...sel, protect: next });
   };
+  // teammates who share a last name told apart, as in the lists below
+  const nameOf = (tid: number) => rosterNames(teamPlayers(league, tid));
   const col = (title: string, tid: number, sel: Sel, set: (s: Sel) => void) => (
     <div className="fo-deal-col">
       <div className="fo-deal-h">
@@ -48,8 +52,8 @@ export function DealCard({
         return (
           <span key={pid} className="fo-pill">
             <Ovr v={p.ovr} size="sm" />
-            <span className="ellipsis grow">{p.lastName}</span>
-            <button className="x" aria-label={`Remove ${p.lastName}`} onClick={() => set({ ...sel, pids: sel.pids.filter((x) => x !== pid) })}>
+            <span className="ellipsis grow">{nameOf(tid)(pid)}</span>
+            <button className="x" aria-label={`Remove ${nameOf(tid)(pid)}`} onClick={() => set({ ...sel, pids: sel.pids.filter((x) => x !== pid) })}>
               <X size={14} />
             </button>
           </span>

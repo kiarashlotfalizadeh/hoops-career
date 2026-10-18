@@ -3,17 +3,18 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, LockKeyhole, Ticket } from 'lucide-react';
 import type { League } from '../../core/types';
-import { playerName, teamPlayers } from '../../core/league/helpers';
+import { playerName, shortName, teamPlayers } from '../../core/league/helpers';
 import { capSalary, pickLabel, untradeable, type TradeOffer } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, Ovr, Section } from '../components/ui';
-import { STRATEGY_META, capSeason, contractEnd } from '../office/common';
+import { STRATEGY_META, capSeason, contractEnd, salaryText } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { isUntouchable } from '../../core/league/proposals';
 import { UntouchableToggle } from '../office/Untouchable';
 import { money } from '../../core/format';
+import { rosterNames } from '../stats';
 
 export function TradingBlock({
   league,
@@ -30,6 +31,8 @@ export function TradingBlock({
 }) {
   const [showAll, setShowAll] = useState(false);
   const mine = teamPlayers(league, league.userTid).sort((a, b) => b.ovr - a.ovr);
+  // teammates who share a last name told apart on the chips
+  const nameOf = rosterNames(mine);
   const pid = shop !== null && league.players[shop]?.tid === league.userTid ? shop : null;
   const target = pid !== null ? league.players[pid] : null;
   // expiring, option and recently signed players can't be moved at all: say so instead of shopping them
@@ -50,7 +53,7 @@ export function TradingBlock({
                 onClick={() => setShop(p.pid)}
               >
                 <Ovr v={p.ovr} size="sm" />
-                {p.lastName}
+                {nameOf(p.pid)}
                 {lock && <Lock size={12} role="img" aria-label="can't be traded now" />}
                 {isUntouchable(league, p.pid) && <LockKeyhole size={12} role="img" aria-label="untouchable" className="accent-text" />}
               </button>
@@ -70,9 +73,9 @@ export function TradingBlock({
       ) : locked ? (
         <Empty>{locked.why}</Empty>
       ) : offers.length === 0 ? (
-        <Empty>No package works for {target.lastName} right now (value or salary matching).</Empty>
+        <Empty>No package works for {shortName(league, target)} right now (value or salary matching).</Empty>
       ) : (
-        <Section title={`${offers.length} team${offers.length > 1 ? 's' : ''} would deal for ${target.lastName}`}>
+        <Section title={`${offers.length} team${offers.length > 1 ? 's' : ''} would deal for ${shortName(league, target)}`}>
           <div className="card flush list">
             {(showAll ? offers : offers.slice(0, 8)).map((o) => {
               const t = league.teams[o.tid];
@@ -123,7 +126,7 @@ export function TradingBlock({
                           <span className="dim">
                             {p.pos} · {playerAge(p, league.season)}
                           </span>
-                          <span className="num">{money(salaryFor(p, capSeason(league)))}</span>
+                          <span className="num">{salaryText(league, salaryFor(p, capSeason(league)))}</span>
                           <span className="dim fo-pkg-end">{contractEnd(league, p)}</span>
                         </div>
                       );

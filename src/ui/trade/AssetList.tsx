@@ -11,11 +11,11 @@ import { Ovr } from '../components/ui';
 import { useLeagueMemo } from '../../state/store';
 import { pickProjection } from '../league/shared';
 import { Term } from '../components/Glossary';
-import { contractEnd } from '../office/common';
+import { contractEnd, outTag, rosterLine, salaryText } from '../office/common';
+import { pickOrder, projText } from '../draft/common';
 import { rosterNames } from '../stats';
 import { TierLine } from './common';
 import { CashControl, SwapChips } from './Terms';
-import { money } from '../../core/format';
 import { toggle, type Sel } from './sel';
 
 export function AssetList({
@@ -43,19 +43,18 @@ export function AssetList({
     ...league.draftPicks.filter((d) => d.round === 1 && moving.has(d.dpid) && (d.originalTid === tid || d.originalTid === other.tid)).map((d) => d.season),
   ];
   const players = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
-  const tw = players.filter((p) => p.contract.twoWay).length;
   const nameOf = rosterNames(players, { initial: true });
-  const picks = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
   // this draft's picks: where they'd land if the season ended today (until the lottery sets the order)
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  // in the order every pick list uses: by draft, then where each lands
+  const picks = league.draftPicks.filter((d) => d.tid === tid).sort(pickOrder(league, proj));
   return (
     <section className="card flush fo-assets" aria-label={title}>
       <div className="fo-assets-h">
         <TeamLogo tid={tid} size={22} decorative />
         <h3 className="grow">{title}</h3>
-        <span className="tiny dim">
-          {players.length - tw} players{tw ? ` + ${tw} two-way` : ''}
-        </span>
+        {/* the roster as every desk counts it */}
+        <span className="tiny dim fo-assets-n">{rosterLine(league, tid, false)}</span>
       </div>
       <div className="list">
         {players.map((p) => (
@@ -97,7 +96,7 @@ export function AssetList({
   );
 }
 
-/** A player to tap into the deal: two lines (his name and flags; position, age, his trade value and whether he's on the block), his rating, this season's salary and when his deal ends. */
+/** A player to tap into the deal: two lines (his name and flags; position, age, potential, his trade value and whether he's on the block, wrapping rather than cut off), his rating, this season's salary and when his deal ends. */
 function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
   const locked = untradeable(league, p);
   return (
@@ -109,11 +108,11 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       <div className="grow">
         <div className="fo-asset-name">
           <span className="fo-name">{name}</span>
-          {p.injury && <span className="fo-flag bad">INJ</span>}
+          {p.injury && <span className="fo-flag bad">{outTag(p)}</span>}
           {p.contract.twoWay && <span className="fo-flag">2W</span>}
           {locked && <span className="fo-flag bad">{{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>}
         </div>
-        <div className="fo-meta">
+        <div className="fo-meta fo-wrap">
           {/* the name line has no room for it: it leads the details instead */}
           {p.mood.tradeRequest && (
             <span className="warn bold">
@@ -122,11 +121,11 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
             </span>
           )}
           {p.pos} · {playerAge(p, league.season)}
-          {p.pot > p.ovr + 2 ? ` · ▲${p.pot}` : ''} · <TierLine inline tier={valueTier(league, p)} avail={availability(league, p)} />
+          {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''} · <TierLine inline tier={valueTier(league, p)} avail={availability(league, p)} />
         </div>
       </div>
       <div className="fo-money">
-        <div className="a">{money(salaryFor(p, season))}</div>
+        <div className="a">{salaryText(league, salaryFor(p, season))}</div>
         <div className="b">{contractEnd(league, p, season)}</div>
       </div>
     </button>
@@ -142,7 +141,7 @@ function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: Dra
       </span>
       <TeamLogo tid={dp.originalTid} size={24} decorative />
       <span className="fo-name grow">{pickLabel(league, dp)}</span>
-      {proj !== undefined && <span className={`fo-flag ${dp.round === 1 && proj <= 14 ? 'warn' : 'info'}`}>proj. #{proj}</span>}
+      {proj !== undefined && <span className="tiny dim num nowrap">{projText(proj)}</span>}
     </button>
   );
 }
