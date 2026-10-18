@@ -15,7 +15,7 @@ import { OvrBadge } from '../components/OvrKey';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
 import { slabVars } from '../teamColors';
-import { plural } from '../../core/format';
+import { injuryName, outFor } from '../../core/format';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
 const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
@@ -105,7 +105,7 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
         {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
         {p.injury && (
           <Tag tone="bad">
-            {p.injury.type} · out {plural(p.injury.gamesRemaining, 'game')}
+            {injuryName(p.injury.type)} · {outFor(p.injury.gamesRemaining)}
           </Tag>
         )}
         {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
@@ -124,9 +124,10 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
           { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
         ]}
       />
-      {!cur && line && lastSeason ? (
+      {/* what the figures are, always: this season's, or his last one's before he plays */}
+      {line ? (
         <div className="tm-hero-note">
-          {seasonLabel(lastSeason)} per game{p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
+          {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
         </div>
       ) : null}
     </section>

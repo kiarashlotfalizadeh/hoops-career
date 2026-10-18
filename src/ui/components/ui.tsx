@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
@@ -645,31 +645,10 @@ export interface Col<T> {
   sticky?: boolean;
   width?: number;
   help?: string;
+  /** The header written as it is, not in caps (ORtg, DRtg, Net). */
+  asIs?: boolean;
   /** Lower is better (a rank, a sprint time): the first tap sorts lowest first. */
   asc?: boolean;
-}
-
-/**
- * A wide table's cue that more columns wait to the right: the scroller (a `.tablewrap`) gets `fr`
- * while there's more to scroll to, and its right edge fades, as the League's tables do. Its first
- * column stays put with `.sticky`.
- */
-export function useMoreRight(ref: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const on = () => el.classList.toggle('fr', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-    on();
-    el.addEventListener('scroll', on, { passive: true });
-    // (a sheet opening, a row added in a live game: the widths change without a scroll)
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(on);
-    ro?.observe(el);
-    if (el.firstElementChild) ro?.observe(el.firstElementChild);
-    return () => {
-      el.removeEventListener('scroll', on);
-      ro?.disconnect();
-    };
-  }, [ref]);
 }
 
 /** "Points per game" → "points per game" (an acronym like "TS%" stays as it is). */
@@ -714,53 +693,68 @@ export function StatTable<T>({
     el.scrollLeft = th.offsetLeft - stuck - 8;
     // (on mount only: a tap on a header sorts where the reader already is)
   }, []);
-  useMoreRight(wrap);
+  // more columns to the right: the table's edge fades, as the league's team tables do
+  const outer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const on = () => outer.current?.classList.toggle('fr', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    on();
+    el.addEventListener('scroll', on, { passive: true });
+    window.addEventListener('resize', on);
+    return () => {
+      el.removeEventListener('scroll', on);
+      window.removeEventListener('resize', on);
+    };
+  }, [rows.length, cols.length]);
   return (
-    <div className="tablewrap" ref={wrap} style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
-      <table className="stats">
-        <thead>
-          <tr>
-            {cols.map((c) => (
-              <th
-                key={c.key}
-                scope="col"
-                className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''} ${sort?.key === c.key ? 'sorted' : ''}`}
-                style={{ minWidth: c.width }}
-                title={c.help}
-                aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
-                onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: firstDir(c) }))}
-              >
-                {/* named by its visible label first ("PTS, sort by points per game"); the arrow is aria-sort's */}
-                <button type="button" className="th-sort" aria-label={`${c.label}, sort by ${lowerFirst(c.help ?? c.label)}`} onClick={(e) => e.preventDefault()}>
-                  {c.label}
-                  {sort?.key === c.key && <span aria-hidden="true">{sort.dir === -1 ? ' ↓' : ' ↑'}</span>}
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {(limit ? sorted.slice(0, limit) : sorted).map((r) => (
-            <tr
-              key={rowKey(r)}
-              className={highlight?.(r) ? 'me' : ''}
-              onClick={onRow ? () => onRow(r) : undefined}
-              tabIndex={onRow ? 0 : undefined}
-              onKeyDown={onRow ? activateOnKey(() => onRow(r)) : undefined}
-              style={{ cursor: onRow ? 'pointer' : undefined }}
-            >
-              {cols.map((c) => {
-                const v = c.get(r);
-                return (
-                  <td key={c.key} className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''}`}>
-                    {c.fmt ? c.fmt(v, r) : typeof v === 'number' ? fmtNum(v) : v}
-                  </td>
-                );
-              })}
+    <div className="tablewrap-o" ref={outer}>
+      <div className="tablewrap" ref={wrap} style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
+        <table className="stats">
+          <thead>
+            <tr>
+              {cols.map((c) => (
+                <th
+                  key={c.key}
+                  scope="col"
+                  className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''} ${sort?.key === c.key ? 'sorted' : ''} ${c.asIs ? 'as-is' : ''}`}
+                  style={{ minWidth: c.width }}
+                  title={c.help}
+                  aria-sort={sort?.key === c.key ? (sort.dir === -1 ? 'descending' : 'ascending') : undefined}
+                  onClick={() => setSort((s) => (s?.key === c.key ? { key: c.key, dir: (s.dir * -1) as 1 | -1 } : { key: c.key, dir: firstDir(c) }))}
+                >
+                  {/* named by its visible label first ("PTS, sort by points per game"); the arrow is aria-sort's */}
+                  <button type="button" className="th-sort" aria-label={`${c.label}, sort by ${lowerFirst(c.help ?? c.label)}`} onClick={(e) => e.preventDefault()}>
+                    {c.label}
+                    {sort?.key === c.key && <span aria-hidden="true">{sort.dir === -1 ? ' ↓' : ' ↑'}</span>}
+                  </button>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(limit ? sorted.slice(0, limit) : sorted).map((r) => (
+              <tr
+                key={rowKey(r)}
+                className={highlight?.(r) ? 'me' : ''}
+                onClick={onRow ? () => onRow(r) : undefined}
+                tabIndex={onRow ? 0 : undefined}
+                onKeyDown={onRow ? activateOnKey(() => onRow(r)) : undefined}
+                style={{ cursor: onRow ? 'pointer' : undefined }}
+              >
+                {cols.map((c) => {
+                  const v = c.get(r);
+                  return (
+                    <td key={c.key} className={`${c.left ? 'l' : ''} ${c.sticky ? 'sticky' : ''}`}>
+                      {c.fmt ? c.fmt(v, r) : typeof v === 'number' ? fmtNum(v) : v}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { curTeamSeason, fmtDate, standardRoster, teamPlayers } from '../../core/league/helpers';
-import { plural } from '../../core/format';
+import { outFor } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
@@ -34,15 +34,15 @@ const whenLabel = (league: League, day: number) =>
 
 /**
  * A side's players who won't play (or might not), three at most, named so teammates can't be
- * confused: "Jal. Williams 3 games, K. Williams (rest) +2 more".
+ * confused: "Jal. Williams out 3 games, K. Williams resting +2 more".
  */
 function outText(league: League, s: SidePreview): string {
   const names = rosterNames(teamPlayers(league, s.tid));
   const name = (pid: number, fallback: string) => names(pid) || fallback;
   const all = [
-    ...s.out.map((p) => `${name(p.pid, p.name)} ${plural(p.games, 'game')}`),
-    ...s.resting.map((p) => `${name(p.pid, p.name)} (rest)`),
-    ...s.questionable.filter((p) => !p.cleared).map((p) => `${name(p.pid, p.name)} (questionable)`),
+    ...s.out.map((p) => `${name(p.pid, p.name)} ${outFor(p.games)}`),
+    ...s.resting.map((p) => `${name(p.pid, p.name)} resting`),
+    ...s.questionable.filter((p) => !p.cleared).map((p) => `${name(p.pid, p.name)} questionable`),
   ];
   return all.slice(0, 3).join(', ') + (all.length > 3 ? ` +${all.length - 3} more` : '');
 }
@@ -125,7 +125,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           )}
           {outs.map((o) => (
             <div key={o.tid} className="td-out">
-              <span className="td-out-k">{league.teams[o.tid].abbrev} out</span>
+              <span className="td-out-k">{league.teams[o.tid].abbrev}</span>
               <span className="grow">{o.text}</span>
             </div>
           ))}

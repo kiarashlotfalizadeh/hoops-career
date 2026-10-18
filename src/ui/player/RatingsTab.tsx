@@ -7,7 +7,7 @@ import { RATING_META, attrDisplay, ovrWeights } from '../../core/ratings';
 import { ratingMeans } from '../../core/league/progression';
 import { Bar, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { RATING_BAR, ratingTone } from '../ratingCols';
+import { RATING_COLOR, RatingBands, ratingTone } from '../ratingCols';
 
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
 const AVERAGE_OVR = 74;
@@ -88,7 +88,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
                     <div key={m.key} className="tm-rt">
                       <button className="tm-rt-row" onClick={() => setOpen(on ? null : m.key)} aria-expanded={on}>
                         <span className="tm-rt-l">{m.label}</span>
-                        <Bar value={((val - 40) / 59) * 100} color={RATING_BAR[ratingTone(val)]} height={3} />
+                        <Bar value={((val - 40) / 59) * 100} color={RATING_COLOR[ratingTone(val)]} height={3} />
                         <span className="tm-rt-v num">{val}</span>
                         <span className={`tm-rt-d num ${prev !== null && val !== prev ? (val > prev ? 'good' : 'bad') : ''}`}>
                           {prev !== null && val !== prev ? `${val > prev ? '+' : ''}${val - prev}` : ''}
@@ -104,8 +104,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
         </div>
       </div>
       <div className="tm-foot">
-        <b style={{ color: RATING_BAR.elite }}>85+</b> elite · <b style={{ color: RATING_BAR.good }}>75+</b> strong · <b style={{ color: RATING_BAR.ok }}>64+</b> solid · under 64
-        weak. Changes are since last season; tap a rating for what it does.
+        <RatingBands named />. Changes are since last season; tap a rating for what it does.
       </div>
     </>
   );

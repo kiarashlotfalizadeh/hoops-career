@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, ChevronLeft, Database, Shuffle } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
+import { rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
 import { DifficultyPicker } from '../components/DifficultyPicker';
@@ -215,6 +216,7 @@ export default function NewLeague() {
               { id: 'W', label: 'West' },
             ]}
           />
+          {rank && <div className="tiny dim">Under each team: its roster&apos;s strength, ranked among the 30.</div>}
           <div className="nl-grid">
             {FRANCHISES.map((fr, i) => ({ fr, i }))
               .filter(({ fr }) => fr.conf === conf)
@@ -228,7 +230,7 @@ export default function NewLeague() {
                 >
                   <TeamLogo tid={i} size={42} decorative />
                   <span className="nl-team-name">{fr.name}</span>
-                  <span className="nl-team-sub">{rank ? `Power #${rank[i]}` : `${market(fr.pop)} market`}</span>
+                  <span className="nl-team-sub">{rank ? rankOf(rank[i], FRANCHISES.length) : `${market(fr.pop)} market`}</span>
                 </button>
               ))}
           </div>

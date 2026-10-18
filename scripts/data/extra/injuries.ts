@@ -7,6 +7,7 @@ import { parquetReadObjects } from 'hyparquet';
 import type { Injury } from '../../../src/core/types';
 import type { SeedInjury, SeedPlayer, SeedSchedule } from '../../../src/core/league/create';
 import { INJURY_TYPES } from '../../../src/core/league/injuries';
+import { injuryName } from '../../../src/core/format';
 import { normName } from '../nba/crosswalk';
 import { compressors } from '../nba/college';
 import { dayOf } from './schedule';
@@ -109,18 +110,20 @@ function severityFor(games: number): Injury['severity'] {
 
 /** Map ESPN's description to an injury type; the generic part name is used only if the time out fits it. */
 export function injuryType(detail: string, games: number | null): { type: string; severity: Injury['severity'] } {
+  // names as the game writes them (sentence case, acronyms kept), so they match INJURY_TYPES
+  const known = (name: string) => INJURY_TYPES.find((x) => x.name === injuryName(name));
   for (const [re, type] of TYPE_RULES) {
     if (re.test(detail)) {
-      const t = INJURY_TYPES.find((x) => x.name === type);
-      return { type, severity: t && (games === null || games <= t.max * 1.5) ? t.severity : severityFor(games ?? 10) };
+      const t = known(type);
+      return { type: injuryName(type), severity: t && (games === null || games <= t.max * 1.5) ? t.severity : severityFor(games ?? 10) };
     }
   }
   const part = detail.split(/\s+[—-]\s+/)[0].trim();
-  if (/achilles/i.test(part) && (games ?? 0) >= 40) return { type: 'Ruptured Achilles', severity: 'severe' };
+  if (/achilles/i.test(part) && (games ?? 0) >= 40) return { type: injuryName('Ruptured Achilles'), severity: 'severe' };
   const generic = PART_TYPES[part.toLowerCase()];
-  const t = generic ? INJURY_TYPES.find((x) => x.name === generic) : undefined;
+  const t = generic ? known(generic) : undefined;
   if (t && (games === null || games <= t.max * 1.5)) return { type: t.name, severity: t.severity };
-  const name = part && part.length < 25 ? `${part[0].toUpperCase()}${part.slice(1)} Injury` : 'Injury';
+  const name = part && part.length < 25 ? injuryName(`${part} injury`) : 'Injury';
   return { type: name, severity: severityFor(games ?? 10) };
 }
 

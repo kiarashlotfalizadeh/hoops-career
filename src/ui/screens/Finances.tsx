@@ -424,7 +424,7 @@ function HistoryTab({ team }: { team: Team }) {
       // how the season ended, as on the team and history pages (a play-in loss isn't a plain miss)
       fmt: (_v, r) => {
         const o = seasonOutcome(league, team.tid, r);
-        return o.short === 'Ongoing' ? '—' : o.short;
+        return o.short === 'In progress' ? '—' : o.short;
       },
     },
     { key: 'rev', label: 'Revenue', get: (r) => r.revenue, fmt: (v) => money(Number(v)) },

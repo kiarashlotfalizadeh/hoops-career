@@ -1,10 +1,10 @@
 /* The NBA Cup: its knockouts and group tables. */
 /* ------------------------------------------------------------------ NBA Cup */
 .bk-head.two,
-.bk.two {
+.bk-grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.bk.two .bk-col.r2 {
+.bk-grid.two .bk-col.r2 {
   justify-content: center;
 }
 .bk-s.cup-tie .bk-t {

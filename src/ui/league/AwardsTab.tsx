@@ -15,8 +15,8 @@ import { seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } f
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
   const pg = playerSeason(p, season, playoffs);
   if (!pg) return '';
-  // (each number kept with its unit where a line wraps)
-  return kind === 'def' ? `${f1(pg.stl)}\u00a0stl · ${f1(pg.blk)}\u00a0blk · ${f1(pg.reb)}\u00a0reb` : `${f1(pg.pts)}\u00a0pts · ${f1(pg.reb)}\u00a0reb · ${f1(pg.ast)}\u00a0ast`;
+  // per game (the tab's foot says so), each figure kept with its stat where a line wraps
+  return kind === 'def' ? `${f1(pg.stl)}\u00a0STL · ${f1(pg.blk)}\u00a0BLK · ${f1(pg.reb)}\u00a0REB` : `${f1(pg.pts)}\u00a0PTS · ${f1(pg.reb)}\u00a0REB · ${f1(pg.ast)}\u00a0AST`;
 }
 
 export function AwardsTab({ league }: { league: League }) {
@@ -62,12 +62,25 @@ export function AwardsTab({ league }: { league: League }) {
           {!decided && isCurrent && <AwardRace league={league} />}
           {!decided && !isCurrent && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
           {decided && aw && <MajorAwards league={league} aw={aw} />}
+          {(decided || (isCurrent && started)) && (
+            <div className="lg-note">Figures per game{decided && aw?.finalsMvp !== undefined ? '; the Finals MVP’s in the playoffs' : ''}.</div>
+          )}
         </>
       )}
-      {view === 'teams' && aw && <Teams league={league} aw={aw} />}
+      {view === 'teams' && aw && (
+        <>
+          <Teams league={league} aw={aw} />
+          <div className="lg-note">Figures per game.</div>
+        </>
+      )}
       {view === 'allstar' && aw && (
         <>
-          {aw.allStars.E.length > 0 && <AllStars league={league} aw={aw} />}
+          {aw.allStars.E.length > 0 && (
+            <>
+              <AllStars league={league} aw={aw} />
+              <div className="lg-note">Figures per game this season.</div>
+            </>
+          )}
           {aw.saturday && <AllStarSaturday league={league} aw={aw} />}
         </>
       )}
@@ -94,7 +107,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
             </span>
             <TeamLogo tid={aw.champion} size={40} decorative />
             <span className="lg-award-t">
-              <span className="lb">Champions</span>
+              <span className="lg-award-lb">Champions</span>
               <span className="nm ellipsis">
                 {league.teams[aw.champion].region} {league.teams[aw.champion].name}
               </span>
@@ -114,7 +127,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
             </span>
             <TeamLogo tid={aw.cupWinner} size={40} decorative />
             <span className="lg-award-t">
-              <span className="lb">NBA Cup</span>
+              <span className="lg-award-lb">NBA Cup</span>
               <Link to={teamPath(aw.cupWinner)} className="nm ellipsis">
                 {league.teams[aw.cupWinner].region} {league.teams[aw.cupWinner].name}
               </Link>
@@ -183,7 +196,7 @@ function PlayerAward({
     <AwardRow icon={icon} to={`/player/${p.pid}`}>
       <Avatar p={{ ...p, tid: tid ?? -1 }} />
       <span className="lg-award-t">
-        <span className="lb">{label}</span>
+        <span className="lg-award-lb">{label}</span>
         <span className="nm ellipsis">
           {p.firstName} {p.lastName}
         </span>
@@ -205,7 +218,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
     <Section title="Season awards">
       <div className="card flush list">
         <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
-        <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP · playoff stats" playoffs />
+        <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP" playoffs />
         <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player of the Year" kind="def" />
         <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
         <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
@@ -214,7 +227,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
           <AwardRow icon={<Award size={18} />} to={teamPath(coyTeam.tid)}>
             <TeamLogo tid={coyTeam.tid} size={40} decorative />
             <span className="lg-award-t">
-              <span className="lb">Coach of the Year</span>
+              <span className="lg-award-lb">Coach of the Year</span>
               <span className="nm ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</span>
               <span className="sub ellipsis">
                 {coyTeam.region} {coyTeam.name}

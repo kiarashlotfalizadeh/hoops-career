@@ -92,11 +92,7 @@ export function PlayoffsTab({ league }: { league: League }) {
     return (
       <>
         {lastAw?.champion !== undefined && <ChampionSlab league={league} season={lastAw.season} tid={lastAw.champion} runnerUp={lastAw.runnerUp} fmvp={lastAw.finalsMvp} />}
-        <div className="card lg-blank">
-          <Trophy size={26} aria-hidden="true" />
-          <h3>The bracket comes after the regular season</h3>
-          <p>Seeds 1-6 go straight in, 7-10 play in. The projected bracket shows once games are played.</p>
-        </div>
+        <div className="card empty">No bracket yet: it&apos;s projected here once games are played. Seeds 1-6 go straight in, 7-10 play in.</div>
       </>
     );
   }
@@ -178,7 +174,7 @@ function Bracket({ league, slots, onOpen }: { league: League; slots: Slot[][]; o
           <span key={r}>{roundName(r, true)}</span>
         ))}
       </div>
-      <div className="bk">
+      <div className="bk-grid">
         <div className="bk-col r1">
           {[0, 2].map((i) => (
             <div key={i} className="bk-pair">
@@ -464,15 +460,25 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
           )}
         </div>
         {leaders.length > 0 && (
-          <Section title="Series leaders">
+          <Section title="Series leaders" right={<span className="lg-sec-meta">Per game</span>}>
             <div className="card flush">
+              <div className="list-divider lg-sr-lead lg-sr-head" aria-hidden="true">
+                <span />
+                <span className="grow" />
+                <span>PTS</span>
+                <span>REB</span>
+                <span>AST</span>
+              </div>
               {leaders.map((l) => (
                 <Link key={l.pid} to={`/player/${l.pid}`} className="lg-sr-lead" onClick={onClose}>
                   <TeamLogo tid={l.tid} size={20} />
                   <span className="grow ellipsis bold">{l.name}</span>
-                  <span className="num dim2">
-                    {(l.pts / l.gp).toFixed(1)} pts · {(l.reb / l.gp).toFixed(1)} reb · {(l.ast / l.gp).toFixed(1)} ast
-                  </span>
+                  {(['pts', 'reb', 'ast'] as const).map((k) => (
+                    <span key={k} className="num dim2">
+                      {(l[k] / l.gp).toFixed(1)}
+                      <span className="sr-only"> {k === 'pts' ? 'points' : k === 'reb' ? 'rebounds' : 'assists'}</span>
+                    </span>
+                  ))}
                 </Link>
               ))}
             </div>

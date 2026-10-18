@@ -11,6 +11,7 @@ import { edit } from '../../state/actions';
 import { agenda, GUIDE_STEPS, guideDone, showGuide } from '../../core/league/agenda';
 import { assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
 import { jobSecurity, type JobSecurity } from '../../core/league/jobSecurity';
+import { FIRING_LINE } from '../../core/league/owner';
 import { confStandings } from '../../core/league/standings';
 import { leagueForecast, pct } from '../../core/analysis/odds';
 import { AgendaList } from '../components/Agenda';
@@ -135,18 +136,39 @@ function AllAdvice({ feed }: { feed: AssistantCard[] }) {
   );
 }
 
-/** The owner's patience, shown when the seat is warm or hot (and no ultimatum in To do says it already). */
+/**
+ * The bands of Office → Owner's meter, as widths on 0-100 (jobSecurity's heat: hot under 32, warm
+ * to 44, steady to 64, secure 65+), so the two meters read the same.
+ */
+const SEAT_BANDS = [
+  ['hot', 32],
+  ['warm', 13],
+  ['steady', 20],
+  ['secure', 35],
+] as const;
+
+/** The owner's patience, shown when the seat is warm or hot (and no ultimatum in To do says it already): the Owner's meter, compact. */
 function JobSecurityLine({ js }: { js: JobSecurity }) {
+  const line = Math.round(50 + 50 * FIRING_LINE);
   return (
     <Link to="/office/owner" className={`card td-seat ${js.heat}`} aria-label={`Job security: ${js.label}, ${js.score} of 100. ${js.line}`}>
       <span className="td-seat-top">
         <span className="over">Job security</span>
-        <span className="td-seat-v">{js.label}</span>
+        <span className="td-seat-v">
+          <span className="num">{js.score}</span> {js.label}
+        </span>
         <ChevronRight size={16} className="dim" aria-hidden="true" />
       </span>
       <span className="td-meter" aria-hidden="true">
-        <span style={{ width: `${js.score}%` }} />
-        <i style={{ left: '25%' }} />
+        <span className="td-meter-track">
+          {SEAT_BANDS.map(([z, w]) => (
+            <i key={z} className={z} style={{ width: `${w}%` }} />
+          ))}
+        </span>
+        <span className="td-meter-line" style={{ left: `${line}%` }}>
+          <span>Fired</span>
+        </span>
+        <span className="td-meter-pin" style={{ left: `${Math.max(1, Math.min(99, js.score))}%` }} />
       </span>
       <span className="td-seat-l">{js.line}</span>
     </Link>

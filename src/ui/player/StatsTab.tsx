@@ -105,6 +105,7 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
         </div>
       )}
       <div className="tm-foot">
+        Per game.{' '}
         {real ? (
           <More label="“real” seasons and advanced stats">
             <p className="tm-more-p">
@@ -134,7 +135,8 @@ function CareerHighs({ p, league }: { p: Player; league: League }) {
       <div className="card flush list">
         {REC_STATS.filter((k) => highs[k]).map((k) => {
           const h = careerHighOf(p, k)!;
-          const text = `vs ${league.teams[h.opp]?.abbrev ?? '?'} · ${fmtDate(h.season, h.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+          // a year only outside this season
+          const text = `vs ${league.teams[h.opp]?.abbrev ?? '?'} · ${fmtDate(h.season, h.day, h.season === league.season ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })}`;
           const body = (
             <>
               <span className="tm-hi-v num">{h.v}</span>

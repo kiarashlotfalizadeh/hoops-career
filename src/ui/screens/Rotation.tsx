@@ -16,7 +16,7 @@ import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
 import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, ordinal, playerSeason, rosterNames, startingFive } from '../stats';
-import { plural } from '../../core/format';
+import { injuryName, plural } from '../../core/format';
 import { swapSpots } from '../../core/analysis/lineups';
 import { MoodMark } from '../team/MoodMark';
 import './team.css';
@@ -173,9 +173,12 @@ export default function Rotation() {
               const m = rot.minutes[pid] ?? 0;
               const pg = playerSeason(p, league.season);
               const short = shortOfMinutes(p, m);
+              const worn = p.wear >= WORN;
+              // the risks, on their own line when he has any
+              const risks = [short ? `wants ${p.mood.expectedMin} min` : '', worn ? `wear ${Math.round(p.wear)}` : ''].filter(Boolean).join(' · ');
               return (
                 <Fragment key={pid}>
-                  {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
+                  {(i === 0 || i === benchFrom) && <RotationHead label={i === 0 ? 'Starters' : 'Bench'} />}
                   {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
                   <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
                     <button
@@ -195,29 +198,39 @@ export default function Rotation() {
                       onClick={() => setEditing(pid)}
                       onKeyDown={activateOnKey(() => setEditing(pid))}
                     >
-                      <div className="grow">
-                        {/* tags drop below a long name instead of cutting it off */}
-                        <div className="tm-rname">
-                          <span className="ellipsis">{fullNameOf(pid)}</span>
-                          {p.injury && <Tag tone="bad">Out</Tag>}
-                          {closers.includes(pid) && <Tag>Closer</Tag>}
-                          {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
-                          <MoodMark p={p} />
-                        </div>
-                        {/* the risks first, so a narrow row cuts the stamina, not them */}
-                        <div className="lr-meta ellipsis">
-                          {p.pos} · {p.injury ? `${p.injury.type}, ${plural(p.injury.gamesRemaining, 'game')}` : pg ? `${f1(pg.min)} mpg` : p.archetype}
-                          {p.wear >= WORN && <span className="warn"> · wear {Math.round(p.wear)}</span>}
-                          {short && <span className="warn"> · wants {p.mood.expectedMin} min</span>}
-                          {` · stamina ${attrDisplay(p.ratings.end)}`}
-                          {p.wear >= 30 && p.wear < WORN ? ` · wear ${Math.round(p.wear)}` : ''}
-                        </div>
+                      {/* tags drop below a long name instead of cutting it off */}
+                      <div className="tm-rname">
+                        <span className="ellipsis">{fullNameOf(pid)}</span>
+                        {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
+                        {closers.includes(pid) && <Tag>Closer</Tag>}
+                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
+                        <MoodMark p={p} />
                       </div>
-                      <span className="tm-rmin">
-                        <span className={`tm-rmin-v num ${short ? 'warn' : ''}`}>{m}</span>
-                        <span className="tm-rmin-k">min</span>
+                      {/* an injured player's line is his injury: his figures wait for his return */}
+                      <div className="tm-rmeta">
+                        {p.pos}
+                        {p.injury ? ` · ${injuryName(p.injury.type)}` : ''}
+                      </div>
+                      {!p.injury && (
+                        <>
+                          <span className="tm-rfig m num">
+                            {pg ? f1(pg.min) : '—'}
+                            <span className="sr-only"> minutes a game</span>
+                          </span>
+                          <span className="tm-rfig s num">
+                            <span className="sr-only">stamina </span>
+                            {attrDisplay(p.ratings.end)}
+                          </span>
+                        </>
+                      )}
+                      {risks && <div className="tm-rwarn warn">{risks.charAt(0).toUpperCase() + risks.slice(1)}</div>}
+                      <span className={`tm-rmin num ${short ? 'warn' : ''}`}>
+                        {m}
+                        <span className="sr-only"> minutes, his target</span>
                       </span>
-                      <Ovr v={p.ovr} size="sm" />
+                      <span className="tm-rovr">
+                        <Ovr v={p.ovr} size="sm" />
+                      </span>
                     </div>
                   </div>
                 </Fragment>
@@ -225,6 +238,7 @@ export default function Rotation() {
             })}
           </div>
         </div>
+        <div className="tm-foot">MIN is minutes a game this season, STA stamina. ↑ swaps a player with the one above; tap a row for his target, cap and rest.</div>
       </Section>
 
       <Section
@@ -273,6 +287,19 @@ export default function Rotation() {
         {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEditing(null)} order={order} names={nameOf} starters={startSet} busy={simming} />}
       </Sheet>
     </>
+  );
+}
+
+/** A depth-chart group's divider, with the columns' names over its rows. */
+function RotationHead({ label }: { label: string }) {
+  return (
+    <div className="list-divider tm-rhead">
+      <span>{label}</span>
+      <span aria-hidden="true">MIN</span>
+      <span aria-hidden="true">STA</span>
+      <span aria-hidden="true">Target</span>
+      <span aria-hidden="true">OVR</span>
+    </div>
   );
 }
 

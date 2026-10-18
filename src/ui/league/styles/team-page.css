@@ -86,10 +86,23 @@
   flex: none;
 }
 
-/* tags on the team's colours: white on a dark wash, whatever their tone */
+/* tags on the team's colours: a dark ground under each, so a tag keeps its tone and reads as it does
+   in Season by season (not the team's colour through a glass) */
 .lg-team-tags .tag {
   color: #fff;
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(7, 9, 12, 0.78);
+}
+.lg-team-tags .tag.good {
+  color: var(--good);
+}
+.lg-team-tags .tag.warn {
+  color: var(--warn);
+}
+.lg-team-tags .tag.info {
+  color: var(--info);
+}
+.lg-team-tags .tag.lg-gold {
+  color: var(--tier-elite);
 }
 
 .lg-team-actions {
