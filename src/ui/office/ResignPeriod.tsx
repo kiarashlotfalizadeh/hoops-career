@@ -246,7 +246,9 @@ export function ResignPeriod() {
               <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />
             ))}
           </div>
-          <div className="tiny dim">Signed through next season. An extension starts the season after, any time until the end of the regular season.</div>
+          <div className="tiny dim">
+            Signed through {shortSeason(next)}. An extension starts in {shortSeason(next + 1)}: sign one any time until the end of the regular season.
+          </div>
         </Section>
       )}
 

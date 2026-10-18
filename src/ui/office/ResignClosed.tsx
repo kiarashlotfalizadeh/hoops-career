@@ -104,7 +104,8 @@ export function ResignClosed({ league }: { league: League }) {
           </div>
         )}
         <div className="tiny dim">
-          Asks use today's ratings and mood; both change by the summer.{canExtend.size > 0 ? " An extension's ask is for the season after his deal ends." : ''}
+          Asks use today's ratings and mood; both change by the summer.
+          {canExtend.size > 0 ? ` An extension's ask is from ${shortSeason(s + 1)}, the season after his deal ends.` : ''}
         </div>
       </Section>
 

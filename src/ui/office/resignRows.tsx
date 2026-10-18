@@ -86,7 +86,8 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
               <span className="warn">Won't extend now</span>
             ) : (
               <>
-                Extension ask <b className="num">{salaryText(league, ask.amount)}</b> {forYears(ask.years)} from {shortSeason(exp + 1)}
+                {/* (from the season after his deal ends: the list's note says which, once) */}
+                Extension ask <b className="num">{salaryText(league, ask.amount)}</b> {forYears(ask.years)}
               </>
             )}
           </div>
