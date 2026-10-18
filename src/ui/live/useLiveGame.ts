@@ -1,7 +1,7 @@
 // The live game's broadcast, as a hook: it sets up (or picks up) today's game, runs the possession
 // loop that hands the court one possession at a time (key plays, replays, the breaks, your timeouts),
-// keeps the drawn view the rest of the screen reads, puts the night's banners and graphics up over the
-// court, and finishes the game. The Live screen (screens/Live.tsx) draws what it returns and adds the
+// keeps the drawn view the rest of the screen reads, tells useOverCourt what to put up over the court,
+// and finishes the game. The Live screen (screens/Live.tsx) draws what it returns and adds the
 // coaching moves; every move goes through `coach`, so the game's journal keeps it.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -22,11 +22,11 @@ import { liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from './graphics';
-import { GRAPHIC_MS, playersBefore } from './LowerThird';
+import { playersBefore } from './LowerThird';
+import { useOverCourt } from './useOverCourt';
 import { otherGames } from './scoreboard';
 import type { SkipTo } from './skip';
-import type { BannerItem } from './Banner';
-import { EVENT_MS, FEED_MAX, FF_MS, WORD_MS, bannerKey, breakAfter, eventBanner, userSetup, type Panel, type Show, type Status } from './session';
+import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Show, type Status } from './session';
 
 export function useLiveGame() {
   const league = useLeague();
@@ -44,14 +44,6 @@ export function useLiveGame() {
   const viewRef = useRef<Drawn | null>(null);
   /** Injuries, foul-outs and coaching adjustments, once drawn: alerts for a while, banners over the court once. */
   const [events, setEvents] = useState<LiveEvent[]>([]);
-  /** What's waiting to go up over the court, one at a time (the first is up). */
-  const [banners, setBanners] = useState<BannerItem[]>([]);
-  /** The banners said so far tonight (see bannerKey), and whether the alerts up now are to be taken as already said (the game was picked up, or skipped ahead). */
-  const bannered = useRef({ said: new Set<string>(), seed: true });
-  /** The broadcast graphic up now (see graphics.ts), and the ones shown so far: each once, one every two game minutes. */
-  const [graphic, setGraphic] = useState<Graphic | null>(null);
-  // graphics shown so far tonight, when the last went up, and whether this game was picked up part-way (see takeView)
-  const gfx = useRef({ shown: new Set<string>(), last: null as number | null, seed: false });
   /**
    * A timeout the user called that the court hasn't shown yet (it opens the next possession), or one
    * waiting for the next dead ball (asked for while the other side had a live ball: see GameSim.callTimeout).
@@ -90,6 +82,9 @@ export function useLiveGame() {
   const [paused, setPaused] = useState(false);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
   const [atBreak, setAtBreak] = useState(false);
+  // the banners and the broadcast graphics over the court
+  const oc = useOverCourt({ paused, atBreak });
+  const { gfx, queueBanner, markSaid, seedGraphics, showGraphic, sayStaff, reset: resetOverCourt } = oc;
   const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
   const [panel, setPanel] = useState<Panel>('none');
   const [clipOpen, setClipOpen] = useState(false);
@@ -195,7 +190,7 @@ export function useLiveGame() {
             regular: lg.game.type === 'regular',
           }
         : null,
-    [home, away, nameOf, before],
+    [home, away, nameOf, before, gfx],
   );
   /** The broadcast graphic the drawn game `v` calls for now, if any; and every one it calls for (shown or not). */
   const graphicFor = useCallback(
@@ -214,16 +209,6 @@ export function useLiveGame() {
   );
   const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue });
   loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue };
-
-  /** Put something up over the court (each once a night). */
-  const queueBanner = useCallback((items: BannerItem[]) => {
-    const said = bannered.current.said;
-    const fresh = items.filter((b) => !said.has(bannerKey(b.id)));
-    if (!fresh.length) return;
-    for (const b of fresh) said.add(bannerKey(b.id));
-    // (a pile-up keeps the latest few)
-    setBanners((q) => [...q, ...fresh].slice(-3));
-  }, []);
 
   /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included); returns the new lines, newest first. */
   const flushFeed = useCallback((): PbpEntry[] => {
@@ -255,27 +240,17 @@ export function useLiveGame() {
           const items = ev.map(eventBanner);
           if (banner) queueBanner(items);
           // (along a skip they're taken as said: what happened waits in the alerts and the play-by-play)
-          else for (const b of items) bannered.current.said.add(bannerKey(b.id));
+          else markSaid(items);
         }
       }
-      // a game picked up part-way (the app was closed, or this screen left and opened again): what the
-      // court already showed when it was picked up went up then, or had its moment, so only what happens
-      // from here gets a graphic
-      if (gfx.current.seed && prev) {
-        gfx.current.seed = false;
-        for (const g of loopHelpers.current.graphicsDue(prev, lg)) gfx.current.shown.add(g.id);
-      }
+      // a game picked up part-way: only what happens from here gets a graphic (see seedGraphics)
+      if (prev) seedGraphics(() => loopHelpers.current.graphicsDue(prev, lg));
       // a broadcast graphic, now and then (not along a skip: that would be a string of them)
       const g = banner ? loopHelpers.current.graphicFor(next, lg) : null;
-      if (g) {
-        gfx.current.shown.add(g.id);
-        // a break's team number doesn't hold up the next one
-        if (g.kind !== 'team') gfx.current.last = next.elapsed;
-        setGraphic(g);
-      }
+      if (g) showGraphic(g, next.elapsed);
       return next;
     },
-    [queueBanner],
+    [queueBanner, markSaid, seedGraphics, showGraphic],
   );
 
   const clearFF = () => {
@@ -283,51 +258,51 @@ export function useLiveGame() {
     ff.current = { timer: 0, waiting: false };
   };
 
-  const attach = useCallback((lg: LiveGame | null) => {
-    liveRef.current = lg;
-    clearTimeout(ff.current.timer);
-    ff.current = { timer: 0, waiting: false };
-    brokeAt.current = 0;
-    viewRef.current = lg ? snapshot(lg.sim) : null;
-    setView(viewRef.current);
-    setEvents([]);
-    setBanners([]);
-    bannered.current = { said: new Set(), seed: true };
-    gfx.current = { shown: new Set(), last: null, seed: !!lg && lg.steps > 0 };
-    setGraphic(null);
-    setToPending(false);
-    huddleNext.current = false;
-    setGame(lg);
-    setScript(null);
-    setShow(null);
-    lastDone.current = null;
-    const intro = !!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false;
-    setIntro(intro);
-    if (!intro) setReveal((x) => x + 1);
-    setAtBreak(false);
-    setPaused(false);
-    setDismissed([]);
-    setPanel('none');
-    setClipOpen(false);
-    setResultGid(null);
-    setAnnounce('');
-    if (!lg) {
-      setStatus('none');
-      return;
-    }
-    const pbp = lg.sim.pbp;
-    pbpRead.current = pbp.length;
-    setFeed(
-      pbp
-        .slice(-FEED_MAX)
-        .map((e, j) => ({ i: pbp.length - Math.min(FEED_MAX, pbp.length) + j, e }))
-        .reverse(),
-    );
-    const score: [number, number] = [lg.sim.T[0].score, lg.sim.T[1].score];
-    announced.current = score.join('-');
-    setTicker(createTicker(lg.sim.clock, score));
-    setStatus('live');
-  }, []);
+  const attach = useCallback(
+    (lg: LiveGame | null) => {
+      liveRef.current = lg;
+      clearTimeout(ff.current.timer);
+      ff.current = { timer: 0, waiting: false };
+      brokeAt.current = 0;
+      viewRef.current = lg ? snapshot(lg.sim) : null;
+      setView(viewRef.current);
+      setEvents([]);
+      resetOverCourt(!!lg && lg.steps > 0);
+      setToPending(false);
+      huddleNext.current = false;
+      setGame(lg);
+      setScript(null);
+      setShow(null);
+      lastDone.current = null;
+      const intro = !!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false;
+      setIntro(intro);
+      if (!intro) setReveal((x) => x + 1);
+      setAtBreak(false);
+      setPaused(false);
+      setDismissed([]);
+      setPanel('none');
+      setClipOpen(false);
+      setResultGid(null);
+      setAnnounce('');
+      if (!lg) {
+        setStatus('none');
+        return;
+      }
+      const pbp = lg.sim.pbp;
+      pbpRead.current = pbp.length;
+      setFeed(
+        pbp
+          .slice(-FEED_MAX)
+          .map((e, j) => ({ i: pbp.length - Math.min(FEED_MAX, pbp.length) + j, e }))
+          .reverse(),
+      );
+      const score: [number, number] = [lg.sim.T[0].score, lg.sim.T[1].score];
+      announced.current = score.join('-');
+      setTicker(createTicker(lg.sim.clock, score));
+      setStatus('live');
+    },
+    [resetOverCourt],
+  );
 
   /** What became of the game this screen is coaching: null while it's still the screen's to finish. */
   const fate = useCallback((lg: LiveGame) => playedElsewhere(lg, useStore.getState().league!), []);
@@ -611,21 +586,6 @@ export function useLiveGame() {
       nextPossession();
     }
   }, [paused, status, nextPossession]);
-  // a graphic stays up a few seconds of play (it waits out a break)
-  const graphicId = graphic?.id;
-  useEffect(() => {
-    if (!graphicId || atBreak) return;
-    const t = setTimeout(() => setGraphic(null), GRAPHIC_MS);
-    return () => clearTimeout(t);
-  }, [graphicId, atBreak]);
-  // one banner at a time, for a few seconds of play (it waits out a pause)
-  const banner = banners[0];
-  useEffect(() => {
-    if (!banner || paused) return;
-    const t = setTimeout(() => setBanners((b) => b.slice(1)), banner.kicker === 'Staff' ? WORD_MS : EVENT_MS);
-    return () => clearTimeout(t);
-  }, [banner, paused]);
-
   const skip = (to: SkipTo) => {
     const lg = liveRef.current;
     if (!lg || status !== 'live') return;
@@ -643,8 +603,7 @@ export function useLiveGame() {
     flushFeed();
     // what happened along the way waits in the alerts: no string of banners
     takeView(lg, false);
-    bannered.current.seed = true;
-    setBanners([]);
+    oc.afterSkip();
     setToPending(false);
     ticker.set(s.clock, [s.T[0].score, s.T[1].score], true);
     if (lg.over) return finish();
@@ -721,20 +680,10 @@ export function useLiveGame() {
     return input ? liveAlerts(input).filter((s) => !dismissed.includes(s.id)) : [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, tick, dismissed, over, alertInput]);
-  // the assistant's word goes up over the court once; what was up when the game was picked up (or skipped through) is taken as said
+  // the assistant's word goes up over the court once (see sayStaff)
   useEffect(() => {
-    if (over) return;
-    const b = bannered.current;
-    if (b.seed) {
-      b.seed = false;
-      for (const a of alerts) b.said.add(bannerKey(a.id));
-      return;
-    }
-    queueBanner(alerts.map((a) => ({ id: a.id, tone: a.tone, kicker: 'Staff', title: a.title, line: a.text || undefined })));
-    // the staff's word on something that's over (he's been subbed out, the run has ended) comes down
-    const up = new Set(alerts.map((a) => bannerKey(a.id)));
-    setBanners((q) => (q.some((x) => x.kicker === 'Staff' && !up.has(bannerKey(x.id))) ? q.filter((x) => x.kicker !== 'Staff' || up.has(bannerKey(x.id))) : q));
-  }, [alerts, over, queueBanner]);
+    if (!over) sayStaff(alerts);
+  }, [alerts, over, sayStaff]);
 
   return {
     league,
@@ -766,10 +715,9 @@ export function useLiveGame() {
     paused,
     atBreak,
     feed,
-    graphic,
-    banner,
-    /** Take down the banner up now. */
-    dropBanner: () => setBanners((b) => b.slice(1)),
+    graphic: oc.graphic,
+    banner: oc.banner,
+    dropBanner: oc.dropBanner,
     lastDone,
     courtDone,
     replay,
