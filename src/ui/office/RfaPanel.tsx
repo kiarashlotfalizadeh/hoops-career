@@ -7,7 +7,7 @@ import { FileSignature, PenLine, ShieldCheck } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { OFFSEASON_ROSTER_MAX, contractSeason, playerName } from '../../core/league/helpers';
+import { OFFSEASON_ROSTER_MAX, contractSeason, playerName, shortName } from '../../core/league/helpers';
 import { askingContract, makeContract, summerRoster, wantsOut } from '../../core/league/contracts';
 import {
   MATCH_DAYS,
@@ -105,7 +105,7 @@ export function SheetDecision({ league, p }: { league: League; p: Player }) {
     <Callout tone="warn" icon={<FileSignature size={18} className="warn" />}>
       <div>
         <b>
-          {t.abbrev} signed {p.lastName} to an offer sheet:
+          {t.abbrev} signed {shortName(league, p)} to an offer sheet:
         </b>{' '}
         {sheetTerms(league, p)}.
       </div>
@@ -143,7 +143,7 @@ export function LetGoSheet({ league, p, open, onClose }: { league: League; p: Pl
   const s = p.rfa?.sheet;
   const t = s ? league.teams[s.tid] : undefined;
   return (
-    <Sheet open={open && !!t} onClose={onClose} title={`Let ${p.lastName} go?`}>
+    <Sheet open={open && !!t} onClose={onClose} title={`Let ${shortName(league, p)} go?`}>
       {t && (
         <div className="col fo-sheet">
           <p className="fo-lede">
@@ -234,7 +234,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
           );
         })}
       </div>
-      <Sheet open={!!withdraw} onClose={() => setWithdraw(null)} title={withdraw ? `Withdraw ${withdraw.lastName}'s qualifying offer?` : undefined}>
+      <Sheet open={!!withdraw} onClose={() => setWithdraw(null)} title={withdraw ? `Withdraw ${shortName(league, withdraw)}'s qualifying offer?` : undefined}>
         {withdraw && (
           <div className="col fo-sheet">
             <p className="fo-lede">

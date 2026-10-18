@@ -2,7 +2,7 @@
 import type { Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
-import { TWO_WAY_MAX, twoWayRoster } from '../../core/league/helpers';
+import { TWO_WAY_MAX, shortName, twoWayRoster } from '../../core/league/helpers';
 import { claimBlockedReason, twoWaySalary, twoWayYears, userClaim, waiverOrder, wantsTwoWay } from '../../core/league/contracts';
 import { signingClosedReason, userTwoWayOffer } from '../../core/league/freeAgency';
 import { useLeague } from '../../state/store';
@@ -20,7 +20,11 @@ export function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
   const blocked = !p
     ? null
     : (signingClosedReason(league) ??
-      (used >= TWO_WAY_MAX ? `All ${TWO_WAY_MAX} two-way slots are taken.` : !wantsTwoWay(league, p, league.userTid) ? `${p.lastName} wants a standard contract.` : null));
+      (used >= TWO_WAY_MAX
+        ? `All ${TWO_WAY_MAX} two-way slots are taken.`
+        : !wantsTwoWay(league, p, league.userTid)
+          ? `${shortName(league, p)} wants a standard contract.`
+          : null));
   const busy = useBusy();
   const offer = () => {
     if (p && settle('The two-way deal', (l) => userTwoWayOffer(l, p.pid))?.ok) onClose();
