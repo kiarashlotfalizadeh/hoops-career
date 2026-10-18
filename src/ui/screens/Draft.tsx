@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, FastForward, Play, Scale, SkipForward, Ticket } from 'lucide-react';
+import { ArrowDown, ArrowLeftRight, ArrowUp, Bot, ChevronRight, FastForward, Play, Scale, SkipForward, Ticket } from 'lucide-react';
 import type { CombineResults, DraftPick, League, Player } from '../../core/types';
-import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
 import { pickLabel, pickTermsNote, tradingClosedReason } from '../../core/league/trades';
@@ -673,8 +672,9 @@ function MyPicks({ league }: { league: League }) {
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
   // this season's picks in draft order: by their slot once it is set, by the projection until then
   const slot = (d: DraftPick) => (d.pick ? overallPick(league, d.round, d.pick) : (proj(d) ?? 99));
-  const owned = league.draftPicks.filter((d) => d.tid === user).sort((a, b) => a.season - b.season || a.round - b.round || slot(a) - slot(b));
-  const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user).sort((a, b) => a.season - b.season || a.round - b.round);
+  // this draft's picks: the later ones live with the moves log (Office → Picks & moves)
+  const owned = league.draftPicks.filter((d) => d.tid === user && d.season === league.season).sort((a, b) => a.round - b.round || slot(a) - slot(b));
+  const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user && d.season === league.season).sort((a, b) => a.round - b.round);
   const drafted = draftedThisYear(league).filter((p) => p.draft.tid === user);
   return (
     <>
@@ -687,9 +687,16 @@ function MyPicks({ league }: { league: League }) {
           </div>
         </Section>
       )}
-      <Section title={`Picks you own · ${owned.length}`}>
+      <Section
+        title={`Your ${league.season} picks · ${owned.length}`}
+        right={
+          <Link to="/office/assets" className="card-link">
+            Future picks <ChevronRight size={14} />
+          </Link>
+        }
+      >
         {owned.length === 0 ? (
-          <Empty>You don't own any draft picks.</Empty>
+          <Empty>No picks left in this draft.</Empty>
         ) : (
           <div className="card flush list">
             {owned.map((d) => (
@@ -698,7 +705,7 @@ function MyPicks({ league }: { league: League }) {
                 <div className="grow fo-min0">
                   <div className="fo-name">{pickLabel(league, d)}</div>
                   <div className="fo-meta fo-wrap">
-                    {d.originalTid === user ? 'Own pick' : `From the ${teamName(league.teams[d.originalTid])}`} · drafted after {seasonLabel(d.season)}
+                    {d.originalTid === user ? 'Own pick' : `From the ${teamName(league.teams[d.originalTid])}`}
                     {/* its protection and any swap on it, in words */}
                     {pickTermsNote(league, d) ? `. ${pickTermsNote(league, d)}` : ''}
                   </div>
@@ -718,7 +725,7 @@ function MyPicks({ league }: { league: League }) {
         {owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>}
       </Section>
       {owed.length > 0 && (
-        <Section title={`Owed to other teams · ${owed.length}`}>
+        <Section title={`Yours, owed to others · ${owed.length}`}>
           <div className="card flush list">
             {owed.map((d) => (
               <div key={d.dpid} className="listrow">

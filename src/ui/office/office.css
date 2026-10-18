@@ -40,26 +40,12 @@
   line-height: 1.4;
   color: var(--text-2);
 }
-.fo-eyebrow {
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent-text);
-}
+
 /* the Front Office's own page tabs sit a little tighter, so Trade's and Finances' fit a phone's row */
 .fo-page > .seg.tabs button {
   padding: 0 10px;
 }
-.fo-mid {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 22px;
-  line-height: 1.05;
-  font-variant-numeric: tabular-nums;
-}
+
 /* a pulsing dot before an overline: something is happening now (the draft clock) */
 .fo-live {
   display: inline-flex;
@@ -111,23 +97,6 @@
   margin: -4px 0 0;
   font-size: 13.5px;
   color: var(--text-2);
-}
-/* rows run edge to edge inside the card */
-.fo-now-list {
-  margin: 0 -14px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.fo-mini-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 50px;
-  padding: 6px 14px;
-  min-width: 0;
-}
-.fo-mini-row:active {
-  background: var(--surface);
 }
 
 /* ------------------------------------------------------------ the cap sheet */
@@ -209,12 +178,7 @@
 .fo-cap-mark.tax span {
   color: color-mix(in srgb, var(--bad) 80%, white);
 }
-.fo-cap-ends {
-  margin-top: -6px;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--text-dim);
-}
+
 .fo-legend {
   display: flex;
   flex-wrap: wrap;
@@ -332,22 +296,6 @@
   opacity: 0.6;
 }
 
-/* ------------------------------------------------------------ owner */
-.fo-owner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 10px 12px 12px;
-}
-.fo-owner:active {
-  background: var(--surface);
-}
-.fo-owner-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
 .fo-owner-row {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr) 30px;
@@ -395,55 +343,6 @@
   border-radius: 3px;
 }
 
-/* ------------------------------------------------------------ contracts table */
-table.stats.fo-contracts td,
-table.stats.fo-contracts th {
-  padding: 8px 6px;
-}
-table.stats.fo-contracts td.sticky,
-table.stats.fo-contracts th.sticky {
-  padding-left: 12px;
-}
-/* the name cell's contents: a narrow column on a phone, the name ellipsized before its flags
-   (a table cell itself ignores max-width) */
-.fo-ct-name {
-  max-width: 118px;
-}
-.fo-ct-top {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.fo-ct-top .fo-name {
-  font-size: 13.5px;
-  text-align: left;
-  min-width: 0;
-}
-.fo-ct-meta {
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-.fo-ct-cap {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-table.stats.fo-contracts tr.dead td {
-  color: var(--text-dim);
-  font-style: italic;
-}
-table.stats.fo-contracts tr.total td {
-  font-weight: 750;
-  background: var(--bg-2);
-  border-top: 1px solid var(--line-2);
-}
-table.stats.fo-contracts tr.clickable td {
-  cursor: pointer;
-}
-table.stats.fo-contracts tr.clickable:active td {
-  background: var(--surface);
-}
 /* a tiny flag after a name: rookie scale, two-way, 10-day, injured */
 .fo-flag {
   flex: none;
@@ -472,39 +371,12 @@ table.stats.fo-contracts tr.clickable:active td {
   background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: color-mix(in srgb, var(--bad) 80%, white);
 }
-.fo-opt {
-  display: inline-block;
-  margin-left: 3px;
-  padding: 0 3px;
-  border-radius: 4px;
-  font-size: 9.5px;
-  font-weight: 800;
-  font-stretch: 100%;
-  letter-spacing: 0.04em;
-  vertical-align: 1px;
-  font-style: normal;
-  background: color-mix(in srgb, var(--info) 20%, transparent);
-  color: var(--info);
-}
-.fo-opt.team {
-  background: color-mix(in srgb, var(--warn) 20%, transparent);
-  color: var(--warn);
-}
-/* the seasons of a signed extension */
-.fo-opt.ext {
-  background: color-mix(in srgb, var(--good) 20%, transparent);
-  color: var(--good);
-}
 
 /* ------------------------------------------------------------ sheets */
 .fo-sheet {
   gap: 12px;
 }
-.fo-sheet-h {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+
 .fo-phead {
   display: flex;
   align-items: center;
@@ -831,11 +703,6 @@ table.stats.fo-contracts tr.clickable:active td {
   font-weight: 650;
   color: var(--text-2);
 }
-.fo-partner-s {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-2);
-}
 
 /* ------------------------------------------------------------ trade: the deal */
 .fo-deal {
@@ -1140,17 +1007,7 @@ table.stats.fo-contracts tr.clickable:active td {
   background: var(--react, var(--accent));
   transition: width 0.3s ease;
 }
-.fo-meter-ticks {
-  display: flex;
-  justify-content: space-between;
-  margin-top: -4px;
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
+
 .fo-dock-more {
   display: flex;
   flex-direction: column;
@@ -1198,8 +1055,7 @@ table.stats.fo-contracts tr.clickable:active td {
    opened (their reaction, the meter, their reasons, a broken rule and the buttons stay): all of it covered
    half the asset list and took its taps. The meter's ticks fold too: its percentage is over it */
 @media (max-width: 759px) {
-  .fo-dock:not(.open) .fo-dock-more,
-  .fo-dock:not(.open) .fo-meter-ticks {
+  .fo-dock:not(.open) .fo-dock-more {
     display: none;
   }
 }
@@ -1252,19 +1108,16 @@ body:has(.simbar) .fo-dock {
   gap: 10px;
   padding: 12px 14px;
 }
-.fo-pkg-h,
-.fo-offer-h {
+.fo-pkg-h {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
-.fo-pkg-h .grow,
-.fo-offer-h .grow {
+.fo-pkg-h .grow {
   min-width: 0;
 }
-.fo-pkg-h .right .tag,
-.fo-offer-h .right .tag {
+.fo-pkg-h .right .tag {
   margin-bottom: 2px;
 }
 .fo-pkg-items {
@@ -1289,21 +1142,7 @@ body:has(.simbar) .fo-dock {
   flex-direction: column;
   gap: 10px;
 }
-.fo-offer-until {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-.fo-offer-note {
-  margin: 0;
-  font-size: 13.5px;
-  font-style: italic;
-  color: var(--text-2);
-  padding-left: 10px;
-  box-shadow: inset 2px 0 0 var(--line-3);
-}
+
 .fo-offer-sides {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -2032,15 +1871,7 @@ button.listrow {
   flex-direction: column;
   gap: 12px;
 }
-.fo-att-hype {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 8px;
-}
-.fo-att-hype .num {
-  text-align: right;
-}
+
 /* the season's costs as one stacked bar, a swatch for each line under it */
 .fo-stack {
   display: flex;
@@ -2113,22 +1944,7 @@ button.listrow {
 .fo-ticket .statline .v {
   font-size: 22px;
 }
-/* the owner: his gauge, his standing, its parts */
-.fo-ownerhero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 16px 14px 14px;
-}
-.fo-ownerhero-v {
-  margin-top: -6px;
-  font-family: var(--display);
-  font-stretch: 70%;
-  font-weight: 800;
-  font-size: 48px;
-  line-height: 1;
-}
+
 .fo-owner-parts {
   align-self: stretch;
   display: flex;
@@ -2156,15 +1972,7 @@ button.listrow {
   font-weight: 800;
   font-size: 20px;
 }
-.fo-tenure {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.fo-tenure > .small {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
+
 /* profit by season: a bar up for a profit, a muted one for the season still running */
 .fo-minichart {
   display: flex;
@@ -2227,20 +2035,8 @@ button.listrow {
   font-weight: 650;
   color: var(--text-dim);
 }
-.fo-teamgrid {
-  display: grid;
-  /* equal columns however long a name: it ellipsizes instead of widening the sheet */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-@media (min-width: 560px) {
-  .fo-teamgrid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
 
 /* ------------------------------------------------------------ offer and package headers: the verdict over its line */
-.fo-offer-h .right,
 .fo-pkg-h .right {
   flex: none;
   display: flex;

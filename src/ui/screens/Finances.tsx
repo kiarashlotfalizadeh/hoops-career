@@ -285,7 +285,7 @@ function BudgetTab({ team }: { team: Team }) {
         </Callout>
       )}
       <Section title="Staff & facilities" right={<span className="fo-faday num">{fmtM(totalBudget)}/season</span>}>
-        <p className="tiny dim">Out of profit, charged per game{profitGoal ? `: profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review` : ''}.</p>
+        <div className="tiny dim">Out of profit, charged per game{profitGoal ? `: profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review` : ''}.</div>
         <div className="card flush list">
           {items.map((it) => {
             const lvl = team.budget[it.k];
@@ -321,8 +321,6 @@ function BudgetTab({ team }: { team: Team }) {
                   max={100}
                   onChange={(x) => set((t) => (t.budget[it.k] = x))}
                   format={(x) => `${fmtM(cost(x))}/season`}
-                  left="Bare bones"
-                  right="Best in league"
                   disabled={fired}
                 />
                 <div className={`small ${lvl > 50 ? 'good' : lvl < 50 ? 'warn' : 'dim2'}`}>{it.effect(lvl)}</div>
