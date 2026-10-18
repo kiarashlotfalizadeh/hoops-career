@@ -12,7 +12,8 @@ const out = process.argv[3] ?? 'tour';
 const stages = (process.argv[4] ?? 'pre,mid,post,draft,resign,fa').split(',');
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+// (reduced motion: a figure that counts up on opening is shot at its value, not half-way there)
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
 // one page for both sizes: a second window on the same league would be a stale copy the moment
 // either one saves (opening a screen can tick off a step of the first-week guide)
 const phone = await ctx.newPage();
