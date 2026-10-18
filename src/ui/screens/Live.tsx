@@ -232,6 +232,7 @@ export default function Live() {
           setPersist={setKeep}
           plan={plan?.items ?? []}
           pills={pills}
+          planned={game.planned}
           offPlan={offPlan(tactics, game.planned)}
           reset={() => applyTactics((x) => resetToPlan(x, game.planned))}
           oppOn={sim.T[1 - userSide].on.map((p) => p.pid)}

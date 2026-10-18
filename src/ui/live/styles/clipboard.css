@@ -459,6 +459,10 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+.tp-changed {
+  flex-basis: 100%;
+  line-height: 1.4;
+}
 .tp-plan,
 .tp-quick,
 .tp-field {
