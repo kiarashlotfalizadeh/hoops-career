@@ -10,6 +10,7 @@ import { LOW_SAMPLE_POSS, lineupUnits, netSE, onOffSplits, unitToClosers, unitTo
 import { sortByPosition } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import type { Player } from '../../core/types';
+import { plural } from '../../core/format';
 import { Avatar, Chips, Empty, Help, More, Ovr, Section, Segmented, Sheet, Statline, Tag, activateOnKey } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { f1, rosterNames, signed, startingFive } from '../stats';
@@ -348,7 +349,7 @@ function UnitSheet({
                 <div className="lr-name ellipsis">{name(pid)}</div>
                 <div className="lr-meta">{p.pos}</div>
               </div>
-              {!onTeam.has(pid) ? <Tag>Gone</Tag> : p.injury ? <Tag tone="bad">Out</Tag> : null}
+              {!onTeam.has(pid) ? <Tag>Gone</Tag> : p.injury ? <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag> : null}
               <Ovr v={p.ovr} size="sm" />
             </div>
           );
@@ -356,9 +357,9 @@ function UnitSheet({
       </div>
       <Statline
         items={[
-          { k: 'Net', v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-          { k: 'ORtg', v: f1(u.ortg) },
-          { k: 'DRtg', v: f1(u.drtg) },
+          { k: <span className="as-is">Net</span>, v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+          { k: <span className="as-is">ORtg</span>, v: f1(u.ortg) },
+          { k: <span className="as-is">DRtg</span>, v: f1(u.drtg) },
           { k: 'Minutes', v: Math.round(u.min), s: `${u.poss} poss` },
         ]}
       />

@@ -67,7 +67,7 @@ export function DayScoreboard({ league }: { league: League }) {
           <ChevronLeft size={20} />
         </button>
         <div className="mid">
-          <div className="lg-day-d">{fmtDate(league.season, day, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+          <div className="lg-day-d">{fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
           <div className="lg-day-s">
             {isToday ? 'Today · ' : ''}
             {games.length} game{games.length === 1 ? '' : 's'}

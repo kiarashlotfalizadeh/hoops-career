@@ -13,20 +13,19 @@ import { RetiredBanners } from './RetiredBanners';
 import { winPctLabel } from './Coaches';
 import { OutcomeTag, careerTotals, ordinal, seasonOutcome } from './shared';
 
-/** The franchise's all-time figures: seasons (and its best), record, playoff runs, titles. */
+/** The franchise's all-time figures in this league: seasons, record, playoff runs, titles. */
 export function FranchiseFigures({ league, tid }: { league: League; tid: number }) {
   const seasons = league.teams[tid].seasons;
   const finished = seasons.filter((s) => s.season < league.season || !['preseason', 'regular'].includes(league.phase));
   const w = seasons.reduce((a, s) => a + s.won, 0);
   const l = seasons.reduce((a, s) => a + s.lost, 0);
   const titles = seasons.filter((s) => s.playoffRound === 5).length;
-  // a 3-0 start isn't a best season: only seasons of 20+ games count
-  const best = [...seasons].filter((s) => s.won + s.lost >= 20).sort((a, b) => b.won / (b.won + b.lost) - a.won / (a.won + a.lost))[0];
   return (
     <div className="lg-frfig">
       <Statline
         items={[
-          { k: 'Seasons', v: seasons.length, s: best ? `Best ${best.won}-${best.lost}` : undefined },
+          // (what they count: this league's seasons; the leaders below count real ones before it too)
+          { k: 'Seasons', v: seasons.length, s: 'in this save' },
           { k: 'Record', v: `${w}-${l}`, s: w + l ? winPctLabel(w, l) : undefined },
           { k: 'Playoffs', v: finished.filter((s) => s.playoffRound >= 1).length },
           { k: 'Titles', v: titles, color: titles ? 'var(--tier-elite)' : undefined },
@@ -91,6 +90,8 @@ function FranchiseLeaders({ league, tid }: { league: League; tid: number }) {
     return rows;
   }, [league, tid]);
   const top = [...leaders].sort((a, b) => b[cat] - a[cat]).slice(0, 8);
+  // imported seasons count with this franchise too: the figures above are this league's alone
+  const real = top.some((r) => r.p.stats.some((s) => s.real && s.tid === tid && !s.playoffs));
   // teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on the roster
   const name = rosterNames(
     top.map((r) => r.p),
@@ -119,7 +120,7 @@ function FranchiseLeaders({ league, tid }: { league: League; tid: number }) {
               <span className="who">
                 <span className="nm">{name(r.p.pid)}</span>
                 <span className="sub">
-                  {r.seasons} season{r.seasons === 1 ? '' : 's'}
+                  {r.seasons} season{r.seasons === 1 ? '' : 's'} here
                   {r.p.tid === tid ? ' · active' : r.p.tid === RETIRED ? ' · retired' : ''}
                 </span>
               </span>
@@ -127,6 +128,9 @@ function FranchiseLeaders({ league, tid }: { league: League; tid: number }) {
             </Link>
           ))}
         </div>
+      )}
+      {real && top.length > 0 && (
+        <div className="lg-note">Leaders count the real seasons before {seasonLabel(league.startSeason)} too; the figures above, this league&apos;s seasons only.</div>
       )}
     </Section>
   );

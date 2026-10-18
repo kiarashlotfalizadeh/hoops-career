@@ -234,11 +234,11 @@
 .tm-rt-row[aria-expanded='true'] {
   background: var(--surface);
 }
+/* a long name (Offensive rebounding) wraps rather than lose its end on a phone */
 .tm-rt-l {
   color: var(--text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  min-width: 0;
 }
 .tm-rt-v {
   text-align: right;

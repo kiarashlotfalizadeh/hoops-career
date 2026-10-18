@@ -212,7 +212,7 @@ describe('saves and honours', () => {
     expect(hallOfFameScore(after, p)).toBe(base.hof);
     expect(accoladeScore(p)).toBeCloseTo(base.acc + 1.5);
     const chips = accolades({ ...p, awards: [...p.awards, { season: 1, type: 'All-Star MVP' }] }).map((a) => a.label);
-    expect(chips.indexOf('3-Point Contest')).toBe(chips.indexOf('All-Star MVP') + 1);
+    expect(chips.indexOf('Three-Point Contest')).toBe(chips.indexOf('All-Star MVP') + 1);
     expect(chips).toContain('Dunk Contest');
   });
 });

@@ -9,10 +9,10 @@ import { leagueForecast, pct } from '../../../core/analysis/odds';
 import { DEF_PRESETS, OFF_PRESETS } from '../../../core/sim/tactics';
 import { activeCoach, coachCareer, coyWinners } from '../../../core/league/coaches';
 import { seasonLabel } from '../../../core/constants';
-import { money } from '../../../core/format';
+import { money, rankOf } from '../../../core/format';
 import { Statline } from '../../components/ui';
 import { Term } from '../../components/Glossary';
-import { f1, ordinal, signed, teamRatings } from '../../stats';
+import { f1, signed, teamRatings } from '../../stats';
 import { STRATEGY_META, StrategyTag } from '../shared';
 import { RosterRows } from '../../team/RosterList';
 
@@ -78,9 +78,22 @@ export function TeamOverview({ league, tid, onContracts }: { league: League; tid
         <div className="card lg-strip">
           <Statline
             items={[
-              { k: <Term id="ortg">ORtg</Term>, v: f1(tr.ortg), s: `${ordinal(ranks.ortg)} of ${ranks.of}` },
-              { k: 'DRtg', v: f1(tr.drtg), s: `${ordinal(ranks.drtg)} of ${ranks.of}` },
-              { k: 'Net', v: signed(tr.net), s: `${ordinal(ranks.net)} of ${ranks.of}`, color: tr.net > 0 ? 'var(--good)' : tr.net < 0 ? 'var(--bad)' : undefined },
+              {
+                k: (
+                  <span className="as-is">
+                    <Term id="ortg">ORtg</Term>
+                  </span>
+                ),
+                v: f1(tr.ortg),
+                s: rankOf(ranks.ortg, ranks.of),
+              },
+              { k: <span className="as-is">DRtg</span>, v: f1(tr.drtg), s: rankOf(ranks.drtg, ranks.of) },
+              {
+                k: <span className="as-is">Net</span>,
+                v: signed(tr.net),
+                s: rankOf(ranks.net, ranks.of),
+                color: tr.net > 0 ? 'var(--good)' : tr.net < 0 ? 'var(--bad)' : undefined,
+              },
             ]}
           />
         </div>
@@ -102,12 +115,12 @@ export function TeamOverview({ league, tid, onContracts }: { league: League; tid
                   <i key={i} className={x ? 'w' : 'l'} />
                 ))}
               </span>
-              <span>
-                {won}-{ts.lastTen.length - won}
+              <span aria-hidden="true">
+                {won}-{ts.lastTen.length - won} in last {ts.lastTen.length}
                 {ts.streak ? ` · ${ts.streak > 0 ? 'W' : 'L'}${Math.abs(ts.streak)}` : ''}
               </span>
               <span className="sr-only">
-                in the last {ts.lastTen.length} games{ts.streak ? `, ${ts.streak > 0 ? 'won' : 'lost'} ${Math.abs(ts.streak)} in a row` : ''}
+                {won}-{ts.lastTen.length - won} in the last {ts.lastTen.length} games{ts.streak ? `, ${ts.streak > 0 ? 'won' : 'lost'} ${Math.abs(ts.streak)} in a row` : ''}
               </span>
             </span>
             <span />

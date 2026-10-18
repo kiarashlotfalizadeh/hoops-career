@@ -3,7 +3,9 @@ import { clamp } from './random';
 
 export interface RatingMeta {
   key: RatingKey;
+  /** The rating's one name, sentence case and full words, on every screen (prose uses it lower-case). */
   label: string;
+  /** Its column header in a ratings table. */
   short: string;
   group: 'Physical' | 'Scoring' | 'Playmaking' | 'Defense' | 'Rebounding';
   help: string;
@@ -22,21 +24,21 @@ export const RATING_META: RatingMeta[] = [
   { key: 'str', label: 'Strength', short: 'STR', group: 'Physical', help: 'Holding position in the post, finishing through contact, screening.' },
   { key: 'end', label: 'Stamina', short: 'STA', group: 'Physical', help: 'How long he can play before fatigue erodes his performance. Fatigue also raises injury risk.' },
   { key: 'ins', label: 'Finishing', short: 'FIN', group: 'Scoring', help: 'Converting at the rim: layups, dunks, finishing through contests.' },
-  { key: 'mid', label: 'Mid-Range', short: 'MID', group: 'Scoring', help: 'Pull-ups, floaters and mid-range jumpers. Key against drop coverage.' },
-  { key: 'tp', label: 'Three Point', short: '3PT', group: 'Scoring', help: 'Three-point accuracy. Shooters also create spacing that opens driving lanes for teammates.' },
-  { key: 'ft', label: 'Free Throw', short: 'FT', group: 'Scoring', help: 'Free throw accuracy. Low values invite intentional fouls late in games.' },
-  { key: 'drw', label: 'Draw Foul', short: 'DRW', group: 'Scoring', help: 'Getting to the line on drives and post-ups.' },
-  { key: 'post', label: 'Post Play', short: 'PST', group: 'Scoring', help: 'Back-to-basket scoring and footwork. Feasts on smaller switched defenders.' },
-  { key: 'hnd', label: 'Ball Handling', short: 'HND', group: 'Playmaking', help: 'Creating off the dribble and protecting the ball against pressure, traps and presses.' },
+  { key: 'mid', label: 'Mid-range', short: 'MID', group: 'Scoring', help: 'Pull-ups, floaters and mid-range jumpers. Key against drop coverage.' },
+  { key: 'tp', label: 'Three-point', short: '3P', group: 'Scoring', help: 'Three-point accuracy. Shooters also create spacing that opens driving lanes for teammates.' },
+  { key: 'ft', label: 'Free throws', short: 'FT', group: 'Scoring', help: 'Free throw accuracy. Low values invite intentional fouls late in games.' },
+  { key: 'drw', label: 'Drawing fouls', short: 'DRW', group: 'Scoring', help: 'Getting to the line on drives and post-ups.' },
+  { key: 'post', label: 'Post play', short: 'PST', group: 'Scoring', help: 'Back-to-basket scoring and footwork. Feasts on smaller switched defenders.' },
+  { key: 'hnd', label: 'Ball handling', short: 'HND', group: 'Playmaking', help: 'Creating off the dribble and protecting the ball against pressure, traps and presses.' },
   { key: 'pas', label: 'Passing', short: 'PAS', group: 'Playmaking', help: 'Vision and accuracy. Punishes blitzes, double teams and over-help with open looks for teammates.' },
   { key: 'oiq', label: 'Offensive IQ', short: 'OIQ', group: 'Playmaking', help: 'Shot selection, reads and feel. Improves every offensive action slightly and reduces turnovers.' },
-  { key: 'perD', label: 'Perimeter D', short: 'PER', group: 'Defense', help: 'On-ball defense against guards and wings. Key in switching schemes and against isolations.' },
-  { key: 'intD', label: 'Interior D', short: 'INT', group: 'Defense', help: 'Post defense and walling off drives in the paint.' },
-  { key: 'blk', label: 'Shot Blocking', short: 'BLK', group: 'Defense', help: 'Altering and blocking shots at the rim. The anchor of drop coverage and zones.' },
+  { key: 'perD', label: 'Perimeter defense', short: 'PERD', group: 'Defense', help: 'On-ball defense against guards and wings. Key in switching schemes and against isolations.' },
+  { key: 'intD', label: 'Interior defense', short: 'INTD', group: 'Defense', help: 'Post defense and walling off drives in the paint.' },
+  { key: 'blk', label: 'Shot blocking', short: 'BLK', group: 'Defense', help: 'Altering and blocking shots at the rim. The anchor of drop coverage and zones.' },
   { key: 'stl', label: 'Steals', short: 'STL', group: 'Defense', help: 'Active hands and passing-lane reads. Pairs with pressure and blitz schemes.' },
   { key: 'diq', label: 'Defensive IQ', short: 'DIQ', group: 'Defense', help: 'Rotations, help timing and positioning. Makes complex schemes (zones, blitzes) work.' },
-  { key: 'oreb', label: 'Off. Rebound', short: 'ORB', group: 'Rebounding', help: 'Crashing the offensive glass for second chances.' },
-  { key: 'dreb', label: 'Def. Rebound', short: 'DRB', group: 'Rebounding', help: 'Finishing defensive possessions by securing the board.' },
+  { key: 'oreb', label: 'Offensive rebounding', short: 'ORB', group: 'Rebounding', help: 'Crashing the offensive glass for second chances.' },
+  { key: 'dreb', label: 'Defensive rebounding', short: 'DRB', group: 'Rebounding', help: 'Finishing defensive possessions by securing the board.' },
 ];
 
 export const RATING_KEYS: RatingKey[] = RATING_META.map((m) => m.key);
@@ -279,14 +281,14 @@ export function potential(ovr: number, age: number, growth: number): number {
 /**
  * The OVR ladder, best first: each band's badge colour (the --tier-* tokens) and the tier names
  * inside it, so a badge's colour and a player's tier name always agree. Sized to the real league:
- * ~6 MVP candidates, ~18 All-NBA, ~30 All-Stars, ~2 quality starters a team.
+ * ~6 superstars (the MVP field), ~18 All-NBA, ~30 All-Stars, ~2 quality starters a team.
  */
 export const OVR_TIERS: readonly { min: number; tone: 'elite' | 'star' | 'good' | 'avg' | 'low' | 'bad'; names: readonly (readonly [number, string])[] }[] = [
   {
     min: 89,
     tone: 'elite',
     names: [
-      [93, 'MVP Candidate'],
+      [93, 'Superstar'],
       [89, 'All-NBA'],
     ],
   },

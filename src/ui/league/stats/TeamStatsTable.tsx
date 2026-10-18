@@ -43,11 +43,11 @@ export function TeamStatsTable({ league, season }: { league: League; season: num
       },
       { key: 'wl', label: 'W-L', get: (r) => r.ts.won / Math.max(1, r.ts.won + r.ts.lost), fmt: (_v, r) => `${r.ts.won}-${r.ts.lost}` },
       // the table opens sorted by Net, so it sits where a phone shows it
-      { key: 'net', label: 'Net', get: (r) => r.tr.net, fmt: (x) => <b className={(x as number) >= 0 ? 'good' : 'bad'}>{signed(x as number)}</b> },
-      { key: 'ortg', label: 'ORtg', get: (r) => r.tr.ortg, fmt: (x) => f1(x as number), help: 'Points scored per 100 possessions' },
-      { key: 'drtg', label: 'DRtg', get: (r) => -r.tr.drtg, fmt: (_x, r) => f1(r.tr.drtg), help: 'Points allowed per 100 possessions (lower is better)' },
-      { key: 'ppg', label: 'PPG', get: (r) => r.tr.ppg, fmt: (x) => f1(x as number) },
-      { key: 'opp', label: 'OPP', get: (r) => r.tr.oppg, fmt: (x) => f1(x as number) },
+      { key: 'net', label: 'Net', asIs: true, get: (r) => r.tr.net, fmt: (x) => <b className={(x as number) >= 0 ? 'good' : 'bad'}>{signed(x as number)}</b> },
+      { key: 'ortg', label: 'ORtg', asIs: true, get: (r) => r.tr.ortg, fmt: (x) => f1(x as number), help: 'Points scored per 100 possessions' },
+      { key: 'drtg', label: 'DRtg', asIs: true, get: (r) => -r.tr.drtg, fmt: (_x, r) => f1(r.tr.drtg), help: 'Points allowed per 100 possessions (lower is better)' },
+      { key: 'ppg', label: 'PTS', get: (r) => r.tr.ppg, fmt: (x) => f1(x as number), help: 'Points a game' },
+      { key: 'opp', label: 'OPP', get: (r) => r.tr.oppg, fmt: (x) => f1(x as number), help: 'Points allowed a game' },
       { key: 'pace', label: 'Pace', get: (r) => r.tr.pace, fmt: (x) => f1(x as number), help: 'Possessions per game' },
       { key: 'efg', label: 'eFG%', get: (r) => r.tr.efg, fmt: pctCell },
       { key: 'tov', label: 'TOV%', get: (r) => -r.tr.tov, fmt: (_x, r) => pctCell(r.tr.tov), help: 'Turnovers per possession (lower is better)' },
@@ -62,7 +62,7 @@ export function TeamStatsTable({ league, season }: { league: League; season: num
   return (
     <>
       <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(teamPath(r.tid))} highlight={(r) => r.tid === league.userTid} />
-      <div className="lg-note">Regular season · ratings per 100 possessions · DRtg, TOV% and Opp eFG% sort lowest (best) first.</div>
+      <div className="lg-note">Regular season · PTS and OPP per game, ratings per 100 possessions · DRtg, TOV% and Opp eFG% sort lowest (best) first.</div>
     </>
   );
 }

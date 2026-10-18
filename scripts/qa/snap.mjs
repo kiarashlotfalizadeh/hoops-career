@@ -19,7 +19,8 @@ if (!base || !out || !routes.length) {
 }
 mkdirSync(out, { recursive: true });
 const size = flag('--tablet') ? { width: 820, height: 1180 } : { width: 390, height: 844 };
-const ctx = await chromium.launchPersistentContext(profile, { viewport: size, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+// (reduced motion: a figure that counts up on opening is shot at its value, not half-way there)
+const ctx = await chromium.launchPersistentContext(profile, { viewport: size, deviceScaleFactor: 1, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
 const page = ctx.pages()[0] ?? (await ctx.newPage());
 const errors = [];
 page.on('pageerror', (e) => errors.push(`${e}`));

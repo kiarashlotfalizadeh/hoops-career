@@ -21,7 +21,7 @@ import { skillColor, useSkillPercentiles } from '../playerSkills';
 import { identityColor } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
-import { money, plural } from '../../core/format';
+import { injuryName, money, outFor } from '../../core/format';
 
 type View = 'profile' | 'ratings' | 'stats';
 /** The view each section is in: who they are first, then the ratings, then the numbers. */
@@ -112,7 +112,7 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
       </span>
       {p.injury && (
         <span className="tag bad cmp-tag">
-          {p.injury.type} · out {plural(p.injury.gamesRemaining, 'game')}
+          {injuryName(p.injury.type)} · {outFor(p.injury.gamesRemaining)}
         </span>
       )}
       <div className="cmp-deal">

@@ -95,8 +95,9 @@ export function TeamScheduleList({
   }, [league, tid, byGid]);
 
   const list = rows.filter((r) => keep(filter, r) && !(split && r.g.gid === skip));
-  // (the hub's list leaves out the running record: the top bar has it)
-  const rowProps = { league, tid, h2hTid, ranks, brief: split };
+  // (no list carries the team's running record: a row's line is about its game, its top scorer or
+  // the opponent's record, the same on every team's schedule; a month's record is in its divider)
+  const rowProps = { league, tid, h2hTid, ranks };
   if (!list.length)
     return (
       <div className="empty">
@@ -123,7 +124,6 @@ interface RowProps {
   tid: number;
   h2hTid?: number;
   ranks: Map<number, StandingRow>;
-  brief?: boolean;
 }
 
 /** A list under a section heading, grouped by month, its first `first` rows shown until expanded. */
@@ -199,7 +199,7 @@ function MonthRows({ rows, all, records = true, ...p }: RowProps & { rows: Row[]
   );
 }
 
-function GameRow({ r, league, tid, h2hTid, ranks, brief }: RowProps & { r: Row }) {
+function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
   const user = league.userTid;
   const mine = tid === user || r.opp === user;
   const live = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
@@ -214,15 +214,11 @@ function GameRow({ r, league, tid, h2hTid, ranks, brief }: RowProps & { r: Row }
   if (r.res) {
     const side = r.res.home.tid === tid ? r.res.home : r.res.away;
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
-    const rec = r.g.type === 'regular' && !brief ? `${r.rec} · ` : '';
     // the top scorer's points stay in view when a long name is cut short (the player's own last
     // name while he's in the league: a box-score name can end in "Jr.")
     sub = top ? (
       <>
-        <span className="gs-lead">
-          {rec}
-          {league.players[top.pid]?.lastName ?? top.name}
-        </span>
+        <span className="gs-lead">{league.players[top.pid]?.lastName ?? top.name}</span>
         <span className="num">{top.pts}</span>
       </>
     ) : (

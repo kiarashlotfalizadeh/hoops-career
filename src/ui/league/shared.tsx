@@ -153,7 +153,7 @@ export const roundName = (round: number, short = false) => (short ? ROUND_SHORT 
 export function seasonOutcome(league: League, tid: number, ts: TeamSeason): Outcome {
   const r = ts.playoffRound;
   if (ts.season === league.season) {
-    if (league.phase === 'preseason' || league.phase === 'regular') return { label: 'In progress', short: 'Ongoing' };
+    if (league.phase === 'preseason' || league.phase === 'regular') return { label: 'In progress', short: 'In progress' };
     if (r === 5) return { label: 'Champion', short: 'Champion', tone: 'good', gold: true };
     // still in it: in a series, or through to a round that isn't drawn until the other series end
     const out = league.playoffs.some((s) => s.winner !== undefined && s.winner !== tid && (s.high === tid || s.low === tid));
@@ -181,7 +181,7 @@ export function OutcomeTag({ o }: { o: Outcome }) {
 /** AI front-office strategies: one label and colour everywhere they appear (team pages, trades, settings). */
 export const STRATEGY_META: Record<Team['strategy'], { label: string; tone: 'good' | 'warn' | 'info'; help: string }> = {
   contend: { label: 'Contending', tone: 'good', help: 'Wants proven players who help now. Discounts draft picks.' },
-  retool: { label: 'Retooling', tone: 'warn', help: 'Balanced: values players and picks at face value.' },
+  retool: { label: 'Retooling', tone: 'warn', help: 'Values players and picks at face value.' },
   rebuild: { label: 'Rebuilding', tone: 'info', help: 'Pays extra for young players and draft picks, marks down veterans 29+.' },
 };
 
@@ -262,7 +262,7 @@ export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
     { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
-    { label: '3-Point Contest', n: count((t) => t === 'Three-Point Contest') },
+    { label: 'Three-Point Contest', n: count((t) => t === 'Three-Point Contest') },
     { label: 'Dunk Contest', n: count((t) => t === 'Slam Dunk Contest') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },

@@ -26,12 +26,12 @@ const ADV_CATS: Cat[] = [
 ];
 
 const CATS: Cat[] = [
-  { key: 'pts', label: 'Points', unit: 'PPG', get: (r) => r.pg.pts, fmt: f1 },
-  { key: 'reb', label: 'Rebounds', unit: 'RPG', get: (r) => r.pg.reb, fmt: f1 },
-  { key: 'ast', label: 'Assists', unit: 'APG', get: (r) => r.pg.ast, fmt: f1 },
-  { key: 'stl', label: 'Steals', unit: 'SPG', get: (r) => r.pg.stl, fmt: f1 },
-  { key: 'blk', label: 'Blocks', unit: 'BPG', get: (r) => r.pg.blk, fmt: f1 },
-  { key: 'tpm', label: '3-Pointers made', unit: '3PM', get: (r) => r.pg.tpm, fmt: f1 },
+  { key: 'pts', label: 'Points', unit: 'PTS', get: (r) => r.pg.pts, fmt: f1 },
+  { key: 'reb', label: 'Rebounds', unit: 'REB', get: (r) => r.pg.reb, fmt: f1 },
+  { key: 'ast', label: 'Assists', unit: 'AST', get: (r) => r.pg.ast, fmt: f1 },
+  { key: 'stl', label: 'Steals', unit: 'STL', get: (r) => r.pg.stl, fmt: f1 },
+  { key: 'blk', label: 'Blocks', unit: 'BLK', get: (r) => r.pg.blk, fmt: f1 },
+  { key: 'tpm', label: 'Threes made', unit: '3PM', get: (r) => r.pg.tpm, fmt: f1 },
   {
     key: 'ts',
     label: 'True shooting',
@@ -68,7 +68,7 @@ export function Leaders({ league, rows, season, playoffs }: { league: League; ro
         })}
       </div>
       <div className="lg-note">
-        Qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game.
+        Per game. Qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game.
       </div>
     </>
   );

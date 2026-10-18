@@ -41,15 +41,76 @@
   margin-block: calc(-1 * var(--row-py));
   margin-right: -6px;
 }
-/* the name and the line under it open his sheet; the arrow stays its own */
+/* the name and the line under it open his sheet; the arrow stays its own. The figures sit in
+   columns named once, in the group's divider (RotationHead): minutes a game and stamina under the
+   name, his target and OVR level with the row's middle */
+.tm-rrow-main,
+.tm-rhead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 26px 46px 30px;
+  column-gap: 6px;
+}
 .tm-rrow-main {
   flex: 1;
   min-width: 0;
-  display: flex;
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 10px;
+  row-gap: 1px;
   cursor: pointer;
   align-self: stretch;
+  align-content: center;
+}
+.tm-rhead > :not(:first-child) {
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.tm-rhead > :nth-child(4) {
+  text-align: center;
+}
+.tm-rhead > :last-child {
+  text-align: center;
+}
+.tm-rrow-main > .tm-rname {
+  grid-column: 1 / 4;
+  grid-row: 1;
+}
+.tm-rmeta {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+/* hurt: the injury takes the figures' room */
+.tm-rrow.out .tm-rmeta {
+  grid-column: 1 / 4;
+}
+.tm-rfig {
+  grid-row: 2;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.tm-rfig.m {
+  grid-column: 2;
+}
+.tm-rfig.s {
+  grid-column: 3;
+}
+.tm-rwarn {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  font-size: 12.5px;
+}
+.tm-rovr {
+  grid-column: 5;
+  grid-row: 1 / -1;
+  justify-self: center;
 }
 .tm-rname {
   display: flex;
@@ -71,30 +132,18 @@
 .tm-rrow.out .tm-rname > .ellipsis {
   color: var(--text-2);
 }
+/* his target: the row's big figure */
 .tm-rmin {
-  flex: none;
-  width: 30px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  grid-column: 4;
+  grid-row: 1 / -1;
+  text-align: center;
   line-height: 1;
-}
-.tm-rmin-v {
   font-family: var(--display);
   font-stretch: 72%;
   font-weight: 800;
   font-size: 24px;
 }
-.tm-rmin-k {
-  margin-top: 2px;
-  font-size: 9.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.tm-rrow.out .tm-rmin-v {
+.tm-rrow.out .tm-rmin {
   color: var(--text-dim);
 }
 
