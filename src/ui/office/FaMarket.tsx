@@ -1,21 +1,25 @@
-// Free agency's market, on the Free Agents screen while it runs: the day, your offer sheets and
+// Free agency's market, on the Free Agents screen while it runs: your offer sheets and
 // pending offers, the latest signings, and the dock that moves the market on a day or a week (and,
 // on its last day, starts the new season).
 import { FastForward, Gavel, Play, SkipForward } from 'lucide-react';
 import { seasonLabel } from '../../core/constants';
 import { freeAgents, playerName } from '../../core/league/helpers';
 import { withdrawBid } from '../../core/league/freeAgency';
-import { FA_DAYS, faDayNumber, faOver, newSeasonBlockedReason } from '../../core/league/season';
+import { faDayNumber, faOver, newSeasonBlockedReason } from '../../core/league/season';
 import { pendingSheets, restrictedFreeAgents } from '../../core/league/rfa';
 import { agendaBlocker } from '../../core/league/agenda';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { useFlowRunner } from '../useFlow';
-import { Bar, More, Section } from '../components/ui';
+import { More, Section } from '../components/ui';
 import { MySheets } from './RfaPanel';
 import { money } from '../../core/format';
 
-/** The market's day, your offer sheets and pending offers (each opens its sheet), and the latest signings. */
+/**
+ * What's moving on the market (the day is in the screen's header): an offer sheet waiting on your
+ * call, your offer sheets and pending offers (each opens its sheet), and the latest signings.
+ * Nothing when there's none of it.
+ */
 export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
   const league = useLeague();
   const bids = league.faBids ?? [];
@@ -27,20 +31,16 @@ export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
     .slice(-4)
     .reverse();
   const sheetWaiting = restrictedFreeAgents(league, league.userTid).some((p) => p.rfa!.sheet);
+  const sheets = pendingSheets(league, league.userTid).length;
+  if (!sheetWaiting && !sheets && !bids.length && !recent.length && !over) return null;
   return (
-    <Section
-      title="Free agency"
-      right={
-        <span className="fo-faday num">
-          Day {faDayNumber(league)}/{FA_DAYS}
-        </span>
-      }
-    >
+    <Section title="The market">
       <div className="card fo-market">
-        <Bar value={faDayNumber(league)} max={FA_DAYS} />
-        <div className="small dim2">
-          {over ? 'The market is winding down.' : sheetWaiting ? <span className="warn">An offer sheet waits for your call.</span> : 'Players who wait lower their price.'}
-        </div>
+        {(over || sheetWaiting) && (
+          <div className="small">
+            {sheetWaiting ? <span className="warn">An offer sheet waits for your call.</span> : <span className="dim2">The market is winding down.</span>}
+          </div>
+        )}
         <MySheets onOpen={onOpen} />
         {bids.length > 0 && (
           <div className="fo-pending">

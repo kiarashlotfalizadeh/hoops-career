@@ -219,8 +219,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px 10px 14px;
-  min-height: 62px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
   width: 100%;
   text-align: left;
 }

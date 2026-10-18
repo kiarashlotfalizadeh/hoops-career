@@ -44,7 +44,7 @@ import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capSeason } from './common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
@@ -119,6 +119,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const busy = useBusy();
 
   const askAt = bidding ? Math.min(maxAmt, Math.ceil((ask.amount * (1 + Math.abs(years - ask.years) * 0.03)) / STEP) * STEP) : askFor(league, p, kind, years, option);
+  // his ask on his own terms as it can be signed (in $50K steps): the figure up top and the "His ask" chip agree
+  const askOwn = bidding ? Math.min(maxAmt, Math.ceil(ask.amount / STEP) * STEP) : askFor(league, p, kind, ask.years);
   const talks = bidding ? null : talkState(league, p, kind);
   const appeal = teamAppeal(league, tid, p);
   const ai = appealInfo(appeal);
@@ -217,7 +219,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       <div className="fo-ask">
         <Statline
           items={[
-            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: money(ask.amount, 2), s: `${yrs(ask.years)} · market ${money(market, 1)}` },
+            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: money(askOwn, 2), s: `${forYears(ask.years)} · market ${money(market, 1)}` },
             mode === 'fa'
               ? {
                   k: 'Interest',
@@ -380,16 +382,16 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           )}
           <Statline
             items={[
-              { k: 'Space now', v: money(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)' },
+              { ...capRoomFig(space), k: space >= 0 ? 'Cap space now' : 'Over the cap now' },
               {
-                k: bidding ? 'If he signs' : 'After signing',
-                v: money(cap.salaryCap - after),
+                k: `${cap.salaryCap - after >= 0 ? 'Cap space' : 'Over the cap'} ${bidding ? 'if he signs' : 'after'}`,
+                v: money(Math.abs(cap.salaryCap - after)),
                 // over the cap is only a problem when no exception covers the signing
                 color: cap.salaryCap - after >= 0 ? 'var(--good)' : route === 'min' || isException(route) ? 'var(--warn)' : 'var(--bad)',
               },
             ]}
           />
-          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
+          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This offer" />
           <div className="tiny dim">
             {route === 'min' && after > cap.salaryCap
               ? `Minimum deals (up to ${money(minAmt, 2)} for him) sign over the cap.`
@@ -413,7 +415,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             <span className="over">{seasonLabel(season)} payroll</span>
             <span className="tag info">Bird rights</span>
           </div>
-          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
+          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This deal" />
           <div className="tiny dim">
             Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${money(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
             {taxBill > 0 ? (

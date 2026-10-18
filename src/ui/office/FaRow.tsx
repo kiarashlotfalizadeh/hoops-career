@@ -6,7 +6,7 @@ import { playerName } from '../../core/league/helpers';
 import { EXCEPTIONS, twoWaySalary, twoWayYears, waiverSalary, type Ask } from '../../core/league/contracts';
 import { tenDayPay, tenDayUntil } from '../../core/league/tenDay';
 import { contractExp } from '../../core/playerGen';
-import { OvrPot, appealInfo, playerMeta, shortSeason } from './common';
+import { OvrPot, appealInfo, forYears, playerMeta, shortSeason } from './common';
 import { rfaTag } from './RfaPanel';
 import { money } from '../../core/format';
 
@@ -115,9 +115,7 @@ export function FaRow({
       ) : (
         <div className="fo-money">
           <div className="a">{money(ask.amount)}</div>
-          <div className="b">
-            {ask.years} yr{ask.years > 1 ? 's' : ''}
-          </div>
+          <div className="b">{forYears(ask.years)}</div>
         </div>
       )}
     </button>

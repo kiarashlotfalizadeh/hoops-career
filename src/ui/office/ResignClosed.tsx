@@ -9,8 +9,8 @@ import { CAP_FOR, payroll, playerName, teamPlayers } from '../../core/league/hel
 import { askingContract } from '../../core/league/contracts';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
-import { Avatar, PageHeader, Section, Statline } from '../components/ui';
-import { Callout, MoodTag, OvrPot, capSeason, playerMeta, shortSeason } from './common';
+import { PageHeader, Section, Statline } from '../components/ui';
+import { Callout, MoodTag, OvrPot, capRoomText, capSeason, forYears, playerMeta, shortSeason } from './common';
 import { ContractSheet } from './ContractSheet';
 import { restrictedFreeAgents } from '../../core/league/rfa';
 import { money } from '../../core/format';
@@ -54,23 +54,21 @@ export function ResignClosed({ league }: { league: League }) {
   return (
     <main className="page fo-page">
       <PageHeader title="Re-sign" sub={`Contracts up after ${seasonLabel(s)}`} back />
-      <section className="card fo-now" aria-label="Re-sign period">
-        <div className="fo-now-over">Re-sign period</div>
-        <h2 className="fo-now-t">{title}</h2>
-        <p className="fo-now-s">{when}</p>
-        <div className="fo-figs">
-          <Statline
-            items={[
-              { k: `Expiring ${shortSeason(s)}`, v: String(list.length), s: `${money(freed)} off the books` },
-              {
-                k: `${shortSeason(s + 1)} committed`,
-                v: money(after),
-                s: after <= cap.salaryCap ? `${money(cap.salaryCap - after)} under projected cap` : `${money(after - cap.salaryCap)} over projected cap`,
-                color: after < cap.salaryCap ? 'var(--good)' : 'var(--warn)',
-              },
-            ]}
-          />
+      <section className="card fo-capsheet" aria-label="Re-sign period">
+        <div className="small dim2">
+          <b className="fo-closed-t">The re-sign period {title.charAt(0).toLowerCase() + title.slice(1)}.</b> {when}
         </div>
+        <Statline
+          items={[
+            { k: `Expiring ${shortSeason(s)}`, v: String(list.length), s: `${money(freed)} off the books` },
+            {
+              k: `${shortSeason(s + 1)} committed`,
+              v: money(after),
+              s: capRoomText(cap.salaryCap - after),
+              color: after < cap.salaryCap ? 'var(--good)' : 'var(--warn)',
+            },
+          ]}
+        />
       </section>
 
       {rfas.length > 0 && (
@@ -93,7 +91,7 @@ export function ResignClosed({ league }: { league: League }) {
               const ask = askingContract(league, p, tid);
               return (
                 <Link key={p.pid} to={`/player/${p.pid}`} className="fo-prow">
-                  <Avatar p={p} />
+                  <OvrPot p={p} />
                   <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
                     <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
@@ -103,7 +101,9 @@ export function ResignClosed({ league }: { league: League }) {
                   </div>
                   <div className="fo-money">
                     <div className="a">{money(salaryFor(p, s))}</div>
-                    <div className="b">would ask ~{money(ask.amount)}</div>
+                    <div className="b">
+                      asks ~{money(ask.amount)} {forYears(ask.years)}
+                    </div>
                   </div>
                 </Link>
               );

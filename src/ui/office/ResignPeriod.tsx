@@ -14,7 +14,7 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Term } from '../components/Glossary';
 import { PageHeader, Section, Sheet, Statline } from '../components/ui';
-import { CapBar, HelpSheet, MoodTag, OvrPot, shortSeason } from './common';
+import { CapBar, HelpSheet, MoodTag, OvrPot, capRoomFig, forYears, rosterFig, shortSeason, taxFig } from './common';
 import { ContractSheet } from './ContractSheet';
 import { QualifyRow } from './RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE } from '../../core/league/rfa';
@@ -112,29 +112,33 @@ export function ResignPeriod() {
         }
       />
 
-      <Section title={`${seasonLabel(next)} payroll`} right={<span className="tag info">Bird rights</span>}>
-        <div className="card fo-capsheet fo-hero">
+      <Section
+        title={`${seasonLabel(next)} payroll`}
+        right={
+          <span className="tag info">
+            <Term id="bird">Bird rights</Term>
+          </span>
+        }
+      >
+        <div className="card fo-capsheet">
           <div className="fo-pay">
             <div className="grow">
               <div className="over">Committed</div>
               <div className="fo-pay-v num">{money(committed)}</div>
             </div>
+            {/* every expiring player kept at about his ask (his cap hold) */}
             <div className="right">
               <div className="over">Keep everyone</div>
               <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>{money(ifAll)}</div>
+              {ifAll > cap.luxuryTax && <div className="tiny bad num">tax ≈ {money(Math.round((ifAll - cap.luxuryTax) * CAP.taxRate))}</div>}
             </div>
           </div>
-          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} legend={false} />
+          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} addLabel="Cap holds" legend="lines" />
           <Statline
             items={[
-              { k: 'Cap space', v: money(space), color: space > 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${money(cap.salaryCap)}` },
-              { k: <Term id="hold">Cap holds</Term>, v: money(holds), s: holds > 0 ? 'striped' : 'none' },
-              {
-                k: 'Roster',
-                v: `${rosterNext}/${CAP.rosterMax}`,
-                s: rosterNext > CAP.rosterMax ? `${rosterNext - CAP.rosterMax} to cut` : 'signed',
-                color: rosterNext > CAP.rosterMax || rosterNext < CAP.rosterMin ? 'var(--warn)' : undefined,
-              },
+              { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
+              taxFig(committed, cap.luxuryTax),
+              rosterFig(league, rosterNext, { label: `Roster ${shortSeason(next)}`, note: rosterNext <= CAP.rosterMax ? 'signed' : undefined }),
             ]}
           />
         </div>
@@ -194,15 +198,12 @@ export function ResignPeriod() {
                       {wantsOut(p) ? (
                         <span className="small bad bold">{p.mood.tradeRequest ? "Wants a trade: won't re-sign" : "Asked for a trade: on hold, won't re-sign"}</span>
                       ) : (
-                        <>
-                          <div className="fo-rs-ask">
-                            <b className="num">{money(ask.amount)}</b>
-                          </div>
+                        <div className="fo-rs-ask">
+                          <b className="num">{money(ask.amount)}</b> <span className="dim">{forYears(ask.years)}</span>
                           <div className="tiny dim">
-                            asks · {ask.years} yr{ask.years > 1 ? 's' : ''}
-                            {talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null}
+                            his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {money(salaryFor(p, league.season))}
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                     <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>

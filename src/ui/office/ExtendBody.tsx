@@ -14,7 +14,7 @@ import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, forYears, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { money } from '../../core/format';
@@ -66,7 +66,11 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
       <div className="fo-ask">
         <Statline
           items={[
-            { k: "He's asking", v: money(ask.amount, 2), s: `${ask.years} yr${ask.years > 1 ? 's' : ''} from ${shortSeason(season)}` },
+            {
+              k: talkState(league, p, 'extend').firm ? 'His ask · firm' : 'His ask',
+              v: money(askFor(league, p, 'extend', ask.years), 2),
+              s: `${forYears(ask.years)} from ${shortSeason(season)}`,
+            },
             { k: 'Mood', v: <MoodTag p={p} />, s: p.mood.notes[0] ?? 'No complaints' },
           ]}
         />
@@ -126,7 +130,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           <span className="over">{seasonLabel(season)} payroll</span>
           <span className="tag info">Extension</span>
         </div>
-        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} />
+        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This extension" />
         <div className="tiny dim">
           Committed for {seasonLabel(season)} so far, plus his extension. Like a re-signing, it can go over the cap.
           {taxBill > 0 ? (

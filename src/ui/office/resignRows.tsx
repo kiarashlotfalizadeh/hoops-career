@@ -1,15 +1,17 @@
 // The Re-sign desk's player rows: a player with his line of stats, and one you can extend now.
+// As on the other desks' lists, the rating leads and the name links to his page.
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PenLine } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { playerName, teamPlayers } from '../../core/league/helpers';
 import { extensionAsk, extensionBlockedReason, extensionRefusal } from '../../core/league/contracts';
 import { contractExp, salaryFor } from '../../core/playerGen';
-import { Avatar } from '../components/ui';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { MoodTag, OvrPot, playerMeta, shortSeason } from './common';
+import { MoodTag, OvrPot, forYears, playerMeta, shortSeason } from './common';
 import { money } from '../../core/format';
 
+/** His per-game line this season (or his latest): points, rebounds, assists, minutes, true shooting, games. */
 export function StatLine({ league, p }: { league: League; p: Player }) {
   const pg = playerSeason(p, league.season);
   const line = pg && pg.gp > 0 ? { season: league.season, pg } : latestLine(league, p);
@@ -40,18 +42,18 @@ export function StatLine({ league, p }: { league: League; p: Player }) {
   );
 }
 
-/** A player in a Re-sign list: his jersey, name (to his page), line of detail and rating. */
-export function PlayerTop({ league, p, pot = true }: { league: League; p: Player; pot?: boolean }) {
+/** A player in a Re-sign list: his rating, name (to his page) and line of detail, with something on the right (his salary). */
+export function PlayerTop({ league, p, pot = true, right }: { league: League; p: Player; pot?: boolean; right?: ReactNode }) {
   return (
     <div className="fo-rs-top">
-      <Avatar p={p} />
+      <OvrPot p={p} showPot={pot} />
       <div className="grow">
         <Link to={`/player/${p.pid}`} className="fo-name">
           {playerName(p)}
         </Link>
         <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
       </div>
-      <OvrPot p={p} showPot={pot} />
+      {right}
     </div>
   );
 }
@@ -68,19 +70,16 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
   const ask = extensionAsk(league, p);
   return (
     <div className="fo-rs">
-      <div className="fo-rs-top">
-        <Avatar p={p} />
-        <div className="grow">
-          <Link to={`/player/${p.pid}`} className="fo-name">
-            {playerName(p)}
-          </Link>
-          <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-        </div>
-        <div className="fo-money">
-          <div className="a">{money(salaryFor(p, exp))}</div>
-          <div className="b">thru {shortSeason(exp)}</div>
-        </div>
-      </div>
+      <PlayerTop
+        league={league}
+        p={p}
+        right={
+          <div className="fo-money">
+            <div className="a">{money(salaryFor(p, exp))}</div>
+            <div className="b">thru {shortSeason(exp)}</div>
+          </div>
+        }
+      />
       <div className="fo-rs-act">
         <div className="grow">
           <MoodTag p={p} />
@@ -89,7 +88,7 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
               <span className="warn">Won't extend now</span>
             ) : (
               <>
-                Extension: asks <b className="num">{money(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''}
+                Extension ask <b className="num">{money(ask.amount)}</b> {forYears(ask.years)} from {shortSeason(exp + 1)}
               </>
             )}
           </div>

@@ -10,7 +10,7 @@ import { FaRow } from '../office/FaRow';
 import { TwoWaySheet, WaiverSheet } from '../office/FaSheets';
 import type { Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
-import { CAP } from '../../core/constants';
+import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
 import { EXCEPTIONS, EXCEPTION_ORDER, askingContract, onWaivers, teamAppeal, twoWaySalary, valueScore, wantsOut, wantsTwoWay } from '../../core/league/contracts';
 import { bidHolds, capPayroll, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
@@ -18,7 +18,9 @@ import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, wantsTenDay } fro
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Chips, Empty, PageHeader, Statline } from '../components/ui';
-import { Callout, capSeason } from '../office/common';
+import { Callout, capRoomFig, capSeason, rosterFig } from '../office/common';
+import { Term } from '../components/Glossary';
+import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { ContractSheet } from '../office/ContractSheet';
 import { MyRfas } from '../office/RfaPanel';
 import { TenDaySheet } from '../office/TenDayPanel';
@@ -123,7 +125,12 @@ export default function FreeAgents() {
 
   return (
     <main className="page fo-page">
-      <PageHeader title="Free Agents" sub={`${all.length} available`} back right={<FaHelp league={league} s={s} space={space} exceptions={exceptions} />} />
+      <PageHeader
+        title="Free Agents"
+        sub={`${fa ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ` : ''}${all.length} available · ${seasonLabel(s)} deals`}
+        back
+        right={<FaHelp league={league} s={s} space={space} exceptions={exceptions} />}
+      />
 
       {closed && (
         <Callout tone="warn" icon={<Lock size={16} className="warn" />}>
@@ -135,32 +142,14 @@ export default function FreeAgents() {
         <Statline
           items={[
             {
-              k: 'Cap space',
-              v: money(space),
-              color: space > 0 ? 'var(--good)' : 'var(--warn)',
-              s:
-                bids.some((b) => b.route === 'space') || sheetsOut.length
-                  ? 'after pending offers'
-                  : holds > 0
-                    ? 'after cap holds'
-                    : space > 0
-                      ? 'to spend'
-                      : exceptions.length
-                        ? 'min or an exception'
-                        : 'min deals only',
+              ...capRoomFig(space),
+              s: bids.some((b) => b.route === 'space') || sheetsOut.length ? 'after pending offers' : holds > 0 ? 'after cap holds' : space > 0 ? 'to spend' : 'min or exception',
             },
-            {
-              k: 'Roster',
-              v: `${n}/${max}`,
-              color: n >= max ? 'var(--bad)' : n > CAP.rosterMax ? 'var(--warn)' : undefined,
-              s: n >= max ? 'full' : n > CAP.rosterMax ? `${n - CAP.rosterMax} to cut` : `${max - n} open`,
-            },
-            {
-              k: 'Exception',
-              v: exceptions.length ? money(exceptions[0].room) : '—',
-              color: exceptions.length ? 'var(--good)' : undefined,
-              s: exceptions.length ? exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') : `min ${money(cap.vetMin, 2)}`,
-            },
+            // (in the offseason up to 21 can sign: past 15, cut down by opening night)
+            rosterFig(league, n, { note: n >= max ? `full (${max} max)` : undefined }),
+            exceptions.length
+              ? { k: 'Best exception', v: money(exceptions[0].room), color: 'var(--good)', s: exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') }
+              : { k: <Term id="exception">Exceptions</Term>, v: 'None', s: `minimum ${money(cap.vetMin, 2)}` },
           ]}
         />
       </div>
