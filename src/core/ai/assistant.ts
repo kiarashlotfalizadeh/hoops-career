@@ -9,9 +9,10 @@ import type { League } from '../types';
 import { teamAlerts, type AlertFix } from './advisor';
 import { applyDefPreset, applyOffPreset } from '../sim/tactics';
 import { CAP } from '../constants';
-import { contractSeason, curTeamSeason, playerName, standardRoster, teamPlayers } from '../league/helpers';
-import { contractExp } from '../playerGen';
-import { extensionBlockedReason } from '../league/contracts';
+import { contractSeason, playerName, standardRoster, teamPlayers } from '../league/helpers';
+import { contractExp, salaryFor } from '../playerGen';
+import { extensionBlockedReason, marketSalary } from '../league/contracts';
+import { money } from '../format';
 import { jobSecurity } from '../league/jobSecurity';
 import { nextOpponent } from '../league/agenda';
 
@@ -72,8 +73,8 @@ export function assistantFeed(league: League): AssistantCard[] {
       area: 'games',
       tone: 'tip',
       title: `No game plan for ${league.teams[opp].abbrev} yet`,
-      line: 'Their tendencies and the staff’s counters are on the matchup page.',
-      to: `/games/${opp}`,
+      line: 'The staff’s counters are ready on the Plan tab, each one testable.',
+      to: `/games/${opp}?tab=plan`,
       weight: 40,
     });
 
@@ -97,30 +98,21 @@ export function assistantFeed(league: League): AssistantCard[] {
     const due = teamPlayers(league, me)
       .filter((p) => p.ovr >= 75 && contractExp(p.contract) === season && !extensionBlockedReason(league, p))
       .sort((a, b) => b.ovr - a.ovr);
-    if (due.length)
+    if (due.length) {
+      // what the call turns on: how good he is, what he makes now and what the market says he's worth
+      const p = due[0];
+      const more = due.length > 1 ? ` · ${due.length - 1} more in a final season` : '';
       cards.push({
-        id: `extend:${due[0].pid}`,
+        id: `extend:${p.pid}`,
         area: 'office',
         tone: 'tip',
-        title: `${playerName(due[0])} can be extended`,
-        line: due.length > 1 ? `He and ${due.length - 1} more are in their final season.` : 'He is in the final season of his deal.',
-        to: `/player/${due[0].pid}`,
+        title: `${playerName(p)} can be extended`,
+        line: `${p.ovr} OVR · ${money(salaryFor(p, season))} in his final season · market ${money(marketSalary(league, p))}${more}`,
+        to: `/player/${p.pid}`,
         weight: 30,
       });
+    }
   }
-
-  // a winning run is worth a word
-  const ts = curTeamSeason(league, me);
-  if (league.phase === 'regular' && ts.won + ts.lost >= 10 && (ts.streak ?? 0) >= 6)
-    cards.push({
-      id: 'streak',
-      area: 'team',
-      tone: 'good',
-      title: `${ts.streak} straight wins`,
-      line: 'Keep the rotation steady: rest the worn legs on back-to-backs.',
-      to: '/team/rotation',
-      weight: 10,
-    });
 
   return cards.sort((a, b) => b.weight - a.weight);
 }
