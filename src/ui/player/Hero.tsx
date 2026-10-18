@@ -4,13 +4,14 @@
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
-import { fmtHeight, tierLabel } from '../../core/ratings';
+import { fmtHeight, ovrColor, tierLabel } from '../../core/ratings';
 import { seasonLabel } from '../../core/constants';
 import { FRANCHISES } from '../../core/teams';
 import { awardRaces } from '../../core/league/awards';
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
-import { Avatar, Ovr, Statline, Tag, pct } from '../components/ui';
+import { Avatar, Statline, Tag, pct } from '../components/ui';
+import { OvrBadge } from '../components/OvrKey';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
 import { slabVars } from '../teamColors';
@@ -84,10 +85,8 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
             {p.lastName}
           </h1>
         </div>
-        <div className="tm-ovr">
-          <Ovr v={p.ovr} size="lg" />
-          <span className="pot">POT {p.pot}</span>
-        </div>
+        {/* a tap: the OVR ladder, his band marked */}
+        <OvrBadge ovr={p.ovr} pot={p.pot} size="lg" />
       </div>
       <div className="tm-meta">
         {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb · {p.country}
@@ -97,7 +96,11 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
       </div>
       <div className="tm-tags">
         <Tag>{p.archetype}</Tag>
-        <Tag>{tierLabel(p.ovr)}</Tag>
+        {/* his tier in its badge's colour, so it doesn't read as an award race */}
+        <span className="tag tm-tier">
+          <i style={{ background: ovrColor(p.ovr) }} aria-hidden="true" />
+          {tierLabel(p.ovr)}
+        </span>
         {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
         {p.injury && (
           <Tag tone="bad">

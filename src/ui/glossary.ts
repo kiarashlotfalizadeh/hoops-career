@@ -84,7 +84,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'ovr',
     term: 'OVR and POT',
     group: 'Numbers',
-    text: 'Overall rating now and his potential, on a 40-99 scale: about 74 is the median rotation player, 87+ an All-Star, 93+ an MVP candidate.',
+    text: 'Overall rating now and his potential (where his OVR is projected to peak), on a 40-99 scale: about 74 is the median rotation player, 87+ an All-Star, 93+ an MVP candidate. Badge colours: gold 89+ (All-NBA), purple 82+ (quality starter, All-Star), blue 78+ (starter), green 72+ (rotation), light grey 67+ (bench), grey below.',
   },
   { id: 'ortg', term: 'Offensive and defensive rating', group: 'Numbers', text: 'Points scored (ORtg) or allowed (DRtg) per 100 possessions. Net rating is the difference.' },
   { id: 'pace', term: 'Pace', group: 'Numbers', text: 'Possessions a team uses per 48 minutes. The league plays about 100.' },

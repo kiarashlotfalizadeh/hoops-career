@@ -10,10 +10,10 @@ import { DEF_PRESETS, OFF_PRESETS } from '../../../core/sim/tactics';
 import { activeCoach, coachCareer, coyWinners } from '../../../core/league/coaches';
 import { seasonLabel } from '../../../core/constants';
 import { money } from '../../../core/format';
-import { Section, Statline } from '../../components/ui';
-import { f1, ordinal, rosterNames, signed, teamRatings } from '../../stats';
+import { Statline } from '../../components/ui';
+import { f1, ordinal, signed, teamRatings } from '../../stats';
 import { STRATEGY_META, StrategyTag } from '../shared';
-import { PlayerRow } from './RosterTab';
+import { RosterRows } from '../../team/RosterList';
 
 /** A league rank among the teams that have played ("4th"). */
 function useRatingRanks(league: League, tid: number) {
@@ -56,7 +56,7 @@ function coachLine(league: League, tid: number) {
   return { id: r.id, line: `${since} · ${playbook(team)}` };
 }
 
-export function TeamOverview({ league, tid, onRoster }: { league: League; tid: number; onRoster: () => void }) {
+export function TeamOverview({ league, tid, onContracts }: { league: League; tid: number; onContracts: () => void }) {
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
   const gp = ts.won + ts.lost;
@@ -66,7 +66,6 @@ export function TeamOverview({ league, tid, onRoster }: { league: League; tid: n
   const coach = useLeagueMemo(() => coachLine(league, tid), [league, tid]);
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   const key = [...roster].sort((a, b) => b.ovr - a.ovr).slice(0, 3);
-  const nameOf = rosterNames(roster);
   const cs = contractSeason(league);
   const pay = payroll(league, tid, cs);
   const cap = CAP_FOR(league, cs);
@@ -129,7 +128,7 @@ export function TeamOverview({ league, tid, onRoster }: { league: League; tid: n
           </span>
           <span />
         </div>
-        <button className="lg-kvl" onClick={onRoster} aria-label={`Payroll ${money(pay)}: contracts`}>
+        <button className="lg-kvl" onClick={onContracts} aria-label={`Payroll ${money(pay)}: contracts`}>
           <span className="k">Payroll</span>
           <span className="v">
             <span className="bold num">{money(pay)}</span>
@@ -141,15 +140,8 @@ export function TeamOverview({ league, tid, onRoster }: { league: League; tid: n
           <ChevronRight size={15} className="dim" aria-hidden="true" />
         </button>
       </div>
-      {key.length > 0 && (
-        <Section title="Key players">
-          <div className="card flush">
-            {key.map((p) => (
-              <PlayerRow key={p.pid} league={league} p={p} name={nameOf(p.pid)} />
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* the three best, as the Roster tab's rows (its column heads in the divider) */}
+      {key.length > 0 && <RosterRows league={league} label="Key players" players={key} />}
     </>
   );
 }

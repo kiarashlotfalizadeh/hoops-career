@@ -34,12 +34,13 @@ function staffLine(league: League): { text: string; assistant: boolean } {
   const t = league.teams[league.userTid];
   const rot = !t.rotation.manual;
   const tac = !t.tactics.manual;
-  if (rot && tac) return { text: 'Assistant runs rotation and tactics', assistant: true };
-  if (rot) return { text: 'Assistant runs the rotation · you, the tactics', assistant: true };
-  if (tac) return { text: 'Assistant runs the tactics · you, the rotation', assistant: true };
-  return { text: 'You run rotation and tactics', assistant: false };
+  if (rot && tac) return { text: 'Assistant runs rotation, tactics', assistant: true };
+  if (rot) return { text: 'Assistant runs the rotation', assistant: true };
+  if (tac) return { text: 'Assistant runs the tactics', assistant: true };
+  return { text: 'You run rotation, tactics', assistant: false };
 }
 
+/** Two lines over the tabs: the team and who runs it, then its roster spots and payroll (the record is in the top bar). */
 function TeamHeader({ league }: { league: League }) {
   const t = league.teams[league.userTid];
   const roster = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
@@ -52,20 +53,22 @@ function TeamHeader({ league }: { league: League }) {
   const Icon = staff.assistant ? Bot : UserRound;
   return (
     <header className="tm-hh">
-      <TeamLogo tid={t.tid} size={46} decorative />
+      <TeamLogo tid={t.tid} size={36} decorative />
       <div className="tm-hh-id">
-        <div className="tm-hh-region">{t.region}</div>
-        <h1 className="tm-hh-name">{t.name}</h1>
-        <div className="tm-hh-meta num">
-          <span className={off ? 'bad' : undefined}>
-            {standard}/{CAP.rosterMax}
+        <div className="tm-hh-top">
+          <h1 className="tm-hh-name">{t.name}</h1>
+          <span className="tm-hh-staff">
+            <Icon size={13} aria-hidden="true" />
+            {staff.text}
           </span>
-          {' · '}
-          {money(pay)} payroll{isOffseason(league) ? ` in ${shortSeason(s0)}` : ''}
         </div>
-        <div className="tm-hh-staff">
-          <Icon size={13} aria-hidden="true" />
-          {staff.text}
+        <div className="tm-hh-meta">
+          Roster{' '}
+          <b className={`num ${off ? 'bad' : ''}`}>
+            {standard}/{CAP.rosterMax}
+          </b>
+          {' · '}Payroll <b className="num">{money(pay)}</b>
+          {isOffseason(league) ? ` in ${shortSeason(s0)}` : ''}
         </div>
       </div>
     </header>

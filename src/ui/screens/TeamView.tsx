@@ -5,13 +5,13 @@ import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { useLeague } from '../../state/store';
 import { PageHeader } from '../components/ui';
-import { TabBar, useQueryParam } from '../league/shared';
+import { TabBar, useQueryParam, useSetParams } from '../league/shared';
 import { MovesTab } from '../league/MovesTab';
 import { PicksList } from '../league/PicksList';
 import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
 import { TeamActions, TeamHero } from '../league/team/Hero';
 import { TeamOverview } from '../league/team/Overview';
-import { RosterTab } from '../league/team/RosterTab';
+import { RosterViews } from '../team/RosterViews';
 import { ScheduleTab } from '../league/team/ScheduleTab';
 import { LazyTeamEditor } from '../god/lazy';
 
@@ -26,6 +26,7 @@ export default function TeamView() {
   const team = Number.isInteger(tid) ? league.teams[tid] : undefined;
   const [raw, setTab] = useQueryParam<string>('tab', 'overview');
   const [editing, setEditing] = useState(false);
+  const setParams = useSetParams();
   if (!team) {
     return (
       <main className="page">
@@ -43,8 +44,8 @@ export default function TeamView() {
       <TeamHero league={league} tid={tid} onEdit={league.settings.godMode ? () => setEditing(true) : undefined} />
       <TeamActions league={league} tid={tid} />
       <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} label="Team sections" />
-      {tab === 'overview' && <TeamOverview league={league} tid={tid} onRoster={() => setTab('roster')} />}
-      {tab === 'roster' && <RosterTab league={league} tid={tid} />}
+      {tab === 'overview' && <TeamOverview league={league} tid={tid} onContracts={() => setParams({ tab: 'roster', rv: 'contracts' })} />}
+      {tab === 'roster' && <RosterViews league={league} tid={tid} param="rv" />}
       {tab === 'schedule' && <ScheduleTab league={league} tid={tid} />}
       {tab === 'picks' && <PicksList league={league} tid={tid} />}
       {tab === 'moves' && <MovesTab league={league} tid={tid} />}

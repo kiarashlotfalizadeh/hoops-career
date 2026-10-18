@@ -75,6 +75,11 @@ export function Overview({
             );
           })}
         </div>
+        {/* what the bars' colours mean, in their colours */}
+        <div className="tm-foot">
+          Percentile among rostered players: <b style={{ color: skillColor(85) }}>85th+</b> · <b style={{ color: skillColor(65) }}>65th+</b> ·{' '}
+          <b style={{ color: skillColor(35) }}>35th+</b> · <b style={{ color: skillColor(0) }}>below</b>
+        </div>
       </Section>
 
       <div className="md-grid2">

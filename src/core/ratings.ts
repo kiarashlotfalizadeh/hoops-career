@@ -276,25 +276,43 @@ export function potential(ovr: number, age: number, growth: number): number {
   return clamp(Math.round(Math.max(ovr, ovr + g)), 40, 99);
 }
 
-/** Tiers sized to the real league: ~6 MVP candidates, ~18 All-NBA, ~30 All-Stars, ~2 quality starters a team. */
+/**
+ * The OVR ladder, best first: each band's badge colour (the --tier-* tokens) and the tier names
+ * inside it, so a badge's colour and a player's tier name always agree. Sized to the real league:
+ * ~6 MVP candidates, ~18 All-NBA, ~30 All-Stars, ~2 quality starters a team.
+ */
+export const OVR_TIERS: readonly { min: number; tone: 'elite' | 'star' | 'good' | 'avg' | 'low' | 'bad'; names: readonly (readonly [number, string])[] }[] = [
+  {
+    min: 89,
+    tone: 'elite',
+    names: [
+      [93, 'MVP Candidate'],
+      [89, 'All-NBA'],
+    ],
+  },
+  {
+    min: 82,
+    tone: 'star',
+    names: [
+      [87, 'All-Star'],
+      [82, 'Quality Starter'],
+    ],
+  },
+  { min: 78, tone: 'good', names: [[78, 'Starter']] },
+  { min: 72, tone: 'avg', names: [[72, 'Rotation']] },
+  { min: 67, tone: 'low', names: [[67, 'Bench']] },
+  { min: -Infinity, tone: 'bad', names: [[-Infinity, 'Fringe']] },
+];
+
+/** The band of the ladder an OVR falls in. */
+export const ovrTier = (ovr: number) => OVR_TIERS.find((t) => ovr >= t.min) ?? OVR_TIERS[OVR_TIERS.length - 1];
+
 export function tierLabel(ovr: number): string {
-  if (ovr >= 93) return 'MVP Candidate';
-  if (ovr >= 89) return 'All-NBA';
-  if (ovr >= 87) return 'All-Star';
-  if (ovr >= 82) return 'Quality Starter';
-  if (ovr >= 78) return 'Starter';
-  if (ovr >= 72) return 'Rotation';
-  if (ovr >= 67) return 'Bench';
-  return 'Fringe';
+  return ovrTier(ovr).names.find(([min]) => ovr >= min)?.[1] ?? 'Fringe';
 }
 
 export function ovrColor(ovr: number): string {
-  if (ovr >= 90) return 'var(--tier-elite)';
-  if (ovr >= 82) return 'var(--tier-star)';
-  if (ovr >= 76) return 'var(--tier-good)';
-  if (ovr >= 70) return 'var(--tier-avg)';
-  if (ovr >= 64) return 'var(--tier-low)';
-  return 'var(--tier-bad)';
+  return `var(--tier-${ovrTier(ovr).tone})`;
 }
 
 // ---------------------------------------------------------------- archetypes & roles

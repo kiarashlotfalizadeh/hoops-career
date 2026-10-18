@@ -83,6 +83,12 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+/* his tier, with its badge's colour as a dot */
+.tm-tier i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
 /* signal tags on a team's colours: a dark ground, so the colour reads whatever the slab */
 .tm-hero .tag.bad,
 .tm-hero .tag.warn {
