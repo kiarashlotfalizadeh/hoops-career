@@ -1,7 +1,7 @@
 import { memo, type CSSProperties } from 'react';
 import { Flame, Snowflake } from 'lucide-react';
 import type { GameManagement } from '../../core/types';
-import { plural } from '../../core/format';
+import { madeAtt, plural } from '../../core/format';
 import { inkOn } from '../teamColors';
 import { foulLimit } from './alerts';
 import type { Drawn, DrawnPlayer } from './drawn';
@@ -25,7 +25,7 @@ export interface SideInfo {
  * Both fives on the floor, at the top of the Clipboard's Lineup (yours first): points, the energy bar
  * (against the staff's sub-out mark), personal fouls (lit at the foul-trouble limit), and who's hot or
  * cold. Tap one of yours for his sheet (the sub, his orders, a play for him), one of
- * theirs for the ways to stop him and a Hack-a. `fives` are [home, away] as the court draws them.
+ * theirs for the ways to stop him and a Hack-a-player. `fives` are [home, away] as the court draws them.
  */
 export const OnCourt = memo(function OnCourt({
   view,
@@ -67,7 +67,7 @@ export const OnCourt = memo(function OnCourt({
           const cold = !hot && isCold(p);
           const what = hot ? `, ${p.streak} straight makes` : cold ? `, ${p.fgm} of ${p.fga} from the field` : '';
           // named by what it shows, number and name first ("7 Holmgren"), then the rest for a screen reader
-          const more = `: ${e}% energy, ${plural(p.fouls, 'foul')}, ${plural(p.pts, 'point')}${what}. ${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a'}`;
+          const more = `: ${e}% energy, ${plural(p.fouls, 'foul')}, ${plural(p.pts, 'point')}${what}. ${mine ? 'Subs and orders' : 'Stop him, guard him, Hack-a-player'}`;
           const tone = p.energy < fat ? 'bad' : p.energy < fat + 0.15 ? 'warn' : 'good';
           return (
             <button
@@ -75,7 +75,7 @@ export const OnCourt = memo(function OnCourt({
               className="oc-row"
               onClick={() => onTap(pid, mine)}
               aria-haspopup="dialog"
-              title={hot ? `${p.streak} straight makes` : cold ? `${p.fgm}/${p.fga} FG` : undefined}
+              title={hot ? `${p.streak} straight makes` : cold ? `${madeAtt(p.fgm, p.fga)} FG` : undefined}
             >
               <span className="oc-num" style={{ background: info[s].kit[0], color: inkOn(info[s].kit[0]), borderColor: info[s].kit[1] }}>
                 {jersey(pid)}

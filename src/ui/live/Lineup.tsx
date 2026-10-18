@@ -8,7 +8,7 @@ import { OnCourt, type SideInfo } from './OnCourt';
 /**
  * The Clipboard's Lineup tab: both fives on the floor (energy, fouls, points, hot or cold), your
  * bench under them, and who makes the substitutions. Tap any player for his sheet: subs, his orders,
- * his matchups, a Hack-a. Who's on and off comes from the game itself (a sub has to be possible now);
+ * his matchups, a Hack-a-player. Who's on and off comes from the game itself (a sub has to be possible now);
  * the numbers from the possession the court last drew (see subsLine).
  */
 export function Lineup({
@@ -45,11 +45,12 @@ export function Lineup({
       <section className="sec">
         <div className="sec-h">
           <h3>Bench</h3>
+          {/* energy first (what a sub is decided on), then the box score's own order */}
           <div className="lu-head" aria-hidden="true">
             <span>Energy</span>
+            <span>MIN</span>
+            <span>PTS</span>
             <span>PF</span>
-            <span>Pts</span>
-            <span>Min</span>
           </div>
         </div>
         <div className="card flush list">
@@ -68,16 +69,16 @@ export function Lineup({
                   {l.energy}%
                 </span>
                 <span className="lu-n num" aria-hidden="true">
-                  {l.fouls}
+                  {l.min}
                 </span>
                 <span className="lu-n num" aria-hidden="true">
                   {l.pts}
                 </span>
                 <span className="lu-n num" aria-hidden="true">
-                  {l.min}
+                  {l.fouls}
                 </span>
                 <span className="sr-only">
-                  , {plural(l.fouls, 'foul')}, {plural(l.pts, 'point')}, {plural(l.min, 'minute')}
+                  , {plural(l.min, 'minute')}, {plural(l.pts, 'point')}, {plural(l.fouls, 'foul')}
                 </span>
               </button>
             );

@@ -1,4 +1,5 @@
 import { ArrowLeftRight, Lightbulb } from 'lucide-react';
+import { madeAtt } from '../../core/format';
 import type { League, OffRole, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
@@ -14,7 +15,7 @@ export function PlayerLine({ p }: { p: DrawnPlayer }) {
       <Statline
         items={[
           { k: 'Pts', v: p.pts },
-          { k: 'FG', v: `${p.fgm}/${p.fga}` },
+          { k: 'FG', v: madeAtt(p.fgm, p.fga) },
           { k: 'Fouls', v: p.fouls, color: p.fouls >= 5 ? 'var(--bad)' : p.fouls >= 4 ? 'var(--warn)' : undefined },
           { k: 'Energy', v: `${e}%` },
         ]}
