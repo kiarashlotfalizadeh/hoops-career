@@ -7,7 +7,8 @@ import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { curTeamSeason, fmtDate, standardRoster } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, standardRoster, teamPlayers } from '../../core/league/helpers';
+import { plural } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
@@ -16,6 +17,7 @@ import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { CAP, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { flowActions, stillAlive } from '../flow';
+import { rosterNames } from '../stats';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -30,15 +32,19 @@ export function nextGame(league: League): ScheduledGame | undefined {
 const whenLabel = (league: League, day: number) =>
   day <= league.day ? 'Today' : day === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' });
 
-/** A side's players who won't play (or might not), three at most: "Davis 3g, Reaves (rest) +2". */
+/**
+ * A side's players who won't play (or might not), three at most, named so teammates can't be
+ * confused: "Jal. Williams 3 games, K. Williams (rest) +2 more".
+ */
 function outText(league: League, s: SidePreview): string {
-  const name = (pid: number, fallback: string) => league.players[pid]?.lastName ?? fallback;
+  const names = rosterNames(teamPlayers(league, s.tid));
+  const name = (pid: number, fallback: string) => names(pid) || fallback;
   const all = [
-    ...s.out.map((p) => `${name(p.pid, p.name)} ${p.games}g`),
+    ...s.out.map((p) => `${name(p.pid, p.name)} ${plural(p.games, 'game')}`),
     ...s.resting.map((p) => `${name(p.pid, p.name)} (rest)`),
     ...s.questionable.filter((p) => !p.cleared).map((p) => `${name(p.pid, p.name)} (questionable)`),
   ];
-  return all.slice(0, 3).join(', ') + (all.length > 3 ? ` +${all.length - 3}` : '');
+  return all.slice(0, 3).join(', ') + (all.length > 3 ? ` +${all.length - 3} more` : '');
 }
 
 /** `noPlan`: the staff would say there's no game plan for this opponent yet (a tag here, not a card below). */
