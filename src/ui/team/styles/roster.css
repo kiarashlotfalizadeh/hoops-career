@@ -88,10 +88,19 @@
 .tm-rl-row .tm-rl-pot.dim {
   color: var(--text-dim);
 }
-/* the archetype beside position and age where there's room for it */
+/* the archetype beside position and age where there's room for it, and the figures level with the
+   row's middle once the name no longer needs their width */
 @media (max-width: 559px) {
   .tm-rl-arch {
     display: none;
+  }
+}
+@media (min-width: 560px) {
+  .tm-rl-name {
+    grid-column: 2;
+  }
+  .tm-rl-row .tm-rl-fig {
+    grid-row: 1 / 3;
   }
 }
 /* the line under a roster: what the figures are, and the OVR key */
