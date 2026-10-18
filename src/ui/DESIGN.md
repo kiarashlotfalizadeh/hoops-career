@@ -144,7 +144,7 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
   `.ghost`, `.danger`, `.good`, `.sm`, `.xs`, `.block`, `.big`).
 - `Help` ("?" opening a sheet) and `More` (an expander) carry every explanation. `Toggle`'s `help`
   goes behind its "?" automatically.
-- `Term` (`components/Glossary.tsx`): a word with a glossary entry (drop, MLE, eFG...): tap for what
+- `Term` (keeps the caps of the heading it sits in) (`components/Glossary.tsx`): a word with a glossary entry (drop, MLE, eFG...): tap for what
   it means. `GlossarySheet` is the whole list. Use `Term` the first time a screen shows jargon.
 - `AgendaList` / `AgendaRow` (`components/Agenda.tsx`): decisions with their actions in reach.
 - `AssistantCards` (`components/Assistant.tsx`): the staff's advice for an area, with one-tap fixes.
@@ -172,8 +172,12 @@ Broadcast first: the court is always the biggest thing on screen.
 - A slim scorebug sits over a full-width court (the win-probability sliver and the scores ticker
   under it when Settings has them on). Captions, graphics, replays and **one banner at a time**
   (injuries, foul-outs, their adjustments, the staff's alerts) go over the court, never beside it.
-- **One row of quick actions** takes the tab bar's place: TO, Subs, Call, the staff's top fix as a
-  pill, Clipboard. Don't add a second row or a floating button.
+- **The scorebug labels its figures**: each team's block reads Timeouts n and Fouls n (Penalty n
+  when the other team is in the bonus), and the sliver under it reads To win. A player on the floor
+  shows points, energy (bar and %) and fouls as "n PF".
+- **One row of quick actions** takes the tab bar's place: Timeout, Subs, Call, the staff's top fix
+  as a pill, Clipboard. They carry no counts (the scorebug has them). Don't add a second row or a
+  floating button.
 - **One Clipboard** (Lineup, Tactics, Calls, Box, Play-by-play) holds every coaching control; it
   docks under the court when there's room and opens as a sheet otherwise. A new control goes in one
   of its tabs, once.
@@ -181,7 +185,12 @@ Broadcast first: the court is always the biggest thing on screen.
 - **One break screen** for quarters, halftime and timeouts (huddle mode): the score and the chance
   to win, who's tired or in foul trouble, what's deciding it with Apply, the keys, and Start.
 - Every change during a game goes through the live controller (the journal records it), never a raw
-  league edit.
+  league edit. The Clipboard's Tactics tab says what's changed since the tip, in Tactics' words.
+- **One box score**: `BoxScore` (`components/BoxScore.tsx`), in the live game and the report, with
+  MIN PTS REB AST STL BLK TOV FG 3P FT PF +/-. Don't build another.
+- Two-team comparisons use `CompareBar`, which puts the winning figure in a pill of its side's
+  colour (`higherBetter={false}` where lower wins, as for TOV%).
+- A court or reel that plays on request is one header line with its button until it's played.
 
 ## Copy
 
@@ -189,6 +198,10 @@ Broadcast first: the court is always the biggest thing on screen.
   longer goes behind `Help` or `More`. No paragraph of more than two lines is visible by default.
 - Cut "you can", "this shows", restating the label, and hedges.
 - Sentence case for text and buttons; capitals only through the overline/display styles.
+- "TO" is never used: Timeout(s) in words, TOV for turnovers, PF for fouls in compact figures.
+- A figure that leads a row carries its unit under it (pts, PPP); the row's text doesn't repeat it.
+- Teammates who share a last name are told apart everywhere (`rosterNames` in lists, `shortName`
+  in text).
 - Numbers over words where a number says it: "3-7 in last 10", "+3.4 pts/100".
 - **Every big figure says what it is** (a label under it, or its column name) **and which way is
   good**; ranks say out of how many ("25th of 30"). Colours on scouting numbers rate the team shown
