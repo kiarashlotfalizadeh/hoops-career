@@ -278,7 +278,7 @@ describe('tactics lab & reports', () => {
     mine.tactics = applyPatch(saved, { defense: { scheme: 'man', help: 55 } });
     let flagged = 0;
     for (let tid = 1; tid < 30; tid++) {
-      const poor = scoutTeam(league, tid).weaknesses.some((w) => w.startsWith('Poor spacing'));
+      const poor = scoutTeam(league, tid).weaknesses.some((w) => w.startsWith('Few shooters in their five'));
       const ids = counterCandidates(league, 0, tid).map((c) => c.id);
       expect(ids.includes('zone')).toBe(poor);
       if (poor) expect(ids).toContain('help-high');
