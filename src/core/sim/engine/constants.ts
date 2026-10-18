@@ -1,0 +1,273 @@
+// The engine's tuning constants (K): shooting by zone, the base rates of turnovers, fouls, boards and
+// run-outs, time, fatigue and injuries, and the size of every tactical edge (coverages, zones and junk
+// defenses, pressure, the press, deny and double, guarding instructions, hunting, the late-game fouls),
+// each with what it is and how it was sized; and the diagnostics the calibration scripts read.
+
+import type { DefScheme, ShotZone } from '../../types';
+
+export const K = {
+  zoneBase: { rim: 0.638, paint: 0.458, mid: 0.42, c3: 0.383, ab3: 0.346 } as Record<ShotZone, number>,
+  zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
+  zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
+  foulRate: { rim: 0.208, paint: 0.106, mid: 0.041, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
+  /** Share of misses that are blocks, for an average contesting defender. */
+  blockMiss: { rim: 0.24, paint: 0.154, mid: 0.04, c3: 0.0165, ab3: 0.0165 } as Record<ShotZone, number>,
+  /** Extra share of misses blocked by the shooter's own defender (from behind, on the contest). */
+  chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
+  orbBase: 0.262,
+  toBase: 0.15,
+  nonShootFoul: 0.17,
+  /** Share of rebounds credited to the team rather than a player (NBA box scores leave these out). */
+  teamReb: { orb: 0.02, drb: 0.07 },
+  transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,
+  setup: { made: 8.6, dreb: 4.9, steal: 2.0, ft: 8.4, deadTO: 8.0, start: 5.6 } as Record<string, number>,
+  actionTime: 7.6,
+  continueBase: 0.38,
+  injuryRate: 0.00042,
+  /** A player playing through an injury (a game-time decision: SimTeamInput.play) is this many times as likely to get hurt in the game. */
+  gameTimeRisk: 2,
+  drain: 0.00068,
+  recover: 0.0012,
+  home: 0.007,
+  usageExp: 2.0,
+  /** Usage damping counts free-throw attempts (0.44 each); fitted when it counted trips, hence the odd values. */
+  usageDamp: 5.2,
+  freedomGreen: 1.25,
+  freedomLimited: 0.55,
+  /** How strongly usage tendency tilts an actor's shoot-vs-pass choice. */
+  selfShotExp: 0.6,
+  /** Share of a team's actions one player can run before the ball starts finding others. */
+  actCap: 0.68,
+  /** Assist share of teammates' baskets past which a passer starts looking for his own shot. */
+  astCap: 0.45,
+  /** Star plan "deny": his share of actions, the advantage he loses catching it late and further out, extra drain on his defender. */
+  denyTouch: 0.62,
+  denyCatch: 0.3,
+  denyDrain: 1.3,
+  /** A junk defense's chaser, with a zone behind him, denies harder than a man-to-man deny: his man's share of actions, and the advantage he loses on the catch. */
+  chaseTouch: 0.4,
+  chaseCatch: 0.45,
+  /** ...and the usage share past which the defense loads up on him comes this much sooner (see usageWeight). */
+  chaseCap: 0.14,
+  /** Run-outs against a team that crashed the glass: chance multiplier per unit of crash above 50, and the runners' edge. */
+  crashLeak: 1.5,
+  crashRunOut: 0.5,
+  /** Expected points of one unit of transition advantage, for impact tags. */
+  transAdvPts: 0.1,
+  /** Diminishing returns on crashing past 50: offensive-board rate given back at 100. */
+  crashFade: 0.11,
+  /** Share of offensive boards given up at full transition-D sprint back. */
+  getBackOrb: 0.08,
+  /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */
+  envPace: 0.035,
+  envShoot: 0.012,
+  envFouls: 0.08,
+  /** Score effects: past this second-half margin the leader eases off and the trailer plays
+   * loose, up to this much field-goal percentage either way, reached this many points later. */
+  easeFrom: 8,
+  ease: 0.058,
+  easeSpan: 12,
+  clutchSec: 240,
+  clutchEase: 0.05,
+  /**
+   * Team feel vs team defense: field-goal percentage per 50 points of difference between the
+   * offense's feel (oiq/pas/hnd) and the defense's team defense (diq/perD/intD), past the gap at
+   * which real-league scoring is unchanged. Sized so team net ratings track what the players'
+   * real box plus-minus says: the OVR model weights these attributes most, and the per-player
+   * matchups alone left team defense barely mattering. A matchup form, so fictional leagues
+   * (whose players rate higher on both ends) keep their scoring.
+   */
+  feel: 0.22,
+  feelGap: 3,
+  /** Full-court press: turnover rate against average ball handlers. */
+  pressTO: 0.06,
+  /** Blitz: trap turnover rate for an average trap and handler, and the 4-on-3's openness behind it. */
+  blitzTO: 0.045,
+  blitz4v3: 0.65,
+  /** Field-goal percentage a fully physical defense takes off every shot. */
+  physContest: 0.01,
+  /** Points per switched pick-and-roll the switch takes away (the screen's advantage). */
+  switchScreen: 0.04,
+  /** Handler's blow-by edge per unit of ball pressure, and the extra edge at full pressure. */
+  blowBy: 0.15,
+  blowByConvex: 0.8,
+  /** Expected points of one unit of handler advantage per action, for impact tags. */
+  advPts: { pnr: 0.04, handoff: 0.04, iso: 0.04, post: 0.04 },
+  /** Expected points swung by an offensive board, a turnover, and a run-out over a half-court trip, for impact tags. */
+  orbPts: 1.6,
+  toPts: 1.45,
+  runOutPts: 0.35,
+  /** Crunch time: how much more often the ball finds the go-to player, and how much more his best action is run. */
+  goToPick: 2.5,
+  goToAction: 1.6,
+  /** Chance an off-ball cross-screen against a switching defense leaves a big posting up a small (when the mismatch is there). */
+  crossSwitch: 0.12,
+  /** ...and the size edge (height rating, about 4.3 an inch) it takes. */
+  crossSize: 20,
+  /** A switched handoff: the matchup edge past which the offense goes after it, how fast its chance of doing so grows, and its cap. */
+  switchHuntFrom: 0.3,
+  switchHunt: 0.6,
+  switchHuntMax: 0.75,
+  /** The scramble a late switch leaves: openness for the mismatch it hands the offense. */
+  switchScramble: 0.15,
+  /** Shooting fouls on a switched post-up grow by one per this much size edge (height rating). */
+  mismatchFoul: 30,
+  /**
+   * Zone defenses by scheme: the edge each takes off the pick-and-roll handler, an isolation, a
+   * post-up and a drive (with their expected points for the zone_paint tags); the openness it
+   * leaves on kick-outs, pops and handoffs; motion's cuts (weight lost, openness lost), swings
+   * (weight multiplier, openness, the corner's share of them); and its offensive-board multiplier
+   * and tag. The 2-3 walls off the paint and leaves threes; the 3-2's three on the arc close out
+   * harder than man-to-man does (negative openness: the ball still swings, into contested threes)
+   * but leave the paint, the post, cutters and the glass softer.
+   */
+  zone: {
+    zone23: {
+      pnr: 0.3,
+      pnrTag: 0.3 * 0.1,
+      iso: 0.35,
+      isoTag: 0.035,
+      post: 0.25,
+      postTag: 0.025,
+      drive: 0.3,
+      kick: 0.2,
+      pop: 0.15,
+      handoff: 0.1,
+      cutW: 0.25,
+      cut: 0.2,
+      swingW: 1.35,
+      swing: 0.22,
+      corner: 0.45,
+      glass: 1.12,
+      glassTag: 0.12,
+    },
+    zone32: {
+      pnr: 0.1,
+      pnrTag: 0.01,
+      iso: 0.1,
+      isoTag: 0.01,
+      post: 0,
+      postTag: 0,
+      drive: 0.05,
+      kick: -0.6,
+      pop: -0.4,
+      handoff: -0.5,
+      cutW: 0.2,
+      cut: 0.06,
+      swingW: 1.5,
+      swing: -0.6,
+      corner: 0.15,
+      glass: 1.22,
+      glassTag: 0.22,
+    },
+    // the junk defenses' zones behind their chasers: four in a 2-2 box, three in a triangle. Fewer
+    // bodies wall off less of the paint and the glass and leave more of the arc open for everyone
+    // the chasers aren't on
+    box1: {
+      pnr: 0.28,
+      pnrTag: 0.028,
+      iso: 0.3,
+      isoTag: 0.03,
+      post: 0.22,
+      postTag: 0.022,
+      drive: 0.28,
+      kick: 0.45,
+      pop: 0.35,
+      handoff: 0.3,
+      cutW: 0.15,
+      cut: 0.1,
+      swingW: 1.4,
+      swing: 0.45,
+      corner: 0.5,
+      glass: 1.08,
+      glassTag: 0.08,
+    },
+    tri2: {
+      pnr: 0.2,
+      pnrTag: 0.02,
+      iso: 0.22,
+      isoTag: 0.022,
+      post: 0.18,
+      postTag: 0.018,
+      drive: 0.2,
+      kick: 0.5,
+      pop: 0.4,
+      handoff: 0.35,
+      cutW: 0.08,
+      cut: 0.04,
+      swingW: 1.45,
+      swing: 0.5,
+      corner: 0.55,
+      glass: 1.1,
+      glassTag: 0.1,
+    },
+  } as Record<Exclude<DefScheme, 'man'>, ZoneK>,
+  /**
+   * Top-locking a player off the ball, by a junk defense's chaser or a "tight" instruction (on top
+   * of the deny's fewer touches and late catches for a chased player): his weight as a kick-out
+   * target, the openness taken off his catch-and-shoot threes, the edge lost coming off screens and
+   * handoffs, and what a defender caught high gives back on his drives on the catch, his curls and
+   * his back-cuts (the openness, and his cut weight multiplier).
+   */
+  lock: {
+    box: { kickW: 0.45, c3: 0.4, offScreen: 0.3, beat: 0.3, cutW: 1.6 },
+    tight: { kickW: 0.6, c3: 0.3, offScreen: 0.25, beat: 0.3, cutW: 1.4 },
+  },
+  /**
+   * Scouting-report instructions on one player: going under screens on him (openness his pull-ups
+   * gain, the edge his drives off the screen lose, the roll and pop openness the screener's defender
+   * takes away by staying home); sagging off him (rim openness taken off teammates' drives, cuts and
+   * rolls while he's off the ball, openness his own catch-and-shoot looks gain); getting physical
+   * with him (the edge his post-ups and drives lose, and his shooting and reach-in fouls drawn).
+   */
+  pd: {
+    under: { pull: 0.4, drive: 0.5, roll: 0.25 },
+    sag: { help: 0.2, kick: 0.6 },
+    body: { post: 0.35, drive: 0.25, foul: 1.35 },
+  },
+  /**
+   * Hunting one defender: how much more often the player he guards gets the isolations, post-ups and
+   * ball-handler reps, the chance he's the screener when he isn't handling, the handler's edge per
+   * this much of the hunted screen defender's gap to his teammates (see huntGap), and the edge motion
+   * and handoffs lose while the ball sticks to the hunted matchup.
+   */
+  hunt: { pick: 1.8, screen: 0.75, screenEdge: 20, flow: 0.08 },
+  /**
+   * Foul to give: the most seconds left it's used with (and the fewest: under that there's no shot to
+   * take away), the openness the inbounds play's first action loses, and the chance the whistle
+   * comes on the shot anyway (two free throws).
+   */
+  ftg: { max: 8, min: 2.5, open: 0.35, inAct: 0.05 },
+};
+
+export interface ZoneK {
+  pnr: number;
+  pnrTag: number;
+  iso: number;
+  isoTag: number;
+  post: number;
+  postTag: number;
+  drive: number;
+  kick: number;
+  pop: number;
+  handoff: number;
+  cutW: number;
+  cut: number;
+  swingW: number;
+  swing: number;
+  corner: number;
+  glass: number;
+  glassTag: number;
+}
+
+/** Diagnostics for calibration scripts: made field goals and assisted makes by zone. */
+export const engineDiag = {
+  made: { rim: 0, paint: 0, mid: 0, three: 0 },
+  ast: { rim: 0, paint: 0, mid: 0, three: 0 },
+};
+export function resetEngineDiag() {
+  for (const k of ['rim', 'paint', 'mid', 'three'] as const) {
+    engineDiag.made[k] = 0;
+    engineDiag.ast[k] = 0;
+  }
+}
