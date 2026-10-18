@@ -911,6 +911,10 @@
 .lq-btn.on {
   color: var(--text);
 }
+/* a timeout called, waiting for the court: lit, not greyed */
+.lq-btn.on:disabled {
+  opacity: 1;
+}
 .lq-btn.on .lq-ic,
 .lq-btn.late .lq-ic {
   color: var(--accent-text);

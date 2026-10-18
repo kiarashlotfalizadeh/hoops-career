@@ -114,7 +114,8 @@ try {
     .getByRole('button', { name: /Sim to final/ })
     .click();
   await page.getByRole('button', { name: /Game report/ }).waitFor({ timeout: 30_000 });
-  step(`coached a live game to the final (${await bug.getAttribute('aria-label')})`);
+  // (the final card takes the scorebug's place: its heading names the result)
+  step(`coached a live game to the final (${await page.locator('main h1').first().textContent()})`);
 
   await page.goto(`${base}/#/`);
   await clearMoments(page);

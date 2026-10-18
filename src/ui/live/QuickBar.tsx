@@ -18,6 +18,7 @@ export function QuickBar({
   timeouts,
   timeout,
   canTimeout,
+  toPending,
   toState,
   onSubs,
   onCall,
@@ -30,6 +31,8 @@ export function QuickBar({
   timeouts: number;
   timeout: () => void;
   canTimeout: boolean;
+  /** A timeout is called and waiting for the court (or the next dead ball). */
+  toPending: boolean;
   /** Why a timeout can't be called now, or that one is waiting, for screen readers. */
   toState: string;
   onSubs: () => void;
@@ -44,7 +47,7 @@ export function QuickBar({
 }) {
   return (
     <div className={`lq${fix ? ' has-fix' : ''}`} role="group" aria-label="Coaching">
-      <button className="lq-btn" disabled={!canTimeout} onClick={timeout}>
+      <button className={`lq-btn${toPending ? ' on' : ''}`} disabled={!canTimeout} onClick={timeout}>
         {/* named by what it shows, "TO 7", then the state: "TO 7 left: call a timeout" */}
         <span className="lq-ic" aria-hidden="true">
           <Timer size={20} />

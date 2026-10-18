@@ -461,9 +461,10 @@ export default function Live() {
     // the app was closed mid-game: say where it picked up (or that it couldn't)
     if (found?.resumed) {
       const s = found.sim;
-      if (found.resumed === 'journal')
+      if (found.resumed === 'restarted') useStore.getState().toast("Your game in progress couldn't be picked up where you left off, so it starts again from tip-off.", 'bad');
+      // (one picked up before its tip has nothing to say: the starting lineups go up as on a fresh one)
+      else if (found.steps > 0)
         useStore.getState().toast(`Picked up where you left off: ${s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : `${periodLabel(s.q)} ${fmtClock(s.clock)}`}.`);
-      else useStore.getState().toast("Your game in progress couldn't be picked up where you left off, so it starts again from tip-off.", 'bad');
       found.resumed = undefined;
     }
     if (notes.length) useStore.getState().toast(notes.join(' '));
@@ -1017,7 +1018,9 @@ export default function Live() {
     return (
       <main className="page lv-final">
         <h1 className="sr-only">
-          {final ? 'Final' : 'Simulated'}: {away.region} {away.name} {neutralSite(game.game) ? 'vs' : 'at'} {home.region} {home.name}
+          {final ? 'Final' : 'Simulated'}: {away.region} {away.name} {result ? `${result.away.pts}, ` : ''}
+          {home.region} {home.name}
+          {result ? ` ${result.home.pts}` : ''}
         </h1>
         <div className="sr-only" aria-live="polite">
           {announce}
@@ -1275,6 +1278,7 @@ export default function Live() {
             canReplay={canReplay}
             playLabel="Resume"
             reveal={reveal}
+            replaying={!!show}
             onPause={togglePause}
             onSpeed={pickSpeed}
             onKeyPlays={toggleKeyPlays}
@@ -1367,6 +1371,7 @@ export default function Live() {
           timeouts={myView.timeouts}
           timeout={() => callTimeout()}
           canTimeout={canTimeout}
+          toPending={toPending}
           toState={toState}
           onSubs={() => openClip('lineup')}
           onCall={() => openClip('calls')}
