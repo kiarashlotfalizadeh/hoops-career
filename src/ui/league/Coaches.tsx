@@ -11,7 +11,7 @@ import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecord, type CoachSeason, type CoachTotals, type CoachStint } from '../../core/league/coaches';
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet, Statline } from '../components/ui';
-import { OutcomeTag, ordinal, seasonOutcome, useQueryParam } from './shared';
+import { OutcomeTag, ordinal, seasonOutcome, teamPath, useQueryParam } from './shared';
 
 interface Row {
   r: CoachRecord;
@@ -161,7 +161,7 @@ function JobRow({ league, j }: { league: League; j: CoachTotals & { stint: Coach
     <div className="lg-job">
       <TeamLogo tid={team.tid} size={24} decorative />
       <span className="lg-coach-t">
-        <Link to={`/teams/${team.tid}`} className="nm ellipsis">
+        <Link to={teamPath(team.tid)} className="nm ellipsis">
           {team.region} {team.name}
         </Link>
         <span className="sub ellipsis">

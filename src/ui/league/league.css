@@ -314,6 +314,26 @@
 
 /* ------------------------------------------------------------------ team tables (Table.tsx) */
 /* the team stays on the left while the figures scroll under it on a phone; a tablet shows them all */
+.lg-tbl-wrap {
+  position: relative;
+}
+/* more figures to the right: the table's edge fades out */
+.lg-tbl-wrap::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 28px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: linear-gradient(270deg, var(--raised) 15%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.lg-tbl-wrap.fr::after {
+  opacity: 1;
+}
 .lg-tbl {
   overflow-x: auto;
   overscroll-behavior-x: contain;

@@ -8,7 +8,7 @@ import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Segmented } from '../components/ui';
-import { TitleSlab, Toolbar, confName, confOrder, useQueryParam } from './shared';
+import { TitleSlab, Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
 
 /** "Dec 4–11", or "Nov 28 – Dec 3" across months. */
 function dateRange(league: League, a: number, b: number) {
@@ -173,7 +173,7 @@ function GroupTables({ league, tables, seeds, decided }: { league: League; table
               const seed = seedOf(r.tid);
               const out = decided && seed === undefined;
               return (
-                <Link key={r.tid} to={`/teams/${r.tid}`} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
+                <Link key={r.tid} to={teamPath(r.tid)} className={`lg-st-row ${r.tid === league.userTid ? 'me' : ''} ${out ? 'cup-out' : ''}`}>
                   <span className="rk">{r.won + r.lost ? r.rank : '—'}</span>
                   <TeamLogo tid={r.tid} size={22} decorative />
                   <span className="nm">

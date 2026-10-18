@@ -8,7 +8,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Chips, Segmented, StatTable, Toggle, type Col } from '../components/ui';
 import { advancedView, f1, perGame, seasonLine, signed, teamRatings, type AdvView, type PerGame } from '../stats';
-import { FilterField, FiltersButton, shortName, statSeasons, statTid, teamAbbrev, useQueryParam } from './shared';
+import { FilterField, FiltersButton, shortName, statSeasons, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
 import { RatingsTab } from './RatingsTab';
 
 type View = 'leaders' | 'players' | 'teams' | 'ratings';
@@ -528,7 +528,7 @@ function TeamStatsTable({ league, season }: { league: League; season: number }) 
   if (!rows.length) return <div className="card empty">{season === league.season ? 'No games played yet this season.' : 'Team stats are only tracked for simulated seasons.'}</div>;
   return (
     <>
-      <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(`/teams/${r.tid}`)} highlight={(r) => r.tid === league.userTid} />
+      <StatTable rows={rows} cols={cols} initialSort="net" rowKey={(r) => r.tid} onRow={(r) => nav(teamPath(r.tid))} highlight={(r) => r.tid === league.userTid} />
       <div className="lg-note">Regular season · ratings per 100 possessions · DRtg, TOV% and Opp eFG% sort lowest (best) first.</div>
     </>
   );

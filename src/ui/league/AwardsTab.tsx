@@ -10,7 +10,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Bar, Help, Section, Segmented } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
-import { seasonTeam, shortName, statTid, teamAbbrev, useQueryParam } from './shared';
+import { seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
   const pg = playerSeason(p, season, playoffs);
@@ -88,7 +88,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
     <Section title="Titles">
       <div className="card flush list">
         {aw.champion !== undefined && (
-          <Link to={`/teams/${aw.champion}`} className="lg-award">
+          <Link to={teamPath(aw.champion)} className="lg-award">
             <span className="ic">
               <Trophy size={18} />
             </span>
@@ -115,7 +115,7 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
             <TeamLogo tid={aw.cupWinner} size={40} decorative />
             <span className="lg-award-t">
               <span className="lb">NBA Cup</span>
-              <Link to={`/teams/${aw.cupWinner}`} className="nm ellipsis">
+              <Link to={teamPath(aw.cupWinner)} className="nm ellipsis">
                 {league.teams[aw.cupWinner].region} {league.teams[aw.cupWinner].name}
               </Link>
               <span className="sub">
@@ -211,7 +211,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
         <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
         <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
         {coyTeam && (
-          <AwardRow icon={<Award size={18} />} to={`/teams/${coyTeam.tid}`}>
+          <AwardRow icon={<Award size={18} />} to={teamPath(coyTeam.tid)}>
             <TeamLogo tid={coyTeam.tid} size={40} decorative />
             <span className="lg-award-t">
               <span className="lb">Coach of the Year</span>

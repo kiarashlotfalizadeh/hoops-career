@@ -8,24 +8,35 @@ import { TeamLogo } from '../components/TeamLogo';
 /** A table: `cols` are the figure columns' widths, `head` their labels after the team's. */
 export function TeamTable({ cols, head, children, className = '' }: { cols: number[]; head: ReactNode[]; children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  // a shadow under the team column once the figures have moved under it
+  // a shadow under the team column once the figures have moved under it, a fade where more are to come
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const on = () => el.classList.toggle('scrolled', el.scrollLeft > 2);
+    const wrap = el?.parentElement;
+    if (!el || !wrap) return;
+    const on = () => {
+      el.classList.toggle('scrolled', el.scrollLeft > 2);
+      wrap.classList.toggle('fr', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    };
+    on();
     el.addEventListener('scroll', on, { passive: true });
-    return () => el.removeEventListener('scroll', on);
+    window.addEventListener('resize', on);
+    return () => {
+      el.removeEventListener('scroll', on);
+      window.removeEventListener('resize', on);
+    };
   }, []);
   return (
-    <div ref={ref} className={`card flush lg-tbl ${className}`} style={{ '--cols': cols.map((w) => `${w}px`).join(' ') } as CSSProperties}>
-      <div className="lg-tbl-in">
-        <div className="lg-tbl-row head" aria-hidden="true">
-          <span className="lead">Team</span>
-          {head.map((h, i) => (
-            <span key={i}>{h}</span>
-          ))}
+    <div className="lg-tbl-wrap">
+      <div ref={ref} className={`card flush lg-tbl ${className}`} style={{ '--cols': cols.map((w) => `${w}px`).join(' ') } as CSSProperties}>
+        <div className="lg-tbl-in">
+          <div className="lg-tbl-row head" aria-hidden="true">
+            <span className="lead">Team</span>
+            {head.map((h, i) => (
+              <span key={i}>{h}</span>
+            ))}
+          </div>
+          {children}
         </div>
-        {children}
       </div>
     </div>
   );

@@ -158,6 +158,8 @@ function LotteryRow({ league, f, t, rank }: { league: League; f: Forecast; t: Te
 function Trail({ league }: { league: League }) {
   const tr = league.oddsTrail;
   if (!tr || tr.season !== league.season || tr.tid !== league.userTid || tr.pts.length < 2) return null;
+  // a flat line at the top (or the bottom) all season says nothing the table doesn't
+  if (tr.pts.every((p) => p[1] >= 990) || tr.pts.every((p) => p[1] <= 10)) return null;
   const last = tr.pts[tr.pts.length - 1];
   return (
     <Section
