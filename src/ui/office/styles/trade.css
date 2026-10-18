@@ -10,12 +10,12 @@
 .fo-team {
   position: relative;
   flex: none;
-  width: 54px;
+  width: 50px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px 0 7px;
+  gap: 3px;
+  padding: 5px 0 6px;
   border-radius: 10px;
   font-size: 11px;
   font-weight: 750;
@@ -246,6 +246,12 @@
   text-overflow: ellipsis;
 }
 
+/* at the end of a row's details, in their size */
+.fo-tier.inline {
+  margin: 0;
+  font-size: inherit;
+}
+
 .fo-tier-v {
   font-weight: 750;
   color: var(--tier);
@@ -293,8 +299,8 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 12px 8px 11px;
-  min-height: 62px;
+  padding: var(--row-py) var(--row-px) var(--row-py) 11px;
+  min-height: var(--row-min);
   text-align: left;
   box-shadow: inset 3px 0 0 transparent;
   transition: background 0.12s ease;
@@ -305,7 +311,12 @@
 }
 
 .fo-asset.pick {
-  min-height: 52px;
+  min-height: 44px;
+}
+
+.fo-asset.pick .fo-name {
+  min-width: 0;
+  font-size: 14px;
 }
 
 .fo-asset:active {
@@ -387,7 +398,7 @@
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   /* solid fallback first: iOS before 16.2 has no color-mix */
   background: rgba(19, 25, 33, 0.97);
   background: color-mix(in srgb, var(--surface) 96%, transparent);
@@ -395,7 +406,7 @@
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line-2);
   border-radius: 14px;
-  padding: 10px 12px 12px;
+  padding: 8px 12px 10px;
   box-shadow:
     0 -8px 30px rgba(0, 0, 0, 0.5),
     inset 0 3px 0 var(--react, var(--line-2));
@@ -425,16 +436,17 @@
 }
 
 .fo-dock-pct {
+  flex: none;
   font-family: var(--display);
   font-stretch: 72%;
   font-weight: 800;
-  font-size: 20px;
+  font-size: 18px;
   color: var(--react);
 }
 
 .fo-meter {
   position: relative;
-  height: 8px;
+  height: 6px;
   border-radius: 4px;
   background: var(--surface-3);
   overflow: hidden;
@@ -450,14 +462,10 @@
   transition: width 0.3s ease;
 }
 
-.fo-dock-more {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+/* what the deal does: salary out and in, your payroll after it, both rosters after it */
 .fo-dock-figs {
-  padding-top: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 0.8fr);
+  padding-top: 6px;
   border-top: 1px solid var(--line);
 }
 
@@ -466,23 +474,28 @@
 }
 
 .fo-dock-figs .v {
-  font-size: 17px;
+  font-size: 16px;
+  white-space: nowrap;
 }
 
 .fo-dock-figs .k {
   font-size: 9.5px;
   letter-spacing: 0.07em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fo-dock-figs .s {
   white-space: normal;
+  line-height: 1.25;
 }
 
 .fo-dock-rule {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.35;
   color: color-mix(in srgb, var(--bad) 75%, white);
 }
 
@@ -502,15 +515,6 @@
 
 .fo-dock-force {
   gap: 4px;
-}
-
-/* on a phone the dock folds the deal's terms and its salary, payroll and roster numbers away until it's
-   opened (their reaction, the meter, their reasons, a broken rule and the buttons stay): all of it covered
-   half the asset list and took its taps. The meter's ticks fold too: its percentage is over it */
-@media (max-width: 759px) {
-  .fo-dock:not(.open) .fo-dock-more {
-    display: none;
-  }
 }
 
 /* while a sim runs its progress shows where the Continue bar is (theme.css keeps the busy one), and the dock rides above it */
@@ -565,19 +569,36 @@ body:has(.simbar) .fo-dock {
 .fo-pkg {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: var(--row-py) var(--row-px) 10px;
 }
 
 .fo-pkg-h {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .fo-pkg-h .grow {
   min-width: 0;
+}
+
+/* the package's details and its verdict ("Fair value · 100%" of his value) on one line */
+.fo-pkg-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fo-pkg-sub .fo-meta {
+  min-width: 0;
+}
+
+.fo-pkg-sub .tag {
+  flex: none;
+  margin-left: auto;
 }
 
 .fo-pkg-h .right .tag {
@@ -587,16 +608,23 @@ body:has(.simbar) .fo-dock {
 .fo-pkg-items {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-left: 40px;
+  gap: 4px;
+  padding-left: 34px;
 }
 
 .fo-pkg-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   min-width: 0;
+}
+
+.fo-pkg-end {
+  flex: none;
+  min-width: 62px;
+  font-size: 11.5px;
+  text-align: right;
 }
 
 .fo-pkg-ic {

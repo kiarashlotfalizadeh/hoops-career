@@ -9,7 +9,7 @@ import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, Ovr, Section } from '../components/ui';
-import { STRATEGY_META, capSeason } from '../office/common';
+import { STRATEGY_META, capSeason, contractEnd } from '../office/common';
 import { blockOffers } from '../office/tradeBlock';
 import { isUntouchable } from '../../core/league/proposals';
 import { UntouchableToggle } from '../office/Untouchable';
@@ -92,19 +92,24 @@ export function TradingBlock({
               return (
                 <div key={o.tid} className="fo-pkg">
                   <div className="fo-pkg-h">
-                    <TeamLogo tid={o.tid} size={30} decorative />
+                    <TeamLogo tid={o.tid} size={26} decorative />
                     <div className="grow">
                       <div className="fo-name">
                         {t.region} {t.name}
                       </div>
-                      <div className="fo-meta">
-                        {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${money(inSal)} back` : 'no salary back'}
+                      <div className="fo-pkg-sub">
+                        <span className="fo-meta">
+                          {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${money(inSal)} salary back` : 'no salary back'}
+                        </span>
+                        <span className={`tag ${tone.c}`}>
+                          {tone.l}
+                          {dump ? '' : ` · ${Math.round(ratio * 100)}%`}
+                        </span>
                       </div>
                     </div>
-                    <div className="right">
-                      <span className={`tag ${tone.c}`}>{tone.l}</span>
-                      {!dump && <div className="tiny dim num">{Math.round(ratio * 100)}% of his value</div>}
-                    </div>
+                    <button className="btn xs" aria-label={`Open the ${t.name}' package in the builder`} onClick={() => onLoad(o.offer)}>
+                      Open
+                    </button>
                   </div>
                   <div className="fo-pkg-items">
                     {o.offer.b.pids.map((x) => {
@@ -119,6 +124,7 @@ export function TradingBlock({
                             {p.pos} · {playerAge(p, league.season)}
                           </span>
                           <span className="num">{money(salaryFor(p, capSeason(league)))}</span>
+                          <span className="dim fo-pkg-end">{contractEnd(league, p)}</span>
                         </div>
                       );
                     })}
@@ -132,9 +138,6 @@ export function TradingBlock({
                       );
                     })}
                   </div>
-                  <button className="btn sm block" onClick={() => onLoad(o.offer)}>
-                    Open in trade builder
-                  </button>
                 </div>
               );
             })}

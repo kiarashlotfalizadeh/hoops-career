@@ -51,6 +51,11 @@ export function TradeHelp({ league, season }: { league: League; season: number }
         rebuilders pay more for youth and picks, less for veterans. A star is worth more than several lesser players, and players they'd have to waive count for nothing.
         {league.settings.difficulty === 'easy' ? ' On easy they take a little less than fair value, but not for players or picks you got in a trade this season.' : ''}
       </p>
+      {league.settings.godMode && (
+        <p>
+          <b>God mode.</b> Force this trade puts a deal through whatever their GM and the trade rules say: only its shape and five players to dress are checked.
+        </p>
+      )}
       <p>
         <b>Negotiating.</b> Under the meter they give their main reasons, and warn you when you'd give far more than you get. When they say no, they offer the versions they would
         take: more from you, one of their pieces left out, or one of their bad contracts for you to absorb.

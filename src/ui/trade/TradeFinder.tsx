@@ -124,7 +124,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               value={state.salary === 'match' ? MATCH : state.salary}
               onChange={(v) => set({ salary: v === MATCH ? 'match' : v })}
               options={[
-                [MATCH, `≤ ${money(data.match)} (you can match)`],
+                [MATCH, `Matchable ≤ ${money(data.match, 0)}`],
                 [25_000, 'Salary ≤ $25M'],
                 [10_000, 'Salary ≤ $10M'],
                 [ANY, 'Any salary'],
@@ -165,9 +165,8 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                       {p.injury && <span className="fo-flag bad">INJ</span>}
                     </div>
                     <div className="fo-meta">
-                      {league.teams[p.tid].abbrev} · {p.pos} · {age} · {p.archetype}
+                      {league.teams[p.tid].abbrev} · {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
                     </div>
-                    <TierLine tier={tier} avail={avail} />
                   </div>
                   <div className="fo-money">
                     <div className="a">{p.contract.twoWay ? 'Two-way' : money(salary)}</div>

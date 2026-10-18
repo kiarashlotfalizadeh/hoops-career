@@ -24,7 +24,7 @@ export function TeamPicker({ league, partner, onPick }: { league: League; partne
     <div className="fo-teams hscroll" ref={ref} role="group" aria-label="Trade partner">
       {teams.map((t) => (
         <button key={t.tid} aria-pressed={t.tid === partner} className={`fo-team ${t.tid === partner ? 'on' : ''}`} onClick={() => onPick(t.tid)}>
-          <TeamLogo tid={t.tid} size={30} decorative />
+          <TeamLogo tid={t.tid} size={24} decorative />
           {t.abbrev}
         </button>
       ))}

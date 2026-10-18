@@ -15,14 +15,19 @@ export const TIER_COLOR: Record<ValueTier, string> = {
 
 const NOTE_COLOR: Record<TradeNote['tone'], string> = { good: 'var(--good)', bad: 'var(--bad)', warn: 'var(--warn)', info: 'var(--info)' };
 
-/** "Starter value · On the block": where a player's neutral trade value ranks league-wide, and whether his team looks ready to move him (or builds around him). */
-export function TierLine({ tier, avail }: { tier: ValueTier; avail: Availability }) {
+/**
+ * "Starter value · On the block": where a player's neutral trade value ranks league-wide, and
+ * whether his team looks ready to move him (or builds around him). A line of its own, or `inline`
+ * at the end of a row's details.
+ */
+export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; avail: Availability; inline?: boolean }) {
+  const Tag = inline ? 'span' : 'div';
   return (
-    <div className="fo-tier" style={{ ['--tier' as string]: TIER_COLOR[tier] }}>
+    <Tag className={inline ? 'fo-tier inline' : 'fo-tier'} style={{ ['--tier' as string]: TIER_COLOR[tier] }}>
       <span className="fo-tier-v">{tier} value</span>
       {avail === 'block' && <span className="good bold"> · On the block</span>}
       {avail === 'franchise' && <span className="dim2"> · Cornerstone</span>}
-    </div>
+    </Tag>
   );
 }
 

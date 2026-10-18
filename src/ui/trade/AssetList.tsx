@@ -6,7 +6,9 @@ import { teamPlayers } from '../../core/league/helpers';
 import { availability, pickLabel, untradeable, valueTier, type TradeOffer } from '../../core/league/trades';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Ovr } from '../components/ui';
+import { Ovr } from '../components/ui';
+import { useLeagueMemo } from '../../state/store';
+import { pickProjection } from '../league/shared';
 import { Term } from '../components/Glossary';
 import { contractEnd } from '../office/common';
 import { rosterNames } from '../stats';
@@ -43,6 +45,8 @@ export function AssetList({
   const tw = players.filter((p) => p.contract.twoWay).length;
   const nameOf = rosterNames(players, { initial: true });
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || (a.pick ?? 99) - (b.pick ?? 99));
+  // this draft's picks: where they'd land if the season ended today (until the lottery sets the order)
+  const proj = useLeagueMemo(() => pickProjection(league), [league]);
   return (
     <section className="card flush fo-assets" aria-label={title}>
       <div className="fo-assets-h">
@@ -71,7 +75,14 @@ export function AssetList({
       ) : (
         <div className="list">
           {picks.map((dp) => (
-            <PickAsset key={dp.dpid} league={league} dp={dp} on={sel.dpids.includes(dp.dpid)} onToggle={() => onChange({ ...sel, dpids: toggle(sel.dpids, dp.dpid) })} />
+            <PickAsset
+              key={dp.dpid}
+              league={league}
+              dp={dp}
+              proj={proj(dp)}
+              on={sel.dpids.includes(dp.dpid)}
+              onToggle={() => onChange({ ...sel, dpids: toggle(sel.dpids, dp.dpid) })}
+            />
           ))}
         </div>
       )}
@@ -85,6 +96,7 @@ export function AssetList({
   );
 }
 
+/** A player to tap into the deal: two lines (his name and flags; position, age, his trade value and whether he's on the block), his rating, this season's salary and when his deal ends. */
 function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
   const locked = untradeable(league, p);
   return (
@@ -92,7 +104,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       <span className="fo-check" aria-hidden="true">
         <Check size={14} strokeWidth={3} />
       </span>
-      <Avatar p={p} />
+      <Ovr v={p.ovr} size="sm" />
       <div className="grow">
         <div className="fo-asset-name">
           <span className="fo-name">{name}</span>
@@ -108,12 +120,10 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
               {p.promise?.kind === 'trade' ? 'Promised a trade' : 'Wants a trade'} ·{' '}
             </span>
           )}
-          {p.pos} · {playerAge(p, league.season)} · {p.archetype}
-          {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''}
+          {p.pos} · {playerAge(p, league.season)}
+          {p.pot > p.ovr + 2 ? ` · ▲${p.pot}` : ''} · <TierLine inline tier={valueTier(league, p)} avail={availability(league, p)} />
         </div>
-        <TierLine tier={valueTier(league, p)} avail={availability(league, p)} />
       </div>
-      <Ovr v={p.ovr} size="sm" />
       <div className="fo-money">
         <div className="a">{money(salaryFor(p, season))}</div>
         <div className="b">{contractEnd(league, p, season)}</div>
@@ -122,19 +132,16 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
   );
 }
 
-function PickAsset({ league, dp, on, onToggle }: { league: League; dp: DraftPick; on: boolean; onToggle: () => void }) {
-  const own = dp.originalTid === dp.tid;
+/** A pick to tap into the deal, on one line: its name (the original team's mark, round, protection, swap) and where it projects. */
+function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: DraftPick; proj?: number; on: boolean; onToggle: () => void }) {
   return (
     <button className={`fo-asset pick ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
       <span className="fo-check" aria-hidden="true">
         <Check size={14} strokeWidth={3} />
       </span>
-      <TeamLogo tid={dp.originalTid} size={28} decorative />
-      <div className="grow">
-        <div className="fo-name">{pickLabel(league, dp)}</div>
-        <div className="fo-meta">{own ? 'Own pick' : `Acquired from ${league.teams[dp.originalTid].abbrev}`}</div>
-      </div>
-      <span className={`fo-flag ${dp.round === 1 ? 'info' : ''}`}>R{dp.round}</span>
+      <TeamLogo tid={dp.originalTid} size={24} decorative />
+      <span className="fo-name grow">{pickLabel(league, dp)}</span>
+      {proj !== undefined && <span className={`fo-flag ${dp.round === 1 && proj <= 14 ? 'warn' : 'info'}`}>proj. #{proj}</span>}
     </button>
   );
 }

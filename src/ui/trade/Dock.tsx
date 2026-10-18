@@ -1,7 +1,7 @@
-// The dock: their GM's live reaction to the deal (the verdict, the meter, his reasons), what it does
-// to the cap and the rosters, and the buttons (make it work, propose, force in god mode).
-import { useId, useState } from 'react';
-import { ChevronDown, ChevronUp, Handshake, Zap } from 'lucide-react';
+// The dock: their GM's live reaction to the deal (the verdict, how much of the value they give up
+// you cover, his reasons), what it does to your cap and both rosters, always in view, and the
+// buttons (make it work, propose, force in god mode).
+import { Handshake, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, payroll, rosterMaxNow } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
@@ -11,16 +11,23 @@ import { TeamLogo } from '../components/TeamLogo';
 import { TradeNotes } from './common';
 import { TermsList } from './Terms';
 import { type EditCheck } from '../../core/league/godMode';
-import { money, moneySigned } from '../../core/format';
+import { money } from '../../core/format';
 
-function reaction(ev: TradeEval): { pct: number; label: string; color: string } {
-  if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)' };
+/**
+ * Their reaction as the meter shows it: how much of the value they'd give up your side covers
+ * (`pct`), and the words for it. Value that's there but blocked (the rules, too many firsts) fills
+ * the meter short of a deal.
+ */
+function reaction(ev: TradeEval): { pct: number; label: string; color: string; figure: string } {
+  if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)', figure: '✓ Deal' };
   // the AI's own verdict on how far the value is from enough
   const { gap: rel, label } = valueVerdict(ev);
   const pct = Math.max(4, Math.min(94, (1 - rel) * 100));
-  // value is there but something else blocks it: the rules, or too many first-round picks
-  if (ev.delta >= 0) return ev.ok ? { pct: 94, label: ev.message, color: 'var(--warn)' } : { pct: 100, label: 'They would take it', color: 'var(--good)' };
-  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)' };
+  if (ev.delta >= 0)
+    return ev.ok
+      ? { pct: 94, label: ev.message, color: 'var(--warn)', figure: 'Value there' }
+      : { pct: 100, label: 'They would take it', color: 'var(--good)', figure: 'Value there' };
+  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)', figure: `${Math.round(pct)}% of value` };
 }
 
 export function Dock({
@@ -48,10 +55,6 @@ export function Dock({
   const user = league.userTid;
   // god-mode edits wait while a sim runs, a forced trade too
   const simming = useStore((s) => !!s.sim);
-  // on a phone the dock folds the deal's terms and its salary, payroll and roster numbers away until it's
-  // opened (office.css .fo-dock-more): all of it covered half the asset list
-  const [more, setMore] = useState(false);
-  const moreId = useId();
   const cap = CAP_FOR(league, season);
   const key = JSON.stringify(offer);
   // in the summer each team's cap holds replay its re-signing plan: work them out once per offer, not every render
@@ -91,61 +94,53 @@ export function Dock({
   // the helper can fix our side's salary matching, a full roster and the value, nothing else
   const theyreOver = capView.theyreOver;
   const fixable = !ev.accept && capView.workable;
-  // god mode's line under Force folds with the details when it only explains (an error or a wait stays)
-  const forcePlain = !!force && !force.errors.length && !force.warnings.length && !simming;
+  const abbrev = league.teams[offer.b.tid].abbrev;
   return (
-    <div className={`fo-dock${more ? ' open' : ''}`} style={{ ['--react' as string]: r.color }}>
+    <div className="fo-dock" style={{ ['--react' as string]: r.color }}>
       <div className="fo-dock-top">
         <TeamLogo tid={offer.b.tid} size={22} decorative />
         <span className="fo-dock-says">
-          <span className="sr-only">{league.teams[offer.b.tid].abbrev}: </span>
+          <span className="sr-only">{abbrev}: </span>
           {r.label}
         </span>
-        <span className="fo-dock-pct num">{ev.accept ? '✓' : `${Math.round(r.pct)}%`}</span>
-        <button className="btn xs ghost fo-only-sm" aria-expanded={more} aria-controls={forcePlain ? `${moreId} ${moreId}f` : moreId} onClick={() => setMore((m) => !m)}>
-          {more ? <ChevronDown size={14} /> : <ChevronUp size={14} />} {more ? 'Less' : 'Details'}
-        </button>
+        <span className="fo-dock-pct num">{r.figure}</span>
       </div>
       <div className="fo-meter" aria-hidden="true">
         <i style={{ width: `${r.pct}%` }} />
       </div>
       {/* their two main reasons (one when a rule problem already needs the room) */}
       {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}
-      <div id={moreId} className="fo-dock-more">
-        {/* what each protection, swap and sum of cash does, a line each */}
-        <TermsList league={league} offer={offer} short />
-        <div className="statline fo-dock-figs">
-          <div>
-            <div className="k">Salary out / in</div>
-            <div className="v num">
-              {money(out)} / {money(inc)}
-            </div>
+      {/* what each protection and swap does, a line each (the cash shows in its own control) */}
+      <TermsList league={league} offer={offer} short />
+      <div className="statline fo-dock-figs">
+        <div>
+          <div className="k">Salary out · in</div>
+          <div className="v num">
+            {money(out)} · {money(inc)}
           </div>
-          <div>
-            <div className="k">Payroll after</div>
-            <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-              {money(after)}
-            </div>
-            <div className="s num">
-              {after > cap.salaryCap ? `${moneySigned(after - cap.salaryCap)} vs cap` : `${money(cap.salaryCap - after)} under`}
-              {holds > 0 ? ` · incl. ${money(holds)} holds` : ''}
-            </div>
+        </div>
+        <div>
+          <div className="k">Payroll after</div>
+          <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+            {money(after)}
           </div>
-          <div>
-            <div className="k">Rosters</div>
-            <div className="v num" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
-              {rosterAfter} / {theirAfter}
-            </div>
-            <div className="s">you / them</div>
+          <div className="s num">
+            {after > cap.luxuryTax
+              ? `${money(after - cap.luxuryTax)} over the tax`
+              : after > cap.salaryCap
+                ? `${money(after - cap.salaryCap)} over the cap`
+                : `${money(cap.salaryCap - after)} cap space`}
+            {holds > 0 ? `, incl. ${money(holds)} holds` : ''}
           </div>
+        </div>
+        <div>
+          <div className="k">Rosters</div>
+          <div className="v num" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
+            {rosterAfter} · {theirAfter}
+          </div>
+          <div className="s">you · {abbrev}</div>
         </div>
       </div>
-      {/* folded on a phone, a payroll over the tax still says so */}
-      {!more && after > cap.luxuryTax && (
-        <div className="fo-only-sm tiny warn bold num">
-          Payroll after {money(after)}: {money(after - cap.luxuryTax)} over the tax
-        </div>
-      )}
       {ruleErrors.length > 0 && (
         <div className="fo-dock-rule">
           <span className="tag bad">Not allowed</span>
@@ -168,12 +163,12 @@ export function Dock({
           <button className="btn sm block" disabled={force.errors.length > 0 || simming} onClick={onForce}>
             <Zap size={16} /> Force this trade
           </button>
-          <span id={`${moreId}f`} className={`tiny ${force.errors.length ? 'bad' : force.warnings.length || simming ? 'warn' : 'dim fo-dock-more'}`}>
-            {force.errors[0] ??
-              (simming
-                ? 'The simulation is running: a forced trade waits for it to stop.'
-                : (force.warnings[0] ?? 'God mode: it goes through whatever their GM and the trade rules say.'))}
-          </span>
+          {/* (the plain explanation stays in the help: only an error, a warning or a wait shows here) */}
+          {(force.errors.length > 0 || force.warnings.length > 0 || simming) && (
+            <span className={`tiny ${force.errors.length ? 'bad' : 'warn'}`}>
+              {force.errors[0] ?? (simming ? 'The simulation is running: a forced trade waits for it to stop.' : force.warnings[0])}
+            </span>
+          )}
         </div>
       )}
     </div>
