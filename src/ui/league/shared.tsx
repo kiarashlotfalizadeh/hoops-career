@@ -262,7 +262,7 @@ export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number
     { label: 'All-NBA', n: count((t) => t.startsWith('All-NBA')) },
     { label: 'All-Star', n: count((t) => t === 'All-Star') },
     { label: 'All-Star MVP', n: count((t) => t === 'All-Star MVP') },
-    { label: '3-Point Contest', n: count((t) => t === 'Three-Point Contest') },
+    { label: 'Three-Point Contest', n: count((t) => t === 'Three-Point Contest') },
     { label: 'Dunk Contest', n: count((t) => t === 'Slam Dunk Contest') },
     { label: 'All-Defense', n: count((t) => t.startsWith('All-Defensive')) },
     { label: 'ROY', n: count((t) => t === 'Rookie of the Year') },
