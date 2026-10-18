@@ -7,7 +7,7 @@ import { rosterNames } from '../stats';
 import { PickRow } from './Pick';
 
 /**
- * Expert game management: who takes over in crunch time, the play after your timeouts (an action, or
+ * Game Mgmt's crunch time: who takes over in crunch time, the play after your timeouts (an action, or
  * one of the sets for a player you name or the best fit on the floor), and whether your assistant
  * adjusts at breaks in the games you don't coach live.
  */
@@ -25,7 +25,6 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
   const atoPid = t.manage.atoPid ?? -1;
   // a set, or an isolation, can be run for one player
   const forOne = isSetId(ato) || ato === 'iso';
-  const help = isSetId(ato) ? `${SETS[ato].what} For ${SETS[ato].forWho}: ${SETS[ato].look}.` : ato !== 'none' ? ACTION_META[ato].help : '';
   const playerSub = (p: Player) => `${p.pos} · OVR ${p.ovr}${p.injury ? ' · injured' : ''}`;
   return (
     <Section
@@ -40,7 +39,7 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
             After one of your timeouts (yours or the staff&apos;s), the next half-court trip opens with the after-timeout play. A set is run for the player you name while he&apos;s
             on the floor, else for the one who fits it best, and like any set it&apos;s read a little better each time it&apos;s run in a game.
           </p>
-          <p>In live games you can also call plays from the bench: from Advanced depth any time (Plays), and in the last two minutes on every depth.</p>
+          <p>In live games you can also call plays from the bench (Plays).</p>
           <p>
             Assistant adjusts in simmed games: at breaks and timeouts he changes one thing a quarter when the other team is exploiting it, as AI coaches do. Game reports list every
             change. Never in games you coach live.
@@ -67,11 +66,10 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
             })
           }
           help="Opens your next half-court trip after your timeouts."
-          note={help || undefined}
           options={[
             { id: 'none' as const, label: 'Any' },
-            ...ACTIONS.map((a) => ({ id: a, label: ACTION_META[a].label, group: 'Actions' })),
-            ...SET_IDS.map((id) => ({ id, label: SETS[id].name, sub: `For ${SETS[id].forWho}`, group: 'Sets' })),
+            ...ACTIONS.map((a) => ({ id: a, label: ACTION_META[a].label, sub: ACTION_META[a].help, group: 'Actions' })),
+            ...SET_IDS.map((id) => ({ id, label: SETS[id].name, sub: `${SETS[id].what} For ${SETS[id].forWho}.`, group: 'Sets' })),
           ]}
         />
         {forOne && (
@@ -97,7 +95,6 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
               })
             }
             label="Assistant adjusts in simmed games"
-            help="One fix a quarter when they exploit you."
           />
         </div>
       </div>

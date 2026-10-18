@@ -3,7 +3,8 @@
 // the pluses and minuses it is made of, the players behind them, and what would raise it.
 import { useMemo, useState } from 'react';
 import { ChevronRight, Info } from 'lucide-react';
-import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
+import { edit } from '../../state/actions';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
 import { presetMatches } from '../../core/sim/playbooks';
 import {
@@ -169,7 +170,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const presets: (OffPreset | DefPreset)[] = kind === 'off' ? OFF_PRESETS : DEF_PRESETS;
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
   const pick = (id: string) =>
-    useStore.getState().mutate((l) => {
+    edit((l) => {
       const tt = l.teams[l.userTid].tactics;
       if (kind === 'off') {
         tt.offense = applyOffPreset(tt.offense, id);

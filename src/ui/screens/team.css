@@ -1,6 +1,54 @@
 /* The Team section: roster, a player's page, rotation, lineups and the shared pickers. Scoped with
    the `tm-` prefix. */
 
+/* ------------------------------------------------------------ the hub's header */
+/* the team, its spots and payroll, who runs it: one compact block over the tabs */
+.tm-hh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: -2px;
+}
+.tm-hh-id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tm-hh-region {
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  line-height: 1.2;
+}
+.tm-hh-name {
+  font-size: 30px;
+  line-height: 1;
+  margin: 1px 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-hh-meta {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.tm-hh-staff {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-hh-staff svg {
+  flex: none;
+}
+
 /* ------------------------------------------------------------ shared */
 /* a line under a table or a list: what its marks mean */
 .tm-foot {
@@ -12,27 +60,22 @@
   flex: none;
   white-space: nowrap;
 }
-/* shortcuts to the screens beside this one: compact, under the title */
-.tm-links {
-  display: flex;
-  gap: 8px;
-  margin-top: -6px;
-}
-.tm-links .btn {
-  flex: 1;
-  min-width: 0;
-  padding: 0 8px;
-  gap: 6px;
-  color: var(--text-2);
-}
-.tm-links .btn svg {
+/* a row's mood mark, only when it matters: a small word in its signal colour */
+.tm-moodmark {
   flex: none;
-  color: var(--text-dim);
-}
-.tm-mood {
-  flex: none;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   line-height: 1;
+  white-space: nowrap;
+}
+.tm-moodmark.warn {
+  color: var(--warn);
+}
+.tm-moodmark.bad {
+  color: var(--bad);
 }
 /* an OVR badge with its POT under it */
 .tm-ovr {
@@ -71,17 +114,22 @@
   font-size: 15px;
   line-height: 1.2;
 }
+.tm-pmeta {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
 .tm-pline {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
+  gap: 4px 10px;
   margin-top: 4px;
 }
 /* a row's season line: figures first, units in small capitals */
 .tm-figs {
   display: inline-flex;
-  flex-wrap: wrap;
+  white-space: nowrap;
   gap: 0 9px;
   font-size: 10.5px;
   font-weight: 700;
@@ -98,8 +146,8 @@
   color: var(--text-2);
   margin-right: 1px;
 }
-/* a narrow phone: the four figures condense to stay on one line */
-@media (max-width: 380px) {
+/* a phone: the figures condense to stay on the line with his position and age */
+@media (max-width: 440px) {
   .tm-figs {
     gap: 0 7px;
     font-size: 10px;
@@ -200,10 +248,10 @@
   color: var(--text-2);
   line-height: 1.15;
 }
-/* 34px, or smaller until the name's longest run (--run letters, at most about 0.62em each) fits the column */
+/* 34px, or smaller until the name's longest run (--run letters, at most about 0.74em each in capitals) fits the column */
 .tm-last {
   font-size: 28px;
-  font-size: clamp(18px, 100cqi / (var(--run, 8) * 0.62), 34px);
+  font-size: clamp(18px, 100cqi / (var(--run, 8) * 0.74), 34px);
   line-height: 0.95;
   letter-spacing: 0.01em;
   overflow-wrap: anywhere;
@@ -357,33 +405,67 @@ a.tag::after {
   font-size: 24px;
 }
 
-/* mood */
-.tm-mood-card {
+/* morale: how he feels in display type, what it does to his play, the pulls behind it */
+.tm-morale {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.tm-mood-ic {
+.tm-morale-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tm-morale-ic {
   font-size: 18px;
   line-height: 1;
   width: 20px;
   text-align: center;
 }
-.tm-mood-l {
-  font-weight: 750;
-  font-size: 16px;
+.tm-morale-l {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
-.tm-notes {
-  margin: 0;
-  padding: 0 0 0 30px;
-  font-size: 13px;
+.tm-morale-fx {
+  font-size: 14.5px;
+  font-weight: 650;
   color: var(--text-2);
+}
+.tm-reasons {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
+  font-size: 13.5px;
+  color: var(--text-2);
 }
-.tm-notes li::marker {
-  color: var(--text-dim);
+.tm-reasons li {
+  display: flex;
+  gap: 10px;
+}
+.tm-reasons .num {
+  font-weight: 750;
+}
+.tm-promise {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.tm-promise svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--info);
 }
 
 /* contract */
@@ -543,11 +625,25 @@ a.tm-hi:active {
 }
 
 /* ------------------------------------------------------------ rotation */
+/* the assistant's switch, flat on the page, and Undo once he has replaced yours */
+.tm-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tm-undo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
 .tm-rsum {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 8px;
 }
 .tm-rsum .statline .v {
   font-size: 26px;
@@ -686,35 +782,6 @@ a.tm-hi:active {
   font-weight: 750;
 }
 
-/* lineups this season */
-.tm-lu {
-  display: grid;
-  grid-template-columns: 50px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-  padding: 10px 14px;
-}
-.tm-lu-net {
-  font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 19px;
-  line-height: 1.05;
-}
-.tm-lu-names {
-  font-size: 13px;
-  color: var(--text-2);
-  line-height: 1.35;
-}
-.tm-lu-min {
-  font-size: 12px;
-  color: var(--text-dim);
-  padding-top: 1px;
-}
-.tm-lu-empty {
-  padding: 14px;
-}
-
 /* the edit sheet */
 .tm-ed {
   display: flex;
@@ -755,41 +822,28 @@ a.tm-hi:active {
 }
 
 /* ------------------------------------------------------------ lineups */
-/* filters: an overline label, then its chips, flat on the page */
-.tm-filters {
+/* what the list shows, in a line under its heading; the sort and filters in a sheet */
+.tm-scope {
+  margin-top: -4px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tm-fsheet {
+  gap: 16px;
+}
+.tm-fgroup {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: -4px;
-}
-.tm-frow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.tm-frow > .over {
-  flex: none;
-  width: 38px;
-}
-.tm-frow-r {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  min-width: 0;
-}
-.tm-filters .chips {
-  gap: 5px;
-}
-.tm-filters .chip {
-  padding: 0 11px;
 }
 .tm-select {
-  height: 32px;
-  max-width: 220px;
-}
-.tm-hint {
-  margin-top: -4px;
+  height: 44px;
+  width: 100%;
 }
 .tm-sec-hint {
   font-size: 12px;

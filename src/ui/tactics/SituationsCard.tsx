@@ -71,7 +71,7 @@ function extraPatch(p: TacticsPatch): TacticsPatch {
 
 const plans = (t: Tactics) => t.situations ?? [];
 
-/** Expert: the team's situational plans, with their triggers and what each one changes. */
+/** Game Mgmt's situational plans, with their triggers and what each one changes. */
 export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
   const [editing, setEditing] = useState<string | null>(null);
   const list = plans(t);
@@ -373,49 +373,5 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
         {ACTIONS.some((a) => s.patch.nudge?.actions?.[a]) && <div className="tiny dim">Action changes come from the template and stay as they are.</div>}
       </div>
     </div>
-  );
-}
-
-/** Advanced: the two main plans as switches (Expert edits them and adds more on Game Mgmt). */
-export function SituationToggles({ t, edit }: { t: Tactics; edit: Edit }) {
-  const list = plans(t);
-  const keys: SituationTemplate[] = ['protectLead', 'chasing'];
-  return (
-    <Section
-      title="Late-game plans"
-      right={
-        <Help title="Late-game plans">
-          <p>Changes to your tactics that kick in by themselves late in close or lopsided games, and end when the situation does.</p>
-          {keys.map((k) => (
-            <p key={k}>
-              <b>{SITUATION_TEMPLATES[k].label}:</b> {SITUATION_TEMPLATES[k].help}
-            </p>
-          ))}
-        </Help>
-      }
-    >
-      <div className="card flush list">
-        {keys.map((k) => {
-          const s = list.find((x) => x.id === k);
-          return (
-            <div key={k} className="tx-ctl">
-              <Toggle
-                on={!!s?.enabled}
-                onChange={(on) =>
-                  edit((tt) => {
-                    const cur = plans(tt);
-                    const have = cur.find((x) => x.id === k);
-                    if (have) have.enabled = on;
-                    else if (on && cur.length < MAX_SITUATIONS) tt.situations = [...cur, situationFromTemplate(k, cur)];
-                  })
-                }
-                label={SITUATION_TEMPLATES[k].label}
-                help={situationText(SITUATION_TEMPLATES[k].when)}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </Section>
   );
 }

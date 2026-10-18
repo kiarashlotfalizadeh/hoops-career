@@ -1,21 +1,29 @@
+// Team → Rotation: the depth chart with each player's minute target (wear and mood risks marked on
+// his row), the assistant's switch, the staff's advice on the rotation, and the stint plan the
+// targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
-import { Fragment, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowUp, BedDouble, ChevronRight, Undo2, Wand2 } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { ArrowDown, ArrowUp, BedDouble, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { edit, touch } from '../../state/actions';
 import { rosterSorted } from '../../core/league/helpers';
-import { evaluateLineup } from '../../core/ai/coachAI';
 import { ensureRotation } from '../../core/league/games';
+import { guideVisit } from '../../core/league/agenda';
+import { shortOfMinutes } from '../../core/league/moraleView';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
-import { Avatar, Help, Ovr, PageHeader, Section, Sheet, Slider, Statline, Tag, Toggle, activateOnKey } from '../components/ui';
-import type { League, Player, Rotation as RotationT } from '../../core/types';
-import { f1, gamesMemo, ordinal, playerSeason, rosterNames, signed, startingFive } from '../stats';
-import { seasonLineups, type LineupAgg } from '../seasonAnalysis';
+import { Avatar, Help, Ovr, Section, Sheet, Slider, Statline, Tag, Toggle, activateOnKey } from '../components/ui';
+import { AssistantCards } from '../components/Assistant';
+import { Term } from '../components/Glossary';
+import type { Player, Rotation as RotationT } from '../../core/types';
+import { f1, ordinal, playerSeason, rosterNames, startingFive } from '../stats';
 import { swapSpots } from '../../core/analysis/lineups';
+import { MoodMark } from '../team/MoodMark';
 import './team.css';
 
 /** The minute bar's full width: the most a target can be. */
 const MAX_MIN = 44;
+/** Season wear the staff flags (as the advisor does). */
+const WORN = 55;
 
 export default function Rotation() {
   const league = useLeague();
@@ -27,34 +35,46 @@ export default function Rotation() {
   const fullNameOf = rosterNames(players, { initial: true });
   const order = rot.order.filter((pid) => byId.has(pid));
   for (const p of players) if (!order.includes(p.pid)) order.push(p.pid);
-  const [edit, setEdit] = useState<number | null>(null);
-  // the rotation Auto replaced, until the next edit
+  const [editing, setEditing] = useState<number | null>(null);
+  // the rotation the assistant replaced, until the next edit
   const [undo, setUndo] = useState<RotationT | null>(null);
-  // a Play-menu sim's progress bar takes the same spot as the undo bar
   const simming = useStore((s) => !!s.sim);
+  // the guided first week's "check your rotation" is done once it's been looked at
+  useEffect(() => void touch((l) => void guideVisit(l, 'rotation')), []);
 
   const update = (fn: (r: RotationT) => void) => {
     setUndo(null);
-    useStore.getState().mutate((l) => {
+    edit((l) => {
       const r = l.teams[l.userTid].rotation;
       fn(r);
       r.manual = true;
     });
   };
+  const setAssistant = (on: boolean) => {
+    if (on) {
+      const before = structuredClone(rot);
+      // the assistant's rotation as the next game would have it: two-way players at the end of the bench too
+      if (
+        edit((l) => {
+          l.teams[l.userTid].rotation.manual = false;
+          ensureRotation(l, l.userTid);
+        })
+      )
+        setUndo(before);
+    } else if (edit((l) => void (l.teams[l.userTid].rotation.manual = true))) setUndo(null);
+  };
 
   const healthyOrder = order.filter((pid) => !byId.get(pid)?.injury);
   const total = healthyOrder.reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
   const injuredMin = order.reduce((a, pid) => a + (byId.get(pid)?.injury ? (rot.minutes[pid] ?? 0) : 0), 0);
-  const starters = healthyOrder.slice(0, 5).map((pid) => byId.get(pid)!);
-  const startEval = starters.length === 5 ? evaluateLineup(starters) : null;
-  const startMin = starters.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+  const startMin = healthyOrder.slice(0, 5).reduce((a, pid) => a + (rot.minutes[pid] ?? 0), 0);
   const closers = rot.closers.filter((pid) => byId.has(pid));
   // the engine starts the first five healthy players: the Bench heading goes after the fifth
   const startSet = startingFive(order.map((pid) => byId.get(pid)!));
   const benchFrom = healthyOrder.length >= 5 ? order.indexOf(healthyOrder[4]) + 1 : order.length;
 
-  // planned stints visual: the engine's own plan inputs (injured players' minutes handed out, caps,
-  // an assistant-managed rotation's shorter playoff eight)
+  // planned stints: the engine's own plan inputs (injured players' minutes handed out, caps, an
+  // assistant-managed rotation's shorter playoff eight)
   const playoffs = league.phase === 'playoffs';
   const plan = useLeagueMemo(() => {
     const pp = planInputs(
@@ -82,122 +102,128 @@ export default function Rotation() {
       r.order = o;
     });
 
-  const ep = edit !== null ? byId.get(edit) : null;
+  const ep = editing !== null ? byId.get(editing) : null;
 
   return (
-    <main className="page">
-      <PageHeader
-        title="Rotation"
-        back
-        backTo="/roster"
-        sub={rot.manual ? 'Custom rotation' : 'Assistant-managed · adjusts for injuries'}
-        right={
-          <button
-            className="btn sm"
-            onClick={() => {
-              setUndo(structuredClone(rot));
-              // the assistant's rotation as the next game would have it: two-way players at the end of the bench too
-              useStore.getState().mutate((l) => {
-                l.teams[l.userTid].rotation.manual = false;
-                ensureRotation(l, l.userTid);
-              });
-            }}
-          >
-            <Wand2 size={16} /> Auto
-          </button>
-        }
-      />
-
-      <div className="card tm-rsum">
-        <div className="row top">
-          <div className="grow">
-            <Statline
-              items={[
-                { k: 'Targets', v: total, s: total === 240 ? 'of 240 minutes' : 'scaled to 240' },
-                { k: 'Starters', v: startMin, s: 'first five' },
-                { k: 'Bench', v: total - startMin, s: 'the rest' },
-              ]}
-            />
-          </div>
-          <Help title="How rotations work">
-            <p>
-              The first five healthy players start. The coaching staff turns your minute targets into a stint plan (below), scaled to exactly 240 minutes, and follows it at dead
-              balls. Fouls, fatigue, injuries and blowouts change it in the game.
-            </p>
-            <p>
-              Closers finish the 4th quarter and overtime when healthy. Players on "rest on back-to-backs" sit the second night of back-to-backs, which lowers wear and injury risk.
-            </p>
-          </Help>
-        </div>
-        {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} minutes of injured players go to the healthy ones: the stint plan shows who.</div>}
-        {startEval && startEval.notes.length > 0 && (
-          <div className="tm-tags">
-            {startEval.notes.map((n) => (
-              <Tag key={n} tone="warn">
-                {n}
-              </Tag>
-            ))}
+    <>
+      <div className="tm-auto">
+        <Toggle
+          on={!rot.manual}
+          onChange={setAssistant}
+          label="Let the assistant manage"
+          help={
+            !rot.manual
+              ? 'He sets the starters and minutes from the roster and adjusts for injuries. Your next edit takes over.'
+              : 'You set it. Turn on to hand it back: he rebuilds it from the roster.'
+          }
+        />
+        {undo && !simming && (
+          <div className="tm-undo">
+            <span className="grow">{undo.manual ? 'Your rotation was replaced.' : 'Rotation refreshed.'}</span>
+            <button
+              className="btn xs"
+              onClick={() => {
+                if (edit((l) => void (l.teams[l.userTid].rotation = undo))) setUndo(null);
+              }}
+            >
+              <Undo2 size={14} /> Undo
+            </button>
           </div>
         )}
       </div>
 
-      <div className="card flush">
-        <div className="list">
-          {order.map((pid, i) => {
-            const p = byId.get(pid)!;
-            const m = rot.minutes[pid] ?? 0;
-            const pg = playerSeason(p, league.season);
-            return (
-              <Fragment key={pid}>
-                {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
-                {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
-                <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
-                  <div className="move-arrows">
-                    <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0}>
-                      <ArrowUp size={16} />
-                    </button>
-                    <button className="iconbtn" onClick={() => move(pid, 1)} aria-label={`Move ${p.firstName} ${p.lastName} down`} disabled={i === order.length - 1}>
-                      <ArrowDown size={16} />
-                    </button>
-                  </div>
-                  <Avatar p={p} />
-                  <div
-                    className="tm-rrow-main"
-                    role="button"
-                    tabIndex={0}
-                    aria-haspopup="dialog"
-                    // named by what it shows, his name first: "A. Mitchell Closer SG · … 28 minutes 82"
-                    onClick={() => setEdit(pid)}
-                    onKeyDown={activateOnKey(() => setEdit(pid))}
-                  >
-                    <div className="grow">
-                      {/* tags drop below a long name instead of cutting it off ("S. Gilgeous-Alex…") */}
-                      <div className="tm-rname">
-                        <span className="ellipsis">{fullNameOf(pid)}</span>
-                        {p.injury && <Tag tone="bad">Out</Tag>}
-                        {closers.includes(pid) && <Tag>Closer</Tag>}
-                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
-                      </div>
-                      <div className="lr-meta ellipsis">
-                        {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg` : p.archetype} · sta {attrDisplay(p.ratings.end)}
-                        {p.wear >= 30 ? ` · wear ${Math.round(p.wear)}` : ''}
-                      </div>
-                      <div className="bar tm-mbar">
-                        <div style={{ width: `${(m / MAX_MIN) * 100}%` }} />
-                      </div>
-                    </div>
-                    <span className="tm-rmin">
-                      <span className="tm-rmin-v num">{m}</span>
-                      <span className="tm-rmin-k">min</span>
-                    </span>
-                    <Ovr v={p.ovr} size="sm" />
-                  </div>
-                </div>
-              </Fragment>
-            );
-          })}
-        </div>
+      <AssistantCards league={league} areas={['team']} max={2} />
+
+      <div className="tm-rsum">
+        <Statline
+          items={[
+            { k: 'Minutes', v: total, s: total === 240 ? 'of 240' : 'scaled to 240' },
+            { k: 'Starters', v: startMin, s: 'first five' },
+            { k: 'Bench', v: total - startMin, s: 'the rest' },
+          ]}
+        />
+        {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} injured minutes go to the healthy players.</div>}
       </div>
+
+      <Section
+        title="Depth chart"
+        right={
+          <Help title="How rotations work">
+            <p>
+              The first five healthy players start. The staff turns your minute targets into a stint plan (below), scaled to exactly 240 minutes, and follows it at dead balls.
+              Fouls, fatigue, injuries and blowouts change it in the game.
+            </p>
+            <p>
+              Closers finish the 4th quarter and overtime when healthy. Players who rest on back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury
+              risk.
+            </p>
+            <p>A row marks a worn-down player (wear {WORN}+) and one whose target is well short of the minutes he expects, which costs his mood.</p>
+          </Help>
+        }
+      >
+        <div className="card flush">
+          <div className="list">
+            {order.map((pid, i) => {
+              const p = byId.get(pid)!;
+              const m = rot.minutes[pid] ?? 0;
+              const pg = playerSeason(p, league.season);
+              const short = shortOfMinutes(p, m);
+              return (
+                <Fragment key={pid}>
+                  {(i === 0 || i === benchFrom) && <div className="list-divider">{i === 0 ? 'Starters' : 'Bench'}</div>}
+                  {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
+                  <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
+                    <div className="move-arrows">
+                      <button className="iconbtn" onClick={() => move(pid, -1)} aria-label={`Move ${p.firstName} ${p.lastName} up`} disabled={i === 0 || simming}>
+                        <ArrowUp size={16} />
+                      </button>
+                      <button className="iconbtn" onClick={() => move(pid, 1)} aria-label={`Move ${p.firstName} ${p.lastName} down`} disabled={i === order.length - 1 || simming}>
+                        <ArrowDown size={16} />
+                      </button>
+                    </div>
+                    <Avatar p={p} />
+                    <div
+                      className="tm-rrow-main"
+                      role="button"
+                      tabIndex={0}
+                      aria-haspopup="dialog"
+                      onClick={() => setEditing(pid)}
+                      onKeyDown={activateOnKey(() => setEditing(pid))}
+                    >
+                      <div className="grow">
+                        {/* tags drop below a long name instead of cutting it off */}
+                        <div className="tm-rname">
+                          <span className="ellipsis">{fullNameOf(pid)}</span>
+                          {p.injury && <Tag tone="bad">Out</Tag>}
+                          {closers.includes(pid) && <Tag>Closer</Tag>}
+                          {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
+                          <MoodMark p={p} />
+                        </div>
+                        {/* the risks first, so a narrow row cuts the stamina, not them */}
+                        <div className="lr-meta ellipsis">
+                          {p.pos} · {p.injury ? `${p.injury.type} (${p.injury.gamesRemaining}g)` : pg ? `${f1(pg.min)} mpg` : p.archetype}
+                          {p.wear >= WORN && <span className="warn"> · wear {Math.round(p.wear)}</span>}
+                          {short && <span className="warn"> · wants {p.mood.expectedMin}</span>}
+                          {` · sta ${attrDisplay(p.ratings.end)}`}
+                          {p.wear >= 30 && p.wear < WORN ? ` · wear ${Math.round(p.wear)}` : ''}
+                        </div>
+                        <div className="bar tm-mbar">
+                          <div style={{ width: `${(m / MAX_MIN) * 100}%` }} />
+                        </div>
+                      </div>
+                      <span className="tm-rmin">
+                        <span className={`tm-rmin-v num ${short ? 'warn' : ''}`}>{m}</span>
+                        <span className="tm-rmin-k">min</span>
+                      </span>
+                      <Ovr v={p.ovr} size="sm" />
+                    </div>
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
+      </Section>
 
       <Section
         title="Stint plan"
@@ -241,30 +267,10 @@ export default function Rotation() {
         </div>
       </Section>
 
-      <LineupsCard />
-
-      <Sheet open={!!ep} onClose={() => setEdit(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
-        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEdit(null)} order={order} names={nameOf} starters={startSet} />}
+      <Sheet open={!!ep} onClose={() => setEditing(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
+        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEditing(null)} order={order} names={nameOf} starters={startSet} busy={simming} />}
       </Sheet>
-
-      {undo && !simming && (
-        <div className="dockbar">
-          <div className="grow small">
-            <div className="bold">Assistant's rotation applied</div>
-            <div className="dim">{undo.manual ? 'It replaced your custom one.' : 'Refreshed for the current roster.'}</div>
-          </div>
-          <button
-            className="btn sm"
-            onClick={() => {
-              useStore.getState().mutate((l) => void (l.teams[l.userTid].rotation = undo));
-              setUndo(null);
-            }}
-          >
-            <Undo2 size={16} /> Undo
-          </button>
-        </div>
-      )}
-    </main>
+    </>
   );
 }
 
@@ -284,52 +290,6 @@ function stints(slots: number[][], pid: number) {
   return out.join(', ');
 }
 
-const lineupLists = new WeakMap<League, { key: string; value: LineupAgg[] }>();
-
-function LineupsCard() {
-  const league = useLeague();
-  // a scan of every game's lineups: worked out again when a game is played, not at every step of a minutes slider
-  const lineups = gamesMemo(lineupLists, league, () =>
-    seasonLineups(league)
-      .filter((l) => l.min >= 8)
-      .slice(0, 10),
-  );
-  // named from the lineups themselves: players traded or released since still read as themselves
-  const names = rosterNames([...new Set(lineups.flatMap((l) => l.pids))].map((pid) => league.players[pid]).filter(Boolean));
-  // the lineup screen also has last season's numbers (and on/off splits) before any five has played together this season
-  const lastSeason = league.teams[league.userTid].seasons.some((s) => s.season === league.season - 1 && s.poss > 0);
-  if (!lineups.length && !lastSeason) return null;
-  return (
-    <Section
-      title={
-        <h3>
-          Lineups this season
-          <Help title="Lineup net rating">
-            Points scored minus allowed per 100 possessions while those five shared the floor. Small samples swing a lot; trust lineups with more minutes. All lineups has every
-            five, the pairs and trios inside them and each player's on-off split, and can make a five your starters or closers.
-          </Help>
-        </h3>
-      }
-      right={
-        <Link className="card-link" to="/lineups" aria-label="See all lineups, pairs, trios and on-off splits">
-          All <ChevronRight size={14} />
-        </Link>
-      }
-    >
-      <div className="card flush list">
-        {!lineups.length && <div className="tm-lu-empty small dim">No five has played 8 minutes together yet this season.</div>}
-        {lineups.map((l) => (
-          <div key={l.key} className="tm-lu">
-            <span className={`tm-lu-net num ${l.net >= 0 ? 'good' : 'bad'}`}>{signed(l.net)}</span>
-            <span className="tm-lu-names">{l.pids.map((pid) => names(pid) || '?').join(', ')}</span>
-            <span className="tm-lu-min num">{Math.round(l.min)}m</span>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
 function EditPlayer({
   p,
   rot,
@@ -338,6 +298,7 @@ function EditPlayer({
   order,
   names,
   starters,
+  busy,
 }: {
   p: Player;
   rot: RotationT;
@@ -347,6 +308,8 @@ function EditPlayer({
   names: (pid: number) => string;
   /** The first five healthy players: the ones who start tonight. */
   starters: Set<number>;
+  /** A sim is running: the league can't change. */
+  busy: boolean;
 }) {
   const starting = starters.has(p.pid);
   const m = rot.minutes[p.pid] ?? 0;
@@ -354,6 +317,7 @@ function EditPlayer({
   const at = order.indexOf(p.pid);
   // one tap instead of a run of arrow taps: trade depth-chart spots (and minutes: the role moves with the spot) with anyone
   const swap = (other: number) => update((r) => swapSpots(r, order, p.pid, other));
+  const short = shortOfMinutes(p, m);
   return (
     <div className="tm-ed">
       <div className="tm-ed-who">
@@ -373,7 +337,7 @@ function EditPlayer({
             .map((pid) => {
               const j = order.indexOf(pid);
               return (
-                <button key={pid} className="chip tm-swap" onClick={() => swap(pid)}>
+                <button key={pid} className="chip tm-swap" disabled={busy} onClick={() => swap(pid)}>
                   <span className={`tm-swap-n ${starters.has(pid) ? 's' : ''}`}>{starters.has(pid) ? 'S' : j + 1}</span>
                   {names(pid)}
                   {/* the S badge and spot number spelled out: "S Dixon, starter", "9 Warren, 9th on the depth chart" */}
@@ -390,15 +354,17 @@ function EditPlayer({
             value={m}
             min={0}
             max={MAX_MIN}
+            disabled={busy}
             onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
             format={(x) => `${x} min`}
-            help={p.mood.expectedMin ? `He expects about ${p.mood.expectedMin}. Big gaps hurt his mood.` : undefined}
+            help={p.mood.expectedMin ? <span className={short ? 'warn' : undefined}>He expects about {p.mood.expectedMin}.</span> : undefined}
           />
           <Slider
             label="Hard minute cap"
             value={cap}
             min={0}
             max={MAX_MIN}
+            disabled={busy}
             onChange={(x) =>
               update((r) => {
                 if (x === 0) delete r.caps[p.pid];
@@ -406,7 +372,7 @@ function EditPlayer({
               })
             }
             format={(x) => (x ? `${x} min` : 'None')}
-            help={cap && cap < m ? `Never more, even in close games: under his ${m}-minute target, so ${cap} at most.` : 'Load management: never more, even in close games.'}
+            help={cap && cap < m ? `Under his ${m}-minute target: ${cap} at most, even in close games.` : 'Never more, even in close games.'}
           />
         </div>
       </Section>
