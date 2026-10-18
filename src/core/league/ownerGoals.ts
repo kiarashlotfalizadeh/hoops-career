@@ -593,7 +593,8 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
                       : 'behind';
           const conf = league.teams[og.tid].conf === 'E' ? 'East' : 'West';
           const text = fresh ? `His read of the roster: ${ordinalRank(seed)} in the ${conf}` : `${ordinalRank(seed)} in the ${conf}`;
-          return { goal: g, now: implied, projected: implied, status, text, fill: clamp(implied / g.target, 0, 1) };
+          // a deep run on track projects to his goal, as its status says (the seed alone only implies the playoffs)
+          return { goal: g, now: implied, projected: g.target >= 3 && deep ? g.target : implied, status, text, fill: clamp(implied / g.target, 0, 1) };
         }
         const still = og.season === league.season && alive(league, og.tid);
         const status: GoalStatus = level >= g.target ? 'met' : still ? 'on track' : 'missed';

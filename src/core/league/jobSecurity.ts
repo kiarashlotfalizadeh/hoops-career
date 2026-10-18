@@ -11,7 +11,7 @@ import { clamp } from '../random';
 import { preset } from './difficulty';
 import { FIRING_LINE, seasonsInCharge } from './owner';
 import { POSTSEASON, currentGoals, gradeGoal, ownerProgress, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
-import { addInbox, curTeamSeason } from './helpers';
+import { addInbox, andList, curTeamSeason } from './helpers';
 import type { Forecast } from '../analysis/odds';
 
 export type SeatHeat = 'secure' | 'steady' | 'warm' | 'hot';
@@ -89,8 +89,16 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   else if (ultimatum) line = `Ultimatum: ${ultimatum.text.toLowerCase()}, or you're fired.`;
   else if (grade === null) line = h.heat === 'secure' || h.heat === 'steady' ? 'The owner is happy with the direction.' : 'The owner wants a better season than the last.';
   else {
-    const behind = ownerProgress(league, og!, fc).filter((p) => p.status === 'behind' || p.status === 'missed');
-    line = behind.length ? `Behind on ${behind.map((p) => p.goal.title.toLowerCase()).join(' and ')}.` : 'On track with his goals.';
+    const prog = ownerProgress(league, og!, fc);
+    const titles = (s: string) => andList(prog.filter((p) => p.status === s).map((p) => p.goal.title.toLowerCase()));
+    const [missed, behind] = [titles('missed'), titles('behind')];
+    // a goal the season can no longer meet is missed, not behind; on track with a cool seat: what's left of a poor standing from before
+    line =
+      missed || behind
+        ? `${[missed && `Missed: ${missed}`, behind && `${missed ? 'behind' : 'Behind'} on ${behind}`].filter(Boolean).join('; ')}.`
+        : h.heat === 'warm' || h.heat === 'hot'
+          ? 'On track with his goals, but your standing from before still weighs on it.'
+          : 'On track with his goals.';
   }
   if (!off && grace > 0 && (h.heat === 'warm' || h.heat === 'hot')) line += ` He can't fire you for ${grace === 1 ? 'this season' : `${grace} seasons`}.`;
   return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, standing, projected, grace, ultimatum, off };

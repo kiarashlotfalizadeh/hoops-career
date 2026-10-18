@@ -152,7 +152,9 @@ export function ownerEvaluation(league: League) {
     from: 'Owner',
     subject: 'Season review',
     body: og
-      ? [`I'm ${feeling}. This season ${fmt(grade)}, overall standing ${fmt(total)}.`, ...lines, answered, warning].filter(Boolean).join('\n')
+      ? [`I'm ${feeling}. Season grade ${fmt(grade)}, overall standing ${fmt(total)} (both −100 to +100; 0 is my goals met exactly).`, ...lines, answered, warning]
+          .filter(Boolean)
+          .join('\n')
       : `I'm ${feeling}. Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,
     tone: total > 0.1 ? 'good' : total < -0.2 ? 'bad' : 'neutral',
     link: '/office/owner',

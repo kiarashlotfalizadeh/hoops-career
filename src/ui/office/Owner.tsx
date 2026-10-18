@@ -62,7 +62,7 @@ export default function Owner() {
           title={review ? `${seasonLabel(shown.season)} review` : `${seasonLabel(shown.season)} goals`}
           right={
             review ? (
-              <Tag tone={review.grade >= 0.1 ? 'good' : review.grade <= -0.1 ? 'bad' : 'warn'}>Season {fmtGrade(review.grade)}</Tag>
+              <Tag tone={review.grade >= 0.1 ? 'good' : review.grade <= -0.1 ? 'bad' : 'warn'}>Season grade {fmtGrade(review.grade)}</Tag>
             ) : provisional ? (
               <Tag tone="info">Set on opening night</Tag>
             ) : (
@@ -106,6 +106,11 @@ export default function Owner() {
                   </div>
                 ))}
           </div>
+          {review && (
+            <div className="tiny dim">
+              Each goal is graded −100 to +100 against its target (0: met exactly); weighted, they make the season&apos;s grade, which moves your job security.
+            </div>
+          )}
           {shown.from && !review && (
             <div className="tiny dim">
               Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? `games after ${shown.from.won}-${shown.from.lost}` : 'rest of the season'} count.
@@ -140,7 +145,7 @@ export default function Owner() {
                     <span className="bold" style={{ color: gradeColor(r.grade) }}>
                       {fmtGrade(r.grade)}
                     </span>
-                    <span className="dim"> · standing {fmtGrade(r.total)}</span>
+                    <span className="dim"> grade · standing {fmtGrade(r.total)}</span>
                   </span>
                 </div>
                 {/* the latest three goal by goal, older seasons by their grades */}
@@ -189,6 +194,8 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
         </div>
       </div>
       {!league.fired && <SeatMeter score={js.score} />}
+      {/* the scale, so a number can be read against the goals below */}
+      {!league.fired && !js.off && <div className="tiny dim">Out of 100: 50 is his goals met exactly; under {Math.round(50 + 50 * FIRING_LINE)} he can fire you.</div>}
       {!js.ultimatum && (
         <p className="fo-seat-line">
           {js.line}
@@ -220,7 +227,7 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
             ))}
           </div>
           <div className="tiny dim">
-            Standing {fmtGrade(js.standing)} now; this season projects it to {fmtGrade(js.projected)}.
+            Standing {fmtGrade(js.standing)} now ({meter(js.standing)} on the meter); this season projects it to {fmtGrade(js.projected)} ({meter(js.projected)}).
           </div>
         </More>
       )}
@@ -320,4 +327,6 @@ function GradingHelp({ league }: { league: League }) {
 const STATUS_LABEL: Record<GoalStatus, string> = { ahead: 'Ahead', 'on track': 'On track', behind: 'Behind', met: 'Met', missed: 'Missed' };
 const STATUS_TONE: Record<GoalStatus, 'good' | 'info' | 'warn' | 'bad'> = { ahead: 'good', 'on track': 'info', behind: 'warn', met: 'good', missed: 'bad' };
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** A standing (−1..1) on the job-security meter's 0..100. */
+const meter = (x: number) => Math.round(Math.max(0, Math.min(100, 50 + 50 * x)));
 const gradeColor = (x: number) => (x >= 0.1 ? 'var(--good)' : x <= -0.1 ? 'var(--bad)' : 'var(--warn)');
