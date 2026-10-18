@@ -241,6 +241,7 @@ export class GameSim {
       helpQ: 50,
       speed: 50,
       pressQ: 50,
+      secQ: 55,
       feelQ: 50,
       defQ: 50,
       guardOf: new Map(),
@@ -315,6 +316,7 @@ export class GameSim {
     t.passQ = passes[0] * 0.45 + passes[1] * 0.35 + passes[2] * 0.2 || 50;
     t.helpQ = on.reduce((a, p) => a + p.c.helpD, 0) / on.length;
     t.pressQ = on.reduce((a, p) => a + (p.c.steal + p.c.perDef) / 2, 0) / on.length;
+    t.secQ = on.reduce((a, p) => a + p.c.ballSec, 0) / on.length;
     t.feelQ = on.reduce((a, p) => a + 0.6 * p.r.oiq + 0.25 * p.r.pas + 0.15 * p.r.hnd, 0) / on.length;
     t.defQ = on.reduce((a, p) => a + 0.5 * p.r.diq + 0.3 * p.r.perD + 0.2 * p.r.intD, 0) / on.length;
     t.speed = on.reduce((a, p) => a + p.r.spd, 0) / on.length;

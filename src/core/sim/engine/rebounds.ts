@@ -20,9 +20,7 @@ export const reboundsMethods = {
     // crashing wins offensive boards (the fourth and fifth crasher add less); sprinting back
     // on the shot (transition D above 50) gives some up
     const crash = (off.t.offense.crashBoards - 50) / 50;
-    const glass =
-      (1 + lev(0.22 * crash) - lev(K.crashFade * Math.max(0, crash) ** 2) - levExtra(K.tradeOff.crash * Math.max(0, crash))) *
-      (1 - lev(K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50)));
+    const glass = (1 + lev(0.22 * crash) - lev(K.crashFade * Math.max(0, crash) ** 2)) * (1 - lev(K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50)));
     let pOrb = K.orbBase * (1 + levExtra(K.recenter.orb)) * Math.pow(offR / defR, 1.05) * glass;
     if (zone === 'c3' || zone === 'ab3') pOrb *= 1.03;
     if (ft) pOrb *= 0.5;

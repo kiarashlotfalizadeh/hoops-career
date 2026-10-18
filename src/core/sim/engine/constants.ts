@@ -260,10 +260,15 @@ export const K = {
    * The costs that grow past 1x leverage on top of the doubled edges, where twice the edge made a
    * blind extreme a win against average personnel (the tactic sweep): the openness a half-court
    * shot gains per unit of ball pressure above 50 (the defense a step out of position), the blitz's
-   * extra 4-on-3 openness, and the offensive-board rate given back per unit of crashing above 50.
-   * Each is multiplied by the leverage past 1.
+   * extra 4-on-3 openness, and the run-out chance a defensive board adds per unit of the other
+   * side's crashing above 50 (on top of K.crashLeak's, so a team that runs collects most of it).
+   * Each is multiplied by the leverage past 1. How much an offense makes of the pressure's is its
+   * ball-handlers' doing: its unit's ball security (ST.secQ) against the league's (sec.avg; its teams
+   * are 50-63) over sec.open, so a loose-handling team gets a quarter of it and a secure one up to
+   * 1.5 times; and the turnovers pressure forces lean the same way, by that difference over sec.to
+   * (see toChance). Pressure is the call against loose handlers, not against everyone.
    */
-  tradeOff: { pressure: 0.45, blitz: 0.6, crash: 0.13 },
+  tradeOff: { pressure: 0.45, blitz: 0.6, crash: 1.5, sec: { avg: 55, open: 20, to: 70 } },
   /**
    * A guarding instruction's give-back on the player it names (the open catch a sag leaves him, the
    * room going under gives his pull-ups, the drives and back-cuts a top-lock gives up, the fouls

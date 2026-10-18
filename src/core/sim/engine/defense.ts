@@ -253,8 +253,12 @@ export const defenseMethods = {
   toChance(this: GameSim, base: number, handler: SP, def: ST, extra = 0) {
     // pressing forces turnovers only as well as the defenders can: an average lineup gets about
     // half of what quick hands and feet would (containing costs turnovers whoever plays)
+    // (and past 1x leverage, the turnovers it forces lean on the offense's ball security: more
+    // against a loose-handling unit, fewer against a secure one, the same against the league's)
     const pr0 = this.pressure(def);
-    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0);
+    const off = this.T[1 - def.side];
+    const sec = pr0 > 0 ? Math.max(0.2, 1 - levExtra((off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.to)) : 1;
+    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0) * sec;
     const p = (base * (1 + levExtra(K.recenter.tov)) * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
     if (pr !== 0) this.impact('pressure_to', def.side, base * 0.32 * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
     return clamp(p, 0.01, 0.4);

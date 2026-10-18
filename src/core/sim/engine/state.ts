@@ -163,6 +163,8 @@ export interface ST {
   speed: number;
   /** How much bite ball pressure has with this lineup: quick hands and on-ball defense. */
   pressQ: number;
+  /** The unit's ball security (its players' average): how much it makes of a defense overplaying the ball. */
+  secQ: number;
   /** The unit's feel on offense (reads, passing, handling) and its team defense (help, on-ball, inside). */
   feelQ: number;
   defQ: number;

@@ -94,8 +94,10 @@ export const shotsMethods = {
         skill = s.pullup ? sh.c.pu3 : sh.c.c3;
     }
     // past 1x tactical leverage, a defense overplaying the ball is a step out of position on the
-    // half-court shots that do get off (the trade-off that keeps heavy pressure from a free win)
-    const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : levExtra(K.tradeOff.pressure * Math.max(0, this.pressure(def)));
+    // half-court shots that do get off, as much as the offense's handlers make of it (the trade-off
+    // that keeps heavy pressure from a free win against teams that can handle it)
+    const beat = clamp(1 + (off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.open, 0.25, 1.5);
+    const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : levExtra(K.tradeOff.pressure * Math.max(0, this.pressure(def)) * beat);
     // (the room tactics have to open or close a look grows with the tactical leverage)
     const open = clamp(s.open + over + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];

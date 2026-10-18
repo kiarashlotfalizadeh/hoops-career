@@ -120,9 +120,9 @@ export const possessionMethods = {
     const getBack = 1.25 - 0.5 * (def.t.defense.getBack / 100) + levExtra(0.25 - 0.5 * (def.t.defense.getBack / 100));
     transP *= getBack;
     // crashing the offensive glass leaves you exposed (the defense crashed on its last
-    // possession): a little below 50, a lot above it
+    // possession): a little below 50, a lot above it (more so past 1x leverage, see K.tradeOff)
     const crashLeak = ctx === 'dreb' ? (def.t.offense.crashBoards - 50) / 50 : 0;
-    const leak = 1 + lev((crashLeak > 0 ? K.crashLeak : 0.35) * crashLeak);
+    const leak = 1 + lev((crashLeak > 0 ? K.crashLeak : 0.35) * crashLeak) + levExtra(K.tradeOff.crash * Math.max(0, crashLeak));
     transP *= leak;
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
