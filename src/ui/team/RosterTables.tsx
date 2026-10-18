@@ -217,7 +217,8 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
       {!mine && <PayrollBar league={league} tid={tid} />}
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} onRow={(r) => nav(`/player/${r.pid}`)} />
       <div className="tm-foot lg-legend">
-        <span className="num">Payroll {[0, 1, 2, 3].map((i) => `${shortSeason(cs + i)} ${money(payroll(league, tid, cs + i))}`).join(' · ')}</span>
+        {/* the seasons after this one: this one's payroll is on the header (yours) or the bar above (theirs) */}
+        <span className="num">Committed {[1, 2, 3].map((i) => `${shortSeason(cs + i)} ${money(payroll(league, tid, cs + i))}`).join(' · ')}</span>
         <span>
           <Term id="options">PO / TO</Term> player / team option
         </span>
