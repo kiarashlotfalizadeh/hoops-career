@@ -194,8 +194,8 @@ try {
 
   // the Tactics Lab sims in a Web Worker, which the production build bundles on its own
   await page.goto(`${base}/#/lab`);
-  await page.getByRole('button', { name: '20 games', exact: true }).click();
-  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await page.locator('.lab-run').getByRole('button', { name: '20', exact: true }).click();
+  await page.getByRole('button', { name: /^Run \d+ games$/ }).click();
   await page
     .getByText('Win %', { exact: true })
     .waitFor({ timeout: 60_000 })
