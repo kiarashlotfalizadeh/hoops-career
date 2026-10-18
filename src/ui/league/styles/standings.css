@@ -1,0 +1,170 @@
+/* Standings: conference and league tables, the play-in line, odds, power and the lottery. */
+/* ------------------------------------------------------------------ standings table */
+.lg-st-row {
+  display: grid;
+  /* narrow number columns leave a phone room for "Timberwolves" and its clinch mark */
+  grid-template-columns: 22px 24px minmax(0, 1fr) 44px 36px 32px 30px;
+  align-items: center;
+  gap: 0 6px;
+  padding: 0 10px;
+  min-height: 46px;
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.lg-st-row > :nth-child(n + 4) {
+  text-align: right;
+}
+.lg-st-row + .lg-st-row {
+  border-top: 1px solid var(--line);
+}
+.lg-st-head {
+  min-height: 34px;
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line-2);
+  /* words: a tabular hyphen would space out "W-L" */
+  font-variant-numeric: normal;
+}
+.lg-st-head + .lg-st-row {
+  border-top: none;
+}
+.lg-st-head > :first-child {
+  text-align: right;
+}
+.lg-st-row .rk {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.lg-st-head .rk,
+.lg-st-head > span {
+  font-family: inherit;
+}
+.lg-st-row .nm {
+  font-weight: 650;
+  font-size: 14.5px;
+  color: var(--text);
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.lg-st-row .nm > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lg-st-row .wl {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text);
+}
+.lg-st-row .wl.good {
+  color: var(--good);
+}
+.lg-st-row .wl.bad {
+  color: var(--bad);
+}
+.lg-st-row .strk {
+  font-weight: 700;
+}
+.lg-st-row .hi {
+  font-weight: 750;
+  color: var(--text);
+}
+.lg-st-row .hi.good {
+  color: var(--good);
+}
+.lg-st-row.me {
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-st-row.me .nm {
+  font-weight: 800;
+}
+.lg-st-row:active:not(.lg-st-head) {
+  background: var(--surface);
+}
+.lg-st-row .nm-ab {
+  display: none;
+}
+.lg-conf {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+
+.lg-clinch {
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  color: var(--text-dim);
+}
+.lg-clinch.x {
+  color: var(--good);
+}
+.lg-clinch.p {
+  color: var(--warn);
+}
+.lg-clinch.e {
+  color: var(--bad);
+}
+/* the playoff and play-in lines: a dashed rule with its name on it */
+.lg-cut {
+  position: relative;
+  height: 0;
+  border-top: 1px dashed var(--line-3);
+}
+.lg-cut span {
+  position: absolute;
+  right: 10px;
+  top: -8px;
+  padding: 0 6px;
+  font-size: 9.5px;
+  line-height: 15px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--raised);
+  border-radius: 4px;
+}
+.lg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.lg-st-row > span {
+  white-space: nowrap;
+}
+
+/* phones: tighter columns leave room for a name (or an abbreviation) and its clinch mark */
+@media (max-width: 389px) {
+  .lg-st-row {
+    grid-template-columns: 20px 22px minmax(0, 1fr) 42px 34px 30px 28px;
+    gap: 0 5px;
+  }
+  .lg-st-row .nm {
+    font-size: 14px;
+  }
+}
+
+.lg-trail {
+  padding: 12px 12px 8px;
+}

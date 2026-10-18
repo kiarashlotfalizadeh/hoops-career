@@ -309,7 +309,8 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
     if (first.tid === user)
       addInbox(league, {
         from: 'Media Relations',
-        subject: shown.some((n) => n.scope === 'league') ? 'A league record' : 'A franchise record',
+        // whose record, in the subject
+        subject: `${shown.some((n) => n.scope === 'league') ? 'League' : 'Franchise'} record: ${who}`,
         body: `${text} The record book has it now.`,
         tone: 'good',
         link: '/league/history?view=records',

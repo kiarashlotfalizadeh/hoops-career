@@ -41,9 +41,15 @@ const SPLIT_SORT: Record<Sort, (a: OnOff, b: OnOff) => number> = {
   ortg: (a, b) => b.on.ortg - b.off.ortg - (a.on.ortg - a.off.ortg),
   drtg: (a, b) => a.on.drtg - a.off.drtg - (b.on.drtg - b.off.drtg),
 };
-const SORT_LABEL: Record<Sort, string> = { min: 'Minutes', net: 'Net', ortg: 'ORtg', drtg: 'DRtg' };
+const SORT_LABEL: Record<Sort, string> = { min: 'Min', net: 'Net', ortg: 'ORtg', drtg: 'DRtg' };
 
-const Net = ({ v }: { v: number }) => <span className={`tm-net num ${v >= 0 ? 'good' : 'bad'}`}>{signed(v)}</span>;
+/** A row's big figure, labelled: a unit's net rating, or a player's on-off difference. */
+const Net = ({ v, k = 'Net' }: { v: number; k?: string }) => (
+  <span className={`tm-net num ${v >= 0 ? 'good' : 'bad'}`}>
+    {signed(v)}
+    <small>{k}</small>
+  </span>
+);
 
 export default function Lineups() {
   const league = useLeague();
@@ -101,6 +107,7 @@ export default function Lineups() {
     minMin ? `${minMin}+ min` : 'any minutes',
     ...(only !== null ? [view === 'onoff' ? fullName(only) : `with ${fullName(only)}`] : []),
   ].join(' · ');
+  const sortLabel = (id: Sort) => (id === 'net' && view === 'onoff' ? 'On-off' : SORT_LABEL[id]);
   const reset = () => {
     setOnly(null);
     setLimit(PAGE);
@@ -150,13 +157,19 @@ export default function Lineups() {
         }
         right={
           (any || hasLast) && (
-            <button className="card-link tm-filter-btn" aria-haspopup="dialog" aria-label={`Sort and filter: by ${SORT_LABEL[sort]}`} onClick={() => setFiltering(true)}>
-              <SlidersHorizontal size={14} aria-hidden="true" /> {SORT_LABEL[sort]}
+            <button className="card-link tm-filter-btn" aria-haspopup="dialog" aria-label={`Filters: ${scope}`} onClick={() => setFiltering(true)}>
+              <SlidersHorizontal size={14} aria-hidden="true" /> Filters
             </button>
           )
         }
       >
-        {(any || hasLast) && <div className="tm-scope">{scope}</div>}
+        {(any || hasLast) && (
+          // what the list shows, and its sort a tap away
+          <div className="tm-lu-bar">
+            <span className="tm-scope">{scope}</span>
+            <Chips label="Sort by" value={sort} onChange={setSort} options={(['min', 'net', 'ortg', 'drtg'] as Sort[]).map((id) => ({ id, label: sortLabel(id) }))} />
+          </div>
+        )}
         {!any ? (
           <div className="card">
             <Empty>
@@ -183,13 +196,13 @@ export default function Lineups() {
                         <div className="grow">
                           <div className="tm-lu-who ellipsis">{fullName(r.pid)}</div>
                           <div className="lr-meta num">
-                            {Math.round(r.min)}m · on {signed(r.on.net)} · off {signed(r.off.net)}
+                            {Math.round(r.min)} min · on {signed(r.on.net)} · off {signed(r.off.net)}
                           </div>
                           <div className="lr-meta num">
                             ORtg {f1(r.on.ortg)} ({signed(r.on.ortg - r.off.ortg)}) · DRtg {f1(r.on.drtg)} ({signed(r.on.drtg - r.off.drtg)})
                           </div>
                         </div>
-                        <Net v={r.diff} />
+                        <Net v={r.diff} k="On-off" />
                       </div>
                     );
                   })
@@ -212,7 +225,7 @@ export default function Lineups() {
                           </div>
                           <div className="tm-lu-meta lr-meta num">
                             <span>
-                              {Math.round(u.min)}m · ORtg {f1(u.ortg)} · DRtg {f1(u.drtg)}
+                              {Math.round(u.min)} min · ORtg {f1(u.ortg)} · DRtg {f1(u.drtg)}
                             </span>
                             {now && sameSet(u.pids, starters) && <Tag tone="info">Starters</Tag>}
                             {now && sameSet(u.pids, closers) && <Tag>Closers</Tag>}
@@ -235,17 +248,8 @@ export default function Lineups() {
         {any && rows > 0 && lowCount > 0 && <div className="tm-foot">Faded: under {LOW_SAMPLE_POSS} possessions, too few to trust.</div>}
       </Section>
 
-      <Sheet open={filtering} onClose={() => setFiltering(false)} title="Sort and filter">
+      <Sheet open={filtering} onClose={() => setFiltering(false)} title="Filters">
         <div className="col tm-fsheet">
-          <div className="tm-fgroup">
-            <div className="over">Sort by</div>
-            <Chips
-              label="Sort by"
-              value={sort}
-              onChange={setSort}
-              options={(['min', 'net', 'ortg', 'drtg'] as Sort[]).map((id) => ({ id, label: id === 'net' && view === 'onoff' ? 'On-off' : SORT_LABEL[id] }))}
-            />
-          </div>
           <div className="tm-fgroup">
             <div className="over">Minimum minutes</div>
             <Chips label="Minimum minutes" value={minIx} onChange={setMinIx} options={thresholds.map((m, i) => ({ id: i, label: m ? `${m}+` : 'All' }))} />

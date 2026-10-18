@@ -1,6 +1,7 @@
 import type { Injury, League, Player } from '../types';
 import { Rng, clamp } from '../random';
 import { addInbox, addNews, age, playerName } from './helpers';
+import { plural } from '../format';
 import { refreshPlayerDerived } from '../playerGen';
 
 interface InjuryType {
@@ -11,8 +12,14 @@ interface InjuryType {
   severity: Injury['severity'];
 }
 
-/** Injuries shorter than this skip the inbox (they still show on the roster and in rotations). */
-const MAIL_MIN_GAMES = 4;
+/**
+ * The inbox hears of an injury that changes plans: one of the eight biggest minute loads out this
+ * many games, or anyone else in the rotation out RETURN_MAIL_GAMES. Shorter absences, and players
+ * out of the rotation, still show on the roster, Today's next game and the rotation.
+ */
+const MAIL_MIN_GAMES = 8;
+/** A return gets its own mail only after an absence this long; shorter ones end without a word. */
+const RETURN_MAIL_GAMES = 15;
 
 // Weights and lengths tuned so a team loses about four to six players a season to 10+ game
 // absences and the league sees a handful of season-ending tears, as in recent NBA seasons.
@@ -85,16 +92,19 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;
   // news for real absences: ten games, or five for a star
   if (inj.gamesRemaining >= 10 || (p.ovr >= 80 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
-  // day-to-day knocks only show on the roster; the inbox is for absences that change plans
-  if (p.tid === league.userTid && inj.gamesRemaining >= MAIL_MIN_GAMES) {
-    // a month-long absence for one of the six core players is worth pausing a long sim for
-    const rot = league.teams[p.tid].rotation;
-    const core = [...rot.order].sort((a, b) => (rot.minutes[b] ?? 0) - (rot.minutes[a] ?? 0)).slice(0, 6);
+  // day-to-day knocks, short absences of the end of the bench and players out of the rotation only
+  // show on the roster; the inbox is for absences that change plans
+  const rot = p.tid === league.userTid ? league.teams[p.tid].rotation : null;
+  const byMinutes = rot ? [...rot.order].filter((pid) => (rot.minutes[pid] ?? 0) > 0).sort((a, b) => (rot.minutes[b] ?? 0) - (rot.minutes[a] ?? 0)) : [];
+  const rank = byMinutes.indexOf(p.pid);
+  if (rank >= 0 && inj.gamesRemaining >= (rank < 8 ? MAIL_MIN_GAMES : RETURN_MAIL_GAMES)) {
     addInbox(league, {
-      important: inj.gamesRemaining >= 15 && core.includes(p.pid),
+      // a month-long absence for one of the six core players is worth pausing a long sim for
+      important: inj.gamesRemaining >= 15 && rank < 6,
       from: 'Medical Staff',
-      subject: `${playerName(p)}: ${inj.type}`,
-      body: `${playerName(p)} is out with ${injuryText(inj.type, true)} and is expected to miss about ${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.${LASTING[inj.severity] ?? ''} Rotation minutes have been redistributed automatically; review them in Rotation.`,
+      // what happened in the subject: who, for how long, with what
+      subject: `${playerName(p)} out ${plural(inj.gamesRemaining, 'game')} (${injuryText(inj.type)})`,
+      body: `${playerName(p)} is out with ${injuryText(inj.type, true)}: about ${plural(inj.gamesRemaining, 'game')}.${LASTING[inj.severity] ?? ''} His minutes go to the healthy players until he's back; Rotation has them.`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });
@@ -142,11 +152,11 @@ export function healOneGame(league: League, p: Player, rng: Rng) {
   const extra = rng.chance((health - 50) / 250) ? 1 : 0;
   p.injury.gamesRemaining -= 1 + extra;
   if (p.injury.gamesRemaining <= 0) {
-    if (p.tid === league.userTid && p.injury.gamesTotal >= MAIL_MIN_GAMES) {
+    if (p.tid === league.userTid && p.injury.gamesTotal >= RETURN_MAIL_GAMES) {
       addInbox(league, {
         from: 'Medical Staff',
-        subject: `${playerName(p)} is cleared`,
-        body: `${playerName(p)} has recovered from his ${injuryText(p.injury.type)} and is available.`,
+        subject: `${playerName(p)} is back`,
+        body: `${playerName(p)} has recovered from his ${injuryText(p.injury.type)} after ${plural(p.injury.gamesTotal, 'game')} out and is available.`,
         tone: 'good',
         link: `/player/${p.pid}`,
       });

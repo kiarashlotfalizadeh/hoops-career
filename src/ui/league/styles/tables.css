@@ -1,0 +1,192 @@
+/* Team tables (Table.tsx): rank, logo, team, figures; your own row on your edge. */
+/* ------------------------------------------------------------------ team tables (Table.tsx) */
+/* the team stays on the left while the figures scroll under it on a phone; a tablet shows them all */
+.lg-tbl-wrap {
+  position: relative;
+}
+/* more figures to the right: the table's edge fades out */
+.lg-tbl-wrap::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 28px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: linear-gradient(270deg, var(--raised) 15%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.lg-tbl-wrap.fr::after {
+  opacity: 1;
+}
+.lg-tbl {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.lg-tbl::-webkit-scrollbar {
+  display: none;
+}
+.lg-tbl-in {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+}
+.lg-tbl-row {
+  display: grid;
+  /* one width for the team column in every table, so the figures line up from one to the next */
+  grid-template-columns: 174px var(--cols);
+  align-items: center;
+  column-gap: 4px;
+  min-height: 46px;
+  padding-right: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.lg-tbl-row > :not(.lead) {
+  text-align: right;
+  white-space: nowrap;
+}
+.lg-tbl-row + .lg-tbl-row {
+  border-top: 1px solid var(--line);
+}
+.lg-tbl-row .lead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 8px;
+  background: var(--raised);
+  transition: box-shadow 0.15s;
+}
+.lg-tbl.scrolled .lg-tbl-row .lead {
+  box-shadow: 8px 0 10px -8px rgba(0, 0, 0, 0.75);
+}
+.lg-tbl-row.head {
+  min-height: 34px;
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line-2);
+  /* words: a tabular hyphen would space out "W-L" */
+  font-variant-numeric: normal;
+}
+.lg-tbl-row.head .lead {
+  background: var(--bg-2);
+  padding-left: 35px;
+}
+.lg-tbl-row.head + .lg-tbl-row {
+  border-top: none;
+}
+.lg-tbl-row .rk {
+  flex: none;
+  width: 20px;
+  text-align: right;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--text-dim);
+}
+.lg-tbl-row .nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 650;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.lg-tbl-row .lead > :not(.nm) {
+  flex: none;
+}
+@media (min-width: 640px) {
+  .lg-tbl-in {
+    width: auto;
+  }
+  .lg-tbl-row {
+    grid-template-columns: minmax(0, 1fr) var(--cols);
+    column-gap: 8px;
+    padding-right: 14px;
+  }
+}
+.lg-tbl-row .wl {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text);
+}
+.lg-tbl-row .wl.good,
+.lg-tbl-row .hi.good {
+  color: var(--good);
+}
+.lg-tbl-row .wl.bad {
+  color: var(--bad);
+}
+.lg-tbl-row .strk {
+  font-weight: 700;
+}
+.lg-tbl-row .hi {
+  font-weight: 750;
+  color: var(--text);
+}
+.lg-tbl-row .lg-proj {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.05;
+}
+.lg-tbl-row .odds-range {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.lg-tbl-row.me,
+.lg-tbl-row.me .lead {
+  background: color-mix(in srgb, var(--team-text) 9%, var(--raised));
+}
+.lg-tbl-row.me .lead {
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.lg-tbl.scrolled .lg-tbl-row.me .lead {
+  box-shadow:
+    inset 3px 0 0 var(--team-text),
+    8px 0 10px -8px rgba(0, 0, 0, 0.75);
+}
+.lg-tbl-row.me .nm {
+  font-weight: 800;
+}
+a.lg-tbl-row:active,
+a.lg-tbl-row:active .lead {
+  background: var(--surface);
+}
+/* the play-in and lottery lines: named at the left, where the team column stays */
+.lg-cut.lg-tbl-cut span {
+  left: 40px;
+  right: auto;
+  z-index: 2;
+}
+/* the clinch marks' key, on the toolbar line */
+.lg-keys {
+  margin-left: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.lg-keys b {
+  margin-left: 4px;
+}

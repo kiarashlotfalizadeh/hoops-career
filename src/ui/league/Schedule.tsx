@@ -92,7 +92,7 @@ export function DayScoreboard({ league }: { league: League }) {
   );
 }
 
-/** "MIL 72%": the favorite by season net rating plus home court, none on a neutral floor (logistic on the expected margin). */
+/** "MIL 72% to win": the favorite by season net rating plus home court, none on a neutral floor (logistic on the expected margin). */
 function favorite(league: League, g: ScheduledGame): string {
   const h = curTeamSeason(league, g.home);
   const a = curTeamSeason(league, g.away);
@@ -101,7 +101,7 @@ function favorite(league: League, g: ScheduledGame): string {
   const pHome = 1 / (1 + Math.exp(-margin / 7));
   const fav = pHome >= 0.5 ? g.home : g.away;
   const p = Math.round(Math.max(pHome, 1 - pHome) * 100);
-  return `${league.teams[fav].abbrev} ${p}%`;
+  return `${league.teams[fav].abbrev} ${p}% to win`;
 }
 
 function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?: GameResult }) {

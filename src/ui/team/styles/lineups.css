@@ -1,0 +1,106 @@
+/* Team → Lineups: the units list, its sort and filters. */
+/* ------------------------------------------------------------ lineups */
+/* what the list shows and its sort, in a line under its heading; the filters in a sheet */
+.tm-lu-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-top: -4px;
+}
+.tm-lu-bar .chips {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.tm-scope {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tm-fsheet {
+  gap: 16px;
+}
+.tm-fgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tm-select {
+  height: 44px;
+  width: 100%;
+}
+.tm-sec-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.tm-lurow {
+  align-items: center;
+  gap: 12px;
+}
+.tm-lu-who {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.tm-lu-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+.tm-net {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+  min-width: 56px; /* "+35.7" and "-8.2" alike, so the names line up */
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+/* the figure's name under it: net rating, or on-off */
+.tm-net small {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tm-lu-chev {
+  flex: none;
+  margin: 0 -4px 0 -6px;
+}
+.tm-lu-more {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+}
+.tm-unit-p {
+  min-height: 52px;
+  padding-block: 6px;
+}
+.tm-sheet-foot .card-link {
+  min-height: 28px;
+}
+
+/* Lineups: a unit or split over too few possessions to trust, greyed by colour (opacity took its
+   small text under 4.5:1) */
+.listrow.lu-faded {
+  color: var(--text-2);
+}
+.listrow.lu-faded .good,
+.listrow.lu-faded .bad {
+  color: var(--text-2);
+}

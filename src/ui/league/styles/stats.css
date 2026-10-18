@@ -1,0 +1,183 @@
+/* Stats: the leaderboards and the name cell of the stats tables. */
+/* ------------------------------------------------------------------ leaders */
+/* the categories in one panel: hairlines between them, two or three abreast on wider screens */
+.lg-leaders {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.lg-lead + .lg-lead {
+  border-top: 1px solid var(--line-2);
+}
+@media (min-width: 600px) {
+  .lg-leaders {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lg-lead + .lg-lead {
+    border-top: none;
+  }
+  .lg-lead:nth-child(n + 3) {
+    border-top: 1px solid var(--line-2);
+  }
+  .lg-lead:nth-child(2n) {
+    border-left: 1px solid var(--line);
+  }
+}
+@media (min-width: 1000px) {
+  .lg-leaders {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .lg-lead:nth-child(n) {
+    border-left: none;
+    border-top: none;
+  }
+  .lg-lead:nth-child(n + 4) {
+    border-top: 1px solid var(--line-2);
+  }
+  .lg-lead:not(:nth-child(3n + 1)) {
+    border-left: 1px solid var(--line);
+  }
+}
+.lg-lead {
+  padding: 12px 0 6px;
+  min-width: 0;
+}
+.lg-lead-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 14px 6px;
+}
+.lg-lead-h h3 {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lg-lead-h h3 {
+  margin-right: auto;
+}
+.lg-lead-h > span {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+/* the board's way to every player, sorted by its figure */
+.lg-lead-all {
+  flex: none;
+  align-self: center;
+  font-size: 12.5px;
+}
+.lg-lead-none {
+  padding: 4px 14px 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.lg-lead-top {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 8px;
+}
+.lg-lead-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lg-lead-who .nm {
+  font-weight: 750;
+  font-size: 15.5px;
+}
+.lg-lead-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.lg-lead-val {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.lg-lead-val small {
+  display: block;
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+.lg-lead-row {
+  display: grid;
+  grid-template-columns: 16px 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  border-top: 1px solid var(--line);
+}
+.lg-lead-row .r {
+  color: var(--text-dim);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 14px;
+  text-align: right;
+}
+.lg-lead-row .v {
+  font-weight: 750;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.lg-lead-row:active,
+.lg-lead-top:active {
+  background: var(--surface);
+}
+/* your players: your team's edge */
+.lg-lead-row.me,
+.lg-lead-top.me {
+  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+}
+.lg-lead-row.me .nm {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* StatTable name cell */
+.lg-pcell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 132px;
+  vertical-align: middle;
+}
+.lg-pcell .n {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.lg-tcell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+.lg-showmore {
+  align-self: center;
+}

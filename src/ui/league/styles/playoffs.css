@@ -1,0 +1,347 @@
+/* The playoff bracket, the play-in and the Finals. */
+/* ------------------------------------------------------------------ playoff bracket */
+.lg-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 22px 18px;
+  color: var(--text-dim);
+}
+.lg-blank h3 {
+  color: var(--text);
+  font-size: 20px;
+}
+.lg-blank p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.bk-conf {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bk-card {
+  padding: 12px 12px 10px;
+}
+.bk-head {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 14px;
+  margin-bottom: 4px;
+}
+.bk-head span {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bk {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 14px;
+}
+.bk-col {
+  display: flex;
+  flex-direction: column;
+}
+.bk-pair {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.bk-pair::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 25%;
+  bottom: 25%;
+  width: 7px;
+  border: 1.5px solid var(--line-3);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+.bk-slot {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 5px 0;
+}
+.bk-col.r2 .bk-slot::before,
+.bk-col.r3 .bk-slot::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  width: 7px;
+  border-top: 1.5px solid var(--line-3);
+}
+.bk-s {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  overflow: hidden;
+  text-align: left;
+  display: block;
+}
+button.bk-s:active,
+a.bk-s:active {
+  background: var(--surface-2);
+}
+.bk-s.live {
+  border-color: color-mix(in srgb, var(--info) 50%, var(--line-2));
+}
+/* your series: your team's edge */
+.bk-s.me {
+  border-color: var(--team-text);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+.bk-s.tbd {
+  background: transparent;
+  border-style: dashed;
+}
+.bk-t {
+  display: grid;
+  grid-template-columns: 11px 18px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  height: 27px;
+  font-size: 12.5px;
+  font-weight: 750;
+}
+.bk-t + .bk-t {
+  border-top: 1px solid var(--line);
+}
+.bk-s.pi .bk-t {
+  grid-template-columns: 14px 18px minmax(0, 1fr) 34px;
+  height: 30px;
+}
+.bk-t .sd {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: right;
+  font-weight: 750;
+}
+.bk-t .w {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.bk-t.win .w {
+  color: var(--good);
+}
+/* the loser dims: grey text that keeps 4.5:1, and a faded mark */
+.bk-t.lose {
+  color: var(--text-dim);
+}
+.bk-t.lose svg {
+  opacity: 0.55;
+}
+.bk-t .tb {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* no mark yet: "Play-in" takes the mark's room too, so it fits a phone-width bracket */
+.bk-t .bk-wide {
+  grid-column: span 2;
+}
+.bk-rec {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.bk-link {
+  display: block;
+}
+/* phones: slimmer gaps and rows, so every round's column still shows a three-letter abbreviation */
+@media (max-width: 400px) {
+  .bk-card {
+    padding: 10px 8px 8px;
+  }
+  .bk-head,
+  .bk {
+    gap: 0 8px;
+  }
+  .bk-pair::after {
+    right: -5px;
+    width: 4px;
+  }
+  .bk-col.r2 .bk-slot::before,
+  .bk-col.r3 .bk-slot::before {
+    left: -4px;
+    width: 4px;
+  }
+  .bk .bk-t {
+    grid-template-columns: 8px 18px minmax(0, 1fr) 10px;
+    gap: 3px;
+    padding: 0 3px;
+  }
+}
+@media (max-width: 359px) {
+  .bk .bk-t {
+    gap: 2px;
+    font-size: 12px;
+  }
+}
+.bk-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@media (max-width: 759px) {
+  .bk-hide-narrow {
+    display: none !important;
+  }
+}
+@media (min-width: 760px) {
+  .bk-panel-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .bk-only-narrow {
+    display: none !important;
+  }
+  .bk-panel-wrap > .bk-W {
+    order: 1;
+  }
+}
+/* the Finals (and the Cup's championship, a series' sheet): two sides and the score between */
+.bk-fcard {
+  display: block;
+  width: 100%;
+  padding: 14px;
+}
+button.bk-fcard:active,
+a.bk-fcard:active {
+  background: var(--surface);
+}
+.bk-finals {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.bk-finals .side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  min-width: 0;
+}
+.bk-finals .side.second {
+  grid-column: 3;
+  grid-row: 1;
+}
+.bk-finals .side.lose {
+  color: var(--text-dim);
+}
+.bk-finals .side.lose svg {
+  opacity: 0.55;
+}
+.bk-finals .score {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.bk-fname {
+  font-weight: 750;
+  max-width: 100%;
+}
+.bk-fconf {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.bk-vs {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.bk-ghost {
+  display: block;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--line-3);
+}
+.bk-sscore {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.bk-sscore .num {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 36px;
+  line-height: 1;
+}
+.lg-sheet {
+  gap: 14px;
+}
+/* a series' games in its sheet */
+.lg-sr-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 12px 0 14px;
+}
+.lg-sr-row + .lg-sr-row {
+  border-top: 1px solid var(--line);
+}
+a.lg-sr-row:active,
+a.lg-sr-lead:active {
+  background: var(--surface);
+}
+.lg-sr-row .g {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+.lg-next {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.lg-sr-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.lg-sr-lead + .lg-sr-lead {
+  border-top: 1px solid var(--line);
+}

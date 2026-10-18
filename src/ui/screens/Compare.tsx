@@ -17,12 +17,11 @@ import { Avatar, Bar, Empty, Help, Ovr, PageHeader, Section, Segmented } from '.
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { capSeason, openOption, shortSeason } from '../office/common';
-import { shortName } from '../league/shared';
 import { skillColor, useSkillPercentiles } from '../playerSkills';
 import { identityColor } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
-import { money } from '../../core/format';
+import { money, plural } from '../../core/format';
 
 type View = 'profile' | 'ratings' | 'stats';
 /** The view each section is in: who they are first, then the ratings, then the numbers. */
@@ -113,7 +112,7 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
       </span>
       {p.injury && (
         <span className="tag bad cmp-tag">
-          {p.injury.type} · {p.injury.gamesRemaining}g
+          {p.injury.type} · out {plural(p.injury.gamesRemaining, 'game')}
         </span>
       )}
       <div className="cmp-deal">
@@ -282,7 +281,8 @@ export default function Compare() {
               <Fragment key={i}>
                 {i === 1 && <span className="cmp-vs">vs</span>}
                 <span className="cmp-side" style={edges[i] ? { ['--cmp-edge' as string]: edges[i] } : undefined}>
-                  <span style={{ ['--run' as string]: p ? longestRun(shortName(p)) : 1 }}>{p ? shortName(p) : '—'}</span>
+                  {/* last names only: one line that stays small while the rows scroll under it */}
+                  <span style={{ ['--run' as string]: p ? longestRun(p.lastName) : 1 }}>{p ? p.lastName : '—'}</span>
                 </span>
               </Fragment>
             ))}
