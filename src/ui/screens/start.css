@@ -3,6 +3,8 @@
 .st-page {
   gap: 18px;
   max-width: 560px;
+  /* the hero's court reaches past the column: never far enough to scroll the page sideways */
+  overflow-x: clip;
 }
 /* the hero: the mark and the wordmark over a faint half court */
 .st-hero {
@@ -34,7 +36,8 @@
 }
 .st-tag {
   margin: 10px 0 0;
-  max-width: 34ch;
+  max-width: 44ch;
+  text-wrap: balance;
   font-size: 15px;
   color: var(--text-2);
 }
@@ -108,6 +111,18 @@
 .st-open .lr-name,
 .st-open .lr-meta {
   display: block;
+}
+/* a save from before the redesign: kept to export or delete, not to open */
+.st-row.old .st-open:active {
+  background: none;
+}
+.st-row.old .st-logo {
+  display: flex;
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+.st-row.old .lr-name {
+  color: var(--text-2);
 }
 
 /* ------------------------------------------------------------ New League */
@@ -272,9 +287,34 @@
 .nl-chosen {
   gap: 12px;
 }
-.nl-fields {
-  gap: 14px;
+/* a name and its field on one line */
+.nl-field {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
 }
-.nl-fields label {
-  gap: 6px;
+.nl-game > .nl-field {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.nl-field .input {
+  height: 42px;
+}
+.nl-label {
+  font-weight: 650;
+}
+/* the game's settings: the difficulty rows, then the switches, a hairline between each */
+.nl-game {
+  display: flex;
+  flex-direction: column;
+}
+.nl-game > * {
+  padding: 12px 14px;
+}
+.nl-game > * + * {
+  border-top: 1px solid var(--line);
+}
+.nl-game > .dif {
+  padding: 12px 6px 8px;
 }

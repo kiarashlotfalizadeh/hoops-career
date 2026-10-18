@@ -1,10 +1,18 @@
 // Settings choices that are also offered elsewhere (New League, the live game), defined once so the
 // screens always agree.
 import type { Settings } from '../core/types';
-import { DIFFICULTIES, DIFFICULTY } from '../core/league/difficulty';
+import { DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/league/difficulty';
+import { GRACE } from '../core/league/jobSecurity';
 
 /** Live game playback speeds (1 = normal). */
 export const LIVE_SPEEDS: { id: number; label: string }[] = [1, 2, 4].map((id) => ({ id, label: `${id}×` }));
+
+/** Where a live game stops for a break with a period report. */
+export const LIVE_BREAKS: { id: NonNullable<Settings['liveBreaks']>; label: string }[] = [
+  { id: 'quarters', label: 'Quarters' },
+  { id: 'half', label: 'Halftime' },
+  { id: 'off', label: 'None' },
+];
 
 /** The difficulty presets as picker options (the numbers live in core/league/difficulty.ts). */
 export const DIFFICULTY_OPTIONS: { id: Settings['difficulty']; label: string; help: string }[] = DIFFICULTIES.map((id) => ({
@@ -14,3 +22,23 @@ export const DIFFICULTY_OPTIONS: { id: Settings['difficulty']; label: string; he
 }));
 
 export const helpFor = <T extends string>(list: { id: T; help: string }[], id: T) => list.find((x) => x.id === id)?.help ?? '';
+
+/** A share of fair value as the difference from it: 0.88 → "−12%", 1 → "Fair". */
+const vsFair = (x: number) => (Math.abs(x - 1) < 0.005 ? 'Fair' : `${x < 1 ? '−' : '+'}${Math.round(Math.abs(x - 1) * 100)}%`);
+const PLANS: Record<'never' | 'sometimes' | 'always', string> = { never: 'None', sometimes: 'Half', always: 'All' };
+
+/**
+ * What tells the presets apart, one column each, for the difficulty picker (Settings and New
+ * League): the label over the column, the figure for a preset, and what it means.
+ */
+export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficulty) => string; help: string }[] = [
+  { id: 'trade', label: 'Trades', value: (d) => vsFair(DIFFICULTY[d].tradeAsk), help: 'What AI GMs need back in a trade, against fair value.' },
+  { id: 'contract', label: 'Contracts', value: (d) => vsFair(DIFFICULTY[d].contractAsk), help: 'What your own players and free agents ask of you, against their market price.' },
+  { id: 'plans', label: 'Game plans', value: (d) => PLANS[DIFFICULTY[d].opponentPlans], help: 'How many opposing coaches game-plan against you.' },
+  {
+    id: 'owner',
+    label: 'Owner waits',
+    value: (d) => `${GRACE[d]} yr${GRACE[d] === 1 ? '' : 's'}`,
+    help: 'Seasons before the owner can fire you (with Job security on). A harder owner also loses patience faster after a bad season.',
+  },
+];
