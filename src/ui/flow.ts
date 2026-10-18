@@ -9,6 +9,7 @@ import { userGameOnDay } from '../core/league/games';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { seasonLabel } from '../core/constants';
 import { agendaBlocker } from '../core/league/agenda';
+import { draftOrder } from '../core/league/draft';
 import { periodLabel } from './stats';
 
 export interface FlowAction {
@@ -81,7 +82,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       // (open in this session, or journaled in the save after the app was closed mid-game)
       const live = liveInProgress(league);
       if (live && onLive) {
-        a.push({ id: 'finish', label: 'Finish this game', sub: 'Sim the rest from the current score and open the box score.', primary: true, cmd: 'quickGame' });
+        a.push({ id: 'finish', label: 'Finish this game', sub: 'Sim the rest from the current score.', primary: true, cmd: 'quickGame' });
         break;
       }
       const g = userGameOnDay(league, league.day);
@@ -128,10 +129,20 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       a.push({ id: 'draft', label: 'Go to the draft', sub: 'Lottery results are in.', primary: true, cmd: 'startDraft' });
       a.push({ id: 'board', label: 'Scout prospects', to: '/office/draft' });
       break;
-    case 'draft':
-      a.push({ id: 'board', label: 'Draft board', sub: 'You are on the clock when it is your pick.', primary: true, to: '/office/draft' });
-      a.push({ id: 'finish', label: 'Auto-draft the rest', cmd: 'finishDraft' });
+    case 'draft': {
+      // with no picks left the board has nothing for the user to do: finishing it is the next step
+      const mine = draftOrder(league).filter((d) => d.tid === league.userTid);
+      const next = mine[0];
+      a.push({
+        id: 'board',
+        label: 'Draft board',
+        sub: next ? `Your next pick: ${next.round === 1 ? '' : '2nd round, '}No. ${next.pick}` : 'You have no picks left.',
+        primary: !!next,
+        to: '/office/draft',
+      });
+      a.push({ id: 'finish', label: 'Auto-draft the rest', sub: next ? 'The staff makes your picks.' : undefined, primary: !next, cmd: 'finishDraft' });
       break;
+    }
     case 'resign':
       a.push({ id: 'resign', label: 'Re-sign players', primary: true, to: '/office/resign' });
       a.push({ id: 'fa', label: 'Open free agency', sub: 'Unsigned players will hit the market.', cmd: 'startFA' });

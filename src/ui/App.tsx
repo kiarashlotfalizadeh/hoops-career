@@ -411,11 +411,17 @@ function Toasts() {
   const toasts = useStore((s) => s.toasts);
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) => (
-        <div key={t.id} className={`toast ${t.tone}`}>
-          {t.text}
-        </div>
-      ))}
+      {toasts.map((t) =>
+        t.link ? (
+          <Link key={t.id} to={t.link} className={`toast ${t.tone} has-link`}>
+            {t.text} <ChevronRight size={15} aria-hidden="true" />
+          </Link>
+        ) : (
+          <div key={t.id} className={`toast ${t.tone}`}>
+            {t.text}
+          </div>
+        ),
+      )}
     </div>
   );
 }

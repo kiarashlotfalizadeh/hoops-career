@@ -13,6 +13,8 @@ export interface Toast {
   id: number;
   text: string;
   tone: 'good' | 'bad' | 'neutral';
+  /** An in-app path the toast opens when tapped (a result's report). */
+  link?: string;
 }
 
 export interface SaveProblem {
@@ -61,7 +63,7 @@ interface AppState {
    */
   attempt: (label: string, fn: (l: League) => void) => boolean;
   stopSim: () => void;
-  toast: (text: string, tone?: Toast['tone']) => void;
+  toast: (text: string, tone?: Toast['tone'], link?: string) => void;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -291,10 +293,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ stopRequested: true });
     stopSimRun();
   },
-  toast: (text, tone = 'neutral') => {
-    const t = { id: toastId++, text, tone };
+  toast: (text, tone = 'neutral', link) => {
+    const t = { id: toastId++, text, tone, ...(link ? { link } : {}) };
     set({ toasts: [...get().toasts, t] });
-    setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== t.id) }), 3200);
+    // one with somewhere to go stays up long enough to tap
+    setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== t.id) }), link ? 5000 : 3200);
   },
 }));
 

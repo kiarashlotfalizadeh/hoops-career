@@ -1602,6 +1602,14 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
 .toast.bad {
   border-left-color: var(--bad);
 }
+.toast.has-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  text-decoration: none;
+  min-height: 44px;
+}
 
 /* ------------------------------------------------------------------ docks
    A screen's own action bar (unsaved tactics or rotation changes): fixed where the Continue bar

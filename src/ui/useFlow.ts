@@ -32,8 +32,17 @@ export function useFlowRunner() {
         await st.simulate({ kind: 'days', n: 1 });
         const l = useStore.getState().league;
         const mine = l?.games.slice(before).find((g) => g.home.tid === l.userTid || g.away.tid === l.userTid);
-        // from the Live screen, the box score replaces it: Back shouldn't land on a finished game
-        if (mine) nav(`/game/${mine.gid}`, { replace: pathname === '/live' });
+        if (!mine || !l) return;
+        // from the Live screen, the report replaces it (Back shouldn't land on a finished game);
+        // anywhere else the result is a toast that opens it, and the screen stays put
+        if (pathname === '/live') {
+          nav(`/game/${mine.gid}`, { replace: true });
+          return;
+        }
+        const home = mine.home.tid === l.userTid;
+        const [us, them] = home ? [mine.home.pts, mine.away.pts] : [mine.away.pts, mine.home.pts];
+        const opp = l.teams[home ? mine.away.tid : mine.home.tid].abbrev;
+        st.toast(`${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp} · Report`, us > them ? 'good' : 'bad', `/game/${mine.gid}`);
         return;
       }
       case 'startRegular': {
