@@ -44,13 +44,13 @@ export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league:
     <>
       <section className="lab-hero" aria-label="Projection">
         <div className="over">
-          {me.abbrev} vs {them.abbrev} · {r.games} games
+          {me.abbrev} vs {them.abbrev} · {r.games} games · pace {f1(r.pace)}
         </div>
         <Statline
           items={[
             { k: 'Win %', v: p0(r.winPct) },
             { k: 'Net rtg', v: signed(r.net), s: <Term id="range">± {f1(SIGMAS * r.netSE)}</Term>, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-            { k: 'Margin', v: signed(r.ptsFor - r.ptsAgainst), s: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)} · pace ${f1(r.pace)}` },
+            { k: 'Margin', v: signed(r.ptsFor - r.ptsAgainst), s: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)} a game` },
           ]}
         />
       </section>
