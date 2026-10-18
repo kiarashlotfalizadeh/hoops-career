@@ -134,6 +134,24 @@ Spacing: the page stacks sections 16px apart; inside a section 10px; inside a ca
 first: wide screens get the same single column, centred, at most 788px. Grid columns are
 `minmax(0, 1fr)`, never a bare `1fr` (a long line would push the page sideways).
 
+## The live game
+
+Broadcast first: the court is always the biggest thing on screen.
+
+- A slim scorebug sits over a full-width court (the win-probability sliver and the scores ticker
+  under it when Settings has them on). Captions, graphics, replays and **one banner at a time**
+  (injuries, foul-outs, their adjustments, the staff's alerts) go over the court, never beside it.
+- **One row of quick actions** takes the tab bar's place: TO, Subs, Call, the staff's top fix as a
+  pill, Clipboard. Don't add a second row or a floating button.
+- **One Clipboard** (Lineup, Tactics, Calls, Box, Play-by-play) holds every coaching control; it
+  docks under the court when there's room and opens as a sheet otherwise. A new control goes in one
+  of its tabs, once.
+- Playback (pause, replay, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
+- **One break screen** for quarters, halftime and timeouts (huddle mode): the score and the chance
+  to win, who's tired or in foul trouble, what's deciding it with Apply, the keys, and Start.
+- Every change during a game goes through the live controller (the journal records it), never a raw
+  league edit.
+
 ## Copy
 
 - **Headline + figure.** A card says what it is in a headline and at most one short line. Anything
