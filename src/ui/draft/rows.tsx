@@ -11,6 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Empty } from '../components/ui';
 import { OvrPot } from '../office/common';
 import { overallPick } from '../league/shared';
+import { OvrKey } from '../components/OvrKey';
 
 export function SelectionRow({ league, p }: { league: League; p: Player }) {
   const mine = p.draft.tid === league.userTid;
@@ -100,6 +101,9 @@ export function BoardList({
           Show more ({list.length - limit} left)
         </button>
       )}
+      <div className="fo-board-foot">
+        <OvrKey />
+      </div>
     </div>
   );
 }

@@ -37,6 +37,12 @@ Rules that follow from it:
   situations, saved playbooks): described through `ui/tactics/changes.ts`, named as the control is.
 - **Money lives in Office.** Payroll appears once as a figure on Team → Roster's header line, and in
   full only in Office.
+- **A cap sheet never shows a negative room**: "Over the cap $X" or "Cap space $X"; for the tax, the
+  bill and how far over the line, or the room under it. An existing contract says when it ends
+  ("thru 27-28", "expiring", PO/TO); a new deal says how long it runs ("$12.0M × 4 yrs"). Use the
+  helpers in `office/common.tsx` (`capRoomFig`, `capRoomText`, `taxFig`, `rosterFig`,
+  `contractEnd`, `forYears`). Rosters count against opening night's 15 everywhere ("16/15 · 1 to
+  cut").
 - **The owner lives in Office → Owner**, as one job-security meter (`jobSecurity`); Today shows the
   meter only when the seat is warm.
 - **Advice has one voice.** Everything the staff says comes through the assistant feed
@@ -161,7 +167,7 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
 3. The thing the screen is for, first. Then sections in order of use.
 4. Nothing important below a long list; filters above it.
 
-Spacing: the page stacks sections 16px apart; inside a section 10px; inside a card 10-12px. Phone
+Spacing comes from the density tokens: `--gap-page` between sections, `--gap-sec` inside one, `--pad-card` inside a card, `--row-min` for a row. Phone
 first: wide screens get the same single column, centred, at most 788px. Grid columns are
 `minmax(0, 1fr)`, never a bare `1fr` (a long line would push the page sideways).
 
@@ -207,6 +213,8 @@ Broadcast first: the court is always the biggest thing on screen.
   good**; ranks say out of how many ("25th of 30"). Colours on scouting numbers rate the team shown
   (green: better than the league), whoever's team it is.
 - **A leaderboard links to its full table**, sorted by its figure.
+- A percentage says what it's a percentage of ("75% of value"); a bar's legend names every part,
+  a striped amount included.
 - **Never quote an engine effect size or spread in copy** ("worth about +1.1 per 100"): show the
   Lab's or the league's numbers at runtime, or none. The engine is re-tuned; copy isn't.
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
@@ -214,7 +222,7 @@ Broadcast first: the court is always the biggest thing on screen.
   Offense, Defense, Roles, Game Mgmt).
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
-  doesn't get mail.
+  doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.
 
 ## Motion
 

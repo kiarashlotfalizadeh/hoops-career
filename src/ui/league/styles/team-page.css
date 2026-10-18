@@ -156,9 +156,9 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px 10px 14px;
-  min-height: 56px;
+  gap: 10px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
 }
 a.lg-pick:active {
   background: var(--surface);
