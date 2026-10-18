@@ -1043,6 +1043,7 @@ export default function Live() {
                 </button>
               )}
             </div>
+            {nextAction?.sub && <div className="lv-final-next small">Next: {nextAction.sub}</div>}
           </FinalSlab>
         ) : (
           <Empty>{final ? 'Final.' : 'This game was simulated.'}</Empty>
@@ -1121,7 +1122,7 @@ export default function Live() {
       out: 0,
       options: me.on.map((p) => {
         const x = line(p);
-        return { pid: p.pid, line: `${x.energy}%${x.fouls ? ` · ${x.fouls}F` : ''}` };
+        return { pid: p.pid, line: `${x.energy}%${x.fouls ? ` · ${x.fouls} PF` : ''}` };
       }),
     };
   };

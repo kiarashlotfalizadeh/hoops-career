@@ -1,14 +1,14 @@
 // The post-game recap for one of the user's games, most telling first: the three stars (the player
 // of the game first), the keys to the game graded, the night (how win probability turned, what the
 // result did to the standings or the series, milestones and records), the highlights, the press
-// conference (the quotes, then the user's answer, each with what it does to the locker room), the
-// rest of the night's results that matter to him, and what's next. Takes a stored result, so the
-// report and the Live screen's final card can both show it. FinalSlab is the result itself, as a
+// conference (the quotes, then the user's answer, each with what it does to the locker room) and the
+// rest of the night's results that matter to him (the Continue bar, or the final card's Next game,
+// names the next game). Takes a stored result, so the report and the Live screen's final card can
+// both show it. FinalSlab is the result itself, as a
 // broadcast's final graphic, over both.
 import { KeysGraded } from './GameKeys';
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
 import type { GameResult, League, PressChoice, ScheduledGame, StandingLine } from '../../core/types';
 import { buildGameReport, type GameReport } from '../../core/analysis/gameReport';
 import {
@@ -27,7 +27,6 @@ import { COMEBACK_WP, playAt, swingWords, TURN_MIN, wpStory, wpText, type WpPoin
 import { markText, milestonesIn } from '../../core/analysis/milestones';
 import { recordWhat, recordsHeld } from '../../core/league/records';
 import { seriesLabel } from '../../core/league/playoffs';
-import { neutralSite } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate, playerName } from '../../core/league/helpers';
@@ -199,7 +198,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
     )
     .slice(0, 4);
 
-  const pregame = league.settings.pregame !== false;
   const facts = !!(stakes || newly || Math.abs(streak) >= 2 || series || turnText || swing || marks.length || records.length || playIn);
 
   return (
@@ -358,33 +356,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
           </div>
         </Section>
       )}
-
-      {next && nextOpp !== undefined && (
-        <Section title="Next up">
-          <div className="card gd-next">
-            <TeamLogo tid={nextOpp} size={36} decorative />
-            <div className="grow" style={{ minWidth: 0 }}>
-              <div className="bold ellipsis">
-                {/* (the Cup final is on a neutral floor: nobody's home) */}
-                {next.home === tid || neutralSite(next) ? 'vs' : '@'} {league.teams[nextOpp].name}
-              </div>
-              <div className="row tiny dim" style={{ gap: 6 }}>
-                {next.day === league.day ? 'Today' : fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-                {next.day - res.day === 1 && <Tag tone="warn">Back-to-back</Tag>}
-              </div>
-            </div>
-            {!pregame && next.day === league.day ? (
-              <Link to="/live" className="btn sm primary" aria-label={`Watch and coach the game against the ${league.teams[nextOpp].name}`}>
-                Watch & coach
-              </Link>
-            ) : (
-              <Link to={`/games/${nextOpp}`} className="btn sm" aria-label={`Matchup: the ${league.teams[nextOpp].name}`}>
-                Matchup <ChevronRight size={14} />
-              </Link>
-            )}
-          </div>
-        </Section>
-      )}
     </div>
   );
 }
@@ -458,6 +429,8 @@ function PressConference({ league, res, quotes }: { league: League; res: GameRes
               <button key={o.id} className="gd-press-opt" disabled={simming} onClick={() => answer(o.id)} aria-label={`${o.label}: ${o.hint}`}>
                 <span className="gd-press-l">{o.label}</span>
                 <span className="gd-press-h">
+                  {/* (+ and − are whose mood it lifts or cools) */}
+                  {/^[+−]/.test(o.hint) && <span className="dim">Mood </span>}
                   {o.hint.split(' · ').map((part, i) => (
                     <span key={part}>
                       {i > 0 && ' · '}
