@@ -5,7 +5,7 @@ import type { GameResult, League, PlayerDefense, SetId, TacticImpact, Tactics, T
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
-import { wholeMinutes } from '../league/helpers';
+import { shortName, wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
 
 export interface Factor {
@@ -349,7 +349,7 @@ function names(league: League, im: TacticImpact, max = 2) {
   const top = Object.entries(im.players)
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
-    .map(([pid]) => league.players[+pid]?.lastName)
+    .map(([pid]) => (league.players[+pid] ? shortName(league, league.players[+pid]) : undefined))
     .filter(Boolean);
   return top.length ? ` (${top.join(', ')})` : '';
 }

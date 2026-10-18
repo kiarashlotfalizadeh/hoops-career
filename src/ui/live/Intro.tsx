@@ -120,7 +120,7 @@ export function Intro({
         <div className="li-kicker">Starting lineups</div>
         <div className="li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>
         {context && <div className="li-where ellipsis live-intro-ctx">{context}</div>}
-        {lastSeason && <div className="li-where ellipsis">Per game, last season</div>}
+        {withLines.length > 0 && <div className="li-where ellipsis">Per game, {lastSeason ? 'last' : 'this'} season</div>}
       </div>
       <div className="li-grid">
         {col(1)}

@@ -6,7 +6,7 @@
 
 import type { BoxLine, GameResult, League, Player, PressChoice, TeamBox } from '../types';
 import { hashString, clamp } from '../random';
-import { playerName, seasonTotals } from '../league/helpers';
+import { playerName, seasonTotals, shortName } from '../league/helpers';
 import { playerAge } from '../playerGen';
 import type { Factor, GameReport } from './gameReport';
 import { COMEBACK_WP, wpStory } from './winProb';
@@ -210,7 +210,8 @@ function pick<T>(gid: number, slot: string, list: T[]): T {
   return list[((h ^ (h >>> 16)) >>> 0) % list.length];
 }
 
-const lastName = (league: League, b: BoxLine) => league.players[b.pid]?.lastName ?? b.name;
+/** His last name (his full name when a teammate shares it): the press options and their effects name one player each. */
+const lastName = (league: League, b: BoxLine) => (league.players[b.pid] ? shortName(league, league.players[b.pid]) : b.name);
 
 function voiceLine(f: Facts, gid: number, league: League): string {
   const v = f.voice!;
