@@ -29,7 +29,8 @@ function nameCol<T>(player: (r: T) => Player | undefined, name: (r: T) => string
     get: (r) => player(r)?.lastName ?? name(r),
     fmt: (_, r) => (
       <span className="lg-pcell tm-ncell">
-        <span className="n">{name(r)}</span>
+        {/* (held together at its spaces: a long name wraps only at a hyphen) */}
+        <span className="n">{name(r).replace(/ /g, '\u00a0')}</span>
         {player(r) && <span className="tiny dim">{player(r)!.pos}</span>}
         {extra?.(r)}
       </span>

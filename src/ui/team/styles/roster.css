@@ -148,6 +148,9 @@
 .lg-pcell.tm-ncell {
   max-width: 118px;
 }
+/* a hyphenated name wraps at its hyphen rather than lose its end ("Gilgeous-Ale...") */
 .tm-ncell .n {
   max-width: 88px;
+  white-space: normal;
+  line-height: 1.15;
 }
