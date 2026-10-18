@@ -197,17 +197,38 @@
   color: var(--tier-elite);
 }
 
-/* ratings: a spec sheet, one row a rating, its group as the divider */
+/* ratings: a spec sheet, two ratings to a line under their group's divider; each the rating's name,
+   its value and last season's change over a thin bar */
+.tm-rt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.tm-rt-grid > * {
+  border-bottom: 1px solid var(--line);
+}
+.tm-rt-grid > :nth-child(even) {
+  border-left: 1px solid var(--line);
+}
+/* the group's last line meets the next divider's own hairline */
+.tm-rt-grid > :nth-last-child(-n + 2):nth-child(odd),
+.tm-rt-grid > :last-child {
+  border-bottom: none;
+}
 .tm-rt-row {
   display: grid;
-  grid-template-columns: minmax(0, 8em) minmax(0, 1fr) 30px 26px;
+  grid-template-columns: minmax(0, 1fr) auto 24px;
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 3px 6px;
   width: 100%;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 6px 10px 7px 12px;
   text-align: left;
   font-size: 13.5px;
+}
+.tm-rt-row .bar {
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 .tm-rt-row:active,
 .tm-rt-row[aria-expanded='true'] {

@@ -78,7 +78,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
           {RATING_GROUPS.map((g) => (
             <Fragment key={g}>
               <div className="list-divider">{g}</div>
-              <div className="list wide2 tm-group">
+              <div className="tm-rt-grid">
                 {RATING_META.filter((m) => m.group === g).map((m) => {
                   const val = attrDisplay(p.ratings[m.key as RatingKey]);
                   const before = was?.[m.key as RatingKey];
@@ -88,7 +88,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
                     <div key={m.key} className="tm-rt">
                       <button className="tm-rt-row" onClick={() => setOpen(on ? null : m.key)} aria-expanded={on}>
                         <span className="tm-rt-l">{m.label}</span>
-                        <Bar value={((val - 40) / 59) * 100} color={RATING_BAR[ratingTone(val)]} />
+                        <Bar value={((val - 40) / 59) * 100} color={RATING_BAR[ratingTone(val)]} height={3} />
                         <span className="tm-rt-v num">{val}</span>
                         <span className={`tm-rt-d num ${prev !== null && val !== prev ? (val > prev ? 'good' : 'bad') : ''}`}>
                           {prev !== null && val !== prev ? `${val > prev ? '+' : ''}${val - prev}` : ''}
