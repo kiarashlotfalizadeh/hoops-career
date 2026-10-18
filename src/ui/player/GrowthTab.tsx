@@ -22,7 +22,8 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
             <LineChart points={hist.map((h) => h.ovr)} labels={hist.map((h) => `'${String(h.season).slice(2)}`)} />
           ) : (
             <div className="small dim">
-              History builds as seasons pass. Now {p.ovr} OVR, potential {p.pot}.
+              {/* (his OVR and potential are on the slab and under Outlook: not a third time here) */}
+              The chart starts once this season ends.
             </div>
           )}
         </div>

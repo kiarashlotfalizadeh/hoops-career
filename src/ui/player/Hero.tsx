@@ -124,9 +124,10 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
           { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
         ]}
       />
-      {!cur && line && lastSeason ? (
+      {/* what the figures are, always: this season's, or his last one's before he plays */}
+      {line ? (
         <div className="tm-hero-note">
-          {seasonLabel(lastSeason)} per game{p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
+          {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
         </div>
       ) : null}
     </section>
