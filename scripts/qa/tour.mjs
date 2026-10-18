@@ -13,19 +13,14 @@ const stages = (process.argv[4] ?? 'pre,mid,post,draft,resign,fa').split(',');
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+// one page for both sizes: a second window on the same league would be a stale copy the moment
+// either one saves (opening a screen can tick off a step of the first-week guide)
 const phone = await ctx.newPage();
-const tablet = await ctx.newPage();
-await tablet.setViewportSize({ width: 820, height: 1180 });
 const errors = [];
-for (const [n, pg] of [
-  ['phone', phone],
-  ['tablet', tablet],
-]) {
-  pg.on('pageerror', (e) => errors.push(`${n}: ${e}`));
-  pg.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`${n}: ${m.text()}`);
-  });
-}
+phone.on('pageerror', (e) => errors.push(`${e}`));
+phone.on('console', (m) => {
+  if (m.type() === 'error') errors.push(m.text());
+});
 const t0 = Date.now();
 const log = (s) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${s}`);
 const waitSim = async (pg) => {
@@ -82,6 +77,8 @@ async function snap(pg, dir, name, route) {
   await pg.goto(`${base}/#${route}`);
   await pg.waitForTimeout(700);
   await pg.screenshot({ path: `${dir}/${name}.png`, fullPage: true });
+  // (Settings' radio groups change the league: its difficulty, its live-game defaults)
+  if (route.startsWith('/settings')) return;
   // every option of the screen's first tab bar (segmented bars are radio groups)
   const tabs = pg.locator('main [role=tablist], main [role=radiogroup]').first().locator('[role=tab], [role=radio]');
   const n = Math.min(await tabs.count(), 9);
@@ -127,19 +124,16 @@ async function tour(stage) {
   ];
   if (ids.gid) routes.push(['game', `/game/${ids.gid}`]);
   if (ids.rookie) routes.push(['rookie', `/player/${ids.rookie}`]);
-  for (const [dev, pg] of [
-    ['phone', phone],
-    ['tablet', tablet],
+  for (const [dev, size] of [
+    ['phone', { width: 390, height: 844 }],
+    ['tablet', { width: 820, height: 1180 }],
   ]) {
     const dir = `${out}/${stage}/${dev}`;
     mkdirSync(dir, { recursive: true });
-    if (dev === 'tablet') {
-      await tablet.goto(`${base}/#/`);
-      await tablet.reload();
-      await tablet.waitForTimeout(1500);
-    }
-    for (const [name, route] of routes) await snap(pg, dir, name, route).catch((e) => log(`  ${dev} ${name}: ${e.message.split('\n')[0]}`));
+    await phone.setViewportSize(size);
+    for (const [name, route] of routes) await snap(phone, dir, name, route).catch((e) => log(`  ${dev} ${name}: ${e.message.split('\n')[0]}`));
   }
+  await phone.setViewportSize({ width: 390, height: 844 });
   await phone.goto(`${base}/#/`);
   await phone.waitForTimeout(500);
   log(`toured ${stage} (${ids.phase})`);
