@@ -90,7 +90,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   { id: 'pace', term: 'Pace', group: 'Numbers', text: 'Possessions a team uses per 48 minutes. The league plays about 100.' },
   { id: 'efg', term: 'eFG%', group: 'Numbers', text: 'Effective field-goal percentage: field goals with a three counted as one and a half makes.' },
   { id: 'ts', term: 'TS%', group: 'Numbers', text: 'True shooting: scoring efficiency counting threes and free throws.' },
-  { id: 'tov', term: 'TOV%', group: 'Numbers', text: 'Turnovers per possession.' },
+  { id: 'tov', term: 'TOV%', group: 'Numbers', text: 'Turnovers per possession: lower is better.' },
   { id: 'orb', term: 'ORB%', group: 'Numbers', text: 'The share of a team’s own misses it rebounds.' },
   { id: 'ftr', term: 'FTR', group: 'Numbers', text: 'Free-throw rate: free-throw attempts per field-goal attempt.' },
   {

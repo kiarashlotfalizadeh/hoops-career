@@ -4,8 +4,9 @@ import { fmtClock, pbpOpacity, periodLabel } from '../stats';
 import { Segmented } from '../components/ui';
 
 /**
- * The Clipboard's Play-by-play tab, newest first: everything, the scoring plays (with the period and
- * timeout lines that frame them), or one team's. It only re-renders when new lines arrive, not on
+ * The Clipboard's Play-by-play tab, newest first, each line with the score after it (away-home, as
+ * the scorebug reads): everything, the scoring plays (with the period and timeout lines that frame
+ * them), or one team's. It only re-renders when new lines arrive, not on
  * every animation frame.
  */
 export const Feed = memo(function Feed({
@@ -45,6 +46,9 @@ export const Feed = memo(function Feed({
             </span>
             <span className="fd-team" style={{ background: e.t === -1 ? 'transparent' : colors[e.t][0] }} />
             <span className="grow">{e.text}</span>
+            <span className="fd-sc num">
+              {e.as}-{e.hs}
+            </span>
           </div>
         ))}
       </div>

@@ -546,6 +546,12 @@
   font-size: 11.5px;
   color: var(--text-dim);
 }
+.fd-sc {
+  flex: none;
+  padding-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
 .fd-team {
   flex: none;
   align-self: stretch;
