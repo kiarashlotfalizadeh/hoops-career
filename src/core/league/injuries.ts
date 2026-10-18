@@ -1,7 +1,7 @@
 import type { Injury, League, Player } from '../types';
 import { Rng, clamp } from '../random';
 import { addInbox, addNews, age, playerName } from './helpers';
-import { plural } from '../format';
+import { outFor, plural } from '../format';
 import { refreshPlayerDerived } from '../playerGen';
 
 interface InjuryType {
@@ -89,7 +89,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
     refreshPlayerDerived(p, league.season, league.ovrScale);
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
-  const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}) — ${inj.type}, out ~${inj.gamesRemaining} game${inj.gamesRemaining === 1 ? '' : 's'}.`;
+  const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}): ${injuryText(inj.type)}, ${outFor(inj.gamesRemaining)}.`;
   // news for real absences: ten games, or five for a star
   if (inj.gamesRemaining >= 10 || (p.ovr >= 80 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
   // day-to-day knocks, short absences of the end of the bench and players out of the rotation only

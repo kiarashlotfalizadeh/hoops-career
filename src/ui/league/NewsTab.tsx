@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeftRight,
@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, playerName } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -119,21 +119,77 @@ export function NewsTab({ league }: { league: League }) {
   );
 }
 
+/** Where a name sits in a story's text, and where its link goes. */
+interface Mention {
+  at: number;
+  end: number;
+  to: string;
+  /** The player or team it names (each linked once). */
+  id: string;
+}
+
+/** Every place the text names one of the story's players or teams (as a whole word), each player and team linked at its first mention. */
+function mentions(league: League, text: string, pids: number[], tids: number[]): Mention[] {
+  const names: { name: string; to: string; id: string }[] = [];
+  for (const pid of pids) names.push({ name: playerName(league.players[pid]), to: `/player/${pid}`, id: `p${pid}` });
+  for (const tid of tids) {
+    const t = league.teams[tid];
+    for (const name of [`${t.region} ${t.name}`, t.name, t.abbrev]) names.push({ name, to: teamPath(tid), id: `t${tid}` });
+  }
+  const word = (c: string | undefined) => !!c && /[\p{L}\p{N}]/u.test(c);
+  const found: Mention[] = [];
+  for (const m of names) {
+    if (!m.name) continue;
+    for (let at = text.indexOf(m.name); at >= 0; at = text.indexOf(m.name, at + 1)) {
+      const end = at + m.name.length;
+      if (!word(text[at - 1]) && !word(text[end])) found.push({ at, end, to: m.to, id: m.id });
+    }
+  }
+  // the longest name wins where two overlap ("Los Angeles Lakers" over "Lakers"); then each one once
+  found.sort((a, b) => a.at - b.at || b.end - a.end);
+  const out: Mention[] = [];
+  const linked = new Set<string>();
+  for (const m of found) {
+    if (out.length && m.at < out[out.length - 1].end) continue;
+    if (linked.has(m.id)) continue;
+    linked.add(m.id);
+    out.push(m);
+  }
+  return out;
+}
+
+/** A story: its kind's icon, then its sentence with the players and teams it names as links (any it doesn't name follow as chips). */
 export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
   const M = NEWS_KIND[n.kind] ?? NEWS_KIND.general;
-  const tids = [...new Set(n.tids)].filter((t) => league.teams[t]).slice(0, 4);
+  const tids = [...new Set(n.tids)].filter((t) => league.teams[t]);
   const pids = [...new Set(n.pids)].filter((p) => league.players[p]);
-  const showP = pids.slice(0, 3);
+  const ms = mentions(league, n.text, pids, tids);
+  const named = new Set(ms.map((m) => m.id));
+  const restT = tids.filter((t) => !named.has(`t${t}`)).slice(0, 3);
+  const restP = pids.filter((p) => !named.has(`p${p}`));
+  const showP = restP.slice(0, 3);
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (const m of ms) {
+    if (m.at > from) parts.push(n.text.slice(from, m.at));
+    parts.push(
+      <Link key={m.at} to={m.to} className="lg-news-link">
+        {n.text.slice(m.at, m.end)}
+      </Link>,
+    );
+    from = m.end;
+  }
+  parts.push(n.text.slice(from));
   return (
     <div className="lg-news">
       <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
         <M.icon size={15} />
       </span>
       <div className="lg-news-body">
-        <div className="lg-news-text">{n.text}</div>
-        {(tids.length > 0 || showP.length > 0) && (
-          <div className="lg-news-meta">
-            {tids.map((t) => (
+        <span className="lg-news-text">{parts}</span>
+        {(restT.length > 0 || showP.length > 0) && (
+          <span className="lg-news-meta">
+            {restT.map((t) => (
               <Link key={`t${t}`} to={teamPath(t)} className="lg-pchip team">
                 <TeamLogo tid={t} size={18} decorative />
                 <span>{league.teams[t].abbrev}</span>
@@ -144,8 +200,8 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
                 <span>{shortName(league.players[pid])}</span>
               </Link>
             ))}
-            {pids.length > showP.length && <span className="lg-news-more">+{pids.length - showP.length} more</span>}
-          </div>
+            {restP.length > showP.length && <span className="lg-news-more">+{restP.length - showP.length} more</span>}
+          </span>
         )}
       </div>
     </div>
