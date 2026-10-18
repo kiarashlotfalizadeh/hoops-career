@@ -20,6 +20,11 @@
   border: 1px solid var(--line);
   background: var(--raised);
 }
+/* more columns to the right (useMoreRight): the table's edge fades out, as the League's tables do */
+.tablewrap.fr {
+  -webkit-mask-image: linear-gradient(270deg, transparent, #000 32px);
+  mask-image: linear-gradient(270deg, transparent, #000 32px);
+}
 table.stats {
   border-collapse: separate;
   border-spacing: 0;

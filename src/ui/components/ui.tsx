@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
@@ -649,6 +649,29 @@ export interface Col<T> {
   asc?: boolean;
 }
 
+/**
+ * A wide table's cue that more columns wait to the right: the scroller (a `.tablewrap`) gets `fr`
+ * while there's more to scroll to, and its right edge fades, as the League's tables do. Its first
+ * column stays put with `.sticky`.
+ */
+export function useMoreRight(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const on = () => el.classList.toggle('fr', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    on();
+    el.addEventListener('scroll', on, { passive: true });
+    // (a sheet opening, a row added in a live game: the widths change without a scroll)
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(on);
+    ro?.observe(el);
+    if (el.firstElementChild) ro?.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener('scroll', on);
+      ro?.disconnect();
+    };
+  }, [ref]);
+}
+
 /** "Points per game" → "points per game" (an acronym like "TS%" stays as it is). */
 const lowerFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
 
@@ -691,6 +714,7 @@ export function StatTable<T>({
     el.scrollLeft = th.offsetLeft - stuck - 8;
     // (on mount only: a tap on a header sorts where the reader already is)
   }, []);
+  useMoreRight(wrap);
   return (
     <div className="tablewrap" ref={wrap} style={{ maxHeight, overflowY: maxHeight ? 'auto' : undefined }}>
       <table className="stats">

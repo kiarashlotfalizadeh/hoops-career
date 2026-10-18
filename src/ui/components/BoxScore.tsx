@@ -2,10 +2,13 @@
 // in bold), the counting stats, the shooting as made-attempted, fouls and plus-minus, then the team's
 // line and a key to the marks. The columns are named as everywhere else in the game; each is spelled
 // out on a long press (its title) and for a screen reader.
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import type { BoxLine, TeamBox } from '../../core/types';
 import { signed, wholeMinutes } from '../stats';
+import { injuryName, madeAtt } from '../../core/format';
+import { useMoreRight } from './ui';
 import './gameday.css';
 
 /** The columns after the player's name: the abbreviation and what it stands for. */
@@ -24,8 +27,8 @@ export const BOX_COLUMNS = [
   ['+/-', 'Plus-minus: the score while he was on the floor'],
 ] as const;
 
-/** "Injured (Concussion)" reads "Injured: Concussion" inside the DNP list's own parentheses. */
-const dnpLabel = (dnp: string) => dnp.replace(/^Injured \((.+)\)$/, 'Injured: $1');
+/** "Injured (Knee Soreness)" reads "Injured: Knee soreness" inside the DNP list's own parentheses, the injury named as everywhere else. */
+const dnpLabel = (dnp: string) => dnp.replace(/^Injured \((.+)\)$/, (_, type: string) => `Injured: ${injuryName(type)}`);
 
 export function BoxScore({
   box,
@@ -54,10 +57,13 @@ export function BoxScore({
   const out = dnp ? box.players.filter((p) => p.min <= 0) : [];
   const min = wholeMinutes(box.players);
   const t = box.t;
+  // on a phone the figures past TOV wait to the right: the names stay put and the edge fades until they're in view
+  const scroller = useRef<HTMLDivElement>(null);
+  useMoreRight(scroller);
   return (
     <div className="bx">
       {/* it scrolls sideways: focusable so a keyboard can scroll it */}
-      <div className="tablewrap" tabIndex={0} role="region" aria-label={label}>
+      <div className="tablewrap" tabIndex={0} role="region" aria-label={label} ref={scroller}>
         <table className="stats bx-table">
           <thead>
             <tr>
@@ -100,15 +106,9 @@ export function BoxScore({
                   <td>{p.stl}</td>
                   <td>{p.blk}</td>
                   <td>{p.tov}</td>
-                  <td>
-                    {p.fgm}-{p.fga}
-                  </td>
-                  <td>
-                    {p.tpm}-{p.tpa}
-                  </td>
-                  <td>
-                    {p.ftm}-{p.fta}
-                  </td>
+                  <td>{madeAtt(p.fgm, p.fga)}</td>
+                  <td>{madeAtt(p.tpm, p.tpa)}</td>
+                  <td>{madeAtt(p.ftm, p.fta)}</td>
                   <td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
                   <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{signed(p.pm, 0)}</td>
                 </tr>
@@ -123,15 +123,9 @@ export function BoxScore({
               <td>{t.stl}</td>
               <td>{t.blk}</td>
               <td>{t.tov}</td>
-              <td>
-                {t.fgm}-{t.fga}
-              </td>
-              <td>
-                {t.tpm}-{t.tpa}
-              </td>
-              <td>
-                {t.ftm}-{t.fta}
-              </td>
+              <td>{madeAtt(t.fgm, t.fga)}</td>
+              <td>{madeAtt(t.tpm, t.tpa)}</td>
+              <td>{madeAtt(t.ftm, t.fta)}</td>
               <td>{t.pf}</td>
               <td />
             </tr>
