@@ -135,8 +135,8 @@ describe('schedule, injuries, two-way contracts, positions', () => {
 
   it('maps injury reports to types and counts games to the return date', () => {
     expect(injuryType('Knee — Veesaar was diagnosed with a torn right ACL', 82).type).toBe('Torn ACL');
-    expect(injuryType('Hamstring — strained his hamstring', 5)).toEqual({ type: 'Hamstring Strain', severity: 'moderate' });
-    expect(injuryType('Knee — hopes to be back early in 2027', 33)).toEqual({ type: 'Knee Injury', severity: 'major' });
+    expect(injuryType('Hamstring — strained his hamstring', 5)).toEqual({ type: 'Hamstring strain', severity: 'moderate' });
+    expect(injuryType('Knee — hopes to be back early in 2027', 33)).toEqual({ type: 'Knee injury', severity: 'major' });
     const players = [player('butleji01', 'Jimmy', 'Butler', 'GSW'), player('x', 'Healthy', 'Guy', 'GSW')];
     const schedule = { season: 2027, start: '2026-10-20', games: ['0:GSW@LAL', '2:LAL@GSW', '5:GSW@DEN', '80:GSW@BOS'] };
     const res = attachInjuries(
