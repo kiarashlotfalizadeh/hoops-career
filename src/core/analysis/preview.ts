@@ -362,17 +362,36 @@ function playInState(g: ScheduledGame): PlayInState | undefined {
   return { id: g.seriesId, elimination: true, note: 'The winner is the 8th seed; the loser is out.' };
 }
 
+/**
+ * A scheduled game set up as it will tip off: both sides' inputs and a throwaway game on a fixed
+ * seed (setting one up plans both rotations and matchups for the tip, and draws nothing from the league).
+ */
+function setUpGame(league: League, g: ScheduledGame) {
+  const neutral = neutralSite(g);
+  const homeIn = buildSimInput(league, g.home, g.day, g.type, g.away, g);
+  const awayIn = buildSimInput(league, g.away, g.day, g.type, g.home, g);
+  const sim = new GameSim(homeIn, awayIn, { rng: new Rng(1), type: g.type, injuries: false, neutral });
+  return { sim, homeIn, awayIn, neutral };
+}
+
+/**
+ * A scheduled game's win chance before tip-off, from the home side: the matchup preview's projection
+ * (and the one the game keeps), so every screen that quotes one quotes the same number. Pass
+ * `ratings` when projecting a day's games.
+ */
+export function gameProjection(league: League, g: ScheduledGame, ratings = leagueRatings(league)): { margin: number; win: number } {
+  const { sim, neutral } = setUpGame(league, g);
+  const { margin } = projectGame(league, sim, neutral, ratings);
+  return { margin, win: winChance(margin) };
+}
+
 export function matchupPreview(league: League, gid: number): MatchupPreview | null {
   const g = league.schedule.find((x) => x.gid === gid);
   if (!g) return null;
   const userGame = g.home === league.userTid || g.away === league.userTid;
   const usHome = !userGame || g.home === league.userTid;
   const [usTid, themTid] = usHome ? [g.home, g.away] : [g.away, g.home];
-  const neutral = neutralSite(g);
-  const homeIn = buildSimInput(league, g.home, g.day, g.type, g.away, g);
-  const awayIn = buildSimInput(league, g.away, g.day, g.type, g.home, g);
-  // a throwaway game on a fixed seed: setting one up plans both rotations and matchups for the tip, and draws nothing from the league
-  const sim = new GameSim(homeIn, awayIn, { rng: new Rng(1), type: g.type, injuries: false, neutral });
+  const { sim, homeIn, awayIn, neutral } = setUpGame(league, g);
   const ratings = leagueRatings(league);
   const rows = new Map(standings(league).map((r) => [r.tid, r]));
   const sHome = side(league, sim, 0, g, homeIn.rest ?? [], ratings, rows.get(g.home));
