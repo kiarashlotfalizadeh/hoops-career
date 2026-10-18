@@ -37,6 +37,8 @@ export const MAX_OPEN = 4;
 const USER_SLACK = 0.1;
 /** Days an in-season or summer offer stands (one is drawn per offer). */
 const STANDS = [5, 7] as const;
+/** Days before the same pitch (the same player bought or sold, the same team's salary dump) can come again. */
+const PITCH_REST = 21;
 
 type Pitch = { tid: number; offer: TradeOffer; kind: Proposal['kind']; note: string; subject: string };
 
@@ -150,8 +152,11 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
         ? 'It stands until the end of today.'
         : `It stands until ${fmtDate(league.season, p.expires)}.`;
   const ask = p.offer.a.pids.length || p.offer.a.dpids.length ? `for ${assetText(league, p.offer.a)}` : 'and want nothing back';
+  const from = `${t.region} ${t.name} GM`;
+  // the same pitch made again this season replaces its earlier mail: one message per pitch, the latest on top
+  league.inbox = league.inbox.filter((m) => !(m.season === league.season && m.subject === pitch.subject && m.from === from));
   addInbox(league, {
-    from: `${t.region} ${t.name} GM`,
+    from,
     subject: pitch.subject,
     body: `${p.note}\n${sentence(`We'd send ${assetText(league, p.offer.b)} ${ask}`)} ${until}`,
     tone: 'neutral',
@@ -177,12 +182,24 @@ const free = (league: League) => {
 };
 
 /**
+ * Is a pitch about this player out already (in an open offer), or was this pitch mailed in the last
+ * PITCH_REST days? Then it isn't made again: a player has one live pitch at a time, and a declined
+ * or lapsed one rests a while before it comes back.
+ */
+function pitchedLately(league: League, pid: number, subject: string): boolean {
+  if (openProposals(league).some((p) => p.offer.a.pids.includes(pid) || p.offer.b.pids.includes(pid))) return true;
+  return league.inbox.some((m) => m.season === league.season && m.subject === subject && league.day - m.day < PITCH_REST);
+}
+
+/**
  * An AI team wants one of the user's players (70+, not untouchable) that fits its plan, and offers
  * its best package for him (see packageFor). A player who asked out comes up three times as often.
  * Two players are tried, each with up to six teams.
  */
 function tryBuy(league: League, rng: Rng): Pitch | null {
-  const targets = standardRoster(league, league.userTid).filter((p) => p.ovr >= 70 && !isUntouchable(league, p.pid) && !untradeable(league, p));
+  const targets = standardRoster(league, league.userTid).filter(
+    (p) => p.ovr >= 70 && !isUntouchable(league, p.pid) && !untradeable(league, p) && !pitchedLately(league, p.pid, `Offer for ${playerName(p)}`),
+  );
   for (let k = 0; k < 2 && targets.length; k++) {
     const target = targets.splice(rng.weighted(targets.map((p) => (p.mood.tradeRequest ? 3 : 1))), 1)[0];
     for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target))).slice(0, 6)) {
@@ -218,7 +235,14 @@ function trySell(league: League, rng: Rng): Pitch | null {
     .map((p) => p.pid);
   for (const t of rng.shuffle(free(league).filter((x) => x.strategy === 'rebuild')).slice(0, 4)) {
     const vets = standardRoster(league, t.tid)
-      .filter((p) => p.ovr >= 74 && age(league, p) >= 27 && !untradeable(league, p) && !tradedAwayBy(league, p, user))
+      .filter(
+        (p) =>
+          p.ovr >= 74 &&
+          age(league, p) >= 27 &&
+          !untradeable(league, p) &&
+          !tradedAwayBy(league, p, user) &&
+          !pitchedLately(league, p.pid, `${t.abbrev} would move ${playerName(p)}`),
+      )
       .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
     for (const vet of vets.slice(0, 3)) {
       const ask = makeItWork(league, { a: { tid: user, pids: [], dpids: [] }, b: { tid: t.tid, pids: [vet.pid], dpids: [] } }, keep);
@@ -248,7 +272,7 @@ function tryDump(league: League, rng: Rng): Pitch | null {
     const bad = standardRoster(league, t.tid)
       .filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && tradeValue(league, p) < 0)
       .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
-    if (!bad) continue;
+    if (!bad || pitchedLately(league, bad.pid, `${t.abbrev} want to shed salary`)) continue;
     const dps: DraftPick[] = [];
     const offer = (): TradeOffer => ({ a: { tid: user, pids: [], dpids: [] }, b: { tid: t.tid, pids: [bad.pid], dpids: dps.map((d) => d.dpid) } });
     if (validateTrade(league, offer()).length) continue;

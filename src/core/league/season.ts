@@ -28,7 +28,7 @@ import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
-import { aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
+import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { resolvePromises, settleExpiringPromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
@@ -133,15 +133,7 @@ function periodic(league: League, rng: Rng) {
       });
     }
   }
-  if (d === league.tradeDeadlineDay - 3) {
-    addInbox(league, {
-      from: 'Assistant GM',
-      subject: 'Trade deadline in 3 days',
-      body: 'Any deals need to be done before the deadline. After that, only free agents can be added.',
-      tone: 'alert',
-      link: '/office/trade',
-    });
-  }
+  // (the deadline has one mail, its deadline-day briefing (deadline.ts); the Office counts the days down)
   if (d % 7 === 3) {
     faDay(league, rng, 0.25);
     fillRosters(league, rng);
@@ -278,45 +270,49 @@ function endRegularSeason(league: League) {
   computeRegularSeasonAwards(league);
   // revenue sharing first: the tax pot is shared on top of it
   const shared = shareRevenue(league).get(league.userTid) ?? 0;
-  if (Math.abs(shared) >= 500)
-    addInbox(league, {
-      from: 'League Office',
-      subject: 'Revenue sharing',
-      body:
-        shared > 0
-          ? `Our local revenue (gate, merchandise, local TV) came in below the league average, so revenue sharing pays us ${money(shared)}.`
-          : `Our local revenue (gate, merchandise, local TV) beat the league average, so we pay ${money(-shared)} into revenue sharing.`,
-      tone: 'neutral',
-      link: '/office/finances',
-    });
   const bills = assessLuxuryTax(league);
+  seasonBooksMail(league, shared, bills);
+  startPlayIn(league);
+}
+
+/**
+ * The regular season's books in one mail: what revenue sharing paid or cost, the luxury tax paid
+ * (with the owner's word on it, by where the team finished) or the share of the league's tax pot
+ * received, and a payroll short of the salary floor. Nothing when none of it moved $0.5M.
+ */
+function seasonBooksMail(league: League, shared: number, bills: ReturnType<typeof assessLuxuryTax>) {
   const mine = bills.find((b) => b.tid === league.userTid);
+  const taxpayers = bills.filter((b) => b.tax > 0);
+  // the pot's share each team under the tax line received (see assessLuxuryTax)
+  const share = mine?.tax ? 0 : (taxpayers.reduce((a, b) => a + b.tax, 0) * TAX_SHARE_TO_NON_TAXPAYERS) / Math.max(1, league.teams.length - taxpayers.length);
+  const lines: string[] = [];
+  if (Math.abs(shared) >= 500)
+    lines.push(
+      shared > 0
+        ? `Revenue sharing paid us ${money(shared)}: our local revenue (gate, merchandise, local TV) came in below the league average.`
+        : `We paid ${money(-shared)} into revenue sharing: our local revenue (gate, merchandise, local TV) beat the league average.`,
+    );
   if (mine?.tax) {
     // the seeds are final: in the top six, in the play-in or out
     const rank = confStandings(league, league.teams[league.userTid].conf).findIndex((r) => r.tid === league.userTid) + 1;
-    const bill = `We paid ${money(mine.tax)} in luxury tax this season`;
-    addInbox(league, {
-      from: 'Owner',
-      subject: 'Luxury tax bill',
-      body:
-        rank <= 6
-          ? `${bill}. Make it count in the playoffs.`
-          : rank <= 10
-            ? `${bill}, and we still have to get through the play-in. Make it count.`
-            : `${bill} for a team that missed the postseason. That can't happen again.`,
-      tone: 'bad',
-      link: '/office/finances',
-    });
-  }
+    const word =
+      rank <= 6
+        ? 'Make it count in the playoffs.'
+        : rank <= 10
+          ? 'We still have to get through the play-in. Make it count.'
+          : "For a team that missed the postseason. That can't happen again.";
+    lines.push(`We paid ${money(mine.tax)} in luxury tax. The owner: "${word}"`);
+  } else if (share >= 500) lines.push(`Our share of the league's luxury tax: ${money(share)}.`);
   if (mine?.shortfall)
-    addInbox(league, {
-      from: 'Owner',
-      subject: 'Under the salary floor',
-      body: `Our payroll finished ${money(mine.shortfall)} under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`,
-      tone: 'bad',
-      link: '/office/finances',
-    });
-  startPlayIn(league);
+    lines.push(`Our payroll finished ${money(mine.shortfall)} under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`);
+  if (!lines.length) return;
+  addInbox(league, {
+    from: 'Front Office',
+    subject: "The season's books",
+    body: lines.join('\n'),
+    tone: mine?.tax || mine?.shortfall ? 'bad' : shared + share > 0 ? 'good' : 'neutral',
+    link: '/office/finances',
+  });
 }
 
 /** Hall of Fame points per award won in this league; 22 gets a player in. */
