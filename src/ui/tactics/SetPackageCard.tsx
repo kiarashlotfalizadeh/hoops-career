@@ -1,18 +1,17 @@
+// Offense's set package: up to four named sets the half court mixes in now and then, each for the
+// player on the floor who fits it best (when one fits it well enough: SET_K.fit). Each row shows who on the roster fits it best
+// and how well; its look, what beats it and what it costs are in its sheet.
 import { useState } from 'react';
 import { Check, Info } from 'lucide-react';
 import type { Player, SetId, Tactics } from '../../core/types';
 import { MAX_SETS, SETS, SET_IDS, SET_K, bestFor, fitPlayer, setFit, setPackage } from '../../core/sim/sets';
-import { Help, Section, Sheet, Tag } from '../components/ui';
+import { Help, Section, Sheet } from '../components/ui';
 import { rosterNames } from '../stats';
+import { FitScore } from './FitScore';
 import '../screens/tactics.css';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/**
- * The set package (Offense): up to four named sets the half court mixes in now
- * and then, each for the player on the floor who fits it best (when one fits well enough). Each set
- * shows who on the roster fits it; its look, what beats it and what it costs are in its sheet.
- */
 export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t: Tactics) => void) => void; players: Player[] }) {
   const names = rosterNames(players);
   const pkg = setPackage(t);
@@ -65,6 +64,10 @@ export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
       }
     >
       <div className="card flush list wide2">
+        <div className="list-divider list-h tx-fith" aria-hidden="true">
+          <span>Best fit on your roster · runs at {SET_K.fit}+</span>
+          <span>Fit</span>
+        </div>
         {SET_IDS.map((id) => {
           const on = pkg.includes(id);
           const best = fitOf(id);
@@ -77,10 +80,14 @@ export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
                 </span>
                 <span className="grow">
                   <span className="lr-name">{SETS[id].name}</span>
-                  <span className="lr-meta">{best ? `For ${names(best.pid)}` : 'Nobody fits it'}</span>
+                  <span className="lr-meta">{best ? (best.fit >= SET_K.fit ? `For ${names(best.pid)}` : `${names(best.pid)} · won't run`) : 'Nobody fits it'}</span>
                 </span>
               </button>
-              {best && <Tag tone={best.fit >= SET_K.fit ? 'good' : undefined}>Fit {best.fit}</Tag>}
+              {best && (
+                <span className="tx-fit" aria-label={`Fit ${best.fit}${best.fit >= SET_K.fit ? '' : `, under ${SET_K.fit}: not run`}`}>
+                  <FitScore v={best.fit} tone={best.fit >= SET_K.fit ? 'good' : ''} />
+                </span>
+              )}
               <button className="iconbtn tx-about" aria-label={`About ${SETS[id].name}`} aria-haspopup="dialog" onClick={() => setAbout(id)}>
                 <Info size={18} />
               </button>

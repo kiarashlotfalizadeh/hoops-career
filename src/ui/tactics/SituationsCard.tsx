@@ -1,59 +1,18 @@
+// Game Mgmt's situational plans: each changes the tactics while its situation lasts (a quarter, the
+// time left, the score, the second unit), the first enabled match applying, top to bottom. A row per
+// plan with what it changes; its sheet edits the trigger and the changes.
 import { useState } from 'react';
 import { ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { DefScheme, PressMode, SituationalPlan, SituationTrigger, Tactics, TacticsPatch } from '../../core/types';
 import { ACTIONS } from '../../core/types';
-import {
-  ACTION_META,
-  COVERAGE_META,
-  MAX_SITUATIONS,
-  PRESS_META,
-  SCHEME_META,
-  SITUATION_TEMPLATES,
-  situationFromTemplate,
-  situationText,
-  type SituationTemplate,
-} from '../../core/sim/tactics';
+import { MAX_SITUATIONS, PRESS_META, SCHEME_META, SITUATION_TEMPLATES, situationFromTemplate, situationText, type SituationTemplate } from '../../core/sim/tactics';
 import { Chips, Help, Section, Sheet, Slider, Toggle } from '../components/ui';
+import { patchParts, patchText } from './changes';
 import '../screens/tactics.css';
 
 type Edit = (fn: (t: Tactics) => void) => void;
 
 const signed = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x)}`;
-
-const NUDGE_LABEL: Record<string, string> = {
-  pace: 'Pace',
-  transition: 'Transition',
-  threePoint: 'Threes',
-  rimAttack: 'Rim attack',
-  crashBoards: 'Crash glass',
-  help: 'Help',
-  pressure: 'Pressure',
-  getBack: 'Get back',
-  physicality: 'Physicality',
-};
-
-/** What a plan changes, in a few words: "Pace −25 · Get back +20 · 3-2 Zone". */
-export function patchText(p: TacticsPatch): string {
-  const out = patchParts(p);
-  return out.length ? out.join(' · ') : 'No changes yet';
-}
-
-function patchParts(p: TacticsPatch): string[] {
-  const out: string[] = [];
-  const { actions, ...off } = p.offense ?? {};
-  if (off.huntMismatch) out.push('Hunt mismatches');
-  for (const [k, v] of Object.entries(off)) if (typeof v === 'number' && NUDGE_LABEL[k]) out.push(`${NUDGE_LABEL[k]} ${v}`);
-  for (const [k, v] of Object.entries(actions ?? {})) out.push(`${ACTION_META[k as keyof typeof ACTION_META].label} ${v}`);
-  const d = p.defense ?? {};
-  if (d.scheme) out.push(SCHEME_META[d.scheme].label);
-  if (d.pnr) out.push(COVERAGE_META[d.pnr].label);
-  if (d.press) out.push(d.press === 'none' ? 'No press' : `Press ${PRESS_META[d.press].label.toLowerCase()}`);
-  for (const [k, v] of Object.entries(d)) if (typeof v === 'number' && NUDGE_LABEL[k]) out.push(`${NUDGE_LABEL[k]} ${v}`);
-  const n = p.nudge ?? {};
-  for (const [k, v] of [...Object.entries(n.offense ?? {}), ...Object.entries(n.defense ?? {})]) if (v) out.push(`${NUDGE_LABEL[k] ?? k} ${signed(v)}`);
-  for (const [k, v] of Object.entries(n.actions ?? {})) if (v) out.push(`${ACTION_META[k as keyof typeof ACTION_META].label} ${signed(v)}`);
-  return out;
-}
 
 /** The plan editor's own controls: six relative sliders, the base scheme and the press. */
 const EDITOR_NUDGES = { offense: ['pace', 'threePoint', 'crashBoards'], defense: ['pressure', 'help', 'getBack'] } as const;

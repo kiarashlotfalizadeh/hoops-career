@@ -41,6 +41,13 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   { id: 'ato', term: 'After-timeout play (ATO)', group: 'Offense', text: 'The play your team runs on the first trip out of a timeout.' },
   {
+    id: 'hunt',
+    term: 'Hunting a mismatch',
+    group: 'Offense',
+    text: 'Running isolations and ball screens at the weakest defender on the floor, or at whoever a switch has left on your scorer.',
+  },
+  { id: 'twoforone', term: '2-for-1', group: 'Offense', text: 'A quick shot with about 35 seconds left in a quarter, so you get the ball back for the last shot too.' },
+  {
     id: 'usage',
     term: 'Usage (USG%)',
     group: 'Offense',
@@ -73,6 +80,24 @@ export const GLOSSARY: GlossaryEntry[] = [
     text: 'Pressure in the backcourt, all over the floor. Forces turnovers and burns the shot clock; risky against good ball handlers.',
   },
   {
+    id: 'guarding',
+    term: 'Go under, top-lock, sag off, physical',
+    group: 'Defense',
+    text: 'How one defender plays his man. Go under screens: room for his pull-ups, none for his drives. Top-lock: runs a shooter off the line, opens drives and backdoor cuts. Sag off: helps in the paint, leaves him open from outside. Physical: tougher drives and post-ups, more fouls.',
+  },
+  {
+    id: 'starplan',
+    term: 'Star plan (deny, double-team)',
+    group: 'Defense',
+    text: 'Deny face-guards their main creator to keep the ball out of his hands; a double-team sends a second defender when he attacks and makes the others beat you.',
+  },
+  {
+    id: 'foultogive',
+    term: 'Foul to give',
+    group: 'Defense',
+    text: 'A foul with a few seconds left in a quarter when they aren’t in the bonus yet: only a side out, with less time and a worse first look for them.',
+  },
+  {
     id: 'hack',
     term: 'Hack-a-player',
     group: 'Defense',
@@ -94,12 +119,30 @@ export const GLOSSARY: GlossaryEntry[] = [
   { id: 'orb', term: 'ORB%', group: 'Numbers', text: 'The share of a team’s own misses it rebounds.' },
   { id: 'ftr', term: 'FTR', group: 'Numbers', text: 'Free-throw rate: free-throw attempts per field-goal attempt.' },
   { id: 'ppp', term: 'PPP', group: 'Numbers', text: 'Points per possession, used for play types (pick-and-roll, spot-ups, transition...). About 1.1 is average.' },
+  {
+    id: 'fourfactors',
+    term: 'Four factors',
+    group: 'Numbers',
+    text: 'What decides possessions, at both ends: shooting (eFG%), turnovers (TOV%), offensive rebounds (ORB%) and getting to the line (FTR).',
+  },
+  {
+    id: 'z',
+    term: 'z (standard errors)',
+    group: 'Numbers',
+    text: 'How far a number is from the league’s, in standard errors. Within about ±2 it could be noise; beyond that it’s a real tendency.',
+  },
+  {
+    id: 'range',
+    term: '± range (Lab)',
+    group: 'Numbers',
+    text: 'How far a Lab result could be off: run the same test many times and the true change lands inside it about 95 times in 100. More games make it tighter.',
+  },
   { id: 'onoff', term: 'On/off', group: 'Numbers', text: 'A team’s net rating with a player on the floor minus with him off it.' },
   {
     id: 'fit',
     term: 'Fit',
     group: 'Numbers',
-    text: 'How well a playbook suits your roster, from what each part of it needs (a lead creator, shooting, a passing big, rim protection, depth).',
+    text: 'How well a playbook suits your roster, from what each part of it needs (a lead creator, shooting, a passing big, rim protection, depth), ranked against the others: 100 is your best fit, 45 your worst. A set’s fit is how well the player it’s run for suits it.',
   },
   {
     id: 'wear',

@@ -170,6 +170,17 @@ button.card:disabled {
   color: var(--text-dim);
   background: var(--bg-2);
 }
+/* a divider as a column header: what the rows are ordered by on the left, the figure column's name
+   on the right (over the figures) */
+.list-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.list-h > :first-child {
+  flex: 1;
+  min-width: 0;
+}
 .listrow.clickable {
   cursor: pointer;
 }

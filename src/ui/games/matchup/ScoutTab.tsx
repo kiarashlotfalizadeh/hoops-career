@@ -9,6 +9,7 @@ import { SCOUT_MIN_GAMES, scoutData } from '../../../core/analysis/scouting';
 import { seasonLabel } from '../../../core/constants';
 import { Avatar, Help, More, Ovr, Section, Segmented } from '../../components/ui';
 import { Term } from '../../components/Glossary';
+import { plural } from '../../../core/format';
 import { HeadToHead, KeyPlayers, PlayTypeTable, RankStrip, scoutSource } from '../../components/scouting';
 
 function Bullets({ items, tone }: { items: string[]; tone?: 'good' | 'info' }) {
@@ -42,7 +43,7 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
             </More>
           </>
         ) : (
-          <div className="mu-note">The numbers come in after {SCOUT_MIN_GAMES} games. Until then the report reads their playbook and roster.</div>
+          <div className="mu-note">League ranks after {SCOUT_MIN_GAMES} games; until then, this reads their playbook and roster.</div>
         )}
       </Section>
 
@@ -74,8 +75,11 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
               </span>
               <Help title="Play types">
                 <p>
-                  Points per possession by how the possession finished, against the league&apos;s, over {data.ptGames} game{data.ptGames === 1 ? '' : 's'}. On their offense red
-                  means they score well; on their defense, that they allow a lot. z is how far from the league in standard errors: beyond ±2 is more than noise.
+                  Points per possession by how the possession finished, against the league&apos;s, over {plural(data.ptGames, 'game')}. Green is where they are better than the
+                  league (scoring more on offense, allowing less on defense), red where they are worse: red is where to attack them.
+                </p>
+                <p>
+                  <Term id="z">z</Term> is how far from the league in standard errors: beyond ±2 is more than noise.
                 </p>
               </Help>
             </span>

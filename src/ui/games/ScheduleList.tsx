@@ -214,9 +214,20 @@ function GameRow({ r, league, tid, h2hTid, ranks, brief }: RowProps & { r: Row }
   if (r.res) {
     const side = r.res.home.tid === tid ? r.res.home : r.res.away;
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
-    // (the player's own last name while he's in the league: a box-score name can end in "Jr.")
-    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name}\u00a0${top.pts}` : '';
-    sub = [r.g.type === 'regular' && !brief ? r.rec : '', lead].filter(Boolean).join(' · ');
+    const rec = r.g.type === 'regular' && !brief ? `${r.rec} · ` : '';
+    // the top scorer's points stay in view when a long name is cut short (the player's own last
+    // name while he's in the league: a box-score name can end in "Jr.")
+    sub = top ? (
+      <>
+        <span className="gs-lead">
+          {rec}
+          {league.players[top.pid]?.lastName ?? top.name}
+        </span>
+        <span className="num">{top.pts}</span>
+      </>
+    ) : (
+      r.rec
+    );
   } else sub = oppLine(league, r.opp, ranks);
   // the keys to the game met, under the score of the user's results
   const keys = r.res && tid === user && r.res.keys?.length ? r.res.keys.filter((k) => k.met !== null) : [];

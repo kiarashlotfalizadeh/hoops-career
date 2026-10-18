@@ -1,0 +1,93 @@
+/* The Games hub's next game: a slab in the opponent's colours (when, who, how they stand, the series
+   and the plan). */
+.gn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gn-over {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.gn-over .today {
+  color: #fff;
+}
+.gn-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.gn-region {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.gn-name {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.gn-at {
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--text-2);
+  margin-right: 6px;
+  text-transform: none;
+  font-family: var(--font);
+  font-stretch: 100%;
+}
+.gn-rec {
+  margin-left: auto;
+  text-align: right;
+  flex: none;
+}
+.gn-rec .v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1;
+}
+.gn-rec .s {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.gn-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.gn-foot .grow {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* the plan line: a tap to the matchup page's Plan */
+.gn-plan {
+  align-self: flex-start;
+  font-weight: 700;
+  color: var(--accent-text);
+  position: relative;
+}
+.gn-plan::after {
+  content: '';
+  position: absolute;
+  inset: -10px -6px;
+}
+.gn-plan.set {
+  color: #fff;
+}

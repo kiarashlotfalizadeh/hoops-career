@@ -97,7 +97,7 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
         return w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
       })()
     : ss && ss.total > 0
-      ? `Season ${ss.won}-${ss.lost} · ${ss.won + ss.lost + 1} of ${ss.total}`
+      ? `Meeting ${ss.won + ss.lost + 1} of ${ss.total}${ss.won + ss.lost ? ` · you're ${ss.won}-${ss.lost}` : ''}`
       : '';
   return (
     <section className="slab gn" style={slabVars(t.colors) as CSSProperties} aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
@@ -133,8 +133,10 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
       </div>
       <div className="gn-foot">
         <span className="grow">
-          {seriesText && <span className="num">{seriesText} · </span>}
-          <span className={`gn-plan${plan.set ? ' set' : ''}`}>{plan.text}</span>
+          {seriesText && <span className="num gn-series">{seriesText}</span>}
+          <Link to={`/games/${opp}?tab=plan`} className={`gn-plan${plan.set ? ' set' : ''}`}>
+            Plan: {plan.set ? plan.text : 'none yet'}
+          </Link>
         </span>
         <Link to={`/games/${opp}`} className="btn sm" aria-label={`Matchup: the ${t.name}`}>
           Matchup <ChevronRight size={15} />

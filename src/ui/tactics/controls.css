@@ -1,0 +1,144 @@
+/* Offense, Defense and Game Mgmt's own controls: the hunt and big-man notes, the set package's
+   checkbox rows, and picker rows that open a sheet of choices. */
+.tx-hunt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--info) 10%, transparent);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.tx-hunt svg {
+  flex: none;
+  color: var(--accent-text);
+}
+.tx-bigfit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* the set package: a checkbox row, the player it's for, its fit, ⓘ */
+.tx-set {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--row-min);
+  padding-right: 2px;
+}
+.tx-set-pick {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--row-py) 4px var(--row-py) var(--row-px);
+  text-align: left;
+}
+.tx-set-pick:disabled {
+  opacity: 0.5;
+}
+.tx-set-pick .lr-name,
+.tx-set-pick .lr-meta {
+  display: block;
+}
+.tx-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--line-3);
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+}
+.tx-set.on .tx-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* picker rows: a setting and its choice, the choices in a sheet */
+.tx-pick + .tx-pick,
+.tx-pick + .tx-ctl {
+  border-top: 1px solid var(--line);
+}
+.tx-pickrow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: var(--row-py) 10px var(--row-py) var(--row-px);
+  text-align: left;
+}
+.tx-pickrow:active {
+  background: var(--surface);
+}
+.tx-pickrow-l {
+  flex: none;
+  font-weight: 650;
+  font-size: 14.5px;
+}
+.tx-pickrow-v {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-text);
+}
+.tx-pick > .tx-note {
+  padding: 0 var(--row-px) 10px;
+  margin-top: -4px;
+}
+.tx-optgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tx-optgroup + .tx-optgroup {
+  margin-top: 16px;
+}
+.tx-opt {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  text-align: left;
+}
+.tx-opt:active {
+  background: var(--surface);
+}
+.tx-opt.on {
+  background: color-mix(in srgb, var(--accent) 12%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.tx-opt-l {
+  display: block;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.tx-opt-s {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tx-opt.on .tx-opt-s {
+  color: var(--text-2);
+}
+.tx-opt-c {
+  flex: none;
+  color: var(--accent-text);
+}
