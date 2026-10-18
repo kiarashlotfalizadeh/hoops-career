@@ -15,6 +15,7 @@ import { OvrBadge } from '../components/OvrKey';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
 import { slabVars } from '../teamColors';
+import { plural } from '../../core/format';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
 const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
@@ -104,7 +105,7 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
         {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
         {p.injury && (
           <Tag tone="bad">
-            {p.injury.type} · {p.injury.gamesRemaining}g
+            {p.injury.type} · out {plural(p.injury.gamesRemaining, 'game')}
           </Tag>
         )}
         {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
