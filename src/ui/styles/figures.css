@@ -171,3 +171,42 @@
     opacity: 0.55;
   }
 }
+
+/* a two-team comparison's figures (CompareBar): the side that wins it in a pill of its colour */
+.cmp-v {
+  padding: 0 5px;
+  border-radius: 5px;
+}
+.cmp-v.win {
+  font-weight: 800;
+  color: var(--text);
+  background: color-mix(in srgb, var(--cmp-c) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cmp-c) 70%, transparent);
+}
+.cmp-v.lose {
+  color: var(--text-dim);
+}
+
+/* the shot chart's key (ShotChart) */
+.shot-key {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.shot-key > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.shot-key i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.shot-key b {
+  font-size: 14px;
+  line-height: 1;
+}

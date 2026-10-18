@@ -6,14 +6,17 @@ import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { Card, Chips, Section, Segmented } from '../components/ui';
 import { FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
-import { fmtClock, periodLabel, wholeMinutes } from '../stats';
+import { fmtClock, periodLabel } from '../stats';
+import { BoxScore } from '../components/BoxScore';
+import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
 
-type Tab = 'box' | 'team' | 'shots' | 'flow';
+type Tab = 'players' | 'team' | 'shots' | 'flow';
 
 /**
- * The live box score as the court has drawn it: players, team totals by period, the shots (by team,
- * period and player) and the flow: your chance to win so far (`wp`, when it's on) and the score margin.
+ * The Clipboard's Box tab, the game as the court has drawn it: each team's players (the box score
+ * the report has, and their play types so far), the team totals by period, the shots (by team, period
+ * and player) and the flow: your chance to win so far (`wp`, when it's on) and the score margin.
  */
 export function BoxPanel({
   view,
@@ -40,7 +43,7 @@ export function BoxPanel({
   /** Win probability's starting point (the projected home margin) and the game's type; absent when it's switched off. */
   wp?: { edge: number; type: GameType };
 }) {
-  const [tab, setTab] = useState<Tab>('box');
+  const [tab, setTab] = useState<Tab>('players');
   const [team, setTeam] = useState<0 | 1>(side);
   const [period, setPeriod] = useState(0);
   const [shooter, setShooter] = useState<number | null>(null);
@@ -48,7 +51,6 @@ export function BoxPanel({
   const home = league.teams[res.home.tid];
   const away = league.teams[res.away.tid];
   const tb = team === 0 ? res.home : res.away;
-  const min = wholeMinutes(tb.players);
   // everyone who has played, and the five on the floor now (the starters at the opening tip)
   const onFloor = new Set(view.sides[team].on);
   const pt = Object.entries(tb.playTypes).sort((a, b) => b[1].poss - a[1].poss);
@@ -62,13 +64,13 @@ export function BoxPanel({
         onChange={setTab}
         label="Box score sections"
         options={[
-          { id: 'box', label: 'Box' },
+          { id: 'players', label: 'Players' },
           { id: 'team', label: 'Team' },
           { id: 'shots', label: 'Shots' },
           { id: 'flow', label: 'Flow' },
         ]}
       />
-      {tab === 'box' && (
+      {tab === 'players' && (
         <>
           <Segmented
             value={String(team)}
@@ -79,69 +81,15 @@ export function BoxPanel({
               { id: '0', label: home.abbrev },
             ]}
           />
-          {/* it scrolls sideways: focusable so a keyboard can scroll it */}
-          <div className="tablewrap" tabIndex={0} role="region" aria-label={`${(team === 0 ? home : away).name} box score`}>
-            <table className="stats">
-              <thead>
-                <tr>
-                  <th className="l sticky">Player</th>
-                  <th>MIN</th>
-                  <th>PTS</th>
-                  <th>REB</th>
-                  <th>AST</th>
-                  <th>FG</th>
-                  <th>3P</th>
-                  <th>FT</th>
-                  <th>PF</th>
-                  <th>+/-</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tb.players
-                  .filter((p) => p.min > 0 || onFloor.has(p.pid))
-                  .map((p) => (
-                    <tr key={p.pid}>
-                      {/* starters in bold, as in the game report */}
-                      <td className={`l sticky${p.gs ? ' bold' : ''}`}>{nameOf(p.pid)}</td>
-                      <td>{min(p.pid)}</td>
-                      <td className="bold">{p.pts}</td>
-                      <td>{p.orb + p.drb}</td>
-                      <td>{p.ast}</td>
-                      <td>
-                        {p.fgm}-{p.fga}
-                      </td>
-                      <td>
-                        {p.tpm}-{p.tpa}
-                      </td>
-                      <td>
-                        {p.ftm}-{p.fta}
-                      </td>
-                      <td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
-                      <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{p.pm > 0 ? `+${p.pm}` : p.pm}</td>
-                    </tr>
-                  ))}
-                <tr>
-                  <td className="l sticky bold">Team</td>
-                  <td />
-                  <td className="bold">{tb.pts}</td>
-                  <td>{tb.t.orb + tb.t.drb}</td>
-                  <td>{tb.t.ast}</td>
-                  <td>
-                    {tb.t.fgm}-{tb.t.fga}
-                  </td>
-                  <td>
-                    {tb.t.tpm}-{tb.t.tpa}
-                  </td>
-                  <td>
-                    {tb.t.ftm}-{tb.t.fta}
-                  </td>
-                  <td>{tb.t.pf}</td>
-                  <td />
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <Section title="Play types so far" right={<span className="tiny dim">poss · per poss</span>}>
+          <BoxScore box={tb} name={nameOf} label={`${(team === 0 ? home : away).name} box score`} shown={(p) => p.min > 0 || onFloor.has(p.pid)} />
+          <Section
+            title={`${(team === 0 ? home : away).abbrev} play types so far`}
+            right={
+              <span className="tiny dim">
+                Poss · <Term id="ppp">PPP</Term>
+              </span>
+            }
+          >
             <div className="card flush list">
               {pt.length === 0 && <div className="bx-pt small dim">None yet.</div>}
               {pt.map(([k, v]) => (
@@ -271,7 +219,7 @@ function ShotsTab({
         ]}
       />
       <Chips label="Period" value={period} onChange={setPeriod} options={[{ id: 0, label: 'All' }, ...periods]} />
-      <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${made}/${shots.length}${period ? ` in ${periodLabel(period)}` : ''}`}>
+      <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${made}/${shots.length} FG${period ? ` in ${periodLabel(period)}` : ''}`}>
         {all.length === 0 ? (
           <div className="small dim">No shots yet{period ? ` in ${periodLabel(period)}` : ''}.</div>
         ) : (
@@ -336,7 +284,7 @@ function WinProbCard({
   const mine = (v: number) => (side === 0 ? v : 1 - v);
   const me = abbrevs[side];
   return (
-    <Card title="Win probability" right={<span className="tiny dim">{me} above 50%</span>}>
+    <Card title={<Term id="winprob">Win probability</Term>} right={<span className="tiny dim">{me} above 50%</span>}>
       {!series || series.length < 2 ? (
         <div className="small dim">The chart starts after the first possession.</div>
       ) : (
@@ -354,7 +302,7 @@ function WinProbCard({
             height={130}
           />
           <div className="small dim" style={{ marginTop: 8 }}>
-            {me} {wpText(mine(series[series.length - 1].wp))} to win now, {wpText(mine(series[0].wp))} at tip-off. From the score, the clock, the ball and the pre-game projection.
+            {me} {wpText(mine(series[series.length - 1].wp))} to win now, {wpText(mine(series[0].wp))} at tip-off.
           </div>
         </>
       )}

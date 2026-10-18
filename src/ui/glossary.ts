@@ -93,6 +93,19 @@ export const GLOSSARY: GlossaryEntry[] = [
   { id: 'tov', term: 'TOV%', group: 'Numbers', text: 'Turnovers per possession.' },
   { id: 'orb', term: 'ORB%', group: 'Numbers', text: 'The share of a team’s own misses it rebounds.' },
   { id: 'ftr', term: 'FTR', group: 'Numbers', text: 'Free-throw rate: free-throw attempts per field-goal attempt.' },
+  {
+    id: 'fourfactors',
+    term: 'Four factors',
+    group: 'Numbers',
+    text: 'What wins games, most important first: shooting (eFG%), not turning it over (TOV%, lower is better), offensive rebounding (ORB%) and free throws (FT/FGA).',
+  },
+  { id: 'ftfga', term: 'FT/FGA', group: 'Numbers', text: 'Free throws made per field-goal attempt: getting to the line and making them, the fourth of the four factors.' },
+  {
+    id: 'grade',
+    term: 'Player grade',
+    group: 'Numbers',
+    text: 'A+ to F for one game: his game score (points, shooting, boards, assists, steals and blocks, less misses, turnovers and fouls) against what his rating predicts for his minutes, plus a little for his plus-minus. B is about what was expected.',
+  },
   { id: 'ppp', term: 'PPP', group: 'Numbers', text: 'Points per possession, used for play types (pick-and-roll, spot-ups, transition...). About 1.1 is average.' },
   { id: 'onoff', term: 'On/off', group: 'Numbers', text: 'A team’s net rating with a player on the floor minus with him off it.' },
   {
