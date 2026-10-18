@@ -52,7 +52,7 @@ await shot('15-lab', true);
 // counters are tested on the opponent's matchup page (Plan): the old link takes you there
 await page.goto(`${base}/#/lab?mode=counters`);
 await page.waitForTimeout(800);
-await page.getByRole('button', { name: /^Test the counters/ }).click();
+await page.getByRole('button', { name: /^Run \d+ games each/ }).click();
 await page.waitForSelector('.mu-runres', { timeout: 240000 });
 await shot('16-lab-counters', true);
 // start season
@@ -85,7 +85,7 @@ await page.getByRole('button', { name: 'Clipboard' }).click();
 await shot('20-live-plan');
 await page.keyboard.press('Escape');
 // the live game's playback controls come up with a tap on the court
-if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
+if (await page.locator('.lv-pb:not(.up)').count()) await page.locator('.lv-pb').click({ position: { x: 12, y: 12 } });
 await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
 await page
   .locator('.sheet')

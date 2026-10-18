@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
 import { clearLive, prepareLive } from '../../state/live';
-import { HOME_EDGE, matchupPreview, projectMargin, winChance } from '../analysis/preview';
+import { gameProjection, HOME_EDGE, matchupPreview, projectMargin, winChance } from '../analysis/preview';
 import { ensureRotation, userGameOnDay } from '../league/games';
 import { simDay } from '../league/season';
 import { teamPlayers } from '../league/helpers';
@@ -125,6 +125,23 @@ describe('matchup preview', () => {
     expect(away.projection.edge).toBe(-HOME_EDGE);
     expect(home.projection.margin - away.projection.margin).toBeCloseTo(2 * HOME_EDGE, 6);
     expect(home.projection.win).toBeGreaterThan(away.projection.win);
+  });
+
+  it('a day’s scoreboard quotes the preview’s own chance to win, for your game and everyone else’s', () => {
+    const l = testLeague('one source');
+    toGameDay(l);
+    for (let i = 0; i < 6; i++) simDay(l);
+    const before = { rng: l.rng, players: JSON.stringify(l.players) };
+    const day = l.schedule.filter((x) => x.day === l.day);
+    expect(day.length).toBeGreaterThan(1);
+    for (const g of day) {
+      const pv = matchupPreview(l, g.gid)!;
+      const p = gameProjection(l, g);
+      // (the preview reads from the user's side in his games, the home side in the rest)
+      expect(pv.usHome ? p.win : 1 - p.win).toBeCloseTo(pv.projection.win, 9);
+      expect(pv.usHome ? p.margin : -p.margin).toBeCloseTo(pv.projection.margin, 9);
+    }
+    expect({ rng: l.rng, players: JSON.stringify(l.players) }).toEqual(before);
   });
 
   it('playoff games carry the series: game number, elimination and clinch, and the tag Home shows', () => {

@@ -313,11 +313,30 @@ export function WinProbChart({
   );
 }
 
-/** A missed shot's cross on the shot chart. */
-const MISS = '#ff8a8a';
+/** A missed shot's cross on the shot chart: neutral, so a team's made shots keep its own colour, red ones included. */
+const MISS = '#9aa5b4';
 
-/** Half-court shot chart, with its key (made in `color`, missed as a cross). Coordinates in feet: x -25..25, y 0..47 from the baseline. */
-export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shots: ShotRecord[]; color?: string; size?: number }) {
+/** The shot chart's key: each team's made shots in its colour (`made`: label and colour), and the misses. */
+export function ShotKey({ made }: { made: { label: string; color: string }[] }) {
+  return (
+    <div className="shot-key" aria-hidden="true">
+      {made.map((m) => (
+        <span key={m.label}>
+          <i style={{ background: m.color }} /> {m.label}
+        </span>
+      ))}
+      <span>
+        <b style={{ color: MISS }}>×</b> Missed
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Half-court shot chart, with its key (made in `color`, missed as a cross) unless `keyed` is false,
+ * for charts that share one key. Coordinates in feet: x -25..25, y 0..47 from the baseline.
+ */
+export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = true }: { shots: ShotRecord[]; color?: string; size?: number; keyed?: boolean }) {
   const W = 50;
   const H = 40;
   const sx = (x: number) => ((x + 25) / W) * size;
@@ -358,14 +377,7 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shot
           ),
         )}
       </svg>
-      <div className="shot-key" aria-hidden="true">
-        <span>
-          <i style={{ background: color }} /> Made
-        </span>
-        <span>
-          <b style={{ color: MISS }}>×</b> Missed
-        </span>
-      </div>
+      {keyed && <ShotKey made={[{ label: 'Made', color }]} />}
     </div>
   );
 }

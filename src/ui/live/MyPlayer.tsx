@@ -1,4 +1,5 @@
 import { ArrowLeftRight, Lightbulb } from 'lucide-react';
+import { madeAtt } from '../../core/format';
 import type { League, OffRole, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
@@ -10,11 +11,11 @@ import { fitPlayers, setsFor, type Calls } from './plays';
 export function PlayerLine({ p }: { p: DrawnPlayer }) {
   const e = Math.round(p.energy * 100);
   return (
-    <div className="ps-fig">
+    <div className="lv-ps-fig">
       <Statline
         items={[
           { k: 'Pts', v: p.pts },
-          { k: 'FG', v: `${p.fgm}/${p.fga}` },
+          { k: 'FG', v: madeAtt(p.fgm, p.fga) },
           { k: 'Fouls', v: p.fouls, color: p.fouls >= 5 ? 'var(--bad)' : p.fouls >= 4 ? 'var(--warn)' : undefined },
           { k: 'Energy', v: `${e}%` },
         ]}
@@ -85,15 +86,15 @@ export function MyPlayer({
   const pending = calls.pending;
   const isOn = (c: Parameters<Calls['call']>[0]) => !!pending && JSON.stringify(pending) === JSON.stringify(c);
   return (
-    <div className="ps">
+    <div className="lv-ps">
       <PlayerLine p={p} />
 
       {subs.out ? (
-        <div className="ps-out">
+        <div className="lv-ps-out">
           <Tag tone={subs.out === 1 ? 'bad' : undefined}>{subs.out === 1 ? 'Fouled out' : subs.dnp === 'Rest' ? 'Resting tonight' : 'Out for the game'}</Tag>
         </div>
       ) : (
-        <div className="ps-blk">
+        <div className="lv-ps-blk">
           <div className="over">
             <ArrowLeftRight size={12} aria-hidden="true" /> {subs.on ? 'Sub him out' : 'Put him in for'}
           </div>
@@ -101,9 +102,9 @@ export function MyPlayer({
             <>
               <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
                 {subs.options.map((o) => (
-                  <button key={o.pid} className={`chip ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
+                  <button key={o.pid} className={`chip lv-ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
                     {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
-                    {nameOf(o.pid)} <span className="ps-sub-l num">{o.line}</span>
+                    {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}</span>
                     {o.staff && <span className="sr-only"> (the staff&apos;s pick)</span>}
                   </button>
                 ))}
@@ -124,7 +125,7 @@ export function MyPlayer({
         </div>
       )}
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
           Shot freedom
           <Help title="Shot freedom">
@@ -143,7 +144,7 @@ export function MyPlayer({
       </div>
 
       {role && (
-        <div className="ps-blk">
+        <div className="lv-ps-blk">
           <div className="over">Role</div>
           <Chips
             label={`Role for ${name}`}
@@ -163,7 +164,7 @@ export function MyPlayer({
       />
 
       {subs.on && (
-        <div className="ps-blk">
+        <div className="lv-ps-blk">
           <div className="over">
             Run a play for him
             <Help title="A play for him">
@@ -187,7 +188,7 @@ export function MyPlayer({
       )}
 
       {subs.on && oppOn.length > 0 && (
-        <div className="ps-blk">
+        <div className="lv-ps-blk">
           <div className="over">
             Who he guards
             <Help title="Matchups">

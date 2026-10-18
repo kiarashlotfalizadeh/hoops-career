@@ -82,38 +82,38 @@ export function ScoreBug({
   const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean) => {
     const look = looks[isHome ? 0 : 1];
     return (
-      <div className={`lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
-        <div className="lb-id">
-          <span className="lb-ab">{t.abbrev}</span>
-          <span className="lb-meta num">
-            <span className="lb-to">
+      <div className={`lv-lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
+        <div className="lv-lb-id">
+          <span className="lv-lb-ab">{t.abbrev}</span>
+          <span className="lv-lb-meta num">
+            <span className="lv-lb-to">
               Timeouts <b>{s.timeouts}</b>
             </span>
-            <span className={`lb-tf${penalty ? ' on' : ''}`}>
+            <span className={`lv-lb-tf${penalty ? ' on' : ''}`}>
               {penalty ? 'Penalty' : 'Fouls'} <b>{s.fouls}</b>
             </span>
           </span>
         </div>
-        <span className="lb-score num" aria-hidden="true">
+        <span className="lv-lb-score num" aria-hidden="true">
           {pts}
         </span>
       </div>
     );
   };
   return (
-    <div className="lb">
-      {context && <div className="lb-ctx ellipsis">{context}</div>}
+    <div className="lv-lb">
+      {context && <div className="lv-lb-ctx ellipsis">{context}</div>}
       <div
-        className="lb-main live-bug"
+        className="lv-lb-main live-bug"
         role="group"
         aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. Win probability: ${away.abbrev} ${pct(1 - wp)}, ${home.abbrev} ${pct(wp)}` : ''}`}
       >
         {side(away, a, score[1], h.bonus, false)}
-        <div className="lb-mid" aria-hidden="true">
-          <span className="lb-q">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : qLabel}</span>
-          {!brk && <span className="lb-clock num">{fmtClock(clock)}</span>}
+        <div className="lv-lb-mid" aria-hidden="true">
+          <span className="lv-lb-q">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : qLabel}</span>
+          {!brk && <span className="lv-lb-clock num">{fmtClock(clock)}</span>}
           {run && (
-            <span className="lb-run num">
+            <span className="lv-lb-run num">
               {run.abbrev} {run.n}-0
             </span>
           )}
@@ -121,12 +121,12 @@ export function ScoreBug({
         {side(home, h, score[0], a.bonus, true)}
       </div>
       {wp !== null && (
-        <div className="lb-wp" aria-hidden="true">
-          <span className="lb-wp-k">To win</span>
+        <div className="lv-lb-wp" aria-hidden="true">
+          <span className="lv-lb-wp-k">To win</span>
           <span className="num">
             {away.abbrev} <b>{pct(1 - wp)}</b>
           </span>
-          <span className="lb-wp-bar">
+          <span className="lv-lb-wp-bar">
             <span style={{ width: `${(1 - wp) * 100}%`, background: awayKit }} />
             <span style={{ width: `${wp * 100}%`, background: homeKit }} />
           </span>

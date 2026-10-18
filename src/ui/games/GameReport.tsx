@@ -65,7 +65,7 @@ export default function GameReport() {
       )}
       {tab === 'report' && report && <WhyTab g={g} league={league} report={report} />}
       {tab === 'box' && <BoxTab g={g} league={league} userGame={userGame} colors={colors} />}
-      {tab === 'shots' && g.shots && <ShotsTab g={g} league={league} userGame={userGame} accentSide={accentSide} />}
+      {tab === 'shots' && g.shots && <ShotsTab g={g} league={league} />}
       {tab === 'flow' && <FlowTab g={g} league={league} side={userGame ? accentSide : 0} kits={matchupColors(home.colors, away.colors)} />}
     </main>
   );

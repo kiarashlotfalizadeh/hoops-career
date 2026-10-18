@@ -198,7 +198,7 @@ if (stages.includes('mid')) {
       }
     }
     // the live game's playback controls come up with a tap on the court
-    if (await phone.locator('.pb:not(.up)').count()) await phone.locator('.pb').click({ position: { x: 12, y: 12 } });
+    if (await phone.locator('.lv-pb:not(.up)').count()) await phone.locator('.lv-pb').click({ position: { x: 12, y: 12 } });
     await phone
       .getByRole('button', { name: 'Skip ahead', exact: true })
       .click()

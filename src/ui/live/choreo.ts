@@ -3,6 +3,7 @@
 // basket at (0, 5.25). The offense always attacks the basket at the top of the screen.
 
 import type { PossLog, PossStep } from '../../core/sim/log';
+import { madeAtt } from '../../core/format';
 import { SETS } from '../../core/sim/sets';
 
 export interface Pt {
@@ -524,10 +525,10 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         snap(450);
         ball = { ...BASKET };
         score[off] += st.v ?? 0;
-        // "1/2 FT": makes out of attempts (a log without attempts just counts the makes)
+        // "1-2 FT": made-attempted, as a box score writes it (a log without attempts just counts the makes)
         snap(520, {
           ballZ: 1,
-          flash: { text: st.n ? `${st.v ?? 0}/${st.n} FT` : `${st.v ?? 0} FT`, kind: (st.v ?? 0) > 0 ? 'make' : 'miss', x: 0, y: 9 },
+          flash: { text: st.n ? `${madeAtt(st.v ?? 0, st.n)} FT` : `${st.v ?? 0} FT`, kind: (st.v ?? 0) > 0 ? 'make' : 'miss', x: 0, y: 9 },
           score: [...score] as [number, number],
           ...cap(`${N(pid)} ${st.n ? `${st.v ?? 0} of ${st.n}` : `${st.v ?? 0}`} at the line`),
         });

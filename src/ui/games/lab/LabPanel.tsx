@@ -119,9 +119,8 @@ export function LabPanel({
             : 'Your tactics before and after an edit, through the same games.')}
       </div>
       <div className="lab-run">
-        <span className="over">Games</span>
         <Chips
-          label="Games to simulate"
+          label="Games to run"
           value={games}
           onChange={setGames}
           disabled={busy}
@@ -133,7 +132,7 @@ export function LabPanel({
         />
         <span className="grow" />
         <button className="btn primary" onClick={() => void start()} disabled={busy || noBaseline || simming} aria-label={`Run ${games} games`}>
-          {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run
+          {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run {games} games
         </button>
       </div>
 

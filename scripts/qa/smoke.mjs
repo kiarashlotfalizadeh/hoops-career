@@ -107,7 +107,7 @@ try {
     .waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, tipoff, { timeout: 15_000 })
     .catch(() => fail.push(`live game clock never moved (${tipoff})`));
   // the live game's playback controls come up with a tap on the court
-  if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
+  if (await page.locator('.lv-pb:not(.up)').count()) await page.locator('.lv-pb').click({ position: { x: 12, y: 12 } });
   await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
   await page
     .locator('.sheet')
@@ -238,7 +238,7 @@ try {
   const start = await bug.getAttribute('aria-label', { timeout: 15_000 });
   await page.waitForFunction((was) => document.querySelector('.live-bug')?.getAttribute('aria-label') !== was, start, { timeout: 15_000 }).catch(() => {});
   // the live game's playback controls come up with a tap on the court
-  if (await page.locator('.pb:not(.up)').count()) await page.locator('.pb').click({ position: { x: 12, y: 12 } });
+  if (await page.locator('.lv-pb:not(.up)').count()) await page.locator('.lv-pb').click({ position: { x: 12, y: 12 } });
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await page.waitForTimeout(2500);
   const left = await bug.getAttribute('aria-label');

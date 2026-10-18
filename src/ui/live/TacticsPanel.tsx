@@ -13,7 +13,7 @@ const CHANGES_SHOWN = 3;
 /** A setting picked from chips: its name over them. */
 function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div className="tp-field">
+    <div className="lv-tp-field">
       <div className="slider-label">{label}</div>
       {children}
     </div>
@@ -65,11 +65,11 @@ export function TacticsPanel({
   // what's changed since the tip, named as the Tactics screen names each control
   const changed = offPlan ? screenChanges(planned, t, nameOf) : [];
   return (
-    <div className="tp">
+    <div className="lv-tp">
       {(plan.length > 0 || offPlan) && (
-        <div className="tp-top">
+        <div className="lv-tp-top">
           {plan.length > 0 && (
-            <div className="tp-plan">
+            <div className="lv-tp-plan">
               <span className="over">
                 <Term id="gameplan">Tonight&apos;s game plan</Term>
               </span>
@@ -88,7 +88,7 @@ export function TacticsPanel({
             </button>
           )}
           {changed.length > 0 && (
-            <div className="tp-changed small">
+            <div className="lv-tp-changed small">
               <span className="dim">Changed tonight:</span> {changesLine(changed.slice(0, CHANGES_SHOWN))}
               {changed.length > CHANGES_SHOWN && <span className="dim"> · {changed.length - CHANGES_SHOWN} more</span>}
             </div>
@@ -97,7 +97,7 @@ export function TacticsPanel({
       )}
 
       {pills.length > 0 && (
-        <div className="tp-quick">
+        <div className="lv-tp-quick">
           <span className="over">
             Quick changes
             <Help title="Quick changes">
@@ -127,7 +127,7 @@ export function TacticsPanel({
         ]}
       />
       {tab === 'def' && (
-        <div className="tp-tab">
+        <div className="lv-tp-tab">
           <Field label={<Term id="zone">Base scheme</Term>}>
             <Chips
               label="Base scheme"
@@ -225,7 +225,7 @@ export function TacticsPanel({
         </div>
       )}
       {tab === 'off' && (
-        <div className="tp-tab">
+        <div className="lv-tp-tab">
           <Levels label="Pace" value={t.offense.pace} names={TACTIC_LEVELS.pace} onChange={(x) => set((tt) => void (tt.offense.pace = x))} />
           <Levels label="Three-point emphasis" value={t.offense.threePoint} names={TACTIC_LEVELS.threePoint} onChange={(x) => set((tt) => void (tt.offense.threePoint = x))} />
           <Levels
@@ -241,7 +241,7 @@ export function TacticsPanel({
         </div>
       )}
       {tab === 'late' && (
-        <div className="tp-tab">
+        <div className="lv-tp-tab">
           <Toggle
             on={t.manage.foulWhenTrailing}
             onChange={(x) => set((tt) => void (tt.manage.foulWhenTrailing = x))}
@@ -263,7 +263,7 @@ export function TacticsPanel({
           />
           <Slider
             label={
-              <span className="tp-label">
+              <span className="lv-tp-label">
                 <Term id="hack">Hack-a-player threshold</Term>
                 <Help title="Hack-a-player threshold">
                   <p>Foul their players who shoot below this from the line, away from the ball (never in a period&apos;s last 2 minutes).</p>

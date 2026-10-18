@@ -26,7 +26,7 @@
     margin: 0;
     padding: 0;
   }
-  .lv .lb {
+  .lv .lv-lb {
     width: auto;
     border: 1px solid var(--line-2);
     border-radius: 12px;
@@ -48,7 +48,7 @@
   .lv-dock {
     grid-area: dock;
   }
-  .lv .clip.docked .clip-body {
+  .lv .lv-clip.docked .lv-clip-body {
     padding-bottom: 8px;
   }
 }

@@ -78,9 +78,7 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
                   Points per possession by how the possession finished, against the league&apos;s, over {plural(data.ptGames, 'game')}. Green is where they are better than the
                   league (scoring more on offense, allowing less on defense), red where they are worse: red is where to attack them.
                 </p>
-                <p>
-                  <Term id="z">z</Term> is how far from the league in standard errors: beyond ±2 is more than noise.
-                </p>
+                <p>vs lg is their points per possession minus the league&apos;s. A colour only shows where the gap is more than chance (1.5 standard errors).</p>
               </Help>
             </span>
           }

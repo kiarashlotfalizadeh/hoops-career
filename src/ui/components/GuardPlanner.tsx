@@ -10,6 +10,7 @@ import { attrDisplay, composites } from '../../core/ratings';
 import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
+import { teamPlayers } from '../../core/league/helpers';
 import { Chips, Help, Section } from './ui';
 import '../games/games.css';
 
@@ -19,13 +20,14 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
   const pick = useLeagueMemo(() => huntPick(league, opp), [league, opp]);
-  const names = rosterNames(theirs);
+  // (told apart from every teammate, the injured too, not just the eight shown)
+  const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   const target = eff.offense.huntTarget ?? null;
   const per = (p: Player) => attrDisplay(composites(p.ratings).perDef);
   const set = (pid: number | null) =>
     edit((l) => {
       if (pid === null) removePlanItem(l, opp, 'hunt');
-      else setPlanItem(l, opp, { id: 'hunt', label: `Attack ${l.players[pid]?.lastName ?? ''}`, group: 'hunt', patch: { offense: { huntTarget: pid } } });
+      else setPlanItem(l, opp, { id: 'hunt', label: `Attack ${names(pid) || (l.players[pid]?.lastName ?? '')}`, group: 'hunt', patch: { offense: { huntTarget: pid } } });
     });
   const sorted = [...theirs].sort((a, b) => per(a) - per(b) || a.pid - b.pid);
   if (!theirs.length) return null;
@@ -41,7 +43,7 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
       }
     >
       <div className="mu-group">
-        <div className="tiny dim">Their rotation by perimeter defense (40-99), weakest first · ★ the staff&apos;s pick</div>
+        <div className="tiny dim">Their rotation by perimeter defense (40-99), weakest first{pick?.worth ? ' · ★ the staff’s pick' : ''}</div>
         <Chips
           label="Defender to attack"
           value={target ?? -1}
@@ -64,7 +66,8 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 8), [league, opp]);
-  const names = rosterNames(theirs);
+  // (told apart from every teammate, the injured too, not just the eight shown)
+  const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   const base = league.teams[league.userTid].tactics.defense.scheme;
   const scheme = eff.defense.scheme;
   const n = chasers(scheme);
@@ -80,7 +83,7 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
         if (chasers(base)) setPlanItem(l, opp, { id: 'junk', label: SCHEME_META.man.label, group: 'coverage', patch: { defense: { scheme: 'man' } } });
         return;
       }
-      const who = pids.map((pid) => l.players[pid]?.lastName ?? '').join(' and ');
+      const who = pids.map((pid) => names(pid) || (l.players[pid]?.lastName ?? '')).join(' and ');
       setPlanItem(l, opp, { id: 'junk', label: `${SCHEME_META[s].label} on ${who}`, group: 'coverage', patch: { defense: { scheme: s, chase: pids } } });
     });
   const pickScheme = (s: DefScheme) => {

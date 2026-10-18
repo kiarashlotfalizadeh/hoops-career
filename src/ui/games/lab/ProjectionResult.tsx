@@ -11,6 +11,7 @@ import { Term } from '../../components/Glossary';
 import { CompareBar } from '../../components/charts';
 import { matchupColors } from '../../teamColors';
 import { f1, p0, p1, rosterNames, signed } from '../../stats';
+import { teamPlayers } from '../../../core/league/helpers';
 import { SIGMAS, sideFor } from './sides';
 
 export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league: League; oppTid: number }) {
@@ -19,12 +20,8 @@ export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league:
   const [cMe, cThem] = matchupColors(me.colors, them.colors);
   // advice only for what your tactics for this opponent still do: no "go back to man-to-man" from man-to-man
   const tactics = useLeagueMemo(() => sideFor(league, league.userTid, oppTid).team.tactics, [league, oppTid]);
-  const names = rosterNames(
-    Object.keys(r.players)
-      .map((pid) => league.players[+pid])
-      .filter(Boolean),
-    { initial: true },
-  );
+  // (told apart from every teammate, the injured too)
+  const names = rosterNames(teamPlayers(league, league.userTid), { initial: true });
   const users = Object.entries(r.players)
     .map(([pid, v]) => ({ p: league.players[+pid], ...v }))
     .filter((x) => x.p)
@@ -49,7 +46,7 @@ export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league:
         <Statline
           items={[
             { k: 'Win %', v: p0(r.winPct) },
-            { k: 'Net rtg', v: signed(r.net), s: <Term id="range">± {f1(SIGMAS * r.netSE)}</Term>, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+            { k: 'Net', v: signed(r.net), s: <Term id="range">± {f1(SIGMAS * r.netSE)}</Term>, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
             { k: 'Margin', v: signed(r.ptsFor - r.ptsAgainst), s: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)} a game` },
           ]}
         />
@@ -84,9 +81,9 @@ export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league:
           <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} colorA={cMe} colorB={cThem} />
           <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} colorA={cMe} colorB={cThem} neutral />
           <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} colorA={cMe} colorB={cThem} neutral />
-          <CompareBar label="FTA / FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} colorA={cMe} colorB={cThem} />
-          <CompareBar label="Turnover %" a={r.shot.tov * 100} b={r.oppShot.tov * 100} colorA={cMe} colorB={cThem} higherBetter={false} />
-          <CompareBar label="Off. rebound %" a={r.shot.orb * 100} b={r.oppShot.orb * 100} colorA={cMe} colorB={cThem} />
+          <CompareBar label="FTA/FGA" a={r.shot.ftRate * 100} b={r.oppShot.ftRate * 100} colorA={cMe} colorB={cThem} />
+          <CompareBar label="TOV%" a={r.shot.tov * 100} b={r.oppShot.tov * 100} colorA={cMe} colorB={cThem} higherBetter={false} />
+          <CompareBar label="ORB%" a={r.shot.orb * 100} b={r.oppShot.orb * 100} colorA={cMe} colorB={cThem} />
         </div>
       </Section>
       <Section title="Your play types" right={<span className="tiny dim">share · pts/poss</span>}>
@@ -111,7 +108,7 @@ export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league:
           </div>
           {users.slice(0, 10).map((u) => (
             <div key={u.p.pid} className="lab-tr c5">
-              <span className="ellipsis">{names(u.p.pid)}</span>
+              <span className="ellipsis">{names(u.p.pid) || u.p.lastName}</span>
               <span className="num dim2">{f1(u.min)}</span>
               <span className="num bold">{f1(u.pts)}</span>
               <span className="num dim2">{p1(u.usg)}</span>

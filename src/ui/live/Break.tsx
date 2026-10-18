@@ -175,8 +175,8 @@ export function Break({
   const lead = me.score - them.score;
 
   return (
-    <div className="bk">
-      <div className="bk-fig">
+    <div className="lv-bk">
+      <div className="lv-bk-fig">
         <Statline
           items={[
             { k: meTeam.abbrev, v: `${me.score}-${them.score}`, color: lead > 0 ? 'var(--good)' : lead < 0 ? 'var(--bad)' : undefined },
@@ -194,7 +194,7 @@ export function Break({
               const sub = subFor(p.pid);
               const tired = energy < fat + 0.1;
               return (
-                <div key={p.pid} className="bk-row">
+                <div key={p.pid} className="lv-bk-row">
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="bold ellipsis">{names(p.pid)}</div>
                     <div className="small num">
@@ -221,12 +221,12 @@ export function Break({
         <Section title={huddle ? 'From your staff' : "What's deciding it"}>
           <div className="card flush ag-list">
             {shown.map((f) => (
-              <div key={f.id} className={`ag-row as-row tone-${f.tone === 'good' ? 'good' : f.tone === 'bad' ? 'bad' : 'warn'} bk-fix`}>
+              <div key={f.id} className={`ag-row as-row tone-${f.tone === 'good' ? 'good' : f.tone === 'bad' ? 'bad' : 'warn'} lv-bk-fix`}>
                 <div className="ag-head">
                   {f.fig ? (
-                    <span className={`bk-fix-fig num ${f.tone}`}>
+                    <span className={`lv-bk-fix-fig num ${f.tone}`}>
                       {f.fig}
-                      <span className="bk-fix-u">{f.unit}</span>
+                      <span className="lv-bk-fix-u">{f.unit}</span>
                     </span>
                   ) : f.tone === 'warn' ? (
                     <AlertTriangle size={15} className="warn" aria-hidden="true" />
@@ -282,9 +282,9 @@ export function Break({
             <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
           </Section>
           <More label="Teams, scorers, sets">
-            <div className="bk-more">
+            <div className="lv-bk-more">
               <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov']} />
-              <div className="bk-scorers small">
+              <div className="lv-bk-scorers small">
                 <div>
                   <b>{away.abbrev}</b> <span className="dim2">{scorers(1)}</span>
                 </div>
@@ -318,7 +318,7 @@ export function Break({
         </>
       )}
 
-      <div className="bk-go">
+      <div className="lv-bk-go">
         <button className="btn primary block big" onClick={onGo}>
           <Play size={18} fill="currentColor" aria-hidden="true" /> {huddle ? 'Resume' : `Start ${next}`}
         </button>

@@ -19,6 +19,8 @@ import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
 import { PressConference } from './PressConference';
+import { streakText } from '../games/series';
+import { madeAtt } from '../../core/format';
 import { Avatar, Section, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
 import './gameday.css';
@@ -152,7 +154,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                     {pog && <span className="gd-star-k">Player of the game</span>}
                     <span className="gd-star-name ellipsis">{nameOf(line.pid, line.name)}</span>
                     <span className="gd-star-line num">
-                      {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${line.fgm}/${line.fga} FG` : ''}
+                      {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${madeAtt(line.fgm, line.fga)} FG` : ''}
                     </span>
                   </span>
                   {/* (your own carry your team's edge) */}
@@ -177,8 +179,11 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
             )}
             {stakes && (
               <Fact k={confWord(team.conf)}>
+                {/* (a place held reads as one: "1st · no change", the live final's shape) */}
                 {stakes.after.rank === stakes.before.rank ? (
-                  <b className="num">{ordinal(stakes.after.rank)}</b>
+                  <span className="num">
+                    <b>{ordinal(stakes.after.rank)}</b> <span className="dim">· no change</span>
+                  </span>
                 ) : (
                   <>
                     <span className="num">
@@ -203,7 +208,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
             )}
             {Math.abs(streak) >= 2 && (
               <Fact k="Streak">
-                <span className={streak > 0 ? 'good' : 'bad'}>{streak > 0 ? `Won ${streak} straight` : `Lost ${-streak} straight`}</span>
+                <span className={`num bold ${streak > 0 ? 'good' : 'bad'}`}>{streakText(streak)}</span>
               </Fact>
             )}
             {series && (

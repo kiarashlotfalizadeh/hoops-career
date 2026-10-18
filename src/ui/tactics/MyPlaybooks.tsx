@@ -186,7 +186,7 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
   return (
     <div className="col tx-pbsheet">
       <div className="tx-sheet-lead">
-        {playbookLabel(pb)} · saved {fmtDate(pb.saved.season, pb.saved.day, { month: 'short', day: 'numeric', year: 'numeric' })}
+        {playbookLabel(pb)} · saved {fmtDate(pb.saved.season, pb.saved.day, { month: 'short', day: 'numeric', year: pb.saved.season === league.season ? undefined : 'numeric' })}
       </div>
       {diff.length ? (
         <div className="col tx-sub">

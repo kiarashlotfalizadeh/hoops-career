@@ -1,4 +1,5 @@
 import { PLAYER_DEFENSES, type PlayerDefense, type Tactics } from '../../core/types';
+import { madeAtt } from '../../core/format';
 import type { DrawnPlayer } from './drawn';
 import { PlayerLine } from './MyPlayer';
 import { HACK_BELOW, hackThreshold } from './pills';
@@ -42,10 +43,10 @@ export function OppPlayer({
       else delete t.defense.playerD;
     });
   return (
-    <div className="ps">
+    <div className="lv-ps">
       <PlayerLine p={p} />
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
           Stop him
           <Help title="Deny or double">
@@ -77,7 +78,7 @@ export function OppPlayer({
         </div>
       </div>
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">Guard him</div>
         <div className="chips" role="group" aria-label={`How to guard ${name}`}>
           {PLAYER_DEFENSES.map((d) => (
@@ -89,7 +90,7 @@ export function OppPlayer({
         <div className="tiny dim">{how ? PLAYER_D_META[how].help : 'Straight up. Tap one for his defender; again to take it off.'}</div>
       </div>
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
           Attack his man
           <Help title="Attacking a defender">
@@ -102,18 +103,13 @@ export function OppPlayer({
         </button>
       </div>
 
-      <div className="ps-blk">
+      <div className="lv-ps-blk">
         <div className="over">
-          <Term id="hack">Hack-a</Term>
+          <Term id="hack">Hack-a-player</Term>
         </div>
         <div className="small">
           <b className="num">{ft}%</b> from the line
-          {p.fta > 0 ? (
-            <span className="dim num">
-              {' '}
-              · {p.ftm}/{p.fta} tonight
-            </span>
-          ) : null}
+          {p.fta > 0 ? <span className="dim num"> · {madeAtt(p.ftm, p.fta)} tonight</span> : null}
         </div>
         {hacking ? (
           <button className="btn block" onClick={() => apply((t) => stopHacking(t.manage))}>

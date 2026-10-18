@@ -7,7 +7,7 @@ import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
 import { shortName, wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
-import { plural } from '../format';
+import { madeAtt, plural } from '../format';
 
 export interface Factor {
   title: string;
@@ -45,7 +45,12 @@ export const impactSentence = (key: string, X: string, Y: string, who = '') => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-/** Templates keyed by impact key + beneficiary role (o = offense, d = defense). */
+/**
+ * Templates keyed by impact key + beneficiary role (o = offense, d = defense). An effect is measured
+ * against what would otherwise have happened, and reads that way ("turned it over less than pressure
+ * would have made them"), never as a count the box score's own factors could contradict ("rarely
+ * turned it over" two rows under a turnover battle they lost).
+ */
 export const IMPACT_TEXT: Record<string, Tpl> = {
   'drop_pullup:o': {
     text: (X, _Y, w) => `${X} attacked drop coverage with pull-up jumpers${w}.`,
@@ -140,7 +145,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Offense > Actions) against pressure.',
   },
   'pressure_to:o': {
-    text: (X, Y) => `${Y} played soft on the ball, so ${X} rarely turned it over.`,
+    text: (X, Y) => `${Y} played soft on the ball, so ${X} turned it over less than pressure would have made them.`,
     advice: 'Turn up Ball pressure (Defense) against shaky ball handlers.',
     uses: (t) => t.defense.pressure < 50,
   },
@@ -156,7 +161,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     uses: (t) => t.defense.pressure > 50,
     cat: 'fouls',
   },
-  'pressure_foul:d': { text: (X) => `${X} contained without reaching, staying out of the penalty.`, cat: 'fouls' },
+  'pressure_foul:d': { text: (X) => `${X} contained without reaching, fouling less than aggressive pressure would have.`, cat: 'fouls' },
   'pressure_backdoor:o': { text: (X) => `${X} beat overplays with backdoor cuts.` },
   'press_to:d': { text: (X) => `${possessive(X)} full-court press created turnovers.` },
   'press_break:o': {
@@ -168,7 +173,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     text: (X) => `${possessive(X)} offensive rebounding created second chances.`,
     advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Offense > Push in transition).',
   },
-  'crash_orb:d': { text: (X, Y) => `${Y} got back on defense instead of crashing, conceding the glass to ${X}.` },
+  'crash_orb:d': { text: (_X, Y) => `${Y} got back on defense instead of crashing, and won fewer offensive rebounds than a crash would have.` },
   'crash_leak:o': {
     text: (X, Y) => `${X} got out in transition because ${Y} crashed the offensive glass.`,
     advice: 'Crash the offensive glass less (Offense) if you keep giving up run-outs.',
@@ -183,7 +188,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'transition:o': { text: (X) => `${X} pushed the pace for transition chances.`, cat: 'pace' },
   'transition:d': {
-    text: (X, Y) => `${Y} rarely pushed in transition, letting ${X} set their defense.`,
+    text: (X, Y) => `${Y} held back in transition, letting ${X} set their defense more often than a running team would.`,
     advice: 'Push the ball after stops and steals (Offense > Push in transition).',
     uses: (t) => t.offense.transition < 50,
     cat: 'pace',
@@ -216,7 +221,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     uses: (t) => t.defense.physicality < 50,
     cat: 'fouls',
   },
-  'clean_defense:d': { text: (X) => `${X} defended without fouling, keeping the opponent off the line.`, cat: 'fouls' },
+  'clean_defense:d': { text: (X) => `${X} defended without fouling, sending the opponent to the line less than a physical defense would have.`, cat: 'fouls' },
   'fatigue:d': {
     text: (_X, Y) => `${Y} wore down: tired legs cost them shooting accuracy.`,
     advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Game Mgmt) to sub tired players out sooner; heavy minutes cost shooting.',
@@ -279,10 +284,10 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     uses: (t) => !!t.manage.foulToGive,
     cat: 'fouls',
   },
-  'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a strategy paid off${w}.` },
+  'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a-player paid off${w}.` },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
-    advice: 'Hack-a only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
+    advice: 'Hack-a-player only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
     uses: (t) => hacks(t.manage),
   },
 };
@@ -458,7 +463,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const better = efgSwing > 0 ? ut.name : ot.name;
     factors.push({
       title: `The ${better} shot it better: eFG ${(Math.max(fu.efg, fo.efg) * 100).toFixed(1)}% vs ${(Math.min(fu.efg, fo.efg) * 100).toFixed(1)}%.`,
-      detail: `${ut.abbrev} ${u.t.fgm}/${u.t.fga} (${u.t.tpm}/${u.t.tpa} 3PT) · ${ot.abbrev} ${o.t.fgm}/${o.t.fga} (${o.t.tpm}/${o.t.tpa} 3PT)`,
+      detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)} (${madeAtt(u.t.tpm, u.t.tpa)} 3P) · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)} (${madeAtt(o.t.tpm, o.t.tpa)} 3P)`,
       pts: efgSwing,
       category: 'shooting',
     });
@@ -490,7 +495,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   const ftSwing = (u.t.ftm - o.t.ftm) * 0.6;
   if (Math.abs(ftSwing) >= 3) {
     factors.push({
-      title: `Free throws: ${ut.abbrev} ${u.t.ftm}/${u.t.fta}, ${ot.abbrev} ${o.t.ftm}/${o.t.fta}.`,
+      title: `Free throws: ${ut.abbrev} ${madeAtt(u.t.ftm, u.t.fta)}, ${ot.abbrev} ${madeAtt(o.t.ftm, o.t.fta)}.`,
       detail: `Fouls committed: ${ut.abbrev} ${u.t.pf}, ${ot.abbrev} ${o.t.pf}.`,
       pts: ftSwing,
       category: 'fouls',
@@ -507,8 +512,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     if (star && star.pts >= Math.max(8, 35 * played)) {
       factors.push({
         title: opts.partial
-          ? `${star.name} has ${star.pts} points so far (${star.fgm}/${star.fga} FG).`
-          : `${star.name} erupted for ${star.pts} points (${star.fgm}/${star.fga} FG).`,
+          ? `${star.name} has ${star.pts} points so far (${madeAtt(star.fgm, star.fga)} FG).`
+          : `${star.name} erupted for ${star.pts} points (${madeAtt(star.fgm, star.fga)} FG).`,
         // (no pace to be on once regulation is played)
         detail:
           opts.partial && played < 1

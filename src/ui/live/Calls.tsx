@@ -71,17 +71,17 @@ export function Calls({
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? nameOf(tactics.manage.atoPid) : undefined) : null;
   return (
-    <div className="cl">
+    <div className="lv-cl">
       {pending ? (
-        <div className="cl-called" role="status">
-          <span className="cl-called-k">Called</span>
-          <span className="grow cl-called-v">{callLabel(pending, nameOf)}</span>
+        <div className="lv-cl-called" role="status">
+          <span className="lv-cl-called-k">Called</span>
+          <span className="grow lv-cl-called-v">{callLabel(pending, nameOf)}</span>
           <button className="btn xs ghost" onClick={calls.cancel}>
             <X size={14} aria-hidden="true" /> Cancel
           </button>
         </div>
       ) : (
-        <div className="cl-hint">
+        <div className="lv-cl-hint">
           {huddle
             ? atoText
               ? `Out of the timeout: your ATO, ${atoText}, unless you call one here.`
@@ -91,7 +91,7 @@ export function Calls({
       )}
 
       <Section
-        className={late ? 'cl-late' : ''}
+        className={late ? 'lv-cl-late' : ''}
         title={<h3>{late ? 'Late game' : 'Situations'}</h3>}
         right={
           late ? (
@@ -149,7 +149,7 @@ export function Calls({
       </Section>
 
       {!huddle && (
-        <div className="cl-ato">
+        <div className="lv-cl-ato">
           <span className="over">
             After a timeout <Term id="ato">(ATO)</Term>
           </span>
@@ -181,9 +181,9 @@ function SetRow({
   const status = readStatus(me, id);
   const auto: PlayCall = { kind: 'set', set: id };
   return (
-    <div className="cl-set">
-      <div className="cl-set-h">
-        <span className="cl-set-name">{s.name}</span>
+    <div className="lv-cl-set">
+      <div className="lv-cl-set-h">
+        <span className="lv-cl-set-name">{s.name}</span>
         {status.runs > 0 && <Tag tone={status.onIt ? 'bad' : 'warn'}>{status.text}</Tag>}
       </div>
       <More label={s.look.replace(/^./, (c) => c.toUpperCase())}>

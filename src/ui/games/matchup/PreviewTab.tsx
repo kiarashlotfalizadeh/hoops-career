@@ -14,13 +14,15 @@ import { matchupPreview, type MatchupPreview, type SidePreview } from '../../../
 import { gameKeys } from '../../../core/analysis/keys';
 import { storylines, type StorylineKind } from '../../../core/analysis/storylines';
 import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
-import { GAME_TIME_PERF, injuryText, setGameTime } from '../../../core/league/injuries';
+import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
+import { injuryName, plural } from '../../../core/format';
 import { K } from '../../../core/sim/engine';
 import { Avatar, Empty, Help, Ovr, Section, Tag } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { OppPlanNote } from '../../components/scouting';
 import { matchupColors } from '../../teamColors';
-import { p0 } from '../../stats';
+import { p0, rosterNames } from '../../stats';
+import { teamPlayers } from '../../../core/league/helpers';
 
 export function PreviewTab({ league, game }: { league: League; game: ScheduledGame }) {
   // the rotations as the game will start them (injuries since a team's last game): the starters shown are the real ones
@@ -186,7 +188,7 @@ function InjuryReport({ league, pv, game, locked }: { league: League; pv: Matchu
               <div className="mu-q-row">
                 <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Game-time'}</Tag>
                 <Link to={`/player/${p.pid}`} className="grow ellipsis">
-                  <b>{p.name}</b> <span className="dim">{injuryText(p.injury)}</span>
+                  <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
                 </Link>
                 <button
                   className={`btn xs ${p.cleared ? '' : 'primary'}`}
@@ -230,11 +232,9 @@ function SideInjuries({ league, s }: { league: League; s: SidePreview }) {
         <Link key={p.pid} to={`/player/${p.pid}`} className="mu-inj">
           <Tag tone="bad">Out</Tag>
           <span className="grow ellipsis">
-            <b>{p.name}</b> <span className="dim">{injuryText(p.injury)}</span>
+            <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
           </span>
-          <span className="tiny dim num nowrap">
-            {p.games} game{p.games === 1 ? '' : 's'}
-          </span>
+          <span className="tiny dim num nowrap">{plural(p.games, 'game')}</span>
         </Link>
       ))}
       {s.resting.map((p) => (
@@ -261,18 +261,22 @@ function SideInjuries({ league, s }: { league: League; s: SidePreview }) {
 /** The two starting fives side by side, away on the left: jerseys facing each other. */
 function StartingFives({ league, away, home }: { league: League; away: SidePreview; home: SidePreview }) {
   const rows = Array.from({ length: Math.max(away.starters.length, home.starters.length) }, (_, i) => [away.starters[i], home.starters[i]] as const);
+  // teammates who share a last name told apart ("Jal. Williams", "Jay. Williams"), the usual starter one stands in for too
+  const [aTid, hTid] = [away.tid, home.tid];
+  const names = useLeagueMemo(() => [aTid, hTid].map((tid) => rosterNames(teamPlayers(league, tid))), [league, aTid, hTid]);
   const cell = (p: SidePreview['starters'][number] | undefined, right: boolean) => {
     const pl = p ? league.players[p.pid] : undefined;
     if (!p || !pl) return <span />;
+    const name = names[right ? 1 : 0];
     return (
       <Link to={`/player/${p.pid}`} className={`mu-five-p ${right ? 'r' : ''}`}>
         <Avatar p={pl} />
         <span className="mu-five-who">
-          <span className="mu-five-n ellipsis">{pl.lastName}</span>
+          <span className="mu-five-n ellipsis">{name(p.pid) || pl.lastName}</span>
           <span className="mu-five-m">
             {p.pos} <Ovr v={p.ovr} size="sm" />
           </span>
-          {p.for && <span className="mu-five-for ellipsis">for {league.players[p.for.pid]?.lastName ?? p.for.name}</span>}
+          {p.for && <span className="mu-five-for ellipsis">for {name(p.for.pid) || p.for.name}</span>}
         </span>
       </Link>
     );

@@ -1,13 +1,13 @@
 /* The scorebug (each team's block with its timeouts and fouls, the scores, the period and clock, a
    run, the chance to win) and the bottom line of the night's other scores, with its sheet. */
-.lb {
+.lv-lb {
   position: relative;
   background: var(--bg-2);
   border-bottom: 1px solid var(--line);
   overflow: hidden;
 }
 /* what's at stake: a series, a Cup round */
-.lb-ctx {
+.lv-lb-ctx {
   padding: 4px 12px 3px;
   border-bottom: 1px solid var(--line);
   text-align: center;
@@ -18,22 +18,22 @@
   text-transform: uppercase;
   color: var(--text-2);
 }
-.lb-main {
+.lv-lb-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: stretch;
   min-height: 48px;
 }
-.lb-side {
+.lv-lb-side {
   display: flex;
   align-items: stretch;
   min-width: 0;
 }
-.lb-side.home {
+.lv-lb-side.home {
   flex-direction: row-reverse;
 }
 /* a team's block: its colour, its name, its timeouts (bars) and team fouls */
-.lb-id {
+.lv-lb-id {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -48,11 +48,11 @@
   background: linear-gradient(160deg, color-mix(in srgb, var(--lb-c) 88%, #fff 12%), var(--lb-c) 70%);
   box-shadow: inset 0 -3px 0 var(--lb-t);
 }
-.lb-side.home .lb-id {
+.lv-lb-side.home .lv-lb-id {
   align-items: flex-end;
   padding: 3px 12px 5px 8px;
 }
-.lb-ab {
+.lv-lb-ab {
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
@@ -60,7 +60,7 @@
   line-height: 0.9;
   letter-spacing: 0.02em;
 }
-.lb-meta {
+.lv-lb-meta {
   display: flex;
   flex-direction: column;
   font-size: 9.5px;
@@ -71,27 +71,27 @@
   line-height: 11px;
   white-space: nowrap;
 }
-.lb-side.home .lb-meta {
+.lv-lb-side.home .lv-lb-meta {
   align-items: flex-end;
 }
-.lb-meta b {
+.lv-lb-meta b {
   font-weight: 850;
 }
-.lb-to,
-.lb-tf {
+.lv-lb-to,
+.lv-lb-tf {
   color: rgba(255, 255, 255, 0.84);
 }
-.lb-tf {
+.lv-lb-tf {
   margin: 0 -3px;
   padding: 0 3px;
   border-radius: 3px;
 }
 /* in the penalty: the other team shoots on every foul */
-.lb-tf.on {
+.lv-lb-tf.on {
   background: var(--warn);
   color: var(--accent-ink);
 }
-.lb-score {
+.lv-lb-score {
   flex: 1;
   min-width: 0;
   display: grid;
@@ -103,7 +103,7 @@
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.lb-mid {
+.lv-lb-mid {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -115,7 +115,7 @@
   border-left: 1px solid var(--line);
   border-right: 1px solid var(--line);
 }
-.lb-q {
+.lv-lb-q {
   font-size: 10.5px;
   font-weight: 800;
   font-stretch: 100%;
@@ -124,21 +124,21 @@
   color: var(--text-2);
   white-space: nowrap;
 }
-.lb-clock {
+.lv-lb-clock {
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 21px;
   line-height: 1;
 }
-.lb-run {
+.lv-lb-run {
   font-size: 10px;
   font-weight: 800;
   color: var(--warn);
   white-space: nowrap;
 }
 /* the win-probability sliver: away on the left, home on the right, as the scores sit */
-.lb-wp {
+.lv-lb-wp {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
@@ -151,23 +151,23 @@
   color: var(--text-dim);
   white-space: nowrap;
 }
-.lb-wp b {
+.lv-lb-wp b {
   color: var(--text);
   font-weight: 800;
 }
-.lb-wp-k {
+.lv-lb-wp-k {
   font-size: 9.5px;
   font-weight: 750;
   font-stretch: 100%;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.lb-wp-bar {
+.lv-lb-wp-bar {
   display: flex;
   gap: 2px;
   height: 3px;
 }
-.lb-wp-bar > span {
+.lv-lb-wp-bar > span {
   display: block;
   border-radius: 2px;
   transition: width 0.4s ease;

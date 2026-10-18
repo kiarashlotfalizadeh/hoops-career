@@ -7,7 +7,8 @@
 // games), the live game (after them) and the result (recorded later still) all read the same keys.
 
 import type { GameResult, KeyGrade, KeyStat, League, ScheduledGame, TeamBox, TeamTotals } from '../types';
-import { playerName } from '../league/helpers';
+import { playerName, shortName } from '../league/helpers';
+import { rankOf } from '../format';
 
 export interface GameKey {
   id: string;
@@ -151,8 +152,6 @@ function totalsAgg(league: League, season: number, scorersOf: number): SeasonAgg
   return { season, teams, scorers };
 }
 
-const ord = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
-
 interface Candidate extends GameKey {
   /** How strongly the numbers point at it (standard deviations from the league's teams). */
   z: number;
@@ -238,7 +237,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
       id,
       title,
       goal,
-      why: why(v.toFixed(1), `${ord(rank(O, signal, stat))} of ${n}${label}`),
+      why: why(v.toFixed(1), `${rankOf(rank(O, signal, stat), n)}${label}`),
       side,
       stat,
       dir,
@@ -268,7 +267,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
         id: 'pressure',
         title: 'Make them cough it up',
         goal: `Force ${plural(target, 'tov')}`,
-        why: `They turn it over ${O.for.tov.toFixed(1)} times a game, ${ord(rank(O, 'for', 'tov'))} of ${n}${label}.`,
+        why: `They turn it over ${O.for.tov.toFixed(1)} times a game, ${rankOf(rank(O, 'for', 'tov'), n)}${label}.`,
         side: 'them',
         stat: 'tov',
         dir: 'min',
@@ -290,7 +289,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
       const most = star === scorers[0] ? 'the most on his team' : 'the most of their healthy players';
       out.push({
         id: 'star',
-        title: `Make ${p.lastName} work`,
+        title: `Make ${shortName(league, p)} work`,
         goal: `Hold ${playerName(p)} to ${plural(target, 'pts')} or fewer`,
         why: label ? `He scored ${ppg.toFixed(1)} a game${label}, ${most}.` : `He scores ${ppg.toFixed(1)} a game, ${most}.`,
         side: 'them',
@@ -368,7 +367,7 @@ function fromPriors(league: League, them: number): Candidate[] {
   if (star && star.ppg >= 20)
     out.push({
       id: 'star',
-      title: `Make ${star.p.lastName} work`,
+      title: `Make ${shortName(league, star.p)} work`,
       goal: `Hold ${playerName(star.p)} to ${plural(Math.round(star.ppg - 1.5), 'pts')} or fewer`,
       why: `He scored ${star.ppg.toFixed(1)} a game last season.`,
       side: 'them',

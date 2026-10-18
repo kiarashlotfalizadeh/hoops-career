@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
+import { boxNames } from './report/names';
 import { neutralSite } from '../../core/league/games';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { planFor } from '../../core/league/gamePlans';
@@ -215,10 +216,10 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
     const side = r.res.home.tid === tid ? r.res.home : r.res.away;
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
     // the top scorer's points stay in view when a long name is cut short (the player's own last
-    // name while he's in the league: a box-score name can end in "Jr.")
+    // name while he's in the league: a box-score name can end in "Jr."; a teammate's namesake told apart)
     sub = top ? (
       <>
-        <span className="gs-lead">{league.players[top.pid]?.lastName ?? top.name}</span>
+        <span className="gs-lead">{boxNames(league, side)(top.pid) || top.name}</span>
         <span className="num">{top.pts}</span>
       </>
     ) : (
@@ -228,7 +229,7 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
   // the keys to the game met, under the score of the user's results
   const keys = r.res && tid === user && r.res.keys?.length ? r.res.keys.filter((k) => k.met !== null) : [];
   const met = keys.filter((k) => k.met).length;
-  const under = [r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '', keys.length ? `keys ${met}/${keys.length}` : ''].filter(Boolean).join(' · ');
+  const under = [r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '', keys.length ? `keys ${met} of ${keys.length}` : ''].filter(Boolean).join(' · ');
   return (
     <Link to={to} className={`gs-row${today ? ' today' : ''}${h2hTid !== undefined && r.opp === h2hTid ? ' h2h' : ''}`}>
       <span className="gs-date">

@@ -1,5 +1,6 @@
 // The game report's Why, for one of your games: what decided it (each edge in points of the final
-// margin, biggest first, with the staff's fix where there is one), the four factors side by side,
+// margin, biggest first, with the staff's fix where there is one), the four factors side by side (away
+// on the left, as the final reads),
 // every player's grade, both benches' adjustments, and one tap down the play types, your sets, your
 // lineups and the momentum swings.
 import { useState } from 'react';
@@ -21,10 +22,16 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
   // your side of the game (0 home, 1 away)
   const side: 0 | 1 = g.home.tid === league.userTid ? 0 : 1;
   const mine = side === 0 ? g.home : g.away;
-  const theirs = side === 0 ? g.away : g.home;
   const names = boxNames(league, mine);
-  const [me, them] = [league.teams[mine.tid].abbrev, league.teams[theirs.tid].abbrev];
-  const ff = report.fourFactors;
+  // two teams side by side read away on the left, home on the right, as the final does; your side carries the accent
+  const [awayAb, homeAb] = [league.teams[g.away.tid].abbrev, league.teams[g.home.tid].abbrev];
+  const ff = side === 0 ? { away: report.fourFactors.opp, home: report.fourFactors.user } : { away: report.fourFactors.user, home: report.fourFactors.opp };
+  const [colorA, colorB] = side === 0 ? ['var(--text-dim)', 'var(--accent)'] : ['var(--accent)', 'var(--text-dim)'];
+  const pts = report.playTypes.map((p) =>
+    side === 0
+      ? { key: p.key, label: p.label, a: [p.oppPoss, p.oppPpp] as const, b: [p.userPoss, p.userPpp] as const }
+      : { key: p.key, label: p.label, a: [p.userPoss, p.userPpp] as const, b: [p.oppPoss, p.oppPpp] as const },
+  );
   return (
     <>
       <Section
@@ -47,15 +54,15 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
         }
         right={
           <span className="tiny dim">
-            {me} · {them}
+            {awayAb} · {homeAb}
           </span>
         }
       >
         <div className="card gv-bars">
-          <CompareBar label={<Term id="efg">eFG%</Term>} a={ff.user.efg * 100} b={ff.opp.efg * 100} />
-          <CompareBar label={<Term id="tov">TOV%</Term>} a={ff.user.tov * 100} b={ff.opp.tov * 100} higherBetter={false} />
-          <CompareBar label={<Term id="orb">ORB%</Term>} a={ff.user.orb * 100} b={ff.opp.orb * 100} />
-          <CompareBar label={<Term id="ftfga">FT/FGA</Term>} a={ff.user.ftr * 100} b={ff.opp.ftr * 100} />
+          <CompareBar label={<Term id="efg">eFG%</Term>} a={ff.away.efg * 100} b={ff.home.efg * 100} colorA={colorA} colorB={colorB} />
+          <CompareBar label={<Term id="tov">TOV%</Term>} a={ff.away.tov * 100} b={ff.home.tov * 100} colorA={colorA} colorB={colorB} higherBetter={false} />
+          <CompareBar label={<Term id="orb">ORB%</Term>} a={ff.away.orb * 100} b={ff.home.orb * 100} colorA={colorA} colorB={colorB} />
+          <CompareBar label={<Term id="ftfga">FT/FGA</Term>} a={ff.away.ftr * 100} b={ff.home.ftr * 100} colorA={colorA} colorB={colorB} />
         </div>
       </Section>
 
@@ -84,18 +91,17 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
             <div className="card flush list">
               <div className="gv-pt gv-pt-h" aria-hidden="true">
                 <span className="grow" />
-                <span>{me}</span>
-                <span>{them}</span>
+                <span>{awayAb}</span>
+                <span>{homeAb}</span>
               </div>
-              {report.playTypes.map((p) => (
+              {pts.map((p) => (
                 <div key={p.key} className="gv-pt">
                   <span className="grow">{p.label}</span>
-                  <span className="num">
-                    <span className="dim">{p.userPoss}</span> <b style={{ color: pppColor(p.userPpp, p.userPoss) }}>{p.userPoss ? p.userPpp.toFixed(2) : '—'}</b>
-                  </span>
-                  <span className="num">
-                    <span className="dim">{p.oppPoss}</span> <b style={{ color: pppColor(p.oppPpp, p.oppPoss) }}>{p.oppPoss ? p.oppPpp.toFixed(2) : '—'}</b>
-                  </span>
+                  {[p.a, p.b].map(([poss, ppp], i) => (
+                    <span key={i} className="num">
+                      <span className="dim">{poss}</span> <b style={{ color: pppColor(ppp, poss) }}>{poss ? ppp.toFixed(2) : '—'}</b>
+                    </span>
+                  ))}
                 </div>
               ))}
             </div>
