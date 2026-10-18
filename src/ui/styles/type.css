@@ -96,3 +96,7 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* a label written as it is even inside caps (an overline, a figure's label): ORtg, DRtg, Net, 3P% */
+.as-is {
+  text-transform: none;
+}

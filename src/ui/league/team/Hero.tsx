@@ -58,7 +58,7 @@ export function TeamHero({ league, tid, onEdit }: { league: League; tid: number;
           {ts.won}-{ts.lost}
         </div>
         <div className="lg-team-rank">{gp ? `${ordinal(confRank)} in the ${confWord}` : 'No games yet'}</div>
-        {outcome.short !== 'Ongoing' && outcome.short !== 'Missed' && (
+        {outcome.short !== 'In progress' && outcome.short !== 'Missed' && (
           <span className="lg-team-tags">
             <OutcomeTag o={outcome} />
           </span>

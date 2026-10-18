@@ -20,6 +20,27 @@
   border: 1px solid var(--line);
   background: var(--raised);
 }
+/* more columns to the right (StatTable sets .fr): the edge fades out, as the league's team tables do */
+.tablewrap-o {
+  position: relative;
+  min-width: 0;
+}
+.tablewrap-o::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 24px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: linear-gradient(270deg, var(--raised) 15%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.tablewrap-o.fr::after {
+  opacity: 1;
+}
 table.stats {
   border-collapse: separate;
   border-spacing: 0;
@@ -42,6 +63,9 @@ table.stats th {
   white-space: nowrap;
   border-bottom: 1px solid var(--line-2);
   user-select: none;
+}
+table.stats th.as-is {
+  text-transform: none;
 }
 table.stats th:has(.th-sort) {
   cursor: pointer;

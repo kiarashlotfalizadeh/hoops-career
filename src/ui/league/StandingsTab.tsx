@@ -43,19 +43,21 @@ export function StandingsTab({ league }: { league: League }) {
 }
 
 function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league' }) {
-  const rows = useLeagueMemo(() => standings(league), [league]);
-  const started = rows.some((r) => r.won + r.lost > 0);
+  const all = useLeagueMemo(() => standings(league), [league]);
+  const started = all.some((r) => r.won + r.lost > 0);
+  // before a game is played there's no order to show: the teams A to Z, and the line says so
+  const rows = started ? all : [...all].sort((a, b) => league.teams[a.tid].name.localeCompare(league.teams[b.tid].name));
   return (
     <>
       <Toolbar right={<StandingsHelp />}>
-        {!started ? 'Season not started' : view === 'league' ? 'By win %' : `${confName(view)}ern Conference`}
+        {!started ? 'Season not started · teams A to Z' : view === 'league' ? 'By win %' : `${confName(view)}ern Conference`}
         {view !== 'league' && started && (
           <span className="lg-keys" aria-hidden="true">
             <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> play-in <b className="lg-clinch e">e</b> out
           </span>
         )}
       </Toolbar>
-      <StandingsTable league={league} rows={view === 'league' ? leagueRows(rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} />
+      <StandingsTable league={league} rows={view === 'league' ? (started ? leagueRows(rows) : rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} />
     </>
   );
 }
@@ -108,7 +110,8 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
-    <TeamTable cols={[50, 38, 34, 32, 44, 44, 44, 44]} head={['W-L', 'GB', 'L10', 'Strk', 'Home', 'Away', 'Conf', 'Diff']}>
+    // (the streak before the last ten, so a phone shows it without a swipe; "Last 10" so "L10" can't read as a streak)
+    <TeamTable cols={[50, 38, 32, 46, 44, 44, 44, 44]} head={['W-L', 'GB', 'Strk', 'Last 10', 'Home', 'Away', 'Conf', 'Diff']}>
       {rows.map((r, i) => {
         const t = league.teams[r.tid];
         const played = r.won + r.lost > 0;
@@ -140,10 +143,10 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
                 {r.won}-{r.lost}
               </span>
               <span aria-hidden="true">{r.gb === 0 ? '—' : r.gb.toFixed(1)}</span>
-              <span aria-hidden="true">{r.lastTen}</span>
               <span className={`strk ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : ''}`} aria-hidden="true">
                 {streakLabel(r.streak)}
               </span>
+              <span aria-hidden="true">{r.lastTen}</span>
               <span aria-hidden="true">{r.home}</span>
               <span aria-hidden="true">{r.away}</span>
               <span aria-hidden="true">{r.confRec}</span>
@@ -205,7 +208,22 @@ function PowerRankings({ league }: { league: League }) {
           </>
         )}
       </Toolbar>
-      <TeamTable cols={[48, 46, 48, 48, 36]} head={['Net', 'W-L', 'ORtg', 'DRtg', 'Tal']}>
+      <TeamTable
+        cols={[48, 46, 48, 48, 36]}
+        head={[
+          <span key="n" className="as-is">
+            Net
+          </span>,
+          'W-L',
+          <span key="o" className="as-is">
+            ORtg
+          </span>,
+          <span key="d" className="as-is">
+            DRtg
+          </span>,
+          'Tal',
+        ]}
+      >
         {list.map((x, i) => (
           <TeamRow
             key={x.tid}

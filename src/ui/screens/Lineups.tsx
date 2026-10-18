@@ -356,9 +356,9 @@ function UnitSheet({
       </div>
       <Statline
         items={[
-          { k: 'Net', v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-          { k: 'ORtg', v: f1(u.ortg) },
-          { k: 'DRtg', v: f1(u.drtg) },
+          { k: <span className="as-is">Net</span>, v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+          { k: <span className="as-is">ORtg</span>, v: f1(u.ortg) },
+          { k: <span className="as-is">DRtg</span>, v: f1(u.drtg) },
           { k: 'Minutes', v: Math.round(u.min), s: `${u.poss} poss` },
         ]}
       />

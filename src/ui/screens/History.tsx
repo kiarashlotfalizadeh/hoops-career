@@ -74,7 +74,17 @@ function Seasons({ league }: { league: League }) {
                 {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
                 {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
               </span>
-              {winners.length > 0 && <span className="sub ellipsis">{winners.join(' · ')}</span>}
+              {/* each award whole, wrapping between them rather than cutting a name short */}
+              {winners.length > 0 && (
+                <span className="sub">
+                  {winners.map((w, i) => (
+                    <span key={i} className="nowrap">
+                      {i > 0 ? ' · ' : ''}
+                      {w}
+                    </span>
+                  ))}
+                </span>
+              )}
             </span>
             <ChevronRight size={16} className="dim" aria-hidden="true" />
           </Link>
