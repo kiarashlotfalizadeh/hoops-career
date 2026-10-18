@@ -5,6 +5,10 @@ import { COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS, 
 import { Chips, Help, Levels, Segmented, Slider, Tag, Toggle } from '../components/ui';
 import { Term } from '../components/Glossary';
 import type { Pill } from './pills';
+import { changesLine, screenChanges } from '../tactics/changes';
+
+/** Changes listed before "N more". */
+const CHANGES_SHOWN = 3;
 
 /** A setting picked from chips: its name over them. */
 function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
@@ -17,8 +21,8 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
 }
 
 /**
- * The Clipboard's Tactics tab: tonight's game plan and the way back to it, a short row of quick
- * changes, then every team-wide lever (defense, offense, the late game), and whether tonight's
+ * The Clipboard's Tactics tab: tonight's game plan, what's changed since the tip (in the Tactics
+ * screen's words) and the way back to it, a short row of quick changes, then every team-wide lever (defense, offense, the late game), and whether tonight's
  * changes stay after the game. Player-by-player orders (matchups, a defender's instructions, a
  * Hack-a on one man) live on each player's sheet. Every change goes through the live game.
  */
@@ -29,6 +33,7 @@ export function TacticsPanel({
   setPersist,
   plan,
   pills,
+  planned,
   offPlan,
   reset,
   oppOn,
@@ -43,6 +48,8 @@ export function TacticsPanel({
   /** Tonight's game plan items. */
   plan: { id: string; label: string }[];
   pills: Pill[];
+  /** The tactics the game tipped off with (its game plan in them). */
+  planned: Tactics;
   /** Tonight's tactics differ from what the game tipped off with. */
   offPlan: boolean;
   reset: () => void;
@@ -55,6 +62,8 @@ export function TacticsPanel({
   const n = chasers(t.defense.scheme);
   const chase = (t.defense.chase ?? []).slice(0, n);
   const set = apply;
+  // what's changed since the tip, named as the Tactics screen names each control
+  const changed = offPlan ? screenChanges(planned, t, nameOf) : [];
   return (
     <div className="tp">
       {(plan.length > 0 || offPlan) && (
@@ -77,6 +86,12 @@ export function TacticsPanel({
             <button className="btn sm" onClick={reset}>
               <RotateCcw size={15} aria-hidden="true" /> Reset to game plan
             </button>
+          )}
+          {changed.length > 0 && (
+            <div className="tp-changed small">
+              <span className="dim">Changed tonight:</span> {changesLine(changed.slice(0, CHANGES_SHOWN))}
+              {changed.length > CHANGES_SHOWN && <span className="dim"> · {changed.length - CHANGES_SHOWN} more</span>}
+            </div>
           )}
         </div>
       )}
@@ -113,17 +128,9 @@ export function TacticsPanel({
       />
       {tab === 'def' && (
         <div className="tp-tab">
-          <Field label={<Term id="pnr">Pick-and-roll coverage</Term>}>
+          <Field label={<Term id="zone">Base scheme</Term>}>
             <Chips
-              label="Pick-and-roll coverage"
-              value={t.defense.pnr}
-              onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
-              options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
-            />
-          </Field>
-          <Field label={<Term id="zone">Scheme</Term>}>
-            <Chips
-              label="Scheme"
+              label="Base scheme"
               value={t.defense.scheme}
               onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
               options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
@@ -164,6 +171,14 @@ export function TacticsPanel({
                 </div>
               </>
             )}
+          </Field>
+          <Field label={<Term id="pnr">Pick-and-roll coverage</Term>}>
+            <Chips
+              label="Pick-and-roll coverage"
+              value={t.defense.pnr}
+              onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
+              options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
+            />
           </Field>
           <Levels label="Help defense" value={t.defense.help} names={TACTIC_LEVELS.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} />
           <Levels label="Ball pressure" value={t.defense.pressure} names={TACTIC_LEVELS.pressure} onChange={(x) => set((tt) => void (tt.defense.pressure = x))} />
@@ -249,8 +264,8 @@ export function TacticsPanel({
           <Slider
             label={
               <span className="tp-label">
-                <Term id="hack">Hack-a</Term> threshold
-                <Help title="Hack-a threshold">
+                <Term id="hack">Hack-a-player threshold</Term>
+                <Help title="Hack-a-player threshold">
                   <p>Foul their players who shoot below this from the line, away from the ball (never in a period&apos;s last 2 minutes).</p>
                   <p>
                     Off also stops tonight&apos;s game-plan targets
@@ -259,7 +274,7 @@ export function TacticsPanel({
                 </Help>
               </span>
             }
-            name="Hack-a threshold"
+            name="Hack-a-player threshold"
             value={t.manage.hackThreshold}
             min={0}
             max={65}
@@ -269,7 +284,7 @@ export function TacticsPanel({
           <Toggle
             on={t.manage.autoTimeouts}
             onChange={(x) => set((tt) => void (tt.manage.autoTimeouts = x))}
-            label="Staff timeouts to stop runs"
+            label="Auto timeouts to stop runs"
             help="After a run (unless you handle subs): rests legs and resets the run."
           />
           <Slider

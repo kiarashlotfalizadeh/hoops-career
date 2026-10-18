@@ -11,7 +11,7 @@ export interface QuickFix {
 
 /**
  * The quick actions under the court (in the tab bar's place on a phone held upright; under the
- * scorebug held sideways): a timeout with the ones left, the lineup and its subs, the play calls
+ * scorebug held sideways): a timeout (the scorebug counts the ones left), the lineup and its subs, the play calls
  * (lit in the late game), the assistant's single top fix as a pill, and the Clipboard.
  */
 export function QuickBar({
@@ -48,15 +48,15 @@ export function QuickBar({
   return (
     <div className={`lq${fix ? ' has-fix' : ''}`} role="group" aria-label="Coaching">
       <button className={`lq-btn${toPending ? ' on' : ''}`} disabled={!canTimeout} onClick={timeout}>
-        {/* named by what it shows, "TO 7", then the state: "TO 7 left: call a timeout" */}
+        {/* named by what it shows, then the state: "Timeout, 7 left: call one" (the scorebug shows the 7) */}
         <span className="lq-ic" aria-hidden="true">
           <Timer size={20} />
-          <span className="lq-n num">{timeouts}</span>
         </span>
-        <span className="lq-l">
-          TO <span className="sr-only">{timeouts}</span>
+        <span className="lq-l">Timeout</span>
+        <span className="sr-only">
+          , {timeouts}
+          {toState}
         </span>
-        <span className="sr-only">{toState}</span>
       </button>
       <button className="lq-btn" onClick={onSubs}>
         <span className="lq-ic" aria-hidden="true">

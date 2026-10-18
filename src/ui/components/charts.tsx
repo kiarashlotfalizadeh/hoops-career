@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useState } from 'react';
+import { useId, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ShotRecord } from '../../core/types';
 import { periodLabel } from '../stats';
 import { wpText } from '../../core/analysis/winProb';
@@ -313,7 +313,10 @@ export function WinProbChart({
   );
 }
 
-/** Half-court shot chart. Coordinates in feet: x -25..25, y 0..47 from the baseline. */
+/** A missed shot's cross on the shot chart. */
+const MISS = '#ff8a8a';
+
+/** Half-court shot chart, with its key (made in `color`, missed as a cross). Coordinates in feet: x -25..25, y 0..47 from the baseline. */
 export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shots: ShotRecord[]; color?: string; size?: number }) {
   const W = 50;
   const H = 40;
@@ -325,39 +328,54 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320 }: { shot
   const cornerY = by + Math.sqrt(arcR * arcR - 22 * 22);
   const made = shots.filter((s) => s.made).length;
   return (
-    <svg
-      viewBox={`0 0 ${size} ${h}`}
-      width="100%"
-      style={{ maxWidth: size * 1.4, display: 'block', margin: '0 auto' }}
-      role="img"
-      aria-label={`Shot chart: ${made} of ${shots.length} shots made`}
-    >
-      <rect x={0} y={0} width={size} height={h} rx={8} fill="#1a140f" />
-      <g stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} fill="none">
-        <rect x={sx(-8)} y={0} width={sx(8) - sx(-8)} height={sy(19)} />
-        <circle cx={sx(0)} cy={sy(19)} r={(6 / W) * size} />
-        <circle cx={sx(0)} cy={sy(by)} r={(0.75 / W) * size} />
-        <line x1={sx(-3)} x2={sx(3)} y1={sy(4)} y2={sy(4)} />
-        <path d={`M${sx(-4)},${sy(by)} A${(4 / W) * size},${(4 / W) * size} 0 0 0 ${sx(4)},${sy(by)}`} />
-        <line x1={sx(-22)} x2={sx(-22)} y1={0} y2={sy(cornerY)} />
-        <line x1={sx(22)} x2={sx(22)} y1={0} y2={sy(cornerY)} />
-        <path d={`M${sx(-22)},${sy(cornerY)} A${(arcR / W) * size},${(arcR / W) * size} 0 0 0 ${sx(22)},${sy(cornerY)}`} />
-      </g>
-      {shots.map((s, i) =>
-        s.made ? (
-          <circle key={i} cx={sx(s.x)} cy={sy(s.y)} r={4.2} fill={color} stroke="#0b0f15" strokeWidth={1} opacity={0.95} />
-        ) : (
-          <g key={i} stroke="#ff8a8a" strokeWidth={1.6} opacity={0.8}>
-            <line x1={sx(s.x) - 3.2} y1={sy(s.y) - 3.2} x2={sx(s.x) + 3.2} y2={sy(s.y) + 3.2} />
-            <line x1={sx(s.x) - 3.2} y1={sy(s.y) + 3.2} x2={sx(s.x) + 3.2} y2={sy(s.y) - 3.2} />
-          </g>
-        ),
-      )}
-    </svg>
+    <div className="shot-chart">
+      <svg
+        viewBox={`0 0 ${size} ${h}`}
+        width="100%"
+        style={{ maxWidth: size * 1.4, display: 'block', margin: '0 auto' }}
+        role="img"
+        aria-label={`Shot chart: ${made} of ${shots.length} shots made`}
+      >
+        <rect x={0} y={0} width={size} height={h} rx={8} fill="#1a140f" />
+        <g stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} fill="none">
+          <rect x={sx(-8)} y={0} width={sx(8) - sx(-8)} height={sy(19)} />
+          <circle cx={sx(0)} cy={sy(19)} r={(6 / W) * size} />
+          <circle cx={sx(0)} cy={sy(by)} r={(0.75 / W) * size} />
+          <line x1={sx(-3)} x2={sx(3)} y1={sy(4)} y2={sy(4)} />
+          <path d={`M${sx(-4)},${sy(by)} A${(4 / W) * size},${(4 / W) * size} 0 0 0 ${sx(4)},${sy(by)}`} />
+          <line x1={sx(-22)} x2={sx(-22)} y1={0} y2={sy(cornerY)} />
+          <line x1={sx(22)} x2={sx(22)} y1={0} y2={sy(cornerY)} />
+          <path d={`M${sx(-22)},${sy(cornerY)} A${(arcR / W) * size},${(arcR / W) * size} 0 0 0 ${sx(22)},${sy(cornerY)}`} />
+        </g>
+        {shots.map((s, i) =>
+          s.made ? (
+            <circle key={i} cx={sx(s.x)} cy={sy(s.y)} r={4.2} fill={color} stroke="#0b0f15" strokeWidth={1} opacity={0.95} />
+          ) : (
+            <g key={i} stroke={MISS} strokeWidth={1.6} opacity={0.8}>
+              <line x1={sx(s.x) - 3.2} y1={sy(s.y) - 3.2} x2={sx(s.x) + 3.2} y2={sy(s.y) + 3.2} />
+              <line x1={sx(s.x) - 3.2} y1={sy(s.y) + 3.2} x2={sx(s.x) + 3.2} y2={sy(s.y) - 3.2} />
+            </g>
+          ),
+        )}
+      </svg>
+      <div className="shot-key" aria-hidden="true">
+        <span>
+          <i style={{ background: color }} /> Made
+        </span>
+        <span>
+          <b style={{ color: MISS }}>×</b> Missed
+        </span>
+      </div>
+    </div>
   );
 }
 
-/** Two-sided bar for comparing a value between two teams. `neutral` stats (a style, like the share of threes) favour neither side. */
+/**
+ * Two-sided bar for comparing a value between two teams. The side that wins it has its figure in a
+ * pill of its colour, so the winner reads at a glance even where lower is better (`higherBetter`
+ * false: turnovers, where the shorter bar wins); `neutral` stats (a style, like the share of threes)
+ * favour neither side.
+ */
 export function CompareBar({
   label,
   a,
@@ -368,7 +386,7 @@ export function CompareBar({
   higherBetter = true,
   neutral = false,
 }: {
-  label: string;
+  label: ReactNode;
   a: number;
   b: number;
   fmt?: (v: number) => string;
@@ -385,12 +403,18 @@ export function CompareBar({
   const tie = neutral || !isFinite(a) || !isFinite(b) || show(a) === show(b);
   const aWins = !tie && (higherBetter ? a > b : a < b);
   const bWins = !tie && !aWins;
+  const fig = (v: number, wins: boolean, color: string) => (
+    <span className={`num cmp-v${wins ? ' win' : tie ? '' : ' lose'}`} style={{ '--cmp-c': color } as CSSProperties}>
+      {show(v)}
+      {wins && <span className="sr-only"> (better)</span>}
+    </span>
+  );
   return (
     <div className="col" style={{ gap: 4 }}>
       <div className="row between small">
-        <span className={`num ${aWins ? 'bold' : tie ? '' : 'dim2'}`}>{show(a)}</span>
+        {fig(a, aWins, colorA)}
         <span className="tiny dim upper">{label}</span>
-        <span className={`num ${bWins ? 'bold' : tie ? '' : 'dim2'}`}>{show(b)}</span>
+        {fig(b, bWins, colorB)}
       </div>
       <div className="row" style={{ gap: 3 }}>
         <div style={{ flex: wa / total, height: 6, borderRadius: 3, background: colorA, opacity: aWins || tie ? 1 : 0.45 }} />

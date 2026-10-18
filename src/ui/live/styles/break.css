@@ -1,0 +1,109 @@
+/* The break screen for a period's end and your timeout, the skip sheet and the final card. */
+.bk {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.bk-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: 8px 12px 8px 14px;
+}
+.bk-fix .ag-head {
+  align-items: flex-start;
+}
+.bk-fix .ag-head > .btn {
+  flex: none;
+  margin-top: 1px;
+}
+.bk-fix-fig {
+  flex: none;
+  min-width: 46px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1.1;
+}
+/* the figure's unit under it: points of the margin, or points per possession */
+.bk-fix-u {
+  display: block;
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.bk-fix-fig.warn {
+  color: var(--warn);
+}
+.bk-more {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+.bk-scorers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* the way on stays in thumb reach while the report scrolls */
+.bk-go {
+  position: sticky;
+  bottom: calc(-22px - var(--safe-b));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 calc(-1 * var(--gut-r)) calc(-22px - var(--safe-b)) calc(-1 * var(--gut-l));
+  padding: 12px var(--gut-r) calc(14px + var(--safe-b)) var(--gut-l);
+  background: linear-gradient(180deg, transparent, var(--bg-2) 18px);
+}
+@media (min-width: 768px) {
+  .bk-go {
+    bottom: -20px;
+    margin-bottom: -20px;
+    padding-bottom: 16px;
+  }
+}
+/* a phone held sideways: a slimmer way on, so the report has room */
+@media (max-height: 520px) {
+  .bk-go {
+    padding-top: 8px;
+    padding-bottom: calc(10px + var(--safe-b));
+  }
+  .bk-go .btn.big {
+    height: 46px;
+    font-size: 18px;
+  }
+  .bk-go .tiny {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ skip, the final */
+.lv-skip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lv-final-go {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.lv-simmed,
+.lv-final-next {
+  color: rgba(255, 255, 255, 0.82);
+}

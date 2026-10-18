@@ -1,4 +1,5 @@
 import type { GameSim } from '../../core/sim/engine';
+import { plural } from '../../core/format';
 import { Tag, Toggle } from '../components/ui';
 import { inkOn } from '../teamColors';
 import { subsLine, type Drawn } from './drawn';
@@ -46,7 +47,7 @@ export function Lineup({
           <h3>Bench</h3>
           <div className="lu-head" aria-hidden="true">
             <span>Energy</span>
-            <span>F</span>
+            <span>PF</span>
             <span>Pts</span>
             <span>Min</span>
           </div>
@@ -76,7 +77,7 @@ export function Lineup({
                   {l.min}
                 </span>
                 <span className="sr-only">
-                  , {l.fouls} foul{l.fouls === 1 ? '' : 's'}, {l.pts} point{l.pts === 1 ? '' : 's'}, {l.min} minute{l.min === 1 ? '' : 's'}
+                  , {plural(l.fouls, 'foul')}, {plural(l.pts, 'point')}, {plural(l.min, 'minute')}
                 </span>
               </button>
             );
@@ -141,11 +142,11 @@ export function MiniFive({
               <span className={tone} style={{ width: `${e}%` }} />
             </span>
             <span className="sr-only">
-              : {p.pts} point{p.pts === 1 ? '' : 's'}, {e}% energy, {p.fouls} foul{p.fouls === 1 ? '' : 's'}
+              : {plural(p.pts, 'point')}, {e}% energy, {plural(p.fouls, 'foul')}
             </span>
             {p.fouls >= 3 && (
               <span className={`mf-f num ${p.fouls >= 5 ? 'bad' : 'warn'}`} aria-hidden="true">
-                {p.fouls}F
+                {p.fouls} PF
               </span>
             )}
           </button>

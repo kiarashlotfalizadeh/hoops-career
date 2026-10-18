@@ -1,5 +1,5 @@
-// Keys to the game on screen (see core/analysis/keys.ts): set on the pre-game screen, tracked live
-// at the breaks and in the huddle, and graded with the result.
+// Keys to the game on screen (see core/analysis/keys.ts), as the matchup preview sets them: tracked
+// live at the breaks and in the huddle, and graded with the result.
 import { Check, KeyRound, X } from 'lucide-react';
 import type { GameResult, KeyGrade } from '../../core/types';
 import { isRate, keyState, keyValue, type GameKey, type KeyState } from '../../core/analysis/keys';
@@ -16,26 +16,6 @@ const STATE_TAG: Record<KeyState, { text: string; tone: string }> = {
 export function gameShare(elapsed: number, q: number): number {
   const total = 2880 + 300 * Math.max(0, q - 4);
   return Math.min(1, Math.max(0, elapsed / total));
-}
-
-/** The three keys before the game: what to do, the number, and why. */
-export function KeysList({ keys }: { keys: GameKey[] }) {
-  return (
-    <div className="col" style={{ gap: 10 }}>
-      {keys.map((k, i) => (
-        <div key={k.id} className="row top" style={{ gap: 10 }}>
-          <span className="gd-key-n num" aria-hidden="true">
-            {i + 1}
-          </span>
-          <div className="grow" style={{ minWidth: 0 }}>
-            <div className="small bold">{k.title}</div>
-            <div className="small">{k.goal}</div>
-            <div className="tiny dim">{k.why}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /**

@@ -5,8 +5,9 @@ import type { GameResult, League, PlayerDefense, SetId, TacticImpact, Tactics, T
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
-import { wholeMinutes } from '../league/helpers';
+import { shortName, wholeMinutes } from '../league/helpers';
 import { GAME } from '../constants';
+import { plural } from '../format';
 
 export interface Factor {
   title: string;
@@ -349,7 +350,7 @@ function names(league: League, im: TacticImpact, max = 2) {
   const top = Object.entries(im.players)
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
-    .map(([pid]) => league.players[+pid]?.lastName)
+    .map(([pid]) => (league.players[+pid] ? shortName(league, league.players[+pid]) : undefined))
     .filter(Boolean);
   return top.length ? ` (${top.join(', ')})` : '';
 }
@@ -398,7 +399,7 @@ export function setLines(res: Pick<GameResult, 'sets'>, side: 0 | 1): SetLine[] 
 
 /** "3 runs, 0.67 PPP, read by the 3rd". */
 export function setLineText(l: SetLine): string {
-  return `${l.runs} run${l.runs === 1 ? '' : 's'}, ${l.ppp.toFixed(2)} PPP${l.readAt ? `, read by the ${nth(l.readAt)}` : ''}`;
+  return `${plural(l.runs, 'run')}, ${l.ppp.toFixed(2)} PPP${l.readAt ? `, read by the ${nth(l.readAt)}` : ''}`;
 }
 
 export interface ReportOptions {
@@ -440,7 +441,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const Y = teamRef(benefitUser ? ot : ut);
     factors.push({
       title: impactSentence(im.key, X, Y, names(league, im)),
-      detail: `Worth about ${im.pts.toFixed(1)} points over ${im.count} play${im.count === 1 ? '' : 's'}.`,
+      // (the report leads the row with what it was worth)
+      detail: `Over ${plural(im.count, 'play')}.`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
       advice: benefitUser ? undefined : impactAdvice(im.key, tactics),
@@ -465,7 +467,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   if (Math.abs(tovSwing) >= 3) {
     factors.push({
       title: `Turnover battle: ${ut.abbrev} ${u.t.tov}, ${ot.abbrev} ${o.t.tov}.`,
-      detail: `Each turnover costs about a point, more when it is a live-ball steal. Points off turnovers: ${ut.abbrev} ${u.extra.offTov}, ${ot.abbrev} ${o.extra.offTov}.`,
+      detail: `Points off turnovers: ${ut.abbrev} ${u.extra.offTov}, ${ot.abbrev} ${o.extra.offTov}.`,
       pts: tovSwing,
       category: 'turnovers',
       advice: tovSwing < 0 ? 'Shift creation to your most secure ball handlers (Tactics > Roles) or lower the pace.' : undefined,
@@ -489,7 +491,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   if (Math.abs(ftSwing) >= 3) {
     factors.push({
       title: `Free throws: ${ut.abbrev} ${u.t.ftm}/${u.t.fta}, ${ot.abbrev} ${o.t.ftm}/${o.t.fta}.`,
-      detail: 'Free-throw volume comes from rim pressure and foul-drawing ability, and from defensive Physicality.',
+      detail: `Fouls committed: ${ut.abbrev} ${u.t.pf}, ${ot.abbrev} ${o.t.pf}.`,
       pts: ftSwing,
       category: 'fouls',
     });
@@ -508,7 +510,10 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
           ? `${star.name} has ${star.pts} points so far (${star.fgm}/${star.fga} FG).`
           : `${star.name} erupted for ${star.pts} points (${star.fgm}/${star.fga} FG).`,
         // (no pace to be on once regulation is played)
-        detail: opts.partial && played < 1 ? `On pace for ${Math.round(star.pts / played)}.` : `The ${side.name} rode their star.`,
+        detail:
+          opts.partial && played < 1
+            ? `On pace for ${Math.round(star.pts / played)}.`
+            : `${Math.round(star.min)} min, ${star.orb + star.drb} reb, ${star.ast} ast for the ${side.name}.`,
         pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
         // (not named: a Star plan goes after their primary creator, who isn't always the scorer)

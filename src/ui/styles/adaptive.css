@@ -84,9 +84,11 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   }
 }
 
-/* a word with a glossary entry: tap for what it means */
+/* a word with a glossary entry: tap for what it means (in an overline or a heading it keeps its caps) */
 .term {
   font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
   color: inherit;
   background: none;
   border: none;

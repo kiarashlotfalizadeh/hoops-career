@@ -422,36 +422,118 @@
   color: var(--text);
   font-weight: 750;
 }
-.gd-next {
+
+/* ------------------------------------------------------------ a box score (components/BoxScore.tsx) */
+.bx {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* (a column's name is spelled out in its title, for a long press: not a link to tap) */
+.bx-table abbr,
+.gv-grades abbr {
+  text-decoration: none;
+}
+/* a long name gives way to the numbers on a phone */
+.bx-table td.l {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 600px) {
+  .bx-table td.l {
+    max-width: 220px;
+  }
+}
+.bx-who {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 12px 12px 14px;
+  gap: 4px;
+  min-width: 0;
+}
+.bx-who > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bx-link {
+  display: block;
+  margin: calc(-1 * var(--cell-py)) calc(-1 * var(--cell-px));
+  padding: var(--cell-py) var(--cell-px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+.bx-pog {
+  flex: none;
+  display: inline-flex;
+  color: var(--warn);
+}
+.bx-team td {
+  background: var(--bg-2);
+}
+.bx-key {
+  padding: 0 2px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.bx-key b {
+  color: var(--text-2);
+}
+.bx-key .bx-pog {
+  margin: 0 1px 0 0;
 }
 
 /* ------------------------------------------------------------ the game report (games/GameReport.tsx) */
-.gv-headline {
-  margin: 2px 0 0;
-  padding-left: 12px;
-  border-left: 3px solid var(--team-text);
-  font-size: 17px;
+/* a line for when there's nothing to list, and the "N more" under a list */
+.gv-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.gv-more {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
   font-weight: 700;
-  line-height: 1.35;
+  color: var(--accent-text);
+}
+.gv-more:active {
+  background: var(--surface);
 }
 .gv-factor {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 11px 12px 12px;
+  gap: 10px;
+  padding: var(--row-py) var(--row-px) calc(var(--row-py) + 2px);
 }
+/* the points the edge was worth, its unit under it */
 .gv-pts {
   flex: none;
-  width: 50px;
+  width: 54px;
+  padding-top: 1px;
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 24px;
+  font-size: 21px;
   line-height: 1;
+}
+.gv-pts-u {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 .gv-factor-t {
   font-weight: 700;
@@ -529,23 +611,17 @@
   border-radius: 2px;
   background: currentColor;
 }
-.gv-grade {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 50px;
-  padding: 7px 14px;
-}
-.gv-grade:active {
-  background: var(--surface);
+/* player grades: the letter in scoreboard type, A green to D-F red */
+.gv-grades td:first-child {
+  width: 34px;
+  padding-right: 0;
 }
 .gv-g {
-  flex: none;
-  width: 30px;
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 1;
   color: var(--bad);
 }
 .gv-g.A {
@@ -558,14 +634,9 @@
   color: var(--warn);
 }
 .gv-grade-n {
-  display: block;
-  font-weight: 700;
-  font-size: 14px;
-}
-.gv-grade-l {
-  display: block;
-  font-size: 12px;
-  color: var(--text-dim);
+  max-width: 150px;
+  overflow: hidden;
+  font-weight: 650;
 }
 .gv-shots {
   display: flex;
@@ -621,18 +692,6 @@
   font-size: 12px;
   color: var(--text-dim);
 }
-.gv-box-pts {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
-}
-.gv-dnp {
-  padding: 9px 14px 11px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--text-dim);
-}
 /* the adjustments both benches made */
 .gv-adj {
   display: flex;
@@ -654,23 +713,6 @@
   color: var(--team-text);
 }
 
-/* keys to the game: the number before each */
-.gd-key-n {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
-  color: var(--accent-text);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 13px;
-}
-
 /* the highlights reel in a game report: the court and its controls */
 .gd-hl {
   display: flex;
@@ -685,14 +727,6 @@
 }
 .gd-hl-court .court-cv {
   border-radius: 12px;
-}
-.gd-hl-start {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(6, 8, 12, 0.55);
 }
 .gd-hl-bar {
   display: flex;

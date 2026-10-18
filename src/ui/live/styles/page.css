@@ -1,0 +1,64 @@
+/* The live page: no scrolling while the game is on, the scorebug and the court edge to edge on a
+   phone, the court as big as leaves the docked Clipboard room under it on a tablet. */
+:root {
+  /* the quick actions' row */
+  --lq-h: 58px;
+  /* on a tablet, the room the court leaves under it: the Clipboard's tabs and both fives whole */
+  --lv-dock-min: 288px;
+}
+:root[data-gameday] .bottomnav {
+  display: none;
+}
+.app main.page.lv {
+  max-width: 820px;
+  height: calc(100dvh - var(--top-h) - var(--safe-t) - 1px);
+  padding: 0 var(--gut-r) calc(var(--lq-h) + var(--safe-b)) var(--gut-l);
+  gap: 0;
+  overflow: hidden;
+}
+.lv-bug,
+.lv-stage {
+  flex: none;
+}
+.lv-stage {
+  position: relative;
+  align-self: center;
+  width: 100%;
+}
+.lv-stage > :not(canvas) {
+  color: #fff;
+}
+/* phones: the scorebug and the court edge to edge, like a broadcast */
+@media (max-width: 599px) {
+  .lv .lv-bug,
+  .lv .lv-stage {
+    width: auto;
+    align-self: stretch;
+    margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  }
+}
+/* wider, upright (tablets): the court as big as leaves the docked clipboard room under it */
+@media (min-width: 600px) {
+  .lv-bug {
+    padding-top: 10px;
+  }
+  .lv-stage {
+    width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
+  }
+  .lv .lb {
+    border-radius: 12px 12px 0 0;
+  }
+  .lv-stage .court-cv,
+  .lv-stage > .live-intro,
+  .lv-stage > .lv-break {
+    border-radius: 0 0 12px 12px;
+  }
+}
+.lv-bug .lb {
+  margin: 0 auto;
+}
+@media (min-width: 600px) and (orientation: portrait) {
+  .lv-bug .lb {
+    width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
+  }
+}

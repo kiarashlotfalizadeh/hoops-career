@@ -223,6 +223,15 @@ export function playerName(p: Player) {
   return `${p.firstName} ${p.lastName}`.trim();
 }
 
+/**
+ * His last name, or his full name when a teammate shares it ("Jalen Williams" on a team with Jaylin
+ * and Kenrich): for a line of text that names one player.
+ */
+export function shortName(league: League, p: Player): string {
+  const twin = Object.values(league.players).some((o) => o.pid !== p.pid && o.tid === p.tid && o.lastName === p.lastName);
+  return twin ? playerName(p) : p.lastName;
+}
+
 export function teamName(t: Team) {
   return `${t.region} ${t.name}`;
 }

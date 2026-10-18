@@ -1,43 +1,26 @@
 // The post-game recap for one of the user's games, most telling first: the three stars (the player
 // of the game first), the keys to the game graded, the night (how win probability turned, what the
 // result did to the standings or the series, milestones and records), the highlights, the press
-// conference (the quotes, then the user's answer, each with what it does to the locker room), the
-// rest of the night's results that matter to him, and what's next. Takes a stored result, so the
-// report and the Live screen's final card can both show it. FinalSlab is the result itself, as a
-// broadcast's final graphic, over both.
+// conference (the quotes, then the user's answer, each with what it does to the locker room) and the
+// rest of the night's results that matter to him (the Continue bar, or the final card's Next game,
+// names the next game). Takes a stored result, so the report and the Live screen's final card can
+// both show it, under the result itself (FinalSlab.tsx).
 import { KeysGraded } from './GameKeys';
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
-import type { GameResult, League, PressChoice, ScheduledGame, StandingLine } from '../../core/types';
+import type { GameResult, League, ScheduledGame, StandingLine } from '../../core/types';
 import { buildGameReport, type GameReport } from '../../core/analysis/gameReport';
-import {
-  holdPress,
-  isLatestUserGame,
-  postGameQuotes,
-  pressEffects,
-  pressOpen,
-  pressOptions,
-  pressSummary,
-  streakAfter,
-  threeStars,
-  type PressEffect,
-} from '../../core/analysis/quotes';
+import { isLatestUserGame, postGameQuotes, streakAfter, threeStars } from '../../core/analysis/quotes';
 import { COMEBACK_WP, playAt, swingWords, TURN_MIN, wpStory, wpText, type WpPoint } from '../../core/analysis/winProb';
 import { markText, milestonesIn } from '../../core/analysis/milestones';
 import { recordWhat, recordsHeld } from '../../core/league/records';
 import { seriesLabel } from '../../core/league/playoffs';
-import { neutralSite } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
-import { cupLabel } from '../../core/league/cup';
 import { fmtDate, playerName } from '../../core/league/helpers';
-import { act } from '../../state/actions';
-import { useStore } from '../../state/store';
-import { matchupLooks } from '../teamColors';
 import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
-import { Avatar, Help, Section, Tag } from './ui';
+import { PressConference } from './PressConference';
+import { Avatar, Section, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
-import { QuarterTable } from './gameBlocks';
 import './gameday.css';
 
 const confWord = (c: 'E' | 'W') => (c === 'E' ? 'East' : 'West');
@@ -48,56 +31,6 @@ const CLINCH: Record<NonNullable<StandingLine['clinched']>, { text: string; tone
   p: { text: 'Clinched a play-in spot', tone: 'info' },
   e: { text: 'Eliminated from the postseason', tone: 'bad' },
 };
-
-/** "NBA Cup · Final", "Playoffs", "Play-In", "Regular season". */
-export function gameTypeLabel(league: League, g: GameResult): string {
-  return cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular season');
-}
-
-/**
- * The result as a broadcast's final: both teams in their colours, the score, the linescore, and
- * whether the user won. `children` go under it (the final card's buttons).
- */
-export function FinalSlab({ res, league, children }: { res: GameResult; league: League; children?: ReactNode }) {
-  const home = league.teams[res.home.tid];
-  const away = league.teams[res.away.tid];
-  // (on a clash the away side wears its second colour, so the two halves never read as one)
-  const [lh, la] = matchupLooks(home.colors, away.colors);
-  const us = res.home.tid === league.userTid ? res.home : res.away.tid === league.userTid ? res.away : null;
-  const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
-  const side = (t: typeof home, pts: number, win: boolean, isHome: boolean) => (
-    <Link to={t.tid === league.userTid ? '/team' : `/teams/${t.tid}`} className={`gd-fs-team${isHome ? ' home' : ''}${win ? '' : ' lost'}`}>
-      <TeamLogo tid={t.tid} size={40} decorative />
-      <span className="gd-fs-ab">{t.abbrev}</span>
-      <span className="gd-fs-pts num">{pts}</span>
-    </Link>
-  );
-  return (
-    <section
-      className="slab gd-final"
-      aria-label={`Final: ${away.name} ${res.away.pts}, ${home.name} ${res.home.pts}`}
-      style={{ '--fa': la.slab, '--fh': lh.slab, '--ta': la.trim, '--th': lh.trim } as CSSProperties}
-    >
-      <div className="gd-fs-over">
-        <span>{gameTypeLabel(league, res)}</span>
-        <span>
-          {fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-          {res.att ? ` · Att ${res.att.toLocaleString()}` : ''}
-        </span>
-      </div>
-      <div className="gd-fs-row">
-        {side(away, res.away.pts, res.away.pts > res.home.pts, false)}
-        <div className="gd-fs-mid">
-          <span className="gd-fs-final">{finalLabel(res.ot)}</span>
-          {us && <span className={`gd-fs-wl ${won ? 'w' : 'l'}`}>{won ? 'Win' : 'Loss'}</span>}
-        </div>
-        {side(home, res.home.pts, res.home.pts > res.away.pts, true)}
-      </div>
-      <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
-      {children && <div className="gd-fs-actions">{children}</div>}
-    </section>
-  );
-}
 
 /** A playoff series as it stood after this game, and its next game. */
 function seriesAfter(league: League, res: GameResult, tid: number) {
@@ -199,7 +132,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
     )
     .slice(0, 4);
 
-  const pregame = league.settings.pregame !== false;
   const facts = !!(stakes || newly || Math.abs(streak) >= 2 || series || turnText || swing || marks.length || records.length || playIn);
 
   return (
@@ -358,117 +290,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
           </div>
         </Section>
       )}
-
-      {next && nextOpp !== undefined && (
-        <Section title="Next up">
-          <div className="card gd-next">
-            <TeamLogo tid={nextOpp} size={36} decorative />
-            <div className="grow" style={{ minWidth: 0 }}>
-              <div className="bold ellipsis">
-                {/* (the Cup final is on a neutral floor: nobody's home) */}
-                {next.home === tid || neutralSite(next) ? 'vs' : '@'} {league.teams[nextOpp].name}
-              </div>
-              <div className="row tiny dim" style={{ gap: 6 }}>
-                {next.day === league.day ? 'Today' : fmtDate(league.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-                {next.day - res.day === 1 && <Tag tone="warn">Back-to-back</Tag>}
-              </div>
-            </div>
-            {!pregame && next.day === league.day ? (
-              <Link to="/live" className="btn sm primary" aria-label={`Watch and coach the game against the ${league.teams[nextOpp].name}`}>
-                Watch & coach
-              </Link>
-            ) : (
-              <Link to={`/games/${nextOpp}`} className="btn sm" aria-label={`Matchup: the ${league.teams[nextOpp].name}`}>
-                Matchup <ChevronRight size={14} />
-              </Link>
-            )}
-          </div>
-        </Section>
-      )}
     </div>
-  );
-}
-
-/**
- * What was said after the game, and the user's own answer (his latest game only, once): each answer
- * shows what it does to the locker room before it's given (see the press conference in quotes.ts).
- */
-function PressConference({ league, res, quotes }: { league: League; res: GameResult; quotes: ReturnType<typeof postGameQuotes> }) {
-  const simming = useStore((s) => !!s.sim);
-  const [given, setGiven] = useState<PressEffect[] | null>(null);
-  const tid = league.userTid;
-  const press = isLatestUserGame(league, res) ? pressOptions(league, res) : [];
-  const open = pressOpen(league, res);
-  const held = league.press?.gid === res.gid ? league.press.choice : undefined;
-  const answer = (choice: PressChoice) => {
-    let fx: PressEffect[] | null = null;
-    if (
-      !act('Press conference', (l) => {
-        const g = l.games.find((x) => x.gid === res.gid);
-        if (g) fx = holdPress(l, g, choice);
-      })
-    )
-      return;
-    setGiven(fx);
-  };
-  const answering = press.length > 0 && (open || held);
-  if (!quotes.length && !answering) return null;
-  return (
-    <Section
-      title="Press conference"
-      right={
-        answering && !held ? (
-          <Help title="Press conference">
-            <p>
-              One answer after your latest game, if you want to give one. It moves your players&apos; mood, which lifts or drags how they play a little and fades over the weeks.
-            </p>
-            <p>
-              Praise lifts the player of the game most, but the teammate he outshone and a starter who had a poor night cool a little. Crediting the group lifts everyone after a
-              win; after a loss it reads as soft.
-            </p>
-            <p>
-              After a loss, challenging the team fires up players in a good mood and stings unhappy ones; calling out the player who struggled most is a big swing: a veteran in a
-              good mood takes it as a challenge, anyone else takes it badly.
-            </p>
-          </Help>
-        ) : undefined
-      }
-    >
-      {quotes.length > 0 && (
-        <div className="gd-quotes">
-          {quotes.map((q, i) => (
-            <blockquote key={i} className={`gd-quote ${q.tid === tid ? 'mine' : ''}`}>
-              <p>“{q.text}”</p>
-              <footer>
-                {q.who}, {q.role}
-              </footer>
-            </blockquote>
-          ))}
-        </div>
-      )}
-      {answering &&
-        (held ? (
-          <div className="gd-press-done small">
-            <span className="dim2">You: {press.find((o) => o.id === held)?.label ?? 'Answered'}.</span>{' '}
-            <span className="bold">{pressSummary(given ?? pressEffects(league, res, held))}</span>
-          </div>
-        ) : (
-          <div className="card flush list gd-press" role="group" aria-label="Your answer">
-            {press.map((o) => (
-              <button key={o.id} className="gd-press-opt" disabled={simming} onClick={() => answer(o.id)} aria-label={`${o.label}: ${o.hint}`}>
-                <span className="gd-press-l">{o.label}</span>
-                <span className="gd-press-h">
-                  {o.hint.split(' · ').map((part, i) => (
-                    <span key={part}>
-                      {i > 0 && ' · '}
-                      <span className={part.startsWith('+') ? 'good' : part.startsWith('−') ? 'bad' : undefined}>{part}</span>
-                    </span>
-                  ))}
-                </span>
-              </button>
-            ))}
-          </div>
-        ))}
-    </Section>
   );
 }

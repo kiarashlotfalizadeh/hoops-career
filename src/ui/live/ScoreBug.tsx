@@ -9,8 +9,6 @@ import type { Ticker } from './ticker';
 
 /** A run this long gets a chip under the clock. */
 const RUN_CHIP = 6;
-/** Timeouts a team starts a game with: the bars under its name (overtimes add to them). */
-const TIMEOUTS = 7;
 
 /**
  * What's at stake beyond the regular season, for the scorebug's subtitle: "Playoffs · R1 G5 ·
@@ -33,7 +31,7 @@ export function gameContext(league: League, g: ScheduledGame, gameNo?: number): 
 
 /**
  * The live scorebug, slim, as a broadcast has it over the court: each team's colour block (its name,
- * timeouts and team fouls), the scores, the period and the clock as the court animates them
+ * timeouts left and team fouls, both labelled), the scores, the period and the clock as the court animates them
  * (`ticker`), a run, the sliver of each team's chance to win (`wpHome`, unless switched off) and the
  * night's other scores under it; everything but the clock and score as of the possession the court
  * last finished drawing (`view`). The final is the final card's (FinalSlab).
@@ -79,25 +77,20 @@ export function ScoreBug({
   // the two colour blocks never read as one: on a clash the away side wears its second colour
   const looks = matchupLooks(home.colors, away.colors);
   const pct = wpText;
-  // a team's fouls light up once they put the other team in the bonus
+  // each block says what its figures are: the timeouts left, and the team fouls this period ("Penalty"
+  // once they put the other team in the bonus: it shoots on every foul from here)
   const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean) => {
     const look = looks[isHome ? 0 : 1];
     return (
       <div className={`lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
         <div className="lb-id">
           <span className="lb-ab">{t.abbrev}</span>
-          <span className="lb-meta">
-            <span className="lb-to" aria-hidden="true">
-              {Array.from({ length: Math.max(TIMEOUTS, s.timeouts) }, (_, i) => (
-                <i key={i} className={i < s.timeouts ? 'on' : ''} />
-              ))}
+          <span className="lb-meta num">
+            <span className="lb-to">
+              Timeouts <b>{s.timeouts}</b>
             </span>
-            <span className="sr-only">
-              {s.timeouts} timeout{s.timeouts === 1 ? '' : 's'} left
-            </span>
-            <span className={`lb-tf${penalty ? ' on' : ''}`} title={penalty ? 'In the penalty' : undefined}>
-              <span className="sr-only">, </span>TF {s.fouls}
-              {penalty && <span className="sr-only"> (in the penalty)</span>}
+            <span className={`lb-tf${penalty ? ' on' : ''}`}>
+              {penalty ? 'Penalty' : 'Fouls'} <b>{s.fouls}</b>
             </span>
           </span>
         </div>
@@ -128,7 +121,8 @@ export function ScoreBug({
         {side(home, h, score[0], a.bonus, true)}
       </div>
       {wp !== null && (
-        <div className="lb-wp" aria-hidden="true" title="Win probability">
+        <div className="lb-wp" aria-hidden="true">
+          <span className="lb-wp-k">To win</span>
           <span className="num">
             {away.abbrev} <b>{pct(1 - wp)}</b>
           </span>
