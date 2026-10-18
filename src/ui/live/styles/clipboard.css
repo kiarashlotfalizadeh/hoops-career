@@ -437,15 +437,6 @@
   line-height: 1.3;
   color: var(--text-2);
 }
-/* a glossary word in an overline or a heading reads like the rest of it */
-.cl .sec-h h3 .term,
-.clip .over .term,
-.tp .over .term,
-.tp .slider-label .term,
-.ps .over .term {
-  text-transform: inherit;
-  letter-spacing: inherit;
-}
 .cl-set .chips {
   margin-top: 2px;
 }
