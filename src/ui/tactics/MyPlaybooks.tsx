@@ -27,7 +27,7 @@ import { fmtDate, rosterSorted } from '../../core/league/helpers';
 import type { League, SavedPlaybook } from '../../core/types';
 import { rosterNames } from '../stats';
 import { setLabBaseline } from '../screens/labBridge';
-import { Help, Section, Sheet, Tag, activateOnKey } from './ui';
+import { Help, Section, Sheet, Tag, activateOnKey } from '../components/ui';
 import '../screens/tactics.css';
 
 /** The user's roster and how its players are named in the changes lists. */

@@ -26,7 +26,7 @@ import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
 import { PlanTab } from './matchup/PlanTab';
 import { MatchupPlanner } from '../components/MatchupPlanner';
-import { LabPanel } from './Lab';
+import { LabPanel } from './lab/LabPanel';
 import './games.css';
 
 type Tab = 'preview' | 'scout' | 'plan' | 'matchups' | 'test';

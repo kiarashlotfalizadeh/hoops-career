@@ -21,7 +21,7 @@ import {
 } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
-import { Sheet, Statline, Tag } from './ui';
+import { Sheet, Statline, Tag } from '../components/ui';
 import '../screens/tactics.css';
 
 function FitTag({ v }: { v: number }) {
