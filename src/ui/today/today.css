@@ -120,7 +120,7 @@
 }
 .td-out-k {
   flex: none;
-  width: 64px;
+  width: 36px;
   white-space: nowrap;
   font-size: 10.5px;
   font-weight: 750;
@@ -216,27 +216,66 @@
   text-transform: uppercase;
   color: var(--heat);
 }
+/* Office → Owner's meter, compact: the four bands, the firing line and where he stands */
 .td-meter {
   position: relative;
   display: block;
+  padding-top: 13px;
+}
+.td-meter-track {
+  display: flex;
+  gap: 2px;
   height: 6px;
   border-radius: 3px;
-  background: var(--surface-3);
+  overflow: hidden;
 }
-.td-meter > span {
+.td-meter-track > i {
   display: block;
   height: 100%;
-  border-radius: 3px;
-  background: var(--heat);
+  opacity: 0.55;
 }
-/* the owner's firing line */
-.td-meter > i {
+.td-meter-track > .hot {
+  background: var(--bad);
+}
+.td-meter-track > .warm {
+  background: var(--warn);
+}
+.td-meter-track > .steady {
+  background: var(--info);
+}
+.td-meter-track > .secure {
+  background: var(--good);
+}
+.td-meter-line {
   position: absolute;
-  top: -3px;
-  bottom: -3px;
+  top: 10px;
   width: 2px;
+  height: 12px;
   margin-left: -1px;
-  background: var(--text-2);
+  background: var(--text);
+}
+.td-meter-line > span {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.td-meter-pin {
+  position: absolute;
+  top: 8px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: var(--heat);
+  border: 3px solid var(--raised);
+  box-shadow: 0 0 0 1px var(--line-3);
 }
 .td-seat-l {
   font-size: 12.5px;

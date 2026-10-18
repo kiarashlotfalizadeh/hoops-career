@@ -57,6 +57,16 @@
   font-size: 15px;
   line-height: 1.2;
 }
+/* the name keeps priority: what's wrong (out, a 10-day deal) drops under a long name instead of
+   cutting it short */
+.tm-rl-name {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+.tm-rl-name > .ellipsis {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
 .tm-rl-name .tag {
   flex: none;
 }
