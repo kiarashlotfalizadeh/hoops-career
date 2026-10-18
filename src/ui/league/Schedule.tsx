@@ -1,15 +1,16 @@
-import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
-import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { teamRatings } from '../stats';
-import { ordinal, roundName, useGamesByGid, useQueryParam } from './shared';
-import { standings, type StandingRow } from '../../core/league/standings';
+import { roundName, useGamesByGid, useQueryParam } from './shared';
 import { nextUserGame } from '../../core/analysis/preview';
 import { neutralSite } from '../../core/league/games';
+
+// one team's schedule and results lives with the Games screens
+export { TeamScheduleList } from '../games/ScheduleList';
 
 const TYPE_LABEL: Record<string, string> = { playin: 'Play-In', playoffs: 'Playoffs', allstar: 'All-Star' };
 const CUP_SHORT: Record<string, string> = { group: 'Cup', qf: 'Cup QF', sf: 'Cup SF', final: 'Cup Final' };
@@ -35,168 +36,6 @@ function seriesGameNo(league: League, g: ScheduledGame) {
   if (!g.seriesId) return 0;
   const list = league.schedule.filter((x) => x.seriesId === g.seriesId && x.type === g.type).sort((a, b) => a.day - b.day || a.gid - b.gid);
   return list.findIndex((x) => x.gid === g.gid) + 1;
-}
-
-interface Row {
-  g: ScheduledGame;
-  res?: GameResult;
-  opp: number;
-  home: boolean;
-  won?: boolean;
-  us?: number;
-  them?: number;
-  rec?: string;
-}
-
-/**
- * One team's schedule & results, grouped by month. Long lists start collapsed around the next game.
- * `h2hTid` marks games against that team (the user's, on another club's page) with its edge;
- * `cupOnly` keeps just its NBA Cup games.
- */
-export function TeamScheduleList({
-  league,
-  tid,
-  h2hTid,
-  collapse = true,
-  cupOnly = false,
-}: {
-  league: League;
-  tid: number;
-  h2hTid?: number;
-  collapse?: boolean;
-  cupOnly?: boolean;
-}) {
-  const byGid = useGamesByGid(league);
-  const [expanded, setExpanded] = useState(!collapse);
-  const ranks = useLeagueMemo(() => new Map(standings(league).map((r) => [r.tid, r])), [league]);
-  // the user's next game opens its preview
-  const nextGid = useLeagueMemo(() => nextUserGame(league)?.gid, [league]);
-  const rows = useLeagueMemo(() => {
-    const list = league.schedule.filter((g) => g.home === tid || g.away === tid).sort((a, b) => a.day - b.day || a.gid - b.gid);
-    let w = 0;
-    let l = 0;
-    return list.map((g): Row => {
-      const home = g.home === tid;
-      const opp = home ? g.away : g.home;
-      const res = g.played ? byGid.get(g.gid) : undefined;
-      if (!res) return { g, opp, home };
-      const us = home ? res.home.pts : res.away.pts;
-      const them = home ? res.away.pts : res.home.pts;
-      const won = us > them;
-      if (g.type === 'regular') {
-        if (won) w++;
-        else l++;
-      }
-      return { g, res, opp, home, won, us, them, rec: `${w}-${l}` };
-    });
-  }, [league, tid, byGid]);
-
-  const list = cupOnly ? rows.filter((r) => r.g.cup) : rows;
-  if (!list.length) return <div className="card empty">{cupOnly ? 'No NBA Cup games on the schedule.' : 'No games on the schedule yet.'}</div>;
-
-  const nextIdx = list.findIndex((r) => !r.g.played);
-  const anchor = nextIdx === -1 ? list.length : nextIdx;
-  const hiddenCount = !expanded && anchor > 5 ? anchor - 3 : 0;
-  const visible = list.slice(hiddenCount);
-
-  let lastMonth = '';
-  return (
-    <div className="card flush">
-      {hiddenCount > 0 && (
-        <button className="lg-more" onClick={() => setExpanded(true)}>
-          <ChevronDown size={15} /> Show {hiddenCount} earlier game{hiddenCount === 1 ? '' : 's'}
-        </button>
-      )}
-      {visible.map((r) => {
-        const d = dayToDate(league.season, r.g.day);
-        const month = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-        const showMonth = month !== lastMonth;
-        lastMonth = month;
-        const monthRec = showMonth && !cupOnly ? monthRecord(rows, league.season, month) : '';
-        const today = !r.g.played && r.g.day === league.day && (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs');
-        const opp = league.teams[r.opp];
-        const typeLabel = gameTag(league, r.g);
-        const to = r.res ? `/game/${r.g.gid}` : r.g.gid === nextGid ? `/preview/${r.g.gid}` : `/team/${r.opp}`;
-        return (
-          <Fragment key={r.g.gid}>
-            {showMonth && (
-              <div className="list-divider lg-month">
-                <span>{month}</span>
-                {monthRec && <span className="num">{monthRec}</span>}
-              </div>
-            )}
-            <Link to={to} className={`lg-g-row ${today ? 'today' : ''} ${h2hTid !== undefined && r.opp === h2hTid ? 'h2h' : ''}`}>
-              <span className="lg-g-date">
-                <span className="wd">{today ? 'Today' : fmtDate(league.season, r.g.day, { weekday: 'short' })}</span>
-                <span className="d">{fmtDate(league.season, r.g.day)}</span>
-              </span>
-              <TeamLogo tid={r.opp} size={28} decorative />
-              <span className="lg-g-opp">
-                <span className="lg-g-name ellipsis">
-                  {/* the Cup final is on a neutral floor: nobody's home */}
-                  <span className="lg-g-at">{r.home || neutralSite(r.g) ? 'vs' : '@'}</span>
-                  {opp.name}
-                </span>
-                {/* (wraps: a long top scorer's name would cut off his points) */}
-                <span className="lg-g-sub">
-                  {typeLabel ? <b className="lg-g-type">{typeLabel} · </b> : null}
-                  {rowSub(league, r, tid, ranks)}
-                </span>
-              </span>
-              <span className="lg-g-res">
-                {r.res ? (
-                  <>
-                    <span className="lg-g-score">
-                      <span className={`lg-wl ${r.won ? 'w' : 'l'}`}>{r.won ? 'W' : 'L'}</span>
-                      <span className="num">
-                        {r.us}-{r.them}
-                      </span>
-                    </span>
-                    {r.res.ot > 0 && <span className="lg-g-ot">{r.res.ot > 1 ? `${r.res.ot}OT` : 'OT'}</span>}
-                  </>
-                ) : r.g.played ? (
-                  <span className="lg-g-ot">Final</span>
-                ) : (
-                  <ChevronRight size={16} className="dim" />
-                )}
-              </span>
-            </Link>
-          </Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-function rowSub(league: League, r: Row, tid: number, ranks: Map<number, StandingRow>) {
-  if (r.res) {
-    const side = r.res.home.tid === tid ? r.res.home : r.res.away;
-    const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
-    // the last word of a box-score name can be a suffix ("Jr."): the player's own last name when he's still in the league
-    // (his points kept with his name when the line wraps)
-    const lead = top ? `${league.players[top.pid]?.lastName ?? top.name}\u00a0${top.pts}\u00a0pts` : '';
-    return [r.g.type === 'regular' ? r.rec : '', lead].filter(Boolean).join(' · ');
-  }
-  const st = ranks.get(r.opp);
-  if (!st) return record(league, r.opp);
-  if (st.won + st.lost) return `${st.won}-${st.lost} · ${ordinal(st.confRank)} in ${st.conf === 'E' ? 'East' : 'West'}`;
-  // a rank means nothing before the opponent has played: show last season instead, if there was one
-  const prev = league.teams[r.opp].seasons.find((s) => s.season === league.season - 1);
-  return prev && prev.won + prev.lost ? `Last season ${prev.won}-${prev.lost}` : '0-0';
-}
-
-/** "9-5", or "3-1 · Play-In 1-0 · Playoffs 2-4" in April: postseason games don't go into the regular-season record. */
-function monthRecord(rows: Row[], season: number, month: string) {
-  const rec = { regular: [0, 0], playin: [0, 0], playoffs: [0, 0] };
-  for (const r of rows) {
-    // the Cup championship counts in none of them
-    if (!r.res || (r.g.type !== 'regular' && r.g.type !== 'playin' && r.g.type !== 'playoffs')) continue;
-    const m = dayToDate(season, r.g.day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    if (m !== month) continue;
-    rec[r.g.type][r.won ? 0 : 1]++;
-  }
-  const part = (label: string, [w, l]: number[]) => (w + l ? `${label}${w}-${l}` : '');
-  return [part('', rec.regular), part('Play-In ', rec.playin), part('Playoffs ', rec.playoffs)].filter(Boolean).join(' · ');
 }
 
 /** Scoreboard for every game on one calendar day, with a day stepper. */

@@ -1,14 +1,15 @@
-// Games: your schedule, a matchup page per opponent (/games/:tid: scouting, the game plan,
-// matchups, the Lab, and on game day the preview), the live game and its reports.
-import { Route, useLocation } from 'react-router-dom';
+// Games: your schedule, a matchup page per opponent (/games/:tid: the preview on game day, scouting,
+// the game plan, matchups and the Lab against them), the live game and its reports, and the Lab.
+import { Navigate, Route, useLocation, useParams } from 'react-router-dom';
+import { useLeague } from '../../state/store';
+import { nextUserGame } from '../../core/analysis/preview';
 import { lazyRetry } from '../lazyRetry';
 
 const GamesHub = lazyRetry(() => import('../games/GamesHub'));
-const Matchup = lazyRetry(() => import('../screens/GamePlan'));
-const Preview = lazyRetry(() => import('../screens/Preview'));
+const Matchup = lazyRetry(() => import('../games/Matchup'));
 const Live = lazyRetry(() => import('../screens/Live'));
-const GameView = lazyRetry(() => import('../screens/GameView'));
-const TacticsLab = lazyRetry(() => import('../screens/TacticsLab'));
+const GameReport = lazyRetry(() => import('../games/GameReport'));
+const Lab = lazyRetry(() => import('../games/Lab'));
 
 function MatchupPage() {
   const { pathname } = useLocation();
@@ -21,13 +22,27 @@ function LivePage() {
   return <Live key={key} />;
 }
 
+/**
+ * The pre-game screen is the matchup page's Preview now: /preview/:gid opens it for that game's
+ * opponent (its report once it's played), /preview the user's next game's.
+ */
+function PreviewRedirect() {
+  const league = useLeague();
+  const { gid } = useParams();
+  const g = gid !== undefined ? league.schedule.find((x) => x.gid === Number(gid)) : nextUserGame(league);
+  if (g && g.played) return <Navigate to={`/game/${g.gid}`} replace />;
+  const me = league.userTid;
+  if (!g || (g.home !== me && g.away !== me)) return <Navigate to="/games" replace />;
+  return <Navigate to={`/games/${g.home === me ? g.away : g.home}?tab=preview`} replace />;
+}
+
 export const gamesRoutes = (
   <>
     <Route path="/games" element={<GamesHub />} />
     <Route path="/games/:tid" element={<MatchupPage />} />
-    <Route path="/preview/:gid?" element={<Preview />} />
+    <Route path="/preview/:gid?" element={<PreviewRedirect />} />
     <Route path="/live" element={<LivePage />} />
-    <Route path="/game/:gid" element={<GameView />} />
-    <Route path="/lab" element={<TacticsLab />} />
+    <Route path="/game/:gid" element={<GameReport />} />
+    <Route path="/lab" element={<Lab />} />
   </>
 );

@@ -1,13 +1,14 @@
-// The post-game recap for one of the user's games: the three stars (the player of the game first),
-// what the result did to the standings or the series, how win probability saw it (the turning point,
-// a comeback or a lead let slip), career milestones reached, quotes and the press conference, the
-// rest of the night's results that matter to you, and what's next. Takes a stored result, so the
+// The post-game recap for one of the user's games, most telling first: the three stars (the player
+// of the game first), the keys to the game graded, the night (how win probability turned, what the
+// result did to the standings or the series, milestones and records), the highlights, the press
+// conference (the quotes, then the user's answer, each with what it does to the locker room), the
+// rest of the night's results that matter to him, and what's next. Takes a stored result, so the
 // report and the Live screen's final card can both show it. FinalSlab is the result itself, as a
 // broadcast's final graphic, over both.
 import { KeysGraded } from './GameKeys';
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { GameResult, League, PressChoice, ScheduledGame, StandingLine } from '../../core/types';
 import { buildGameReport, type GameReport } from '../../core/analysis/gameReport';
 import {
@@ -30,10 +31,11 @@ import { neutralSite } from '../../core/league/games';
 import { confStandings } from '../../core/league/standings';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate, playerName } from '../../core/league/helpers';
+import { act } from '../../state/actions';
 import { useStore } from '../../state/store';
 import { matchupLooks } from '../teamColors';
 import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
-import { Avatar, Section, Tag } from './ui';
+import { Avatar, Help, Section, Tag } from './ui';
 import { TeamLogo } from './TeamLogo';
 import { QuarterTable } from './gameBlocks';
 import './gameday.css';
@@ -64,7 +66,7 @@ export function FinalSlab({ res, league, children }: { res: GameResult; league: 
   const us = res.home.tid === league.userTid ? res.home : res.away.tid === league.userTid ? res.away : null;
   const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
   const side = (t: typeof home, pts: number, win: boolean, isHome: boolean) => (
-    <Link to={t.tid === league.userTid ? '/roster' : `/team/${t.tid}`} className={`gd-fs-team${isHome ? ' home' : ''}${win ? '' : ' lost'}`}>
+    <Link to={t.tid === league.userTid ? '/team' : `/teams/${t.tid}`} className={`gd-fs-team${isHome ? ' home' : ''}${win ? '' : ' lost'}`}>
       <TeamLogo tid={t.tid} size={40} decorative />
       <span className="gd-fs-ab">{t.abbrev}</span>
       <span className="gd-fs-pts num">{pts}</span>
@@ -136,7 +138,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
   const story = useMemo(() => (us ? wpStory(res) : null), [us, res]);
   const marks = useMemo(() => (us ? milestonesIn(league, res) : []), [us, league, res]);
   const records = useMemo(() => (us ? recordsHeld(league, res) : []), [us, league, res]);
-  const [pressFx, setPressFx] = useState<string | null>(null);
   if (!us) return null;
   const them = us === res.home ? res.away : res.home;
   const won = us.pts > them.pts;
@@ -198,18 +199,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
     )
     .slice(0, 4);
 
-  const press = isLatestUserGame(league, res) ? pressOptions(league, res) : [];
-  const open = pressOpen(league, res);
-  const held = league.press?.gid === res.gid ? league.press.choice : undefined;
-  const answer = (choice: PressChoice) => {
-    const out: { fx: PressEffect[] | null } = { fx: null };
-    useStore.getState().mutate((l) => {
-      const g = l.games.find((x) => x.gid === res.gid);
-      if (g) out.fx = holdPress(l, g, choice);
-    });
-    if (out.fx) setPressFx(pressSummary(out.fx));
-  };
-  const heldFx = held ? (pressFx ?? pressSummary(pressEffects(league, res, held))) : null;
   const pregame = league.settings.pregame !== false;
   const facts = !!(stakes || newly || Math.abs(streak) >= 2 || series || turnText || swing || marks.length || records.length || playIn);
 
@@ -223,7 +212,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
               const mine = st === tid;
               const pog = k === 0 && line.pid === res.pog;
               return (
-                // named by what it shows: "1 Player of the game Shai Gilgeous-Alexander OKC 42 pts · …"
+                // named by what it shows: "1 Player of the game Shai Gilgeous-Alexander 42 pts · …"
                 <Link key={line.pid} to={`/player/${line.pid}`} className={`gd-star${pog ? ' pog' : ''}${mine ? ' mine' : ''}`}>
                   <span className="gd-star-n num">{k + 1}</span>
                   {p ? <Avatar p={p} /> : <TeamLogo tid={st} size={36} decorative />}
@@ -234,7 +223,8 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                       {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${line.fgm}/${line.fga} FG` : ''}
                     </span>
                   </span>
-                  {mine ? <Tag tone="good">Yours</Tag> : <span className="gd-star-team">{league.teams[st]?.abbrev}</span>}
+                  {/* (your own carry your team's edge) */}
+                  {!mine && <span className="gd-star-team">{league.teams[st]?.abbrev}</span>}
                 </Link>
               );
             })}
@@ -242,20 +232,30 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
         </Section>
       )}
 
-      {highlights}
+      {res.keys && res.keys.length > 0 && <KeysGraded keys={res.keys} />}
 
       {facts && (
         <Section title="The night">
           <dl className="gd-facts">
+            {turnText && <Fact k="Turning point">{turnText}</Fact>}
+            {swing && (
+              <Fact k={swing.label}>
+                <span className={won ? 'good' : 'bad'}>{swing.text}</span>
+              </Fact>
+            )}
             {stakes && (
               <Fact k={confWord(team.conf)}>
-                <span className="num">
-                  {ordinal(stakes.before.rank)} → <b>{ordinal(stakes.after.rank)}</b>
-                </span>{' '}
-                <span className={`num ${stakes.after.rank < stakes.before.rank ? 'good' : stakes.after.rank > stakes.before.rank ? 'bad' : 'dim'}`}>
-                  {stakes.after.rank < stakes.before.rank ? '▲' : stakes.after.rank > stakes.before.rank ? '▼' : '·'}
-                </span>
-                {gbText(stakes.after) && <span className="dim num"> {gbText(stakes.after)}</span>}
+                {stakes.after.rank === stakes.before.rank ? (
+                  <b className="num">{ordinal(stakes.after.rank)}</b>
+                ) : (
+                  <>
+                    <span className="num">
+                      {ordinal(stakes.before.rank)} → <b>{ordinal(stakes.after.rank)}</b>
+                    </span>{' '}
+                    <span className={`num ${stakes.after.rank < stakes.before.rank ? 'good' : 'bad'}`}>{stakes.after.rank < stakes.before.rank ? '▲' : '▼'}</span>
+                  </>
+                )}
+                {gbText(stakes.after) && <span className="dim num"> · {gbText(stakes.after)}</span>}
                 {newly && (
                   <>
                     {' '}
@@ -302,12 +302,6 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                 </span>
               </Fact>
             )}
-            {turnText && <Fact k="Turning point">{turnText}</Fact>}
-            {swing && (
-              <Fact k={swing.label}>
-                <span className={won ? 'good' : 'bad'}>{swing.text}</span>
-              </Fact>
-            )}
             {marks.length > 0 && (
               <Fact k="Milestone">
                 {marks
@@ -333,43 +327,9 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
         </Section>
       )}
 
-      {res.keys && res.keys.length > 0 && <KeysGraded keys={res.keys} />}
+      {highlights}
 
-      {quotes.length > 0 && (
-        <Section title="Quotes">
-          <div className="gd-quotes">
-            {quotes.map((q, i) => (
-              <blockquote key={i} className={`gd-quote ${q.tid === tid ? 'mine' : ''}`}>
-                <p>“{q.text}”</p>
-                <footer>
-                  {q.who}, {q.role}
-                </footer>
-              </blockquote>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {press.length > 0 && (open || held) && (
-        <Section title="Press conference" right={!held ? <span className="tiny dim">Optional</span> : undefined}>
-          {held ? (
-            <div className="card gd-press small">
-              <span className="dim2">You: {press.find((o) => o.id === held)?.label ?? 'Answered'}.</span> <span className="bold">{heldFx}</span>
-            </div>
-          ) : (
-            <div className="card gd-press">
-              <div className="small dim">Your answer moves the locker room a little.</div>
-              <div className="gd-press-opts">
-                {press.map((o) => (
-                  <button key={o.id} className="btn sm" onClick={() => answer(o.id)}>
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </Section>
-      )}
+      <PressConference league={league} res={res} quotes={quotes} />
 
       {elsewhere.length > 0 && (
         <Section title={`Elsewhere ${res.day === league.day - 1 || res.day === league.day ? 'tonight' : 'that night'}`}>
@@ -418,13 +378,97 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                 Watch & coach
               </Link>
             ) : (
-              <Link to={`/preview/${next.gid}`} className="btn sm" aria-label={`Preview the game against the ${league.teams[nextOpp].name}`}>
-                Preview <ArrowRight size={14} />
+              <Link to={`/games/${nextOpp}`} className="btn sm" aria-label={`Matchup: the ${league.teams[nextOpp].name}`}>
+                Matchup <ChevronRight size={14} />
               </Link>
             )}
           </div>
         </Section>
       )}
     </div>
+  );
+}
+
+/**
+ * What was said after the game, and the user's own answer (his latest game only, once): each answer
+ * shows what it does to the locker room before it's given (see the press conference in quotes.ts).
+ */
+function PressConference({ league, res, quotes }: { league: League; res: GameResult; quotes: ReturnType<typeof postGameQuotes> }) {
+  const simming = useStore((s) => !!s.sim);
+  const [given, setGiven] = useState<PressEffect[] | null>(null);
+  const tid = league.userTid;
+  const press = isLatestUserGame(league, res) ? pressOptions(league, res) : [];
+  const open = pressOpen(league, res);
+  const held = league.press?.gid === res.gid ? league.press.choice : undefined;
+  const answer = (choice: PressChoice) => {
+    let fx: PressEffect[] | null = null;
+    if (
+      !act('Press conference', (l) => {
+        const g = l.games.find((x) => x.gid === res.gid);
+        if (g) fx = holdPress(l, g, choice);
+      })
+    )
+      return;
+    setGiven(fx);
+  };
+  const answering = press.length > 0 && (open || held);
+  if (!quotes.length && !answering) return null;
+  return (
+    <Section
+      title="Press conference"
+      right={
+        answering && !held ? (
+          <Help title="Press conference">
+            <p>
+              One answer after your latest game, if you want to give one. It moves your players&apos; mood, which lifts or drags how they play a little and fades over the weeks.
+            </p>
+            <p>
+              Praise lifts the player of the game most, but the teammate he outshone and a starter who had a poor night cool a little. Crediting the group lifts everyone after a
+              win; after a loss it reads as soft.
+            </p>
+            <p>
+              After a loss, challenging the team fires up players in a good mood and stings unhappy ones; calling out the player who struggled most is a big swing: a veteran in a
+              good mood takes it as a challenge, anyone else takes it badly.
+            </p>
+          </Help>
+        ) : undefined
+      }
+    >
+      {quotes.length > 0 && (
+        <div className="gd-quotes">
+          {quotes.map((q, i) => (
+            <blockquote key={i} className={`gd-quote ${q.tid === tid ? 'mine' : ''}`}>
+              <p>“{q.text}”</p>
+              <footer>
+                {q.who}, {q.role}
+              </footer>
+            </blockquote>
+          ))}
+        </div>
+      )}
+      {answering &&
+        (held ? (
+          <div className="gd-press-done small">
+            <span className="dim2">You: {press.find((o) => o.id === held)?.label ?? 'Answered'}.</span>{' '}
+            <span className="bold">{pressSummary(given ?? pressEffects(league, res, held))}</span>
+          </div>
+        ) : (
+          <div className="card flush list gd-press" role="group" aria-label="Your answer">
+            {press.map((o) => (
+              <button key={o.id} className="gd-press-opt" disabled={simming} onClick={() => answer(o.id)} aria-label={`${o.label}: ${o.hint}`}>
+                <span className="gd-press-l">{o.label}</span>
+                <span className="gd-press-h">
+                  {o.hint.split(' · ').map((part, i) => (
+                    <span key={part}>
+                      {i > 0 && ' · '}
+                      <span className={part.startsWith('+') ? 'good' : part.startsWith('−') ? 'bad' : undefined}>{part}</span>
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
+        ))}
+    </Section>
   );
 }

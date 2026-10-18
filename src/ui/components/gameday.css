@@ -366,15 +366,39 @@
   font-size: 11.5px;
   color: var(--text-dim);
 }
-.gd-press {
+/* the press conference: each answer with what it does to the room */
+.gd-press-opt {
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.gd-press-opts {
-  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
   flex-wrap: wrap;
-  gap: 8px;
+  min-height: 52px;
+  padding: 8px 14px;
+  text-align: left;
+}
+.gd-press-opt:active {
+  background: var(--surface);
+}
+.gd-press-opt:disabled {
+  opacity: 0.55;
+}
+.gd-press-l {
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--accent-text);
+}
+.gd-press-h {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.gd-press-done {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--line);
 }
 /* the night's other results */
 .gd-other {
@@ -405,7 +429,7 @@
   padding: 12px 12px 12px 14px;
 }
 
-/* ------------------------------------------------------------ the game report (GameView.tsx) */
+/* ------------------------------------------------------------ the game report (games/GameReport.tsx) */
 .gv-headline {
   margin: 2px 0 0;
   padding-left: 12px;
@@ -628,53 +652,6 @@
 }
 .gv-mine {
   color: var(--team-text);
-}
-
-/* ------------------------------------------------------------ the pre-game screen (Preview.tsx) */
-/* results and players in compact rows that link */
-.gd-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  min-width: 0;
-}
-
-/* play-type usage bars on the preview: label, bar, points per possession */
-.gd-pt {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(60px, 34%) 40px;
-  align-items: center;
-  gap: 10px;
-  font-size: 12.5px;
-}
-
-/* the pre-game screen's action bar: stays above the bottom nav (and a running sim's bar) */
-.gd-dock {
-  position: sticky;
-  bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
-  z-index: 20;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  background: rgba(11, 15, 21, 0.94);
-  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  border: 1px solid var(--line-2);
-  border-radius: 16px;
-  padding: 10px;
-  box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.45);
-}
-.gd-dock .btn {
-  min-width: 0;
-  padding: 0 10px;
-}
-.gd-dock .btn.primary {
-  grid-column: span 1;
-}
-body:has(.simbar) .gd-dock {
-  bottom: calc(var(--nav-h) + var(--safe-b) + 76px);
 }
 
 /* keys to the game: the number before each */

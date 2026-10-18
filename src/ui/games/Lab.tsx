@@ -1,7 +1,11 @@
+// The Tactics Lab: real engine games before you commit. One panel, two homes: the Lab screen (/lab)
+// compares your tactics before and after an edit and projects your plan against anyone, and the
+// matchup page's Test projects it against that team and ranks the staff's counters for them.
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Beaker, Check, ChevronRight, Play } from 'lucide-react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Beaker, Check, Play } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { act, touch } from '../../state/actions';
 import { progressCallback, resetLab, withLab } from '../../state/labClient';
 import type { Candidate, CandidateResult, LabSide, LabSummary } from '../../core/ai/lab';
 import { applyPatch, pairedDelta } from '../../core/ai/lab';
@@ -13,16 +17,17 @@ import { curTeamSeason } from '../../core/league/helpers';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
-import { Chips, Empty, Help, PageHeader, Section, Segmented, Spinner, Statline, Tag, scrollBehavior } from '../components/ui';
+import type { GameType, League, SetId, Tactics, TacticsPatch } from '../../core/types';
+import { Chips, Help, PageHeader, Section, Segmented, Spinner, Statline, Tag, scrollBehavior } from '../components/ui';
 import { CompareBar } from '../components/charts';
 import { TeamLogo } from '../components/TeamLogo';
 import { matchupColors } from '../teamColors';
 import { f1, p0, p1, rosterNames, signed } from '../stats';
-import { clearLabBaseline, labBaselineName, takeLabBaseline } from './labBridge';
-import type { GameType, League, SetId, Tactics, TacticsPatch } from '../../core/types';
-import './tactics.css';
+import { clearLabBaseline, labBaselineName, takeLabBaseline } from '../screens/labBridge';
+import './games.css';
 
-type Mode = 'project' | 'compare' | 'counters';
+export type LabMode = 'project' | 'compare' | 'counters';
+const MODE_LABEL: Record<LabMode, string> = { project: 'Project', compare: 'Compare', counters: 'Counters' };
 
 /** A verdict needs the change to clear two standard errors (about a 95% interval). */
 const SIGMAS = 2;
@@ -57,6 +62,7 @@ function sideFor(league: League, tid: number, opp: number, tactics?: Tactics): L
   return { ...input, team: { ...input.team, seasons: [] } };
 }
 
+/** The user's next opponent (today's first), else any other team. */
 function defaultOpponent(league: League): number {
   const g =
     userGameOnDay(league, league.day) ??
@@ -71,30 +77,81 @@ const toTactics = (t: Tactics): TacticsPatch => ({ offense: { ...t.offense }, de
 /** What a finished run was for: results only show, and only apply, for the matchup they simulated. */
 interface Run {
   opp: number;
-  mode: Mode;
+  mode: LabMode;
   result?: LabSummary;
   base?: LabSummary;
   cands?: CandidateResult[];
 }
 
-export default function TacticsLab() {
+/** The Lab screen: compare your edits, or project your plan against anyone. Counters live on each matchup page. */
+export default function LabPage() {
   const league = useLeague();
   const [params] = useSearchParams();
+  const asked = Number(params.get('opp') ?? NaN);
+  const opp = Number.isInteger(asked) && league.teams[asked] && asked !== league.userTid ? asked : null;
   const [baseline] = useState<Tactics | null>(() => (params.get('compare') ? takeLabBaseline(league) : null));
   // a saved playbook (from Tactics' My playbooks) as the before side, instead of the tactics before an edit
   const [baselineName] = useState(() => (params.get('compare') ? labBaselineName(league) : null));
   useEffect(() => clearLabBaseline(), []);
-  const [mode, setMode] = useState<Mode>(baseline ? 'compare' : params.get('mode') === 'counters' ? 'counters' : 'project');
-  // a link from before a team switch (or a hand-edited one) can name your own team or none: fall back to the next opponent
-  const [opp, setOpp] = useState<number>(() => {
-    const asked = Number(params.get('opp') ?? NaN);
-    return Number.isInteger(asked) && league.teams[asked] && asked !== league.userTid ? asked : defaultOpponent(league);
-  });
+  if (params.get('mode') === 'counters') return <Navigate to={`/games/${opp ?? defaultOpponent(league)}?tab=test&lab=counters`} replace />;
+  return (
+    <main className="page">
+      <PageHeader
+        title="Tactics Lab"
+        back
+        backTo="/team/tactics"
+        right={
+          <Help title="Tactics Lab">
+            <p>Real engine games, before you commit: both teams play as they would tonight, with both game plans, rest, wear and injuries.</p>
+            <p>Project: your plan against any team. Compare: your tactics before and after an edit, through the same games.</p>
+            <p>To rank the staff&apos;s counters for one team, open its matchup page: Test.</p>
+          </Help>
+        }
+      />
+      <LabPanel
+        league={league}
+        modes={['project', 'compare']}
+        initialMode={baseline ? 'compare' : 'project'}
+        initialOpp={opp ?? undefined}
+        baseline={baseline}
+        baselineName={baselineName}
+      />
+    </main>
+  );
+}
+
+/**
+ * The Lab itself. `fixedOpp`: the matchup page's, against that team only (its slab names them); else
+ * an opponent picker. `baseline`: the tactics Compare plays as "before".
+ */
+export function LabPanel({
+  league,
+  fixedOpp,
+  modes,
+  initialMode,
+  initialOpp,
+  baseline = null,
+  baselineName = null,
+}: {
+  league: League;
+  fixedOpp?: number;
+  modes: LabMode[];
+  initialMode?: LabMode;
+  initialOpp?: number;
+  baseline?: Tactics | null;
+  baselineName?: string | null;
+}) {
+  const [params] = useSearchParams();
+  const asked = params.get('lab') as LabMode | null;
+  const [mode, setMode] = useState<LabMode>(() => initialMode ?? (asked && modes.includes(asked) ? asked : modes[0]));
+  const [picked, setOpp] = useState<number>(() => initialOpp ?? defaultOpponent(league));
+  const opp = fixedOpp ?? picked;
   const [games, setGames] = useState(40);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(1);
   const [run, setRun] = useState<Run | null>(null);
+  const simming = useStore((s) => !!s.sim);
   const mounted = useRef(true);
   const busyRef = useRef(false);
   busyRef.current = busy;
@@ -111,13 +168,6 @@ export default function TacticsLab() {
   // "opponent:counter id": counters are drafted per opponent and share their ids
   const [applied, setApplied] = useState<string[]>([]);
   const user = league.userTid;
-  const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
-  const plan = planFor(league, opp);
-  // the plan their coach brings to your next meeting, which the lab plays as he will
-  const theirPlan = useLeagueMemo(() => {
-    const g = nextMeeting(league, opp);
-    return g ? aiGamePlan(league, opp, league.userTid, g) : null;
-  }, [league, opp]);
   const noBaseline = mode === 'compare' && !baseline;
 
   useEffect(() => {
@@ -129,10 +179,10 @@ export default function TacticsLab() {
     stopped.current = false;
     const job: Run = { opp, mode };
     try {
-      useStore.getState().mutate((l) => {
+      touch((l) => {
         ensureRotation(l, user);
         ensureRotation(l, opp);
-      }, false);
+      });
       const b = sideFor(league, opp, user);
       const seed = (league.rng ^ (opp * 7919)) >>> 0;
       const type = labGameType(league);
@@ -180,155 +230,67 @@ export default function TacticsLab() {
   };
 
   const applyCand = (c: CandidateResult, scope: 'game' | 'always', vs: number) => {
-    useStore.getState().mutate((l) => {
+    const ok = act(scope === 'game' ? 'Game plan' : 'Tactics', (l) => {
       if (scope === 'always') {
         const tm = l.teams[l.userTid];
         // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
         tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
       } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
     });
+    if (!ok) return;
     setApplied((a) => [...a, `${vs}:${c.id}`]);
-    useStore.getState().toast(scope === 'game' ? `Game plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Applied to your tactics: ${c.label}`, 'good');
+    useStore.getState().toast(scope === 'game' ? `Plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Your tactics: ${c.label}`, 'good');
   };
 
-  // the teams keep their order (a tapped one doesn't jump under the finger): the one picked on arrival scrolls into view
-  const picker = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const row = picker.current;
-    const btn = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (row && btn) row.scrollLeft = Math.max(0, btn.offsetLeft - (row.clientWidth - btn.offsetWidth) / 2);
-  }, []);
-  // a finished run brings its results up under the header: they start below the opponent and the Run bar
+  // a finished run brings its results up under the header
   const results = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (run) results.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }, [run]);
 
-  const oppTeam = league.teams[opp];
-  const ts = curTeamSeason(league, opp);
   const shown = run && run.opp === opp && run.mode === mode ? run : null;
+  const them = league.teams[opp];
   return (
-    <main className="page">
-      <PageHeader title="Tactics Lab" back backTo="/tactics" sub="Real engine games, before you commit." />
-      <Segmented
-        tabs
-        value={mode}
-        onChange={setMode}
-        label="Lab mode"
-        disabled={busy}
-        options={[
-          { id: 'project', label: 'Project' },
-          { id: 'compare', label: 'Compare' },
-          { id: 'counters', label: 'Counters' },
-        ]}
-      />
+    <>
+      {modes.length > 1 && <Segmented value={mode} onChange={setMode} label="Lab mode" disabled={busy} options={modes.map((id) => ({ id, label: MODE_LABEL[id] }))} />}
 
-      <Section
-        title="Opponent"
-        right={
-          <Link to={`/gameplan/${opp}`} className="card-link">
-            Game plan vs {oppTeam.abbrev} <ChevronRight size={14} />
-          </Link>
-        }
-      >
-        <div className="card flush">
-          <div className="hscroll tx-teams" ref={picker}>
-            {league.teams
-              .filter((t) => t.tid !== user)
-              .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
-              .map((t) => (
-                <button key={t.tid} onClick={() => setOpp(t.tid)} disabled={busy} aria-pressed={t.tid === opp} className="tx-team">
-                  {/* named by the abbreviation it shows, then the team: "MEM, Memphis Grizzlies" */}
-                  <TeamLogo tid={t.tid} size={t.tid === opp ? 42 : 34} decorative />
-                  <span className="tx-team-ab">{t.abbrev}</span>
-                  <span className="sr-only">
-                    , {t.region} {t.name}
-                  </span>
-                </button>
-              ))}
-          </div>
-          <div className="tx-scout">
-            <div className="tx-scout-h">
-              <span className="tx-scout-n">
-                {oppTeam.region} {oppTeam.name}
-              </span>
-              <span className="num tx-opp-rec">
-                {ts.won}-{ts.lost}
-              </span>
-            </div>
-            <div className="tx-note">
-              {scout.offense[0]} {scout.defense[0]}
-            </div>
-            {scout.weaknesses.length > 0 && (
-              <div className="tx-sline">
-                <Tag tone="good">Attack</Tag>
-                <span className="grow">{scout.weaknesses[0]}</span>
-              </div>
-            )}
-            {plan && (
-              <div className="tx-sline">
-                <span className="over">Your plan</span>
-                <span className="chips grow">
-                  {plan.items.map((it) => (
-                    <Tag key={it.id} tone="info">
-                      {it.label}
-                    </Tag>
-                  ))}
-                </span>
-              </div>
-            )}
-            {theirPlan && (
-              <div className="tx-sline">
-                <span className="over">Their plan</span>
-                <span className="chips grow">
-                  {theirPlan.items.map((it) => (
-                    <Tag key={it.id} tone="warn">
-                      {it.text}
-                    </Tag>
-                  ))}
-                </span>
-              </div>
-            )}
-            {(plan || theirPlan) && <div className="tiny dim">Both plans play in every Lab game.</div>}
-          </div>
-        </div>
-      </Section>
+      {fixedOpp === undefined && <OpponentPicker league={league} opp={opp} onPick={setOpp} disabled={busy} />}
+      <Plans league={league} opp={opp} />
 
-      <div className="card tx-run">
-        <div className="tx-note">
-          {mode === 'project' && 'Your plan against them: the result, shot profile, play types and who gets the ball.'}
-          {mode === 'compare' &&
-            (baseline
-              ? baselineName
-                ? `Your playbook "${baselineName}" (before) vs your tactics now (after): same opponent, same random draws.`
-                : 'Your tactics before vs after your edits: same opponent, same random draws.'
-              : 'Plays your tactics from before and after an edit through the same games.')}
-          {mode === 'counters' && 'The assistant drafts counters for them and tests each one. Apply the ones that move the needle.'}
-        </div>
-        <div className="row">
-          <Chips
-            label="Games to simulate"
-            value={games}
-            onChange={setGames}
-            disabled={busy}
-            options={[
-              { id: 20, label: '20 games' },
-              { id: 40, label: '40' },
-              { id: 100, label: '100' },
-            ]}
-          />
-          <div className="grow" />
-          <button className="btn primary tx-runbtn" onClick={() => void start()} disabled={busy || noBaseline}>
-            {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run
-          </button>
-        </div>
+      <div className="small dim2">
+        {mode === 'project' && `Your plan against the ${them.name}: the result, the shots, who gets the ball.`}
+        {mode === 'compare' &&
+          (baseline
+            ? baselineName
+              ? `Your playbook “${baselineName}” (before) vs your tactics now, through the same games.`
+              : 'Your tactics before vs after your edits, through the same games.'
+            : 'Your tactics before and after an edit, through the same games.')}
+        {mode === 'counters' && 'Each of the staff’s counters against them, ranked.'}
+      </div>
+      <div className="lab-run">
+        <span className="over">Games</span>
+        <Chips
+          label="Games to simulate"
+          value={games}
+          onChange={setGames}
+          disabled={busy}
+          options={[
+            { id: 20, label: '20' },
+            { id: 40, label: '40' },
+            { id: 100, label: '100' },
+          ]}
+        />
+        <span className="grow" />
+        <button className="btn primary" onClick={() => void start()} disabled={busy || noBaseline || simming} aria-label={`Run ${games} games`}>
+          {busy ? <Spinner /> : <Play size={16} fill="currentColor" />} Run
+        </button>
       </div>
 
       {busy && (
-        <div className="card tx-busy">
+        <div className="card lab-busy">
           <div className="row">
             <Spinner />
-            <span className="small dim2 grow">Simulating {mode === 'counters' ? 'several game plans' : `${games} games`}…</span>
+            <span className="small dim2 grow">Simulating {mode === 'counters' ? 'each counter' : `${games} games`}…</span>
             <span className="small num dim">
               {Math.min(progress, total)}/{total}
             </span>
@@ -343,115 +305,202 @@ export default function TacticsLab() {
             </button>
           </div>
           <div className="bar" role="progressbar" aria-label="Games simulated" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(progress, total)}>
-            <div className="tx-fill" style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%` }} />
+            <div className="lab-fill" style={{ width: `${Math.min(100, (progress / Math.max(1, total)) * 100)}%` }} />
           </div>
         </div>
       )}
 
       {!busy && !shown && (
-        <Empty>
-          <Beaker size={28} className="tx-empty-ic" />
-          <div className="tx-empty-t">
-            {mode === 'project' && 'Tap Run to simulate this matchup with your plan.'}
-            {mode === 'compare' &&
-              (baseline ? 'Tap Run to play both versions of your tactics against them.' : 'Nothing to compare yet. Change something in Tactics, then tap Compare.')}
-            {mode === 'counters' && 'Tap Run: the assistant drafts counters for them, then tests each one.'}
-          </div>
+        <div className="lab-empty">
+          <Beaker size={26} aria-hidden="true" />
+          <div>{noBaseline ? 'Nothing to compare yet.' : 'Tap Run: real engine games, nothing is saved.'}</div>
           {noBaseline && (
-            <Link to="/tactics" className="btn sm tx-empty-btn">
+            <Link to="/team/tactics" className="btn sm">
               Open Tactics
             </Link>
           )}
-        </Empty>
+        </div>
       )}
 
-      <div ref={results} className="tx-anchor" aria-hidden="true" />
+      <div ref={results} className="lab-anchor" aria-hidden="true" />
       {shown?.result && mode === 'project' && <Summary r={shown.result} league={league} oppTid={shown.opp} />}
       {shown?.result && shown.base && mode === 'compare' && <CompareView before={shown.base} after={shown.result} league={league} />}
-      {shown?.cands && shown.base && (
-        <>
-          <section className="card tx-hero" aria-label="Baseline">
-            <div className="over tx-hero-over">Baseline · your plan now</div>
-            <Statline
-              items={[
-                { k: 'Win %', v: p0(shown.base.winPct) },
-                { k: 'Net rtg', v: signed(shown.base.net), color: shown.base.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-                { k: 'Margin', v: signed(shown.base.ptsFor - shown.base.ptsAgainst) },
-              ]}
-            />
-          </section>
-          <Section
-            title="Counters, ranked"
-            right={
-              <Help title="Reading these numbers">
-                Each candidate is simulated against the same opponent. The change is in net rating (points per 100 possessions) versus your current plan. A counter is only marked
-                as better or worse when its change clears the ± range. With several counters tested at once the range is wider than for one (two standard errors), so a counter that
-                changes nothing rarely looks like a win. More games mean tighter estimates.
-              </Help>
-            }
-          >
-            <div className="card flush list">
-              {!shown.cands.length && <div className="tx-empty">Nothing new to test: your plan already covers what the staff sees.</div>}
-              {shown.cands.map((c, i, all) => {
-                const sig = familySigmas(all.length);
-                const good = c.delta > sig * c.se;
-                const bad = c.delta < -sig * c.se;
-                const tone = good ? 'good' : bad ? 'bad' : '';
-                // a counter that only names their players (attacking one defender) has nothing to keep for every game
-                const mine = league.teams[league.userTid].tactics;
-                const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
-                return (
-                  <div key={c.id} className={`tx-cand ${tone}`}>
-                    <div className="tx-cand-top">
-                      <span className="tx-rank num" aria-hidden="true">
-                        {i + 1}
-                      </span>
-                      <span className="grow lr-name">{c.label}</span>
-                      <span className="tx-cand-d">
-                        <span className={`tx-delta num ${tone || 'dim2'}`}>{signed(c.delta)}</span>
-                        <span className="tiny dim num">± {f1(sig * c.se)}</span>
-                      </span>
-                    </div>
-                    <div className="tx-cand-body">
-                      <div className="tx-note">{c.why}</div>
-                      {c.evidence && (
-                        <div className="tx-ev">
-                          <b>By the numbers:</b> {c.evidence}
-                        </div>
-                      )}
-                      <div className="tx-cand-foot">
-                        <Tag tone={good ? 'good' : bad ? 'bad' : undefined}>{good ? 'Better' : bad ? 'Worse' : 'Too close'}</Tag>
-                        <span className="tiny dim num grow">win {p0(c.winPct)}</span>
-                        {applied.includes(`${shown.opp}:${c.id}`) ? (
-                          <Tag tone="good">
-                            <Check size={12} /> Applied
-                          </Tag>
-                        ) : (
-                          <span className="row tx-btns">
-                            <button
-                              className={`btn xs ${good ? 'primary' : ''}`}
-                              onClick={() => applyCand(c, 'game', shown.opp)}
-                              aria-label={`Vs ${league.teams[shown.opp].abbrev}: ${c.label}, in your game plan for them`}
-                            >
-                              Vs {league.teams[shown.opp].abbrev}
-                            </button>
-                            {always && (
-                              <button className="btn xs ghost" onClick={() => applyCand(c, 'always', shown.opp)} aria-label={`Always: ${c.label}, in your tactics for every game`}>
-                                Always
-                              </button>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Section>
-        </>
+      {shown?.cands && shown.base && <Counters league={league} run={shown} applied={applied} onApply={applyCand} />}
+    </>
+  );
+}
+
+/** Every other team, its logo and abbreviation, the picked one scrolled into view. */
+function OpponentPicker({ league, opp, onPick, disabled }: { league: League; opp: number; onPick: (tid: number) => void; disabled: boolean }) {
+  const ts = curTeamSeason(league, opp);
+  const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
+  // the teams keep their order (a tapped one doesn't jump under the finger): the one picked on arrival scrolls into view
+  const picker = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = picker.current;
+    const btn = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (row && btn) row.scrollLeft = Math.max(0, btn.offsetLeft - (row.clientWidth - btn.offsetWidth) / 2);
+  }, []);
+  const t = league.teams[opp];
+  return (
+    <Section
+      title="Opponent"
+      right={
+        <Link to={`/games/${opp}`} className="card-link">
+          Matchup
+        </Link>
+      }
+    >
+      <div className="card flush">
+        <div className="hscroll lab-teams" ref={picker}>
+          {league.teams
+            .filter((x) => x.tid !== league.userTid)
+            .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
+            .map((x) => (
+              <button key={x.tid} onClick={() => onPick(x.tid)} disabled={disabled} aria-pressed={x.tid === opp} className="lab-team">
+                {/* named by the abbreviation it shows, then the team: "MEM, Memphis Grizzlies" */}
+                <TeamLogo tid={x.tid} size={x.tid === opp ? 38 : 30} decorative />
+                <span className="lab-team-ab">{x.abbrev}</span>
+                <span className="sr-only">
+                  , {x.region} {x.name}
+                </span>
+              </button>
+            ))}
+        </div>
+        <div className="lab-plans">
+          <div className="row between">
+            <b>
+              {t.region} {t.name}
+            </b>
+            <span className="num dim2">
+              {ts.won}-{ts.lost}
+            </span>
+          </div>
+          <div className="mu-note">{scout.summary.replace(`${t.region} ${t.name}: `, '')}</div>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/** Both game plans, as every Lab game plays them. */
+function Plans({ league, opp }: { league: League; opp: number }) {
+  const plan = planFor(league, opp);
+  // the plan their coach brings to your next meeting, which the Lab plays as he will
+  const theirPlan = useLeagueMemo(() => {
+    const g = nextMeeting(league, opp);
+    return g ? aiGamePlan(league, opp, league.userTid, g) : null;
+  }, [league, opp]);
+  if (!plan?.items.length && !theirPlan?.items.length) return null;
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      {!!plan?.items.length && (
+        <div className="lab-pline">
+          <span className="over">Your plan</span>
+          <span className="small dim2">{plan.items.map((it) => it.label).join(' · ')}</span>
+        </div>
       )}
-    </main>
+      {!!theirPlan?.items.length && (
+        <div className="lab-pline">
+          <span className="over">Their plan</span>
+          <span className="small dim2">{theirPlan.items.map((it) => it.text).join(' · ')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Counters({ league, run, applied, onApply }: { league: League; run: Run; applied: string[]; onApply: (c: CandidateResult, scope: 'game' | 'always', vs: number) => void }) {
+  const simming = useStore((s) => !!s.sim);
+  const base = run.base!;
+  const cands = run.cands!;
+  const vs = league.teams[run.opp].abbrev;
+  const mine = league.teams[league.userTid].tactics;
+  return (
+    <>
+      <section className="lab-hero" aria-label="Your plan now">
+        <div className="over">Your plan now</div>
+        <Statline
+          items={[
+            { k: 'Win %', v: p0(base.winPct) },
+            { k: 'Net rtg', v: signed(base.net), color: base.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+            { k: 'Margin', v: signed(base.ptsFor - base.ptsAgainst) },
+          ]}
+        />
+      </section>
+      <Section
+        title="Counters, ranked"
+        right={
+          <Help title="Reading these numbers">
+            Each counter plays the same games against them. The change is in net rating (points per 100 possessions) against your plan now. A counter is only called better or worse
+            when its change clears the ± range; with several tested at once the range is wider than for one, so a counter that changes nothing rarely looks like a win. More games,
+            tighter numbers.
+          </Help>
+        }
+      >
+        <div className="card flush list">
+          {!cands.length && <div className="mu-empty">Nothing new to test: your plan already covers what the staff sees.</div>}
+          {cands.map((c, i, all) => {
+            const sig = familySigmas(all.length);
+            const good = c.delta > sig * c.se;
+            const bad = c.delta < -sig * c.se;
+            const tone = good ? 'good' : bad ? 'bad' : '';
+            // a counter that only names their players (attacking one defender) has nothing to keep for every game
+            const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
+            return (
+              <div key={c.id} className={`lab-cand ${tone}`}>
+                <div className="lab-cand-top">
+                  <span className="lab-rank num" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  <span className="grow lr-name">{c.label}</span>
+                  <span className="lab-d">
+                    <span className={`lab-delta num ${tone || 'dim2'}`}>{signed(c.delta)}</span>
+                    <span className="tiny dim num">± {f1(sig * c.se)}</span>
+                  </span>
+                </div>
+                <div className="mu-note">{c.why}</div>
+                {c.evidence && (
+                  <div className="mu-ev">
+                    <b>By the numbers:</b> {c.evidence}
+                  </div>
+                )}
+                <div className="lab-cand-foot">
+                  <Tag tone={good ? 'good' : bad ? 'bad' : undefined}>{good ? 'Better' : bad ? 'Worse' : 'Too close'}</Tag>
+                  <span className="tiny dim num grow">win {p0(c.winPct)}</span>
+                  {applied.includes(`${run.opp}:${c.id}`) ? (
+                    <Tag tone="good">
+                      <Check size={12} /> Added
+                    </Tag>
+                  ) : (
+                    <>
+                      <button
+                        className={`btn xs ${good ? 'primary' : ''}`}
+                        disabled={simming}
+                        onClick={() => onApply(c, 'game', run.opp)}
+                        aria-label={`${c.label}: into your plan against ${vs}`}
+                      >
+                        Plan vs {vs}
+                      </button>
+                      {always && (
+                        <button
+                          className="btn xs ghost"
+                          disabled={simming}
+                          onClick={() => onApply(c, 'always', run.opp)}
+                          aria-label={`${c.label}: into your tactics for every game`}
+                        >
+                          Always
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+    </>
   );
 }
 
@@ -484,27 +533,45 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
     .slice(0, 6);
   return (
     <>
-      <section className="card tx-hero" aria-label="Projection">
-        <div className="over tx-hero-over">
+      <section className="lab-hero" aria-label="Projection">
+        <div className="over">
           {me.abbrev} vs {them.abbrev} · {r.games} games
         </div>
         <Statline
           items={[
             { k: 'Win %', v: p0(r.winPct) },
-            { k: 'Net rtg', v: signed(r.net), s: `95% ± ${f1(SIGMAS * r.netSE)}`, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+            { k: 'Net rtg', v: signed(r.net), s: `± ${f1(SIGMAS * r.netSE)}`, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
             { k: 'Score', v: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)}`, s: `Pace ${f1(r.pace)}` },
           ]}
         />
       </section>
+      {impacts.length > 0 && (
+        <Section title="What drives it" right={<span className="tiny dim">pts a game</span>}>
+          <div className="card flush list">
+            {impacts.map(([k, v]) => {
+              const advice = v < 0 ? impactAdvice(k, tactics) : undefined;
+              return (
+                <div key={`${k}${v >= 0 ? '+' : '-'}`} className="lab-imp">
+                  <span className={`lab-imp-v num ${v >= 0 ? 'good' : 'bad'}`}>{signed(v)}</span>
+                  <span>
+                    <span>{impactSentence(k, teamRef(v >= 0 ? me : them), teamRef(v >= 0 ? them : me))}</span>
+                    {advice && <span className="lab-imp-a">{advice}</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
       <Section
         title="Shot profile"
         right={
-          <span className="tx-legend">
+          <span className="lab-legend">
             <i style={{ background: cMe }} /> {me.abbrev} <i style={{ background: cThem }} /> {them.abbrev}
           </span>
         }
       >
-        <div className="card col tx-bars">
+        <div className="card lab-bars">
           <CompareBar label="eFG%" a={r.shot.efg * 100} b={r.oppShot.efg * 100} colorA={cMe} colorB={cThem} />
           <CompareBar label="Rim rate" a={r.shot.rimRate * 100} b={r.oppShot.rimRate * 100} colorA={cMe} colorB={cThem} neutral />
           <CompareBar label="3PA rate" a={r.shot.threeRate * 100} b={r.oppShot.threeRate * 100} colorA={cMe} colorB={cThem} neutral />
@@ -514,20 +581,19 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
         </div>
       </Section>
       <Section title="Your play types" right={<span className="tiny dim">share · pts/poss</span>}>
-        <div className="card flush tx-table">
+        <div className="card flush list">
           {pts.map(([k, v]) => (
-            <div key={k} className="tx-tr tx-tr2">
+            <div key={k} className="lab-tr c2">
               <span className="ellipsis">{FINISH_LABEL[k as FinishType] ?? k}</span>
               <span className="num dim2">{p0(v.freq)}</span>
               <span className={`num bold ${v.ppp >= 1.1 ? 'good' : v.ppp < 0.9 ? 'bad' : ''}`}>{v.ppp.toFixed(2)}</span>
             </div>
           ))}
         </div>
-        <div className="tx-note">League average ≈ 1.13 points per possession.</div>
       </Section>
-      <Section title="Who gets the ball" right={<span className="tiny dim">per game</span>}>
-        <div className="card flush tx-table">
-          <div className="tx-tr tx-tr5 tx-th">
+      <Section title="Who gets the ball" right={<span className="tiny dim">a game</span>}>
+        <div className="card flush list">
+          <div className="lab-tr c5 h">
             <span>Player</span>
             <span>Min</span>
             <span>Pts</span>
@@ -535,7 +601,7 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
             <span>TS%</span>
           </div>
           {users.slice(0, 10).map((u) => (
-            <div key={u.p.pid} className="tx-tr tx-tr5">
+            <div key={u.p.pid} className="lab-tr c5">
               <span className="ellipsis">{names(u.p.pid)}</span>
               <span className="num dim2">{f1(u.min)}</span>
               <span className="num bold">{f1(u.pts)}</span>
@@ -545,26 +611,6 @@ function Summary({ r, league, oppTid }: { r: LabSummary; league: League; oppTid:
           ))}
         </div>
       </Section>
-      {impacts.length > 0 && (
-        <Section title="What drives the result" right={<span className="tiny dim">pts per game</span>}>
-          <div className="card flush list">
-            {impacts.map(([k, v]) => {
-              const advice = v < 0 ? impactAdvice(k, tactics) : undefined;
-              const X = teamRef(v >= 0 ? me : them);
-              const Y = teamRef(v >= 0 ? them : me);
-              return (
-                <div key={`${k}${v >= 0 ? '+' : '-'}`} className="tx-imp">
-                  <span className={`tx-imp-v num ${v >= 0 ? 'good' : 'bad'}`}>{signed(v)}</span>
-                  <span className="grow">
-                    <span className="tx-imp-t">{impactSentence(k, X, Y)}</span>
-                    {advice && <span className="tx-imp-a">{advice}</span>}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-      )}
     </>
   );
 }
@@ -589,24 +635,23 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
     .sort((x, y) => y.a.min - x.a.min)
     .slice(0, 9);
   const legend = (
-    <span className="tx-legend">
+    <span className="lab-legend">
       <i className="before" /> Before <i className="after" /> After
     </span>
   );
   return (
     <>
-      <section className="card tx-hero" aria-label="Verdict">
-        <div className="tx-verdict">
+      <section className="lab-hero" aria-label="Verdict">
+        <div className="lab-verdict">
           <div className="grow">
             <div className="over">Verdict</div>
-            <div className={`tx-verdict-t ${tone}`}>{verdict}</div>
+            <div className={`lab-verdict-t ${tone}`}>{verdict}</div>
           </div>
-          <div className="tx-verdict-d">
-            <span className={`tx-delta big num ${tone || 'dim2'}`}>{signed(d)}</span>
-            <span className="tiny dim">net / 100 poss</span>
+          <div className="lab-d">
+            <span className={`lab-delta big num ${tone || 'dim2'}`}>{signed(d)}</span>
+            <span className="tiny dim">net / 100 poss · ± {f1(margin)}</span>
           </div>
         </div>
-        <div className="tx-note tx-verdict-n">95% range ± {f1(margin)}: only a change bigger than that is called.</div>
         <Statline
           items={[
             { k: 'Win %', v: p0(after.winPct), s: `was ${p0(before.winPct)}` },
@@ -615,8 +660,8 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
           ]}
         />
       </section>
-      <Section title="Shot profile shift" right={legend}>
-        <div className="card col tx-bars">
+      <Section title="Shot profile" right={legend}>
+        <div className="card lab-bars">
           <CompareBar label="eFG%" a={before.shot.efg * 100} b={after.shot.efg * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
           <CompareBar label="3PA rate" a={before.shot.threeRate * 100} b={after.shot.threeRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
           <CompareBar label="Rim rate" a={before.shot.rimRate * 100} b={after.shot.rimRate * 100} colorA="var(--text-dim)" colorB="var(--accent)" neutral />
@@ -624,18 +669,13 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
           <CompareBar label="Opp turnover %" a={before.oppShot.tov * 100} b={after.oppShot.tov * 100} colorA="var(--text-dim)" colorB="var(--accent)" />
         </div>
       </Section>
-      <Section title="Play types">
-        <div className="card flush tx-table">
-          <div className="tx-tr tx-trw tx-th">
-            <span>Type</span>
-            <span>Share</span>
-            <span>Pts/poss</span>
-          </div>
+      <Section title="Play types" right={<span className="tiny dim">share · pts/poss</span>}>
+        <div className="card flush list">
           {keys.map((k) => {
             const b = before.playTypes[k] ?? { freq: 0, ppp: 0 };
             const a = after.playTypes[k] ?? { freq: 0, ppp: 0 };
             return (
-              <div key={k} className="tx-tr tx-trw">
+              <div key={k} className="lab-tr c3">
                 <span className="ellipsis">{FINISH_LABEL[k as FinishType] ?? k}</span>
                 <span className="num dim2">
                   {p0(b.freq)} → {p0(a.freq)}
@@ -658,18 +698,13 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
             </Help>
           }
         >
-          <div className="card flush tx-table">
-            <div className="tx-tr tx-trw tx-th">
-              <span>Set</span>
-              <span>Runs</span>
-              <span>Pts/poss</span>
-            </div>
+          <div className="card flush list">
             {setKeys.map((k) => {
               const b = before.sets?.[k];
               const a = after.sets?.[k];
               const ppp = (x?: { runs: number; pts: number }) => (x?.runs ? (x.pts / x.runs).toFixed(2) : '—');
               return (
-                <div key={k} className="tx-tr tx-trw">
+                <div key={k} className="lab-tr c3">
                   <span className="ellipsis">{k === 'iso' ? CLEAR_OUT.name : SETS[k as SetId].name}</span>
                   <span className="num dim2">
                     {f1(b?.runs ?? 0)} → {f1(a?.runs ?? 0)}
@@ -684,9 +719,9 @@ function CompareView({ before, after, league }: { before: LabSummary; after: Lab
         </Section>
       )}
       <Section title="Touches" right={<span className="tiny dim">usage · pts</span>}>
-        <div className="card flush tx-table">
+        <div className="card flush list">
           {players.map(({ p, a, b }) => (
-            <div key={p.pid} className="tx-tr tx-trw">
+            <div key={p.pid} className="lab-tr c3">
               <span className="ellipsis">{names(p.pid)}</span>
               <span className="num dim2 nowrap">
                 {b ? p1(b.usg) : '—'} → {p1(a.usg)}

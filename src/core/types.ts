@@ -1365,8 +1365,8 @@ export type LiveOp = { at: number } & (
   | { op: 'cancelCall'; args: Record<string, never> }
 );
 
-/** Post-game press conference answers: credit the group, praise the player of the game, challenge the effort (after a loss). */
-export type PressChoice = 'group' | 'pog' | 'challenge';
+/** Post-game press conference answers: credit the group, praise the player of the game, challenge the team and call one player out (after a loss). */
+export type PressChoice = 'group' | 'pog' | 'challenge' | 'callout';
 
 export interface CupGroup {
   /** 'East A' ... 'West C'. */

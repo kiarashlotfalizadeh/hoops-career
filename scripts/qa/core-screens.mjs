@@ -49,7 +49,9 @@ await page.waitForTimeout(400);
 await page.getByRole('button', { name: /Run/ }).click();
 await page.waitForSelector('text=Win %', { timeout: 120000 });
 await shot('15-lab', true);
-await page.getByRole('radio', { name: 'Counters' }).click();
+// counters live on the opponent's matchup page (Test): the old link takes you there
+await page.goto(`${base}/#/lab?mode=counters`);
+await page.waitForTimeout(800);
 await page.getByRole('button', { name: /Run/ }).click();
 await page.waitForSelector('text=Counters, ranked', { timeout: 240000 });
 await shot('16-lab-counters', true);
@@ -68,12 +70,13 @@ await waitSim();
 await page.goto(`${base}/#/`);
 await page.waitForTimeout(500);
 await shot('18-home-gameday', true);
-// the pre-game screen for that game, with its 40-game simulation
+// the pre-game screen for that game (its matchup page's Preview), and the Lab against them (Test)
 await page.goto(`${base}/#/preview`);
 await page.waitForTimeout(800);
 await shot('18b-preview', true);
-await page.getByRole('button', { name: /Simulate 40 games/ }).click();
-await page.waitForSelector('text=/won \\d+ of 40/', { timeout: 120000 });
+await page.getByRole('radio', { name: 'Test' }).click();
+await page.getByRole('button', { name: /Run/ }).click();
+await page.waitForSelector('text=Win %', { timeout: 120000 });
 await shot('18c-preview-sim', true);
 await page.goto(`${base}/#/live`);
 await page.waitForTimeout(6000);
