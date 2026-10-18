@@ -164,8 +164,7 @@ await shot('e11-release-confirm-bottom');
 await page.getByRole('button', { name: /^Release and stretch over/ }).click();
 await page.waitForTimeout(600);
 await go('/office');
-await page.locator('.fo-contracts').scrollIntoViewIfNeeded();
-await shot('e12-office-dead-stretched');
+await shot('e12-office-dead-stretched', true);
 await go('/office/finances');
 await shot('e13-finances-dead', true);
 
@@ -271,9 +270,8 @@ await page
   .click();
 await page.waitForTimeout(500);
 await shot('e23-inbox-ten-day-second');
-await go('/office');
-await page.locator('.fo-contracts').scrollIntoViewIfNeeded();
-await shot('e24-office-ten-day');
+await go('/team?view=contracts');
+await shot('e24-roster-ten-day', true);
 
 await browser.close();
 if (errors.length) {

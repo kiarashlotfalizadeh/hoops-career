@@ -174,15 +174,16 @@ for (let i = 0; i < 5; i++) {
   const over = (await start.count()) && (await start.isDisabled()) && /Release or trade down/.test((await start.textContent()) ?? '');
   await page.keyboard.press('Escape');
   if (!over) break;
-  await page.goto(`${base}/#/office`);
-  await page.waitForTimeout(600);
-  // two-way deals don't count toward the 15
-  const row = page.locator('table.fo-contracts tbody tr.clickable').filter({ hasNotText: '2W' }).last();
-  const who = (await row.locator('.fo-name').first().textContent())?.trim();
-  await row.click();
-  await page.locator('.sheet').getByRole('button', { name: 'Release', exact: true }).click();
-  await page.locator('.sheet').getByRole('button', { name: 'Release', exact: true }).click();
+  // the agenda holds opening night with the staff's cut one tap away (a second tap when it leaves dead money)
+  await page.locator('.continue-go').click();
   await page.waitForTimeout(400);
+  const cut = page.locator('.sheet .ag-acts .btn').first();
+  const who = (await cut.textContent())?.replace(/^Release /, '').trim();
+  await cut.click();
+  await page.waitForTimeout(300);
+  if ((await cut.isVisible().catch(() => false)) && /Confirm/.test((await cut.textContent()) ?? '')) await cut.click();
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Escape');
   log(`  released ${who} to get down to 15`);
 }
 await page.goto(`${base}/#/`);

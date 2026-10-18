@@ -67,7 +67,9 @@ await page.waitForTimeout(2500);
 await go('/office');
 await shot('o01-office');
 await shot('o02-office-full', true);
-if (await tryClick(page.locator('table.fo-contracts tbody tr.clickable').first(), 'contract row')) {
+await go('/team?view=contracts');
+await shot('o02b-contracts', true);
+if (await tryClick(page.locator('table.stats tbody tr').first(), 'contract row')) {
   await shot('o03-contract-sheet');
   if (await tryClick(page.locator('.sheet').getByRole('button', { name: 'Release', exact: true }), 'release')) {
     await shot('o04-release-confirm');
@@ -116,18 +118,16 @@ await go('/office/finances');
 await shot('o17-finances');
 await tryClick(page.getByRole('radio', { name: 'Budget' }), 'budget');
 await shot('o18-finances-budget', true);
-await tryClick(page.getByRole('radio', { name: 'Owner' }), 'owner');
+await go('/office/owner');
 await shot('o19-owner', true);
+await go('/office/finances');
 await tryClick(page.getByRole('radio', { name: 'History' }), 'history');
 await shot('o20-fin-history');
 
 await go('/settings');
 await shot('o21-settings', true);
-if (await tryClick(page.getByRole('button', { name: 'Switch team' }), 'switch')) {
-  await tryClick(page.locator('.fo-teamgrid button:not([disabled])').first(), 'pick team');
-  await shot('o22-switch-sheet');
-  await closeSheet();
-}
+await go('/office/career');
+await shot('o22-career', true);
 
 await go('/office/resign');
 await shot('o23-resign-off', true);
@@ -198,7 +198,7 @@ if (stage === 'all') {
   await go('/office');
   await shot('s11-office-resign');
   await go('/office/resign');
-  await tryClick(page.getByRole('button', { name: /Done — open free agency/ }), 'done');
+  await tryClick(page.getByRole('button', { name: /^Open free agency/ }), 'done');
   await tryClick(page.locator('.sheet').getByRole('button', { name: 'Open free agency' }), 'confirm fa');
   await page.waitForTimeout(800);
   await shot('s12-fa-day1');
@@ -216,7 +216,7 @@ if (stage === 'all') {
   await go('/office/finances');
   await tryClick(page.getByRole('radio', { name: 'History' }), 'history');
   await shot('s17-fin-history');
-  await tryClick(page.getByRole('radio', { name: 'Owner' }), 'owner');
+  await go('/office/owner');
   await shot('s18-owner-after', true);
 }
 

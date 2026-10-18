@@ -7,7 +7,6 @@ import { AlertTriangle } from 'lucide-react';
 import { useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { lazyRetry } from '../lazyRetry';
-import { PageHeader } from '../components/ui';
 
 const Office = lazyRetry(() => import('../screens/Office'));
 const Trade = lazyRetry(() => import('../screens/Trade'));
@@ -15,6 +14,7 @@ const FreeAgents = lazyRetry(() => import('../screens/FreeAgents'));
 const Resign = lazyRetry(() => import('../screens/Resign'));
 const Draft = lazyRetry(() => import('../screens/Draft'));
 const Finances = lazyRetry(() => import('../screens/Finances'));
+const Assets = lazyRetry(() => import('../office/Assets'));
 const Owner = lazyRetry(() => import('../office/Owner'));
 const Career = lazyRetry(() => import('../office/Career'));
 
@@ -42,15 +42,6 @@ export function OfficeGate({ children }: { children: ReactNode }) {
   );
 }
 
-/** Office → Picks & moves until the League area's components are wired in. */
-function AssetsPlaceholder() {
-  return (
-    <main className="page">
-      <PageHeader title="Picks & moves" back backTo="/office" />
-    </main>
-  );
-}
-
 const gated = (el: ReactNode) => <OfficeGate>{el}</OfficeGate>;
 
 export const officeRoutes = (
@@ -63,7 +54,6 @@ export const officeRoutes = (
     <Route path="/office/finances" element={<Finances />} />
     <Route path="/office/owner" element={<Owner />} />
     <Route path="/office/career" element={<Career />} />
-    {/* Picks & moves: wired at integration (the League area's picks list and moves log) */}
-    <Route path="/office/assets" element={<AssetsPlaceholder />} />
+    <Route path="/office/assets" element={<Assets />} />
   </>
 );

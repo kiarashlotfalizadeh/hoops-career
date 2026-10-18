@@ -109,7 +109,10 @@ await shot('d03-office-resign');
 await go(`/player/${names[0].pid}`);
 await shot('d04-player-qualified', true);
 await go('/office/resign');
-await page.getByRole('button', { name: /Done — open free agency/ }).click();
+await page
+  .getByRole('button', { name: /^Open free agency/ })
+  .first()
+  .click();
 await page.waitForTimeout(400);
 await shot('d05-open-fa-confirm');
 await page.locator('.sheet').getByRole('button', { name: 'Open free agency' }).click();

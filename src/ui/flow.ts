@@ -140,7 +140,15 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         primary: !!next,
         to: '/office/draft',
       });
-      a.push({ id: 'finish', label: 'Auto-draft the rest', sub: next ? 'The staff makes your picks.' : undefined, primary: !next, cmd: 'finishDraft' });
+      // every pick made: the draft is over, and finishing it opens re-signing
+      const over = draftOrder(league).length === 0;
+      a.push({
+        id: 'finish',
+        label: over ? 'Continue to re-signing' : 'Auto-draft the rest',
+        sub: next ? 'The staff makes your picks.' : undefined,
+        primary: !next,
+        cmd: 'finishDraft',
+      });
       break;
     }
     case 'resign':
