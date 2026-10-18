@@ -1,0 +1,267 @@
+/* The draft: the team on the clock, the picks coming up, the board's rows and the prospect sheet. */
+
+/* ------------------------------------------------------------ draft */
+/* the team on the clock, in its colours */
+.fo-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 14px 16px;
+}
+
+.fo-clock-over {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 14px;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.fo-clock .fo-live {
+  color: #fff;
+}
+
+.fo-clock-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fo-clock-main .grow {
+  min-width: 0;
+}
+
+.fo-clock-n {
+  font-family: var(--display);
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 0.85;
+  letter-spacing: -0.01em;
+}
+
+.fo-clock-team {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fo-clock-sub {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.fo-clock-s {
+  margin: -2px 0 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.fo-clock-btns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.fo-clock-btns .btn {
+  padding: 0 8px;
+  min-width: 0;
+}
+
+.fo-rank {
+  width: 26px;
+  flex: none;
+  text-align: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-pickchip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 58px;
+  padding: 8px 0 7px;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+
+.fo-pickchip:active {
+  background: var(--surface);
+}
+
+.fo-pickchip.me {
+  border-color: color-mix(in srgb, var(--team-text) 60%, var(--line));
+  box-shadow: inset 0 -3px 0 var(--team-text);
+}
+
+.fo-pickchip .n {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.fo-pickchip .ab {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+
+.fo-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12.5px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+/* a prospect's row and its Draft button side by side */
+.fo-board-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.fo-board-row.can {
+  padding-right: 12px;
+}
+
+.fo-board-row .fo-prow {
+  min-width: 0;
+  padding-left: 10px;
+  gap: 9px;
+}
+
+.fo-board-row .avatar {
+  width: 34px;
+  height: 34px;
+}
+
+.fo-board-proj {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.fo-proj {
+  color: var(--text-2);
+}
+
+/* draft rows: buttons and links that read as list rows; your team's with its edge */
+button.listrow {
+  width: 100%;
+  text-align: left;
+}
+
+.fo-sel .grow {
+  min-width: 0;
+}
+
+.fo-sel:active {
+  background: var(--surface);
+}
+
+.fo-sel.me {
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+}
+
+.fo-wrap {
+  white-space: normal;
+}
+
+.fo-push {
+  margin-left: auto;
+}
+
+/* the prospect sheet: a jersey, the name as a hero's, his ratings */
+.fo-prospect-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fo-prospect-h .grow {
+  min-width: 0;
+}
+
+.fo-prospect-first {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+
+.fo-prospect-last {
+  font-size: 32px;
+  line-height: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fo-prospect-r {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.fo-combine {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.fo-combine > div {
+  padding: 8px 8px 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.fo-combine > div:not(:nth-child(4n + 1)) {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.fo-combine .k {
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fo-combine .v {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1.1;
+}

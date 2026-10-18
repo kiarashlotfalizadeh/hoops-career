@@ -1,0 +1,389 @@
+/* The Front Office's shared pieces: help and lede text, flags after a name, sheets and their
+   label/value lines, callouts, player rows, filter selects, and the docks a screen pins over the
+   tab bar. */
+
+/* ------------------------------------------------------------ type */
+.fo-help {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fo-help p,
+.fo-help ul {
+  margin: 0;
+}
+
+.fo-lede {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+/* the Front Office's own page tabs sit a little tighter, so Trade's and Finances' fit a phone's row */
+.fo-page > .seg.tabs button {
+  padding: 0 10px;
+}
+
+/* a pulsing dot before an overline: something is happening now (the draft clock) */
+.fo-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--bad);
+}
+
+.fo-live::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 25%, transparent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* a card other screens still use for a headline block */
+.fo-hero {
+  position: relative;
+}
+
+/* a tiny flag after a name: rookie scale, two-way, 10-day, injured */
+.fo-flag {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.04em;
+  font-style: normal;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.fo-flag.info {
+  background: color-mix(in srgb, var(--info) 18%, transparent);
+  color: var(--info);
+}
+
+.fo-flag.warn {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+
+.fo-flag.bad {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: color-mix(in srgb, var(--bad) 80%, white);
+}
+
+/* ------------------------------------------------------------ sheets */
+.fo-sheet {
+  gap: 12px;
+}
+
+.fo-phead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fo-phead .grow {
+  min-width: 0;
+}
+
+.fo-phead h2 {
+  font-size: 24px;
+}
+
+.fo-phead .fo-meta {
+  margin-top: 3px;
+}
+
+/* label / value rows with hairlines (a contract's seasons, a sheet's terms) */
+.fo-lines {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.fo-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.fo-line-k {
+  color: var(--text-2);
+}
+
+.fo-line-v {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.fo-line.past {
+  opacity: 0.5;
+}
+
+/* the release's dead money: release and stretched side by side */
+.fo-dead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 18px;
+  row-gap: 5px;
+  font-size: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.fo-dead.three {
+  grid-template-columns: 1fr auto auto;
+}
+
+.fo-dead .r {
+  text-align: right;
+}
+
+.fo-dead .num {
+  font-weight: 700;
+}
+
+.fo-dead-t {
+  font-weight: 750;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-buyout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------------ notes */
+/* a note with a tone: an edge and an icon on the page's ground, not a tinted box */
+.fo-callout {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--line-3);
+}
+
+.fo-callout b {
+  color: var(--text);
+}
+
+.fo-callout.bad {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+
+.fo-callout.good {
+  box-shadow: inset 3px 0 0 var(--good);
+}
+
+.fo-callout.warn {
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+.fo-callout > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ------------------------------------------------------------ player rows */
+.fo-prow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  min-height: 62px;
+  width: 100%;
+  text-align: left;
+}
+
+.fo-prow:active {
+  background: var(--surface);
+}
+
+/* a long status tag ("Offer sheet · SAS · POR decides day 4") wraps instead of running under the money column */
+.fo-prow .tag {
+  max-width: 100%;
+  height: auto;
+  min-height: 20px;
+  padding-block: 2px;
+  white-space: normal;
+}
+
+.fo-ovrstack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  width: 36px;
+}
+
+.fo-ovrstack .pot {
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.fo-name {
+  display: block;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fo-meta {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fo-mood {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fo-money {
+  text-align: right;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-money .a,
+.fo-money-a {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.05;
+}
+
+.fo-money .b {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ selects (the filters' and a pick's protection) */
+.fo-select {
+  height: 38px;
+  width: 100%;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a94a4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding: 0 28px 0 11px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-overflow: ellipsis;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fo-select:focus-visible {
+  border-color: var(--accent-text);
+}
+
+.fo-select.sm {
+  height: 32px;
+  font-size: 12px;
+  padding: 0 24px 0 9px;
+  background-position: right 7px center;
+}
+
+@media (pointer: coarse) {
+  .fo-select {
+    height: 42px;
+  }
+  .fo-select.sm {
+    height: 36px;
+  }
+}
+
+.fo-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fo-filters .hscroll .chips {
+  flex-wrap: nowrap;
+}
+
+.fo-selects {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 760px) {
+  .fo-selects {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.fo-dock.fo-dock-go {
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* the button's number-plate cut clips a box shadow: the shadow follows its shape instead */
+.fo-dock-go .btn.big {
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6));
+}
+
+/* a glossary word as a figure's label keeps the label's caps */
+.statline .k .term {
+  text-transform: inherit;
+  letter-spacing: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* a glossary word in an overline or a list divider keeps its caps */
+.fo-page .term {
+  text-transform: inherit;
+  letter-spacing: inherit;
+}

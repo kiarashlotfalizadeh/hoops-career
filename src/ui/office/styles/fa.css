@@ -1,0 +1,142 @@
+/* Free agents: the figures on top, the market while it runs, the list's rows and restricted free agency. */
+
+/* ------------------------------------------------------------ free agents */
+.fo-figs-card {
+  padding: 12px 14px;
+}
+
+.fo-figs-card .statline .v {
+  font-size: 24px;
+}
+
+.fo-figs-card .statline > * {
+  padding: 2px 10px;
+}
+
+.fo-figs-card .statline > :first-child {
+  padding-left: 0;
+}
+
+.fo-faday {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--accent-text);
+}
+
+.fo-market {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fo-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-pending .over {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.fo-pending-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fo-pending-row {
+  text-align: left;
+  min-width: 0;
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.fo-nowrap {
+  flex-wrap: nowrap;
+}
+
+.fo-prow-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 3px 0 1px;
+}
+
+.fo-prow-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.fo-interest {
+  color: var(--note);
+}
+
+.fo-interest::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
+  background: var(--note);
+}
+
+/* restricted free agency */
+.fo-qualify {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-qualify > svg {
+  flex: none;
+}
+
+.fo-qualify .grow {
+  min-width: 0;
+}
+
+.fo-rfa {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.fo-rfa-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fo-rfa-top .grow {
+  min-width: 0;
+}
+
+/* an agenda row inside a list row (an offer sheet on your restricted free agent): edge to edge */
+.fo-sheet-item {
+  margin: 0 -14px -12px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-dock-why {
+  text-align: center;
+}
+
+.fo-dock.fo-dock-days {
+  padding: 10px;
+}

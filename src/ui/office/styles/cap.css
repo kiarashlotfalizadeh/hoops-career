@@ -1,0 +1,136 @@
+/* The cap sheet's figures: the payroll in scoreboard type, the cap bar with its cap and tax lines,
+   its legend, and the figures under it (the Office hub, Re-sign, a contract's cap impact, Finances). */
+
+/* ------------------------------------------------------------ the cap sheet */
+.fo-capsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fo-pay {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fo-pay .tag {
+  margin-bottom: 6px;
+}
+
+.fo-pay-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 0.95;
+  margin-top: 2px;
+  letter-spacing: 0.005em;
+}
+
+.fo-cap {
+  position: relative;
+  padding-top: 15px;
+}
+
+.fo-cap-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.fo-cap-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 5px 0 0 5px;
+  transition: width 0.25s ease;
+}
+
+.fo-cap-add {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, var(--accent) 0 5px, color-mix(in srgb, var(--accent) 50%, transparent) 5px 10px);
+  transition:
+    width 0.2s ease,
+    left 0.2s ease;
+}
+
+.fo-cap-mark {
+  position: absolute;
+  top: 11px;
+  width: 2px;
+  height: 18px;
+  margin-left: -1px;
+  background: var(--text);
+  border-radius: 1px;
+}
+
+.fo-cap-mark.tax {
+  background: var(--bad);
+}
+
+.fo-cap-mark span {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.fo-cap-mark.tax span {
+  color: color-mix(in srgb, var(--bad) 80%, white);
+}
+
+.fo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.fo-legend b {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: 0;
+}
+
+/* the four figures, two by two with hairlines */
+.fo-figs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-figs .statline + .statline {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+/* three figures across a phone: a size that fits "-$51.2M" */
+.fo-capsheet .statline .v {
+  font-size: 24px;
+}

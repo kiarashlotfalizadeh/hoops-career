@@ -1,0 +1,12 @@
+/* Career: the record slab. */
+
+.fo-career-slab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fo-career-slab .statline .v {
+  font-size: 24px;
+  white-space: nowrap;
+}

@@ -1,0 +1,202 @@
+/* The owner: the job-security meter, his ultimatum, the season's goals, and the standing by part. */
+
+.fo-owner-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 8px;
+}
+
+.fo-owner-row .over {
+  font-size: 10.5px;
+}
+
+.fo-owner-row .num {
+  font-size: 12.5px;
+  font-weight: 750;
+  text-align: right;
+  color: var(--text-2);
+}
+
+/* a -1..1 value growing from the centre */
+.fo-cbar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+
+.fo-cbar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--line-3);
+}
+
+.fo-cbar > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+}
+
+.fo-owner-parts {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.fo-goal-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.fo-goal-v {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+/* the owner's meter: the score, the heat, a track from the hot seat to secure with the firing line */
+.fo-seat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  --seat: var(--info);
+}
+
+.fo-seat.tone-good {
+  --seat: var(--good);
+}
+
+.fo-seat.tone-warn {
+  --seat: var(--warn);
+}
+
+.fo-seat.tone-bad {
+  --seat: var(--bad);
+}
+
+.fo-seat-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.fo-seat-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 0.9;
+  color: var(--seat);
+}
+
+.fo-seat-l {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.fo-seat-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.fo-meterbar {
+  position: relative;
+  padding: 16px 0 4px;
+}
+
+.fo-meterbar-track {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.fo-meterbar-track .z {
+  display: block;
+  height: 100%;
+  opacity: 0.55;
+}
+
+.fo-meterbar-track .hot {
+  background: var(--bad);
+}
+
+.fo-meterbar-track .warm {
+  background: var(--warn);
+}
+
+.fo-meterbar-track .steady {
+  background: var(--info);
+}
+
+.fo-meterbar-track .secure {
+  background: var(--good);
+}
+
+.fo-meterbar-line {
+  position: absolute;
+  top: 12px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.fo-meterbar-line span {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fo-meterbar-pin {
+  position: absolute;
+  top: 10px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: var(--seat);
+  border: 3px solid var(--raised);
+  box-shadow: 0 0 0 1px var(--line-3);
+}
+
+.fo-ultimatum {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+}

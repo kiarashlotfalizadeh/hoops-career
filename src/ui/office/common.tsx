@@ -90,28 +90,10 @@ export function appealInfo(a: number): { label: string; color: string; tone: 'go
   return { label: 'Not keen', color: 'var(--bad)', tone: 'bad' };
 }
 
-export function ownerVerdict(total: number): { label: string; color: string } {
-  if (total > 0.4) return { label: 'Thrilled', color: 'var(--good)' };
-  if (total > 0.1) return { label: 'Pleased', color: 'var(--good)' };
-  if (total > -0.2) return { label: 'Patient', color: 'var(--info)' };
-  if (total > -0.5) return { label: 'Concerned', color: 'var(--warn)' };
-  return { label: 'Hot seat', color: 'var(--bad)' };
-}
-
 /** "+12" / "-40": a -1..1 grade as the owner's -100..100 scale. */
 export const fmtGrade = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)}`;
 
 // ------------------------------------------------------------------ components
-
-/** An overline heading with an optional control on its right (the Section look, for screens outside the Front Office too). */
-export function SecTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return (
-    <div className="fo-sec-row">
-      <div className="fo-sec grow">{children}</div>
-      {right}
-    </div>
-  );
-}
 
 /** Payroll vs cap vs tax, with an optional pending amount (striped). */
 export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number; cap: number; tax: number; add?: number; legend?: boolean }) {
@@ -160,40 +142,6 @@ export function CenterBar({ value }: { value: number }) {
     <div className="fo-cbar">
       <i style={{ left: v >= 0 ? '50%' : `${50 - w}%`, width: `${Math.max(w, 1.5)}%`, background: color }} />
     </div>
-  );
-}
-
-/** Semicircle gauge for the owner's overall mood (-1..1). */
-export function Gauge({ value, size = 150, label }: { value: number; size?: number; label?: string }) {
-  const v = clamp(value, -1, 1);
-  const r = 42;
-  const cx = 50;
-  const cy = 50;
-  const ang = Math.PI * (1 - (v + 1) / 2); // 180° (left) .. 0° (right)
-  const nx = cx + Math.cos(ang) * (r - 6);
-  const ny = cy - Math.sin(ang) * (r - 6);
-  const arc = (from: number, to: number) => {
-    const a0 = Math.PI * (1 - from);
-    const a1 = Math.PI * (1 - to);
-    const x0 = cx + Math.cos(a0) * r;
-    const y0 = cy - Math.sin(a0) * r;
-    const x1 = cx + Math.cos(a1) * r;
-    const y1 = cy - Math.sin(a1) * r;
-    return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`;
-  };
-  const verdict = ownerVerdict(v);
-  return (
-    <svg className="fo-gauge" width={size} height={size * 0.68} viewBox="0 0 100 68" role="img" aria-label={`Owner mood ${Math.round(v * 100)}`}>
-      <path d={arc(0, 0.25)} stroke="var(--bad)" strokeWidth="7" fill="none" />
-      <path d={arc(0.25, 0.4)} stroke="var(--warn)" strokeWidth="7" fill="none" />
-      <path d={arc(0.4, 0.55)} stroke="var(--info)" strokeWidth="7" fill="none" />
-      <path d={arc(0.55, 1)} stroke="var(--good)" strokeWidth="7" fill="none" />
-      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
-      <circle cx={cx} cy={cy} r="4.5" fill="var(--text)" />
-      <text x={cx} y={66} textAnchor="middle" fontSize="12" fontWeight="800" fill={verdict.color}>
-        {label ?? verdict.label.toUpperCase()}
-      </text>
-    </svg>
   );
 }
 

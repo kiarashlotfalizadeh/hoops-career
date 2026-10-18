@@ -1,0 +1,366 @@
+/* The contract sheet: his ask, your offer (amount, years, option), talks with his agent, a top free
+   agent's bids, what the signing does to the cap, and meeting a player. */
+
+/* ------------------------------------------------------------ the contract sheet */
+.fo-contract {
+  gap: 16px;
+}
+
+.fo-compare {
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.fo-compare svg {
+  flex: none;
+}
+
+/* his ask and his interest (or mood), with the "?" at the corner */
+.fo-ask {
+  position: relative;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+
+.fo-ask > .help-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.fo-ask .statline .v {
+  font-size: 24px;
+}
+
+.fo-ask-word {
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.fo-ask .statline .v .tag {
+  font-family: var(--font);
+  vertical-align: 4px;
+}
+
+.fo-ask .statline > :last-child {
+  padding-right: 18px;
+}
+
+.fo-offer-amt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fo-offer-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fo-offer-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 42px;
+  line-height: 0.95;
+  margin-top: 3px;
+}
+
+.fo-offer-t {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  margin-top: 3px;
+  color: var(--text-2);
+}
+
+.fo-offer-slide {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fo-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fo-quick .chip {
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-stepper {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  flex: none;
+}
+
+.fo-stepper:active {
+  transform: scale(0.94);
+}
+
+/* a 44px touch target around the compact button */
+.fo-stepper::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.fo-years {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fo-yrs {
+  display: flex;
+  gap: 6px;
+}
+
+.fo-yr {
+  flex: 1;
+  height: 48px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+  position: relative;
+}
+
+.fo-yr small {
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fo-yr.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+}
+
+.fo-yr.on small {
+  color: var(--text-2);
+}
+
+/* a length the offer can't run (an offer sheet's single season) */
+.fo-yr:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fo-callout-btns {
+  margin-top: 8px;
+}
+
+/* talks with his agent */
+.fo-talk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+
+.fo-talk-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fo-patience {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.fo-patience i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  transform: skewX(-12deg);
+  background: var(--good);
+}
+
+.fo-patience.warn i {
+  background: var(--warn);
+}
+
+.fo-patience.bad i {
+  background: var(--bad);
+}
+
+.fo-counter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+.fo-counter-row > svg {
+  flex: none;
+}
+
+.fo-counter-row .grow {
+  min-width: 0;
+}
+
+.fo-talk-warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+.fo-talk-warn svg {
+  flex: none;
+}
+
+.fo-talk .more p {
+  margin: 0;
+}
+
+/* a top free agent's bids */
+.fo-bid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fo-bid-mine {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fo-lead {
+  margin-left: 4px;
+}
+
+.fo-lines-h {
+  padding: 2px 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.fo-bid .fo-lines {
+  border-top: none;
+}
+
+.fo-fit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fo-fit svg {
+  flex: none;
+}
+
+/* what the signing does to the cap */
+.fo-capimpact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-capimpact-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.fo-capimpact .statline .v {
+  font-size: 24px;
+}
+
+/* the sheet's action stays in thumb reach while its terms scroll */
+.fo-sheet-foot {
+  position: sticky;
+  bottom: calc(-22px - var(--safe-b));
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--gut-r)) calc(-22px - var(--safe-b)) calc(-1 * var(--gut-l));
+  padding: 10px var(--gut-r) calc(12px + var(--safe-b)) var(--gut-l);
+  background: var(--bg-2);
+  border-top: 1px solid var(--line-2);
+}
+
+.fo-sheet-foot .btn.grow {
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+@media (min-width: 768px) {
+  .fo-sheet-foot {
+    bottom: -20px;
+    margin-bottom: -20px;
+    padding-bottom: 14px;
+  }
+}
+
+/* ------------------------------------------------------------ meeting a player */
+.fo-meet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.fo-meet-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.fo-meet-h .grow {
+  min-width: 0;
+}
+
+.fo-meet-t {
+  font-family: var(--font);
+  font-stretch: var(--text-w);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-bottom: 2px;
+}
+
+.fo-meet .more p {
+  margin: 0;
+}
