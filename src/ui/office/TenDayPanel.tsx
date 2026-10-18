@@ -117,13 +117,12 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
             <Line k="Players out (3+ games)">{h.out}</Line>
           </div>
           <p className="fo-lede small">
-            His minimum, prorated. Then he's a free agent again with no dead money, unless you give him a second 10-day or the rest of the season
-            {had ? ': this would be his second with you' : ''}.{' '}
+            His minimum, prorated; it ends by itself with no dead money{had ? ' (his second with you)' : ''}.{' '}
             {spot === 'hardship'
-              ? `He takes a hardship spot beyond ${CAP.rosterMax}: with ${h.out} out you can carry ${h.spots} more on 10-days.`
+              ? `A hardship spot beyond ${CAP.rosterMax} (${h.out} out).`
               : spot === 'regular'
-                ? `He takes one of your ${CAP.rosterMax} roster spots.`
-                : `With ${HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows 10-day players beyond ${CAP.rosterMax}.`}
+                ? `Takes one of your ${CAP.rosterMax} spots.`
+                : `${HARDSHIP_OUT}+ out for 3+ games opens hardship spots beyond ${CAP.rosterMax}.`}
           </p>
           {blocked && <div className="small warn">{blocked}</div>}
           <div className="row">
@@ -134,7 +133,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
               Sign to a 10-day
             </button>
           </div>
-          <div className="tiny dim">Up to {TEN_DAY_MAX} per player with one team a season; after the second, the rest of the season or he leaves.</div>
+          <div className="tiny dim">Then a second 10-day, the rest of the season at his minimum, or he leaves: up to {TEN_DAY_MAX} per player with one team a season.</div>
         </div>
       )}
     </Sheet>

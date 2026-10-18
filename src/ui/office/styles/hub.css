@@ -1,0 +1,180 @@
+/* The Office hub: the phase card (what the desk is doing now), the exceptions line, the seasons
+   ahead, and the desks with their status lines. */
+
+/* ------------------------------------------------------------ the phase card ("what to do now") */
+.fo-now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sec);
+}
+
+/* the headline and, when there's one action, its button beside it */
+.fo-now-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fo-now-main > .grow {
+  min-width: 0;
+}
+
+.fo-now-main > .btn {
+  flex: none;
+}
+
+.fo-now-over {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.fo-now:not(.accent) .fo-now-over {
+  color: var(--text-dim);
+}
+
+.fo-now-t {
+  margin-top: 3px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.fo-now-s {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+
+.fo-now-acts {
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------ the cap sheet's lines under its figures */
+.fo-exc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--gap-sec);
+  border-top: 1px solid var(--line);
+}
+
+.fo-exc .over {
+  color: var(--text-dim);
+}
+
+.fo-exc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 22px;
+  font-size: 14px;
+}
+
+.fo-sec-links {
+  gap: 14px;
+}
+
+/* the seasons ahead: committed payroll and the room it leaves, a row each */
+.fo-next {
+  display: flex;
+  flex-direction: column;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.fo-next-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.fo-next-row > :last-child {
+  text-align: right;
+}
+
+.fo-next-h .over {
+  font-size: 10.5px;
+}
+
+/* ------------------------------------------------------------ the desks */
+.fo-dept {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  min-width: 0;
+}
+
+.fo-dept:active {
+  background: var(--surface);
+}
+
+.fo-dept-ic {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.fo-dept.hot .fo-dept-ic {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-text);
+}
+
+.fo-dept-t {
+  display: block;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.fo-dept-s {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fo-dept .grow {
+  min-width: 0;
+}
+
+.fo-dept.muted .fo-dept-t,
+.fo-dept.muted .fo-dept-ic {
+  opacity: 0.6;
+}
+
+.fo-dept-s.good {
+  color: var(--good);
+}
+
+.fo-dept-s.warn {
+  color: var(--warn);
+}
+
+.fo-dept-s.bad {
+  color: var(--bad);
+}

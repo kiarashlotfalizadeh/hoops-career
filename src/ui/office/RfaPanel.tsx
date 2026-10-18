@@ -27,18 +27,18 @@ import { AgendaRow } from '../components/Agenda';
 import { Term } from '../components/Glossary';
 import { settle } from '../../state/actions/office';
 import { Section, Sheet } from '../components/ui';
-import { Callout, OvrPot, playerMeta, shortSeason } from './common';
+import { Callout, OvrPot, forYears, playerMeta, shortSeason } from './common';
 import { money } from '../../core/format';
 
 /** Run a core move as one league action and toast its answer. */
 const act = (label: string, fn: (l: League) => { ok: boolean; reason: string }, good: 'good' | 'neutral' = 'good') => !!settle(label, fn, good)?.ok;
 
-/** An offer sheet's terms as signed: "4 yrs · $48.2M · $11.0M in 27-28". */
+/** An offer sheet's terms as signed, the first season first: "$11.0M in 27-28, $48.2M over 4 yrs". */
 export function sheetTerms(league: League, p: Player): string {
   const s = p.rfa?.sheet;
   if (!s) return '';
   const c = makeContract(league, s.amount, s.years, contractSeason(league), p.experience);
-  return `${s.years} yr${s.years > 1 ? 's' : ''} · ${money(c.salaries.reduce((a, x) => a + x, 0))} · ${money(c.salaries[0])} in ${shortSeason(c.start)}`;
+  return `${money(c.salaries[0])} in ${shortSeason(c.start)}, ${money(c.salaries.reduce((a, x) => a + x, 0))} over ${s.years} yr${s.years > 1 ? 's' : ''}`;
 }
 
 /** What a list says about a restricted free agent: the user's own, another team's he could sign to an offer sheet, or one who has signed one. */
@@ -65,11 +65,11 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
       <div className="grow small dim2">
         {qualified ? (
           <>
-            <b className="good">Qualified</b> · {money(qo)} for 1 yr: you can match any offer sheet.
+            <b className="good">Qualified</b> · {money(qo)} {forYears(1)}: you can match any offer sheet.
           </>
         ) : (
           <>
-            Qualifying offer <b className="num">{money(qo)}</b> (1 yr) makes him restricted.
+            <Term id="qo">Qualifying offer</Term> <b className="num">{money(qo)}</b> {forYears(1)} makes him <Term id="rfa">restricted</Term>.
           </>
         )}
       </div>
@@ -201,7 +201,9 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                 </div>
                 <div className="fo-money">
                   <div className="a">{money(r.qo)}</div>
-                  <div className="b">QO · hold {money(r.hold ?? r.qo)}</div>
+                  <div className="b">
+                    <Term id="qo">QO</Term> · cap hold {money(r.hold ?? r.qo)}
+                  </div>
                 </div>
               </div>
               {r.sheet ? (
@@ -214,7 +216,7 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
                       <span className="warn">wants out: won't re-sign, but you can match a sheet</span>
                     ) : (
                       <>
-                        asks <b className="num">{money(ask.amount)}</b> × {ask.years} yr{ask.years > 1 ? 's' : ''} to re-sign
+                        asks <b className="num">{money(ask.amount)}</b> {forYears(ask.years)} to re-sign
                       </>
                     )}
                   </div>

@@ -43,7 +43,7 @@ export function OfferControls({
       <div className="fo-offer-amt">
         <div className="fo-offer-top">
           <div>
-            <div className="over">Your offer · a season</div>
+            <div className="over">Your offer · per season</div>
             <div className="fo-offer-v num">{money(amount, 2)}</div>
           </div>
           <div className="right">

@@ -11,7 +11,7 @@ import { filterTargets, maxTakeBack, pickLabel, tradeTargets, type TradeOffer, t
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Chips, Empty, Section } from '../components/ui';
-import { Callout, HelpSheet, OvrPot, capSeason, contractYearsLabel, isOffseason } from '../office/common';
+import { Callout, HelpSheet, OvrPot, capSeason, contractEnd, isOffseason } from '../office/common';
 import { TierLine } from './common';
 import { money } from '../../core/format';
 
@@ -124,7 +124,7 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               value={state.salary === 'match' ? MATCH : state.salary}
               onChange={(v) => set({ salary: v === MATCH ? 'match' : v })}
               options={[
-                [MATCH, `≤ ${money(data.match)} (you can match)`],
+                [MATCH, `Matchable ≤ ${money(data.match, 0)}`],
                 [25_000, 'Salary ≤ $25M'],
                 [10_000, 'Salary ≤ $10M'],
                 [ANY, 'Any salary'],
@@ -165,13 +165,13 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                       {p.injury && <span className="fo-flag bad">INJ</span>}
                     </div>
                     <div className="fo-meta">
-                      {league.teams[p.tid].abbrev} · {p.pos} · {age} · {p.archetype}
+                      <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
+                      {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
                     </div>
-                    <TierLine tier={tier} avail={avail} />
                   </div>
                   <div className="fo-money">
                     <div className="a">{p.contract.twoWay ? 'Two-way' : money(salary)}</div>
-                    <div className="b">{contractYearsLabel(league, p, s)}</div>
+                    <div className="b">{contractEnd(league, p, s)}</div>
                   </div>
                 </button>
               ))}

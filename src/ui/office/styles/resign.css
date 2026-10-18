@@ -1,0 +1,114 @@
+/* Re-sign: next season's payroll, the team options and the expiring contracts, each with its line of stats. */
+
+/* a season's line of stats under a player (Re-sign) */
+.fo-statline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 9px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-statline b {
+  color: var(--text);
+  font-weight: 750;
+}
+
+/* ------------------------------------------------------------ re-sign */
+.fo-pay .right {
+  text-align: right;
+}
+
+.fo-pay-v2 {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  margin-top: 3px;
+}
+
+.fo-rs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px var(--row-px);
+}
+
+/* outside the re-sign period: when it opens, in a line over the figures */
+.fo-closed-t {
+  color: var(--text);
+}
+
+.fo-rs > * {
+  max-width: 100%;
+}
+
+.fo-rs-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.fo-rs-top .grow,
+.fo-min0 {
+  min-width: 0;
+}
+
+.fo-rs-act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.fo-rs-act .grow {
+  min-width: 0;
+}
+
+.fo-rs-ask {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.fo-rs-ask b {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 19px;
+}
+
+.fo-rs-ext {
+  margin-top: 4px;
+}
+
+.fo-rs-mood {
+  margin-top: 4px;
+}
+
+.fo-rs .fo-qualify {
+  width: 100%;
+}
+
+.fo-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fo-done svg {
+  flex: none;
+}
+
+.fo-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 14px;
+  font-size: 14px;
+}

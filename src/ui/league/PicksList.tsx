@@ -13,12 +13,10 @@ import { PROJECTION_NOTE, pickProjection, teamPath } from './shared';
 
 export function PicksList({ league, tid }: { league: League; tid: number }) {
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
-  // a pick whose slot is set carries its number in its name
+  // a pick whose slot is set carries its number in its name, and every pick its year: only a projection needs a tag
   const slotTag = (d: DraftPick) => {
     const p = proj(d);
-    if (p !== undefined) return { text: `Proj. #${p}`, tone: d.round === 1 && p <= 14 ? 'warn' : 'info' };
-    const yrs = d.season - league.season;
-    return { text: yrs <= 0 ? 'This draft' : `In ${yrs} yr${yrs === 1 ? '' : 's'}`, tone: d.pick ? 'good' : '' };
+    return p !== undefined ? { text: `Proj. #${p}`, tone: d.round === 1 && p <= 14 ? 'warn' : 'info' } : null;
   };
   const owned = league.draftPicks.filter((d) => d.tid === tid).sort((a, b) => a.season - b.season || a.round - b.round || a.originalTid - b.originalTid);
   const away = league.draftPicks.filter((d) => d.originalTid === tid && d.tid !== tid).sort((a, b) => a.season - b.season || a.round - b.round);
@@ -46,14 +44,11 @@ export function PicksList({ league, tid }: { league: League; tid: number }) {
                 <div key={d.dpid} className="lg-pick">
                   <TeamLogo tid={d.originalTid} size={28} decorative />
                   <span className="lg-pick-t">
+                    {/* the name carries whose pick it was ("2027 1st (DEN)"); the line under it, its protection and any swap in words */}
                     <span className="lr-name">{pickLabel(league, d)}</span>
-                    <span className="lr-meta">
-                      {d.originalTid !== tid ? `From the ${teamName(league.teams[d.originalTid])}` : 'Own pick'}
-                      {/* its protection and any swap on it, in words */}
-                      {terms ? `. ${terms}` : ''}
-                    </span>
+                    {terms && <span className="lr-meta">{terms}</span>}
                   </span>
-                  <span className={`tag ${t.tone}`}>{t.text}</span>
+                  {t && <span className={`tag ${t.tone}`}>{t.text}</span>}
                 </div>
               );
             })

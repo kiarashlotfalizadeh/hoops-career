@@ -9,7 +9,7 @@ import { useLeagueMemo } from '../../state/store';
 import { Sheet } from '../components/ui';
 import { capSeason } from '../office/common';
 import { TradeNotes } from './common';
-import { money, moneySigned, moneyExact } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 const KIND = {
   add: { icon: Plus, tone: 'info' },
@@ -38,13 +38,12 @@ export function CounterSheet({
     <Sheet open={open} onClose={onClose} title={base ? `${league.teams[base.b.tid].abbrev} say no` : undefined}>
       {open && base && (
         <div className="col fo-sheet">
-          <p className="fo-lede">But they'd sign one of these now. Best for you first.</p>
+          <p className="fo-lede">But they'd sign one of these now: the best for you first, by league-neutral value.</p>
           <div className="card flush list">
             {counters.map((c, i) => (
               <CounterCard key={`${i}:${c.label}`} league={league} base={base} c={c} onAccept={onAccept} onEdit={onEdit} />
             ))}
           </div>
-          <div className="tiny dim">Values are league-neutral.</div>
         </div>
       )}
     </Sheet>
@@ -119,9 +118,13 @@ function CounterCard({
         <Side title="You get" items={items(c.offer.b, base.b)} />
       </div>
       <div className="tiny dim num">
-        Net salary {moneySigned(info.inc - info.out)} · payroll after{' '}
+        {info.inc >= info.out ? 'You take on' : 'You shed'} {money(Math.abs(info.inc - info.out))} in salary · payroll after{' '}
         <b className={info.after > cap.luxuryTax ? 'bad' : info.after > cap.salaryCap ? 'warn' : 'good'}>{money(info.after)}</b>
-        {info.after > cap.luxuryTax ? ' (over the tax)' : info.after > cap.salaryCap ? ' (over the cap)' : ''}
+        {info.after > cap.luxuryTax
+          ? `, ${money(info.after - cap.luxuryTax)} over the tax`
+          : info.after > cap.salaryCap
+            ? `, ${money(info.after - cap.salaryCap)} over the cap`
+            : `, ${money(cap.salaryCap - info.after)} in cap space`}
       </div>
       {info.warn.length > 0 && <TradeNotes notes={info.warn} />}
       <div className="row">

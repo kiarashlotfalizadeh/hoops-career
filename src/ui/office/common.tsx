@@ -1,6 +1,6 @@
-// Shared Front Office helpers: money formatting, cap bar, owner mood visuals and
-// small player-row building blocks used by Office, Trade, Free Agents, Re-sign,
-// Draft, Finances and Settings.
+// Shared Front Office helpers: the cap sheet's words (cap room, the tax, roster spots, when a
+// contract ends), the cap bar, and the small building blocks of the desks' rows and sheets (Office,
+// Trade, Free agents, Re-sign, Draft, Finances, Owner, and the player page's contract).
 import { Fragment, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import type { League, Phase, Player, Team } from '../../core/types';
@@ -8,12 +8,13 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
-import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
+import { contractSeason, playerName, rosterMaxNow, standardRoster } from '../../core/league/helpers';
 import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releaseSchedule, stretchDeadMoney, stretchPhrase, stretchedSeasons } from '../../core/league/contracts';
 import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
+import { Term } from '../components/Glossary';
 import './office.css';
 import { money } from '../../core/format';
 
@@ -74,28 +75,61 @@ export function tradeClosedNote(league: League): string | null {
   return why && `${why} Trading reopens after the playoffs, with the draft lottery.`;
 }
 
-export function contractYearsLabel(league: League, p: Player, fromSeason: number): string {
-  const exp = contractExp(p.contract);
-  const yrs = exp - fromSeason + 1;
-  if (yrs <= 0) return 'Expiring';
-  const opt = openOption(league, p);
-  return `${yrs} yr${yrs > 1 ? 's' : ''}${opt ? (opt === 'player' ? ' · PO' : ' · TO') : ''}`;
+// ------------------------------------------------------------------ the cap sheet's words
+// Every desk says the cap the same way: a room is never a negative number, an existing contract
+// says when it ends ("thru 27-28"), a new deal how long it runs ("× 4 yrs").
+
+/** Cap room as a figure: "Cap space $12.0M" under the cap, "Over the cap $51.2M" over it (the label opens the cap's glossary entry). */
+export function capRoomFig(space: number): { k: ReactNode; v: string; color: string } {
+  return space >= 0
+    ? { k: <Term id="cap">Cap space</Term>, v: money(space), color: 'var(--good)' }
+    : { k: <Term id="cap">Over the cap</Term>, v: money(-space), color: 'var(--warn)' };
 }
+
+/** Cap room in a phrase: "$12.0M in cap space", "$51.2M over the cap". */
+export const capRoomText = (space: number) => (space >= 0 ? `${money(space)} in cap space` : `${money(-space)} over the cap`);
+
+/** Where a payroll stands against the tax line, as a figure: the tax bill over it, the room under it. */
+export function taxFig(pay: number, line: number): { k: ReactNode; v: string; s: string; color?: string } {
+  return pay > line
+    ? { k: <Term id="tax">Luxury tax</Term>, v: money(Math.round((pay - line) * CAP.taxRate)), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
+    : { k: <Term id="tax">Under the tax</Term>, v: money(line - pay), s: `line ${money(line)}` };
+}
+
+/**
+ * Standard roster spots as every desk counts them, against the 15 of opening night: what's open,
+ * full, or how many to cut (in the offseason up to 21 can sign, but 15 play). Two-way deals ride
+ * outside the 15.
+ */
+export function rosterFig(league: League, n: number, opts: { label?: string; twoWay?: number; note?: string } = {}): { k: string; v: string; s: string; color?: string } {
+  const max = rosterMaxNow(league);
+  const over = n - CAP.rosterMax;
+  const tw = opts.twoWay ? ` · +${opts.twoWay} two-way` : '';
+  return {
+    k: opts.label ?? 'Roster',
+    v: `${n}/${CAP.rosterMax}`,
+    color: n > max ? 'var(--bad)' : over > 0 || n < CAP.rosterMin ? 'var(--warn)' : undefined,
+    s: opts.note ?? (over > 0 ? `${over} to cut` : over === 0 ? `full${tw}` : `${-over} open${tw}`),
+  };
+}
+
+/** When a contract ends, as a cap sheet says it: "expiring" this season, else "thru 27-28" (with an option still to come: "thru 28-29 PO"). */
+export function contractEnd(league: League, p: Player, season = capSeason(league)): string {
+  const exp = contractExp(p.contract);
+  if (exp <= season) return 'expiring';
+  const opt = openOption(league, p);
+  return `thru ${shortSeason(exp)}${opt ? (opt === 'player' ? ' PO' : ' TO') : ''}`;
+}
+
+/** A new deal's length after its yearly amount: "× 4 yrs". */
+export const forYears = (years: number) => `× ${years} yr${years === 1 ? '' : 's'}`;
 
 export function appealInfo(a: number): { label: string; color: string; tone: 'good' | 'info' | 'warn' | 'bad' } {
   if (a >= 1.12) return { label: 'Very interested', color: 'var(--good)', tone: 'good' };
   if (a >= 1.02) return { label: 'Interested', color: 'var(--good)', tone: 'good' };
-  if (a >= 0.94) return { label: 'Open', color: 'var(--info)', tone: 'info' };
+  if (a >= 0.94) return { label: 'Neutral', color: 'var(--info)', tone: 'info' };
   if (a >= 0.86) return { label: 'Lukewarm', color: 'var(--warn)', tone: 'warn' };
   return { label: 'Not keen', color: 'var(--bad)', tone: 'bad' };
-}
-
-export function ownerVerdict(total: number): { label: string; color: string } {
-  if (total > 0.4) return { label: 'Thrilled', color: 'var(--good)' };
-  if (total > 0.1) return { label: 'Pleased', color: 'var(--good)' };
-  if (total > -0.2) return { label: 'Patient', color: 'var(--info)' };
-  if (total > -0.5) return { label: 'Concerned', color: 'var(--warn)' };
-  return { label: 'Hot seat', color: 'var(--bad)' };
 }
 
 /** "+12" / "-40": a -1..1 grade as the owner's -100..100 scale. */
@@ -103,18 +137,27 @@ export const fmtGrade = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100
 
 // ------------------------------------------------------------------ components
 
-/** An overline heading with an optional control on its right (the Section look, for screens outside the Front Office too). */
-export function SecTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return (
-    <div className="fo-sec-row">
-      <div className="fo-sec grow">{children}</div>
-      {right}
-    </div>
-  );
-}
-
-/** Payroll vs cap vs tax, with an optional pending amount (striped). */
-export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number; cap: number; tax: number; add?: number; legend?: boolean }) {
+/**
+ * Payroll against the cap and the tax line, with an amount on top of it striped (cap holds, an
+ * offer). The legend names each part: the payroll and the stripe with their swatches (`full`), or
+ * only the two lines when the payroll is the figure above it (`lines`).
+ */
+export function CapBar({
+  pay,
+  cap,
+  tax,
+  add = 0,
+  addLabel,
+  legend = 'full',
+}: {
+  pay: number;
+  cap: number;
+  tax: number;
+  add?: number;
+  /** What the stripe is ("Cap holds", "This offer"). */
+  addLabel?: ReactNode;
+  legend?: 'full' | 'lines' | false;
+}) {
   const total = pay + Math.max(0, add);
   const max = Math.max(tax * 1.14, total * 1.03);
   const pct = (x: number) => clamp((x / max) * 100, 0, 100);
@@ -135,15 +178,23 @@ export function CapBar({ pay, cap, tax, add = 0, legend = true }: { pay: number;
       </div>
       {legend && (
         <div className="fo-legend">
-          <span>
-            <i style={{ background: tone(total) }} />
-            Payroll <b>{money(total)}</b>
-          </span>
+          {legend === 'full' && (
+            <span>
+              <i style={{ background: tone(pay) }} />
+              Payroll <b>{money(pay)}</b>
+            </span>
+          )}
+          {add > 0 && addLabel && (
+            <span>
+              <i className="fo-legend-add" />
+              {addLabel} <b>{money(add)}</b>
+            </span>
+          )}
           <span>
             Cap <b>{money(cap)}</b>
           </span>
           <span>
-            Tax <b>{money(tax)}</b>
+            Tax line <b>{money(tax)}</b>
           </span>
         </div>
       )}
@@ -160,40 +211,6 @@ export function CenterBar({ value }: { value: number }) {
     <div className="fo-cbar">
       <i style={{ left: v >= 0 ? '50%' : `${50 - w}%`, width: `${Math.max(w, 1.5)}%`, background: color }} />
     </div>
-  );
-}
-
-/** Semicircle gauge for the owner's overall mood (-1..1). */
-export function Gauge({ value, size = 150, label }: { value: number; size?: number; label?: string }) {
-  const v = clamp(value, -1, 1);
-  const r = 42;
-  const cx = 50;
-  const cy = 50;
-  const ang = Math.PI * (1 - (v + 1) / 2); // 180° (left) .. 0° (right)
-  const nx = cx + Math.cos(ang) * (r - 6);
-  const ny = cy - Math.sin(ang) * (r - 6);
-  const arc = (from: number, to: number) => {
-    const a0 = Math.PI * (1 - from);
-    const a1 = Math.PI * (1 - to);
-    const x0 = cx + Math.cos(a0) * r;
-    const y0 = cy - Math.sin(a0) * r;
-    const x1 = cx + Math.cos(a1) * r;
-    const y1 = cy - Math.sin(a1) * r;
-    return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`;
-  };
-  const verdict = ownerVerdict(v);
-  return (
-    <svg className="fo-gauge" width={size} height={size * 0.68} viewBox="0 0 100 68" role="img" aria-label={`Owner mood ${Math.round(v * 100)}`}>
-      <path d={arc(0, 0.25)} stroke="var(--bad)" strokeWidth="7" fill="none" />
-      <path d={arc(0.25, 0.4)} stroke="var(--warn)" strokeWidth="7" fill="none" />
-      <path d={arc(0.4, 0.55)} stroke="var(--info)" strokeWidth="7" fill="none" />
-      <path d={arc(0.55, 1)} stroke="var(--good)" strokeWidth="7" fill="none" />
-      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
-      <circle cx={cx} cy={cy} r="4.5" fill="var(--text)" />
-      <text x={cx} y={66} textAnchor="middle" fontSize="12" fontWeight="800" fill={verdict.color}>
-        {label ?? verdict.label.toUpperCase()}
-      </text>
-    </svg>
   );
 }
 

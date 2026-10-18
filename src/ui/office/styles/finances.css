@@ -1,0 +1,168 @@
+/* Finances: attendance and the ticket, the season's costs as one stacked bar, dead money, the
+   budgets, and profit by season. */
+
+.fo-att,
+.fo-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* the season's costs as one stacked bar, a swatch for each line under it */
+.fo-stack {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.fo-stack > div {
+  height: 100%;
+}
+
+.fo-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: 0;
+}
+
+.fo-legend-lines {
+  margin-bottom: 4px;
+}
+
+.fo-dead-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 14px;
+}
+
+.fo-dead-row .grow {
+  min-width: 0;
+}
+
+.fo-dead-s {
+  flex: none;
+  width: 44px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.fo-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.fo-budget-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fo-budget-h h3 {
+  min-width: 0;
+  font-family: var(--font);
+  font-stretch: var(--text-w);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.fo-line-txt {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.fo-ticket .statline {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.fo-ticket .statline .v {
+  font-size: 22px;
+}
+
+/* profit by season: a bar up for a profit, a muted one for the season still running */
+.fo-minichart {
+  display: flex;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.fo-minichart > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* the profits stand on the zero line, the losses hang from it */
+.fo-minichart .pos,
+.fo-minichart .neg {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+}
+
+.fo-minichart .pos {
+  align-items: flex-end;
+  min-height: 62px;
+}
+
+.fo-minichart.split .pos {
+  min-height: 42px;
+}
+
+.fo-minichart .neg {
+  align-items: flex-start;
+  min-height: 42px;
+  margin-top: -4px;
+  border-top: 1px solid var(--line-3);
+}
+
+.fo-minichart .b {
+  width: 100%;
+  max-width: 30px;
+  border-radius: 4px 4px 1px 1px;
+  background: var(--good);
+}
+
+.fo-minichart .down .b {
+  border-radius: 1px 1px 4px 4px;
+  background: var(--bad);
+}
+
+.fo-minichart .live .b {
+  opacity: 0.5;
+  background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.25) 0 4px, transparent 4px 8px);
+}
+
+.fo-minichart .v {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--good);
+  white-space: nowrap;
+}
+
+.fo-minichart .down .v {
+  color: color-mix(in srgb, var(--bad) 80%, white);
+}
+
+.fo-minichart .s {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}

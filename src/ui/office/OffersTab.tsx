@@ -16,7 +16,7 @@ import { act } from '../../state/actions';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, More, Ovr } from '../components/ui';
-import { capSeason } from './common';
+import { capSeason, contractEnd } from './common';
 import { useBusy } from '../../state/actions/office';
 import { money } from '../../core/format';
 
@@ -109,6 +109,7 @@ function OfferCard({
           <span className={`tag ${verdict.c}`}>{verdict.l}</span>
           <span className="tiny dim num grow">
             Payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
+            {after > cap.luxuryTax ? ', over the tax' : after > cap.salaryCap ? ', over the cap' : ''}
           </span>
           <button className="btn xs ghost" disabled={!!error} onClick={() => onReview(p.offer)}>
             <PencilLine size={14} /> Review
@@ -138,7 +139,9 @@ function Side({ league, title, side }: { league: League; title: string; side: Tr
               <Link to={`/player/${pid}`} className="fo-name small">
                 {playerName(p)}
               </Link>
-              <div className="fo-meta num">{money(salaryFor(p, s))}</div>
+              <div className="fo-meta num">
+                {money(salaryFor(p, s))} · {contractEnd(league, p)}
+              </div>
             </div>
           </div>
         );

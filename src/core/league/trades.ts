@@ -758,8 +758,9 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (salaryMatchGap(league, offer, key) > 0) {
       const maxIn = outSal * CAP.tradeMatchPct + CAP.tradeMatchBuffer;
       // (sending nothing, the limit is the $0.1M buffer alone: "125% of $0.0M plus $0.1M ($0.1M)" read garbled)
-      const sends = outSal > 0 ? `125% of the ${money(outSal)} it sends, plus $0.1M` : 'it sends no salary out, and the 125% rule adds only $0.1M';
-      errors.push(`${abbrev} would be over the cap after the trade, so it can take back at most ${money(maxIn)} (${sends}) — incoming is ${money(inSal)}.`);
+      // (over the cap after the trade: the 125% rule)
+      const limit = outSal > 0 ? `${money(maxIn)} limit (125% of ${money(outSal)} out + $0.1M)` : '$0.1M limit (125% rule, no salary out)';
+      errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)}, over its ${limit}.`);
     }
     // the mid-level and the bi-annual are for teams under the tax, so using one caps the team at the tax line for that season
     const tax = CAP_FOR(league, s).luxuryTax;

@@ -96,13 +96,13 @@ function Overview({ team }: { team: Team }) {
           <Statline
             items={[
               {
-                k: `Profit ${shortSeason(league.season)}`,
-                v: games || pr ? moneySigned(pr) : '—',
+                k: `${pr >= 0 ? 'Profit' : 'Loss'} ${shortSeason(league.season)}`,
+                v: games || pr ? money(Math.abs(pr)) : '—',
                 color: games || pr ? (pr >= 0 ? 'var(--good)' : 'var(--bad)') : undefined,
-                s: games ? `${games} games` : 'not started',
+                s: isOffseason(league) ? 'season over' : games ? `so far · ${games} games` : 'not started',
               },
-              { k: 'Revenue', v: games || ts.revenue ? money(ts.revenue) : '—' },
-              { k: 'Expenses', v: games || ts.expenses ? money(ts.expenses) : '—' },
+              { k: 'Revenue', v: games || ts.revenue ? money(ts.revenue) : '—', s: isOffseason(league) ? undefined : 'so far' },
+              { k: 'Expenses', v: games || ts.expenses ? money(ts.expenses) : '—', s: isOffseason(league) ? undefined : 'so far' },
             ]}
           />
         )}
@@ -122,7 +122,11 @@ function Overview({ team }: { team: Team }) {
         <div className="card fo-att">
           <Statline
             items={[
-              { k: homeGames ? 'A home game' : 'Projected', v: Math.round(attShown).toLocaleString(), s: `${full}% of ${ARENA_CAPACITY.toLocaleString()}` },
+              {
+                k: homeGames ? 'Per home game' : 'Projected',
+                v: Math.round(attShown).toLocaleString(),
+                s: full >= 100 ? 'sold out' : `${full}% of ${ARENA_CAPACITY.toLocaleString()} seats`,
+              },
               { k: 'Hype', v: Math.round(team.hype * 100), s: 'of 100' },
             ]}
           />
@@ -130,7 +134,7 @@ function Overview({ team }: { team: Team }) {
         </div>
       </Section>
 
-      <Section title="Season costs" right={<span className="tiny dim">{s > league.season ? `${seasonLabel(s)} projected` : 'full season'}</span>}>
+      <Section title={`${seasonLabel(s)} costs`} right={<span className="tiny dim">{s > league.season ? 'projected' : 'full season, projected'}</span>}>
         <div className="card">
           <div className="fo-stack" role="img" aria-label={expenses.map((e) => `${e.k} ${money(e.v)}`).join(', ')}>
             {expenses.map((e) => (

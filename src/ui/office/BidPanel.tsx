@@ -7,7 +7,7 @@ import { PREF_KEYS, type PlayerPrefs, appealTerms, playerPrefs, willSign } from 
 import { bidDecideDay, bidStanding, faInterest, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
-import { Callout, Line } from './common';
+import { Callout, Line, forYears } from './common';
 import { money } from '../../core/format';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
@@ -53,7 +53,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
         {bid && (
           <div className="fo-bid-mine">
             <span className="small dim2">
-              Your offer: {bid.years} yr{bid.years > 1 ? 's' : ''} · {money(bid.amount, 2)}
+              Your offer: {money(bid.amount, 2)} {forYears(bid.years)}
             </span>
             <button className="btn xs" disabled={busy} onClick={withdraw}>
               Withdraw

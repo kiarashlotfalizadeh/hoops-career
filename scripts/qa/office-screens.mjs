@@ -168,8 +168,11 @@ if (stage === 'all') {
   await shot('s03-draft-lottery', true);
   await go('/office');
   await shot('s04-office-lottery');
+  // the draft starts from the Play menu, and runs to your first pick
+  await go('/');
+  await play(/Go to the draft/);
+  await waitSim();
   await go('/office/draft');
-  await tryClick(page.getByRole('button', { name: /Start the draft/ }), 'start draft');
   await page.waitForTimeout(600);
   await shot('s05-draft-live');
   await shot('s05b-draft-live-full', true);
@@ -180,12 +183,25 @@ if (stage === 'all') {
     await page.waitForTimeout(600);
     await shot('s07-draft-after-pick');
   }
-  await tryClick(page.getByRole('button', { name: /Sim to end/ }).first(), 'sim to end');
-  // asked only while you still hold a pick; the simmed draft then stays open until you move on
-  await tryClick(page.getByRole('button', { name: 'Sim the draft' }), 'confirm sim');
-  await page.waitForTimeout(600);
-  await tryClick(page.getByRole('button', { name: /Continue to re-signing/ }), 'continue to re-signing');
-  await waitSim();
+  // the rest of the draft from its own screen: the staff's pick whenever you're on the clock, else
+  // "Auto-draft the rest" (confirmed while you hold a pick), until it's over and re-signing opens
+  const button = (name) => page.getByRole('button', { name }).first();
+  const inDraft = (phase) => /NBA Draft/.test(phase ?? '');
+  for (let i = 0; i < 12 && inDraft(await page.locator('.topbar').first().getAttribute('data-phase')); i++) {
+    await go('/office/draft');
+    await waitSim();
+    await page.waitForTimeout(600);
+    await clearMoments(page);
+    if (await button(/Continue to re-signing/).count()) await button(/Continue to re-signing/).click();
+    else if (await button(/Take the staff's pick/).count()) await button(/Take the staff's pick/).click();
+    else if (await button(/Auto-draft the rest/).count()) {
+      await button(/Auto-draft the rest/).click();
+      await page.waitForTimeout(400);
+      if (await page.locator('.sheet').getByRole('button', { name: 'Auto-draft the rest' }).count())
+        await page.locator('.sheet').getByRole('button', { name: 'Auto-draft the rest' }).click();
+    } else break;
+    await waitSim();
+  }
   await page.waitForTimeout(800);
   await go('/office/resign');
   await shot('s08-resign', true);
@@ -202,7 +218,8 @@ if (stage === 'all') {
   await tryClick(page.locator('.sheet').getByRole('button', { name: 'Open free agency' }), 'confirm fa');
   await page.waitForTimeout(800);
   await shot('s12-fa-day1');
-  await tryClick(page.getByRole('button', { name: /Next day/ }), 'next day');
+  await tryClick(page.getByRole('button', { name: /Advance 1 day/ }), 'next day');
+  await waitSim();
   await page.waitForTimeout(500);
   await shot('s13-fa-day2', true);
   if (await tryClick(page.locator('.fo-prow').first(), 'fa row')) {

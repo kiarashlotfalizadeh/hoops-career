@@ -123,6 +123,28 @@ describe('AI trade offers', () => {
     expect(n).toBeGreaterThan(4);
   });
 
+  it('pitch a player once at a time and rest a pitch three weeks before it comes back, one mail for each', () => {
+    for (const seed of [5, 9]) {
+      const l = season(seed);
+      // the day each pitch (its mail's subject) was made
+      const days = new Map<string, number[]>();
+      // every offer turned down at once: the same pitch would otherwise come straight back
+      const made = offersThroughDeadline(l, (p) => {
+        const players = (x: Proposal) => [...x.offer.a.pids, ...x.offer.b.pids];
+        const others = openProposals(l).filter((x) => x.id !== p.id);
+        expect(players(p).some((pid) => others.some((x) => players(x).includes(pid)))).toBe(false);
+        const subject = l.inbox.find((m) => m.proposal === p.id)!.subject;
+        days.set(subject, [...(days.get(subject) ?? []), p.day]);
+        declineProposal(l, p.id);
+      });
+      expect(made.length).toBeGreaterThan(0);
+      for (const ds of days.values()) for (let i = 1; i < ds.length; i++) expect(ds[i] - ds[i - 1]).toBeGreaterThanOrEqual(21);
+      // each pitch has one mail, however often it was made
+      const mail = l.inbox.filter((m) => m.proposal !== undefined).map((m) => `${m.from}|${m.subject}`);
+      expect(new Set(mail).size).toBe(mail.length);
+    }
+  });
+
   it("never ask for a player the user made untouchable, nor does 'what would make this work?'", () => {
     const l = season(9);
     const off = standardRoster(l, U)

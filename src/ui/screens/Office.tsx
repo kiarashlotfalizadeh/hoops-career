@@ -1,25 +1,15 @@
-// The Office hub: the GM's desk. What the desk is doing now (the phase card and its one action),
-// the decisions waiting on it, the cap sheet in one block, and the desks, each with a line of live
-// status. The contracts table lives on Team → Roster → Contracts; the owner on his own desk.
+// The Office hub: the GM's desk. What the desk is doing now (the phase card and its action), the
+// decisions waiting on it, the cap sheet in one block (the payroll against the cap and the tax line,
+// the room or how far over, the roster, the exceptions open and why the others aren't, the seasons
+// ahead), and the desks, each with a line of live status. The contracts table lives on Team → Roster
+// → Contracts; the owner on his own desk.
 import { createContext, useContext, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, ClipboardList, Crown, ListOrdered, PenLine, PiggyBank, Ticket, UserPlus } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
-import {
-  CAP_FOR,
-  OFFSEASON_ROSTER_MAX,
-  fmtDate,
-  freeAgents,
-  payroll,
-  playerName,
-  prospects,
-  rosterMaxNow,
-  standardRoster,
-  teamPlayers,
-  twoWayRoster,
-} from '../../core/league/helpers';
-import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedReason, extensionBlockedReason } from '../../core/league/contracts';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, standardRoster, teamPlayers, twoWayRoster } from '../../core/league/helpers';
+import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason } from '../../core/league/contracts';
 import { bidOnException, capHolds, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT } from '../../core/league/tenDay';
 import { draftOrder, nextPick } from '../../core/league/draft';
@@ -32,15 +22,15 @@ import { teamTxns } from '../../core/league/transactions';
 import { contractExp } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { useBusy } from '../../state/actions/office';
-import { Bar, More, PageHeader, Section, Statline } from '../components/ui';
+import { Bar, PageHeader, Section, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capSeason, isOffseason, shortSeason } from '../office/common';
+import { CapBar, HelpSheet, capRoomFig, capSeason, isOffseason, rosterFig, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
 import { useFlowRunner } from '../useFlow';
 import { seatOf } from '../office/seat';
-import { money, moneySigned } from '../../core/format';
+import { money, plural } from '../../core/format';
 
 /** The decisions the desk settles (the owner's and the job market's show on their desks' lines; the pick on the phase card). */
 const OFFICE_AGENDA: AgendaKind[] = ['cuts', 'signings', 'twoWays', 'offerSheet', 'tenDay', 'tradeOffer'];
@@ -82,6 +72,7 @@ interface Action {
   run?: () => void;
 }
 
+/** What the desk is doing now: an overline, a headline, a short line, and its action beside it (two actions go under it). */
 function Now({
   over,
   live,
@@ -102,30 +93,35 @@ function Now({
   const nav = useNavigate();
   const busy = useBusy();
   const quiet = useContext(Quiet);
-  const button = (a: Action, primary: boolean) => (
-    <button className={`btn block ${primary ? 'primary' : ''}`} disabled={!!a.run && busy} onClick={() => (a.run ? a.run() : nav(a.to!))}>
+  const button = (a: Action, primary: boolean, block: boolean) => (
+    <button className={`btn ${block ? 'block' : ''} ${primary ? 'primary' : ''}`} disabled={!!a.run && busy} onClick={() => (a.run ? a.run() : nav(a.to!))}>
       {a.label}
     </button>
   );
+  const single = !!action && !second;
   return (
     <section className={`card fo-now ${action && !quiet ? 'accent' : ''}`} aria-label="Now">
-      <div className="fo-now-over">
-        <span className={live ? 'fo-live' : ''}>{over}</span>
+      <div className="fo-now-main">
+        <div className="grow">
+          <div className="fo-now-over">
+            <span className={live ? 'fo-live' : ''}>{over}</span>
+          </div>
+          <h2 className="fo-now-t">{title}</h2>
+          {sub && <p className="fo-now-s">{sub}</p>}
+        </div>
+        {single && button(action, !quiet, false)}
       </div>
-      <h2 className="fo-now-t">{title}</h2>
-      {sub && <p className="fo-now-s">{sub}</p>}
       {children}
-      {(action || second) && (
-        <div className="col fo-now-acts">
-          {action && button(action, !quiet)}
-          {second && button(second, false)}
+      {!single && (action || second) && (
+        <div className="grid2 fo-now-acts">
+          {action && button(action, !quiet, true)}
+          {second && button(second, false, true)}
         </div>
       )}
     </section>
   );
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const picksText = (league: League, picks: { round: number; pick?: number }[]) => picks.map((d) => `#${overallPick(league, d.round, d.pick!)}`).join(', ');
 
 function PhaseCard({ league }: { league: League }) {
@@ -149,9 +145,8 @@ function PhaseCard({ league }: { league: League }) {
         );
       return (
         <Now
-          over="Trade deadline"
+          over={`Trade deadline · ${fmtDate(league.season, league.tradeDeadlineDay)}`}
           title={d === 0 ? 'Deadline today' : `${plural(d, 'day')} left`}
-          sub={fmtDate(league.season, league.tradeDeadlineDay)}
           action={{ label: 'Make a trade', to: '/office/trade' }}
         />
       );
@@ -275,10 +270,8 @@ function CapSheet({ league }: { league: League }) {
   // in the offseason, count the players actually under contract for next season
   const signedN = isOffseason(league) ? roster.filter((p) => contractExp(p.contract) >= s0).length : roster.length;
   const expiringN = roster.length - signedN;
-  const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
   const status = pay > cap.luxuryTax ? 'tax' : pay + holds > cap.salaryCap ? 'cap' : 'under';
   const dead = team.deadMoney.filter((d) => d.season === s0).reduce((a, d) => a + d.amount, 0);
-  const max = rosterMaxNow(league);
   return (
     <Section
       title={`${seasonLabel(s0)} cap sheet`}
@@ -294,7 +287,7 @@ function CapSheet({ league }: { league: League }) {
       <div className="card fo-capsheet">
         <div className="fo-pay">
           <div className="grow">
-            <div className="over">Payroll</div>
+            <div className="over">Payroll{dead > 0 ? ` · incl. ${money(dead)} dead money` : ''}</div>
             <div className="fo-pay-v num">{money(pay)}</div>
           </div>
           {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
@@ -302,46 +295,52 @@ function CapSheet({ league }: { league: League }) {
             {status === 'tax' ? 'Taxpayer' : status === 'cap' ? 'Over the cap' : 'Under the cap'}
           </span>
         </div>
-        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
+        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} addLabel={<Term id="hold">Cap holds</Term>} legend="lines" />
         <Statline
           items={[
-            { k: 'Cap space', v: money(space), color: space >= 0 ? 'var(--good)' : 'var(--warn)', s: `cap ${money(cap.salaryCap)}` },
-            tax > 0
-              ? { k: 'Tax bill', v: money(tax), color: 'var(--bad)', s: `line ${money(cap.luxuryTax)}` }
-              : { k: 'Under tax', v: money(cap.luxuryTax - pay), s: `line ${money(cap.luxuryTax)}` },
-            {
-              k: isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster',
-              v: `${signedN}/${CAP.rosterMax}`,
-              color: signedN > max ? 'var(--bad)' : signedN > CAP.rosterMax || signedN < CAP.rosterMin ? 'var(--warn)' : undefined,
-              s: expiringN ? `+${expiringN} expiring` : signedN > CAP.rosterMax ? `${signedN - CAP.rosterMax} to cut` : tw ? `+${tw} two-way` : `${CAP.rosterMax - signedN} open`,
-            },
+            { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
+            taxFig(pay, cap.luxuryTax),
+            rosterFig(league, signedN, {
+              label: isOffseason(league) ? `Roster ${shortSeason(s0)}` : 'Roster',
+              twoWay: tw,
+              note: expiringN ? `+${expiringN} expiring` : undefined,
+            }),
           ]}
         />
         <Exceptions league={league} season={s0} />
-        {(holds > 0 || dead > 0) && (
-          <div className="tiny dim num">{[holds > 0 ? `${money(holds)} in cap holds (striped)` : '', dead > 0 ? `${money(dead)} dead money` : ''].filter(Boolean).join(' · ')}</div>
-        )}
-        <More label="Next seasons">
-          <NextSeasons league={league} from={s0 + 1} />
-        </More>
+        <SeasonsAhead league={league} from={s0 + 1} />
       </div>
     </Section>
   );
 }
 
-/** Committed payroll and cap space for the seasons after this one. */
-function NextSeasons({ league, from }: { league: League; from: number }) {
+/** Committed payroll and the cap room it leaves for the three seasons after this one. */
+function SeasonsAhead({ league, from }: { league: League; from: number }) {
   const tid = league.userTid;
   return (
-    <div className="fo-next">
+    <div className="fo-next" role="table" aria-label="Seasons ahead">
+      <div className="fo-next-row fo-next-h" role="row">
+        <span className="over" role="columnheader">
+          Ahead
+        </span>
+        <span className="over" role="columnheader">
+          Committed
+        </span>
+        <span className="over" role="columnheader">
+          Cap space
+        </span>
+      </div>
       {[from, from + 1, from + 2].map((s) => {
-        const pay = payroll(league, tid, s);
-        const cap = CAP_FOR(league, s);
+        const room = CAP_FOR(league, s).salaryCap - payroll(league, tid, s);
         return (
-          <div key={s} className="fo-next-row num">
-            <span className="dim2">{shortSeason(s)}</span>
-            <span>{money(pay)} committed</span>
-            <span className={cap.salaryCap - pay >= 0 ? 'good' : 'warn'}>{moneySigned(cap.salaryCap - pay)} vs cap</span>
+          <div key={s} className="fo-next-row num" role="row">
+            <span className="dim2" role="cell">
+              {shortSeason(s)}
+            </span>
+            <span role="cell">{money(payroll(league, tid, s))}</span>
+            <span className={room >= 0 ? 'good' : 'warn'} role="cell">
+              {room >= 0 ? money(room) : `over by ${money(-room)}`}
+            </span>
           </div>
         );
       })}
@@ -349,28 +348,38 @@ function NextSeasons({ league, from }: { league: League; from: number }) {
   );
 }
 
-/** The exceptions open to a signing now (net of a pending offer that leans on one), on one line; why the rest aren't, behind More. */
+/** The room exception's short reason before any signing with cap space: its usual state. */
+const ROOM_IDLE = 'only after a cap-space signing';
+
+/** The exceptions open to a signing now (net of a pending offer that leans on one), and in a few words why the others aren't. */
 function Exceptions({ league, season }: { league: League; season: number }) {
   const rows = EXCEPTION_ORDER.map((k) => {
     const room = userExceptionRoom(league, k, season);
     const bid = bidOnException(league, k);
     const why =
-      exceptionUsedReason(league, league.userTid, k, season) ??
+      exceptionUsedShort(league, league.userTid, k, season) ??
       (bid
         ? bid.route === k
-          ? `Held for your pending offer to ${playerName(league.players[bid.pid])}.`
-          : `Gone while your offer to ${playerName(league.players[bid.pid])} holds your cap space: a team that uses its space gets the room exception instead.`
+          ? `held for your offer to ${playerName(league.players[bid.pid])}`
+          : 'gone while your offer holds your cap space'
         : room <= 0
-          ? 'Only for a team under the tax line.'
+          ? 'over the tax line'
           : null);
     return { k, room, why };
   });
   const open = rows.filter((r) => !r.why).sort((a, b) => b.room - a.room);
-  const closed = rows.filter((r) => r.why);
+  // the room exception's usual state (no cap-space signing yet) says nothing: it's left out
+  const closed = rows.filter((r) => r.why && !(r.k === 'room' && r.why === ROOM_IDLE));
+  // the same reason once, for the exceptions it closes, biggest first: "Mid-level, bi-annual: over the tax line"
+  const byWhy = new Map<string, string[]>();
+  for (const r of [...closed].reverse()) byWhy.set(r.why!, [...(byWhy.get(r.why!) ?? []), EXCEPTIONS[r.k].short]);
+  const whys = [...byWhy].map(([why, names]) => `${names.map((n, i) => (i ? n.toLowerCase() : n)).join(', ')}: ${why}`);
   return (
     <div className="fo-exc">
       <div className="fo-exc-row">
-        <span className="over">Exceptions</span>
+        <span className="over">
+          <Term id="exception">Exceptions</Term>
+        </span>
         {open.length ? (
           <span className="num bold good">
             {open.map((r, i) => (
@@ -381,20 +390,10 @@ function Exceptions({ league, season }: { league: League; season: number }) {
             ))}
           </span>
         ) : (
-          <span className="dim">None open</span>
+          <span className="dim2">None open</span>
         )}
       </div>
-      {closed.length > 0 && (
-        <More label={open.length ? 'The others' : 'Why not'}>
-          <ul className="fo-why">
-            {closed.map((r) => (
-              <li key={r.k}>
-                <b>{EXCEPTIONS[r.k].short}.</b> {r.why}
-              </li>
-            ))}
-          </ul>
-        </More>
-      )}
+      {whys.length > 0 && <div className="tiny dim">{whys.join(' · ')}</div>}
     </div>
   );
 }
@@ -406,7 +405,8 @@ function CapHelp({ league, season }: { league: League; season: number }) {
   return (
     <HelpSheet title="How the cap works">
       <p>
-        <b>Soft cap ({money(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {money(cap.vetMin, 2)}) over it.
+        <b>Soft cap ({money(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {money(cap.vetMin, 2)}) over it. The cap sheet shows the season new
+        deals count against: next season's from the draft lottery on.
       </p>
       <p>
         <b>Mid-level.</b> Once a season, for a team that stays under the tax line: one free agent up to {money(exceptionAmount(league, 'mle', season))} ({pct('mle')}% of the cap,{' '}
@@ -430,7 +430,7 @@ function CapHelp({ league, season }: { league: League; season: number }) {
       </p>
       <p>
         <b>Bird rights.</b> Re-sign your own players for any amount in the re-sign period, even over the cap. Until free agency opens (or you renounce them), each holds cap room at
-        about his ask.
+        about his ask: the striped part of the bar.
       </p>
       <p>
         <b>Restricted free agents.</b> A young player you qualify can still be re-signed in free agency, and you can match any offer sheet he signs. His cap hold (the larger of the
@@ -438,7 +438,7 @@ function CapHelp({ league, season }: { league: League; season: number }) {
       </p>
       <p>
         <b>Luxury tax ({money(cap.luxuryTax)}).</b> Every dollar over the line costs {CAP.taxRate}× at the end of the regular season; {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}
-        % of the pot goes to the teams under it.
+        % of the pot goes to the teams under it. Cap holds don't count toward it.
       </p>
       <p>
         <b>Trades.</b> A team over the cap after a trade takes back at most 125% of the salary it sends, plus $0.1M.
@@ -467,10 +467,20 @@ interface Desk {
   tone?: 'good' | 'warn' | 'bad';
 }
 
+/** This draft's picks of yours, in order: their slots once the order is set, their projections until then. */
+function draftSlots(league: League, proj: ReturnType<typeof pickProjection>): number[] {
+  return league.draftPicks
+    .filter((d) => d.tid === league.userTid && d.season === league.season)
+    .map((d) => (d.pick ? overallPick(league, d.round, d.pick) : proj(d)))
+    .filter((n): n is number => n !== undefined)
+    .sort((a, b) => a - b);
+}
+
 function Desks({ league }: { league: League }) {
   const tid = league.userTid;
   const team = league.teams[tid];
-  const faCount = useLeagueMemo(() => freeAgents(league).length, [league]);
+  const market = useLeagueMemo(() => freeAgents(league), [league]);
+  const best = market.reduce((a, p) => Math.max(a, p.ovr), 0);
   const extendable = useLeagueMemo(() => teamPlayers(league, tid).filter((p) => !extensionBlockedReason(league, p)).length, [league, tid]);
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
   const prospectsN = useLeagueMemo(() => prospects(league, league.season).length, [league]);
@@ -484,8 +494,11 @@ function Desks({ league }: { league: League }) {
   const after = league.phase === 'resign' || league.phase === 'freeAgency';
   const myPicks = league.draftPicks.filter((d) => d.tid === tid);
   const firsts = myPicks.filter((d) => d.round === 1).length;
-  const thisFirst = myPicks.find((d) => d.season === league.season && d.round === 1);
+  const slots = draftSlots(league, proj);
+  // (before opening night nothing projects: the count stands in)
+  const thisDraft = myPicks.filter((d) => d.season === league.season).length;
   const drafted = after ? Object.values(league.players).filter((p) => p.draft.year === league.season && p.draft.tid === tid && p.draft.round > 0) : [];
+  const expiring = teamPlayers(league, tid).filter((p) => !p.contract.twoWay && contractExp(p.contract) === league.season).length;
   const ts = team.seasons.find((s) => s.season === league.season);
   const pr = ts && ts.won + ts.lost > 0 ? profit(league, tid) : null;
   const jobOffers = league.jobOffers?.season === league.season ? league.jobOffers.offers.length : 0;
@@ -504,7 +517,7 @@ function Desks({ league }: { league: League }) {
       to: '/office/free-agents',
       icon: UserPlus,
       title: 'Free agents',
-      sub: `${faCount} on the market${signingClosed ? ' · signings closed' : ''}`,
+      sub: `${market.length} on the market${market.length ? `, best ${best} OVR` : ''}${signingClosed ? ' · signings closed' : ''}`,
       hot: league.phase === 'freeAgency',
       muted: signingClosed,
     },
@@ -515,11 +528,9 @@ function Desks({ league }: { league: League }) {
       sub:
         league.phase === 'resign'
           ? `Open until free agency · ${signedThisSummer(league).length} re-signed`
-          : extendable > 0
-            ? `${plural(extendable, 'player')} can be extended`
-            : league.phase === 'freeAgency'
-              ? 'Closed until next summer'
-              : 'Opens after the draft',
+          : [league.phase !== 'freeAgency' && expiring ? `${expiring} expiring after ${shortSeason(league.season)}` : '', extendable > 0 ? `${extendable} can be extended now` : '']
+              .filter(Boolean)
+              .join(' · ') || (league.phase === 'freeAgency' ? 'Closed until next summer' : 'Opens after the draft'),
       hot: league.phase === 'resign',
       muted: league.phase !== 'resign' && !extendable,
     },
@@ -527,17 +538,21 @@ function Desks({ league }: { league: League }) {
       to: '/office/draft',
       icon: ListOrdered,
       title: 'Draft',
-      sub: draftNight
-        ? league.phase === 'draft'
-          ? 'Draft night'
-          : 'The lottery is in'
-        : after
-          ? drafted.length
-            ? `You drafted ${drafted.map((p) => p.lastName).join(', ')}`
-            : 'No picks this year'
-          : thisFirst && proj(thisFirst) !== undefined
-            ? `Your first projects #${proj(thisFirst)} · ${prospectsN} prospects`
-            : `${prospectsN} prospects on the board`,
+      sub: after
+        ? drafted.length
+          ? `You drafted ${drafted.map((p) => p.lastName).join(', ')}`
+          : 'No picks this year'
+        : [
+            league.phase === 'draft' ? 'Draft night' : '',
+            slots.length
+              ? `${draftNight ? 'You pick' : 'Your picks project'} ${slots.map((n) => `#${n}`).join(', ')}`
+              : thisDraft
+                ? `${plural(thisDraft, 'pick')} this year`
+                : 'No picks this year',
+            draftNight ? '' : `${prospectsN} prospects`,
+          ]
+            .filter(Boolean)
+            .join(' · '),
       hot: draftNight,
     },
     {
@@ -545,7 +560,7 @@ function Desks({ league }: { league: League }) {
       icon: Ticket,
       title: 'Picks & moves',
       sub: [
-        `${plural(firsts, 'first')} · ${plural(myPicks.length - firsts, 'second')}`,
+        `${firsts} first- and ${myPicks.length - firsts} second-round picks`,
         lastMove ? `last move ${fmtDate(lastMove.season, lastMove.day, { month: 'short', day: 'numeric' })}` : '',
       ]
         .filter(Boolean)
@@ -555,13 +570,13 @@ function Desks({ league }: { league: League }) {
       to: '/office/finances',
       icon: PiggyBank,
       title: 'Finances',
-      sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${moneySigned(pr)} this season` : ''}`,
+      sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${pr >= 0 ? 'profit' : 'loss'} of ${money(Math.abs(pr))} ${isOffseason(league) ? `in ${shortSeason(league.season)}` : 'so far'}` : ''}`,
     },
     {
       to: '/office/owner',
       icon: Crown,
       title: 'Owner',
-      sub: js.off ? 'Job security off' : js.ultimatum ? `Ultimatum: ${js.ultimatum.text.toLowerCase()}` : `${js.label} · ${js.score}/100`,
+      sub: js.off ? 'Job security off' : js.ultimatum ? `Ultimatum: ${js.ultimatum.text.toLowerCase()}` : `Job security ${js.score}/100 · ${js.label.toLowerCase()}`,
       tone: js.off ? undefined : js.ultimatum || js.heat === 'hot' ? 'bad' : js.heat === 'warm' ? 'warn' : undefined,
     },
     {
@@ -584,7 +599,7 @@ function Desks({ league }: { league: League }) {
         {desks.map((d) => (
           <Link key={d.to} to={d.to} className={`fo-dept ${d.hot ? 'hot' : ''} ${d.muted ? 'muted' : ''}`}>
             <span className="fo-dept-ic" aria-hidden="true">
-              <d.icon size={18} />
+              <d.icon size={17} />
             </span>
             <span className="grow">
               <span className="fo-dept-t">{d.title}</span>
