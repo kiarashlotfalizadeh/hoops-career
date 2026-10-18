@@ -5,7 +5,7 @@ import { buildSimInput, userGameOnDay } from '../../../core/league/games';
 import { nextMeeting } from '../../../core/ai/opponentPlan';
 import type { GameType, League, Tactics, TacticsPatch } from '../../../core/types';
 
-export type LabMode = 'project' | 'compare' | 'counters';
+export type LabMode = 'project' | 'compare';
 
 /** A verdict needs the change to clear two standard errors (about a 95% interval). */
 export const SIGMAS = 2;

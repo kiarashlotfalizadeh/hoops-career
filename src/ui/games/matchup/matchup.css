@@ -113,7 +113,7 @@
   line-height: 1.4;
 }
 .mu-empty {
-  padding: 14px;
+  padding: var(--pad-card);
   font-size: 13.5px;
   color: var(--text-dim);
 }
@@ -158,7 +158,7 @@
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
   gap: 10px;
-  padding: 12px 14px;
+  padding: 10px var(--row-px);
 }
 .mu-key-n {
   font-family: var(--display);
@@ -191,7 +191,7 @@
   background: var(--surface);
 }
 .mu-key-why {
-  padding: 0 14px 12px 46px;
+  padding: 0 var(--row-px) 10px 44px;
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--text-dim);
@@ -202,7 +202,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px 4px;
+  padding: 8px var(--row-px) 4px;
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -216,7 +216,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
+  padding: var(--row-py) var(--row-px);
   min-height: 44px;
   font-size: 13.5px;
 }
@@ -227,7 +227,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 14px;
+  padding: 8px var(--row-px);
 }
 .mu-q-row {
   display: flex;
@@ -240,7 +240,7 @@
 .mu-fives-h {
   display: flex;
   justify-content: space-between;
-  padding: 10px 14px 6px;
+  padding: 8px var(--row-px) 6px;
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -256,7 +256,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
-  padding: 6px 14px;
+  padding: 4px var(--row-px);
   border-top: 1px solid var(--line);
 }
 .mu-five-p {
@@ -299,8 +299,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 14px;
-  min-height: 52px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
   font-size: 13.5px;
   line-height: 1.35;
 }
@@ -310,8 +310,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 8px 10px 14px;
-  min-height: 52px;
+  padding: var(--row-py) 8px var(--row-py) var(--row-px);
+  min-height: var(--row-min);
 }
 .mu-item .grow {
   display: flex;
@@ -328,21 +328,6 @@
   color: var(--info);
   font-weight: 700;
 }
-.mu-linkrow {
-  width: 100%;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  min-height: 48px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--accent-text);
-}
-.mu-linkrow:active {
-  background: var(--surface);
-}
 .mu-group {
   display: flex;
   flex-direction: column;
@@ -354,14 +339,98 @@
   gap: 6px;
 }
 
+/* what a plan item or a counter changes, in the Tactics screen's words */
+.mu-changes {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+/* how long the plan lasts, under its items */
+.mu-scope {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mu-scope .seg {
+  flex: 1;
+}
+
+/* the counters: the test row and its progress, then one counter per row (ranked once tested, with
+   its change at the right and a better/worse edge) */
+.mu-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
+  background: var(--bg-2);
+}
+.mu-run .over {
+  flex: none;
+}
+.mu-run .chips {
+  flex-wrap: nowrap;
+}
+.mu-runbusy {
+  padding: 8px;
+}
+.mu-runbusy .card {
+  border: none;
+  padding: 4px;
+}
+.mu-runres {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px var(--row-px);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.mu-cand {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px var(--row-px);
+}
+.mu-cand.good {
+  box-shadow: inset 3px 0 0 var(--good);
+}
+.mu-cand.bad {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+.mu-cand-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+.mu-rank {
+  width: 14px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text-dim);
+}
+.mu-cand-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
 /* hack-a-player rows */
 .mu-hack {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 48px;
-  padding: 6px 14px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
   text-align: left;
 }
 .mu-hack:active {
@@ -390,7 +459,7 @@
   width: 100%;
   min-height: 84px;
   resize: vertical;
-  padding: 12px 14px;
+  padding: 10px var(--row-px);
   border-radius: var(--radius);
   border: 1px solid var(--line-2);
   background: var(--raised);
@@ -409,8 +478,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
-  min-height: 56px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
 }
 .mu-threat .grow {
   display: flex;
@@ -424,4 +493,30 @@
 }
 .mu-dock .btn.primary {
   flex: 2;
+}
+
+/* the slab's plan line: a tap to the Plan tab */
+.mu-planlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
+  font-weight: 700;
+  color: var(--accent-text);
+  position: relative;
+}
+.mu-planlink::after {
+  content: '';
+  position: absolute;
+  inset: -10px -6px;
+}
+.mu-planlink.set {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* five tabs on game day: tighter, so the last one isn't cut off on a phone */
+.mu-slab + .lg-tabs .seg.tabs button {
+  padding: 0 8px;
+  letter-spacing: 0.04em;
 }

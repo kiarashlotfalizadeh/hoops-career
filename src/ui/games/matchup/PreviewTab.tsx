@@ -80,7 +80,7 @@ function Projection({ league, game, pv }: { league: League; game: ScheduledGame;
             teams&apos; pace, {pv.neutral ? 'with no home court on the neutral floor' : `plus home court (about ${Math.abs(pv.projection.edge).toFixed(1)} points)`}. A game&apos;s
             margin varies by about 13 points either way.
           </p>
-          <p>Test → Project plays it through the real engine, with both game plans.</p>
+          <p>The Lab tab plays it through the real engine, with both game plans.</p>
         </Help>
       }
     >

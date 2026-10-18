@@ -40,7 +40,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 14px 12px;
+  padding: 8px var(--row-px) 10px;
   border-top: 1px solid var(--line);
 }
 .lab-pline {
@@ -116,7 +116,7 @@
   display: grid;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: var(--cell-py) var(--row-px);
   font-size: 13.5px;
 }
 .lab-tr > :not(:first-child) {
@@ -142,7 +142,7 @@
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
   gap: 10px;
-  padding: 10px 14px;
+  padding: 8px var(--row-px);
 }
 .lab-imp-v {
   font-family: var(--display);
@@ -150,42 +150,17 @@
   font-weight: 800;
   font-size: 18px;
 }
+/* the fix for what hurts: a line under it, led by an arrow (as on Tactics → Insights) */
 .lab-imp-a {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 12.5px;
-  color: var(--text-dim);
+  color: var(--text-2);
 }
-.lab-cand {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-}
-.lab-cand.good {
-  box-shadow: inset 3px 0 0 var(--good);
-}
-.lab-cand.bad {
-  box-shadow: inset 3px 0 0 var(--bad);
-}
-.lab-cand-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.lab-rank {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 18px;
-  color: var(--text-dim);
-  width: 16px;
-}
-.lab-cand-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.lab-imp-a::before {
+  content: '→ ';
+  color: var(--accent-text);
+  font-weight: 700;
 }
 .lab-busy {
   display: flex;

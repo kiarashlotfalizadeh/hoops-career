@@ -15,6 +15,7 @@ import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
 import { Avatar, Chips, Help, Ovr, Section, Sheet, Tag } from './ui';
+import { Term } from './Glossary';
 import './scouting.css';
 
 function Notes({ them, me }: { them: Player; me: Player }) {
@@ -117,7 +118,9 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
         {them && row && (
           <div className="col" style={{ gap: 16 }}>
             <div className="col" style={{ gap: 8 }}>
-              <div className="over">How to guard him</div>
+              <div className="over">
+                <Term id="guarding">How to guard him</Term>
+              </div>
               <Chips
                 label={`How to guard ${names(them.pid)}`}
                 value={cur ?? ('' as PlayerDefense)}

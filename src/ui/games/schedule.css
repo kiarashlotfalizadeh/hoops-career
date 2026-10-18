@@ -17,8 +17,8 @@
   grid-template-columns: 44px 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 0 10px;
-  padding: 8px 12px 8px 14px;
-  min-height: 58px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
 }
 .gs-row + .gs-row,
 .gs-row + .list-divider,
@@ -73,9 +73,21 @@
   color: var(--text-dim);
 }
 .gs-sub {
+  display: flex;
+  gap: 4px;
   margin-top: 1px;
   font-size: 12px;
   color: var(--text-dim);
+  white-space: nowrap;
+}
+/* one line: a long name gives way, the figures after it stay */
+.gs-sub > :not(.num) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gs-sub > .num {
+  flex: none;
 }
 .gs-tag {
   font-weight: 750;
@@ -155,5 +167,8 @@
   display: none;
 }
 .gs-filters .chip {
+  flex: none;
+}
+.gs-sub > .gs-tag {
   flex: none;
 }

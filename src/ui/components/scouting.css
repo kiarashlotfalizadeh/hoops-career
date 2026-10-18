@@ -1,4 +1,4 @@
-/* Scouting numbers (Scouting tab, game plan screen) */
+/* Scouting numbers (a matchup page's Scout, Tactics → Insights) and who guards whom (its Matchups). */
 /* figures four to a row, hairlines between them (as a Statline), no box per figure */
 .scout-ranks {
   display: grid;
@@ -48,8 +48,8 @@
   align-items: center;
   gap: 4px 10px;
   width: 100%;
-  min-height: 60px;
-  padding: 10px 10px 10px 14px;
+  min-height: var(--row-min);
+  padding: 8px 10px 8px var(--row-px);
   text-align: left;
 }
 .gp-match:active {
@@ -108,8 +108,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 50px;
-  padding: 8px 14px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
   text-align: left;
 }
 .gp-opt:active {

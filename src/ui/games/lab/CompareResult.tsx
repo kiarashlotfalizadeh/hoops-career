@@ -6,6 +6,7 @@ import { FINISH_LABEL, type FinishType } from '../../../core/sim/log';
 import { CLEAR_OUT, SETS } from '../../../core/sim/sets';
 import type { League, SetId } from '../../../core/types';
 import { Help, Section, Statline } from '../../components/ui';
+import { Term } from '../../components/Glossary';
 import { CompareBar } from '../../components/charts';
 import { f1, p0, p1, rosterNames, signed } from '../../stats';
 import { SIGMAS } from './sides';
@@ -44,7 +45,9 @@ export function CompareResult({ before, after, league }: { before: LabSummary; a
           </div>
           <div className="lab-d">
             <span className={`lab-delta big num ${tone || 'dim2'}`}>{signed(d)}</span>
-            <span className="tiny dim">net / 100 poss · ± {f1(margin)}</span>
+            <span className="tiny dim">
+              net / 100 poss · <Term id="range">± {f1(margin)}</Term>
+            </span>
           </div>
         </div>
         <Statline

@@ -19,7 +19,7 @@ export default function LabPage() {
   // a saved playbook (from Tactics' My playbooks) as the before side, instead of the tactics before an edit
   const [baselineName] = useState(() => (params.get('compare') ? labBaselineName(league) : null));
   useEffect(() => clearLabBaseline(), []);
-  if (params.get('mode') === 'counters') return <Navigate to={`/games/${opp ?? defaultOpponent(league)}?tab=test&lab=counters`} replace />;
+  if (params.get('mode') === 'counters') return <Navigate to={`/games/${opp ?? defaultOpponent(league)}?tab=plan`} replace />;
   return (
     <main className="page">
       <PageHeader
@@ -30,7 +30,7 @@ export default function LabPage() {
           <Help title="Tactics Lab">
             <p>Real engine games, before you commit: both teams play as they would tonight, with both game plans, rest, wear and injuries.</p>
             <p>Project: your plan against any team. Compare: your tactics before and after an edit, through the same games.</p>
-            <p>To rank the staff&apos;s counters for one team, open its matchup page: Test.</p>
+            <p>To test the staff&apos;s counters for one team, open its matchup page: Plan.</p>
           </Help>
         }
       />

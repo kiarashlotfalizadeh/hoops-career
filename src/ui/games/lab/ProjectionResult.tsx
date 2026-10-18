@@ -7,6 +7,7 @@ import { IMPACT_TEXT, impactAdvice, impactSentence, teamRef } from '../../../cor
 import type { League } from '../../../core/types';
 import { useLeagueMemo } from '../../../state/store';
 import { Section, Statline } from '../../components/ui';
+import { Term } from '../../components/Glossary';
 import { CompareBar } from '../../components/charts';
 import { matchupColors } from '../../teamColors';
 import { f1, p0, p1, rosterNames, signed } from '../../stats';
@@ -48,8 +49,8 @@ export function ProjectionResult({ r, league, oppTid }: { r: LabSummary; league:
         <Statline
           items={[
             { k: 'Win %', v: p0(r.winPct) },
-            { k: 'Net rtg', v: signed(r.net), s: `± ${f1(SIGMAS * r.netSE)}`, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
-            { k: 'Score', v: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)}`, s: `Pace ${f1(r.pace)}` },
+            { k: 'Net rtg', v: signed(r.net), s: <Term id="range">± {f1(SIGMAS * r.netSE)}</Term>, color: r.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+            { k: 'Margin', v: signed(r.ptsFor - r.ptsAgainst), s: `${Math.round(r.ptsFor)}-${Math.round(r.ptsAgainst)} · pace ${f1(r.pace)}` },
           ]}
         />
       </section>

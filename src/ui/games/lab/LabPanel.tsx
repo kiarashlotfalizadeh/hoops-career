@@ -1,29 +1,28 @@
 // The Lab itself, one panel with two homes: the Lab screen (/lab: project your plan against anyone,
-// or compare your tactics before and after an edit) and the matchup page's Test (against that team:
-// project, or rank the staff's counters). Real engine games; nothing is saved until you apply one.
+// or compare your tactics before and after an edit) and the matchup page's Lab (your plan against
+// that team, projected). Real engine games; nothing is saved. The staff's counters are tested on the
+// matchup page's Plan, with the same runner.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Beaker, Play } from 'lucide-react';
-import type { Candidate, CandidateResult, LabSummary } from '../../../core/ai/lab';
-import { applyPatch } from '../../../core/ai/lab';
-import { counterCandidates, scoutTeam, tacticsWithCounter } from '../../../core/ai/advisor';
+import type { LabSummary } from '../../../core/ai/lab';
+import { scoutTeam } from '../../../core/ai/advisor';
 import { aiGamePlan, nextMeeting } from '../../../core/ai/opponentPlan';
 import { ensureRotation } from '../../../core/league/games';
-import { persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
+import { planFor } from '../../../core/league/gamePlans';
 import { curTeamSeason } from '../../../core/league/helpers';
 import type { League, Tactics } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
-import { act, touch } from '../../../state/actions';
+import { touch } from '../../../state/actions';
 import { Chips, Section, Segmented, Spinner, scrollBehavior } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { CompareResult } from './CompareResult';
-import { CountersResult } from './CountersResult';
 import { ProjectionResult } from './ProjectionResult';
-import { defaultOpponent, labGameType, labSeed, sideFor, toTactics, type LabMode } from './sides';
+import { defaultOpponent, labGameType, labSeed, sideFor, type LabMode } from './sides';
 import { LabProgress, useLabRunner } from './useLabRunner';
 import './lab.css';
 
-const MODE_LABEL: Record<LabMode, string> = { project: 'Project', compare: 'Compare', counters: 'Counters' };
+const MODE_LABEL: Record<LabMode, string> = { project: 'Project', compare: 'Compare' };
 
 /** What a finished run was for: results only show, and only apply, for the matchup they simulated. */
 interface Run {
@@ -31,7 +30,6 @@ interface Run {
   mode: LabMode;
   result?: LabSummary;
   base?: LabSummary;
-  cands?: CandidateResult[];
 }
 
 /**
@@ -64,8 +62,6 @@ export function LabPanel({
   const [run, setRun] = useState<Run | null>(null);
   const lab = useLabRunner();
   const simming = useStore((s) => !!s.sim);
-  // "opponent:counter id": counters are drafted per opponent and share their ids
-  const [applied, setApplied] = useState<string[]>([]);
   const user = league.userTid;
   const noBaseline = mode === 'compare' && !baseline;
 
@@ -93,32 +89,8 @@ export function LabPanel({
         ]);
         return { opp, mode, base, result };
       });
-    } else if (mode === 'counters') {
-      const candidates = counterCandidates(league, user, opp);
-      const n = Math.max(20, Math.round(games * 0.75));
-      // each counter plays as the plan would play it: in place of the plan's item in its group
-      const tested: Candidate[] = candidates.map((c) => ({ ...c, patch: toTactics(tacticsWithCounter(league, opp, c)) }));
-      job = await lab.run(n * (candidates.length + 1), async (w, track) => {
-        const out = await w.evaluate(sideFor(league, user, opp), b, tested, n, seed, track(0), type);
-        const byId = new Map(candidates.map((c) => [c.id, c]));
-        // (what goes into the plan is the counter itself, relative to the playbook)
-        return { opp, mode, base: out.base, cands: out.results.map((r) => ({ ...r, patch: byId.get(r.id)!.patch })) };
-      });
     }
     if (job) setRun(job);
-  };
-
-  const applyCand = (c: CandidateResult, scope: 'game' | 'always', vs: number) => {
-    const ok = act(scope === 'game' ? 'Game plan' : 'Tactics', (l) => {
-      if (scope === 'always') {
-        const tm = l.teams[l.userTid];
-        // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
-        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
-      } else setPlanItem(l, vs, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
-    });
-    if (!ok) return;
-    setApplied((a) => [...a, `${vs}:${c.id}`]);
-    useStore.getState().toast(scope === 'game' ? `Plan vs ${league.teams[vs].abbrev}: ${c.label}` : `Your tactics: ${c.label}`, 'good');
   };
 
   // a finished run brings its results up under the header
@@ -145,7 +117,6 @@ export function LabPanel({
               ? `Your playbook “${baselineName}” (before) vs your tactics now, through the same games.`
               : 'Your tactics before vs after your edits, through the same games.'
             : 'Your tactics before and after an edit, through the same games.')}
-        {mode === 'counters' && 'Each of the staff’s counters against them, ranked.'}
       </div>
       <div className="lab-run">
         <span className="over">Games</span>
@@ -166,7 +137,7 @@ export function LabPanel({
         </button>
       </div>
 
-      {busy && <LabProgress lab={lab} what={mode === 'counters' ? 'each counter' : `${games} games`} />}
+      {busy && <LabProgress lab={lab} what={`${games} games`} />}
 
       {!busy && !shown && (
         <div className="lab-empty">
@@ -183,7 +154,6 @@ export function LabPanel({
       <div ref={results} className="lab-anchor" aria-hidden="true" />
       {shown?.result && mode === 'project' && <ProjectionResult r={shown.result} league={league} oppTid={shown.opp} />}
       {shown?.result && shown.base && mode === 'compare' && <CompareResult before={shown.base} after={shown.result} league={league} />}
-      {shown?.cands && shown.base && <CountersResult league={league} opp={shown.opp} base={shown.base} cands={shown.cands} applied={applied} onApply={applyCand} />}
     </>
   );
 }

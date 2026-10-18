@@ -36,12 +36,12 @@ export function AttackCard({ league, opp }: { league: League; opp: number }) {
         <Help title="Attack a defender">
           While he&apos;s on the floor your offense runs its isolations, post-ups and ball screens at the player he guards, and that player sets most of the ball screens, so a
           switch leaves him on your ball handler and a weak screen defender can&apos;t hold up the coverage. It costs some ball movement: motion and handoffs lose a little. Against
-          a real weak link it&apos;s a small edge; against a good defender it costs points. It replaces Hunt mismatches while he plays. The numbers are perimeter defense on the
-          40-99 scale; ★ is the staff&apos;s pick.
+          a real weak link it pays; against a good defender it costs points. It replaces Hunt mismatches while he plays.
         </Help>
       }
     >
       <div className="mu-group">
+        <div className="tiny dim">Their rotation by perimeter defense (40-99), weakest first · ★ the staff&apos;s pick</div>
         <Chips
           label="Defender to attack"
           value={target ?? -1}
