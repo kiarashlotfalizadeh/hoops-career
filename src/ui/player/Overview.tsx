@@ -6,6 +6,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { ROLE_META, archetype, composites } from '../../core/ratings';
 import { Bar, Help, Section, Statline, Tag, pct } from '../components/ui';
+import { Term } from '../components/Glossary';
 import { ordinalSuffix, playerSeason, signed } from '../stats';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerMoves } from '../league/MovesTab';
@@ -41,7 +42,7 @@ export function Overview({
     ...(cur
       ? [
           { k: 'USG%', v: pct(cur.usg), s: 'usage' },
-          { k: 'On net', v: signed(cur.onOff), s: 'per 100', color: cur.onOff >= 0 ? 'var(--good)' : 'var(--bad)' },
+          { k: <Term id="onnet">On net</Term>, v: signed(cur.onOff), s: 'per 100', color: cur.onOff >= 0 ? 'var(--good)' : 'var(--bad)' },
           { k: '+/-', v: signed(cur.pm), s: 'a game' },
         ]
       : []),

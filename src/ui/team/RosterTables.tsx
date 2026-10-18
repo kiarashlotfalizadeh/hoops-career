@@ -113,7 +113,7 @@ export function RosterStats({ league, roster }: { league: League; roster: Player
       <StatTable rows={roster} cols={cols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
       <div className="tm-foot">
         {current ? 'Per game this season.' : any ? 'No games yet: each player’s latest season, per game.' : 'No games played yet.'} Tap for what they are: <Term id="ts">TS%</Term>{' '}
-        · <Term id="usage">USG%</Term> · <Term id="onoff">ON NET</Term> (net rating per 100 possessions with him on the floor).
+        · <Term id="usage">USG%</Term> · <Term id="onnet">ON NET</Term>.
       </div>
     </>
   );

@@ -96,6 +96,12 @@ export const GLOSSARY: GlossaryEntry[] = [
   { id: 'ppp', term: 'PPP', group: 'Numbers', text: 'Points per possession, used for play types (pick-and-roll, spot-ups, transition...). About 1.1 is average.' },
   { id: 'onoff', term: 'On/off', group: 'Numbers', text: 'A team’s net rating with a player on the floor minus with him off it.' },
   {
+    id: 'onnet',
+    term: 'On net (on-court net rating)',
+    group: 'Numbers',
+    text: 'The team’s points scored minus allowed per 100 possessions while he is on the floor. Unlike on/off, it doesn’t subtract the minutes he sits.',
+  },
+  {
     id: 'fit',
     term: 'Fit',
     group: 'Numbers',
