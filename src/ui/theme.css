@@ -268,12 +268,6 @@ h3 {
   text-overflow: ellipsis;
 }
 /* two lines, then an ellipsis */
-.clamp2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 
 /* ------------------------------------------------------------------ layout */
 .app {
@@ -340,21 +334,7 @@ h3 {
     gap: 6px;
   }
 }
-.grid3 {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.grid4 {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-@media (max-width: 359px) {
-  .grid4 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
+
 .md-grid2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1377,14 +1357,6 @@ input[type='range']:focus-visible::-moz-range-thumb {
   border-radius: 3px;
   background: var(--accent);
 }
-.ratingrow {
-  display: grid;
-  grid-template-columns: 96px 1fr 30px;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  min-height: 26px;
-}
 
 /* ------------------------------------------------------------------ tables */
 .tablewrap {
@@ -1633,7 +1605,7 @@ table.stats tr[tabindex]:focus-visible > td:last-child {
   animation: cont-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 /* (a running sim's progress still shows: the docks ride above it) */
-body:has(.dockbar, .fo-dock, .gd-dock) .continue:not(.is-busy) {
+body:has(.dockbar, .fo-dock) .continue:not(.is-busy) {
   display: none;
 }
 
@@ -1649,9 +1621,7 @@ body:has(.dockbar, .fo-dock, .gd-dock) .continue:not(.is-busy) {
   border: 1px solid var(--line);
   min-width: 0;
 }
-.grid3 > .kpi {
-  min-width: 0;
-}
+
 .kpi .k {
   font-size: 10.5px;
   color: var(--text-dim);
@@ -1813,23 +1783,6 @@ body:has(.dockbar, .fo-dock, .gd-dock) .continue:not(.is-busy) {
 }
 
 /* ------------------------------------------------------------------ live game layout */
-.live-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-@media (min-width: 760px) and (orientation: landscape) {
-  .live-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr);
-    align-items: start;
-    gap: 14px;
-  }
-  .live-left {
-    position: sticky;
-    top: calc(var(--top-h) + var(--safe-t) + 10px);
-  }
-}
 
 .th-sort {
   font: inherit;
@@ -1877,11 +1830,6 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
     grid-column: 1 / -1;
     border-left: none;
   }
-  .grid-md2 {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 10px;
-  }
 }
 
 /* phones held sideways: slimmer chrome */
@@ -1893,16 +1841,6 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   }
   .navitem .nav-label {
     display: none;
-  }
-  .live-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr);
-    align-items: start;
-    gap: 12px;
-  }
-  .live-left {
-    position: sticky;
-    top: calc(var(--top-h) + var(--safe-t) + 8px);
   }
 }
 

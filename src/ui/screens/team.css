@@ -389,11 +389,7 @@ a.tag::after {
   font-weight: 750;
   font-size: 16px;
 }
-.tm-role-help {
-  margin-top: 2px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
+
 .tm-role .statline,
 .tm-outlook .statline {
   padding-top: 10px;

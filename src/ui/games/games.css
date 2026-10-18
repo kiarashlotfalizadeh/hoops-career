@@ -166,29 +166,6 @@
 }
 
 /* the next opponents (Team → Tactics) */
-.uo-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 58px;
-  padding: 8px 10px 8px 14px;
-}
-.uo-row:active {
-  background: var(--surface);
-}
-.uo-row > svg {
-  flex: none;
-}
-.uo-t {
-  display: block;
-  font-weight: 750;
-  font-size: 15px;
-  line-height: 1.2;
-}
-.uo-rec {
-  font-weight: 550;
-  color: var(--text-dim);
-}
 
 /* ------------------------------------------------------------------ next game (the hub's slab) */
 .gn {
@@ -354,9 +331,6 @@
   text-decoration-color: rgba(255, 255, 255, 0.4);
   text-underline-offset: 3px;
 }
-.mu-link {
-  align-self: flex-start;
-}
 
 /* a short list of bullets: what a team does, where to attack it */
 .mu-bullets {
@@ -378,12 +352,7 @@
 .mu-bullets.info {
   --bul: var(--info);
 }
-.mu-lead {
-  font-size: 14.5px;
-  line-height: 1.45;
-  color: var(--text-2);
-  margin: 0;
-}
+
 .mu-note {
   font-size: 12.5px;
   color: var(--text-dim);
@@ -682,25 +651,9 @@
 }
 
 /* the play types table */
-.mu-pt {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 46px 46px 40px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  font-size: 13.5px;
-}
+
 .mu-pt > :not(:first-child) {
   text-align: right;
-}
-.mu-pt.h {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  padding-top: 10px;
-  padding-bottom: 6px;
 }
 
 /* threats: their key players */
