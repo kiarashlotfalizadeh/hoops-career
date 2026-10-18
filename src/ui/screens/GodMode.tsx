@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeftRight, Pencil, TriangleAlert, UserPlus } from 'lucide-react';
 import { setOwnerConfidence } from '../../core/league/godMode';
+import { edit } from '../../state/actions';
 import { useLeague, useStore } from '../../state/store';
-import { PageHeader, Section, Slider, Toggle } from '../components/ui';
+import { Help, PageHeader, Section, Slider, Toggle } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { PlayerEditor } from '../god/PlayerEditor';
@@ -39,7 +40,7 @@ export default function GodMode() {
       <div className={`card god-switch ${on ? 'on' : ''}`}>
         <Toggle
           on={on}
-          onChange={(v) => useStore.getState().mutate((l) => (l.settings.godMode = v))}
+          onChange={(v) => edit((l) => void (l.settings.godMode = v))}
           label="God mode"
           help="Edit any player or team, create players and force trades. Your edits stay when it's off."
         />
@@ -64,7 +65,6 @@ export default function GodMode() {
                 <UserPlus size={17} /> New player
               </button>
             </div>
-            <div className="small dim">Ratings, bio, health, mood, contract and team. Every player's page has Edit too.</div>
           </Section>
 
           <Section title="Teams">
@@ -83,8 +83,8 @@ export default function GodMode() {
 
           <Section title="Trades">
             <div className="card row" style={{ gap: 12 }}>
-              <div className="grow small dim2">Force puts your deal through whatever the other GM, the cap or the calendar say.</div>
-              <Link to="/trade" className="btn sm">
+              <div className="grow small dim2">Force any deal through, whatever the other GM, the cap or the calendar say.</div>
+              <Link to="/office/trade" className="btn sm">
                 <ArrowLeftRight size={16} /> Trade
               </Link>
             </div>
@@ -93,7 +93,15 @@ export default function GodMode() {
           <Section title="Owner">
             <div className="card col" style={{ gap: 10 }}>
               <Slider
-                label="Owner's confidence in you"
+                label={
+                  <span className="row" style={{ gap: 6 }}>
+                    Owner's confidence in you
+                    <Help title="Owner's confidence">
+                      With Job security on, a coach under −50 at a season's review is fired once the owner's grace period is over (Difficulty sets how long).
+                    </Help>
+                  </span>
+                }
+                name="Owner's confidence in you"
                 min={-100}
                 max={100}
                 value={Math.round(owner * 100)}
@@ -101,7 +109,6 @@ export default function GodMode() {
                 format={(v) => `${v > 0 ? '+' : ''}${v}`}
                 left="Ready to fire you"
                 right="Delighted"
-                help="With Job security on, under -50 after your first two seasons a bad season gets you fired."
               />
               <button className="btn sm" style={{ alignSelf: 'flex-start' }} disabled={!!block || owner === league.ownerMood.total} onClick={saveOwner}>
                 Save

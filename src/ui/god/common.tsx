@@ -7,6 +7,7 @@ import { FREE_AGENT } from '../../core/types';
 import { fmtHeight } from '../../core/ratings';
 import { GOD_LIMITS, type EditCheck } from '../../core/league/godMode';
 import { liveInProgress } from '../../state/live';
+import { act } from '../../state/actions';
 import { useStore } from '../../state/store';
 import '../league/league.css';
 import './god.css';
@@ -28,7 +29,7 @@ export function useEditBlock(league: League): string | null {
  * Apply a god-mode change to the open league: all of it, or (if it throws) none of it, with a toast
  * saying so. Returns whether it worked.
  */
-export const applyEdit = (fn: (l: League) => void): boolean => useStore.getState().attempt('The edit', fn);
+export const applyEdit = (fn: (l: League) => void): boolean => act('The edit', fn);
 
 /** A labelled field: the label names the control inside it. */
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
