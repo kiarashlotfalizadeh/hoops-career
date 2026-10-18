@@ -3,8 +3,8 @@
 // physical) and the weakest perimeter defender in their rotation, each with the numbers behind it
 // (their games where there are enough, their ratings otherwise).
 
-import type { League, Player, PlayerDefense, PlayerStats } from '../types';
-import { attrDisplay, composites } from '../ratings';
+import type { League, Player, PlayerDefense, PlayerStats, RatingKey } from '../types';
+import { attrDisplay, composites, RATING_META } from '../ratings';
 import { seasonTotals } from '../league/helpers';
 import { projectedRotation, SCOUT_MIN_GAMES } from './scouting';
 
@@ -60,6 +60,15 @@ export function guardLine(league: League, p: Player): GuardLine {
 }
 
 /**
+ * A rating as prose says it: its name from RATING_META in lower case, then its value on the 40-99
+ * scale, as his Ratings tab shows it ("perimeter defense 64", "offensive IQ 71").
+ */
+export function ratingText(p: Player, key: RatingKey): string {
+  const label = RATING_META.find((m) => m.key === key)?.label ?? key;
+  return `${label.replace(/^[A-Z](?=[a-z])/, (ch) => ch.toLowerCase())} ${attrDisplay(p.ratings[key])}`;
+}
+
+/**
  * The staff's read on guarding one player: going under screens on a ball handler who can't shoot
  * off the dribble, top-locking a volume shooter who can't put it on the floor, getting physical with
  * a post scorer or driver who misses his free throws, sagging off a rotation player who doesn't
@@ -74,11 +83,9 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
   const taken = Math.round(line.tpa * line.gp);
   // (last season's numbers say so, as the guard planner's line does)
   const when = line.source === 'last' ? ' last season' : '';
-  // his skills named and valued as his player page shows them (three-point shooting, shot creation, finishing)
-  const threeSkill = attrDisplay((c.c3 + c.pu3) / 2);
-  const creation = attrDisplay((c.create + c.pnrHandle) / 2);
+  // (the reads weigh the engine's blends; what they quote is his ratings, as his Ratings tab shows them)
   const shoots = !games
-    ? `three-point shooting ${threeSkill}`
+    ? ratingText(p, 'tp')
     : !few
       ? `${pct1(line.tpPct)} from three on ${per(line.tpa)} a game${when}`
       : `${taken ? `${taken} three${taken === 1 ? '' : 's'}` : 'no threes'} in his ${line.gp} games${when}`;
@@ -88,21 +95,20 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     return {
       pid: p.pid,
       suggest: 'under',
-      why: `Runs ball screens (shot creation ${creation}) but is no threat to pull up (${shoots}).`,
+      why: `Runs ball screens (${ratingText(p, 'hnd')}) but is no threat to pull up (${shoots}).`,
       line,
     };
   // a volume shooter who rarely beats his man off the dribble (the bottom quarter in creation)
   if (c.c3 >= 66 && c.create < 47 && (!games || (line.tpa >= 4 && line.tpPct >= 0.36)))
-    return { pid: p.pid, suggest: 'tight', why: `A shooter (${shoots}) who rarely beats his man off the dribble (shot creation ${creation}).`, line };
+    return { pid: p.pid, suggest: 'tight', why: `A shooter (${shoots}) who rarely beats his man off the dribble (${ratingText(p, 'hnd')}).`, line };
   // a post scorer or driver who misses free throws (before sagging off him: his scoring is the threat)
-  const ftShown =
-    games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? `${pct1(line.ftPct)} from the line on ${per(line.fta)} a game${when}` : `free throws ${attrDisplay(p.ratings.ft)}`;
+  const ftShown = games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? `${pct1(line.ftPct)} from the line on ${per(line.fta)} a game${when}` : ratingText(p, 'ft');
   const ftPoor = games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? line.ftPct < 0.68 : p.ratings.ft < 55;
   if ((c.postScore >= 62 || c.rim >= 66) && ftPoor)
     return {
       pid: p.pid,
       suggest: 'body',
-      why: `Scores inside (${c.postScore >= 62 ? `post play ${attrDisplay(c.postScore)}` : `finishing ${attrDisplay(c.rim)}`}) but misses free throws (${ftShown}).`,
+      why: `Scores inside (${ratingText(p, c.postScore >= 62 ? 'post' : 'ins')}) but misses free throws (${ftShown}).`,
       line,
     };
   // a rotation player who doesn't shoot threes (by his games; by his ratings, about the bottom sixth)
@@ -110,7 +116,7 @@ export function guardAdvice(league: League, p: Player): GuardAdvice {
     return {
       pid: p.pid,
       suggest: 'sag',
-      why: !games ? `Can't shoot from three (three-point shooting ${threeSkill}).` : few && taken ? `Rarely shoots threes (${shoots}).` : `Doesn't shoot threes (${shoots}).`,
+      why: !games ? `Can't shoot from three (${ratingText(p, 'tp')}).` : few && taken ? `Rarely shoots threes (${shoots}).` : `Doesn't shoot threes (${shoots}).`,
       line,
     };
   return { pid: p.pid, line };

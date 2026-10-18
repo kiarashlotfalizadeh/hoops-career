@@ -2,11 +2,12 @@
 // top eight at tip-off, solved as the engine solves them on the floor (src/core/sim/matchups.ts),
 // with the plan's own assignments on top, and what each pairing means.
 
-import type { League, Player, ScheduledGame, Tactics } from '../types';
+import type { League, Player, RatingKey, ScheduledGame, Tactics } from '../types';
 import { ROLE_USAGE, archetype, attrDisplay, composites } from '../ratings';
 import { K, type SimTeamInput } from '../sim/engine';
 import { solveMatchups } from '../sim/matchups';
 import { buildMinutePlan, planInputs, planRoles } from '../sim/rotationPlan';
+import { ratingText } from './guarding';
 import { buildSimInput } from '../league/games';
 
 export interface MatchupRow {
@@ -111,24 +112,21 @@ export interface MatchupNote {
 }
 
 /**
- * What a pairing means, from your defender's side: the size gap, and what he does with the ball
- * against your defender's defense at his spot, named as the player page's skills name them (shot
- * creation, finishing, post play; perimeter and interior defense). Green is your edge, yellow worth
- * watching, red a mismatch to fix.
+ * What a pairing means, from your defender's side: the size gap, and his ratings with the ball against
+ * your defender's at his spot, by their names and values on the Ratings tab (ball handling against
+ * perimeter defense; post play or finishing against interior defense). Green is your edge, yellow
+ * worth watching, red a mismatch to fix.
  */
 export function matchupNotes(them: Player, me: Player): MatchupNote[] {
   const out: MatchupNote[] = [];
   const gap = Math.round(them.heightIn - me.heightIn);
   if (gap >= 3) out.push({ text: `Your defender is ${gap} in shorter`, tone: gap >= 6 ? 'bad' : 'warn' });
   else if (gap <= -4) out.push({ text: `Your defender is ${-gap} in taller`, tone: 'good' });
-  const tc = composites(them.ratings);
-  const mc = composites(me.ratings);
   const big = isBig(them);
-  const a = attrDisplay(big ? Math.max(tc.postScore, tc.rim) : (tc.pnrHandle + tc.create) / 2);
-  const d = attrDisplay(big ? mc.intDef : mc.perDef);
-  const what = big ? (tc.postScore > tc.rim ? 'post play' : 'finishing') : 'shot creation';
-  const where = big ? 'interior defense' : 'perimeter defense';
-  if (a - d >= 6) out.push({ text: `His ${what} ${a} vs your ${where} ${d}`, tone: a - d >= 12 ? 'bad' : 'warn' });
-  else if (d - a >= 6) out.push({ text: `Your ${where} ${d} vs his ${what} ${a}`, tone: 'good' });
+  const his: RatingKey = big ? (them.ratings.post > them.ratings.ins ? 'post' : 'ins') : 'hnd';
+  const yours: RatingKey = big ? 'intD' : 'perD';
+  const gapR = attrDisplay(them.ratings[his]) - attrDisplay(me.ratings[yours]);
+  if (gapR >= 6) out.push({ text: `His ${ratingText(them, his)} vs your ${ratingText(me, yours)}`, tone: gapR >= 12 ? 'bad' : 'warn' });
+  else if (gapR <= -6) out.push({ text: `Your ${ratingText(me, yours)} vs his ${ratingText(them, his)}`, tone: 'good' });
   return out;
 }
