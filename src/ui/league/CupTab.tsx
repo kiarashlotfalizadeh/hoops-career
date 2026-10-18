@@ -42,11 +42,7 @@ export function CupTab({ league }: { league: League }) {
         {lastWinner?.cupWinner !== undefined && (
           <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
         )}
-        <div className="card lg-blank">
-          <Trophy size={26} aria-hidden="true" />
-          <h3>No NBA Cup this season</h3>
-          <p>Drawn with each new schedule: groups in November, knockouts in December.</p>
-        </div>
+        <div className="card empty">No NBA Cup this season: it&apos;s drawn with each new schedule (groups in November, knockouts in December).</div>
       </>
     );
   }
@@ -127,7 +123,11 @@ export function CupTab({ league }: { league: League }) {
           </div>
         ))}
       </div>
-      {seeds && <div className="lg-note">{cup.seeds ? 'Went through' : 'Would go through today'}: group winners (#1-3) and the best runner-up (WC).</div>}
+      {seeds && (
+        <div className="lg-note">
+          {cup.seeds ? 'Went through' : 'Would go through today'}: group winners (seeds 1-3) and the best runner-up (WC). +/- and PTS count group games only.
+        </div>
+      )}
     </>
   );
 }
@@ -157,9 +157,9 @@ function GroupTables({ league, tables, seeds, decided }: { league: League; table
         <span />
         <span>Team</span>
         <span>W-L</span>
-        <span title="Point differential in group games">PD</span>
-        <span title="Points scored in group games">PF</span>
-        <span />
+        <span title="Point differential in group games">+/-</span>
+        <span title="Points scored in group games">PTS</span>
+        <span title="Knockout seed">Seed</span>
       </div>
       {tables.map((table) => {
         const seedOf = (tid: number) => {
@@ -187,7 +187,7 @@ function GroupTables({ league, tables, seeds, decided }: { league: League; table
                   </span>
                   <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : ''}>{r.won + r.lost ? (r.pd > 0 ? `+${r.pd}` : r.pd) : '—'}</span>
                   <span>{r.won + r.lost ? r.pf : '—'}</span>
-                  <span>{seed !== undefined && <span className={`tag ${!decided ? '' : seed === 4 ? 'info' : 'good'}`}>{seed === 4 ? 'WC' : `#${seed}`}</span>}</span>
+                  <span>{seed !== undefined && <span className={`tag ${!decided ? '' : seed === 4 ? 'info' : 'good'}`}>{seed === 4 ? 'WC' : seed}</span>}</span>
                 </Link>
               );
             })}
@@ -259,7 +259,7 @@ function KnockoutBracket({ league, conf, projected }: { league: League; conf: 'E
         <span>QF · {qfDate}</span>
         <span>SF · {fmtDate(league.season, cup.sfDay)}</span>
       </div>
-      <div className="bk two">
+      <div className="bk-grid two">
         <div className="bk-col r1">
           <div className="bk-pair">
             <div className="bk-slot">

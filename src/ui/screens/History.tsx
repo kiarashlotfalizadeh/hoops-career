@@ -3,7 +3,7 @@
 // Awards tab; this is the league's memory.
 import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Crown, Landmark } from 'lucide-react';
+import { ChevronDown, ChevronRight, Crown } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { RETIRED } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -51,13 +51,7 @@ export default function History() {
 function Seasons({ league }: { league: League }) {
   const list = [...league.awards].filter((a) => a.champion !== undefined || a.mvp !== undefined || a.cupWinner !== undefined).sort((a, b) => b.season - a.season);
   if (!list.length) {
-    return (
-      <div className="card lg-blank">
-        <Landmark size={26} aria-hidden="true" />
-        <h3>History starts here</h3>
-        <p>Each season&apos;s champion and MVPs land here.</p>
-      </div>
-    );
+    return <div className="card empty">No seasons finished yet: each season&apos;s champion and MVPs land here.</div>;
   }
   // a team taken over later won its earlier titles under another coach
   const tenure = league.tenureStart ?? league.startSeason;

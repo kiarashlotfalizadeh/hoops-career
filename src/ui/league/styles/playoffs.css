@@ -1,24 +1,5 @@
 /* The playoff bracket, the play-in and the Finals. */
 /* ------------------------------------------------------------------ playoff bracket */
-.lg-blank {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 6px;
-  padding: 22px 18px;
-  color: var(--text-dim);
-}
-.lg-blank h3 {
-  color: var(--text);
-  font-size: 20px;
-}
-.lg-blank p {
-  margin: 0;
-  max-width: 34ch;
-  font-size: 13.5px;
-  line-height: 1.45;
-}
 .bk-conf {
   display: flex;
   flex-direction: column;
@@ -45,7 +26,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.bk {
+.bk-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0 14px;
@@ -176,7 +157,7 @@ a.bk-s:active {
     padding: 10px 8px 8px;
   }
   .bk-head,
-  .bk {
+  .bk-grid {
     gap: 0 8px;
   }
   .bk-pair::after {
@@ -188,14 +169,14 @@ a.bk-s:active {
     left: -4px;
     width: 4px;
   }
-  .bk .bk-t {
+  .bk-grid .bk-t {
     grid-template-columns: 8px 18px minmax(0, 1fr) 10px;
     gap: 3px;
     padding: 0 3px;
   }
 }
 @media (max-width: 359px) {
-  .bk .bk-t {
+  .bk-grid .bk-t {
     gap: 2px;
     font-size: 12px;
   }
@@ -344,4 +325,18 @@ a.lg-sr-lead:active {
 }
 .lg-sr-lead + .lg-sr-lead {
   border-top: 1px solid var(--line);
+}
+/* the leaders' figures in columns named once, in the divider over them */
+.lg-sr-lead > .num,
+.lg-sr-head > span:nth-child(n + 3) {
+  flex: none;
+  width: 36px;
+  text-align: right;
+}
+.lg-sr-head.lg-sr-lead {
+  min-height: 0;
+  padding-block: 7px 5px;
+}
+.lg-sr-head > :first-child {
+  width: 20px;
 }
