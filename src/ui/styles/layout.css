@@ -1,0 +1,117 @@
+/* The page, rows, columns and grids, a page's title block and the box-less section. */
+/* ------------------------------------------------------------------ layout */
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 14px var(--gut-r) calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 36px) var(--gut-l);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* opacity only: a transform would make the page the frame of its fixed docks while it runs */
+  animation: fade 0.2s ease;
+}
+
+.page.full {
+  max-width: 1100px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.row.wrap {
+  flex-wrap: wrap;
+}
+.row.between {
+  justify-content: space-between;
+}
+.row.top {
+  align-items: flex-start;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.grid2 > .btn {
+  white-space: normal;
+  line-height: 1.15;
+}
+.grid2 > .btn > svg {
+  flex: none;
+}
+@media (max-width: 399px) {
+  .grid2 > .btn {
+    padding: 0 10px;
+    gap: 6px;
+  }
+}
+
+.md-grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+@media (min-width: 760px) {
+  .md-grid2 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* a page's title block: the overline it belongs to, the title, one line under it */
+.ph {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.ph h1 {
+  font-size: 30px;
+  line-height: 1;
+}
+.ph .ph-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.ph .back {
+  margin-left: -10px;
+}
+
+/* a section without a box: an overline heading (with an optional link) and its content */
+.sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sec-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+}
+.sec-h h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

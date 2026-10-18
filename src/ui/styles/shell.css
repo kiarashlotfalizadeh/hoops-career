@@ -1,0 +1,321 @@
+/* The app's chrome: the top bar, the tab bar and the Continue bar with its Play options. */
+/* ------------------------------------------------------------------ top bar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding-top: var(--safe-t);
+  background: rgba(7, 9, 12, 0.86);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner {
+  height: var(--top-h);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 max(10px, var(--safe-r)) 0 max(12px, var(--safe-l));
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.topbar .tb-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 44px;
+  padding-right: 6px;
+}
+.topbar .title {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.topbar .title .num {
+  color: var(--text-2);
+  margin-left: 2px;
+}
+.topbar .sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.iconbtn {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  position: relative;
+  flex: none;
+}
+.iconbtn:active {
+  background: var(--surface-2);
+}
+.iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.badge-dot {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 80%;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* ------------------------------------------------------------------ tab bar */
+.bottomnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
+  background: rgba(11, 14, 19, 0.94);
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border-top: 1px solid var(--line);
+}
+.bottomnav-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  height: var(--nav-h);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.navitem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-stretch: 100%;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  position: relative;
+}
+.navitem svg {
+  transition: transform 0.18s ease;
+}
+.navitem.active {
+  color: var(--text);
+}
+.navitem.active svg {
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+.navitem.active::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  width: 30px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent);
+}
+
+/* ------------------------------------------------------------------ the Continue bar
+   Football Manager's Continue, in thumb reach over the tab bar: the next step's name runs it, the arrow
+   opens every option, and while a sim runs it becomes the progress bar with Stop */
+.continue {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  z-index: 45;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--gut-r) 0 var(--gut-l);
+  pointer-events: none;
+}
+.continue-inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  height: var(--cont-h);
+  width: min(100%, 420px);
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  overflow: hidden;
+  position: relative;
+  animation: cont-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cont-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.continue-go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px 0 16px;
+  text-align: left;
+}
+.continue-go > svg {
+  flex: none;
+}
+.continue-go .cg-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.continue-go .cg-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 650;
+  opacity: 0.78;
+}
+.continue-more {
+  flex: none;
+  width: 50px;
+  display: grid;
+  place-items: center;
+  border-left: 1px solid rgba(0, 0, 0, 0.18);
+}
+/* on the screen the next step names: just the options, a round button at the side */
+.continue-inner.compact {
+  width: var(--cont-h);
+  border-radius: 50%;
+}
+.continue-inner.compact .continue-more {
+  width: 100%;
+  border-left: none;
+}
+.continue-go:active,
+.continue-more:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+.continue-inner.busy {
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px var(--line-2) inset;
+}
+/* the sim's progress fills the bar from the left */
+.continue-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  transition: width 0.25s ease;
+  pointer-events: none;
+}
+.continue-fill.pulse {
+  width: 100%;
+}
+.continue-busy {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 16px;
+}
+.continue-stop {
+  position: relative;
+  flex: none;
+  margin: 8px 8px 8px 0;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  font-weight: 700;
+  font-size: 13.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* the Play options sheet: one row per step, the primary one in brand */
+.flow-opt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 56px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+.flow-opt .fo-l {
+  font-weight: 750;
+  font-size: 15.5px;
+}
+.flow-opt .fo-s {
+  grid-column: 1;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.flow-opt .fo-c {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--text-dim);
+}
+.flow-opt.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.flow-opt.primary .fo-l {
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.flow-opt.primary .fo-s,
+.flow-opt.primary .fo-c {
+  color: var(--accent-ink);
+  opacity: 0.78;
+}
+.flow-opt:active {
+  transform: scale(0.99);
+}
+.flow-opt:disabled {
+  opacity: 0.5;
+}
+/* while the bar shows, the end of a page scrolls clear of it */
+body:has(.continue) .page {
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 36px);
+}
