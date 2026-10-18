@@ -2,9 +2,9 @@
 // it moves the league on (no dead ends, no buttons that do nothing).
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { useStore } from '../store';
+import { useStore, type TaskOp } from '../store';
 import { flowActions, opponentText, type FlowAction } from '../../ui/flow';
-import { faAdvance, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../../core/league/season';
+import { simDay } from '../../core/league/season';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { takeOverTeam } from '../../core/league/owner';
@@ -15,20 +15,20 @@ import { testLeague } from './fixtures';
 const st = () => useStore.getState();
 
 /** What useFlowRunner does for each command, without the router. */
-const COMMANDS: Record<string, (l: League) => unknown> = {
-  startRegular: startRegularSeason,
-  startDraft,
-  finishDraft: finishDraftPhase,
-  startFA: startFreeAgency,
-  faDay: (l) => faAdvance(l, 1),
-  faWeek: (l) => faAdvance(l, 7),
-  newSeason,
+const COMMANDS: Record<string, TaskOp> = {
+  startRegular: { kind: 'startRegular' },
+  startDraft: { kind: 'startDraft' },
+  finishDraft: { kind: 'finishDraft' },
+  startFA: { kind: 'startFA' },
+  faDay: { kind: 'faAdvance', days: 1 },
+  faWeek: { kind: 'faAdvance', days: 7 },
+  newSeason: { kind: 'newSeason' },
 };
 
 async function run(a: FlowAction) {
   if (a.sim) await st().simulate(a.sim);
   else if (a.cmd === 'quickGame') await st().simulate({ kind: 'days', n: 1 });
-  else if (a.cmd) expect(await st().task(a.label, (l) => void COMMANDS[a.cmd!](l))).toBe(true);
+  else if (a.cmd) expect(await st().task(a.label, COMMANDS[a.cmd!])).not.toBeNull();
 }
 
 const where = (l: League) => `${l.season} ${l.phase} d${l.day} fa${l.faDay} ${l.games.length}`;
@@ -37,11 +37,13 @@ afterEach(() => st().setLeague(null));
 
 describe('Play menu', () => {
   it('always has a way forward, from opening night to the next preseason', { timeout: 300_000 }, async () => {
-    const l = testLeague('flow');
-    st().setLeague(l);
-    const season = l.season;
+    st().setLeague(testLeague('flow'));
+    // each sim and phase change hands back a new league object
+    const lg = () => st().league!;
+    const season = lg().season;
     const seen = new Set<string>();
-    for (let i = 0; i < 200 && !(l.season > season && l.phase === 'preseason'); i++) {
+    for (let i = 0; i < 200 && !(lg().season > season && lg().phase === 'preseason'); i++) {
+      const l = lg();
       const acts = flowActions(l);
       const primary = acts.find((a) => a.primary);
       expect(primary, where(l)).toBeDefined();
@@ -55,10 +57,10 @@ describe('Play menu', () => {
       seen.add(`${l.phase}: ${pick!.label}`);
       const before = where(l);
       await run(pick!);
-      expect(where(l), `"${pick!.label}" did nothing`).not.toBe(before);
+      expect(where(lg()), `"${pick!.label}" did nothing`).not.toBe(before);
     }
-    expect(l.season).toBe(season + 1);
-    expect(l.phase).toBe('preseason');
+    expect(lg().season).toBe(season + 1);
+    expect(lg().phase).toBe('preseason');
     expect([...seen]).toEqual(expect.arrayContaining(['regular: Sim to end of regular season', 'draftLottery: Go to the draft', 'resign: Open free agency']));
   });
 

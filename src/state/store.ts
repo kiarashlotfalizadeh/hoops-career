@@ -1,28 +1,13 @@
 import { useMemo, type DependencyList } from 'react';
 import { create } from 'zustand';
 import type { League } from '../core/types';
-import { isQuotaError, loadLeague, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
+import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
-import { simDay, regularGamesLeft } from '../core/league/season';
-import { userGameOnDay } from '../core/league/games';
-import { schedulePlayoffDay } from '../core/league/playoffs';
+import { estimateTotal, targetDone, type SimProgress, type SimTarget, type TaskOp, type TaskResult } from './simCore';
+import { simLeague, stopSimRun, taskLeague } from './simClient';
 
-export type SimTarget =
-  | { kind: 'days'; n: number }
-  | { kind: 'untilUserGame' }
-  | { kind: 'week' }
-  | { kind: 'allStar' }
-  | { kind: 'deadline' }
-  | { kind: 'endRegular' }
-  | { kind: 'endPostseason' }
-  /** Through the play-in and the playoffs in one go (for teams that are out). */
-  | { kind: 'endPlayoffs' };
-
-export interface SimProgress {
-  label: string;
-  done: number;
-  total: number;
-}
+export type { SimProgress, SimTarget, TaskOp, TaskResult } from './simCore';
+export { allStarStop } from './simCore';
 
 export interface Toast {
   id: number;
@@ -49,8 +34,11 @@ interface AppState {
   /** Why the latest save failed; cleared by the next one that works. */
   saveProblem: SaveProblem | null;
   setLeague: (l: League | null) => void;
-  /** Mutate the league in place and re-render. */
-  mutate: (fn: (l: League) => void, save?: boolean) => void;
+  /**
+   * Mutate the league in place and re-render. Refused (false) while a sim or a phase change runs:
+   * the worker is playing on a copy of the league, which replaces this one when it's done.
+   */
+  mutate: (fn: (l: League) => void, save?: boolean) => boolean;
   /** Write the league to the device now. Resolves false (see saveProblem) if it didn't get there. */
   save: () => Promise<boolean>;
   /** Save only if something changed since the last save. */
@@ -61,10 +49,11 @@ interface AppState {
    * export first; a copy another window has saved over has nothing worth keeping.
    */
   saveBeforeLeaving: () => Promise<boolean>;
+  /** Sim days in the worker up to `target`; the screens show the league as it stands meanwhile (every 20 days). */
   simulate: (target: SimTarget) => Promise<void>;
-  /** Heavy one-shot league work (phase changes) behind the progress bar: buttons that watch `sim`
-   * are disabled meanwhile and a second call is ignored. Resolves false if it didn't run. */
-  task: (label: string, fn: (l: League) => void) => Promise<boolean>;
+  /** A phase change in the worker, behind the progress bar: buttons that watch `sim` are disabled
+   * meanwhile and a second call is ignored. Resolves to its result, or null if it didn't run. */
+  task: (label: string, op: TaskOp) => Promise<TaskResult | null>;
   /**
    * `mutate` for league work that mustn't be left half-done and runs outside the progress bar (the
    * Live screen setting up today's game and recording it): if `fn` throws, the league goes back to
@@ -82,63 +71,10 @@ let saving: Promise<boolean> | null = null;
 let queued: Promise<boolean> | null = null;
 let toastId = 1;
 
-const nextFrame = () => new Promise<void>((r) => setTimeout(r, 0));
-
 export function problemOf(e: unknown): SaveProblem {
   if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message, deleted: e.deleted };
   if (isQuotaError(e)) return { kind: 'quota', text: 'Device storage is full. Free up some space, or export a backup.' };
   return { kind: 'error', text: `Could not save to device storage${e instanceof Error && e.message ? ` (${e.message})` : ''}.` };
-}
-
-/** Day "Sim to All-Star break" lands on: the day before the All-Star Game, so the user can act first. */
-export function allStarStop(l: League) {
-  return l.allStarDay - 1;
-}
-
-function targetDone(l: League, target: SimTarget, startDay: number, startPhase: string): boolean {
-  if (target.kind === 'endPlayoffs') return l.phase !== 'playin' && l.phase !== 'playoffs';
-  if (l.phase !== startPhase) return true;
-  if (!(l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs')) return true;
-  switch (target.kind) {
-    case 'days':
-      return l.day - startDay >= target.n;
-    case 'week':
-      return l.day - startDay >= 7;
-    case 'untilUserGame':
-      if (l.day === startDay) return false;
-      if (l.phase === 'playoffs') schedulePlayoffDay(l);
-      return !!userGameOnDay(l, l.day);
-    case 'allStar':
-      // stop the day before the All-Star Game (played at the end of allStarDay), mid-break
-      return l.phase !== 'regular' || l.day >= allStarStop(l);
-    case 'deadline':
-      // deadline day itself is the last day trades are allowed
-      return l.phase !== 'regular' || l.day >= l.tradeDeadlineDay;
-    case 'endRegular':
-      return l.phase !== 'regular' || regularGamesLeft(l) === 0;
-    case 'endPostseason':
-      return false;
-  }
-}
-
-function estimateTotal(l: League, target: SimTarget): number {
-  switch (target.kind) {
-    case 'days':
-      return target.n;
-    case 'week':
-      return 7;
-    case 'untilUserGame':
-      return 3;
-    case 'allStar':
-      return Math.max(1, allStarStop(l) - l.day);
-    case 'deadline':
-      return Math.max(1, l.tradeDeadlineDay - l.day);
-    case 'endRegular':
-      return Math.max(1, l.regularSeasonDays - l.day + 1);
-    case 'endPostseason':
-    case 'endPlayoffs':
-      return 60;
-  }
 }
 
 /** Put a league object back to an earlier copy of itself, keeping its identity (and save tracking). */
@@ -164,13 +100,8 @@ function rollbackPoint(l: League): () => void {
 
 const failed = (label: string) => `${label} hit an error, so nothing changed. If it keeps happening, export a backup and report it.`;
 
-/** Leagues a sim threw on halfway through a day: their last save is read back in their place, so they are never written. */
-const halfPlayed = new WeakSet<League>();
-
 /** One write of `l`, recorded in the store while it's still the open league. */
 async function write(l: League): Promise<boolean> {
-  // (nothing of a half-played day is worth keeping: its last save stands)
-  if (halfPlayed.has(l)) return true;
   if (useStore.getState().saveProblem?.kind === 'conflict') return false;
   const at = changes;
   try {
@@ -184,28 +115,14 @@ async function write(l: League): Promise<boolean> {
   }
 }
 
-/** After a sim threw halfway: go back to the last save rather than keep a half-played day. */
-async function reloadLastSave(l: League) {
-  // an autosave, the app being hidden or another league opened over it mustn't write the half-played day meanwhile
-  halfPlayed.add(l);
-  let last: League | undefined;
-  try {
-    last = await loadLeague(l.id);
-  } catch (e) {
-    console.error(e);
-  }
-  const st = useStore.getState();
-  // another league was opened meanwhile: it stays open, and this one's last save is where it picks up
-  if (st.league !== l) return;
-  if (last) {
-    st.setLeague(last);
-    st.toast('The simulation hit an error, so your league went back to its last save.', 'bad');
-    return;
-  }
-  // never saved (or the device can't be read): this copy is the only one, so keep it
-  halfPlayed.delete(l);
-  useStore.setState({ sim: null, stopRequested: false, v: st.v + 1 });
-  st.toast("The simulation hit an error, and this league has no save to go back to. Export a backup of it (Settings) so it isn't lost.", 'bad');
+/** Bumped by every run in the worker and by opening another league: a run whose token is stale has nothing to hand back. */
+let runToken = 0;
+
+/** The league a run in the worker became takes the open one's place (what's on the device carries over). */
+function replaceLeague(from: League, to: League) {
+  adoptSync(from, to);
+  changes++;
+  useStore.setState({ league: to, v: useStore.getState().v + 1, dirty: true });
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -221,7 +138,7 @@ export const useStore = create<AppState>((set, get) => ({
     // another league opened over this one (Back to the main menu, then another save): keep its
     // unsaved changes. A reload of the same league is a way back from them, so it skips this.
     // (callers that can wait use saveBeforeLeaving first, and offer an export when it fails)
-    if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict' && !halfPlayed.has(old))
+    if (old && l && old.id !== l.id && get().dirty && get().saveProblem?.kind !== 'conflict')
       void (saving ?? Promise.resolve())
         .then(() => saveLeague(old))
         .catch((e) => {
@@ -233,14 +150,16 @@ export const useStore = create<AppState>((set, get) => ({
     saveTimer = null;
     // (a live game in progress stays journaled in the league it was in, to pick up when it's opened again)
     dropLive();
-    // a sim still running on the old league sees the swap and stops
+    // a sim still running on the old league stops, and has nothing to hand back
+    if (get().sim) stopSimRun();
+    runToken++;
     // a league that was never saved (just created) counts as a change until its first save works
     set({ league: l, v: get().v + 1, sim: null, stopRequested: false, dirty: !!l && !onDevice(l), saveProblem: null });
     setLastLeagueId(l?.id ?? null);
   },
   mutate: (fn, save = true) => {
     const l = get().league;
-    if (!l) return;
+    if (!l || get().sim) return false;
     fn(l);
     changes++;
     set({ v: get().v + 1, dirty: true });
@@ -248,6 +167,7 @@ export const useStore = create<AppState>((set, get) => ({
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(() => void get().save(), 800);
     }
+    return true;
   },
   save: () => {
     if (saveTimer) clearTimeout(saveTimer);
@@ -277,76 +197,80 @@ export const useStore = create<AppState>((set, get) => ({
   simulate: async (target) => {
     const l = get().league;
     if (!l || get().sim) return;
+    const token = ++runToken;
+    set({ sim: { label: 'Simulating', done: 0, total: estimateTotal(l, target) }, stopRequested: false });
+    // what the sim starts from is on the device first
+    await get().flush();
+    if (runToken !== token) return;
+    const done = (toast?: [string, Toast['tone']]) => {
+      if (runToken !== token) return;
+      set({ sim: null, stopRequested: false, v: get().v + 1 });
+      if (toast) get().toast(...toast);
+      void get().save();
+    };
+    // a live game left mid-way finishes from its current score here first (picked up from its journal
+    // if the app was closed since): re-simming it would record it twice. It plays out the day.
     const startDay = l.day;
     const startPhase = l.phase;
-    const total = estimateTotal(l, target);
-    const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
-    const inboxBefore = bigNews();
-    set({ sim: { label: 'Simulating', done: 0, total }, stopRequested: false });
-    // a sim that throws falls back to the last save: make that the state it starts from
-    await get().flush();
-    // a live game left mid-way finishes from its current score (picked up from its journal if the app
-    // was closed since): re-simming it would record it twice
     const journaled = liveInProgress(l);
     const live = resumeLive(l);
     if (journaled && !live) get().toast("Your game in progress couldn't be picked up where you left off, so it was played from tip-off.", 'bad');
-    let days = 0;
-    // the day this sim left the league on: the Live screen can finish its game while the sim waits
-    // (the save above, a frame), and a target that move reached needs no more days
-    let left = startDay;
-    try {
-      for (;;) {
-        // a write in flight (an autosave, the app being hidden) stores the league as it is when its turn
-        // comes, which mustn't be halfway through a day that throws
-        while (saving) await saving;
-        if (get().stopRequested || get().league !== l) break;
-        if (l.day !== left && targetDone(l, target, startDay, startPhase)) break;
-        if (live && !live.committed) live.commit(l);
-        else simDay(l);
-        left = l.day;
-        days++;
+    if (live && !live.committed) {
+      const undo = rollbackPoint(l);
+      try {
+        live.commit(l);
         changes++;
-        // re-render league views weekly during long sims; the progress bar updates daily
-        const sim = { label: 'Simulating', done: days, total: Math.max(total, days) };
-        set(days % 7 === 0 || total <= 7 ? { sim, dirty: true, v: get().v + 1 } : { sim, dirty: true });
-        if (targetDone(l, target, startDay, startPhase)) break;
-        // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
-        if (l.settings.stopOnNews !== false && days > 1 && target.kind !== 'days' && bigNews() > inboxBefore) {
-          get().toast('Stopped: something needs your attention (see Inbox).', 'neutral');
-          break;
-        }
-        if (days % 20 === 0) await get().save();
-        await nextFrame();
+        set({ dirty: true });
+      } catch (e) {
+        console.error('finishing the live game failed', e);
+        undo();
+        done([failed('Finishing the game'), 'bad']);
+        return;
       }
+      if (targetDone(l, target, startDay, startPhase) || get().stopRequested) return done();
+    }
+    // the screens keep this league while the worker plays on a copy; checkpoints and the end replace it
+    let shown = l;
+    try {
+      const out = await simLeague(l, target, {
+        progress: (p) => void (runToken === token && set({ sim: p })),
+        checkpoint: async (x) => {
+          if (runToken !== token) return;
+          replaceLeague(shown, x);
+          shown = x;
+          await get().save();
+        },
+      });
+      if (runToken !== token) return;
+      replaceLeague(shown, out.league);
+      done(out.stop === 'news' ? ['Stopped: something needs your attention.', 'neutral'] : undefined);
     } catch (e) {
       console.error('sim failed', e);
-      if (get().league === l) await reloadLastSave(l);
-      return;
+      // the league on screen is the last good one: before the sim, or its latest checkpoint
+      done([`The simulation hit an error, so it stopped at ${shown === l ? 'where it started' : 'its last save'}. If it keeps happening, export a backup and report it.`, 'bad']);
     }
-    // the league was swapped out mid-sim: leave both alone
-    if (get().league !== l) return;
-    set({ sim: null, stopRequested: false, v: get().v + 1 });
-    await get().save();
   },
-  task: async (label, fn) => {
+  task: async (label, op) => {
     const l = get().league;
-    if (!l || get().sim) return false;
+    if (!l || get().sim) return null;
+    const token = ++runToken;
     set({ sim: { label, done: 0, total: 1 } });
-    // let the disabled buttons and the progress bar paint before the main thread is busy
-    await new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => setTimeout(r, 0)) : setTimeout(r, 0)));
-    if (get().league !== l) return false;
-    // phase changes touch most of the league: keep a copy to put back if one throws halfway
-    const before = structuredClone(l);
+    await get().flush();
+    if (runToken !== token) return null;
     try {
-      get().mutate(fn);
-      return true;
+      const out = await taskLeague(l, op);
+      if (runToken !== token) return null;
+      replaceLeague(l, out.league);
+      return out.result;
     } catch (e) {
       console.error(`${label} failed`, e);
-      restore(l, before);
-      get().toast(failed(label), 'bad');
-      return false;
+      if (runToken === token) get().toast(failed(label), 'bad');
+      return null;
     } finally {
-      if (get().league === l) set({ sim: null, v: get().v + 1 });
+      if (runToken === token) {
+        set({ sim: null, v: get().v + 1 });
+        void get().save();
+      }
     }
   },
   attempt: (label, fn) => {
@@ -354,8 +278,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (!l) return false;
     const undo = rollbackPoint(l);
     try {
-      get().mutate(fn);
-      return true;
+      return get().mutate(fn);
     } catch (e) {
       console.error(`${label} failed`, e);
       undo();
@@ -364,7 +287,10 @@ export const useStore = create<AppState>((set, get) => ({
       return false;
     }
   },
-  stopSim: () => set({ stopRequested: true }),
+  stopSim: () => {
+    set({ stopRequested: true });
+    stopSimRun();
+  },
   toast: (text, tone = 'neutral') => {
     const t = { id: toastId++, text, tone };
     set({ toasts: [...get().toasts, t] });

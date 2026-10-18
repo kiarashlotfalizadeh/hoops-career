@@ -2,13 +2,13 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { problemOf, useStore } from '../store';
-import { loadLeague, SaveConflictError, saveLeague } from '../persistence';
-import { simDay } from '../../core/league/season';
+import { loadLeague, SaveConflictError } from '../persistence';
+import { newSeason, simDay } from '../../core/league/season';
 import { testLeague } from './fixtures';
 
 vi.mock('../../core/league/season', async (load) => {
   const m = await load<typeof import('../../core/league/season')>();
-  return { ...m, simDay: vi.fn(m.simDay) };
+  return { ...m, simDay: vi.fn(m.simDay), newSeason: vi.fn(m.newSeason) };
 });
 
 vi.mock('../persistence', async (load) => {
@@ -128,8 +128,34 @@ describe('saving', () => {
   });
 });
 
+describe('simming in the worker', () => {
+  it('hands back a new league and leaves the one it started from as it was', async () => {
+    const l = testLeague('sim');
+    st().setLeague(l);
+    const day = l.day;
+    const before = structuredClone(l);
+    await st().simulate({ kind: 'days', n: 2 });
+    const now = st().league!;
+    expect(now).not.toBe(l);
+    expect(now.day).toBe(day + 2);
+    expect(l).toEqual(before);
+    expect(st().sim).toBeNull();
+  });
+
+  it('refuses changes while a sim runs: the sim is playing on a copy that will replace them', async () => {
+    const l = testLeague('busy');
+    st().setLeague(l);
+    const running = st().simulate({ kind: 'days', n: 2 });
+    expect(st().mutate((x) => void (x.name = 'edited'))).toBe(false);
+    await running;
+    expect(st().league!.name).not.toBe('edited');
+    expect(st().mutate((x) => void (x.name = 'edited'))).toBe(true);
+    expect(st().league!.name).toBe('edited');
+  });
+});
+
 describe('recovering from errors', () => {
-  it('a sim that throws goes back to the last save instead of keeping a half-played day', async () => {
+  it('a sim that throws leaves the league where it started, with nothing of the half-played day', async () => {
     const l = testLeague('sim error');
     st().setLeague(l);
     await st().save();
@@ -139,121 +165,57 @@ describe('recovering from errors', () => {
       throw new Error('boom');
     });
     await st().simulate({ kind: 'week' });
-    const now = st().league!;
-    expect(now).not.toBe(l);
-    expect(now.day).toBe(day);
+    expect(st().league).toBe(l);
+    expect(l.day).toBe(day);
     expect(st().sim).toBeNull();
-    expect(st().toasts.at(-1)?.text).toMatch(/last save/);
+    expect(st().toasts.at(-1)?.text).toMatch(/hit an error/);
   });
 
-  /** A week's sim on a saved league whose second day throws halfway; `meanwhile` runs as its last save is read back. */
-  async function simThrows(name: string, meanwhile: () => Promise<unknown> | void) {
-    const l = testLeague(name);
+  it('a sim that throws after a checkpoint keeps the league as of that checkpoint, saved', async () => {
+    const l = testLeague('sim error later');
     st().setLeague(l);
-    await st().save();
     const day = l.day;
-    vi.mocked(simDay)
-      .mockImplementationOnce(vi.mocked(simDay).getMockImplementation()!)
-      .mockImplementationOnce((x) => {
-        x.day += 3;
-        throw new Error('boom');
-      });
-    const read = vi.mocked(loadLeague).getMockImplementation()!;
-    vi.mocked(loadLeague).mockImplementationOnce(async (id) => {
-      await meanwhile();
-      return read(id);
-    });
-    vi.mocked(saveLeague).mockClear();
-    await st().simulate({ kind: 'week' });
-    return { l, day };
-  }
-
-  it("nothing saves a sim's half-played day while its last save is read back", async () => {
-    // the app is hidden just then
-    const { l, day } = await simThrows('half played', async () => expect(await st().flush()).toBe(true));
-    expect(vi.mocked(saveLeague)).not.toHaveBeenCalled();
-    expect(st().league!.day).toBe(day);
-    expect((await loadLeague(l.id))!.day).toBe(day);
-  });
-
-  it('a league opened while a failed sim reads back its last save stays open, and the half-played one is not saved', async () => {
-    const other = testLeague('opened meanwhile');
-    const { l, day } = await simThrows('half played, left', () => st().setLeague(other));
-    expect(st().league).toBe(other);
-    expect(vi.mocked(saveLeague).mock.calls.some(([x]) => x === l)).toBe(false);
-    expect((await loadLeague(l.id))!.day).toBe(day);
-  });
-
-  it('sims no day while a save is writing the league, which could store one that throws halfway', async () => {
-    const l = testLeague('save in flight');
-    st().setLeague(l);
-    await st().save();
-    const write = vi.mocked(saveLeague).getMockImplementation()!;
     const sim = vi.mocked(simDay).getMockImplementation()!;
-    let writing = 0;
-    const during: number[] = [];
-    vi.mocked(saveLeague).mockImplementation(async (x) => {
-      writing++;
-      try {
-        await new Promise((r) => setTimeout(r, 30));
-        return await write(x);
-      } finally {
-        writing--;
-      }
-    });
+    let n = 0;
     vi.mocked(simDay).mockImplementation((x, o) => {
-      during.push(writing);
+      if (++n === 25) throw new Error('boom');
       sim(x, o);
-      // an autosave fires after the first day
-      if (during.length === 1) void st().save();
     });
     try {
-      await st().simulate({ kind: 'days', n: 3 });
+      await st().simulate({ kind: 'endRegular' });
     } finally {
-      vi.mocked(saveLeague).mockImplementation(write);
       vi.mocked(simDay).mockImplementation(sim);
     }
-    expect(during).toEqual([0, 0, 0]);
-  });
-
-  it('a sim that throws keeps a league that was never saved, and points to a backup', async () => {
-    const l = testLeague('never saved');
-    st().setLeague(l);
-    failPuts(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
-    vi.mocked(simDay).mockImplementationOnce(() => {
-      throw new Error('boom');
-    });
-    await st().simulate({ kind: 'week' });
-    expect(st().league).toBe(l);
-    expect(st().sim).toBeNull();
-    expect(st().toasts.at(-1)?.text).toMatch(/no save to go back to\. Export a backup/);
+    const now = st().league!;
+    expect(now.day).toBe(day + 20);
+    expect(st().toasts.at(-1)?.text).toMatch(/last save/);
+    expect((await loadLeague(l.id))!.day).toBe(day + 20);
   });
 
   it('a phase change that throws leaves the league as it was', async () => {
     const l = testLeague('task error');
     st().setLeague(l);
     const before = structuredClone(l);
-    const ran = await st().task('Training camp', (x) => {
+    vi.mocked(newSeason).mockImplementationOnce((x) => {
       x.season += 1;
       x.players = {};
       throw new Error('boom');
     });
-    expect(ran).toBe(false);
+    const ran = await st().task('Training camp', { kind: 'newSeason' });
+    expect(ran).toBeNull();
     expect(st().league).toBe(l);
     expect(l).toEqual(before);
     expect(st().sim).toBeNull();
     expect(st().toasts.at(-1)?.text).toMatch(/nothing changed/);
   });
 
-  it('opening another league stops a sim running on the old one', async () => {
+  it('opening another league stops a sim running on the old one, which hands nothing back', async () => {
     const l = testLeague('swap');
     st().setLeague(l);
-    const day = l.day;
     const running = st().simulate({ kind: 'week' });
     const other = testLeague('other');
     st().setLeague(other);
     await running;
-    expect(l.day - day).toBeLessThan(7);
     expect(st()).toMatchObject({ league: other, sim: null });
   });
 });

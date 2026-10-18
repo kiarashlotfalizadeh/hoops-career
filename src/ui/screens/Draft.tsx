@@ -6,7 +6,7 @@ import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, playerName, prospects, teamName, withRng } from '../../core/league/helpers';
 import { aiChoose, draftOrder, draftUntilUser, lotteryOdds, nextPick } from '../../core/league/draft';
 import { pickLabel, pickTermsNote, tradingClosedReason } from '../../core/league/trades';
-import { draftNextPick, finishDraftPhase, startDraft, userDraftPick } from '../../core/league/season';
+import { draftNextPick, userDraftPick } from '../../core/league/season';
 import { draftProposals } from '../../core/league/proposals';
 import { leagueMock, mockAvailable, userNextSlot, type MockDraft, type MockSlot } from '../../core/league/mockDraft';
 import { fmtHeight } from '../../core/ratings';
@@ -138,15 +138,13 @@ export default function Draft() {
   // phase changes run behind the progress bar, as from the Play menu: a second tap is a no-op and an error changes nothing
   const busy = useStore((s) => !!s.sim);
   const finish = async () => {
-    let done = false;
-    if (!(await useStore.getState().task('Finishing the draft', (l) => void (done = finishDraftPhase(l)))) || !done) return;
+    if (!(await useStore.getState().task('Finishing the draft', { kind: 'finishDraft' }))?.done) return;
     useStore.getState().toast('The draft is complete. Time to re-sign your players.', 'good');
     nav('/resign');
   };
 
   const begin = async () => {
-    let done = false;
-    if ((await useStore.getState().task('Draft night', (l) => void (done = startDraft(l)))) && done) setView('live');
+    if ((await useStore.getState().task('Draft night', { kind: 'startDraft' }))?.done) setView('live');
   };
 
   const myRemaining = league.phase === 'draft' ? draftOrder(league).filter((d) => d.tid === user) : [];

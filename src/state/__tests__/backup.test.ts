@@ -111,7 +111,7 @@ describe('import', () => {
     await loadLeague(back.id);
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
     expect((Object.prototype as { polluted?: boolean }).polluted).toBeUndefined();
-    expect(back.day).toBe(l.day + 3);
+    expect(useStore.getState().league!.day).toBe(l.day + 3);
   });
 
   it('refuses files that are not backups, too big, or from a newer version', async () => {

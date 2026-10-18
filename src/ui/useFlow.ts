@@ -1,8 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useStore } from '../state/store';
+import { useStore, type TaskOp } from '../state/store';
 import type { FlowAction } from './flow';
-import type { League } from '../core/types';
-import { faAdvance, finishDraftPhase, newSeason, newSeasonBlockedReason, startDraft, startFreeAgency, startRegularSeason } from '../core/league/season';
+import { newSeasonBlockedReason } from '../core/league/season';
 import { seasonLabel } from '../core/constants';
 
 export function useFlowRunner() {
@@ -20,13 +19,9 @@ export function useFlowRunner() {
       await st.simulate(a.sim);
       return;
     }
-    // phase changes run behind the progress bar (buttons disabled); each is also a no-op outside
-    // its phase, so a stale dispatch can't skip ahead
-    let done = false;
-    const task = (label: string, fn: (l: League) => boolean | void) =>
-      st.task(label, (l) => {
-        done = fn(l) !== false;
-      });
+    // phase changes run in the worker behind the progress bar (buttons disabled); each is also a
+    // no-op outside its phase, so a stale dispatch can't skip ahead
+    const task = (label: string, op: TaskOp) => st.task(label, op);
     switch (a.cmd) {
       case 'watchLive':
         nav('/live');
@@ -42,29 +37,32 @@ export function useFlowRunner() {
         return;
       }
       case 'startRegular': {
-        let errs: string[] = [];
-        if (!(await task('Opening night', (l) => void (errs = startRegularSeason(l))))) return;
+        const r = await task('Opening night', { kind: 'startRegular' });
+        if (!r) return;
+        const errs = r.errors ?? [];
         if (errs.length) st.toast(errs[0], 'bad');
         else st.toast('The regular season has begun!', 'good');
         return;
       }
       case 'startDraft':
-        if (await task('Draft night', startDraft)) nav('/draft');
+        if (await task('Draft night', { kind: 'startDraft' })) nav('/draft');
         return;
       case 'finishDraft':
-        if (await task('Finishing the draft', finishDraftPhase)) nav('/resign');
+        if (await task('Finishing the draft', { kind: 'finishDraft' })) nav('/resign');
         return;
       case 'startFA':
-        if (await task('Opening free agency', startFreeAgency)) nav('/free-agents');
+        if (await task('Opening free agency', { kind: 'startFA' })) nav('/free-agents');
         return;
       case 'faDay':
-        await task('Free agency', (l) => faAdvance(l, 1));
+        await task('Free agency', { kind: 'faAdvance', days: 1 });
         return;
       case 'faWeek':
-        await task('Free agency', (l) => faAdvance(l, 7));
+        await task('Free agency', { kind: 'faAdvance', days: 7 });
         return;
       case 'newSeason': {
-        if (!(await task('Training camp', newSeason))) return;
+        const r = await task('Training camp', { kind: 'newSeason' });
+        if (!r) return;
+        const done = !!r.done;
         // finishing the market stops for an offer sheet on one of the user's restricted free agents
         const blocked = !done && newSeasonBlockedReason(useStore.getState().league!);
         if (blocked) {

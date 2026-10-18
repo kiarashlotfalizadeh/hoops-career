@@ -89,31 +89,29 @@ describe('live game', () => {
     expect(l.day).toBe(day + 1);
   });
 
-  it('a live game whose league went back to its last save (a sim error) is gone, and the save picks it up where it was saved', async () => {
+  it('a live game that throws as "Finish this game" plays it out stays where it was, and finishes once later', async () => {
     const l = testLeague('reload');
     toGameDay(l);
     const lg = goLive(l);
     lg.simTo('quarter');
-    const q1 = [lg.sim.T[0].score, lg.sim.T[1].score];
+    const day = l.day;
     expect(playedElsewhere(lg, l)).toBeNull();
-    // "Finish this game" from the Play menu throws halfway: the store opens the last save in its place
+    // "Finish this game" from the Play menu throws halfway: the league goes back to how it was before it
+    const commit = lg.commit.bind(lg);
     lg.commit = () => {
       throw new Error('boom');
     };
     await useStore.getState().simulate({ kind: 'days', n: 1 });
-    const now = useStore.getState().league!;
-    expect(now).not.toBe(l);
-    // the Live screen stops animating it (finishing it would throw: its league isn't open any more)
-    expect(playedElsewhere(lg, now)).toBe('gone');
-    const again = prepareLive(now)!;
-    expect(again.game.gid).toBe(lg.game.gid);
-    // the sim saved the league before it started: the game went into that save as far as the break
-    expect(again.resumed).toBe('journal');
-    expect([again.sim.q, again.sim.clock <= 0.05, [again.sim.T[0].score, again.sim.T[1].score]]).toEqual([1, true, q1]);
-    expect(playedElsewhere(again, now)).toBeNull();
-    expect(again.commit(now).gid).toBe(lg.game.gid);
-    expect(playedElsewhere(again, now)).toBe(lg.game.gid);
-    expect(once(now, lg.game.gid)).toBe(1);
+    expect(useStore.getState().league).toBe(l);
+    expect(l.day).toBe(day);
+    expect(once(l, lg.game.gid)).toBe(0);
+    expect(useStore.getState().toasts.at(-1)?.text).toMatch(/hit an error/);
+    // the game is still today's to finish, and finishing it records it once
+    expect(playedElsewhere(lg, l)).toBeNull();
+    lg.commit = commit;
+    expect(lg.commit(l).gid).toBe(lg.game.gid);
+    expect(playedElsewhere(lg, l)).toBe(lg.game.gid);
+    expect(once(l, lg.game.gid)).toBe(1);
   });
 
   it('a game the Live screen finishes while "Finish this game" is saving is the one day that sim plays', async () => {

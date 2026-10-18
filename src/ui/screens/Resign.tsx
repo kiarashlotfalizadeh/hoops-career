@@ -16,7 +16,6 @@ import {
   wantsOut,
 } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
-import { startFreeAgency } from '../../core/league/season';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { Avatar, PageHeader, Section, Sheet, Statline } from '../components/ui';
@@ -128,7 +127,7 @@ function ResignPhase() {
   const busy = useStore((s) => !!s.sim);
   const openFA = async () => {
     // runs behind the progress bar; a second tap (or a stale screen) is a no-op
-    if (!(await useStore.getState().task('Opening free agency', (l) => void startFreeAgency(l)))) return;
+    if (!(await useStore.getState().task('Opening free agency', { kind: 'startFA' }))) return;
     useStore.getState().toast('Free agency is open!', 'good');
     nav('/free-agents');
   };

@@ -24,7 +24,7 @@ import {
   wantsTwoWay,
 } from '../../core/league/contracts';
 import { bidHolds, capPayroll, offerRoute, signingClosedReason, userExceptionRoom, userTwoWayOffer, withdrawBid } from '../../core/league/freeAgency';
-import { FA_DAYS, faAdvance, faDayNumber, faOver } from '../../core/league/season';
+import { FA_DAYS, faDayNumber, faOver } from '../../core/league/season';
 import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
 import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, tenDayPay, tenDayUntil, wantsTenDay } from '../../core/league/tenDay';
 import { contractExp, playerAge } from '../../core/playerGen';
@@ -147,7 +147,7 @@ export default function FreeAgents() {
     const sheeted = sheetsOut.map((p) => p.pid);
     const from = faDayNumber(league) + 1;
     // behind the progress bar, like the Play menu's: a second tap while it runs is a no-op
-    if (!(await useStore.getState().task('Free agency', (l) => faAdvance(l, days)))) return;
+    if (!(await useStore.getState().task('Free agency', { kind: 'faAdvance', days }))) return;
     const l = useStore.getState().league!;
     const signed = before
       .map((pid) => l.players[pid])
