@@ -83,8 +83,9 @@ describe('broadcast graphics', () => {
 
   it('a game picked up part-way puts up only what happens after it: everything it already called for counts as shown', () => {
     const { views, logs } = playThrough(11);
-    // halfway through, with a big night or a double-double already on the court
-    const mid = views[Math.floor(views.length / 2)];
+    // from halfway on, the first snapshot with a big night or a double-double already on the court (not at a
+    // break, where the team numbers come one at a time)
+    const mid = views.slice(Math.floor(views.length / 2)).find((v) => v.clock > 0.05 && graphicCandidates(input(v, logs)).some((g) => g.kind !== 'team'))!;
     const due = graphicCandidates(input(mid, logs));
     expect(due.length).toBeGreaterThan(0);
     const g = nextGraphic(input(mid, logs));
@@ -171,7 +172,8 @@ describe('record book graphics', () => {
   it('a franchise or league scoring record broken goes up, the league one first; one within reach late is a watch', () => {
     const { sim, views, logs } = playThrough(23);
     const end = views[views.length - 1];
-    const top = [...end.box.home.players].sort((a, b) => b.pts - a.pts)[0];
+    // (the night's top scorer, whichever side he's on: a record is tonight's best)
+    const top = [...end.box.home.players, ...end.box.away.players].sort((a, b) => b.pts - a.pts)[0];
     expect(top.pts).toBeGreaterThan(10);
     const at = (records: PlayerBefore['records']) =>
       graphicCandidates(input(end, logs, { before: new Map([[top.pid, { records }]]) })).filter((g) => g.kind === 'record' || g.id.startsWith('rec-'));
