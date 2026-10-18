@@ -3,7 +3,7 @@
 
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
-import { K } from './constants';
+import { K, lev, levExtra } from './constants';
 import type { SP, ST } from './state';
 import type { GameSim } from './game';
 
@@ -20,16 +20,18 @@ export const reboundsMethods = {
     // crashing wins offensive boards (the fourth and fifth crasher add less); sprinting back
     // on the shot (transition D above 50) gives some up
     const crash = (off.t.offense.crashBoards - 50) / 50;
-    const glass = (1 + 0.22 * crash - K.crashFade * Math.max(0, crash) ** 2) * (1 - K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50));
-    let pOrb = K.orbBase * Math.pow(offR / defR, 1.05) * glass;
+    const glass =
+      (1 + lev(0.22 * crash) - lev(K.crashFade * Math.max(0, crash) ** 2) - levExtra(K.tradeOff.crash * Math.max(0, crash))) *
+      (1 - lev(K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50)));
+    let pOrb = K.orbBase * (1 + levExtra(K.recenter.orb)) * Math.pow(offR / defR, 1.05) * glass;
     if (zone === 'c3' || zone === 'ab3') pOrb *= 1.03;
     if (ft) pOrb *= 0.5;
     // the tags count the boards a scheme adds at an average rate: half as many off a free throw
     const orbRate = K.orbBase * (ft ? 0.5 : 1);
     const zd = this.zone(def);
     if (zd) {
-      pOrb *= zd.glass;
-      this.impact('zone_glass', off.side, orbRate * zd.glassTag * K.orbPts);
+      pOrb *= 1 + lev(zd.glassTag);
+      this.impact('zone_glass', off.side, orbRate * lev(zd.glassTag) * K.orbPts);
     }
     if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts);
     pOrb = clamp(pOrb, 0.08, 0.45);

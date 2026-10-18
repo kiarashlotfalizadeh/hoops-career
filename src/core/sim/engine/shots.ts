@@ -6,7 +6,7 @@
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType, PossStep } from '../log';
-import { K, engineDiag } from './constants';
+import { K, engineDiag, lev, levExtra, levGift } from './constants';
 import type { SP, ST, ShotOpts } from './state';
 import type { GameSim } from './game';
 
@@ -93,7 +93,11 @@ export const shotsMethods = {
       default:
         skill = s.pullup ? sh.c.pu3 : sh.c.c3;
     }
-    const open = clamp(s.open + this.rng.normal(0, 0.18), -1.2, 1.3);
+    // past 1x tactical leverage, a defense overplaying the ball is a step out of position on the
+    // half-court shots that do get off (the trade-off that keeps heavy pressure from a free win)
+    const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : levExtra(K.tradeOff.pressure * Math.max(0, this.pressure(def)));
+    // (the room tactics have to open or close a look grows with the tactical leverage)
+    const open = clamp(s.open + over + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];
     if (s.pullup && three) p -= 0.012;
     // contesting defender quality
@@ -108,7 +112,7 @@ export const shotsMethods = {
     // fatigue
     p -= (1 - sh.energy) * 0.12;
     // physicality: tighter contests
-    const phys = (def.t.defense.physicality - 50) / 50;
+    const phys = lev((def.t.defense.physicality - 50) / 50);
     p -= phys * K.physContest;
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
@@ -124,14 +128,15 @@ export const shotsMethods = {
         this.impact(k, off.side, d * K.zoneOpen[zone] * value, sh.pid);
       }
     }
+    if (over) this.impact('pressure_blowby', off.side, over * K.zoneOpen[zone] * value, sh.pid);
     if (sh.energy < 0.7) this.impact('fatigue', def.side, (1 - sh.energy) * 0.12 * value * 0.5, sh.pid);
 
     // block?
     let blocker: SP | null = null;
-    const pBlk = c ? K.blockMiss[zone] * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
+    const pBlk = c ? K.blockMiss[zone] * (1 + levExtra(K.recenter.blk)) * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
     // shooting foul?
     const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + 0.3 * phys) * (s.forcedFoulMult ?? 1);
-    const pFoul = K.foulRate[zone] * draw * this.env.fouls;
+    const pFoul = K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls;
     if (phys !== 0) {
       // net of the extra fouls (a trip to the line instead of the shot) and the tighter contest
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
@@ -248,16 +253,16 @@ export const shotsMethods = {
     if (lk) {
       const key = this.openKey(def);
       const zoneOpen = lk.tag === 'box_chase' ? (s.tags ?? []).reduce((a, [k, x]) => (k === key ? a + x : a), 0) : 0;
-      s = { ...s, open: s.open - zoneOpen - lk.k.c3, tags: [...(s.tags ?? []).filter(([k]) => lk.tag !== 'box_chase' || k !== key), [lk.tag, -lk.k.c3]] };
+      s = { ...s, open: s.open - zoneOpen - lk.c3, tags: [...(s.tags ?? []).filter(([k]) => lk.tag !== 'box_chase' || k !== key), [lk.tag, -lk.c3]] };
     } else if (this.pd(def, sh) === 'sag') {
       // sagged off: the kick-out finds him open
-      s = { ...s, open: s.open + K.pd.sag.kick, tags: [...(s.tags ?? []), ['pd_sag', K.pd.sag.kick]] };
+      s = { ...s, open: s.open + levGift(K.pd.sag.kick), tags: [...(s.tags ?? []), ['pd_sag', levGift(K.pd.sag.kick)]] };
     }
     const t3 = off.t.offense.threePoint / 100;
-    const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
+    const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * (1 + levExtra(K.recenter.three)) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     // (a defender closing out high gets attacked off the catch)
-    if (lk) wDrive *= 1 + 2 * lk.k.beat;
+    if (lk) wDrive *= 1 + 2 * lk.beat;
     if (this.go3) wDrive *= 0.05;
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
@@ -270,16 +275,16 @@ export const shotsMethods = {
     const pMid = (0.15 * sh.tm) / (0.15 * sh.tm + 0.85);
     const zone: ShotZone = r < pMid ? 'mid' : this.rimOr(sh, 0.65);
     const help = this.help(def);
-    const tags: [string, number][] = [['help_paint', -help * 0.2]];
-    let o = adv * 0.3 + this.spacingBonus(off) * 0.4 - help * 0.2;
+    const tags: [string, number][] = [['help_paint', -lev(help * 0.2)]];
+    let o = adv * 0.3 + this.spacingBonus(off) * 0.4 - lev(help * 0.2);
     if (lk) {
-      o += lk.k.beat;
-      tags.push([lk.beatTag, lk.k.beat]);
+      o += lk.beat;
+      tags.push([lk.beatTag, lk.beat]);
     }
     const body = this.body(def, sh);
     if (body) {
-      o -= K.pd.body.drive;
-      tags.push(['pd_body', -K.pd.body.drive]);
+      o -= lev(K.pd.body.drive);
+      tags.push(['pd_body', -lev(K.pd.body.drive)]);
     }
     const sag = zone !== 'mid' ? this.sagHelp(def, off, sh) : 0;
     if (sag) {

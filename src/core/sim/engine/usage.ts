@@ -7,7 +7,7 @@
 import type { ActionType } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
-import { K } from './constants';
+import { K, lev, levW } from './constants';
 import { type SP, type ST, ACTION_LIST } from './state';
 import type { GameSim } from './game';
 
@@ -42,7 +42,7 @@ export const usageMethods = {
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
     if (teamUse >= 12.5) {
       const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
-      const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - K.chaseCap : p.useCap;
+      const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - lev(K.chaseCap) : p.useCap;
       if (share > cap) w *= Math.exp(-p.useDamp * (share - cap));
     }
     // even a heliocentric offense moves the ball: past ~2/3 of his team's actions, others get it
@@ -82,13 +82,13 @@ export const usageMethods = {
     // hunting one defender: the player he guards gets the isolations, post-ups and ball screens (in
     // place of the automatic mismatch hunt)
     const hunted = action === 'iso' || action === 'post' || action === 'pnr' ? this.hunted(t, this.T[1 - t.side]) : null;
-    if (hunted) ws[t.on.indexOf(hunted)] *= K.hunt.pick;
+    if (hunted) ws[t.on.indexOf(hunted)] *= levW(K.hunt.pick);
     // mismatch hunting: favor the player with the weakest defender
     else if (t.t.offense.huntMismatch && (action === 'iso' || action === 'pnr')) {
       const def = this.T[1 - t.side];
       t.on.forEach((p, i) => {
         const d = def.guardOf.get(p.pid);
-        if (d) ws[i] *= Math.exp(clamp((p.c.create - d.c.perDef) / 40, -0.5, 0.9));
+        if (d) ws[i] *= Math.exp(lev(clamp((p.c.create - d.c.perDef) / 40, -0.5, 0.9)));
       });
     }
     // star plan "deny": face-guarding keeps the ball out of his hands, as a junk defense's chasers do
@@ -96,9 +96,9 @@ export const usageMethods = {
     const denied = def.t.defense.starPlan === 'deny' ? this.starTarget(def, t) : null;
     if (def.t.defense.starPlan === 'deny') {
       const i = t.on.indexOf(denied!);
-      if (i >= 0) ws[i] *= K.denyTouch;
+      if (i >= 0) ws[i] *= levW(K.denyTouch);
     }
-    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= c === denied ? K.chaseTouch / K.denyTouch : K.chaseTouch;
+    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= c === denied ? levW(K.chaseTouch) / levW(K.denyTouch) : levW(K.chaseTouch);
     // crunch time: the ball finds the go-to player
     const go = this.goTo(t);
     if (go) ws[t.on.indexOf(go)] *= K.goToPick;
@@ -174,7 +174,7 @@ export const usageMethods = {
         : ((Math.pow(Math.max(5, p.c.c3) / 50, 2) * Math.sqrt(p.t3) * Math.pow(p.tu, 0.75) * (0.6 + 0.4 * p.freedom) * (p.role === 'shooter' || p.role === 'glue' ? 1.3 : 1)) /
             Math.sqrt(p.tcr)) *
           // a top-locked shooter is hard to find
-          (this.lock(def, off, p)?.k.kickW ?? 1),
+          (this.lock(def, off, p)?.kickW ?? 1),
     );
     return off.on[this.rng.weighted(ws)];
   },

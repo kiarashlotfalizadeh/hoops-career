@@ -330,32 +330,36 @@ describe('engine defense', () => {
 
   it('leaves games that use none of it exactly as they were', () => {
     // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
-    // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays)
+    // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
+    // tactics were made to matter twice as much: tacticLeverage.test.ts plays these games at 1x leverage and gets
+    // the fingerprints from before that)
     const expected: Record<string, number[][]> = {
       default: [
-        [137, 136, 94, 49, 15, 17, 19, 1],
-        [111, 97, 97, 19, 14, 32, 10, 0],
-        [116, 106, 101, 32, 13, 16, 7, 0],
+        [131, 125, 88, 44, 15, 18, 16, 0],
+        [116, 114, 91, 18, 18, 21, 17, 0],
+        [132, 91, 90, 27, 8, 22, 13, 0],
       ],
       zone23: [
-        [117, 106, 78, 49, 11, 9, 15, 0],
-        [118, 114, 80, 21, 6, 36, 13, 0],
-        [115, 109, 91, 37, 9, 20, 15, 0],
+        [114, 104, 81, 48, 13, 22, 12, 0],
+        [115, 120, 96, 15, 17, 37, 9, 0],
+        [122, 132, 110, 29, 19, 28, 14, 1],
       ],
       zone32: [
-        [108, 105, 82, 33, 20, 18, 14, 0],
-        [108, 102, 84, 17, 9, 29, 10, 0],
-        [117, 103, 93, 32, 12, 21, 14, 0],
+        [109, 99, 80, 43, 11, 19, 19, 0],
+        [109, 110, 94, 16, 16, 22, 15, 0],
+        [99, 97, 97, 28, 16, 17, 17, 0],
       ],
       double: [
-        [101, 114, 83, 40, 13, 30, 19, 0],
-        [118, 104, 92, 24, 9, 16, 10, 0],
-        [126, 111, 96, 28, 15, 19, 12, 0],
+        [119, 105, 91, 36, 18, 18, 18, 0],
+        [113, 115, 86, 27, 13, 27, 16, 0],
+        [110, 80, 92, 26, 11, 26, 14, 0],
       ],
+      // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
+      // the couple of trips the mismatch hunt changes back to the same team lines)
       hunt: [
-        [132, 119, 84, 47, 15, 10, 15, 0],
-        [127, 103, 92, 19, 9, 27, 10, 0],
-        [116, 106, 102, 32, 14, 16, 7, 0],
+        [131, 125, 88, 44, 15, 18, 16, 0],
+        [141, 143, 102, 24, 20, 29, 18, 1],
+        [108, 115, 89, 29, 5, 32, 15, 0],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

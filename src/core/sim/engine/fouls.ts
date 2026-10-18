@@ -5,7 +5,7 @@
 import { clamp } from '../../random';
 import { GAME } from '../../constants';
 import type { FinishType } from '../log';
-import { K } from './constants';
+import { K, lev, levGiftW } from './constants';
 import type { SP, ST } from './state';
 import type { GameSim } from './game';
 
@@ -113,11 +113,13 @@ export const foulsMethods = {
 
   /** Reach-in / off-ball foul on the handler: free throws in the penalty (returns true), else a side out (sets sideOut). */
   nonShootingFoul(this: GameSim, off: ST, def: ST, handler: SP, defender: SP, finish: FinishType): boolean {
-    const phys = (def.t.defense.physicality - 50) / 50;
-    const pr = this.pressure(def);
+    const phys = lev((def.t.defense.physicality - 50) / 50);
+    const pr = lev(this.pressure(def));
     // (getting physical with him: more reach-ins on him too)
-    const body = this.pd(def, handler) === 'body' ? K.pd.body.foul : 1;
-    const p = K.nonShootFoul * (1 + 0.3 * phys + 0.25 * pr) * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * body;
+    const body = this.pd(def, handler) === 'body' ? levGiftW(K.pd.body.foul) : 1;
+    // (a clean, containing defense at past-1x leverage still reaches in now and then)
+    const mult = Math.max(0.25, 1 + 0.3 * phys + 0.25 * pr);
+    const p = K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * body;
     if (!this.rng.chance(p)) return false;
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
     if (this.record) {
@@ -127,7 +129,6 @@ export const foulsMethods = {
     this.addFoul(def, fouler);
     if (this.bonus(def)) {
       // two free throws (~1.55) instead of the rest of the possession (~1.1)
-      const mult = 1 + 0.3 * phys + 0.25 * pr;
       if (phys !== 0) this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, (0.45 * 0.3 * phys) / mult, handler.pid);
       if (pr !== 0) this.impact('pressure_foul', off.side, (0.45 * 0.25 * pr) / mult, handler.pid);
       if (body !== 1) this.impact('pd_body', off.side, (0.45 * (body - 1)) / body, handler.pid);

@@ -294,7 +294,9 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       group: 'actions-handoff',
       patch: { nudge: { actions: { motion: 20, handoff: 15 } } },
     });
-  // a real weak link on the perimeter: attack the man he guards
+  // a real weak link on the perimeter: attack the man he guards. His defense against his rotation's is
+  // the evidence, so he ranks with the counters the numbers back (with tactics' edges at their full size,
+  // the scouting backs many of them, and a weak link shouldn't drop off the end of the list behind them)
   const hunt = huntPick(league, oppTid);
   if (hunt?.worth && cur.offense.huntTarget !== hunt.pid) {
     const who = league.players[hunt.pid]?.lastName ?? '';
@@ -303,6 +305,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       label: `Attack ${who}`,
       why: `${who} is their weakest perimeter defender (${hunt.perDef}, their rotation ${hunt.teamPerDef}): run isolations and ball screens at the man he guards. It costs some ball movement.`,
       group: 'hunt',
+      evidence: `${who} rates ${hunt.perDef} on perimeter defense; their rotation averages ${hunt.teamPerDef}.`,
       patch: { offense: { huntTarget: hunt.pid } },
     });
   }

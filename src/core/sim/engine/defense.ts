@@ -8,9 +8,20 @@ import type { DefScheme, PlayerDefense } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
 import { solveMatchups } from '../matchups';
-import { K, type ZoneK } from './constants';
+import { K, lev, levExtra, levGift, levGiftW, levW, type ZoneK } from './constants';
 import { type SP, type ST, NONE } from './state';
 import type { GameSim } from './game';
+
+/** A top-lock on one player as the actions play it (K.lock's table at the tactical leverage), with the tags for what it takes away and what it gives back. */
+export interface Lock {
+  kickW: number;
+  c3: number;
+  offScreen: number;
+  beat: number;
+  cutW: number;
+  tag: string;
+  beatTag: string;
+}
 
 export const defenseMethods = {
   /** Assign defenders (on the defensive team) to each offensive player. */
@@ -99,7 +110,7 @@ export const defenseMethods = {
 
   /** How often a player gets the ball in the half court where nobody runs a play for him: a junk defense's chased players far less. */
   touch(this: GameSim, def: ST, off: ST, p: SP): number {
-    return def.t.defense.scheme !== 'box1' && def.t.defense.scheme !== 'tri2' ? 1 : this.chased(def, off).includes(p) ? K.chaseTouch : 1;
+    return def.t.defense.scheme !== 'box1' && def.t.defense.scheme !== 'tri2' ? 1 : this.chased(def, off).includes(p) ? levW(K.chaseTouch) : 1;
   },
 
   /** The scouting-report instruction for guarding offensive player `p`, if any. */
@@ -111,13 +122,20 @@ export const defenseMethods = {
    * Whether offensive player `p` is top-locked off the ball, and how hard: a junk defense's chaser
    * face-guards him, or a "tight" instruction runs him off the line. With the impact tags for what
    * it takes away (his catch-and-shoot and off-screen looks) and what it gives back (drives on the
-   * catch, curls and back-cuts against a defender caught high).
+   * catch, curls and back-cuts against a defender caught high), at the tactical leverage: a "tight"
+   * instruction's give-back grows as an instruction's does (see K.giftExp).
    */
-  lock(this: GameSim, def: ST, off: ST, p: SP): { k: (typeof K.lock)['box']; tag: string; beatTag: string } | null {
+  lock(this: GameSim, def: ST, off: ST, p: SP): Lock | null {
     if (def.t.defense.scheme === 'box1' || def.t.defense.scheme === 'tri2') {
-      if (this.chased(def, off).includes(p)) return { k: K.lock.box, tag: 'box_chase', beatTag: 'box_beat' };
+      if (this.chased(def, off).includes(p)) {
+        const k = K.lock.box;
+        return { kickW: levW(k.kickW), c3: lev(k.c3), offScreen: lev(k.offScreen), beat: lev(k.beat), cutW: levW(k.cutW), tag: 'box_chase', beatTag: 'box_beat' };
+      }
     }
-    if (this.pd(def, p) === 'tight') return { k: K.lock.tight, tag: 'pd_tight', beatTag: 'pd_tight' };
+    if (this.pd(def, p) === 'tight') {
+      const k = K.lock.tight;
+      return { kickW: levW(k.kickW), c3: lev(k.c3), offScreen: lev(k.offScreen), beat: levGift(k.beat), cutW: levGiftW(k.cutW), tag: 'pd_tight', beatTag: 'pd_tight' };
+    }
     return null;
   },
 
@@ -130,7 +148,7 @@ export const defenseMethods = {
     if (!pd) return 0;
     let n = 0;
     for (const p of off.on) if (pd[p.pid] === 'sag' && !onBall.includes(p)) n++;
-    return Math.min(2, n) * K.pd.sag.help;
+    return Math.min(2, n) * lev(K.pd.sag.help);
   },
 
   /** The offensive player the defender being hunted guards (while both are on the floor), or null. */
@@ -167,7 +185,7 @@ export const defenseMethods = {
    * transition defense has fewer helpers back).
    */
   rimContester(this: GameSim, def: ST, own: SP | null, pull = 1): SP {
-    const help = 1 + 0.4 * this.help(def);
+    const help = 1 + 0.4 * lev(this.help(def));
     const ws = def.on.map((p) => {
       const w = Math.pow(Math.max(10, p.c.rimProt * this.dq(p)) / 50, 3);
       return p === own ? w * 2.2 : w * help * pull;
@@ -210,7 +228,7 @@ export const defenseMethods = {
 
   /** "Get physical with him": the shooting fouls he draws, as a shot's options take them (none without the instruction). */
   body(this: GameSim, def: ST, p: SP): { forcedFoulMult: number; foulTag: [string, number] } | undefined {
-    return this.pd(def, p) === 'body' ? { forcedFoulMult: K.pd.body.foul, foulTag: ['pd_body', K.pd.body.foul] } : undefined;
+    return this.pd(def, p) === 'body' ? { forcedFoulMult: levGiftW(K.pd.body.foul), foulTag: ['pd_body', levGiftW(K.pd.body.foul)] } : undefined;
   },
 
   /**
@@ -219,12 +237,12 @@ export const defenseMethods = {
    */
   denyCatch(this: GameSim, def: ST, off: ST, p: SP, from: 'pnr' | 'handoff' | 'iso' | 'post'): number {
     if (this.chased(def, off).includes(p)) {
-      this.impact('box_chase', def.side, K.chaseCatch * K.advPts[from], p.pid);
-      return K.chaseCatch;
+      this.impact('box_chase', def.side, lev(K.chaseCatch) * K.advPts[from], p.pid);
+      return lev(K.chaseCatch);
     }
     if (def.t.defense.starPlan !== 'deny' || this.starTarget(def, off) !== p) return 0;
-    this.impact('star_deny', def.side, K.denyCatch * K.advPts[from], p.pid);
-    return K.denyCatch;
+    this.impact('star_deny', def.side, lev(K.denyCatch) * K.advPts[from], p.pid);
+    return lev(K.denyCatch);
   },
 
   /** Defensive effectiveness modifier from fatigue. */
@@ -236,8 +254,8 @@ export const defenseMethods = {
     // pressing forces turnovers only as well as the defenders can: an average lineup gets about
     // half of what quick hands and feet would (containing costs turnovers whoever plays)
     const pr0 = this.pressure(def);
-    const pr = pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0;
-    const p = (base * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
+    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0);
+    const p = (base * (1 + levExtra(K.recenter.tov)) * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
     if (pr !== 0) this.impact('pressure_to', def.side, base * 0.32 * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
     return clamp(p, 0.01, 0.4);
   },
@@ -248,7 +266,7 @@ export const defenseMethods = {
    */
   blowBy(this: GameSim, def: ST, h: SP, from: 'pnr' | 'handoff' | 'iso'): number {
     const pr = this.pressure(def);
-    const edge = K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2;
+    const edge = lev(K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2);
     if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, edge * K.advPts[from], h.pid);
     return edge;
   },

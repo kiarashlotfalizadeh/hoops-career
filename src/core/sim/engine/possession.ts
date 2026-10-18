@@ -8,7 +8,7 @@ import type { ActionType, SetId } from '../../types';
 import { clamp } from '../../random';
 import { GAME } from '../../constants';
 import { SETS, isSetId } from '../sets';
-import { K } from './constants';
+import { K, lev, levExtra } from './constants';
 import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -117,12 +117,12 @@ export const possessionMethods = {
     const push = 0.55 + 0.9 * (off.t.offense.transition / 100);
     let transP = (K.transitionBase[ctx] ?? 0) * push;
     transP *= 1 + (off.speed - def.speed) / 120;
-    const getBack = 1.25 - 0.5 * (def.t.defense.getBack / 100);
+    const getBack = 1.25 - 0.5 * (def.t.defense.getBack / 100) + levExtra(0.25 - 0.5 * (def.t.defense.getBack / 100));
     transP *= getBack;
     // crashing the offensive glass leaves you exposed (the defense crashed on its last
     // possession): a little below 50, a lot above it
     const crashLeak = ctx === 'dreb' ? (def.t.offense.crashBoards - 50) / 50 : 0;
-    const leak = 1 + (crashLeak > 0 ? K.crashLeak : 0.35) * crashLeak;
+    const leak = 1 + lev((crashLeak > 0 ? K.crashLeak : 0.35) * crashLeak);
     transP *= leak;
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
@@ -136,7 +136,7 @@ export const possessionMethods = {
       if (!pressBroken) {
         this.impact('transition', o, (0.25 * (push - 1)) / push);
         this.impact('getback', (1 - o) as 0 | 1, (K.runOutPts * (1 - getBack)) / getBack);
-        if (leak !== 1) this.impact('crash_leak', o, (K.runOutPts * (leak - 1)) / leak + K.crashRunOut * Math.max(0, crashLeak) * K.transAdvPts);
+        if (leak !== 1) this.impact('crash_leak', o, (K.runOutPts * (leak - 1)) / leak + lev(K.crashRunOut * Math.max(0, crashLeak)) * K.transAdvPts);
       }
       this.transition(off, def, ctx, pressBroken);
       return;
@@ -275,7 +275,7 @@ export const possessionMethods = {
 
   prefs(this: GameSim, off: ST, late: LateMode) {
     const t3 = off.t.offense.threePoint / 100;
-    let three = 0.48 + 0.8 * t3;
+    let three = (0.48 + 0.8 * t3) * (1 + levExtra(K.recenter.three));
     let mid = 1.43 - 0.95 * t3;
     const rim = 0.7 + 0.6 * (off.t.offense.rimAttack / 100);
     if (late.need3) {

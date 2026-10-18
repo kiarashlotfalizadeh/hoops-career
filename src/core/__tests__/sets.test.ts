@@ -330,17 +330,18 @@ describe('sets in the engine', () => {
   it('plays games with no sets exactly as before: AI teams never run one, and an empty package draws nothing', () => {
     // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
     // and a coached side with an after-timeout action, a go-to player and every call there was), taken again
-    // when side-out fouls started restarting the shot clock and timeouts started stopping play
+    // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
+    // tactics were made to matter twice as much (K.tacticEdge)
     const expected = {
       ai: [
-        [137, 136, 94, 49, 15, 17, 19, 1],
-        [111, 97, 97, 19, 14, 32, 10, 0],
-        [116, 106, 101, 32, 13, 16, 7, 0],
+        [131, 125, 88, 44, 15, 18, 16, 0],
+        [116, 114, 91, 18, 18, 21, 17, 0],
+        [132, 91, 90, 27, 8, 22, 13, 0],
       ],
       coached: [
-        [142, 104, 81, 20, 9, 20, 17, 0],
-        [123, 121, 95, 35, 12, 25, 17, 0],
-        [111, 133, 72, 28, 9, 46, 17, 0],
+        [133, 103, 76, 26, 8, 26, 14, 0],
+        [131, 127, 86, 29, 8, 28, 13, 0],
+        [120, 140, 74, 41, 13, 38, 21, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

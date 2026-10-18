@@ -5,7 +5,7 @@
 
 import { Rng } from '../../random';
 import { GAME } from '../../constants';
-import { K } from './constants';
+import { K, levW } from './constants';
 import { type ST, type LateMode, NONE, mix } from './state';
 import type { GameSim } from './game';
 
@@ -75,9 +75,9 @@ export const clockMethods = {
         if (p.on) {
           p.b.sec += dt;
           let drain = K.drain * (1.4 - 0.75 * (p.r.end / 100)) * paceMult;
-          if (press) drain *= 1.15;
-          if (t.t.defense.press === 'always') drain *= 1.12;
-          if (p === denyD || (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p))) drain *= K.denyDrain;
+          if (press) drain *= levW(1.15);
+          if (t.t.defense.press === 'always') drain *= levW(1.12);
+          if (p === denyD || (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p))) drain *= levW(K.denyDrain);
           p.energy = Math.max(0.2, p.energy - drain * dt);
         } else if (p.out === 0 || p.out === 1) {
           p.energy = Math.min(1, p.energy + K.recover * dt);

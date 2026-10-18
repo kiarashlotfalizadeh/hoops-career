@@ -3,7 +3,7 @@
 // him, and the shot or the pass out (Post split's cutter and flare).
 
 import { clamp } from '../../random';
-import { K } from './constants';
+import { K, lev, levGiftW } from './constants';
 import type { SP, ST, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -32,17 +32,17 @@ export const postUpMethods = {
     // getting physical with him: a tougher post-up, at the price of more shooting fouls
     const body = this.body(def, A);
     if (body) {
-      adv -= K.pd.body.post;
-      this.impact('pd_body', def.side, K.pd.body.post * K.advPts.post, A.pid);
+      adv -= lev(K.pd.body.post);
+      this.impact('pd_body', def.side, lev(K.pd.body.post) * K.advPts.post, A.pid);
     }
     const zd = this.zone(def);
     if (zd) {
-      adv -= zd.post;
-      this.impact('zone_paint', def.side, zd.postTag, A.pid);
+      adv -= lev(zd.post);
+      this.impact('zone_paint', def.side, lev(zd.postTag), A.pid);
     }
     if (fixed?.tag === 'mismatch_post') this.impact(fixed.tag, off.side, Math.max(0, (A.r.hgt - D.r.hgt) / 70) * K.advPts.post, A.pid);
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
-    const doubleP = starDouble ? 0.75 : 0.08 + Math.max(0, help) * 0.15 + (adv > 0.6 ? 0.15 : 0);
+    const doubleP = starDouble ? 0.75 : 0.08 + lev(Math.max(0, help) * 0.15) + (adv > 0.6 ? 0.15 : 0);
     if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble, play);
     const pTO = this.toChance(K.toBase * 1.1, A, def, this.setJump(play, def, A));
     if (this.rng.chance(pTO)) {
@@ -51,11 +51,11 @@ export const postUpMethods = {
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
     // a small switched onto a big can only hold his ground by fouling
-    let reach = fixed?.tag === 'switch_mismatch' ? 1 + Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul : 1;
+    let reach = fixed?.tag === 'switch_mismatch' ? 1 + lev(Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul) : 1;
     let foulTag: [string, number] | undefined = reach > 1 ? ['switch_mismatch', reach] : undefined;
     // (the physical defender's extra fouls go to the instruction unless a switch already put a small on him)
     if (body) {
-      reach *= K.pd.body.foul;
+      reach *= levGiftW(K.pd.body.foul);
       foulTag ??= body.foulTag;
     }
     const ss = this.selfShot(A);
@@ -107,12 +107,12 @@ export const postUpMethods = {
             ...(ct.length ? { tags: ct } : {}),
           });
         } else {
-          const kt: [string, number][] = [['help_kick', Math.max(0, help) * 0.25]];
+          const kt: [string, number][] = [['help_kick', lev(Math.max(0, help) * 0.25)]];
           const so = play ? this.setOpen(play, 'kick', kt) : 0;
           this.spotUp(off, def, {
             shooter: tgt,
             zone: this.cornerOrWing(off, tgt),
-            open: 0.2 + Math.max(0, help) * 0.25 + so,
+            open: 0.2 + lev(Math.max(0, help) * 0.25) + so,
             contest: this.defOf(def, tgt),
             assister: A,
             finish: 'spotup',

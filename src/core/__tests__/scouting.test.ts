@@ -106,8 +106,11 @@ describe('scouting data', () => {
   it("falls back to last season's numbers (labelled) until this season has enough games", () => {
     const m = playedLeague();
     const tid = scoutable(m, m.userTid + 1);
-    // what was played becomes last season, and the new one hasn't started
+    // what was played becomes last season, and the new one hasn't started (the imported lines of the real
+    // season before move back a year first, as they would be by then: else a regular's imported line and his
+    // played one share a season, and the imported one, with no on-court numbers, is the one read)
     const S = m.season;
+    for (const p of Object.values(m.players)) for (const s of p.stats) if (s.season === S - 1 && s.real) s.season = S - 2;
     for (const t of m.teams) for (const s of t.seasons) s.season = S - 1;
     for (const p of Object.values(m.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
     for (const g of m.games) g.season = S - 1;

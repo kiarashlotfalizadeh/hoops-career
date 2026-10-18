@@ -3,7 +3,7 @@
 // who got back.
 
 import { clamp } from '../../random';
-import { K } from './constants';
+import { K, lev } from './constants';
 import type { ST, Ctx } from './state';
 import type { GameSim } from './game';
 
@@ -14,8 +14,8 @@ export const transitionMethods = {
     const trapQ = def.on.reduce((a, p) => a + p.c.steal + p.r.spd, 0) / (def.on.length * 2);
     const secQ = (h.c.ballSec + handlers[1].c.ballSec + off.passQ) / 3;
     const adv = (secQ - trapQ) / 20;
-    const pTO = clamp(K.pressTO - adv * 0.035, 0.02, 0.16);
-    const pBroken = clamp(0.2 + adv * 0.08, 0.06, 0.4);
+    const pTO = clamp(K.pressTO - lev(adv * 0.035), 0.02, 0.16);
+    const pBroken = clamp(0.2 + lev(adv * 0.08), 0.06, 0.4);
     this.tick(this.rng.uniform(3, 6));
     if (this.cur) {
       this.cur.kind = 'press';
@@ -45,9 +45,9 @@ export const transitionMethods = {
     this.tick(this.rng.uniform(3, 6.5));
     if (this.record) this.cur!.steps.push({ k: 'transition', pid: h.pid });
     let adv = (off.speed - def.speed) / 25 + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
-    adv -= (def.t.defense.getBack - 50) / 100;
+    adv -= lev((def.t.defense.getBack - 50) / 100);
     // fewer defenders back when they crashed the glass
-    if (ctx === 'dreb') adv += K.crashRunOut * Math.max(0, (def.t.offense.crashBoards - 50) / 50);
+    if (ctx === 'dreb') adv += lev(K.crashRunOut * Math.max(0, (def.t.offense.crashBoards - 50) / 50));
     adv += this.rng.normal(0, 0.5);
     // turnover in the open floor
     const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv, 0.02, 0.18);

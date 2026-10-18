@@ -4,7 +4,7 @@
 
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
-import { K } from './constants';
+import { K, lev, levExtra, levW } from './constants';
 import type { SP, ST, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -19,13 +19,13 @@ export const motionMethods = {
     let adv = (off.passQ - def.helpQ) / 22 + this.spacingBonus(off) * 0.8 + this.rng.normal(0, 0.55) + open;
     const sw = def.t.defense.switchOffBall && !zone;
     if (sw) {
-      adv -= 0.15;
-      this.impact('switch_deny', def.side, 0.15 * 0.1);
+      adv -= lev(0.15);
+      this.impact('switch_deny', def.side, lev(0.15) * 0.1);
     }
     // the ball sticks while the offense waits on the matchup it hunts
     if (this.hunted(off, def)) {
-      adv -= K.hunt.flow;
-      this.impact('hunt', def.side, K.hunt.flow * 0.1);
+      adv -= lev(K.hunt.flow);
+      this.impact('hunt', def.side, lev(K.hunt.flow) * 0.1);
     }
     if (this.cur && (play || !this.cur.set)) this.cur.label = play ? play.label : zone ? `Ball movement vs ${this.zoneName(def)}` : 'Motion offense';
     // the ball swings: after a reset it often finds the offense's hub before the next action
@@ -46,27 +46,27 @@ export const motionMethods = {
       const small = off.on.filter((p) => p !== P && p !== passer).sort((a, b) => a.r.hgt - b.r.hgt)[0];
       const own = P && this.defOf(def, P);
       const nd = small && this.defOf(def, small);
-      if (P && own && nd && nd !== own && P.c.postScore > 50 && P.r.hgt - nd.r.hgt >= K.crossSize && this.rng.chance(K.crossSwitch)) {
+      if (P && own && nd && nd !== own && P.c.postScore > 50 && P.r.hgt - nd.r.hgt >= K.crossSize && this.rng.chance(lev(K.crossSwitch))) {
         const gain = ((own.c.intDef * this.dq(own) - nd.c.intDef * this.dq(nd)) / 20 + (own.r.hgt - nd.r.hgt) / 70) * K.advPts.post;
-        this.impact('switch_mismatch', off.side, gain, P.pid);
+        this.impact('switch_mismatch', off.side, lev(gain), P.pid);
         if (this.cur) this.cur.label = `Switch! ${P.name} posts up ${nd.name}`;
         this.passStep(passer, P);
-        return this.post(off, def, open + K.switchScramble, forced, { actor: P, defender: nd, tag: 'switch_mismatch', entry: passer });
+        return this.post(off, def, open + lev(K.switchScramble) + levExtra(gain / K.advPts.post), forced, { actor: P, defender: nd, tag: 'switch_mismatch', entry: passer });
       }
     }
     const cutters = off.on.filter((p) => p !== passer);
     // (a top-locked player back-cuts the defender caught high)
     const cutW = cutters.map(
       (p) =>
-        ((Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1)) / Math.sqrt(p.tcr)) * (this.lock(def, off, p)?.k.cutW ?? 1),
+        ((Math.pow(p.c.cut / 50, 2.2) * Math.pow(p.tu, 0.75) * (p.role === 'slasher' || p.role === 'roller' ? 1.4 : 1)) / Math.sqrt(p.tcr)) * (this.lock(def, off, p)?.cutW ?? 1),
     );
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);
     // backdoor cuts punish ball pressure / denial
-    const backdoor = Math.max(0, pr) * 0.3;
-    const zoneCut = zone ? -zone.cutW : 0;
+    const backdoor = lev(Math.max(0, pr) * 0.3);
+    const zoneCut = zone ? -lev(zone.cutW) : 0;
     const opts = [
       (cutW.reduce((a, b) => a + b, 0) / 4) * 0.55 * (1 + backdoor + zoneCut) * pf.rim, // cut
-      Math.pow(off.spacing / 50, 1.2) * 0.9 * pf.three * (zone ? zone.swingW : 1), // swing for spot-up 3
+      Math.pow(off.spacing / 50, 1.2) * 0.9 * pf.three * (zone ? levW(zone.swingW) : 1), // swing for spot-up 3
       0.55 * pf.rim * (1 + this.spacingBonus(off)), // drive & kick
       Math.pow(Math.max(...off.on.map((p) => p.c.midShot)) / 50, 2) * 0.25 * pf.mid, // flare/mid
       forced ? 0 : K.continueBase * (adv < 0 ? 1.5 : 0.7),
@@ -81,13 +81,13 @@ export const motionMethods = {
         this.passStep(passer, cutter);
         const tags: [string, number][] = [];
         if (backdoor > 0) tags.push(['pressure_backdoor', backdoor * 0.8]);
-        if (zone) tags.push(['zone_paint', -zone.cut]);
+        if (zone) tags.push(['zone_paint', -lev(zone.cut)]);
         const cd = this.defOf(def, cutter);
-        let o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -zone.cut : 0);
+        let o = advOpen - 0.06 + backdoor * 0.8 + (cutter.c.cut - cd.c.helpD * this.dq(cd)) / 100 + (zone ? -lev(zone.cut) : 0);
         const lk = this.lock(def, off, cutter);
         if (lk) {
-          o += lk.k.beat;
-          tags.push([lk.beatTag, lk.k.beat]);
+          o += lk.beat;
+          tags.push([lk.beatTag, lk.beat]);
         }
         const sag = this.sagHelp(def, off, cutter, passer);
         if (sag) {
@@ -96,8 +96,8 @@ export const motionMethods = {
         }
         const body = this.body(def, cutter);
         if (body) {
-          o -= K.pd.body.drive;
-          tags.push(['pd_body', -K.pd.body.drive]);
+          o -= lev(K.pd.body.drive);
+          tags.push(['pd_body', -lev(K.pd.body.drive)]);
         }
         this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rimContester(def, cd), assister: passer, finish: 'cut', tags, ...body });
         return 'done';
@@ -108,12 +108,12 @@ export const motionMethods = {
         const tags: [string, number][] = [];
         let o = advOpen + 0.05;
         if (zone) {
-          o += zone.swing;
-          tags.push([this.openKey(def), zone.swing]);
+          o += lev(zone.swing);
+          tags.push([this.openKey(def), lev(zone.swing)]);
         }
         if (help !== 0) {
-          o += help * 0.15;
-          tags.push(['help_kick', help * 0.15]);
+          o += lev(help * 0.15);
+          tags.push(['help_kick', lev(help * 0.15)]);
         }
         const d = this.defOf(def, sh);
         this.spotUp(off, def, {
@@ -134,17 +134,17 @@ export const motionMethods = {
           : drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr) * this.touch(def, off, p)))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
-        const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -zone.drive : 0);
+        const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -lev(zone.drive) : 0);
         // (Hammer's baseline drive is run to kick it to the corner)
-        const kickP = play ? 0.75 + help * 0.15 : 0.45 + dr.c.passing / 200 + help * 0.15;
+        const kickP = play ? 0.75 + lev(help * 0.15) : 0.45 + dr.c.passing / 200 + lev(help * 0.15);
         if (this.go3 || this.rng.chance(clamp(kickP, 0.2, play ? 0.9 : 0.8))) {
           // kick out after collapsing the defense
           const sh = play ? play.cast.b : this.kickTarget(off, dr);
           // the hammer screen on the help side frees the corner
           if (play && this.record) this.cur!.steps.push({ k: 'pin', pid: play.cast.c.pid, pid2: sh.pid });
           this.passStep(dr, sh);
-          const tags: [string, number][] = [['help_kick', Math.max(0, help) * 0.3]];
-          const ko = 0.12 + Math.max(0, help) * 0.3 + Math.max(0, dAdv) * 0.2 + (play ? this.setOpen(play, 'kick', tags) : 0);
+          const tags: [string, number][] = [['help_kick', lev(Math.max(0, help) * 0.3)]];
+          const ko = 0.12 + lev(Math.max(0, help) * 0.3) + Math.max(0, dAdv) * 0.2 + (play ? this.setOpen(play, 'kick', tags) : 0);
           this.spotUp(off, def, {
             shooter: sh,
             zone: play ? 'c3' : this.cornerOrWing(off, sh),
@@ -157,14 +157,14 @@ export const motionMethods = {
         } else {
           const zoneS: ShotZone = this.rimOr(dr, 0.6);
           const tags: [string, number][] = [
-            ['help_paint', -help * 0.25],
+            ['help_paint', -lev(help * 0.25)],
             ['spacing', this.spacingBonus(off) * 0.4],
           ];
-          let o = dAdv * 0.35 - help * 0.25 + this.spacingBonus(off) * 0.4;
+          let o = dAdv * 0.35 - lev(help * 0.25) + this.spacingBonus(off) * 0.4;
           const body = this.body(def, dr);
           if (body) {
-            o -= K.pd.body.drive;
-            tags.push(['pd_body', -K.pd.body.drive]);
+            o -= lev(K.pd.body.drive);
+            tags.push(['pd_body', -lev(K.pd.body.drive)]);
           }
           const sag = this.sagHelp(def, off, dr, passer);
           if (sag) {

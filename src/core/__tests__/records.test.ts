@@ -191,7 +191,9 @@ describe('what one game did to the book', () => {
   it("the night's best mark on a list is its record, not every man who passed the old best in turn", () => {
     const x = structuredClone(l);
     const g = night(999_201, [100, 120, 110]);
-    const notes = recordGame(x, g).filter((n) => n.stat === 'pts' && !n.team);
+    // (the home side's notes: the away side replays its own night from the book, and its top scorer can
+    // tie the franchise best he set that night)
+    const notes = recordGame(x, g).filter((n) => n.stat === 'pts' && !n.team && n.tid === g.home.tid);
     const [, second] = g.home.players.filter((b) => b.min > 0);
     expect(notes.map((n) => [n.scope, n.kind, n.pid, n.v])).toEqual([
       ['league', 'record', second.pid, 120],

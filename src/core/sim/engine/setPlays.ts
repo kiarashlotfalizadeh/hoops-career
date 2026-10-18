@@ -5,7 +5,7 @@
 
 import type { ActionType, SetId, SetStat } from '../../types';
 import { READ_ON_IT, SET_K, castFor, fitsFloor, readAfter, readSlots, setEdges, setLabel, setLook, setPackage, type DefRead, type Slot } from '../sets';
-import { K } from './constants';
+import { K, lev } from './constants';
 import type { SP, ST, SetPlay } from './state';
 import type { GameSim } from './game';
 
@@ -31,13 +31,16 @@ export const setPlaysMethods = {
    * Set `id` run now for player `pid` (the best fit when he isn't on the floor): its cast, its edges
    * against this defense, the defense's read of it from the runs before, and the look the team goes
    * for. Counts the run (the possession's points go to its tally) and records it on the possession.
+   * Its edges and the read's openness are played at the tactical leverage; whether the defense is on
+   * it (READ_ON_IT) is judged on the read's 1x size, so a set is read in as many runs as before.
    */
   setPlay(this: GameSim, off: ST, def: ST, id: SetId, pid: number | null): SetPlay | null {
     const cast = castFor(id, off.on, pid !== null ? off.on.find((p) => p.pid === pid) : undefined);
     if (!cast) return null;
     const runs = off.setRuns.get(id) ?? 0;
     off.setRuns.set(id, runs + 1);
-    const read = readAfter(id, runs, def.team.coach?.tactics ?? 50);
+    const seen = readAfter(id, runs, def.team.coach?.tactics ?? 50);
+    const read = lev(seen);
     const zone = this.zone(def);
     const d: DefRead = {
       cov: zone ? 'zone' : def.t.defense.pnr,
@@ -51,8 +54,8 @@ export const setPlaysMethods = {
     const tags: SetPlay['tags'] = {};
     for (const [slot, e] of Object.entries(setEdges(cast, d)) as [Slot, number][]) {
       if (!e) continue;
-      open[slot] = e;
-      tags[slot] = [[`set_${id}`, e]];
+      open[slot] = lev(e);
+      tags[slot] = [[`set_${id}`, lev(e)]];
     }
     if (read > 0)
       for (const slot of readSlots(cast)) {
@@ -60,7 +63,7 @@ export const setPlaysMethods = {
         (tags[slot] ??= []).push(['set_read', -read]);
       }
     const st = this.setStat(off.side, id);
-    if (read >= READ_ON_IT && st.readAt === undefined) st.readAt = st.runs;
+    if (seen >= READ_ON_IT && st.readAt === undefined) st.readAt = st.runs;
     this.possSet = st;
     if (this.cur) this.cur.set = { id, pid: cast.star.pid, n: runs + 1 };
     return { cast, label: setLabel(id, cast.star.name), read, open, tags, w: setLook(cast, d.locked) };

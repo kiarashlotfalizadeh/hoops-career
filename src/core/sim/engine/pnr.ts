@@ -5,7 +5,7 @@
 
 import type { PnrCoverage, ShotZone } from '../../types';
 import { clamp } from '../../random';
-import { K } from './constants';
+import { K, lev, levExtra, levGift, levW } from './constants';
 import type { SP, ST, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -31,7 +31,7 @@ export const pnrMethods = {
         if (p.role === 'roller' || p.role === 'stretch' || p.role === 'hub') w *= 1.6;
         if (off.t.offense.huntMismatch && !hunted) {
           const d = this.defOf(def, p);
-          w *= Math.exp(clamp((60 - d.c.perDef) / 30, -0.4, 0.9));
+          w *= Math.exp(lev(clamp((60 - d.c.perDef) / 30, -0.4, 0.9)));
         }
         return Math.pow(w / 50, 2) * Math.pow(p.tu, 0.75);
       });
@@ -62,18 +62,21 @@ export const pnrMethods = {
     if (cov === 'switch') {
       // after the switch: H vs dS (often a big), S vs dH (often a guard). The switch takes away
       // the screen's advantage; the offense gains (or loses) whatever the new matchup is worth
-      // compared with the one it had
+      // compared with the one it had. Both are the switch's edges, so past 1x tactical leverage the
+      // action plays them that many times over: the screen taken away again, and the change of
+      // matchup again on top of the one the new defender makes
       const isoAdv = (H.c.create - dS.c.perDef * this.dq(dS)) / 20;
       const postAdv = (S.c.postScore - dH.c.intDef * this.dq(dH)) / 20 + (S.r.hgt - dH.r.hgt) / 50;
-      this.impact('switch_screen', def.side, K.switchScreen, H.pid);
+      this.impact('switch_screen', def.side, lev(K.switchScreen), H.pid);
       if (postAdv > isoAdv + 0.25 && S.c.postScore > 50 && this.rng.chance(0.7)) {
         const gain = ((dS.c.intDef * this.dq(dS) - dH.c.intDef * this.dq(dH)) / 20 + (dS.r.hgt - dH.r.hgt) / 70) * K.advPts.post;
-        this.impact('switch_mismatch', off.side, gain, S.pid);
+        this.impact('switch_mismatch', off.side, lev(gain), S.pid);
         this.passStep(H, S);
-        return this.post(off, def, open + 0.1, forced, { actor: S, defender: dH, tag: 'switch_mismatch', entry: H });
+        return this.post(off, def, open + lev(0.1) + levExtra(gain / K.advPts.post), forced, { actor: S, defender: dH, tag: 'switch_mismatch', entry: H });
       }
-      this.impact('switch_mismatch', off.side, ((dH.c.perDef * this.dq(dH) - dS.c.perDef * this.dq(dS)) / 20) * K.advPts.iso, H.pid);
-      return this.iso(off, def, open, late, forced, { actor: H, defender: dS, tag: 'switch_mismatch', fromPnr: true });
+      const swap = (dH.c.perDef * this.dq(dH) - dS.c.perDef * this.dq(dS)) / 20;
+      this.impact('switch_mismatch', off.side, lev(swap) * K.advPts.iso, H.pid);
+      return this.iso(off, def, open + levExtra(swap - screen), late, forced, { actor: H, defender: dS, tag: 'switch_mismatch', fromPnr: true });
     }
 
     // a denied star catches it late (a switch has already traded his matchup for another)
@@ -82,7 +85,7 @@ export const pnrMethods = {
     if (hunted === H) this.huntEdge(def, dH, 'pnr', H.pid);
     // screen-hunting: a weak defender dragged into the two-man game can't hold up his end of the coverage
     if (hunted === S && cov !== 'zone') {
-      const edge = clamp(this.huntGap(def, dS, 'pnr') / K.hunt.screenEdge, -0.4, 0.8);
+      const edge = lev(clamp(this.huntGap(def, dS, 'pnr') / K.hunt.screenEdge, -0.4, 0.8));
       advH += edge;
       this.impact('hunt', off.side, edge * K.advPts.pnr, H.pid);
     }
@@ -102,77 +105,77 @@ export const pnrMethods = {
     if (cov === 'drop') {
       // big sags; trailing guard -> pull-up space
       const big = dS;
-      const deep = 0.35 + (big.c.rimProt - 50) / 200;
-      pullOpen += 0.38;
-      tagsPull.push(['drop_pullup', 0.38]);
+      const deep = lev(0.35 + (big.c.rimProt - 50) / 200);
+      pullOpen += lev(0.38);
+      tagsPull.push(['drop_pullup', lev(0.38)]);
       rimOpen -= deep;
       tagsRim.push(['drop_rim', -deep]);
-      rollOpen -= 0.3;
-      tagsRoll.push(['drop_rim', -0.3]);
+      rollOpen -= lev(0.3);
+      tagsRoll.push(['drop_rim', -lev(0.3)]);
       if (S.c.pop > 55) {
-        popOpen += 0.45;
-        tagsPop.push(['drop_pop', 0.45]);
+        popOpen += lev(0.45);
+        tagsPop.push(['drop_pop', lev(0.45)]);
       }
     } else if (cov === 'hedge') {
       const recover = (dS.r.spd - S.r.spd) / 60 + (dS.r.diq - 50) / 150;
-      advH -= 0.28;
-      this.impact('hedge_stall', def.side, 0.28 * 0.08, H.pid);
-      rollOpen += 0.15 - recover;
-      tagsRoll.push(['hedge_roll', 0.15 - recover]);
-      kickOpen += 0.12;
-      tagsKick.push(['hedge_rotate', 0.12]);
-      toExtra += 0.01;
+      advH -= lev(0.28);
+      this.impact('hedge_stall', def.side, lev(0.28) * 0.08, H.pid);
+      rollOpen += lev(0.15 - recover);
+      tagsRoll.push(['hedge_roll', lev(0.15 - recover)]);
+      kickOpen += lev(0.12);
+      tagsKick.push(['hedge_rotate', lev(0.12)]);
+      toExtra += lev(0.01);
     } else if (cov === 'blitz') {
-      handlerShoots = 0.18;
+      handlerShoots = levW(0.18);
       const trap = ((dH.c.steal + dS.c.steal) / 2 + (dH.r.hgt + dS.r.hgt) / 4 - 50) / 100;
       const escape = (H.c.passing - 55) / 100;
-      const pTrapTO = clamp(K.blitzTO + trap * 0.2 - escape * 0.3, 0.02, 0.18);
+      const pTrapTO = lev(clamp(K.blitzTO + trap * 0.2 - escape * 0.3, 0.02, 0.18));
       toExtra += pTrapTO;
       this.impact('blitz_to', def.side, pTrapTO * H.ttv * K.toPts, H.pid);
       // 4-on-3 behind the trap: quality scales with the handler's passing and the short-roll big
-      const fourThree = K.blitz4v3 + escape * 0.6 + (S.c.passing - 50) / 200;
+      const fourThree = lev(K.blitz4v3 + escape * 0.6 + (S.c.passing - 50) / 200) + levExtra(K.tradeOff.blitz);
       rollOpen += fourThree;
       tagsRoll.push(['blitz_4v3', fourThree]);
       kickOpen += fourThree * 0.9;
       tagsKick.push(['blitz_4v3', fourThree * 0.9]);
       if (this.record) this.cur!.steps.push({ k: 'trap', pid: H.pid });
     } else if (cov === 'ice') {
-      pullOpen -= 0.18;
-      tagsPull.push(['ice_contain', -0.18]);
-      rimOpen -= 0.2;
-      tagsRim.push(['ice_contain', -0.2]);
-      rollOpen -= 0.1;
-      tagsRoll.push(['ice_contain', -0.1]);
-      toExtra += 0.006;
+      pullOpen -= lev(0.18);
+      tagsPull.push(['ice_contain', -lev(0.18)]);
+      rimOpen -= lev(0.2);
+      tagsRim.push(['ice_contain', -lev(0.2)]);
+      rollOpen -= lev(0.1);
+      tagsRoll.push(['ice_contain', -lev(0.1)]);
+      toExtra += lev(0.006);
     } else if (zone) {
-      advH -= zone.pnr;
-      this.impact('zone_paint', def.side, zone.pnrTag);
-      kickOpen += zone.kick;
-      tagsKick.push([this.openKey(def), zone.kick]);
+      advH -= lev(zone.pnr);
+      this.impact('zone_paint', def.side, lev(zone.pnrTag));
+      kickOpen += lev(zone.kick);
+      tagsKick.push([this.openKey(def), lev(zone.kick)]);
       // (a chased screener's chaser stays with him)
       if (!this.chased(def, off).includes(S)) {
-        popOpen += zone.pop;
-        tagsPop.push([this.openKey(def), zone.pop]);
+        popOpen += lev(zone.pop);
+        tagsPop.push([this.openKey(def), lev(zone.pop)]);
       }
     }
     // going under the screen on this handler: room for his pull-ups, none for his drive, and the
     // screener's man stays home
     if (cov !== 'blitz' && cov !== 'zone' && this.pd(def, H) === 'under') {
-      const u = K.pd.under;
-      pullOpen += u.pull;
-      tagsPull.push(['pd_under', u.pull]);
-      rimOpen -= u.drive;
-      tagsRim.push(['pd_under', -u.drive]);
-      rollOpen -= u.roll;
-      tagsRoll.push(['pd_under', -u.roll]);
-      popOpen -= u.roll;
-      tagsPop.push(['pd_under', -u.roll]);
+      const [pull, drive, roll] = [levGift(K.pd.under.pull), lev(K.pd.under.drive), lev(K.pd.under.roll)];
+      pullOpen += pull;
+      tagsPull.push(['pd_under', pull]);
+      rimOpen -= drive;
+      tagsRim.push(['pd_under', -drive]);
+      rollOpen -= roll;
+      tagsRoll.push(['pd_under', -roll]);
+      popOpen -= roll;
+      tagsPop.push(['pd_under', -roll]);
     }
     // a screener top-locked off the ball pops into a hand in his face
     const sLock = this.lock(def, off, S);
     if (sLock) {
-      popOpen -= sLock.k.c3;
-      tagsPop.push([sLock.tag, -sLock.k.c3]);
+      popOpen -= sLock.c3;
+      tagsPop.push([sLock.tag, -sLock.c3]);
     }
     // defenders sagging off non-shooters help at the rim
     const sag = this.sagHelp(def, off, H, S);
@@ -184,11 +187,11 @@ export const pnrMethods = {
     }
 
     // help defense / spacing on drives
-    rimOpen += spacing * 0.6 - help * 0.28;
+    rimOpen += spacing * 0.6 - lev(help * 0.28);
     if (help !== 0) {
-      tagsRim.push(['help_paint', -help * 0.28]);
-      kickOpen += help * 0.3;
-      tagsKick.push(['help_kick', help * 0.3]);
+      tagsRim.push(['help_paint', -lev(help * 0.28)]);
+      kickOpen += lev(help * 0.3);
+      tagsKick.push(['help_kick', lev(help * 0.3)]);
     }
     if (spacing !== 0) tagsRim.push(['spacing', spacing * 0.6]);
     // a set's edges against this coverage, and what the defense has read of it
@@ -239,12 +242,12 @@ export const pnrMethods = {
           pf.three *
           S.t3 *
           (1 + popOpen) *
-          (sLock?.k.kickW ?? 1)
+          (sLock?.kickW ?? 1)
         : 0.01, // pop
       Math.pow(H.c.passing / 50, 1.3) * this.passT(H) * (off.spacing / 50) * 1.1 * (1 + kickOpen), // kick out
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
-    if (cov === 'blitz') opts[2] *= 0.3;
+    if (cov === 'blitz') opts[2] *= levW(0.3);
     if (this.go3) opts[3] *= 0.05;
     // a set goes for its look
     if (play) (['pull3', 'pull2', 'drive', 'roll', 'pop', 'kick'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
@@ -273,18 +276,18 @@ export const pnrMethods = {
         this.shoot(off, def, {
           shooter: H,
           zone,
-          open: advOpen + rimOpen + open - (body ? K.pd.body.drive : 0),
-          contest: zone === 'rim' ? this.rimContester(def, dH, cov === 'drop' ? 1.5 : 1) : dS,
+          open: advOpen + rimOpen + open - (body ? lev(K.pd.body.drive) : 0),
+          contest: zone === 'rim' ? this.rimContester(def, dH, cov === 'drop' ? levW(1.5) : 1) : dS,
           assister: null,
           finish: 'pnrBH',
-          tags: body ? [...tagsRim, ['pd_body', -K.pd.body.drive]] : tagsRim,
+          tags: body ? [...tagsRim, ['pd_body', -lev(K.pd.body.drive)]] : tagsRim,
           ...body,
         });
         return 'done';
       }
       case 3: {
         this.passStep(H, S);
-        const shortRoll = clamp(0.04 + (S.c.passing - 50) / 300, 0.01, 0.2) * Math.sqrt(this.passT(S)) * (cov === 'blitz' || cov === 'hedge' ? 1.8 : 1);
+        const shortRoll = clamp(0.04 + (S.c.passing - 50) / 300, 0.01, 0.2) * Math.sqrt(this.passT(S)) * (cov === 'blitz' || cov === 'hedge' ? levW(1.8) : 1);
         if (this.rng.chance(clamp(shortRoll, 0, 0.5))) {
           const sh = this.kickTarget(off, H, S);
           this.passStep(S, sh);
@@ -306,11 +309,11 @@ export const pnrMethods = {
         this.shoot(off, def, {
           shooter: S,
           zone: this.rimOr(S, 0.75),
-          open: rollAdv * 0.4 + rollOpen - 0.32 + open - (body ? K.pd.body.drive : 0),
-          contest: cov === 'blitz' ? this.rimContester(def, null, 1) : this.rimContester(def, dS, cov === 'drop' ? 1.3 : 1),
+          open: rollAdv * 0.4 + rollOpen - 0.32 + open - (body ? lev(K.pd.body.drive) : 0),
+          contest: cov === 'blitz' ? this.rimContester(def, null, 1) : this.rimContester(def, dS, cov === 'drop' ? levW(1.3) : 1),
           assister: H,
           finish: 'pnrRoll',
-          tags: body ? [...tagsRoll, ['pd_body', -K.pd.body.drive]] : tagsRoll,
+          tags: body ? [...tagsRoll, ['pd_body', -lev(K.pd.body.drive)]] : tagsRoll,
           ...body,
         });
         return 'done';

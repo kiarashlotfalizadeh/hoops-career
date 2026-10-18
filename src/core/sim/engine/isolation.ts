@@ -6,7 +6,7 @@ import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType } from '../log';
 import { SPLIT_DOUBLE } from '../sets';
-import { K } from './constants';
+import { K, lev, levExtra } from './constants';
 import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -26,20 +26,20 @@ export const isolationMethods = {
     // pressure: aggressive defenders get blown by, quick creators most of all
     adv += this.blowBy(def, A, 'iso');
     if (pr > 0) {
-      const blow = pr * clamp((A.c.create - 55) / 50, 0, 0.5);
+      const blow = lev(pr * clamp((A.c.create - 55) / 50, 0, 0.5));
       adv += blow;
       this.impact('pressure_blowby', off.side, blow * K.advPts.iso, A.pid);
     }
     const zd = this.zone(def);
     if (zd) {
-      adv -= zd.iso;
-      this.impact('zone_paint', def.side, zd.isoTag, A.pid);
+      adv -= lev(zd.iso);
+      this.impact('zone_paint', def.side, lev(zd.isoTag), A.pid);
     }
     // the Star plan doubles him; heavy help sends a second defender at anyone who beats his man
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
     let doubled = false;
     if (starDouble) doubled = this.rng.chance(0.75);
-    else if (adv > 0.7 && help > 0) doubled = this.rng.chance(0.25 * help);
+    else if (adv > 0.7 && help > 0) doubled = this.rng.chance(lev(0.25 * help));
     if (this.record) this.cur!.steps.push({ k: 'drive', pid: A.pid });
     // (a switched pick-and-roll's isolation is booked to the handler's play type throughout)
     if (doubled) return this.doubleTeam(off, def, A, finish, starDouble);
@@ -53,7 +53,7 @@ export const isolationMethods = {
     if (this.sideOut && forced) return { carry: 0, ball: A };
     if (!D.on) D = this.defOf(def, A);
     const spacing = this.spacingBonus(off);
-    const rimOpen = adv * 0.35 + spacing * 0.5 - help * 0.25;
+    const rimOpen = adv * 0.35 + spacing * 0.5 - lev(help * 0.25);
     const sizeEdge = (A.r.hgt - D.r.hgt) / 25;
     const ss = this.selfShot(A);
     const opts = [
@@ -61,7 +61,7 @@ export const isolationMethods = {
       Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.9 * Math.sqrt(A.tm) * ss,
       Math.pow(A.c.pu3 / 50, 2.5) * pf.three * 0.6 * A.t3 * ss,
       sizeEdge > 0.3 ? Math.pow(A.c.postScore / 50, 2) * sizeEdge : 0,
-      Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + Math.max(0, help)),
+      Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + lev(Math.max(0, help))),
       forced ? 0 : K.continueBase * (adv < -0.3 ? 1.4 : 0.5),
     ];
     if (this.go3) opts[3] *= 0.05;
@@ -70,19 +70,19 @@ export const isolationMethods = {
     switch (c) {
       case 0: {
         const zone: ShotZone = this.rimOr(A, 0.62);
-        const hp = -help * 0.25;
+        const hp = -lev(help * 0.25);
         const tags: [string, number][] = [
           ['help_paint', hp],
           ['spacing', spacing * 0.5],
         ];
         const body = this.body(def, A);
-        if (body) tags.push(['pd_body', -K.pd.body.drive]);
+        if (body) tags.push(['pd_body', -lev(K.pd.body.drive)]);
         const sag = this.sagHelp(def, off, A);
         if (sag) tags.push(['pd_sag', -sag]);
         this.shoot(off, def, {
           shooter: A,
           zone,
-          open: advOpen + spacing * 0.5 + hp - 0.08 - (body ? K.pd.body.drive : 0) - sag,
+          open: advOpen + spacing * 0.5 + hp - 0.08 - (body ? lev(K.pd.body.drive) : 0) - sag,
           contest: zone === 'rim' ? this.rimContester(def, D) : D,
           assister: null,
           finish,
@@ -102,7 +102,7 @@ export const isolationMethods = {
       case 4: {
         const sh = this.kickTarget(off, A);
         this.passStep(A, sh);
-        const ko = 0.15 + Math.max(0, help) * 0.3;
+        const ko = 0.15 + lev(Math.max(0, help) * 0.3);
         this.spotUp(off, def, {
           shooter: sh,
           zone: this.cornerOrWing(off, sh),
@@ -110,7 +110,7 @@ export const isolationMethods = {
           contest: this.defOf(def, sh),
           assister: A,
           finish: 'spotup',
-          tags: [['help_kick', Math.max(0, help) * 0.3]],
+          tags: [['help_kick', lev(Math.max(0, help) * 0.3)]],
         });
         return 'done';
       }
@@ -122,13 +122,16 @@ export const isolationMethods = {
   /**
    * A double team; only the Star plan's doubles are tagged as the plan's doing. Doubling Post split's
    * post player sends the ball out to the pair splitting around him: the cutter or the flare, with the
-   * split's edge on the 4-on-3.
+   * split's edge on the 4-on-3. A Star plan double plays its edges over the usual look at the tactical
+   * leverage: the turnovers it forces past a usual 6%, the open 4-on-3 past a usual kick-out's 0.15
+   * openness, and the forced shot of a star who splits it past a usual pull-up's -0.12.
    */
   doubleTeam(this: GameSim, off: ST, def: ST, A: SP, from: 'iso' | 'pnrBH' | 'post', star: boolean, play: SetPlay | null = null): 'done' {
     if (this.cur) this.cur.label = `${A.name} gets doubled!`;
     if (this.record) this.cur!.steps.push({ k: 'trap', pid: A.pid });
     const escape = (A.c.passing - 55) / 100;
-    const pTO = clamp((0.1 - escape * 0.25) * A.ttv, 0.03, 0.2);
+    const pTO0 = clamp((0.1 - escape * 0.25) * A.ttv, 0.03, 0.2);
+    const pTO = star ? pTO0 + levExtra(pTO0 - 0.06) : pTO0;
     if (star) this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, A, this.stealer(def), from);
@@ -139,12 +142,13 @@ export const isolationMethods = {
       const split = play?.cast.id === 'postSplit' ? play.cast : null;
       const sh = split ? (this.rng.chance(0.5) ? split.c : split.d!) : this.kickTarget(off, A);
       this.passStep(A, sh);
-      const o = 0.5 + escape * 0.5;
+      const o0 = 0.5 + escape * 0.5;
+      const o = star ? o0 + levExtra(o0 - 0.15) : o0;
       this.impact('double_kick', off.side, o * 0.06 * 3 * 0.35, sh.pid);
       // (what the defense has read of the split takes its share off this look too)
       const read = split ? play!.read : 0;
-      const tags: [string, number][] | undefined = split ? [['set_postSplit', SPLIT_DOUBLE], ...(read ? [['set_read', -read] as [string, number]] : [])] : undefined;
-      const so = split ? SPLIT_DOUBLE - read : 0;
+      const tags: [string, number][] | undefined = split ? [['set_postSplit', lev(SPLIT_DOUBLE)], ...(read ? [['set_read', -read] as [string, number]] : [])] : undefined;
+      const so = split ? lev(SPLIT_DOUBLE) - read : 0;
       if (split ? sh === split.c : this.rng.chance(0.3) && sh.c.rim > 52) {
         this.shoot(off, def, { shooter: sh, zone: 'rim', open: o * 0.6 + so, contest: this.rimContester(def, this.defOf(def, sh), 1.2), assister: A, finish: 'cut', tags });
       } else {
@@ -156,11 +160,11 @@ export const isolationMethods = {
     this.shoot(off, def, {
       shooter: A,
       zone: this.midOr(A, 0.5),
-      open: -0.55,
+      open: star ? -0.55 - levExtra(0.43) : -0.55,
       contest: this.defOf(def, A),
       assister: null,
       finish: from,
-      tags: star ? [['star_double', -0.4]] : undefined,
+      tags: star ? [['star_double', -lev(0.4)]] : undefined,
     });
     return 'done';
   },

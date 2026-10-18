@@ -6,7 +6,8 @@
 // timeouts, subs, new tactics mid-game); each one hashes its result (box scores, play-by-play, shots,
 // tags, lineups, flow), its possession logs and its raw boxes. The season slice plays the first weeks of
 // a real-roster league through the league code and hashes its results, stats and standings.
-// Usage: npx tsx scripts/engine-fingerprint.ts [--verbose]   (prints one hash per part, then the total)
+// Usage: npx tsx scripts/engine-fingerprint.ts [--verbose] [--edge=<x>]   (prints one hash per part, then the
+// total; --edge plays at tactical leverage x instead of K.tacticEdge: at 1 the engine plays as it did before it)
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createLeague, defaultSettings } from '../src/core/league/create';
@@ -14,12 +15,14 @@ import { ensureRotation } from '../src/core/league/games';
 import { teamPlayers } from '../src/core/league/helpers';
 import { simDay, startRegularSeason } from '../src/core/league/season';
 import { applyPatch } from '../src/core/sim/tactics';
-import { GameSim, engineDiag, resetEngineDiag, type SimTeamInput } from '../src/core/sim/engine';
+import { GameSim, K, engineDiag, resetEngineDiag, type SimTeamInput } from '../src/core/sim/engine';
 import type { PlayCall, PossLog } from '../src/core/sim/log';
 import { Rng } from '../src/core/random';
 import type { GameType, Player, SituationalPlan, TacticsPatch } from '../src/core/types';
 
 const verbose = process.argv.includes('--verbose');
+const edge = process.argv.find((a) => a.startsWith('--edge='));
+if (edge) K.tacticEdge = Number(edge.slice('--edge='.length));
 const seed = JSON.parse(readFileSync('src/data/seed.json', 'utf8'));
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const total = createHash('sha256');

@@ -47,7 +47,9 @@ describe('engine rules', () => {
   it('runs the shot clock from the inbound: breaking a full-court press uses some of it', () => {
     let trips = 0;
     let over = 0;
-    for (let g = 0; g < 4; g++) {
+    // (five games: with the press's edges at full tactical leverage, more presses are broken into
+    // run-outs, which don't count here)
+    for (let g = 0; g < 5; g++) {
       const sim = new GameSim(side(4, { defense: { press: 'always' } }), side(5), { rng: new Rng(g), type: 'regular', record: true, injuries: false });
       sim.simToEnd();
       for (const l of sim.drainLogs()) {

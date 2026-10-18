@@ -1,7 +1,9 @@
 // The engine's tuning constants (K): shooting by zone, the base rates of turnovers, fouls, boards and
 // run-outs, time, fatigue and injuries, and the size of every tactical edge (coverages, zones and junk
 // defenses, pressure, the press, deny and double, guarding instructions, hunting, the late-game fouls),
-// each with what it is and how it was sized; and the diagnostics the calibration scripts read.
+// each with what it is and how it was sized; the tactical leverage those edges are played at
+// (K.tacticEdge, with lev and the helpers after K that apply it); and the diagnostics the
+// calibration scripts read.
 
 import type { DefScheme, ShotZone } from '../../types';
 
@@ -238,7 +240,57 @@ export const K = {
    * comes on the shot anyway (two free throws).
    */
   ftg: { max: 8, min: 2.5, open: 0.35, inAct: 0.05 },
+  /**
+   * Tactical leverage. The owner's call: tactics matter about twice as much as they did, so a
+   * well-aimed choice is worth about twice as much and a wrong one costs about twice as much, while
+   * no setting becomes a free win and the league's averages stay NBA-like. Every edge a tactical
+   * choice gets from fitting (or not fitting) the opponent and its own personnel is this many times
+   * the size written where it's set (the tables above and the numbers in the actions are its 1x
+   * sizes; see lev and levW): the pick-and-roll coverages, switching, the zones and junk defenses,
+   * help, ball pressure and physicality, the press, deny and double, the guarding instructions,
+   * hunting, sets and the defense's reads of them, crashing the glass and getting back. Where twice
+   * the edge would have made a blind extreme a win against average personnel, its cost grows with
+   * the leverage too (tradeOff); a guarding instruction's give-back grows a little less (giftExp);
+   * and a few base rates are recentered (recenter). All of them are nothing at 1, where the engine
+   * plays exactly as it did before the change. scripts/tactic-impact.ts measures aimed choices at
+   * 1x and at this leverage, scripts/tactic-sweep.ts the blind extremes.
+   */
+  tacticEdge: 2,
+  /**
+   * The costs that grow past 1x leverage on top of the doubled edges, where twice the edge made a
+   * blind extreme a win against average personnel (the tactic sweep): the openness a half-court
+   * shot gains per unit of ball pressure above 50 (the defense a step out of position), the blitz's
+   * extra 4-on-3 openness, and the offensive-board rate given back per unit of crashing above 50.
+   * Each is multiplied by the leverage past 1.
+   */
+  tradeOff: { pressure: 0.45, blitz: 0.6, crash: 0.13 },
+  /**
+   * A guarding instruction's give-back on the player it names (the open catch a sag leaves him, the
+   * room going under gives his pull-ups, the drives and back-cuts a top-lock gives up, the fouls
+   * getting physical sends him to the line for) grows as the leverage to this power, about 1.6
+   * times at 2x. The offense takes more of a bigger gift, and each one is better, so its cost
+   * compounds: at the full leverage it grew several times what the instruction's take-away saved.
+   */
+  giftExp: 0.65,
+  /**
+   * Past 1x leverage the doubled edges move the league's averages a little (the coverages AI coaches
+   * play leave more pull-ups and kick-outs and fewer drives, and most of them crash less and get back
+   * more than 50), so these base rates move back by this share per unit of leverage past 1, keeping
+   * AI-vs-AI games on their 2025-26 averages: the offense's taste for threes, shooting fouls,
+   * offensive boards, turnovers and blocks.
+   */
+  recenter: { three: -0.1, foul: 0.053, orb: 0.057, tov: 0.045, blk: 0.06 },
 };
+
+/** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */
+export const lev = (x: number) => x * K.tacticEdge;
+/** A tactical multiplier (a weight or a rate factor) at the game's tactical leverage: 1.8 at 1x is 1.8² at 2x. */
+export const levW = (m: number) => m ** K.tacticEdge;
+/** The part of a tactical edge past its 1x size, for an edge that comes from a matchup rather than a number: 0 at 1x. */
+export const levExtra = (x: number) => x * (K.tacticEdge - 1);
+/** A guarding instruction's give-back at the game's tactical leverage (see K.giftExp); a multiplier with `w`. */
+export const levGift = (x: number) => x * K.tacticEdge ** K.giftExp;
+export const levGiftW = (m: number) => m ** (K.tacticEdge ** K.giftExp);
 
 export interface ZoneK {
   pnr: number;
