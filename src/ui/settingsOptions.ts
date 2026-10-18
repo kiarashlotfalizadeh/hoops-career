@@ -52,9 +52,14 @@ const PLANS: Record<'never' | 'sometimes' | 'always', string> = { never: 'None',
  * League): the label over the column, the figure for a preset, and what it means.
  */
 export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficulty) => string; help: string }[] = [
-  { id: 'trade', label: 'Trades', value: (d) => vsFair(DIFFICULTY[d].tradeAsk), help: 'What AI GMs need back in a trade, against fair value.' },
-  { id: 'contract', label: 'Contracts', value: (d) => vsFair(DIFFICULTY[d].contractAsk), help: 'What your own players and free agents ask of you, against their market price.' },
-  { id: 'plans', label: 'Game plans', value: (d) => PLANS[DIFFICULTY[d].opponentPlans], help: 'How many opposing coaches game-plan against you.' },
+  { id: 'trade', label: 'Trade asks', value: (d) => vsFair(DIFFICULTY[d].tradeAsk), help: 'What AI GMs need back in a trade, against fair value (−12% means 12% less).' },
+  {
+    id: 'contract',
+    label: 'Contract asks',
+    value: (d) => vsFair(DIFFICULTY[d].contractAsk),
+    help: 'What your own players and free agents ask of you, against their market price.',
+  },
+  { id: 'plans', label: 'Opponent plans', value: (d) => PLANS[DIFFICULTY[d].opponentPlans], help: 'How many opposing coaches come in with a game plan against you.' },
   {
     id: 'owner',
     label: 'Owner waits',
