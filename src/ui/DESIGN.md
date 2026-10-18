@@ -18,13 +18,13 @@ or a screen, find where it already lives. If it's there, link to it; don't show 
 
 Five tabs, one per role. Every screen belongs to exactly one (`tabFor` in `nav.ts` lights it).
 
-| Tab        | What it's for         | Lives here (and nowhere else)                                                                                                                                                                                                                                                       |
-| ---------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Today**  | What needs you now    | The agenda (decisions waiting), the staff's top advice, the next game at a glance, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                                                                    |
-| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics (playbook, offense, defense, roles, game management, saved playbooks) `/team/tactics`; lineups `/team/lineups`; your players' pages; compare                         |
-| **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`: scouting, the game plan, matchups, the Lab against them, and on game day the preview); the live game (`/live`); game reports (`/game/:gid`); the Lab (`/lab`, for comparing your own edits) |
-| **League** | Everyone else         | Standings and odds, the schedule around the league, stats, ratings, playoffs, the Cup, awards, news, other teams' pages (`/teams/:tid`), other players' pages, history (`/league/history`: seasons, records, Hall of Fame, coaches)                                                 |
-| **Office** | The GM's desk         | The cap sheet and exceptions, trade (`/office/trade`), free agents, re-signing, the draft, picks, finances, the owner and job security (`/office/owner`), your career and job offers (`/office/career`)                                                                             |
+| Tab        | What it's for         | Lives here (and nowhere else)                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Today**  | What needs you now    | The agenda (decisions waiting), the staff's top advice, the next game at a glance, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                                                                                                                                                 |
+| **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics (playbook, offense, defense, roles, game management, saved playbooks) `/team/tactics`; lineups `/team/lineups`; your players' pages; compare                                                                                                      |
+| **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`: scouting, the game plan with the staff's counters tested in place, matchups, the Lab against them, and on game day the preview; its slab carries the plan's state); the live game (`/live`); game reports (`/game/:gid`); the Lab (`/lab`, for comparing your own edits) |
+| **League** | Everyone else         | Standings and odds, the schedule around the league, stats, ratings, playoffs, the Cup, awards, news, other teams' pages (`/teams/:tid`), other players' pages, history (`/league/history`: seasons, records, Hall of Fame, coaches)                                                                                                                              |
+| **Office** | The GM's desk         | The cap sheet and exceptions, trade (`/office/trade`), free agents, re-signing, the draft, picks, finances, the owner and job security (`/office/owner`), your career and job offers (`/office/career`)                                                                                                                                                          |
 
 Rules that follow from it:
 
@@ -33,6 +33,8 @@ Rules that follow from it:
 - **Anything about one opponent lives on its Matchup page.** Home, the schedule, a team's page, the
   live game and the report link to `/games/:tid`; they don't host their own scouting, plans or
   matchup editors.
+- **A change to the tactics reads in Tactics' own words** wherever it shows (plan items, counters,
+  situations, saved playbooks): described through `ui/tactics/changes.ts`, named as the control is.
 - **Money lives in Office.** Payroll appears once as a figure on Team → Roster's header line, and in
   full only in Office.
 - **The owner lives in Office → Owner**, as one job-security meter (`jobSecurity`); Today shows the
@@ -125,8 +127,18 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
 - `Section` (`.sec`, `.sec-h`): overline title + right-side link (`.card-link`) + content.
 - `Card` (`.card`): flat `--raised` panel. `.flush` + `.list` for rows. `accent` sparingly.
 - `.slab` (+ `.slab-mark`): the identity hero. Your team by default; another with `slabVars(colors)`.
-- Lists: `.card.flush` > `.list` > rows. `.listrow` (58px), `.lr-name`, `.lr-meta`. Your own rows:
-  a `--team-text` inset edge + 9% tint.
+- Lists: `.card.flush` > `.list` > rows. `.listrow` (`--row-min`, 48px), `.lr-name`, `.lr-meta`. Your
+  own rows: a `--team-text` inset edge + 9% tint.
+- **A list of players with figures is a row grid** (`team/RosterViews`): the jersey, the name over
+  position and age, then figures in columns named once per group (in the divider), OVR beside POT.
+  Never a unit on every figure. Every team's roster is the same component.
+- **A score in a list** (a playbook's fit, a set's fit) is a figure in its own column with a bar
+  under it, named in a column header (`.list-divider.list-h`) that says the order; colour bands are
+  explained in the section's Help. A control's reference setting (the playbook's own) carries a dot
+  (`Levels mark`).
+- **Badge colours come from `OVR_TIERS`** (`core/ratings.ts`), one colour per tier name. A list or
+  table of badges carries `OvrKey` under it; a player's own badge opens the ladder. Attribute
+  ratings use `ratingTone` everywhere, with `RatingKey` under a ratings table.
 - Figures: `Statline` for 2-4 figures in a row; `Kpi` tiles only for a grid of many.
 - `Segmented` (`tabs` for page tabs), `Chips`, `.tag`, `Ovr`, `Avatar`, buttons (`.btn`, `.primary`,
   `.ghost`, `.danger`, `.good`, `.sm`, `.xs`, `.block`, `.big`).
@@ -178,10 +190,18 @@ Broadcast first: the court is always the biggest thing on screen.
 - Cut "you can", "this shows", restating the label, and hedges.
 - Sentence case for text and buttons; capitals only through the overline/display styles.
 - Numbers over words where a number says it: "3-7 in last 10", "+3.4 pts/100".
+- **Every big figure says what it is** (a label under it, or its column name) **and which way is
+  good**; ranks say out of how many ("25th of 30"). Colours on scouting numbers rate the team shown
+  (green: better than the league), whoever's team it is.
+- **A leaderboard links to its full table**, sorted by its figure.
+- **Never quote an engine effect size or spread in copy** ("worth about +1.1 per 100"): show the
+  Lab's or the league's numbers at runtime, or none. The engine is re-tuned; copy isn't.
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
 - Names of controls in advice must match the controls on screen (Team → Tactics tabs: Playbook,
   Offense, Defense, Roles, Game Mgmt).
-- Inbox mail: a subject that says what happened and a one-line summary; detail below it.
+- Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
+  for what changes a plan**: what a screen already shows (a short injury, "the season starts")
+  doesn't get mail.
 
 ## Motion
 
