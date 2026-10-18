@@ -50,7 +50,6 @@ export function Playback({
   };
   useEffect(() => {
     if (reveal) bump();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal]);
   useEffect(() => () => clearTimeout(timer.current), []);
   // paused: they stay up; playing again, they fade after a moment
