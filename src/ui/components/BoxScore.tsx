@@ -57,7 +57,7 @@ export function BoxScore({
   return (
     <div className="bx">
       {/* it scrolls sideways: focusable so a keyboard can scroll it */}
-      <div className="tablewrap bx-wrap" tabIndex={0} role="region" aria-label={label}>
+      <div className="tablewrap" tabIndex={0} role="region" aria-label={label}>
         <table className="stats bx-table">
           <thead>
             <tr>
@@ -146,7 +146,7 @@ export function BoxScore({
             · <Star size={11} className="bx-pog" fill="currentColor" aria-hidden="true" /> Player of the game
           </>
         )}
-        {out.length > 0 && <span className="bx-dnp"> · Didn&apos;t play: {out.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}</span>}
+        {out.length > 0 && <span> · Didn&apos;t play: {out.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}</span>}
       </div>
     </div>
   );

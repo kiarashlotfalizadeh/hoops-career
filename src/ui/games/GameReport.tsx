@@ -16,7 +16,6 @@ import { BoxTab } from './report/BoxTab';
 import { ShotsTab } from './report/ShotsTab';
 import { FlowTab } from './report/FlowTab';
 import '../components/gameday.css';
-import './games.css';
 
 type Tab = 'recap' | 'report' | 'box' | 'shots' | 'flow' | 'pbp';
 

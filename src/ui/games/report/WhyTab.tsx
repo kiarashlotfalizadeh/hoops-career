@@ -36,7 +36,7 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
           </Help>
         }
       >
-        {report.factors.length === 0 ? <div className="mu-note">No single factor stood out: this one came down to execution.</div> : <Factors factors={report.factors} />}
+        {report.factors.length === 0 ? <div className="gv-note">No single factor stood out: this one came down to execution.</div> : <Factors factors={report.factors} />}
       </Section>
 
       <Section
@@ -122,7 +122,7 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
           )}
           <Section title="Your lineups" right={<span className="tiny dim">+/- · minutes together</span>}>
             {report.lineups.length === 0 ? (
-              <div className="mu-note">No lineup played 3+ minutes together.</div>
+              <div className="gv-note">No lineup played 3+ minutes together.</div>
             ) : (
               <div className="card flush list">
                 {report.lineups.map((l, i) => (
@@ -180,7 +180,7 @@ function Factors({ factors }: { factors: GameReport['factors'] }) {
         </div>
       ))}
       {shown.length < factors.length && (
-        <button className="gs-more" onClick={() => setAll(true)}>
+        <button className="gv-more" onClick={() => setAll(true)}>
           <ChevronDown size={15} aria-hidden="true" /> {factors.length - shown.length} more
         </button>
       )}

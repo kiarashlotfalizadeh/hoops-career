@@ -486,6 +486,27 @@
 }
 
 /* ------------------------------------------------------------ the game report (games/GameReport.tsx) */
+/* a line for when there's nothing to list, and the "N more" under a list */
+.gv-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.gv-more {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+.gv-more:active {
+  background: var(--surface);
+}
 .gv-factor {
   display: flex;
   align-items: flex-start;
